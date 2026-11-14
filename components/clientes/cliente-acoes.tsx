@@ -4,99 +4,91 @@ import { confirmar, toast } from "@/components/ui/avisos";
 import Link from "next/link";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Pencil, MoreVertical, Eye, Ban, Loader2 } from "lucide-react";
+import { Pencil, Eye, Ban, Loader2, RotateCcw } from "lucide-react";
 import { usePermissoes } from "@/components/providers/permissoes-provider";
 
 /**
- * Ações da linha de cliente na listagem: ícone de editar (lápis) + menu "3 pontinhos"
- * com "Editar"/"Visualizar" e "Inativar cliente". Segue o padrão corporativo/discreto
- * dos demais ícones de ação do sistema (cinza por padrão, primário no hover, sem fundo).
+ * Ações da linha de cliente na lista, no padrão das outras listas: ícones discretos na própria linha
+ * (cinza; primário ou vermelho ao passar), sem menu de três pontos.
  *
- * Não há tela de detalhes separada: a ficha do cliente é a própria tela de edição,
- * que abre em modo somente leitura para quem não tem permissão de editar. Por isso o
- * item do menu se chama "Editar" (com permissão) ou "Visualizar" (sem permissão).
+ * Não há tela de detalhes separada: a ficha do cliente é a tela de edição, que abre somente leitura
+ * para quem não pode editar. Por isso o ícone é o lápis (com permissão) ou o olho (sem).
  *
- * As ações respeitam o RBAC do módulo "clientes" (o servidor também valida):
- * - editar  → lápis e item "Editar";
- * - excluir → item "Inativar cliente" (soft-delete via DELETE /api/clientes/[id]).
+ * As ações respeitam o módulo "clientes" (o servidor também valida):
+ * - editar  → lápis;
+ * - excluir → "Inativar" (reversível; DELETE /api/clientes/[id] só marca como inativo);
+ * - editar  → "Reativar" no cliente inativo (PATCH { ativo: true }), a mesma regra da ficha.
+ * Recusado pelo servidor, a lista fica como está e o motivo aparece no aviso.
  */
 export function ClienteAcoes({ id, nome, ativo = true }: { id: string; nome?: string; ativo?: boolean }) {
   const router = useRouter();
   const { pode } = usePermissoes();
-  const [menu, setMenu] = useState(false);
   const [inativando, setInativando] = useState(false);
   const fichaHref = `/clientes/${id}/editar`;
   const podeEditar = pode("clientes", "editar");
   const podeInativar = pode("clientes", "excluir") && ativo;
+  const podeReativar = podeEditar && !ativo;
+  const alvo = nome ?? "cliente";
 
-  async function inativar() {
-    setMenu(false);
-    const alvo = nome ? `o cliente "${nome}"` : "este cliente";
-    if (!(await confirmar({ titulo: "Inativar cliente", mensagem: `Inativar ${alvo}? Ele deixará de aparecer nas listagens padrão, mas todo o histórico será preservado.`, perigo: true, confirmarTexto: "Inativar" }))) return;
+  async function reativar() {
     setInativando(true);
     try {
-      const res = await fetch(`/api/clientes/${id}`, { method: "DELETE" });
+      const res = await fetch(`/api/clientes/${id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ativo: true }) });
       if (!res.ok) {
         const e = await res.json().catch(() => ({}));
-        toast(e.erro ?? "Erro ao inativar cliente.", "erro");
+        toast(e.erro ?? "Não foi possível reativar o cliente.", "erro");
         return;
       }
+      toast("Cliente reativado.");
       router.refresh();
     } catch {
-      toast("Erro de conexão.", "erro");
+      toast("Sem conexão. Tente de novo.", "erro");
     } finally {
       setInativando(false);
     }
   }
 
-  return (
-    <div className="flex items-center justify-end gap-1">
-      {podeEditar && (
-        <Link
-          href={fichaHref}
-          title="Editar cliente"
-          className="p-1 rounded text-ink-muted hover:text-primary-600 transition-colors"
-        >
-          <Pencil className="w-4 h-4" />
-        </Link>
-      )}
+  async function inativar() {
+    if (!(await confirmar({
+      titulo: nome ? `Inativar ${nome}?` : "Inativar este cliente?",
+      mensagem: "Ele sai das listas e dos seletores. O histórico fica guardado e o cadastro pode ser reativado.",
+      perigo: true, confirmarTexto: "Inativar",
+    }))) return;
+    setInativando(true);
+    try {
+      const res = await fetch(`/api/clientes/${id}`, { method: "DELETE" });
+      if (!res.ok) {
+        const e = await res.json().catch(() => ({}));
+        toast(e.erro ?? "Não foi possível inativar o cliente.", "erro");
+        return;
+      }
+      toast("Cliente inativado.");
+      router.refresh();
+    } catch {
+      toast("Sem conexão. Tente de novo.", "erro");
+    } finally {
+      setInativando(false);
+    }
+  }
 
-      <div className="relative">
-        <button
-          type="button"
-          title="Mais ações"
-          disabled={inativando}
-          onClick={() => setMenu((v) => !v)}
-          className="p-1 rounded text-ink-muted hover:text-primary-600 transition-colors disabled:opacity-50"
-        >
-          {inativando ? <Loader2 className="w-4 h-4 animate-spin" /> : <MoreVertical className="w-4 h-4" />}
+  const btn = "p-1.5 rounded text-ink-muted hover:text-primary-600 hover:bg-primary-50 transition-colors disabled:opacity-50";
+  return (
+    <span className="inline-flex items-center justify-end gap-0.5" data-acoes-cliente={id}>
+      <Link href={fichaHref} aria-label={`${podeEditar ? "Editar" : "Ver"} ${alvo}`} title={podeEditar ? "Editar" : "Ver"} className={btn} data-abrir-cliente>
+        {podeEditar ? <Pencil className="w-4 h-4" aria-hidden /> : <Eye className="w-4 h-4" aria-hidden />}
+      </Link>
+      {podeInativar && (
+        <button type="button" onClick={() => void inativar()} disabled={inativando} aria-label={`Inativar ${alvo}`} title="Inativar"
+          className={`${btn} hover:text-atrasado hover:bg-atrasado-claro`} data-inativar-cliente>
+          {inativando ? <Loader2 className="w-4 h-4 animate-spin" aria-hidden /> : <Ban className="w-4 h-4" aria-hidden />}
         </button>
-        {menu && (
-          <>
-            <div className="fixed inset-0 z-20" onClick={() => setMenu(false)} />
-            <div className="absolute right-0 top-full mt-1 z-30 w-44 bg-white border border-surface-border rounded-lg shadow-card-hover py-1 text-left">
-              <Link
-                href={fichaHref}
-                onClick={() => setMenu(false)}
-                className="flex items-center gap-2 w-full px-3 py-2 text-sm text-ink hover:bg-surface-alt"
-              >
-                {podeEditar
-                  ? <><Pencil className="w-3.5 h-3.5" /> Editar</>
-                  : <><Eye className="w-3.5 h-3.5" /> Visualizar</>}
-              </Link>
-              {podeInativar && (
-                <button
-                  type="button"
-                  onClick={inativar}
-                  className="flex items-center gap-2 w-full px-3 py-2 text-sm text-atrasado hover:bg-atrasado-claro"
-                >
-                  <Ban className="w-3.5 h-3.5" /> Inativar cliente
-                </button>
-              )}
-            </div>
-          </>
-        )}
-      </div>
-    </div>
+      )}
+      {podeReativar && (
+        <button type="button" onClick={() => void reativar()} disabled={inativando} aria-label={`Reativar ${alvo}`} title="Reativar"
+          className={`${btn} hover:text-ok-texto hover:bg-ok-claro`} data-reativar-cliente>
+          {inativando ? <Loader2 className="w-4 h-4 animate-spin" aria-hidden /> : <RotateCcw className="w-4 h-4" aria-hidden />}
+        </button>
+      )}
+    </span>
   );
 }

@@ -16,9 +16,9 @@ export default async function ImprimirQrPage({ searchParams }: { searchParams: P
 
   if (ids.length === 0) {
     return (
-      <div className="max-w-xl mx-auto text-center py-16">
+      <div className="max-w-xl mx-auto text-center py-16 px-4" data-sem-etiquetas>
         <p className="text-ink-muted">Nenhum QR Code selecionado para impressão.</p>
-        <Link href="/qrcodes" className="text-primary-600 hover:underline text-sm mt-2 inline-block">← Voltar</Link>
+        <Link href="/qrcodes" className="text-primary-600 hover:underline text-sm mt-2 inline-block">Voltar para QR Codes</Link>
       </div>
     );
   }

@@ -19,7 +19,8 @@ import { ImportarClientes } from "@/components/clientes/importar-clientes";
 import { BaixarPlanilha } from "@/components/importacao/baixar-planilha";
 import { janela, lerOrdem, lerPaginacao, ordemPrisma, paginaValida } from "@/lib/listagem";
 import { ORDEM_CLIENTES, ORDEM_PADRAO_CLIENTES } from "@/lib/listas/ordenacao";
-import { BuscaUrl, ConteudoUrl, FiltroCheckUrl, FiltroSelectUrl, LimparBuscaUrl, ListaUrl, PaginacaoUrl, ThOrdUrl } from "@/components/listagem/lista-url";
+import { BuscaUrl, ConteudoUrl, FiltroCheckUrl, FiltroSelectUrl, LimparBuscaUrl, ListaUrl, PaginacaoUrl, TabelaProUrl } from "@/components/listagem/lista-url";
+import { PLANILHA } from "@/lib/planilha";
 
 export const metadata: Metadata = { title: "Clientes" };
 
@@ -90,13 +91,11 @@ export default async function ClientesPage({
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-3">
-          <div className="p-2 bg-primary-50 rounded-lg">
-            <Users className="w-5 h-5 text-primary-600" />
-          </div>
+          <div className="p-2 bg-surface-alt rounded-lg"><Users className="w-5 h-5 text-ink-muted" aria-hidden /></div>
           <h1 className="page-title">Clientes</h1>
           <span className="text-xs font-semibold text-ink-muted bg-surface-alt border border-surface-border px-2.5 py-1 rounded-full">{total}</span>
         </div>
-        {/* No celular: Baixar | Importar numa linha e "Novo Cliente" embaixo, na largura toda */}
+        {/* No celular: Baixar | Importar numa linha e "Novo cliente" embaixo, na largura toda */}
         <div className="flex items-center gap-2 flex-wrap w-full sm:w-auto">
           <BaixarPlanilha entidade="clientes" className="flex-1 sm:flex-none" />
         {podeCriar && (
@@ -104,9 +103,10 @@ export default async function ClientesPage({
             <ImportarClientes className="flex-1 sm:flex-none" />
             <Link
               href="/clientes/novo"
+              data-novo-cliente
               className="basis-full sm:basis-auto inline-flex items-center justify-center gap-2 bg-primary-500 hover:bg-primary-600 text-white px-4 py-2.5 rounded-lg text-sm font-semibold transition-all shadow-sm hover:shadow"
             >
-              <Plus className="w-4 h-4" /> Novo Cliente
+              <Plus className="w-4 h-4" aria-hidden /> Novo cliente
             </Link>
           </>
         )}
@@ -117,7 +117,7 @@ export default async function ClientesPage({
         {/* Busca ao vivo + filtros (mudam a URL; o servidor devolve a página nova) */}
         <div className="p-4 border-b border-surface-border flex flex-wrap items-center gap-2 bg-surface-alt/40">
           <div className="flex-1 min-w-[220px]">
-            <BuscaUrl lista="clientes" placeholder="Pesquisar por nome, fantasia ou CPF/CNPJ…" rotulo="Pesquisar clientes" />
+            <BuscaUrl lista="clientes" placeholder="Pesquisar por nome, fantasia ou CPF/CNPJ" rotulo="Pesquisar clientes" />
           </div>
           <FiltroSelectUrl param="status" vazio="Status financeiro" opcoes={Object.entries(LABELS_STATUS_FINANCEIRO_CALC).map(([value, label]) => ({ value, label }))} />
           <FiltroSelectUrl param="segmento" vazio="Segmento" opcoes={Object.entries(LABELS_SEGMENTO).map(([value, label]) => ({ value, label }))} />
@@ -145,7 +145,7 @@ export default async function ClientesPage({
                   <p className="text-xs text-ink-muted truncate">{formatarCpfCnpj(c.cpfCnpj)}{c.segmento ? ` · ${LABELS_SEGMENTO[c.segmento] ?? c.segmento}` : ""}</p>
                   <div className="mt-1.5 flex flex-wrap items-center gap-1.5 text-[11px]">
                     <span className={cn("font-semibold px-2 py-0.5 rounded-full", COR_STATUS_FINANCEIRO_CALC[sf])}>{LABELS_STATUS_FINANCEIRO_CALC[sf]}</span>
-                    <span className="text-ink-subtle">{c._count.unidades} end. · {c._count.ordensServico} OS</span>
+                    <span className="text-ink-subtle">{c._count.unidades} {c._count.unidades === 1 ? "endereço" : "endereços"} · {c._count.ordensServico} OS</span>
                     {!c.ativo && <span className="font-bold bg-surface-linha text-ink-muted px-2 py-0.5 rounded-full">Inativo</span>}
                   </div>
                 </div>
@@ -154,70 +154,51 @@ export default async function ClientesPage({
             );
           })}
         </ul>
-        <table className="w-full text-sm hidden md:table">
-          <thead className="bg-surface-alt border-b border-surface-border">
-            <tr>
-              {massa && <th className="w-px pl-4 pr-1 py-3"><CheckboxPagina /></th>}
-              <ThOrdUrl label="Nome" k="nome" padrao="nome" className="px-4 py-3 text-ink-muted text-xs tracking-wider" />
-              <ThOrdUrl label="CPF/CNPJ" k="documento" className="px-4 py-3 text-ink-muted text-xs tracking-wider" />
-              <ThOrdUrl label="Segmento" k="segmento" className="px-4 py-3 text-ink-muted text-xs tracking-wider hidden lg:table-cell" />
-              <ThOrdUrl label="Satisfação" k="satisfacao" className="px-4 py-3 text-ink-muted text-xs tracking-wider hidden xl:table-cell" />
-              <ThOrdUrl label="End." k="unidades" className="px-4 py-3 text-ink-muted text-xs tracking-wider" />
-              <ThOrdUrl label="OS" k="os" className="px-4 py-3 text-ink-muted text-xs tracking-wider" />
-              <th className="text-left px-4 py-3 font-semibold text-ink-muted text-xs uppercase tracking-wider">Status</th>
-              <th className="text-right px-4 py-3 font-semibold text-ink-muted text-xs uppercase tracking-wider w-px">Ações</th>
-            </tr>
-          </thead>
-          <tbody>
-            {clientes.map((c, idx) => (
-                <tr key={c.id} className={cn(
-                  "border-b border-surface-border hover:bg-primary-50/40 transition-colors",
-                  idx % 2 === 1 && "bg-surface-alt/30",
-                  !c.ativo && "opacity-60",
-                )}>
-                  {massa && <td className="w-px pl-4 pr-1 py-3"><CheckboxLinha id={c.id} rotulo={c.nomeFantasia ?? c.nome} /></td>}
-                  <td className="px-4 py-3">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <Link href={`/clientes/${c.id}/editar`} className="font-semibold text-ink hover:text-primary-600 transition-colors">
-                        {c.nomeFantasia ?? c.nome}
-                      </Link>
-                      {!c.ativo && (
-                        <span className="inline-flex items-center gap-1 text-[10px] font-bold bg-surface-linha text-ink-muted px-2 py-0.5 rounded-full whitespace-nowrap">Inativo</span>
-                      )}
-                      {c._count.contratos > 0 && (
-                        <span className="inline-flex items-center gap-1 text-[10px] font-bold bg-success-50 text-success-700 px-2 py-0.5 rounded-full whitespace-nowrap">
-                          <FileCheck className="w-2.5 h-2.5" /> Cliente de Contrato
-                        </span>
-                      )}
-                    </div>
-                    {c.nomeFantasia && <p className="text-xs text-ink-subtle mt-0.5">{c.nome}</p>}
-                  </td>
-                  <td className="px-4 py-3 text-ink-muted whitespace-nowrap">{formatarCpfCnpj(c.cpfCnpj)}</td>
-                  <td className="px-4 py-3 text-ink-muted hidden lg:table-cell text-xs">
-                    {c.segmento ? (LABELS_SEGMENTO[c.segmento] ?? c.segmento) : "—"}
-                  </td>
-                  <td className="px-4 py-3 hidden xl:table-cell">
-                    <div className="flex justify-center">{estrelas(c.satisfacao)}</div>
-                  </td>
-                  <td className="px-4 py-3 text-center text-ink-muted">{c._count.unidades}</td>
-                  <td className="px-4 py-3 text-center text-ink-muted">{c._count.ordensServico}</td>
-                  <td className="px-4 py-3">
-                    {(() => {
-                      const sf = statusFinanceiroMap[c.id] ?? "SEM_HISTORICO";
-                      return (
-                        <span className={cn("text-[10px] font-semibold px-2.5 py-1 rounded-full whitespace-nowrap", COR_STATUS_FINANCEIRO_CALC[sf])}>
-                          {LABELS_STATUS_FINANCEIRO_CALC[sf]}
-                        </span>
-                      );
-                    })()}
-                  </td>
-                  <td className="px-4 py-3">
-                    <ClienteAcoes id={c.id} nome={c.nomeFantasia ?? c.nome} ativo={c.ativo} />
-                  </td>
-                </tr>
-              ))}
-          </tbody>
-        </table>
+        <TabelaProUrl
+          tela="clientes" padrao="nome" atributos={{ "data-tabela-clientes": true }}
+          barra={<span>{total === 1 ? "1 cliente" : `${total} clientes`}</span>}
+          colunas={[
+            ...(massa ? [{ id: "sel", titulo: "Selecionar a página", fixa: true, largura: 36, cabecalho: <CheckboxPagina />, classe: "pl-3" }] : []),
+            { id: "nome", titulo: "Nome", ordenar: "nome", obrigatoria: true, minimo: 220 },
+            { id: "documento", titulo: "CPF/CNPJ", largura: 152, ordenar: "documento" },
+            { id: "segmento", titulo: "Segmento", largura: 140, ordenar: "segmento", classe: "truncate" },
+            { id: "satisfacao", titulo: "Satisfação", largura: 100, ordenar: "satisfacao" },
+            { id: "unidades", titulo: "Endereços", largura: 116, alinhar: "centro", ordenar: "unidades" },
+            { id: "os", titulo: "OS", largura: 60, alinhar: "centro", ordenar: "os" },
+            { id: "status", titulo: "Status financeiro", largura: 148 },
+            { id: "acoes", titulo: "Ações", fixa: true, semTitulo: true, largura: 80, alinhar: "direita", classe: "py-0.5" },
+          ]}
+          linhas={clientes.map((c) => {
+            const nome = c.nomeFantasia ?? c.nome;
+            const sf = statusFinanceiroMap[c.id] ?? "SEM_HISTORICO";
+            return {
+              id: c.id, atributos: { "data-cliente": c.id }, classe: c.ativo ? undefined : "opacity-60",
+              // A razão social (quando há fantasia) aparece inteira ao passar o mouse
+              titulos: { nome: c.nomeFantasia ? `${c.nomeFantasia} · ${c.nome}` : c.nome, segmento: c.segmento ? (LABELS_SEGMENTO[c.segmento] ?? c.segmento) : undefined },
+              celulas: {
+                sel: massa ? <CheckboxLinha id={c.id} rotulo={nome} /> : null,
+                nome: (
+                  <span className="flex items-center gap-2 min-w-0">
+                    <Link href={`/clientes/${c.id}/editar`} className={cn(PLANILHA.nome, "truncate hover:text-primary-600")}>{nome}</Link>
+                    {!c.ativo && <span className="text-[10px] font-bold bg-surface-linha text-ink-muted px-2 py-0.5 rounded-full whitespace-nowrap">Inativo</span>}
+                    {c._count.contratos > 0 && (
+                      <span className="inline-flex items-center gap-1 text-[10px] font-bold bg-ok-claro text-ok-texto px-2 py-0.5 rounded-full whitespace-nowrap" title="Tem contrato ativo">
+                        <FileCheck className="w-2.5 h-2.5" aria-hidden /> Contrato
+                      </span>
+                    )}
+                  </span>
+                ),
+                documento: <span className={cn(PLANILHA.apagado, "whitespace-nowrap tabular-nums")}>{formatarCpfCnpj(c.cpfCnpj)}</span>,
+                segmento: c.segmento ? <span className={PLANILHA.apagado}>{LABELS_SEGMENTO[c.segmento] ?? c.segmento}</span> : <span className="text-ink-subtle">—</span>,
+                satisfacao: estrelas(c.satisfacao) ?? <span className="text-ink-subtle">—</span>,
+                unidades: <span className={cn(PLANILHA.apagado, "tabular-nums")}>{c._count.unidades}</span>,
+                os: <span className={cn(PLANILHA.apagado, "tabular-nums")}>{c._count.ordensServico}</span>,
+                status: <span className={cn("text-[10px] font-semibold px-2.5 py-0.5 rounded-full whitespace-nowrap", COR_STATUS_FINANCEIRO_CALC[sf])}>{LABELS_STATUS_FINANCEIRO_CALC[sf]}</span>,
+                acoes: <ClienteAcoes id={c.id} nome={nome} ativo={c.ativo} />,
+              },
+            };
+          })}
+        />
         </>
         )}
         </ConteudoUrl>

@@ -24,6 +24,9 @@ import { Thermometer, ImageIcon, MapPin, Cog, QrCode, History, CheckCircle2, Cli
 import { chaveDiaCivil } from "@/lib/fuso";
 import { InputData } from "@/components/ui/input-data";
 import { hrefSecaoConfig } from "@/lib/navegacao/configuracoes";
+import { toast } from "@/components/ui/avisos";
+import { TabelaPro } from "@/components/listagem/tabela-pro";
+import { PLANILHA } from "@/lib/planilha";
 
 
 /** Tipos personalizados (sem `chaveEnum`) entram no select como "custom:<id>". */
@@ -197,6 +200,9 @@ export function EquipamentoForm({ initialData, unidadeIdFixo, abaInicial }: Equi
     return UNIDADE.opcao(data);
   }
 
+  // Editar no contexto a unidade escolhida (o cadastro dela): a lista do seletor acompanha o nome novo
+  const edicaoUnidade = UNIDADE.edicao<UnidadeItem>(clienteId, (u) => setUnidades((lista) => lista.map((x) => (x.id === u.id ? { ...x, ...u } : x))));
+
   async function criarTipo(v: Record<string, string>): Promise<OpcaoCadastro> {
     const res = await fetch("/api/tipos-equipamento", {
       method: "POST",
@@ -294,9 +300,10 @@ export function EquipamentoForm({ initialData, unidadeIdFixo, abaInicial }: Equi
       });
       if (res.status === 413) { setErroGlobal("As fotos ficaram grandes demais para enviar. Remova alguma foto e tente de novo."); return; }
       if (!res.ok) { const e = await res.json().catch(() => ({})); setErroGlobal(e.erro ?? "Erro ao salvar equipamento."); return; }
+      toast(isEditing ? "Equipamento atualizado." : "Equipamento cadastrado.");
       router.push("/equipamentos");
       router.refresh();
-    } catch { setErroGlobal("Erro de conexão. Tente novamente."); } finally { setSalvando(false); }
+    } catch { setErroGlobal("Sem conexão. Tente de novo."); } finally { setSalvando(false); }
   }
 
   const tipoLabel = form.tipo ? (opcoesTipo.find((o) => o.value === form.tipo)?.label ?? LABELS_TIPO_EQUIPAMENTO[form.tipo] ?? null) : null;
@@ -409,6 +416,7 @@ export function EquipamentoForm({ initialData, unidadeIdFixo, abaInicial }: Equi
                 opcoes={opcoesCliente} entidade={CLIENTE.entidade} placeholder="Selecione o cliente"
                 carregando={carregandoClientes} campos={CLIENTE.campos} valoresIniciais={CLIENTE.valoresIniciais}
                 campoBusca="nome" permissao={CLIENTE.permissao} linkCadastroCompleto={CLIENTE.link} criar={criarCliente}
+                  edicao={CLIENTE.edicao()}
               />
             </FormField>
             <FormField label="Endereço / Unidade" required>
@@ -417,6 +425,7 @@ export function EquipamentoForm({ initialData, unidadeIdFixo, abaInicial }: Equi
                 contexto="para este cliente" placeholder="Selecione o endereço" disabled={!clienteId} textoDesabilitado="Selecione um cliente primeiro"
                 carregando={carregandoUnidades} campos={UNIDADE.campos} campoBusca="nome" criar={criarUnidade}
                 permissao={UNIDADE.permissao} linkCadastroCompleto={clienteId ? UNIDADE.link(clienteId) : undefined}
+                edicao={edicaoUnidade}
               />
             </FormField>
           </FormGrid>
@@ -620,6 +629,7 @@ export function EquipamentoForm({ initialData, unidadeIdFixo, abaInicial }: Equi
                   opcoes={opcoesCliente} entidade={CLIENTE.entidade} placeholder="Selecione o cliente"
                   carregando={carregandoClientes} campos={CLIENTE.campos} valoresIniciais={CLIENTE.valoresIniciais}
                   campoBusca="nome" permissao={CLIENTE.permissao} linkCadastroCompleto={CLIENTE.link} criar={criarCliente}
+                  edicao={CLIENTE.edicao()}
                 />
               </FormField>
               <FormField label="Endereço / Unidade" required>
@@ -638,6 +648,7 @@ export function EquipamentoForm({ initialData, unidadeIdFixo, abaInicial }: Equi
                   criar={criarUnidade}
                   permissao={UNIDADE.permissao}
                   linkCadastroCompleto={clienteId ? UNIDADE.link(clienteId) : undefined}
+                  edicao={edicaoUnidade}
                 />
               </FormField>
               <FormGrid>
@@ -741,42 +752,64 @@ export function EquipamentoForm({ initialData, unidadeIdFixo, abaInicial }: Equi
                   <p>Nenhuma ordem de serviço registrada para este equipamento.</p>
                 </div>
               ) : (
-                <div className="overflow-hidden rounded-lg border border-surface-border">
-                  <table className="w-full text-sm">
-                    <thead className="bg-surface-alt text-ink-muted text-xs uppercase tracking-wide">
-                      <tr>
-                        <th className="text-left px-4 py-2.5 font-semibold">OS</th>
-                        <th className="text-left px-4 py-2.5 font-semibold">Data</th>
-                        <th className="text-left px-4 py-2.5 font-semibold">Tipo</th>
-                        <th className="text-left px-4 py-2.5 font-semibold">Técnico</th>
-                        <th className="text-left px-4 py-2.5 font-semibold">Status</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-surface-linha">
-                      {(initialData.ordensServico as any[]).map((o) => {
-                        const st = STATUS_OS[o.status] ?? { label: o.status, cor: "text-ink-muted bg-surface-linha" };
-                        return (
-                          <tr key={o.id} className="hover:bg-surface-alt/50">
-                            <td className="px-4 py-2.5 font-mono text-ink">{o.numero}</td>
-                            <td className="px-4 py-2.5 text-ink-muted">{dataBR(o.dataConclusao ?? o.criadoEm)}</td>
-                            <td className="px-4 py-2.5 text-ink">{o.atividades?.[0]?.tipoOs?.nome ?? "—"}</td>
-                            <td className="px-4 py-2.5 text-ink-muted">{o.atividades?.[0]?.tecnico?.nome ?? "—"}</td>
-                            <td className="px-4 py-2.5">
-                              <span className={cn("inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium", st.cor)}>
-                                {o.status === "CONCLUIDA" && <CheckCircle2 className="w-3 h-3" />}{st.label}
-                              </span>
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
+                <HistoricoOs ordens={initialData.ordensServico as any[]} />
               )}
             </div>
           )}
         </div>
       </div>
+    </div>
+  );
+}
+
+/** Aba Histórico: as OS do equipamento no padrão de lista (tabela no desktop, cartões no celular). */
+function HistoricoOs({ ordens }: { ordens: any[] }) {
+  const linhas = ordens.map((o) => {
+    const st = STATUS_OS[o.status] ?? { label: o.status, cor: "text-ink-muted bg-surface-linha" };
+    return {
+      id: o.id as string, numero: o.numero as string, data: dataBR(o.dataConclusao ?? o.criadoEm),
+      tipo: (o.atividades?.[0]?.tipoOs?.nome as string | undefined) ?? "", tecnico: (o.atividades?.[0]?.tecnico?.nome as string | undefined) ?? "",
+      selo: (
+        <span className={cn("inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium whitespace-nowrap", st.cor)}>
+          {o.status === "CONCLUIDA" && <CheckCircle2 className="w-3 h-3" aria-hidden />}{st.label}
+        </span>
+      ),
+    };
+  });
+  const numero = (l: (typeof linhas)[number]) => <Link href={`/ordens/${l.id}`} className={cn(PLANILHA.codigo, "text-primary-600 hover:underline")}>{l.numero}</Link>;
+  return (
+    <div className="rounded-lg border border-surface-border overflow-hidden" data-historico-os>
+      <ul className="sm:hidden divide-y divide-surface-border" data-cartoes>
+        {linhas.map((l) => (
+          <li key={l.id} data-cartao={l.id} className="px-3 py-2.5 flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <p>{numero(l)} <span className="text-xs text-ink-muted">{l.data}</span></p>
+              <p className="text-sm text-ink truncate">{[l.tipo, l.tecnico].filter(Boolean).join(" · ") || "Sem tipo informado"}</p>
+            </div>
+            {l.selo}
+          </li>
+        ))}
+      </ul>
+      <TabelaPro
+        tela="equipamento-historico" quebra="sm"
+        barra={<span>{linhas.length === 1 ? "1 ordem de serviço" : `${linhas.length} ordens de serviço`}</span>}
+        colunas={[
+          { id: "numero", titulo: "OS", largura: 120, obrigatoria: true },
+          { id: "data", titulo: "Data", largura: 100 },
+          { id: "tipo", titulo: "Tipo", classe: "truncate", minimo: 140 },
+          { id: "tecnico", titulo: "Técnico", largura: 200, classe: "truncate" },
+          { id: "status", titulo: "Status", largura: 140 },
+        ]}
+        linhas={linhas.map((l) => ({
+          id: l.id, titulos: { tipo: l.tipo || undefined, tecnico: l.tecnico || undefined },
+          celulas: {
+            numero: numero(l), data: <span className={cn(PLANILHA.data, PLANILHA.apagado)}>{l.data}</span>,
+            tipo: l.tipo ? <span className="text-ink">{l.tipo}</span> : <span className="text-ink-subtle">—</span>,
+            tecnico: l.tecnico ? <span className={PLANILHA.apagado}>{l.tecnico}</span> : <span className="text-ink-subtle">—</span>,
+            status: l.selo,
+          },
+        }))}
+      />
     </div>
   );
 }

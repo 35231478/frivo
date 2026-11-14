@@ -5,8 +5,21 @@ import { Button } from "@/components/ui/button";
 import { Select } from "@/components/ui/select";
 import { FormSection } from "@/components/ui/form-field";
 import { QrCode, Download, Unlink, Plus, Link2 } from "lucide-react";
+import { confirmar, toast } from "@/components/ui/avisos";
 
 type QrRef = { id: string; codigo: string };
+
+/** O erro que a rota devolveu ({ erro }) ou o texto de reserva (resposta sem JSON não derruba a tela) */
+async function erroDa(res: Response, reserva: string): Promise<string> {
+  const j = await res.json().catch(() => null);
+  return (j && typeof j.erro === "string" && j.erro) || reserva;
+}
+
+/**
+ * Aba QR Code da edição do equipamento: gerar, vincular uma etiqueta livre ou desvincular. A tela só
+ * abre para quem tem Equipamentos › editar (a rota recusa de qualquer jeito). Toda gravação avisa
+ * (toast); desvincular pede confirmação; recusada pelo servidor, a aba fica como está.
+ */
 
 export function EquipamentoQrSection({ equipamentoId, qrInicial }: { equipamentoId: string; qrInicial: QrRef | null }) {
   const [qr, setQr] = useState<QrRef | null>(qrInicial);
@@ -47,10 +60,11 @@ export function EquipamentoQrSection({ equipamentoId, qrInicial }: { equipamento
       const res = await fetch(`/api/equipamentos/${equipamentoId}/qrcode`, {
         method: "POST", headers: { "Content-Type": "application/json" }, body: "{}",
       });
-      if (!res.ok) { const e = await res.json(); setErro(e.erro ?? "Erro ao gerar."); return; }
+      if (!res.ok) { setErro(await erroDa(res, "Não foi possível gerar o QR Code.")); return; }
       const d = await res.json();
       setQr({ id: d.id, codigo: d.codigo });
-    } catch { setErro("Erro de conexão."); } finally { setCarregando(false); }
+      toast(`QR Code ${d.codigo} gerado.`);
+    } catch { setErro("Sem conexão. Tente de novo."); } finally { setCarregando(false); }
   }
 
   async function vincularExistente() {
@@ -60,19 +74,27 @@ export function EquipamentoQrSection({ equipamentoId, qrInicial }: { equipamento
       const res = await fetch(`/api/equipamentos/${equipamentoId}/qrcode`, {
         method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ qrcodeId: selecionado }),
       });
-      if (!res.ok) { const e = await res.json(); setErro(e.erro ?? "Erro ao vincular."); return; }
+      if (!res.ok) { setErro(await erroDa(res, "Não foi possível vincular o QR Code.")); return; }
       const d = await res.json();
       setQr({ id: d.id, codigo: d.codigo });
-    } catch { setErro("Erro de conexão."); } finally { setCarregando(false); }
+      toast(`QR Code ${d.codigo} vinculado.`);
+    } catch { setErro("Sem conexão. Tente de novo."); } finally { setCarregando(false); }
   }
 
   async function desvincular() {
+    if (!qr) return;
+    if (!(await confirmar({
+      titulo: `Desvincular a etiqueta ${qr.codigo}?`,
+      mensagem: "Ela deixa de apontar para este equipamento e fica livre para outro. O histórico do equipamento não muda.",
+      perigo: true, confirmarTexto: "Desvincular",
+    }))) return;
     setErro(""); setCarregando(true);
     try {
       const res = await fetch(`/api/equipamentos/${equipamentoId}/qrcode`, { method: "DELETE" });
-      if (!res.ok) { const e = await res.json(); setErro(e.erro ?? "Erro ao desvincular."); return; }
+      if (!res.ok) { setErro(await erroDa(res, "Não foi possível desvincular o QR Code.")); return; }
+      toast(`Etiqueta ${qr.codigo} desvinculada.`);
       setQr(null); setImagem(""); setUrlPublica(""); setSelecionado("");
-    } catch { setErro("Erro de conexão."); } finally { setCarregando(false); }
+    } catch { setErro("Sem conexão. Tente de novo."); } finally { setCarregando(false); }
   }
 
   function baixar() {
@@ -85,7 +107,7 @@ export function EquipamentoQrSection({ equipamentoId, qrInicial }: { equipamento
 
   return (
     <FormSection title="QR Code">
-      {erro && <div className="bg-atrasado-claro border border-atrasado/20 text-atrasado-texto text-sm rounded-lg px-4 py-2.5 mb-3">{erro}</div>}
+      {erro && <div role="alert" data-erro-qr className="bg-atrasado-claro border border-atrasado/20 text-atrasado-texto text-sm rounded-lg px-4 py-2.5 mb-3">{erro}</div>}
 
       {qr ? (
         <div className="flex flex-col sm:flex-row gap-5 items-start">
@@ -107,7 +129,7 @@ export function EquipamentoQrSection({ equipamentoId, qrInicial }: { equipamento
               <Button type="button" variant="secondary" size="sm" onClick={baixar} disabled={!imagem}>
                 <Download className="w-3.5 h-3.5" /> Baixar QR Code
               </Button>
-              <Button type="button" variant="ghost" size="sm" onClick={desvincular} loading={carregando} className="text-atrasado">
+              <Button type="button" variant="ghost" size="sm" onClick={desvincular} loading={carregando} className="text-atrasado" data-desvincular-qr>
                 <Unlink className="w-3.5 h-3.5" /> Desvincular
               </Button>
             </div>
@@ -115,17 +137,17 @@ export function EquipamentoQrSection({ equipamentoId, qrInicial }: { equipamento
         </div>
       ) : (
         <div className="space-y-4">
-          <p className="text-sm text-ink-muted">Este equipamento ainda não possui um QR Code.</p>
+          <p className="text-sm text-ink-muted">Este equipamento ainda não tem QR Code.</p>
           <div className="flex flex-col sm:flex-row gap-3 sm:items-end">
-            <Button type="button" onClick={gerar} loading={carregando}>
+            <Button type="button" onClick={gerar} loading={carregando} data-gerar-qr>
               <Plus className="w-4 h-4" /> Gerar QR Code
             </Button>
             <span className="text-xs text-ink-subtle sm:pb-2.5">ou</span>
             <div className="flex gap-2 items-center flex-1">
-              <Select value={selecionado} onChange={(e) => setSelecionado(e.target.value)} placeholder="Vincular QR existente" className="max-w-xs">
+              <Select value={selecionado} onChange={(e) => setSelecionado(e.target.value)} placeholder="Vincular QR existente" aria-label="QR Code livre para vincular" className="max-w-xs">
                 {disponiveis.map((q) => <option key={q.id} value={q.id}>{q.codigo}</option>)}
               </Select>
-              <Button type="button" variant="secondary" onClick={vincularExistente} loading={carregando} disabled={!selecionado}>
+              <Button type="button" variant="secondary" onClick={vincularExistente} loading={carregando} disabled={!selecionado} data-vincular-qr>
                 <Link2 className="w-4 h-4" /> Vincular
               </Button>
             </div>

@@ -41,7 +41,7 @@ export async function POST(req: NextRequest) {
   const { session } = guard;
   const empresaId = session.user!.empresaId;
 
-  const parsed = gerarSchema.safeParse(await req.json());
+  const parsed = gerarSchema.safeParse(await req.json().catch(() => null));
   if (!parsed.success) {
     return NextResponse.json({ erro: "Dados inválidos", detalhes: parsed.error.flatten() }, { status: 400 });
   }

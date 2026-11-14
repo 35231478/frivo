@@ -8,6 +8,7 @@
  */
 import { createElement } from "react";
 import { formatarCpfCnpj, LABELS_TIPO_EQUIPAMENTO } from "@/lib/utils";
+import { cnpjCompleto, digitosDoDocumento, sugestaoDoCnpj } from "@/lib/cadastros/autofill-cnpj";
 import { ContatosNoContexto } from "@/components/cadastro-rapido/contatos-no-contexto";
 import type { CampoRapido, EdicaoDoSelecionado, OpcaoCadastro, PermissaoCriar } from "@/components/ui/select-cadastro-rapido";
 import { hrefSecaoConfig } from "@/lib/navegacao/configuracoes";
@@ -49,7 +50,15 @@ export const CLIENTE = {
   campos: [
     { nome: "tipoPessoa", label: "Tipo", tipo: "select", obrigatorio: true, colunas: 2,
       opcoes: [{ value: "JURIDICA", label: "Empresa (PJ)" }, { value: "FISICA", label: "Pessoa (PF)" }] },
-    { nome: "cpfCnpj", label: "CPF / CNPJ", obrigatorio: true, colunas: 4, inputMode: "numeric", placeholder: "Somente números" },
+    // Empresa: "Consultar" puxa razão social, fantasia e telefone da Receita, como no cadastro completo.
+    // Sugere só no que está vazio; tudo continua editável.
+    { nome: "cpfCnpj", label: "CPF / CNPJ", obrigatorio: true, colunas: 4, inputMode: "numeric", placeholder: "Somente números",
+      consulta: {
+        origem: "Dados da Receita Federal",
+        disponivel: (v) => (v.tipoPessoa || "JURIDICA") !== "FISICA",
+        pronto: cnpjCompleto,
+        buscar: async (valor) => sugestaoDoCnpj(await ler(`/api/cnpj/${digitosDoDocumento(valor)}`, "Não foi possível consultar o CNPJ. Preencha à mão.")),
+      } },
     { nome: "nome", label: "Nome / Razão social", obrigatorio: true, placeholder: "Ex: Supermercado Bom Preço Ltda" },
     { nome: "nomeFantasia", label: "Nome fantasia", colunas: 3 },
     { nome: "telefone", label: "Telefone", colunas: 3, inputMode: "tel" },

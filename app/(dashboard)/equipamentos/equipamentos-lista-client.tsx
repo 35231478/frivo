@@ -18,7 +18,9 @@ import { TipoIcone } from "@/components/equipamentos/tipo-equipamento";
 import { GarantiaSelo, StatusSelo } from "@/components/equipamentos/selos";
 import type { FiltrosListagem, OrdemListagem } from "@/lib/equipamento-listagem";
 import { useListagemUrl } from "@/components/listagem/use-listagem-url";
-import { AlternarVisao, CampoBusca, sugerirPorUrl, ChipResumo, MultiSelect, Paginacao, SelectFiltro, ThOrd } from "@/components/listagem/listagem-ui";
+import { AlternarVisao, CampoBusca, sugerirPorUrl, ChipResumo, MultiSelect, Paginacao, SelectFiltro } from "@/components/listagem/listagem-ui";
+import { TabelaPro, type ColunaPro } from "@/components/listagem/tabela-pro";
+import { PLANILHA } from "@/lib/planilha";
 
 export type EquipLinha = {
   id: string;
@@ -62,18 +64,6 @@ function ambienteTexto(e: Pick<EquipLinha, "setor" | "ambiente">): string | null
   return a.principal ? [a.principal, a.complemento].filter(Boolean).join(" · ") : null;
 }
 
-function AmbienteCelula({ e, onFiltrar }: { e: EquipLinha; onFiltrar: (m: Record<string, string | null>) => void }) {
-  const a = ambienteEquipamento(e);
-  if (!a.principal) return <span className="text-xs text-ink-subtle italic">Não informado</span>;
-  return (
-    <button data-ambiente onClick={() => onFiltrar({ cliente: e.clienteId, unidade: e.unidadeId, setor: e.setor ?? null })}
-      className="block text-left max-w-full group/amb" title="Ver equipamentos deste local">
-      <span className="flex items-center gap-1 font-medium text-ink truncate group-hover/amb:text-primary-600"><MapPin className="w-3.5 h-3.5 text-primary-500 shrink-0" />{a.principal}</span>
-      {a.complemento && <span className="block text-xs text-ink-muted truncate pl-[18px]">{a.complemento}</span>}
-    </button>
-  );
-}
-
 export function EquipamentosListaClient({ itens, total, filtros: f, opcoes, resumo }: Props) {
   const massa = useAcoesMassaDisponiveis("equipamentos");
   const { pode } = usePermissoes();
@@ -110,12 +100,12 @@ export function EquipamentosListaClient({ itens, total, filtros: f, opcoes, resu
         <div className="flex items-center gap-2">
           <AlternarVisao visao={visao} onTrocar={trocarVisao} />
           {podeCriar && (
-            <Link href="/equipamentos/novo/foto" title="Cadastrar pela foto da etiqueta (IA)" className="inline-flex items-center gap-2 border border-primary-300 text-primary-700 bg-primary-50 hover:bg-primary-100 px-3 py-2.5 rounded-lg text-sm font-semibold transition-all">
+            <Link href="/equipamentos/novo/foto" title="Cadastrar pela foto da etiqueta" aria-label="Cadastrar pela foto da etiqueta" data-novo-por-foto className="inline-flex items-center gap-2 border border-primary-300 text-primary-700 bg-primary-50 hover:bg-primary-100 px-3 py-2.5 rounded-lg text-sm font-semibold transition-all">
               <Camera className="w-4 h-4" /> <span className="hidden sm:inline">Por foto</span>
             </Link>
           )}
           {podeCriar && (
-            <Link href={`/equipamentos/novo${f.unidade ? `?unidadeId=${f.unidade}` : ""}`} className="inline-flex items-center gap-2 bg-primary-500 hover:bg-primary-600 text-white px-4 py-2.5 rounded-lg text-sm font-semibold transition-all shadow-sm hover:shadow">
+            <Link href={`/equipamentos/novo${f.unidade ? `?unidadeId=${f.unidade}` : ""}`} data-novo-equipamento className="inline-flex items-center gap-2 bg-primary-500 hover:bg-primary-600 text-white px-4 py-2.5 rounded-lg text-sm font-semibold transition-all shadow-sm hover:shadow">
               <Plus className="w-4 h-4" /> <span className="hidden sm:inline">Novo equipamento</span><span className="sm:hidden">Novo</span>
             </Link>
           )}
@@ -273,99 +263,96 @@ export function EquipamentosListaClient({ itens, total, filtros: f, opcoes, resu
   );
 }
 
-/* ───────── Tabela (desktop) ───────── */
+/* ───────── Tabela (desktop), no padrão de lista ───────── */
+// As larguras somam o que cabe num notebook (1440px com o menu aberto) sem rolar de lado: o status não
+// tem coluna (o inativo leva o selo ao lado do nome) e cliente e unidade dividem uma.
+const COLUNAS: ColunaPro[] = [
+  { id: "equipamento", titulo: "Equipamento", ordenar: "tipo", obrigatoria: true, minimo: 200 },
+  { id: "identificacao", titulo: "Identificação", largura: 170, classe: "truncate" },
+  { id: "ambiente", titulo: "Ambiente", largura: 140, classe: "truncate" },
+  { id: "local", titulo: "Cliente e unidade", largura: 210, ordenar: "cliente" },
+  { id: "garantia", titulo: "Garantia", largura: 96, ordenar: "garantia" },
+  { id: "ultimo", titulo: "Últ. atend.", largura: 96, ordenar: "ultimo" },
+  { id: "acoes", titulo: "Ações", fixa: true, semTitulo: true, largura: 124, alinhar: "direita", classe: "py-0.5" },
+];
+
 function Tabela({
   itens, f, onOrdenar, onFiltrar, podeEditar, massa,
 }: {
   itens: EquipLinha[]; f: FiltrosListagem; onOrdenar: (k: OrdemListagem) => void;
   onFiltrar: (m: Record<string, string | null>) => void; podeEditar: boolean; massa: boolean;
 }) {
-  const router = useRouter();
+  const filtro = "block max-w-full truncate text-left hover:text-primary-600";
   return (
-    <div className="bg-white border border-surface-border rounded-card overflow-x-auto">
-      <table className="w-full text-sm">
-        <thead className="bg-surface-alt text-ink-muted text-[11px] uppercase tracking-wide border-b border-surface-border">
-          <tr>
-            {massa && <th className="w-px pl-4 pr-1 py-2.5"><CheckboxPagina /></th>}
-            <ThOrd label="Equipamento (tipo · capacidade)" k="tipo" ordem={f.ordem} dir={f.dir} onOrdenar={onOrdenar} className={massa ? "pl-2" : "pl-4"} />
-            <th className="text-left px-3 py-2.5 font-semibold">Ambiente</th>
-            <ThOrd label="Cliente › Unidade" k="cliente" ordem={f.ordem} dir={f.dir} onOrdenar={onOrdenar} />
-            <ThOrd label="Garantia" k="garantia" ordem={f.ordem} dir={f.dir} onOrdenar={onOrdenar} />
-            <th className="text-left px-3 py-2.5 font-semibold">Status</th>
-            <ThOrd label="Últ. atend." k="ultimo" ordem={f.ordem} dir={f.dir} onOrdenar={onOrdenar} className="hidden lg:table-cell" />
-            <th className="text-right pl-2 pr-3 py-2.5 font-semibold">Ações</th>
-          </tr>
-        </thead>
-        <tbody className="divide-y divide-surface-border/70">
-          {itens.map((e) => (
-            <tr
-              key={e.id} onClick={() => router.push(`/equipamentos/${e.id}`)}
-              className={cn("cursor-pointer hover:bg-primary-50/40 transition-colors", !e.ativo && "opacity-60")}
-            >
-              {massa && <td className="w-px pl-4 pr-1 py-2.5"><CheckboxLinha id={e.id} rotulo={descricaoEquipamento(e)} /></td>}
-              <td className={cn("pr-3 py-2.5", massa ? "pl-2" : "pl-4")}>
-                <div className="flex items-center gap-3 min-w-[220px]">
-                  <Miniatura e={e} />
-                  <div className="min-w-0">
-                    <p data-descricao className="font-semibold text-ink truncate max-w-[260px] 2xl:max-w-[360px]">{descricaoEquipamento(e)}</p>
-                    <p className="text-xs text-ink-muted truncate max-w-[260px] 2xl:max-w-[360px]">
-                      {[e.temNome ? e.nome : null, fabricanteModelo(e)].filter(Boolean).join(" · ")}
-                      {identificadores(e) && <span className="font-mono text-[11px] text-ink-subtle"> · {identificadores(e)}</span>}
-                    </p>
-                  </div>
-                </div>
-              </td>
-              <td className="px-3 py-2.5 max-w-[200px] 2xl:max-w-[260px]" onClick={(ev) => ev.stopPropagation()}>
-                <AmbienteCelula e={e} onFiltrar={onFiltrar} />
-              </td>
-              <td className="px-3 py-2.5 max-w-[200px] 2xl:max-w-[300px]" onClick={(ev) => ev.stopPropagation()}>
-                <button onClick={() => onFiltrar({ cliente: e.clienteId, unidade: null, setor: null })} className="block text-ink font-medium truncate max-w-full hover:text-primary-600 text-left" title="Ver equipamentos deste cliente">
-                  {e.cliente}
-                </button>
-                <button onClick={() => onFiltrar({ cliente: e.clienteId, unidade: e.unidadeId, setor: null })} className="block text-xs text-ink-muted truncate max-w-full hover:text-primary-600 text-left" title="Ver equipamentos desta unidade">
-                  {e.unidade}
-                </button>
-              </td>
-              <td className="px-3 py-2"><GarantiaSelo fim={e.garantiaAte} compacto /></td>
-              <td className="px-3 py-2"><StatusSelo ativo={e.ativo} /></td>
-              <td className="px-3 py-2 hidden lg:table-cell whitespace-nowrap">
-                {e.ultimoAtendimento ? (
-                  <div className="leading-tight">
-                    <p className="text-ink">{formatarData(e.ultimoAtendimento)}</p>
-                    <p className="text-[11px] text-ink-subtle">{haQuanto(e.ultimoAtendimento)}</p>
-                  </div>
-                ) : <span className="text-ink-subtle">—</span>}
-              </td>
-              <td className="pl-2 pr-3 py-2" onClick={(ev) => ev.stopPropagation()}>
-                <AcoesLinha e={e} podeEditar={podeEditar} />
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
+    <TabelaPro
+      tela="equipamentos" className="bg-white border border-surface-border rounded-card overflow-hidden" atributos={{ "data-tabela-equipamentos": true }}
+      ordenacao={{ ativa: f.ordem, dir: f.dir, onOrdenar: (k) => onOrdenar(k as OrdemListagem) }}
+      barra={<span>{itens.length === 1 ? "1 equipamento nesta página" : `${itens.length} equipamentos nesta página`}</span>}
+      colunas={[
+        ...(massa ? [{ id: "sel", titulo: "Selecionar a página", fixa: true, largura: 36, cabecalho: <CheckboxPagina />, classe: "pl-3" }] : []),
+        ...COLUNAS,
+      ]}
+      linhas={itens.map((e) => {
+        const detalhe = [e.temNome ? e.nome : null, fabricanteModelo(e), identificadores(e) || null].filter(Boolean).join(" · ");
+        const a = ambienteEquipamento(e);
+        const ambiente = a.principal ? [a.principal, a.complemento].filter(Boolean).join(" · ") : null;
+        return {
+          id: e.id, atributos: { "data-equipamento": e.id }, classe: e.ativo ? undefined : "opacity-60",
+          titulos: { equipamento: descricaoEquipamento(e), identificacao: detalhe || undefined, ambiente: ambiente ?? undefined },
+          celulas: {
+            sel: massa ? <CheckboxLinha id={e.id} rotulo={descricaoEquipamento(e)} /> : null,
+            equipamento: (
+              <span className="flex items-center gap-2 min-w-0">
+                <Link href={`/equipamentos/${e.id}`} className="flex items-center gap-2 min-w-0 hover:text-primary-600">
+                  <Miniatura e={e} pequena />
+                  <span data-descricao className={cn(PLANILHA.nome, "truncate")}>{descricaoEquipamento(e)}</span>
+                </Link>
+                {!e.ativo && <StatusSelo ativo={false} className="shrink-0" />}
+              </span>
+            ),
+            identificacao: detalhe ? <span className={PLANILHA.apagado}>{detalhe}</span> : <span className="text-ink-subtle">—</span>,
+            ambiente: ambiente
+              ? <button type="button" data-ambiente onClick={() => onFiltrar({ cliente: e.clienteId, unidade: e.unidadeId, setor: e.setor ?? null })} className={cn(filtro, "text-ink")} title={`Filtrar por ${ambiente}`}>{ambiente}</button>
+              : <span className="text-ink-subtle">Não informado</span>,
+            local: (
+              <span className="flex items-center gap-1 min-w-0">
+                <button type="button" onClick={() => onFiltrar({ cliente: e.clienteId, unidade: null, setor: null })} className={cn(filtro, "text-ink shrink min-w-0")} title={`Filtrar por ${e.cliente}`}>{e.cliente}</button>
+                <span className="text-ink-subtle shrink-0" aria-hidden>·</span>
+                <button type="button" onClick={() => onFiltrar({ cliente: e.clienteId, unidade: e.unidadeId, setor: null })} className={cn(filtro, PLANILHA.apagado, "shrink min-w-0")} title={`Filtrar por ${e.unidade}`}>{e.unidade}</button>
+              </span>
+            ),
+            garantia: <GarantiaSelo fim={e.garantiaAte} compacto />,
+            ultimo: e.ultimoAtendimento
+              ? <span className={PLANILHA.data} title={haQuanto(e.ultimoAtendimento) ?? undefined}>{formatarData(e.ultimoAtendimento)}</span>
+              : <span className="text-ink-subtle">—</span>,
+            acoes: <AcoesLinha e={e} podeEditar={podeEditar} />,
+          },
+        };
+      })}
+    />
   );
 }
 
 function AcoesLinha({ e, podeEditar }: { e: EquipLinha; podeEditar: boolean }) {
-  const btn = "p-1 rounded-md text-ink-muted hover:text-primary-600 hover:bg-surface-alt";
+  const btn = "p-1.5 rounded text-ink-muted hover:text-primary-600 hover:bg-primary-50";
+  const alvo = descricaoEquipamento(e);
   return (
-    <div className="flex items-center justify-end gap-0.5">
-      <Link href={`/equipamentos/${e.id}`} title="Ver ficha" className={btn}><Eye className="w-4 h-4" /></Link>
+    <span className="inline-flex items-center justify-end gap-0.5" data-acoes-equipamento={e.id}>
+      <Link href={`/equipamentos/${e.id}`} title="Ver ficha" aria-label={`Ver a ficha de ${alvo}`} className={btn}><Eye className="w-4 h-4" aria-hidden /></Link>
       {podeEditar && (
         <>
           <Link
-            href={`/equipamentos/${e.id}/editar?aba=qrcode`}
-            title={e.qrcodeId ? "QR Code vinculado" : "Gerar/vincular QR Code"}
+            href={`/equipamentos/${e.id}/editar?aba=qrcode`} data-qr-equipamento
+            title={e.qrcodeId ? "QR Code vinculado" : "Gerar ou vincular QR Code"} aria-label={`QR Code de ${alvo}`}
             className={cn(btn, e.qrcodeId && "text-ok-texto")}
           >
-            <QrCode className="w-4 h-4" />
+            <QrCode className="w-4 h-4" aria-hidden />
           </Link>
-          <Link href={`/equipamentos/${e.id}/editar`} title="Editar" className={btn}><Pencil className="w-4 h-4" /></Link>
+          <Link href={`/equipamentos/${e.id}/editar`} title="Editar" aria-label={`Editar ${alvo}`} className={btn} data-editar-equipamento><Pencil className="w-4 h-4" aria-hidden /></Link>
         </>
       )}
-      <EquipamentoAtivoBotao id={e.id} nome={e.nome} ativo={e.ativo} />
-    </div>
+      <EquipamentoAtivoBotao id={e.id} nome={alvo} ativo={e.ativo} />
+    </span>
   );
 }
 
@@ -434,10 +421,11 @@ function Cards({ itens, massa }: { itens: EquipLinha[]; massa: boolean }) {
 }
 
 /* ───────── Peças ───────── */
-function Miniatura({ e }: { e: EquipLinha }) {
-  if (!e.foto) return <TipoIcone tipo={e.tipo} tamanho="md" />;
+function Miniatura({ e, pequena }: { e: EquipLinha; pequena?: boolean }) {
+  if (!e.foto) return <TipoIcone tipo={e.tipo} tamanho={pequena ? "sm" : "md"} className={pequena ? "w-7 h-7 shrink-0" : undefined} />;
+  const lado = pequena ? 28 : 48;
   return (
     // eslint-disable-next-line @next/next/no-img-element
-    <img src={e.foto} alt={e.nome} loading="lazy" decoding="async" width={48} height={48} className="w-12 h-12 rounded-lg object-cover border border-surface-border shrink-0 bg-surface-alt" />
+    <img src={e.foto} alt="" loading="lazy" decoding="async" width={lado} height={lado} className={cn("object-cover border border-surface-border shrink-0 bg-surface-alt", pequena ? "w-7 h-7 rounded-md" : "w-12 h-12 rounded-lg")} />
   );
 }

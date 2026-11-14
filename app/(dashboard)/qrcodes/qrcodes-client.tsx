@@ -1,13 +1,21 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
-import { QrCode, Printer, Link2, X, Plus } from "lucide-react";
+import { Modal } from "@/components/ui/modal";
+import { BuscaSelect } from "@/components/ui/busca-select";
+import { Dica } from "@/components/ui/dica";
+import { confirmar, toast } from "@/components/ui/avisos";
+import { CampoBusca, ListaVazia } from "@/components/listagem/listagem-ui";
+import { TabelaPro, type ColunaPro } from "@/components/listagem/tabela-pro";
+import { QrCode, Printer, Link2, Unlink, Plus, Ban, RotateCcw } from "lucide-react";
 import { usePermissoes } from "@/components/providers/permissoes-provider";
-import { formatarData as formatarDataBR } from "@/lib/utils";
+import { PLANILHA } from "@/lib/planilha";
+import { cn, formatarData } from "@/lib/utils";
 
 type EquipamentoRef = { id: string; nome: string; local: string | null };
 type QrItem = {
@@ -25,160 +33,198 @@ interface Props {
   proximoCodigo: string;
 }
 
-const formatarData = (iso: string) => formatarDataBR(iso); // dia de Brasília
+const AJUDA = "Etiquetas QR dos equipamentos. Inativa, a etiqueta deixa de abrir a página pública; pode ser reativada. Desvincular solta a etiqueta para outro equipamento.";
 
+const COLUNAS: ColunaPro[] = [
+  { id: "sel", titulo: "Selecionar", fixa: true, largura: 36, semTitulo: true, classe: "pl-3" },
+  { id: "codigo", titulo: "Código", largura: 150, obrigatoria: true },
+  { id: "equipamento", titulo: "Equipamento", obrigatoria: true, minimo: 180, classe: "truncate" },
+  { id: "status", titulo: "Status", largura: 100 },
+  { id: "criado", titulo: "Criado em", largura: 110 },
+  { id: "acoes", titulo: "Ações", semTitulo: true, fixa: true, largura: 128, alinhar: "direita" },
+];
+
+/** Lê o erro que a rota devolveu ({ erro }), ou o texto de reserva */
+async function erroDa(res: Response, reserva: string): Promise<string> {
+  const j = await res.json().catch(() => null);
+  return (j && typeof j.erro === "string" && j.erro) || reserva;
+}
+
+/**
+ * Equipamentos › QR Codes, no padrão de lista: busca, filtros, tabela no desktop e cartões no celular (a
+ * tela é usada em campo). Ver e imprimir: quem tem QR Codes › visualizar. Gerar, vincular, desvincular,
+ * inativar e reativar: só QR Codes › gerenciar — a mesma permissão das rotas, que recusam de qualquer
+ * jeito. Toda gravação avisa (toast); se o servidor recusa, a lista não muda.
+ */
 export function QrcodesClient({ lista, equipamentosLivres, proximoCodigo }: Props) {
   const router = useRouter();
-  // Gerar e vincular QR exigem "QR Codes › gerenciar" (mesma regra da API); ver/imprimir não.
   const podeGerenciar = usePermissoes().pode("qrcodes", "gerenciar");
+  const [busca, setBusca] = useState("");
   const [filtroVinculo, setFiltroVinculo] = useState("");
   const [filtroAtivo, setFiltroAtivo] = useState("");
   const [selecionados, setSelecionados] = useState<Set<string>>(new Set());
   const [modalGerar, setModalGerar] = useState(false);
-  const [vinculandoId, setVinculandoId] = useState<string | null>(null);
+  const [vinculando, setVinculando] = useState<QrItem | null>(null);
+  const [ocupado, setOcupado] = useState<string | null>(null);
 
-  const filtrada = useMemo(() => {
-    return lista.filter((q) => {
-      if (filtroVinculo === "vinculado" && !q.equipamento) return false;
-      if (filtroVinculo === "nao" && q.equipamento) return false;
-      if (filtroAtivo === "ativo" && !q.ativo) return false;
-      if (filtroAtivo === "inativo" && q.ativo) return false;
-      return true;
-    });
-  }, [lista, filtroVinculo, filtroAtivo]);
+  const q = busca.trim().toLowerCase();
+  const filtrada = useMemo(() => lista.filter((x) => {
+    if (filtroVinculo === "vinculado" && !x.equipamento) return false;
+    if (filtroVinculo === "nao" && x.equipamento) return false;
+    if (filtroAtivo === "ativo" && !x.ativo) return false;
+    if (filtroAtivo === "inativo" && x.ativo) return false;
+    if (q && !`${x.codigo} ${x.equipamento?.nome ?? ""} ${x.equipamento?.local ?? ""}`.toLowerCase().includes(q)) return false;
+    return true;
+  }), [lista, filtroVinculo, filtroAtivo, q]);
 
-  function toggleSel(id: string) {
-    setSelecionados((s) => {
-      const n = new Set(s);
-      if (n.has(id)) n.delete(id); else n.add(id);
-      return n;
-    });
-  }
-  function toggleTodos() {
-    setSelecionados((s) =>
-      s.size === filtrada.length ? new Set() : new Set(filtrada.map((q) => q.id)),
-    );
+  const toggleSel = (id: string) => setSelecionados((s) => { const n = new Set(s); if (n.has(id)) n.delete(id); else n.add(id); return n; });
+  const todosMarcados = filtrada.length > 0 && filtrada.every((x) => selecionados.has(x.id));
+  const toggleTodos = () => setSelecionados(todosMarcados ? new Set() : new Set(filtrada.map((x) => x.id)));
+  const hrefImprimir = (ids: string[]) => `/qrcodes/imprimir?ids=${ids.join(",")}`;
+
+  /** Grava pela rota e só então atualiza a lista; recusado, avisa e deixa como está */
+  async function gravar(item: QrItem, corpo: Record<string, unknown>, sucesso: string, falha: string) {
+    setOcupado(item.id);
+    try {
+      const res = await fetch(`/api/qrcodes/${item.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(corpo) });
+      if (!res.ok) { toast(await erroDa(res, falha), "erro"); return; }
+      toast(sucesso);
+      router.refresh();
+    } catch { toast("Sem conexão. Tente de novo.", "erro"); } finally { setOcupado(null); }
   }
 
-  function imprimirSelecionados() {
-    if (selecionados.size === 0) return;
-    router.push(`/qrcodes/imprimir?ids=${Array.from(selecionados).join(",")}`);
+  async function desvincular(item: QrItem) {
+    if (!(await confirmar({
+      titulo: `Desvincular a etiqueta ${item.codigo}?`,
+      mensagem: `Fica livre para outro equipamento. ${item.equipamento?.nome ?? "O equipamento"} e o histórico não mudam.`,
+      perigo: true, confirmarTexto: "Desvincular",
+    }))) return;
+    await gravar(item, { equipamentoId: null }, `Etiqueta ${item.codigo} desvinculada.`, "Não foi possível desvincular a etiqueta.");
   }
+
+  async function alternarAtivo(item: QrItem) {
+    if (item.ativo && !(await confirmar({
+      titulo: `Inativar a etiqueta ${item.codigo}?`,
+      mensagem: "A leitura deixa de abrir a página do equipamento. A etiqueta pode ser reativada.",
+      perigo: true, confirmarTexto: "Inativar",
+    }))) return;
+    await gravar(item, { ativo: !item.ativo }, item.ativo ? `Etiqueta ${item.codigo} inativada.` : `Etiqueta ${item.codigo} reativada.`, "Não foi possível alterar a etiqueta.");
+  }
+
+  const selo = (x: QrItem) => (
+    <span className={cn("inline-flex px-2 py-0.5 rounded-full text-xs font-medium", x.ativo ? "bg-ok-claro text-ok-texto" : "bg-surface-linha text-ink-muted")} data-status-qr>
+      {x.ativo ? "Ativo" : "Inativo"}
+    </span>
+  );
+  const equipamento = (x: QrItem) => x.equipamento
+    ? <span className="text-ink">{x.equipamento.nome}{x.equipamento.local ? <span className="text-ink-muted"> · {x.equipamento.local}</span> : null}</span>
+    : <span className="text-ink-subtle">Não vinculado</span>;
+  const btn = "p-1.5 rounded text-ink-muted hover:text-primary-600 hover:bg-primary-50 transition-colors disabled:opacity-40";
+  const acoes = (x: QrItem) => (
+    <span className="inline-flex items-center justify-end gap-0.5" data-acoes-qr>
+      <Link href={hrefImprimir([x.id])} aria-label={`Imprimir ${x.codigo}`} title="Imprimir" className={btn} data-imprimir-qr={x.id}><Printer className="w-4 h-4" aria-hidden /></Link>
+      {podeGerenciar && (x.equipamento ? (
+        <button type="button" onClick={() => void desvincular(x)} disabled={ocupado === x.id} aria-label={`Desvincular ${x.codigo}`} title="Desvincular" className={btn} data-desvincular-qr={x.id}><Unlink className="w-4 h-4" aria-hidden /></button>
+      ) : (
+        <button type="button" onClick={() => setVinculando(x)} disabled={ocupado === x.id} aria-label={`Vincular ${x.codigo}`} title="Vincular a um equipamento" className={btn} data-vincular-qr={x.id}><Link2 className="w-4 h-4" aria-hidden /></button>
+      ))}
+      {podeGerenciar && (
+        <button type="button" onClick={() => void alternarAtivo(x)} disabled={ocupado === x.id} aria-label={`${x.ativo ? "Inativar" : "Reativar"} ${x.codigo}`} title={x.ativo ? "Inativar" : "Reativar"}
+          className={cn(btn, x.ativo ? "hover:text-atrasado hover:bg-atrasado-claro" : "hover:text-ok-texto hover:bg-ok-claro")} data-alternar-qr={x.id}>
+          {x.ativo ? <Ban className="w-4 h-4" aria-hidden /> : <RotateCcw className="w-4 h-4" aria-hidden />}
+        </button>
+      )}
+    </span>
+  );
+  const caixa = (x: QrItem) => <input type="checkbox" checked={selecionados.has(x.id)} onChange={() => toggleSel(x.id)} aria-label={`Selecionar ${x.codigo}`} data-selecionar-qr={x.id} className="w-4 h-4" />;
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-start justify-between gap-4">
-        <div className="flex items-center gap-3">
-          <div className="p-2 bg-primary-50 rounded-lg">
-            <QrCode className="w-5 h-5 text-primary-600" />
-          </div>
-          <div>
-            <h1 className="text-2xl font-bold text-ink tracking-tight">QR Codes</h1>
-            <p className="text-sm text-ink-muted mt-1">Gere etiquetas QR e vincule aos equipamentos</p>
-          </div>
+    <div className="space-y-4" data-qrcodes>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-center gap-3 min-w-0">
+          <div className="p-2 bg-surface-alt rounded-lg shrink-0"><QrCode className="w-5 h-5 text-ink-muted" aria-hidden /></div>
+          <h1 className="page-title flex items-center gap-1.5">QR Codes <Dica texto={AJUDA} rotulo="QR Codes" lado="direita" /></h1>
+          <span className="text-xs font-semibold text-ink-muted bg-surface-alt border border-surface-border px-2.5 py-1 rounded-full" data-total-qr>{lista.length}</span>
         </div>
-        <div className="flex items-center gap-2 shrink-0">
-          <Button variant="secondary" onClick={imprimirSelecionados} disabled={selecionados.size === 0}>
-            <Printer className="w-4 h-4" /> Imprimir{selecionados.size > 0 ? ` (${selecionados.size})` : ""}
+        {/* No celular: os botões ocupam a linha toda, um ao lado do outro */}
+        <div className="flex items-center gap-2 w-full sm:w-auto">
+          <Button variant="secondary" onClick={() => router.push(hrefImprimir([...selecionados]))} disabled={selecionados.size === 0} className="flex-1 sm:flex-none" data-imprimir-selecionados>
+            <Printer className="w-4 h-4" aria-hidden /> Imprimir{selecionados.size > 0 ? ` (${selecionados.size})` : ""}
           </Button>
           {podeGerenciar && (
-            <Button onClick={() => setModalGerar(true)}>
-              <Plus className="w-4 h-4" /> Gerar QR Codes
+            <Button onClick={() => setModalGerar(true)} className="flex-1 sm:flex-none" data-gerar-qr>
+              <Plus className="w-4 h-4" aria-hidden /> Gerar QR Codes
             </Button>
           )}
         </div>
       </div>
 
-      {/* Filtros */}
-      <div className="flex flex-wrap items-center gap-3">
-        <Select value={filtroVinculo} onChange={(e) => setFiltroVinculo(e.target.value)} className="max-w-[200px]">
-          <option value="">Todos (vínculo)</option>
-          <option value="vinculado">Vinculados</option>
-          <option value="nao">Não vinculados</option>
-        </Select>
-        <Select value={filtroAtivo} onChange={(e) => setFiltroAtivo(e.target.value)} className="max-w-[180px]">
-          <option value="">Todos (status)</option>
-          <option value="ativo">Ativos</option>
-          <option value="inativo">Inativos</option>
-        </Select>
-        <span className="text-sm text-ink-muted">{filtrada.length} de {lista.length}</span>
+      <div className="card overflow-hidden">
+        <div className="p-3 sm:p-4 border-b border-surface-border flex flex-wrap items-center gap-2 bg-surface-alt/40">
+          {/* Celular: a pesquisa ocupa a linha e os dois filtros dividem a de baixo */}
+          <div className="basis-full sm:basis-0 sm:flex-1 sm:min-w-[12rem]">
+            <CampoBusca valor={busca} onChange={setBusca} placeholder="Pesquisar por código ou equipamento" rotulo="Pesquisar QR Codes" atalho={false} />
+          </div>
+          <Select value={filtroVinculo} onChange={(e) => setFiltroVinculo(e.target.value)} aria-label="Filtrar por vínculo" className="flex-1 sm:flex-none sm:w-44" data-filtro-vinculo>
+            <option value="">Vínculo: todos</option>
+            <option value="vinculado">Vinculados</option>
+            <option value="nao">Não vinculados</option>
+          </Select>
+          <Select value={filtroAtivo} onChange={(e) => setFiltroAtivo(e.target.value)} aria-label="Filtrar por status" className="flex-1 sm:flex-none sm:w-40" data-filtro-status>
+            <option value="">Status: todos</option>
+            <option value="ativo">Ativos</option>
+            <option value="inativo">Inativos</option>
+          </Select>
+        </div>
+
+        {filtrada.length === 0 ? (
+          <ListaVazia mensagem={lista.length === 0 ? "Nenhum QR Code gerado" : "Nenhum QR Code encontrado"} busca={q ? busca.trim() : undefined} onLimpar={() => setBusca("")} />
+        ) : (
+          <>
+            {/* Celular: um cartão por etiqueta */}
+            <div className="sm:hidden px-3 py-2 border-b border-surface-border flex items-center justify-between text-xs text-ink-muted">
+              <label className="inline-flex items-center gap-2"><input type="checkbox" checked={todosMarcados} onChange={toggleTodos} className="w-4 h-4" data-selecionar-todos-celular /> Selecionar todos</label>
+              <span>{filtrada.length} de {lista.length}</span>
+            </div>
+            <ul className="sm:hidden divide-y divide-surface-border" data-cartoes>
+              {filtrada.map((x) => (
+                <li key={x.id} data-cartao={x.id} className={cn("flex items-start gap-3 px-3 py-3", !x.ativo && "opacity-70")}>
+                  <span className="pt-0.5">{caixa(x)}</span>
+                  <div className="min-w-0 flex-1">
+                    <p className={cn(PLANILHA.codigo, "text-ink")}>{x.codigo}</p>
+                    <p className="text-sm break-words">{equipamento(x)}</p>
+                    <div className="mt-1.5 flex flex-wrap items-center gap-2 text-xs text-ink-muted">{selo(x)}<span>{formatarData(x.criadoEm)}</span></div>
+                  </div>
+                  <div className="shrink-0 -mr-1">{acoes(x)}</div>
+                </li>
+              ))}
+            </ul>
+            <TabelaPro
+              tela="qrcodes" quebra="sm" className="hidden sm:block" atributos={{ "data-tabela-qrcodes": true }}
+              barra={<span data-contagem-qr>{filtrada.length} de {lista.length}</span>}
+              colunas={COLUNAS.map((c) => (c.id === "sel" ? { ...c, cabecalho: <input type="checkbox" checked={todosMarcados} onChange={toggleTodos} aria-label="Selecionar todos" className="w-4 h-4" data-selecionar-todos /> } : c))}
+              linhas={filtrada.map((x) => ({
+                id: x.id, atributos: { "data-qr": x.id }, classe: x.ativo ? undefined : "opacity-70", titulos: { equipamento: x.equipamento ? `${x.equipamento.nome}${x.equipamento.local ? ` · ${x.equipamento.local}` : ""}` : undefined },
+                celulas: {
+                  sel: caixa(x), codigo: <span className={cn(PLANILHA.codigo, "text-ink")}>{x.codigo}</span>, equipamento: equipamento(x), status: selo(x),
+                  criado: <span className={cn(PLANILHA.data, PLANILHA.apagado)}>{formatarData(x.criadoEm)}</span>, acoes: acoes(x),
+                },
+              }))}
+            />
+          </>
+        )}
       </div>
 
-      {/* Tabela */}
-      <div className="bg-white rounded-card border border-surface-border overflow-hidden">
-        <table className="w-full text-sm">
-          <thead className="bg-surface-alt text-ink-muted text-xs uppercase tracking-wide">
-            <tr>
-              <th className="w-10 px-4 py-3">
-                <input type="checkbox" checked={filtrada.length > 0 && selecionados.size === filtrada.length} onChange={toggleTodos} />
-              </th>
-              <th className="text-left px-4 py-3 font-semibold">Código</th>
-              <th className="text-left px-4 py-3 font-semibold">Equipamento</th>
-              <th className="text-left px-4 py-3 font-semibold">Status</th>
-              <th className="text-left px-4 py-3 font-semibold">Criado em</th>
-              <th className="text-right px-4 py-3 font-semibold">Ações</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-surface-linha">
-            {filtrada.length === 0 && (
-              <tr><td colSpan={6} className="px-4 py-10 text-center text-ink-muted">Nenhum QR Code encontrado.</td></tr>
-            )}
-            {filtrada.map((q) => (
-              <tr key={q.id} className="hover:bg-surface-alt/50">
-                <td className="px-4 py-3">
-                  <input type="checkbox" checked={selecionados.has(q.id)} onChange={() => toggleSel(q.id)} />
-                </td>
-                <td className="px-4 py-3 font-mono font-medium text-ink">{q.codigo}</td>
-                <td className="px-4 py-3">
-                  {q.equipamento ? (
-                    <span className="text-ink">{q.equipamento.nome}{q.equipamento.local ? <span className="text-ink-muted"> · {q.equipamento.local}</span> : null}</span>
-                  ) : (
-                    <span className="text-ink-subtle italic">Não vinculado</span>
-                  )}
-                </td>
-                <td className="px-4 py-3">
-                  <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${q.ativo ? "bg-ok-claro text-ok-texto" : "bg-surface-linha text-ink-muted"}`}>
-                    {q.ativo ? "Ativo" : "Inativo"}
-                  </span>
-                </td>
-                <td className="px-4 py-3 text-ink-muted">{formatarData(q.criadoEm)}</td>
-                <td className="px-4 py-3 text-right">
-                  {podeGerenciar && !q.equipamento && (
-                    <button onClick={() => setVinculandoId(q.id)} className="inline-flex items-center gap-1 text-xs font-medium text-primary-600 hover:text-primary-700">
-                      <Link2 className="w-3.5 h-3.5" /> Vincular
-                    </button>
-                  )}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-
-      {modalGerar && <ModalGerar onClose={() => setModalGerar(false)} proximoCodigo={proximoCodigo} onPronto={() => { setModalGerar(false); router.refresh(); }} />}
-      {vinculandoId && (
-        <ModalVincular
-          qrId={vinculandoId}
-          equipamentos={equipamentosLivres}
-          onClose={() => setVinculandoId(null)}
-          onPronto={() => { setVinculandoId(null); router.refresh(); }}
-        />
-      )}
+      <ModalGerar aberto={modalGerar} onFechar={() => setModalGerar(false)} proximoCodigo={proximoCodigo} onPronto={(n) => { setModalGerar(false); toast(n === 1 ? "1 QR Code gerado." : `${n} QR Codes gerados.`); router.refresh(); }} />
+      <ModalVincular
+        item={vinculando} equipamentos={equipamentosLivres} onFechar={() => setVinculando(null)}
+        onPronto={(codigo) => { setVinculando(null); toast(`Etiqueta ${codigo} vinculada.`); router.refresh(); }}
+      />
     </div>
   );
 }
 
-function Overlay({ children, onClose }: { children: React.ReactNode; onClose: () => void }) {
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={onClose}>
-      <div className="bg-white rounded-card shadow-xl w-full max-w-md" onClick={(e) => e.stopPropagation()}>
-        {children}
-      </div>
-    </div>
-  );
-}
-
-function ModalGerar({ onClose, onPronto, proximoCodigo }: { onClose: () => void; onPronto: () => void; proximoCodigo: string }) {
+function ModalGerar({ aberto, onFechar, onPronto, proximoCodigo }: { aberto: boolean; onFechar: () => void; onPronto: (quantidade: number) => void; proximoCodigo: string }) {
   const [quantidade, setQuantidade] = useState(10);
   const [gerando, setGerando] = useState(false);
   const [erro, setErro] = useState("");
@@ -198,84 +244,71 @@ function ModalGerar({ onClose, onPronto, proximoCodigo }: { onClose: () => void;
   async function gerar() {
     setErro(""); setGerando(true);
     try {
-      const res = await fetch("/api/qrcodes", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ quantidade }),
-      });
-      if (!res.ok) { const e = await res.json(); setErro(e.erro ?? "Erro ao gerar."); return; }
-      onPronto();
-    } catch { setErro("Erro de conexão."); } finally { setGerando(false); }
+      const res = await fetch("/api/qrcodes", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ quantidade }) });
+      if (!res.ok) { setErro(await erroDa(res, "Não foi possível gerar os QR Codes.")); return; }
+      onPronto(quantidade);
+    } catch { setErro("Sem conexão. Tente de novo."); } finally { setGerando(false); }
   }
 
   return (
-    <Overlay onClose={onClose}>
-      <div className="flex items-center justify-between px-5 py-4 border-b border-surface-linha">
-        <h2 className="text-lg font-semibold text-ink">Gerar QR Codes</h2>
-        <button onClick={onClose} className="text-ink-muted hover:text-ink"><X className="w-5 h-5" /></button>
-      </div>
-      <div className="p-5 space-y-4">
-        {erro && <div className="bg-atrasado-claro border border-atrasado/20 text-atrasado-texto text-sm rounded-lg px-4 py-2.5">{erro}</div>}
-        <div>
-          <label className="block text-sm font-medium text-ink mb-1.5">Quantidade a gerar (1 a 100)</label>
-          <Input type="number" min={1} max={100} value={quantidade}
+    <Modal aberto={aberto} onFechar={onFechar} titulo="Gerar QR Codes" tamanho="sm">
+      <div className="space-y-4" data-modal-gerar>
+        {erro && <div role="alert" className="bg-atrasado-claro border border-atrasado/20 text-atrasado-texto text-sm rounded-lg px-4 py-2.5" data-erro-gerar>{erro}</div>}
+        <label className="block">
+          <span className="block text-sm font-medium text-ink mb-1.5">Quantidade (1 a 100)</span>
+          <Input type="number" inputMode="numeric" min={1} max={100} value={quantidade} data-quantidade
             onChange={(e) => setQuantidade(Math.min(100, Math.max(1, Number(e.target.value) || 1)))} />
-        </div>
-        <div className="bg-surface-alt rounded-lg p-3 text-sm">
-          <p className="text-ink-muted text-xs mb-1.5">Os códigos gerados serão:</p>
+        </label>
+        <div className="bg-surface-alt rounded-lg p-3 text-sm" data-previa-codigos>
+          <p className="text-ink-muted text-xs mb-1.5">Códigos que serão gerados</p>
           <ul className="font-mono text-ink space-y-0.5">
             {previa.map((c) => <li key={c}>{c}</li>)}
             {quantidade > 3 && <li className="text-ink-subtle">… até {`${proximo.prefixo}${proximo.seq + quantidade - 1}`}</li>}
           </ul>
         </div>
+        <div className="flex justify-end gap-2">
+          <Button variant="secondary" onClick={onFechar}>Cancelar</Button>
+          <Button onClick={gerar} loading={gerando} data-confirmar-gerar>Gerar</Button>
+        </div>
       </div>
-      <div className="flex justify-end gap-2 px-5 py-4 border-t border-surface-linha">
-        <Button variant="secondary" onClick={onClose}>Cancelar</Button>
-        <Button onClick={gerar} loading={gerando}>Gerar</Button>
-      </div>
-    </Overlay>
+    </Modal>
   );
 }
 
-function ModalVincular({ qrId, equipamentos, onClose, onPronto }: { qrId: string; equipamentos: { id: string; nome: string }[]; onClose: () => void; onPronto: () => void }) {
+function ModalVincular({ item, equipamentos, onFechar, onPronto }: { item: QrItem | null; equipamentos: { id: string; nome: string }[]; onFechar: () => void; onPronto: (codigo: string) => void }) {
   const [equipamentoId, setEquipamentoId] = useState("");
   const [salvando, setSalvando] = useState(false);
   const [erro, setErro] = useState("");
 
   async function vincular() {
+    if (!item) return;
     if (!equipamentoId) { setErro("Selecione um equipamento."); return; }
     setErro(""); setSalvando(true);
     try {
-      const res = await fetch(`/api/qrcodes/${qrId}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ equipamentoId }),
-      });
-      if (!res.ok) { const e = await res.json(); setErro(e.erro ?? "Erro ao vincular."); return; }
-      onPronto();
-    } catch { setErro("Erro de conexão."); } finally { setSalvando(false); }
+      const res = await fetch(`/api/qrcodes/${item.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ equipamentoId }) });
+      if (!res.ok) { setErro(await erroDa(res, "Não foi possível vincular a etiqueta.")); return; }
+      setEquipamentoId("");
+      onPronto(item.codigo);
+    } catch { setErro("Sem conexão. Tente de novo."); } finally { setSalvando(false); }
   }
 
   return (
-    <Overlay onClose={onClose}>
-      <div className="flex items-center justify-between px-5 py-4 border-b border-surface-linha">
-        <h2 className="text-lg font-semibold text-ink">Vincular a um equipamento</h2>
-        <button onClick={onClose} className="text-ink-muted hover:text-ink"><X className="w-5 h-5" /></button>
-      </div>
-      <div className="p-5 space-y-4">
-        {erro && <div className="bg-atrasado-claro border border-atrasado/20 text-atrasado-texto text-sm rounded-lg px-4 py-2.5">{erro}</div>}
+    <Modal aberto={!!item} onFechar={() => { setErro(""); setEquipamentoId(""); onFechar(); }} titulo={item ? `Vincular a etiqueta ${item.codigo}` : "Vincular a etiqueta"} tamanho="sm">
+      <div className="space-y-4" data-modal-vincular>
+        {erro && <div role="alert" className="bg-atrasado-claro border border-atrasado/20 text-atrasado-texto text-sm rounded-lg px-4 py-2.5" data-erro-vincular>{erro}</div>}
         {equipamentos.length === 0 ? (
-          <p className="text-sm text-ink-muted">Não há equipamentos sem QR Code disponíveis.</p>
+          <p className="text-sm text-ink-muted" data-sem-equipamentos>Não há equipamento sem QR Code.</p>
         ) : (
-          <Select value={equipamentoId} onChange={(e) => setEquipamentoId(e.target.value)} placeholder="Selecione o equipamento">
-            {equipamentos.map((e) => <option key={e.id} value={e.id}>{e.nome}</option>)}
-          </Select>
+          <label className="block">
+            <span className="block text-sm font-medium text-ink mb-1.5">Equipamento</span>
+            <BuscaSelect value={equipamentoId} onChange={setEquipamentoId} options={equipamentos.map((e) => ({ value: e.id, label: e.nome }))} placeholder="Pesquisar equipamento sem QR Code" />
+          </label>
         )}
+        <div className="flex justify-end gap-2">
+          <Button variant="secondary" onClick={() => { setErro(""); setEquipamentoId(""); onFechar(); }}>Cancelar</Button>
+          <Button onClick={vincular} loading={salvando} disabled={equipamentos.length === 0} data-confirmar-vincular>Vincular</Button>
+        </div>
       </div>
-      <div className="flex justify-end gap-2 px-5 py-4 border-t border-surface-linha">
-        <Button variant="secondary" onClick={onClose}>Cancelar</Button>
-        <Button onClick={vincular} loading={salvando} disabled={equipamentos.length === 0}>Vincular</Button>
-      </div>
-    </Overlay>
+    </Modal>
   );
 }

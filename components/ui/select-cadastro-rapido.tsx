@@ -8,6 +8,7 @@ import { Modal } from "@/components/ui/modal";
 import { Dica } from "@/components/ui/dica";
 import { toast } from "@/components/ui/avisos";
 import { alcanceDaEdicao, camposAlterados, rotuloDaEdicao, type EscopoEdicao } from "@/lib/edicao-contexto";
+import { aplicarSugestao, notaDaSugestao } from "@/lib/cadastros/autofill-cnpj";
 import { usePermissoes } from "@/components/providers/permissoes-provider";
 import type { Acao } from "@/lib/permissoes";
 import { AvisoSerieDuplicada } from "@/components/equipamentos/aviso-serie-duplicada";
@@ -55,6 +56,23 @@ export interface CampoRapido {
   inputMode?: "text" | "numeric" | "decimal" | "tel" | "email";
   /** Nº de série de equipamento: avisa (sem bloquear) se já existe outro com a mesma etiqueta. */
   avisoSerie?: boolean;
+  /** Botão "Consultar" ao lado do campo: sugere os outros campos a partir deste (ex.: CNPJ). */
+  consulta?: ConsultaDoCampo;
+}
+
+/**
+ * Consulta a partir de um campo (o CNPJ puxa razão social, fantasia e telefone). Ela SUGERE: só entra
+ * nos campos ainda vazios, a tela diz de onde veio e tudo continua editável.
+ */
+export interface ConsultaDoCampo {
+  /** De onde vêm os dados — abre a frase mostrada depois ("Dados da Receita Federal") */
+  origem: string;
+  /** A consulta vale para estes valores? (ex.: só pessoa jurídica). Sem ela, vale sempre. */
+  disponivel?: (valores: Record<string, string>) => boolean;
+  /** O valor do campo já dá para consultar? (ex.: 14 dígitos) */
+  pronto: (valor: string) => boolean;
+  /** Busca e devolve { campo: valor sugerido } (lance Error(msg) em falha) */
+  buscar: (valor: string) => Promise<Record<string, string>>;
 }
 
 /**
@@ -499,10 +517,14 @@ function MiniCadastro({
   const [erro, setErro] = useState("");
   const [faltando, setFaltando] = useState<Set<string>>(new Set());
   const [buscandoCep, setBuscandoCep] = useState(false);
+  const [consultando, setConsultando] = useState<string | null>(null);
+  const valoresRef = useRef(valores);
+  valoresRef.current = valores;
+  const [notaConsulta, setNotaConsulta] = useState<{ campo: string; texto: string; erro?: boolean } | null>(null);
 
   // Reinicia a cada abertura (com o texto da busca, se houver)
   useEffect(() => {
-    if (aberto) { setValores(valoresIniciais); setErro(""); setFaltando(new Set()); }
+    if (aberto) { setValores(valoresIniciais); setErro(""); setFaltando(new Set()); setNotaConsulta(null); setConsultando(null); }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [aberto]);
 
@@ -523,6 +545,23 @@ function MiniCadastro({
         });
       }
     } catch { /* sem rede: o usuário digita */ } finally { setBuscandoCep(false); }
+  }
+
+  /** A consulta do campo sugere os outros: só entra no que está vazio, e a tela diz o que entrou */
+  async function consultar(c: CampoRapido) {
+    if (!c.consulta || consultando) return;
+    setConsultando(c.nome); setNotaConsulta(null);
+    try {
+      const sugestao = await c.consulta.buscar(valores[c.nome] ?? "");
+      const outros = campos.filter((x) => x.nome !== c.nome);
+      // Os valores do momento em que a resposta chega: o que foi digitado durante a consulta fica
+      const r = aplicarSugestao(valoresRef.current, sugestao, outros.map((x) => x.nome));
+      setValores(r.valores);
+      setNotaConsulta({ campo: c.nome, texto: notaDaSugestao(r.preenchidos, Object.fromEntries(outros.map((x) => [x.nome, x.label])), c.consulta.origem) });
+      setFaltando((f) => { const n = new Set(f); for (const k of r.preenchidos) n.delete(k); return n; });
+    } catch (e) {
+      setNotaConsulta({ campo: c.nome, texto: e instanceof Error && e.message ? e.message : "Não foi possível consultar. Preencha à mão.", erro: true });
+    } finally { setConsultando(null); }
   }
 
   async function salvar() {
@@ -585,6 +624,7 @@ function MiniCadastro({
                   className={cn(inputCls, "resize-none", faltando.has(c.nome) && "border-atrasado/40")}
                 />
               ) : (
+                <span className={c.consulta && c.consulta.disponivel?.(valores) !== false ? "flex gap-2" : undefined}>
                 <input
                   autoFocus={i === 0}
                   value={valores[c.nome] ?? ""}
@@ -593,6 +633,17 @@ function MiniCadastro({
                   inputMode={c.tipo === "cep" ? "numeric" : c.inputMode}
                   className={cn(inputCls, faltando.has(c.nome) && "border-atrasado/40 focus:border-atrasado focus:ring-atrasado/10")}
                 />
+                {c.consulta && c.consulta.disponivel?.(valores) !== false && (
+                  <button type="button" onClick={() => void consultar(c)} disabled={!!consultando || !c.consulta.pronto(valores[c.nome] ?? "")} data-consultar={c.nome}
+                    title={c.consulta.pronto(valores[c.nome] ?? "") ? `Consultar: ${c.consulta.origem.toLowerCase()}` : "Preencha o campo para consultar"}
+                    className="shrink-0 inline-flex items-center gap-1.5 px-3 text-sm font-medium rounded-lg border border-surface-border text-ink hover:bg-surface-alt disabled:opacity-50 disabled:hover:bg-transparent">
+                    {consultando === c.nome ? <Loader2 className="w-4 h-4 animate-spin" aria-hidden /> : <Search className="w-4 h-4" aria-hidden />} Consultar
+                  </button>
+                )}
+                </span>
+              )}
+              {notaConsulta?.campo === c.nome && (
+                <span role="status" data-nota-consulta={notaConsulta.erro ? "erro" : "ok"} className={cn("block text-xs mt-1", notaConsulta.erro ? "text-atrasado" : "text-ink-muted")}>{notaConsulta.texto}</span>
               )}
             </label>
           ))}
