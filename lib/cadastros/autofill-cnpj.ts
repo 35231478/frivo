@@ -45,11 +45,15 @@ export const digitosDoDocumento = (v: unknown) => digitos(v);
 /** CNPJ completo (14 dígitos, com ou sem máscara)? Só então dá para consultar. */
 export const cnpjCompleto = (v: unknown) => digitos(v).length === 14;
 
-/** O que a consulta de CNPJ (/api/cnpj) devolve e o cadastro rápido aproveita: só texto não vazio. */
+/**
+ * O que a consulta de CNPJ (/api/cnpj) devolve e o cadastro rápido aproveita: só texto não vazio, e só
+ * para campos que a pessoa VÊ no cadastro rápido (razão social, fantasia, telefone e e-mail). A opção
+ * pelo Simples e o endereço ficam de fora: o cadastro rápido não tem esses campos.
+ */
 export function sugestaoDoCnpj(resposta: unknown): Record<string, string> {
   const r = (resposta && typeof resposta === "object" ? resposta : {}) as Record<string, unknown>;
   const saida: Record<string, string> = {};
-  for (const campo of ["nome", "nomeFantasia", "telefone"]) {
+  for (const campo of ["nome", "nomeFantasia", "telefone", "email"]) {
     const v = typeof r[campo] === "string" ? (r[campo] as string).trim() : "";
     if (v) saida[campo] = v;
   }

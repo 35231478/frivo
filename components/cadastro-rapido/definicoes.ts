@@ -50,7 +50,7 @@ export const CLIENTE = {
   campos: [
     { nome: "tipoPessoa", label: "Tipo", tipo: "select", obrigatorio: true, colunas: 2,
       opcoes: [{ value: "JURIDICA", label: "Empresa (PJ)" }, { value: "FISICA", label: "Pessoa (PF)" }] },
-    // Empresa: "Consultar" puxa razão social, fantasia e telefone da Receita, como no cadastro completo.
+    // Empresa: "Consultar" puxa razão social, fantasia, telefone e e-mail da Receita, como no cadastro completo.
     // Sugere só no que está vazio; tudo continua editável.
     { nome: "cpfCnpj", label: "CPF / CNPJ", obrigatorio: true, colunas: 4, inputMode: "numeric", placeholder: "Somente números",
       consulta: {
@@ -62,6 +62,8 @@ export const CLIENTE = {
     { nome: "nome", label: "Nome / Razão social", obrigatorio: true, placeholder: "Ex: Supermercado Bom Preço Ltda" },
     { nome: "nomeFantasia", label: "Nome fantasia", colunas: 3 },
     { nome: "telefone", label: "Telefone", colunas: 3, inputMode: "tel" },
+    // Opcional. A consulta do CNPJ também sugere o e-mail (só se o campo estiver vazio)
+    { nome: "email", label: "E-mail", inputMode: "email", placeholder: "contato@empresa.com.br" },
   ] as CampoRapido[],
   /** Cria o cliente (POST /api/clientes). Devolve o registro bruto. */
   async criar(v: Record<string, string>) {
@@ -74,6 +76,7 @@ export const CLIENTE = {
       nomeFantasia: v.nomeFantasia || undefined,
       cpfCnpj: formatarCpfCnpj(digitos),
       telefone: v.telefone || undefined,
+      email: v.email || undefined,
     }, "Erro ao cadastrar o cliente.");
   },
   opcao(c: { id: string; nome: string; nomeFantasia?: string | null }): OpcaoCadastro {

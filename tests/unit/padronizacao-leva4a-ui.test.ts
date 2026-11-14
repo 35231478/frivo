@@ -587,10 +587,17 @@ describe("CNPJ no cadastro rápido de cliente — as regras puras", () => {
     expect(digitosDoDocumento("45.723.174/0001-10")).toBe("45723174000110");
   });
 
-  it("da consulta, aproveita só razão social, fantasia e telefone — e só o que veio preenchido", () => {
-    expect(sugestaoDoCnpj({ nome: " PADARIA LTDA ", nomeFantasia: "", telefone: "(11) 3333-9000", email: "x@y.com", cidade: "SP", optanteSimples: true })).toEqual({ nome: "PADARIA LTDA", telefone: "(11) 3333-9000" });
+  it("da consulta, aproveita razão social, fantasia, telefone e e-mail — e só o que veio preenchido", () => {
+    expect(sugestaoDoCnpj({ nome: " PADARIA LTDA ", nomeFantasia: "", telefone: "(11) 3333-9000", email: " contato@padaria.com.br ", cidade: "SP", optanteSimples: true }))
+      .toEqual({ nome: "PADARIA LTDA", telefone: "(11) 3333-9000", email: "contato@padaria.com.br" });
     expect(sugestaoDoCnpj(null)).toEqual({});
-    expect(sugestaoDoCnpj({ nome: 12, telefone: "   " })).toEqual({});
+    expect(sugestaoDoCnpj({ nome: 12, telefone: "   ", email: "" })).toEqual({});
+  });
+
+  it("a opção pelo Simples e o endereço NÃO entram: o cadastro rápido não tem esses campos", () => {
+    const completa = { nome: "PADARIA LTDA", nomeFantasia: "PAO QUENTE", telefone: "(11) 3333-9000", email: "c@p.com.br", optanteSimples: true, endereco: "Rua A", numero: "10", bairro: "Centro", cidade: "SP", estado: "SP", cep: "01000-000" };
+    expect(Object.keys(sugestaoDoCnpj(completa)).sort()).toEqual(["email", "nome", "nomeFantasia", "telefone"]);
+    expect(sugestaoDoCnpj({ ...completa, optanteSimples: "Sim" })).not.toHaveProperty("optanteSimples");
   });
 
   it("a sugestão entra só no campo VAZIO do formulário; o que já foi digitado fica", () => {
@@ -609,8 +616,9 @@ describe("CNPJ no cadastro rápido de cliente — as regras puras", () => {
   });
 
   it("a frase diz de onde veio e o que entrou; sem nada a preencher, diz isso", () => {
-    const rotulos = { nome: "Nome / Razão social", nomeFantasia: "Nome fantasia", telefone: "Telefone" };
+    const rotulos = { nome: "Nome / Razão social", nomeFantasia: "Nome fantasia", telefone: "Telefone", email: "E-mail" };
     expect(notaDaSugestao(["nome", "nomeFantasia", "telefone"], rotulos, "Dados da Receita Federal")).toBe("Dados da Receita Federal: nome / razão social, nome fantasia e telefone. Confira antes de salvar.");
+    expect(notaDaSugestao(["nome", "nomeFantasia", "telefone", "email"], rotulos, "Dados da Receita Federal")).toBe("Dados da Receita Federal: nome / razão social, nome fantasia, telefone e e-mail. Confira antes de salvar.");
     expect(notaDaSugestao(["telefone"], rotulos, "Dados da Receita Federal")).toBe("Dados da Receita Federal: telefone. Confira antes de salvar.");
     expect(notaDaSugestao(["nome", "telefone"], rotulos, "Dados da Receita Federal")).toBe("Dados da Receita Federal: nome / razão social e telefone. Confira antes de salvar.");
     expect(notaDaSugestao([], rotulos, "Dados da Receita Federal")).toBe("Dados da Receita Federal: nada a preencher, os campos já estavam preenchidos.");
@@ -659,15 +667,51 @@ describe("CNPJ no cadastro rápido de cliente — na tela", () => {
     expect(campo("Nome / Razão social").value).toBe("PADARIA PAO QUENTE LTDA");
     expect(campo("Nome fantasia").value).toBe("PAO QUENTE");
     expect(campo("Telefone").value).toBe("(11) 3333-9000");
-    expect(txt($("[data-nota-consulta='ok']"))).toBe("Dados da Receita Federal: nome / razão social, nome fantasia e telefone. Confira antes de salvar.");
+    expect(campo("E-mail").value).toBe("contato@paoquente.com.br");
+    expect(txt($("[data-nota-consulta='ok']"))).toBe("Dados da Receita Federal: nome / razão social, nome fantasia, telefone e e-mail. Confira antes de salvar.");
     // nada é travado: a pessoa corrige e é o valor dela que vai
-    expect([campo("Nome / Razão social"), campo("Nome fantasia"), campo("Telefone")].some((c) => c.disabled || c.readOnly)).toBe(false);
+    expect([campo("Nome / Razão social"), campo("Nome fantasia"), campo("Telefone"), campo("E-mail")].some((c) => c.disabled || c.readOnly)).toBe(false);
     // a frase e o botão ficam FORA do rótulo: para o leitor de tela, o nome do campo é só "CPF / CNPJ"
     expect($$("label", modal()).filter((l) => /Consultar|Receita/.test(txt(l)))).toEqual([]);
     expect(campo("CPF / CNPJ").closest("label")).toBeNull();
     await digitar(campo("Nome fantasia"), "Padaria Pão Quente");
     await clicar(botao("SalvarSalvar e selecionar", modal()));
-    expect(criado).toEqual([{ tipoPessoa: "JURIDICA", cpfCnpj: "45.723.174/0001-10", nome: "PADARIA PAO QUENTE LTDA", nomeFantasia: "Padaria Pão Quente", telefone: "(11) 3333-9000" }]);
+    expect(criado).toEqual([{ tipoPessoa: "JURIDICA", cpfCnpj: "45.723.174/0001-10", nome: "PADARIA PAO QUENTE LTDA", nomeFantasia: "Padaria Pão Quente", telefone: "(11) 3333-9000", email: "contato@paoquente.com.br" }]);
+  });
+
+  it("o e-mail é opcional (sem asterisco) e, digitado antes, NÃO é trocado pelo da Receita", async () => {
+    respostas["GET /api/cnpj/45723174000110"] = { status: 200, corpo: RECEITA };
+    await abrir();
+    const rotulo = $$("label", modal()).find((l) => txt($("span", l)).startsWith("E-mail"))!;
+    expect(txt($("span", rotulo))).toBe("E-mail");
+    expect(campo("E-mail").getAttribute("inputmode")).toBe("email");
+    await digitar(campo("CPF / CNPJ"), "45723174000110");
+    await digitar(campo("E-mail"), "financeiro@padaria.com.br");
+    await clicar(consultar());
+    expect(campo("E-mail").value).toBe("financeiro@padaria.com.br");
+    expect(txt($("[data-nota-consulta='ok']"))).toBe("Dados da Receita Federal: nome / razão social, nome fantasia e telefone. Confira antes de salvar.");
+    await clicar(botao("SalvarSalvar e selecionar", modal()));
+    expect(criado.map((c) => c.email)).toEqual(["financeiro@padaria.com.br"]);
+  });
+
+  it("salvar sem e-mail continua valendo (o campo vazio nem vai para o servidor)", async () => {
+    await abrir();
+    await digitar(campo("CPF / CNPJ"), "45723174000110");
+    await digitar(campo("Nome / Razão social"), "Padaria sem e-mail");
+    await clicar(botao("SalvarSalvar e selecionar", modal()));
+    expect(criado).toEqual([{ tipoPessoa: "JURIDICA", cpfCnpj: "45723174000110", nome: "Padaria sem e-mail" }]);
+  });
+
+  it("o cadastro rápido manda o e-mail para a rota de criar cliente (e nada de Simples)", async () => {
+    const { CLIENTE } = await import("@/components/cadastro-rapido/definicoes");
+    respostas["POST /api/clientes"] = { status: 201, corpo: { id: "c1", nome: "Padaria Ltda" } };
+    await CLIENTE.criar({ tipoPessoa: "JURIDICA", cpfCnpj: "45723174000110", nome: "Padaria Ltda", email: "contato@padaria.com.br" });
+    await CLIENTE.criar({ tipoPessoa: "JURIDICA", cpfCnpj: "45723174000110", nome: "Padaria Ltda" });
+    const corpos = gravacoes().filter((c) => c.url === "/api/clientes").map((c) => c.corpo);
+    expect(corpos[0]).toEqual({ tipoPessoa: "JURIDICA", nome: "Padaria Ltda", cpfCnpj: "45.723.174/0001-10", email: "contato@padaria.com.br" });
+    expect(corpos[1]).toEqual({ tipoPessoa: "JURIDICA", nome: "Padaria Ltda", cpfCnpj: "45.723.174/0001-10" });
+    expect(CLIENTE.campos.map((c) => c.nome)).toEqual(["tipoPessoa", "cpfCnpj", "nome", "nomeFantasia", "telefone", "email"]);
+    expect(CLIENTE.campos.find((c) => c.nome === "email")!.obrigatorio).toBeFalsy();
   });
 
   it("não preenche no escuro: o que já foi digitado NÃO é trocado, e a frase lista só o que entrou", async () => {
@@ -680,7 +724,8 @@ describe("CNPJ no cadastro rápido de cliente — na tela", () => {
     expect(campo("Nome / Razão social").value).toBe("Padaria do Zé");
     expect(campo("Telefone").value).toBe("(11) 99999-0000");
     expect(campo("Nome fantasia").value).toBe("PAO QUENTE");
-    expect(txt($("[data-nota-consulta='ok']"))).toBe("Dados da Receita Federal: nome fantasia. Confira antes de salvar.");
+    expect(campo("E-mail").value).toBe("contato@paoquente.com.br");
+    expect(txt($("[data-nota-consulta='ok']"))).toBe("Dados da Receita Federal: nome fantasia e e-mail. Confira antes de salvar.");
     // segunda consulta: nada mais a preencher
     await clicar(consultar());
     expect(txt($("[data-nota-consulta='ok']"))).toBe("Dados da Receita Federal: nada a preencher, os campos já estavam preenchidos.");

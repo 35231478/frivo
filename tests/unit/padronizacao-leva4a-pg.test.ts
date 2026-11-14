@@ -254,6 +254,25 @@ describe.skipIf(!URL_PG)("Leva 4A: Clientes, Equipamentos e QR Codes — o servi
       expect(await prisma.unidade.count({ where: { clienteId: "c1" } })).toBe(1);
     });
 
+    it("cadastro rápido: o e-mail (opcional) é gravado; sem e-mail também cria; a opção pelo Simples não é inventada", async () => {
+      logar(montarPermissoes({ clientes: ["visualizar", "criar"] }));
+      // o que o cadastro rápido manda depois de "Consultar" (a Receita devolve o e-mail em maiúsculas)
+      const com = await chamar("clientes", "POST", { tipoPessoa: "JURIDICA", nome: "Padaria Nova Era Ltda", cpfCnpj: "11.444.777/0001-61", telefone: "(11) 3333-9000", email: "CONTATO@NOVAERA.COM.BR" });
+      expect(com.status).toBe(201);
+      const sem = await chamar("clientes", "POST", { tipoPessoa: "JURIDICA", nome: "Mercado Sem Email Ltda", cpfCnpj: "06.990.590/0001-23" });
+      expect(sem.status).toBe(201);
+      try {
+        expect(await prisma.cliente.findUnique({ where: { id: com.json.id } })).toMatchObject({ email: "contato@novaera.com.br", telefone: "(11) 3333-9000", optanteSimples: null, ativo: true });
+        expect(await prisma.cliente.findUnique({ where: { id: sem.json.id } })).toMatchObject({ email: null, optanteSimples: null });
+        // e-mail inválido é recusado com mensagem (a pessoa corrige no próprio cadastro rápido)
+        const ruim = await chamar("clientes", "POST", { tipoPessoa: "JURIDICA", nome: "Invalido Ltda", cpfCnpj: "45.997.418/0001-53", email: "sem-arroba" });
+        expect(ruim.status).toBe(400);
+        expect(await prisma.cliente.count({ where: { nome: { contains: "Invalido" } } })).toBe(0);
+      } finally {
+        await prisma.cliente.deleteMany({ where: { id: { in: [com.json.id, sem.json.id].filter(Boolean) } } });
+      }
+    });
+
     it("cliente de outra empresa: não encontra", async () => {
       expect((await chamar("clientes/[id]", "DELETE", undefined, { id: "c9" })).status).toBe(404);
       expect((await prisma.cliente.findUnique({ where: { id: "c9" } })).ativo).toBe(true);
@@ -310,7 +329,7 @@ describe.skipIf(!URL_PG)("Leva 4A: Clientes, Equipamentos e QR Codes — o servi
       vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify(BRASIL_API), { status: 200, headers: { "content-type": "application/json" } })));
       const r = await chamar("cnpj/[cnpj]", "GET", undefined, { cnpj: "45.723.174/0001-10" });
       expect(r.status).toBe(200);
-      expect(sugestaoDoCnpj(r.json)).toEqual({ nome: "PADARIA PAO QUENTE LTDA", nomeFantasia: "PAO QUENTE", telefone: "(11) 3333-9000" });
+      expect(sugestaoDoCnpj(r.json)).toEqual({ nome: "PADARIA PAO QUENTE LTDA", nomeFantasia: "PAO QUENTE", telefone: "(11) 3333-9000", email: "contato@paoquente.com.br" });
     });
 
     it("CNPJ que a Receita não conhece: 404 com a mensagem que a tela mostra", async () => {
