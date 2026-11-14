@@ -140,7 +140,7 @@ export function EmailTemplatesClient() {
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             {templates.map((t) => (
-              <button key={t.id} type="button" onClick={() => abrir(t)} className="text-left border border-surface-border rounded-lg p-4 hover:border-primary-300 hover:shadow-card transition-all">
+              <button key={t.id} type="button" onClick={() => abrir(t)} data-modelo-email={t.id} className="text-left border border-surface-border rounded-lg p-4 hover:border-primary-300 hover:shadow-card transition-all">
                 <div className="flex items-center justify-between gap-2">
                   <p className="font-semibold text-ink truncate">{t.nome}</p>
                   <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${t.ativo ? "bg-success-50 text-success-700" : "bg-surface-alt text-ink-muted"}`}>{t.ativo ? "Ativo" : "Inativo"}</span>
