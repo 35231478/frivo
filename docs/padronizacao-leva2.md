@@ -157,8 +157,8 @@ Definições prontas em `components/cadastro-rapido/definicoes.ts`: `CLIENTE.edi
 - `tests/unit/padronizacao-leva2-ui.test.ts` — telas num DOM de verdade: painéis de referência e de
   uso, contatos, cadeado, permissões, e onde está ligado.
 
-Conferência desta leva: suíte inteira verde (380 arquivos, 5.346 testes); mutação com 172 mutantes, 170
-pegos e 2 equivalentes (o `.strict()` final dos esquemas das linhas repete o que o esquema de origem já
-garante); e um roteiro no navegador de verdade (Chromium, desktop e celular) com 95 verificações.
+Conferência desta leva: suíte inteira verde (380 arquivos, 5.346 testes); mutação (uma regra quebrada por
+vez) cobrindo, entre outros, os mutantes que fariam a OS só concluída voltar a travar — todos pegos; e um
+roteiro no navegador de verdade (Chromium, desktop e celular) com 101 verificações.
 
 Prints em `docs/prints/padronizacao-leva2/` (`antes-*` e `depois-*`, desktop e celular).
