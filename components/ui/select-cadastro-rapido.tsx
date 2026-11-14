@@ -364,6 +364,24 @@ export function BotaoEditarNoContexto({ rotulo, travado, onClick, className, com
 }
 
 /**
+ * A faixa que diz até onde a mudança chega (referência: em todo lugar; uso: só aqui). Com `rotulo`, diz
+ * também o que está sendo editado — para o editor que não é o painel (ex.: os materiais de um item).
+ */
+export function FaixaDaEdicao({ escopo, rotulo, className }: { escopo: EscopoEdicao; rotulo?: string; className?: string }) {
+  return (
+    <div data-faixa-edicao={escopo}
+      className={cn("flex items-start gap-2 rounded-lg border px-3 py-2",
+        escopo === "referencia" ? "border-atencao/30 bg-atencao-claro text-atencao-texto" : "border-surface-border bg-surface-alt text-ink", className)}>
+      {escopo === "referencia" ? <Layers className="w-4 h-4 mt-0.5 shrink-0" aria-hidden /> : <MapPin className="w-4 h-4 mt-0.5 shrink-0" aria-hidden />}
+      <p className="text-sm font-medium">
+        {rotulo && <span data-rotulo-edicao>{rotulo}. </span>}
+        <span data-alcance-edicao>{alcanceDaEdicao(escopo)}</span>
+      </p>
+    </div>
+  );
+}
+
+/**
  * O mini-formulário de EDIÇÃO sozinho (para telas com seletor próprio ou para a linha de uma
  * transação). A faixa do topo diz o que está sendo editado e até onde a mudança chega; com `travado`
  * só mostra o motivo. Nada muda → fecha sem chamar o servidor. Salvou → toast.
@@ -401,15 +419,8 @@ export function EdicaoNoContextoModal(props: {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [aberto]);
   const valores = carregar ? buscados ?? {} : props.valores;
-  const faixa = (
-    <div data-faixa-edicao={escopo}
-      className={cn("flex items-start gap-2 rounded-lg border px-3 py-2 -mt-1",
-        escopo === "referencia" ? "border-atencao/30 bg-atencao-claro text-atencao-texto" : "border-surface-border bg-surface-alt text-ink")}>
-      {escopo === "referencia" ? <Layers className="w-4 h-4 mt-0.5 shrink-0" aria-hidden /> : <MapPin className="w-4 h-4 mt-0.5 shrink-0" aria-hidden />}
-      {/* O título do painel já diz O QUE está sendo editado; a faixa diz até onde a mudança chega */}
-      <p className="text-sm font-medium" data-alcance-edicao>{alcanceDaEdicao(escopo)}</p>
-    </div>
-  );
+  // O título do painel já diz O QUE está sendo editado; a faixa diz até onde a mudança chega
+  const faixa = <FaixaDaEdicao escopo={escopo} className="-mt-1" />;
   if (travado) {
     return (
       <Modal aberto={aberto} onFechar={onFechar} titulo={titulo} tamanho="sm">

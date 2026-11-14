@@ -49,7 +49,7 @@ export async function PUT(req: NextRequest, { params }: Params) {
   // Edição (E3.3b)
   // Registro fechado (OS concluída, assinada, faturada ou com nota): as linhas não mudam mais
   const fechada = await travaDasLinhasDaOs(id);
-  if (fechada) return NextResponse.json({ erro: fechada }, { status: 409 });
+  if (fechada) return NextResponse.json({ erro: fechada }, { status: 400 });
   if (item.orcamentoServicoId) return NextResponse.json({ erro: "Este item veio do orçamento aprovado: edite-o no orçamento." }, { status: 400 });
   if (item.materialId) return NextResponse.json({ erro: "Peça derivada: edite-a nos materiais do serviço." }, { status: 400 });
   if (item.executado) return NextResponse.json({ erro: "Item já executado não pode ser alterado." }, { status: 400 });
@@ -83,7 +83,7 @@ export async function PATCH(req: NextRequest, { params }: Params) {
   const item = await prisma.osItemOrcamento.findFirst({ where: { id: itemId, ordemServicoId: id }, include: { materiais: { orderBy: { ordem: "asc" } } } });
   if (!item) return NextResponse.json({ erro: "Não encontrado" }, { status: 404 });
   const motivo = motivoDaLinhaDaOs(item, await situacaoDaOsNoBanco(id));
-  if (motivo) return NextResponse.json({ erro: motivo }, { status: 409 });
+  if (motivo) return NextResponse.json({ erro: motivo }, { status: 400 });
 
   const parsed = linhaOsContextoSchema.safeParse(await req.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ erro: parsed.error.issues[0]?.message ?? "Dados inválidos" }, { status: 400 });
@@ -129,7 +129,7 @@ export async function DELETE(_: NextRequest, { params }: Params) {
   if (!item) return NextResponse.json({ erro: "Não encontrado" }, { status: 404 });
   // Registro fechado: as linhas não saem mais
   const fechada = await travaDasLinhasDaOs(id);
-  if (fechada) return NextResponse.json({ erro: fechada }, { status: 409 });
+  if (fechada) return NextResponse.json({ erro: fechada }, { status: 400 });
   // Peça derivada não se apaga sozinha: ela segue o material do serviço (tire o material, ou zere a quantidade)
   if (item.materialId) return NextResponse.json({ erro: "Peça derivada: tire o material nos materiais do serviço." }, { status: 400 });
   // E4.1: material separado (reservado no razão) não some junto com o item — desfaz a separação antes

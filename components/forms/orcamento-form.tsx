@@ -181,6 +181,8 @@ function propostaInicialToState(p?: PropostaInicial): PropostaState {
 }
 
 /** Sugestões (o campo é texto livre) */
+/** As linhas são USO: o que se digita aqui vale só neste orçamento (leva 2 da padronização) */
+const DICA_LINHAS = "Descrição, quantidade e preço valem só neste orçamento. O catálogo não muda.";
 const PRAZOS_SUGERIDOS = ["Imediato, após aprovação", "1 dia útil após aprovação", "3 dias úteis após aprovação", "5 dias úteis após aprovação", "10 dias úteis após aprovação", "A combinar"];
 
 function novoId() {
@@ -706,6 +708,7 @@ export function OrcamentoForm({
       <div className="card-padded">
         <ItensTabela
           titulo={tipo === "PROPOSTA_CONTRATO" ? "Serviços inclusos no contrato" : "Serviços"}
+          dica={DICA_LINHAS}
           labelAdicionar="Pesquisar serviço por nome ou código..."
           catalogo={catalogoServicos}
           itens={servicos}
@@ -727,6 +730,7 @@ export function OrcamentoForm({
       <div className="card-padded">
         <ItensTabela
           titulo="Produtos"
+          dica={DICA_LINHAS}
           labelAdicionar="Pesquisar produto por nome ou código..."
           catalogo={catalogoProdutos}
           itens={[...produtos, ...pecasDerivadas]}

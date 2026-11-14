@@ -31,7 +31,7 @@ export async function editarLinhaDoOrcamento(empresaId: string, orcamentoId: str
   if (!servico && !produto) return { ok: false, status: 404, erro: "Item não encontrado" };
 
   const motivo = motivoDaLinhaDoOrcamento({ materialId: produto?.materialId }, { status: o.status, faturado: !!(await orcamentoJaFaturado(orcamentoId)) });
-  if (motivo) return { ok: false, status: 409, erro: motivo };
+  if (motivo) return { ok: false, status: 400, erro: motivo };
   if (m.descricao === undefined && m.quantidade === undefined && m.valorUnitario === undefined && m.observacao === undefined) return { ok: false, status: 400, erro: "Nada para alterar." };
   // Serviço com total digitado à mão: o preço dele é esse total (muda no formulário do orçamento, não pelo unitário)
   if (servico?.valorManual && servico.materiais.length && m.valorUnitario !== undefined)

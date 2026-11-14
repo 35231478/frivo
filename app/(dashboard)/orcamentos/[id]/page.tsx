@@ -184,7 +184,7 @@ export default async function OrcamentoDetalhePage({
             equipamentos={equipamentos}
           />
         ) : (
-          <OrcamentoDocumento orcamento={orcamento} empresa={empresa} cliente={orcamento.cliente} versao="interna" anexos={anexosDoDocumento(orcamento.anexos, `/api/orcamentos/${orcamento.id}/anexos`)} />
+          <OrcamentoDocumento orcamento={orcamento} empresa={empresa} cliente={orcamento.cliente} versao="interna" edicaoLinhas={{ orcamentoId: orcamento.id, faturado: temFaturas }} anexos={anexosDoDocumento(orcamento.anexos, `/api/orcamentos/${orcamento.id}/anexos`)} />
         )}
       </div>
 

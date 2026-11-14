@@ -22,6 +22,7 @@ import { CabecalhoOs } from "@/components/os/central/cabecalho-os";
 import { ResumoOs } from "@/components/os/central/resumo-os";
 import { usePermissoes } from "@/components/providers/permissoes-provider";
 import { centralDaOs } from "@/lib/os/central";
+import { situacaoDaOs } from "@/lib/edicao-contexto";
 import { AlertTriangle, FileBarChart, Send } from "lucide-react";
 import { BotaoFaturar } from "@/components/faturamento/botao-faturar";
 
@@ -159,7 +160,8 @@ export function OsDetalhe({ os: initialOs, abaInicial }: { os: any; abaInicial?:
                   </section>
                   <section data-secao-itens>
                     <h3 className="section-title mb-3">Itens da OS</h3>
-                    <OsOrcamento osId={os.id} itens={os.itensOrcamento} clienteId={os.cliente.id} />
+                    <OsOrcamento osId={os.id} itens={os.itensOrcamento} clienteId={os.cliente.id}
+                      situacao={situacaoDaOs({ status: os.status, aceite: os.aceite, faturada: !!os.fatura, notaEmitida: !!os.notaEmitida })} />
                   </section>
                 </div>
               )}

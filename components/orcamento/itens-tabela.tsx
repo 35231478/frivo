@@ -4,6 +4,7 @@ import { casaCodigo } from "@/lib/cadastros/codigos";
 import { descricaoDoCatalogo } from "@/lib/orcamentos/proposta";
 import { useState, useRef, useEffect, useId, type InputHTMLAttributes } from "react";
 import { cn, formatarMoeda } from "@/lib/utils";
+import { Dica } from "@/components/ui/dica";
 import { AlertTriangle, Plus, Trash2, Search, X, Lock, LockOpen, MessageSquarePlus } from "lucide-react";
 import {
   CadastroRapidoModal, usePodeCriar, type CampoRapido, type EntidadeCadastro, type PermissaoCriar,
@@ -67,6 +68,8 @@ export interface CadastroCatalogo {
 
 interface ItensTabelaProps {
   titulo: string;
+  /** Explicação da tabela, no ⓘ ao lado do título (ex.: as linhas valem só neste documento) */
+  dica?: string;
   labelAdicionar: string;
   catalogo: CatalogoItem[];
   itens: ItemTabela[];
@@ -194,7 +197,7 @@ function ObservacaoItem({ valor, onChange, descricao }: { valor: string; onChang
 const COLUNAS = "grid grid-cols-3 sm:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)_4.5rem_7.25rem_7.25rem_2rem] gap-x-2 sm:gap-x-3";
 const rotuloCelular = "block sm:sr-only text-[11px] font-semibold uppercase tracking-wider text-ink-muted mb-0.5";
 
-export function ItensTabela({ titulo, labelAdicionar, catalogo, itens, onChange, tabela, cadastro, totalEditavel = false, extraLinha, onAdicionadoDoCatalogo }: ItensTabelaProps) {
+export function ItensTabela({ titulo, dica, labelAdicionar, catalogo, itens, onChange, tabela, cadastro, totalEditavel = false, extraLinha, onAdicionadoDoCatalogo }: ItensTabelaProps) {
   function atualizar(id: string, patch: Partial<ItemTabela>) {
     onChange(itens.map((it) => (it.id === id ? { ...it, ...patch } : it)));
   }
@@ -256,7 +259,7 @@ export function ItensTabela({ titulo, labelAdicionar, catalogo, itens, onChange,
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between gap-3">
-        <h3 className="section-title">{titulo}</h3>
+        <h3 className="section-title flex items-center gap-1.5">{titulo}{dica && <Dica texto={dica} rotulo={titulo} />}</h3>
         <div className="text-sm">
           <span className="text-ink-muted">Subtotal: </span>
           <span className="font-bold text-ink tabular-nums" data-subtotal-grupo>{formatarMoeda(subtotal)}</span>

@@ -8,6 +8,7 @@ import { carregarGaleria } from "@/lib/os/galeria-server";
 import { contasVinculadas } from "@/lib/financeiro/conta-receber-server";
 import { pode } from "@/lib/permissoes";
 import { osJaFaturada } from "@/lib/faturamento-os";
+import { osTemNotaEmitida } from "@/lib/os/trava-edicao-server";
 import { faturamentoDaOs } from "@/lib/faturamento/faturar-server";
 
 export const metadata: Metadata = { title: "Ordem de serviço" };
@@ -101,6 +102,8 @@ export default async function OsDetalhePage({ params, searchParams }: { params: 
 
   // Faturar: a OS já está numa fatura/medição viva (direto, relatório ou o orçamento de origem)? Nunca oferece de novo
   const fatura = await osJaFaturada(os.id);
+  // Trava das linhas (registro fechado): a tela também precisa saber se há nota emitida
+  const notaEmitida = await osTemNotaEmitida(os.id, fatura?.id);
   // P5: OS avulsa pode ser faturada em partes — total, faturado, saldo e as faturas (uma medição de contrato cobre tudo)
   const faturamentoOs = !os.contrato ? await faturamentoDaOs(os.id) : null;
   const faturamento = faturamentoOs && !faturamentoOs.outra ? { total: faturamentoOs.total, faturado: faturamentoOs.faturado, saldo: faturamentoOs.saldo, faturas: faturamentoOs.faturas } : null;
@@ -111,5 +114,5 @@ export default async function OsDetalhePage({ params, searchParams }: { params: 
   // tabelas do cronograma ainda não existirem no banco, a OS abre normalmente, só sem o atalho.
   const pmoc = await prisma.pmocExecucao.findFirst({ where: { ordemServicoId: os.id }, select: { pmoc: { select: { id: true, nome: true } } } }).then((x) => x?.pmoc ?? null).catch(() => null);
 
-  return <OsDetalhe os={{ ...os, medicoes: medicoesDaOs, galeria, contasReceber, fatura, faturamento, pmoc, exigirPrestacaoMaterial: cfg?.osExigirPrestacaoMaterial ?? false }} abaInicial={aba} />;
+  return <OsDetalhe os={{ ...os, medicoes: medicoesDaOs, galeria, contasReceber, fatura, faturamento, notaEmitida, pmoc, exigirPrestacaoMaterial: cfg?.osExigirPrestacaoMaterial ?? false }} abaInicial={aba} />;
 }

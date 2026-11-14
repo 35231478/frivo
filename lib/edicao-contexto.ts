@@ -142,3 +142,17 @@ export function motivoDaLinhaDoOrcamento(
   if (linha.materialId) return TRAVA_LINHA_PECA;
   return null;
 }
+
+/**
+ * O número que a pessoa digitou num campo de texto do painel ("1.250,50", "2,5", "3") — ou null quando não
+ * é um número (nada de gravar zero por causa de um erro de digitação).
+ */
+export function numeroDoCampo(texto: string | null | undefined): number | null {
+  const t = (texto ?? "").trim().replace(/^R\$\s*/, "");
+  if (!/^\d{1,3}(\.\d{3})+(,\d+)?$|^\d+([.,]\d+)?$/.test(t)) return null;
+  const n = Number(t.includes(",") ? t.replace(/\./g, "").replace(",", ".") : t);
+  return Number.isFinite(n) ? n : null;
+}
+
+/** O número como o campo de texto do painel mostra (vírgula decimal; `casas` fixa os centavos). */
+export const numeroParaCampo = (n: number, casas?: number) => (casas == null ? String(n) : n.toFixed(casas)).replace(".", ",");

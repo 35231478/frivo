@@ -6,12 +6,15 @@ import { Input } from "@/components/ui/input";
 import { FormField, FormGrid } from "@/components/ui/form-field";
 import { SeletorCadastro, useCadastro } from "@/components/cadastros/seletor-cadastro";
 import { CampoNumero } from "@/components/orcamento/itens-tabela";
+import { EditarNoContexto, FaixaDaEdicao, type EdicaoDoSelecionado } from "@/components/ui/select-cadastro-rapido";
+import { motivoDaLinhaDaOs, motivoDaTrava, numeroDoCampo, numeroParaCampo, rotuloDaEdicao, type SituacaoDoRegistro } from "@/lib/edicao-contexto";
 import { MateriaisLinha } from "@/components/orcamento/materiais-linha";
 import type { ItemCadastro } from "@/lib/cadastros/opcoes";
 import { valorDaLinha, type MaterialOrcamento } from "@/lib/orcamentos/materiais";
 import { unitarioParaEdicao } from "@/lib/os/materiais";
 import { cn, formatarMoeda } from "@/lib/utils";
-import { Plus, X, Check, CheckCircle, Trash2, Pencil, Package, Wrench } from "lucide-react";
+import { usePermissoes } from "@/components/providers/permissoes-provider";
+import { Plus, X, Check, CheckCircle, Lock, Trash2, Package, Wrench } from "lucide-react";
 
 type Tipo = "SERVICO" | "PRODUTO";
 interface ItemOs {
@@ -26,14 +29,27 @@ interface Edicao { id?: string; tipo: Tipo; servicoId: string | null; produtoId:
 
 const num = (v: unknown) => Number(v ?? 0) || 0;
 const uid = () => Math.random().toString(36).slice(2);
+/** O que identifica a edição da linha: USO — vale só nesta OS, o catálogo não muda */
+const ALVO_LINHA = "este item da OS";
 
 /**
  * Itens da OS (aba Comercial). E3.3b: além da linha livre, serviço e produto do catálogo com o preço do cliente; o
  * serviço com composição entra com o painel "Materiais e peças" (kit explodido, snapshot editável): material incluso
  * ajusta a linha do serviço; peça vira item PRODUTO derivado, cobrado à parte. Item que veio do orçamento aprovado é
  * só leitura (como sempre), com o snapshot copiado à vista. Marcar executado continua igual. Sem baixa de estoque.
+ *
+ * Leva 2 da padronização — a linha é USO: o lápis abre "Editando este item da OS" (descrição, quantidade e o
+ * preço aplicado NESTA OS; o catálogo nunca muda). Registro fechado (OS concluída, assinada, faturada ou com
+ * nota) trava as linhas: cadeado com o motivo no ⓘ, e nada entra nem sai. O servidor confere de novo.
  */
-export function OsOrcamento({ osId, itens: iniciais, clienteId = null }: { osId: string; itens: ItemOs[]; clienteId?: string | null }) {
+export function OsOrcamento({ osId, itens: iniciais, clienteId = null, situacao = null }: {
+  osId: string; itens: ItemOs[]; clienteId?: string | null;
+  /** A situação da OS para a trava de registro fechado (lib/edicao-contexto › situacaoDaOs) */
+  situacao?: SituacaoDoRegistro | null;
+}) {
+  const fechada = motivoDaTrava(situacao);
+  // RBAC: quem não edita OS vê os itens, sem lápis, lixeira nem "novo item" (o servidor recusa de qualquer jeito)
+  const podeEditar = usePermissoes().pode("ordens", "editar");
   const [itens, setItens] = useState<ItemOs[]>(iniciais);
   const [edicao, setEdicao] = useState<Edicao | null>(null);
   const [modo, setModo] = useState<"livre" | "servico" | "produto" | null>(null);
@@ -115,6 +131,33 @@ export function OsOrcamento({ osId, itens: iniciais, clienteId = null }: { osId:
     return res.ok && d?.material ? { material: d.material } : { erro: d?.erro ?? "Não foi possível adicionar o material." };
   };
 
+  /** A edição da linha como USO, no painel da leva 1: só o que mudou vai para o servidor */
+  const edicaoDaLinha = (i: ItemOs, motivo: string | null): EdicaoDoSelecionado => {
+    const comMateriais = !!i.materiais?.length;
+    return {
+      escopo: "uso", alvo: ALVO_LINHA, travado: motivo, permissao: { modulo: "ordens", acao: "editar" }, mensagemSucesso: "Item da OS atualizado.",
+      campos: [
+        { nome: "descricao", label: "Descrição", obrigatorio: true, tipo: "textarea", maxLength: 500 },
+        { nome: "quantidade", label: "Quantidade", obrigatorio: true, colunas: 3, inputMode: "decimal" },
+        // Linha com total digitado à mão: o preço é esse total (muda em "Materiais e peças")
+        ...(i.valorManual && comMateriais ? [] : [{ nome: "valorUnitario", label: comMateriais ? "Unit. base (R$)" : "Valor unitário (R$)", obrigatorio: true, colunas: 3 as const, inputMode: "decimal" as const }]),
+      ],
+      valores: () => ({ descricao: i.descricao, quantidade: numeroParaCampo(num(i.quantidade)), valorUnitario: numeroParaCampo(unitarioParaEdicao(i), 2) }),
+      async salvar(id, valores, alterados) {
+        const corpo: Record<string, unknown> = {};
+        for (const k of alterados) corpo[k] = k === "descricao" ? valores[k] : numeroDoCampo(valores[k]);
+        if ("quantidade" in corpo && !(Number(corpo.quantidade) > 0)) throw new Error("Quantidade deve ser maior que zero.");
+        if ("valorUnitario" in corpo && corpo.valorUnitario === null) throw new Error("Valor unitário inválido.");
+        const res = await fetch(`/api/ordens/${osId}/orcamento/${id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(corpo) });
+        const d = await res.json().catch(() => null);
+        if (!res.ok || !d?.id) throw new Error(d?.erro ?? "Não foi possível salvar o item.");
+        setItens((prev) => prev.map((x) => (x.id === id ? { ...x, ...d } : x)));
+      },
+      // O serviço com (ou que pode ter) materiais: o editor completo continua nesta tela
+      acaoSecundaria: () => ((i.tipo ?? "SERVICO") === "SERVICO" ? { rotulo: "Materiais e peças deste item", onClick: () => editar(i) } : null),
+    };
+  };
+
   const v = edicao ? valorDaLinha(edicao) : null;
   const totalEdicao = v ? (edicao!.materiais?.length ? v.valorTotal : (edicao!.quantidade || 0) * (edicao!.valorUnitario || 0)) : 0;
 
@@ -137,7 +180,8 @@ export function OsOrcamento({ osId, itens: iniciais, clienteId = null }: { osId:
         {itens.map((i) => {
           const derivada = !!i.materialId;
           const doOrcamento = !!i.orcamentoServicoId;
-          const editavel = !derivada && !doOrcamento && !i.executado;
+          // Por que esta linha não se edita (registro fechado ou motivo da própria linha) — null = edita
+          const motivo = motivoDaLinhaDaOs(i, situacao);
           const emEdicao = edicao?.id === i.id;
           return (
             <div key={i.id} className={cn(i.executado && "bg-ok-claro/60", derivada && "bg-surface-page/60")} data-item-os={i.id} data-tipo-item={i.tipo ?? "SERVICO"} data-linha-derivada={derivada ? "true" : undefined}>
@@ -157,13 +201,14 @@ export function OsOrcamento({ osId, itens: iniciais, clienteId = null }: { osId:
                 <span className="text-center">
                   {i.executado ? (
                     <span className="inline-flex items-center gap-0.5 text-[10px] font-medium text-ok-texto bg-ok-claro px-1.5 py-0.5 rounded-full"><CheckCircle className="w-3 h-3" /> Executado</span>
-                  ) : (
+                  ) : podeEditar && (
                     <Button type="button" variant="ghost" onClick={() => marcarExecutado(i.id)} className="text-[10px] h-6 px-2 text-acento">Marcar executado</Button>
                   )}
                 </span>
-                <span className="flex justify-end gap-1">
-                  {editavel && !emEdicao && <button type="button" onClick={() => editar(i)} className="p-1 text-ink-muted hover:text-ink" aria-label={`Editar ${i.descricao}`}><Pencil className="w-3.5 h-3.5" /></button>}
-                  {!derivada && !doOrcamento && !i.executado && <button type="button" onClick={() => remover(i)} className="p-1 text-ink-muted hover:text-atrasado" aria-label={`Excluir ${i.descricao}`}><Trash2 className="w-3.5 h-3.5" /></button>}
+                <span className="flex items-center justify-end gap-0.5" data-acoes-item>
+                  {/* USO: "Editando este item da OS". Travada: cadeado com o motivo no ⓘ */}
+                  {!emEdicao && <EditarNoContexto id={i.id} rotulo={`Editar ${i.descricao}`} edicao={edicaoDaLinha(i, motivo)} />}
+                  {!motivo && podeEditar && <button type="button" onClick={() => remover(i)} className="p-1 text-ink-muted hover:text-atrasado" aria-label={`Excluir ${i.descricao}`}><Trash2 className="w-3.5 h-3.5" /></button>}
                 </span>
                 </div>
               </div>
@@ -198,7 +243,13 @@ export function OsOrcamento({ osId, itens: iniciais, clienteId = null }: { osId:
         </div>
       )}
 
-      {!modo && !edicao && (
+      {/* Registro fechado: não entra linha nova (o servidor recusa de qualquer jeito) */}
+      {fechada && podeEditar && !modo && !edicao && (
+        <p className="flex items-center gap-2 text-sm text-ink-muted bg-surface-page border border-surface-border rounded-lg px-3 py-2.5" data-itens-travados>
+          <Lock className="w-4 h-4 shrink-0" aria-hidden /> {fechada}
+        </p>
+      )}
+      {!fechada && podeEditar && !modo && !edicao && (
         <div className="flex flex-wrap gap-2">
           <Button type="button" variant="secondary" onClick={() => setModo("servico")} className="flex-1 justify-center border-dashed" data-acao="novo-servico"><Wrench className="w-4 h-4" /> Serviço do catálogo</Button>
           <Button type="button" variant="secondary" onClick={() => setModo("produto")} className="flex-1 justify-center border-dashed" data-acao="novo-produto"><Package className="w-4 h-4" /> Produto do catálogo</Button>
@@ -217,6 +268,8 @@ function FormItem({ edicao: e, setEdicao, total, salvar, cancelar, salvando, cli
   const patch = (p: Partial<Edicao>) => setEdicao((atual) => (atual ? { ...atual, ...p } : atual));
   return (
     <div className="space-y-3 px-3 py-3 bg-white border-t border-surface-border" data-form-item>
+      {/* USO: o que se muda aqui vale só nesta OS — o serviço e o produto do catálogo ficam como estão */}
+      <FaixaDaEdicao escopo="uso" rotulo={e.id ? rotuloDaEdicao("uso", ALVO_LINHA) : "Novo item da OS"} />
       <FormGrid cols={3}>
         <FormField label="Descrição" required className="sm:col-span-3">
           <Input value={e.descricao} onChange={(ev) => patch({ descricao: ev.target.value })} placeholder="Item ou serviço" data-descricao-item />

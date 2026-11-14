@@ -1,4 +1,5 @@
 import { TimbreEmpresa } from "@/components/documento/timbre-empresa";
+import { EditarLinhaOrcamento } from "@/components/orcamento/editar-linha-orcamento";
 import { formatarCpfCnpj, formatarData, formatarMoeda, formatarTelefone, cn } from "@/lib/utils";
 import { calcularOrcamento, versaoCliente, type EntradaCalculo, type TipoDesconto } from "@/lib/orcamentos/calculo";
 import { PLANILHA } from "@/lib/planilha";
@@ -11,6 +12,11 @@ import {
 } from "@/lib/orcamentos/proposta";
 
 export interface ItemDoc {
+  /** Presentes quando o documento vem do banco (a edição da linha no detalhe do orçamento usa) */
+  id?: string;
+  materialId?: string | null;
+  valorBase?: unknown;
+  valorManual?: boolean | null;
   descricao: string;
   quantidade: unknown;
   valorUnitario: unknown;
@@ -147,6 +153,11 @@ export interface OrcamentoDocumentoProps {
    * status e observações internas.
    */
   versao?: "cliente" | "interna";
+  /**
+   * Detalhe do orçamento (tela do escritório): cada linha ganha o lápis de "Editando este item do orçamento"
+   * — ou o cadeado com o motivo, quando o orçamento não se edita mais. Some na impressão.
+   */
+  edicaoLinhas?: { orcamentoId: string; faturado: boolean };
 }
 
 function n(v: unknown): number {
@@ -164,7 +175,8 @@ function tamanhoLegivel(bytes: number) {
   return bytes >= 1024 * 1024 ? `${(bytes / 1024 / 1024).toFixed(1).replace(".", ",")} MB` : `${Math.max(1, Math.round(bytes / 1024))} KB`;
 }
 
-export function OrcamentoDocumento({ orcamento, empresa, cliente, anexos = [], variante = "completa", versao = "cliente" }: OrcamentoDocumentoProps) {
+export function OrcamentoDocumento({ orcamento, empresa, cliente, anexos = [], variante = "completa", versao = "cliente", edicaoLinhas }: OrcamentoDocumentoProps) {
+  const edicao = edicaoLinhas ? { ...edicaoLinhas, status: orcamento.status } : undefined;
   // Mesmo cálculo da tela e do servidor (lib/orcamentos/calculo.ts), a partir do que está gravado
   const entrada: EntradaCalculo = {
     servicos: orcamento.servicos, produtos: orcamento.produtos,
@@ -265,12 +277,12 @@ export function OrcamentoDocumento({ orcamento, empresa, cliente, anexos = [], v
       </section>
 
       {orcamento.servicos.length > 0 && (
-        <TabelaGrupo titulo="Serviços" rotulo="serviços" itens={orcamento.servicos} grupo={grupoServicos} />
+        <TabelaGrupo titulo="Serviços" rotulo="serviços" itens={orcamento.servicos} grupo={grupoServicos} edicao={edicao} />
       )}
 
       {orcamento.produtos.length > 0 && (
         <div className="border-t border-surface-border">
-          <TabelaGrupo titulo="Produtos" rotulo="produtos" itens={orcamento.produtos} grupo={grupoProdutos} />
+          <TabelaGrupo titulo="Produtos" rotulo="produtos" itens={orcamento.produtos} grupo={grupoProdutos} edicao={edicao} />
         </div>
       )}
 
@@ -479,7 +491,9 @@ interface GrupoDoc {
  * é cortada ao meio; os subtotais ficam FORA da tabela (num tfoot o navegador repetiria o
  * "Subtotal" em toda página) e não se separam da última linha.
  */
-function TabelaGrupo({ titulo, rotulo, itens, grupo }: { titulo: string; rotulo: string; itens: ItemDoc[]; grupo: GrupoDoc }) {
+function TabelaGrupo({ titulo, rotulo, itens, grupo, edicao }: {
+  titulo: string; rotulo: string; itens: ItemDoc[]; grupo: GrupoDoc; edicao?: { orcamentoId: string; faturado: boolean; status: string };
+}) {
   const comIss = (grupo.valorIss ?? 0) > 0;
   const mostrarTotal = grupo.desconto > 0 || comIss;
   const qtds = quantidadesAlinhadas(itens.map((it) => n(it.quantidade)));
@@ -500,6 +514,7 @@ function TabelaGrupo({ titulo, rotulo, itens, grupo }: { titulo: string; rotulo:
               <th scope="col" className={cn(th, "hidden sm:table-cell text-right w-16")}>Qtd</th>
               <th scope="col" className={cn(th, "hidden sm:table-cell text-right w-28")}>Unitário (R$)</th>
               <th scope="col" className={cn(th, "text-right w-28 sm:w-32")}>Total (R$)</th>
+              {edicao && <th scope="col" className={cn(th, "w-12 print:hidden")}><span className="sr-only">Editar</span></th>}
             </tr>
           </thead>
           <tbody>
@@ -513,6 +528,16 @@ function TabelaGrupo({ titulo, rotulo, itens, grupo }: { titulo: string; rotulo:
                 <td className={cn(td, "hidden sm:table-cell text-right text-ink-muted tabular-nums whitespace-nowrap")} data-qtd>{qtds[i]}</td>
                 <td className={cn(td, "hidden sm:table-cell text-right text-ink-muted tabular-nums whitespace-nowrap")} data-unitario>{valorSemMoeda(grupo.itens[i]?.valorUnitario ?? 0)}</td>
                 <td className={cn(td, "text-right font-medium text-ink tabular-nums whitespace-nowrap")} data-total-item>{valorSemMoeda(grupo.itens[i]?.valorTotal ?? 0)}</td>
+                {edicao && (
+                  <td className={cn(td, "print:hidden text-right !py-0")} data-editar-linha>
+                    {it.id && <EditarLinhaOrcamento orcamentoId={edicao.orcamentoId} status={edicao.status} faturado={edicao.faturado} linha={{
+                      id: it.id, descricao: it.descricao, quantidade: n(it.quantidade), observacao: it.observacao ?? null, materialId: it.materialId ?? null,
+                      // Serviço com materiais: o preço que se edita é o BASE (antes do ajuste dos inclusos)
+                      comMateriais: it.valorBase != null, valorManual: !!it.valorManual,
+                      valorUnitario: it.valorBase != null ? n(it.valorBase) / (n(it.quantidade) || 1) : n(it.valorUnitario),
+                    }} />}
+                  </td>
+                )}
               </tr>
             ))}
           </tbody>

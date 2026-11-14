@@ -23,7 +23,7 @@ export async function POST(req: NextRequest, { params }: Params) {
   if (!(await osDaEmpresa(id, empresaId))) return NextResponse.json({ erro: "OS não encontrada" }, { status: 404 });
   // Registro fechado (OS concluída, assinada, faturada ou com nota): não entra linha nova
   const fechada = await travaDasLinhasDaOs(id);
-  if (fechada) return NextResponse.json({ erro: fechada }, { status: 409 });
+  if (fechada) return NextResponse.json({ erro: fechada }, { status: 400 });
   const body = await req.json();
   const parsed = itemOsSchema.safeParse(body);
   if (!parsed.success) return NextResponse.json({ erro: parsed.error.issues[0]?.message ?? "Dados inválidos" }, { status: 400 });
