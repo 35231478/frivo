@@ -149,9 +149,11 @@ export function motivoDaLinhaDoOrcamento(
  */
 export function numeroDoCampo(texto: string | null | undefined): number | null {
   const t = (texto ?? "").trim().replace(/^R\$\s*/, "");
-  if (!/^\d{1,3}(\.\d{3})+(,\d+)?$|^\d+([.,]\d+)?$/.test(t)) return null;
-  const n = Number(t.includes(",") ? t.replace(/\./g, "").replace(",", ".") : t);
-  return Number.isFinite(n) ? n : null;
+  // À brasileira: ponto de milhar ("1.250" = mil duzentos e cinquenta) e vírgula decimal
+  if (/^\d{1,3}(\.\d{3})+(,\d+)?$/.test(t)) return Number(t.replace(/\./g, "").replace(",", "."));
+  // Sem milhar: vírgula ou ponto como decimal ("2,5" ou "2.5")
+  if (/^\d+([.,]\d+)?$/.test(t)) return Number(t.replace(",", "."));
+  return null;
 }
 
 /** O número como o campo de texto do painel mostra (vírgula decimal; `casas` fixa os centavos). */

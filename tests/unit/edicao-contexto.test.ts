@@ -9,8 +9,11 @@
  */
 import { describe, expect, it } from "vitest";
 import {
-  alcanceDaEdicao, camposAlterados, motivoDaTrava, rotuloDaEdicao,
+  alcanceDaEdicao, camposAlterados, motivoDaLinhaDaOs, motivoDaLinhaDoOrcamento, motivoDaTrava, numeroDoCampo, numeroParaCampo, rotuloDaEdicao,
+  situacaoDaOs, temMaterialMovimentado,
   TRAVA_APROVADO, TRAVA_ASSINADA, TRAVA_CONCLUIDA, TRAVA_FATURADO, TRAVA_NOTA,
+  TRAVA_LINHA_DO_ORCAMENTO, TRAVA_LINHA_EXECUTADA, TRAVA_LINHA_PECA, TRAVA_LINHA_SEPARADA,
+  TRAVA_ORCAMENTO_CANCELADO, TRAVA_ORCAMENTO_ENVIADO, TRAVA_ORCAMENTO_REPROVADO,
 } from "@/lib/edicao-contexto";
 
 describe("o rótulo do que está sendo editado (regra de ouro)", () => {
@@ -73,5 +76,114 @@ describe("o que mudou (só isso vai para o servidor)", () => {
 
   it("só olha os campos do formulário: o que não é campo não vira mudança", () => {
     expect(camposAlterados({ nome: "A", id: "1" }, { nome: "A", id: "2", empresaId: "outra" }, ["nome"])).toEqual([]);
+  });
+});
+
+/* ───────── Leva 2: a trava nas telas de OS e de orçamento ───────── */
+
+describe("a situação da OS (o que a tela e o servidor sabem dela)", () => {
+  it("status, aceite, fatura e nota viram a situação que a trava entende", () => {
+    expect(situacaoDaOs({ status: "EM_ANDAMENTO" })).toEqual({ statusOs: "EM_ANDAMENTO", aceite: null, faturado: false, notaEmitida: false });
+    expect(situacaoDaOs({ status: "CONCLUIDA", aceite: { situacao: "CONFIRMADO" }, faturada: true, notaEmitida: true }))
+      .toEqual({ statusOs: "CONCLUIDA", aceite: "CONFIRMADO", faturado: true, notaEmitida: true });
+    expect(situacaoDaOs({})).toEqual({ statusOs: null, aceite: null, faturado: false, notaEmitida: false });
+  });
+
+  it("OS aberta não trava; concluída, assinada, faturada e com nota travam — cada uma com o seu motivo", () => {
+    expect(motivoDaTrava(situacaoDaOs({ status: "EM_ANDAMENTO", aceite: { situacao: "PENDENTE" } }))).toBeNull();
+    expect(motivoDaTrava(situacaoDaOs({ status: "CONCLUIDA" }))).toBe(TRAVA_CONCLUIDA);
+    expect(motivoDaTrava(situacaoDaOs({ status: "CONCLUIDA", aceite: { situacao: "CONFIRMADO" } }))).toBe(TRAVA_ASSINADA);
+    expect(motivoDaTrava(situacaoDaOs({ status: "CONCLUIDA", aceite: { situacao: "CONFIRMADO" }, faturada: true }))).toBe(TRAVA_FATURADO);
+    expect(motivoDaTrava(situacaoDaOs({ status: "CONCLUIDA", faturada: true, notaEmitida: true }))).toBe(TRAVA_NOTA);
+  });
+});
+
+describe("a linha da OS: registro fechado primeiro, depois o motivo da própria linha", () => {
+  const aberta = situacaoDaOs({ status: "EM_ANDAMENTO" });
+  it("linha comum de OS aberta: edita", () => {
+    expect(motivoDaLinhaDaOs({}, aberta)).toBeNull();
+    expect(motivoDaLinhaDaOs({ materialId: null, orcamentoServicoId: null, executado: false, materialMovimentado: false }, null)).toBeNull();
+  });
+
+  it("OS fechada trava TODAS as linhas com o motivo do documento, seja qual for a linha", () => {
+    const fechada = situacaoDaOs({ status: "CONCLUIDA" });
+    for (const linha of [{}, { executado: true }, { materialId: "m1" }, { orcamentoServicoId: "o1" }, { materialMovimentado: true }]) {
+      expect(motivoDaLinhaDaOs(linha, fechada), JSON.stringify(linha)).toBe(TRAVA_CONCLUIDA);
+    }
+    expect(motivoDaLinhaDaOs({}, situacaoDaOs({ status: "CONCLUIDA", notaEmitida: true }))).toBe(TRAVA_NOTA);
+  });
+
+  it("OS aberta: peça derivada, item do orçamento aprovado, item executado e material movimentado — nessa ordem", () => {
+    expect(motivoDaLinhaDaOs({ materialId: "m1" }, aberta)).toBe(TRAVA_LINHA_PECA);
+    expect(motivoDaLinhaDaOs({ orcamentoServicoId: "o1" }, aberta)).toBe(TRAVA_LINHA_DO_ORCAMENTO);
+    expect(motivoDaLinhaDaOs({ executado: true }, aberta)).toBe(TRAVA_LINHA_EXECUTADA);
+    expect(motivoDaLinhaDaOs({ materialMovimentado: true }, aberta)).toBe(TRAVA_LINHA_SEPARADA);
+    expect(motivoDaLinhaDaOs({ materialId: "m1", orcamentoServicoId: "o1", executado: true, materialMovimentado: true }, aberta)).toBe(TRAVA_LINHA_PECA);
+    expect(motivoDaLinhaDaOs({ orcamentoServicoId: "o1", executado: true, materialMovimentado: true }, aberta)).toBe(TRAVA_LINHA_DO_ORCAMENTO);
+    expect(motivoDaLinhaDaOs({ executado: true, materialMovimentado: true }, aberta)).toBe(TRAVA_LINHA_EXECUTADA);
+    expect(new Set([TRAVA_LINHA_PECA, TRAVA_LINHA_DO_ORCAMENTO, TRAVA_LINHA_EXECUTADA, TRAVA_LINHA_SEPARADA]).size).toBe(4);
+  });
+
+  it("material movimentado: separado, consumido ou devolvido contam; zerado não", () => {
+    expect(temMaterialMovimentado(null)).toBe(false);
+    expect(temMaterialMovimentado([])).toBe(false);
+    expect(temMaterialMovimentado([{ quantidadeSeparada: 0, quantidadeConsumida: "0", quantidadeDevolvida: null }])).toBe(false);
+    expect(temMaterialMovimentado([{ quantidadeSeparada: 0 }, { quantidadeSeparada: "2.5" }])).toBe(true);
+    expect(temMaterialMovimentado([{ quantidadeConsumida: 1 }])).toBe(true);
+    expect(temMaterialMovimentado([{ quantidadeDevolvida: 0.001 }])).toBe(true);
+  });
+});
+
+describe("a linha do orçamento: só o rascunho se edita", () => {
+  it("rascunho edita; a peça derivada segue os materiais do serviço", () => {
+    expect(motivoDaLinhaDoOrcamento({}, { status: "RASCUNHO" })).toBeNull();
+    expect(motivoDaLinhaDoOrcamento({ materialId: null }, { status: "RASCUNHO", faturado: false })).toBeNull();
+    expect(motivoDaLinhaDoOrcamento({ materialId: "m1" }, { status: "RASCUNHO" })).toBe(TRAVA_LINHA_PECA);
+  });
+
+  it("aprovado, convertido, faturado e com nota são registro fechado", () => {
+    expect(motivoDaLinhaDoOrcamento({}, { status: "APROVADO" })).toBe(TRAVA_APROVADO);
+    expect(motivoDaLinhaDoOrcamento({}, { status: "CONVERTIDA" })).toBe(TRAVA_APROVADO);
+    expect(motivoDaLinhaDoOrcamento({}, { status: "APROVADO", faturado: true })).toBe(TRAVA_FATURADO);
+    expect(motivoDaLinhaDoOrcamento({}, { status: "APROVADO", faturado: true, notaEmitida: true })).toBe(TRAVA_NOTA);
+    expect(motivoDaLinhaDoOrcamento({ materialId: "m1" }, { status: "APROVADO" })).toBe(TRAVA_APROVADO);
+  });
+
+  it("enviado, reprovado e cancelado: a regra de sempre, cada um com a sua frase", () => {
+    expect(motivoDaLinhaDoOrcamento({}, { status: "ENVIADO" })).toBe(TRAVA_ORCAMENTO_ENVIADO);
+    expect(motivoDaLinhaDoOrcamento({}, { status: "REPROVADO" })).toBe(TRAVA_ORCAMENTO_REPROVADO);
+    expect(motivoDaLinhaDoOrcamento({}, { status: "CANCELADO" })).toBe(TRAVA_ORCAMENTO_CANCELADO);
+    expect(motivoDaLinhaDoOrcamento({ materialId: "m1" }, { status: "ENVIADO" })).toBe(TRAVA_ORCAMENTO_ENVIADO);
+    expect(new Set([TRAVA_ORCAMENTO_ENVIADO, TRAVA_ORCAMENTO_REPROVADO, TRAVA_ORCAMENTO_CANCELADO, TRAVA_APROVADO]).size).toBe(4);
+  });
+});
+
+describe("número digitado no painel (quantidade e preço)", () => {
+  it("lê vírgula decimal, ponto de milhar e o prefixo R$", () => {
+    expect(numeroDoCampo("3")).toBe(3);
+    expect(numeroDoCampo(" 2,5 ")).toBe(2.5);
+    expect(numeroDoCampo("150,00")).toBe(150);
+    expect(numeroDoCampo("1.250,50")).toBe(1250.5);
+    expect(numeroDoCampo("1.250")).toBe(1250);
+    expect(numeroDoCampo("12.345.678,9")).toBe(12345678.9);
+    expect(numeroDoCampo("R$ 99,90")).toBe(99.9);
+    expect(numeroDoCampo("0")).toBe(0);
+    expect(numeroDoCampo("2.5")).toBe(2.5);
+    // ponto seguido de três dígitos é milhar, não decimal (o engano que viraria R$ 1,25 no lugar de R$ 1.250)
+    expect(numeroDoCampo("1.500")).toBe(1500);
+    expect(numeroDoCampo("1.50")).toBe(1.5);
+    expect(numeroDoCampo("0,5")).toBe(0.5);
+  });
+
+  it("o que não é número não vira zero: devolve null", () => {
+    for (const ruim of ["", "   ", "abc", "1o0", "10,5,2", "-5", "1,", ",5", "12 34", null, undefined]) expect(numeroDoCampo(ruim), String(ruim)).toBeNull();
+  });
+
+  it("mostra como o campo de texto espera", () => {
+    expect(numeroParaCampo(2)).toBe("2");
+    expect(numeroParaCampo(1.5)).toBe("1,5");
+    expect(numeroParaCampo(150, 2)).toBe("150,00");
+    expect(numeroParaCampo(1250.5, 2)).toBe("1250,50");
+    expect(numeroDoCampo(numeroParaCampo(1250.5, 2))).toBe(1250.5);
   });
 });
