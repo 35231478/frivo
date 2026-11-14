@@ -36,7 +36,8 @@ QR Codes › gerenciar), mas a tela não a oferece.
 ## QR Codes: o conserto funcional
 
 - **Celular.** Antes o cabeçalho estourava a largura e a tabela cortava. Agora a lista vira cartões
-  (código, equipamento, status, data e as ações), com a pesquisa numa linha e os filtros na de baixo.
+  (código, equipamento, status, data e as ações, com área de toque maior), com a pesquisa numa linha e
+  os filtros na de baixo. O "Vincular" lista os equipamentos dentro do próprio diálogo, com pesquisa.
 - **Lista no padrão**: `TabelaPro` (colunas ajustáveis, preferência por usuário), pesquisa por código
   ou equipamento, filtros de vínculo e status, contador e estado vazio.
 - **Qual equipamento é qual.** A lista e o seletor de "Vincular" mostravam só marca e modelo — num
@@ -131,6 +132,15 @@ visível** na tela, de propósito.
   entra em campo vazio.
 - Teste existente atualizado por mudança intencional: `ux3-toast` (o título da confirmação de inativar
   equipamento virou a pergunta curta).
+- **Mutação**: 124 regras quebradas uma por vez (a permissão de cada rota, cada botão, cada confirmação,
+  o "só em campo vazio" do CNPJ). 123 foram pegas de primeira. A que sobreviveu — vincular etiqueta a
+  equipamento de outra empresa — mostrou um teste fraco (o servidor estava certo, mas o teste passava
+  pelo motivo errado); o teste foi reforçado e agora pega.
+- **Navegador de verdade** (Chromium, app real, banco local descartável): 110 conferências em desktop e
+  celular. A resposta da Receita foi simulada no navegador (o ambiente local não alcança a BrasilAPI);
+  a rota de verdade tem teste próprio. O roteiro achou três defeitos que os testes de DOM não pegam,
+  corrigidos nesta leva: a lista do seletor de vincular cortada no celular, a coluna de ações de
+  equipamentos estreita (gerava rolagem lateral) e a frase da consulta dentro do rótulo do campo.
 
 Prints em `docs/prints/padronizacao-leva4a/` (`antes-*` e `depois-*`, desktop e celular, e as versões
 `-sem-permissao`).
