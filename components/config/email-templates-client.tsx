@@ -8,7 +8,9 @@ import { Textarea } from "@/components/ui/textarea";
 import { FormField } from "@/components/ui/form-field";
 import { ToggleSwitch } from "@/components/ui/toggle-switch";
 import { VARIAVEIS_DISPONIVEIS, TEMPLATES_PADRAO, substituirVariaveis, montarEmailHtml } from "@/lib/email-templates";
-import { Pencil, ArrowLeft, Check } from "lucide-react";
+import { Pencil, ArrowLeft, Check, Eye, Plus } from "lucide-react";
+import { Dica } from "@/components/ui/dica";
+import { SomenteLeitura, erroDaResposta, usePodeGerenciarConfig } from "@/components/config/permissao-config";
 
 const SAMPLE: Record<string, string> = {
   cliente_nome: "João Silva", cliente_cnpj: "12.345.678/0001-90", valor: "R$ 1.250,00", vencimento: "10/07/2026",
@@ -20,7 +22,15 @@ const SAMPLE: Record<string, string> = {
 };
 const EMPRESA_SAMPLE = { nome: "Sua Empresa", telefone: "(11) 99999-0000", email: "contato@empresa.com.br", site: "www.empresa.com.br", endereco: "Av. Exemplo, 100", cidade: "São Paulo", estado: "SP", logo: null };
 
+const AJUDA = "Assunto e corpo de cada e-mail automático. Sem modelo próprio, o sistema usa o texto padrão. Modelo inativo: aquele e-mail não é enviado.";
+
+/**
+ * Configurações › Modelos de e-mail: lista dos modelos e o editor com a prévia. Só quem tem
+ * Configurações › gerenciar edita ou carrega os modelos padrão (o servidor recusa de qualquer jeito);
+ * sem ela, abre para leitura — dá para ver o modelo e a prévia, sem Salvar.
+ */
 export function EmailTemplatesClient() {
+  const podeEditar = usePodeGerenciarConfig();
   const [templates, setTemplates] = useState<any[]>([]);
   const [carregando, setCarregando] = useState(true);
   const [editando, setEditando] = useState<any | null>(null);
@@ -35,11 +45,18 @@ export function EmailTemplatesClient() {
     fetch("/api/email/templates").then((r) => r.json()).then((d) => setTemplates(Array.isArray(d) ? d : [])).catch(() => {}).finally(() => setCarregando(false));
   }
 
-  async function restaurarPadroes() {
+  /** Cria os modelos padrão que ainda não existem (os já editados ficam como estão) */
+  async function carregarPadroes() {
     setCarregando(true);
-    const res = await fetch("/api/email/templates", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ restaurarPadroes: true }) });
-    const d = await res.json();
-    setTemplates(Array.isArray(d) ? d : []); setCarregando(false);
+    try {
+      const res = await fetch("/api/email/templates", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ restaurarPadroes: true }) });
+      if (!res.ok) { toast(await erroDaResposta(res, "Não foi possível carregar os modelos padrão."), "erro"); return; }
+      const d = await res.json();
+      const lista = Array.isArray(d) ? d : [];
+      const novos = lista.length - templates.length;
+      setTemplates(lista);
+      toast(novos > 0 ? `${novos} ${novos === 1 ? "modelo padrão adicionado" : "modelos padrão adicionados"}.` : "Nenhum modelo padrão faltando.");
+    } catch { toast("Sem conexão. Tente de novo.", "erro"); } finally { setCarregando(false); }
   }
 
   function abrir(t: any) { setEditando(t); setAssunto(t.assunto); setCorpo(t.corpo); setAtivo(t.ativo); }
@@ -53,12 +70,12 @@ export function EmailTemplatesClient() {
         const t = await res.json();
         setTemplates((p) => p.map((x) => (x.id === t.id ? t : x)));
         setEditando(null);
-        toast("Template salvo.");
+        toast("Modelo de e-mail salvo.");
       } else {
         // Gravação nunca falha em silêncio (UX-3)
-        toast((await res.json().catch(() => null))?.erro ?? "Não foi possível salvar o template.", "erro");
+        toast(await erroDaResposta(res, "Não foi possível salvar o modelo."), "erro");
       }
-    } catch { toast("Erro de conexão. Tente novamente.", "erro"); } finally { setSalvando(false); }
+    } catch { toast("Sem conexão. Tente de novo.", "erro"); } finally { setSalvando(false); }
   }
 
   const def = editando ? TEMPLATES_PADRAO.find((t) => t.tipo === editando.tipo) : undefined;
@@ -71,30 +88,35 @@ export function EmailTemplatesClient() {
 
   if (editando) {
     return (
-      <div className="space-y-4">
-        <button onClick={() => setEditando(null)} className="inline-flex items-center gap-1.5 text-sm text-ink-muted hover:text-ink"><ArrowLeft className="w-4 h-4" /> Voltar</button>
+      <div className="space-y-4" data-editor-modelo>
+        <button type="button" onClick={() => setEditando(null)} className="inline-flex items-center gap-1.5 text-sm text-ink-muted hover:text-ink"><ArrowLeft className="w-4 h-4" aria-hidden /> Voltar</button>
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
           <div className="space-y-4">
             <h3 className="font-bold text-ink">{editando.nome}</h3>
+            {!podeEditar && <SomenteLeitura />}
+            <fieldset disabled={!podeEditar} className="space-y-4 min-w-0">
             <ToggleSwitch checked={ativo} onChange={setAtivo} label="Modelo ativo" dica="Inativo, este e-mail não é enviado." />
             <FormField label="Assunto"><Input value={assunto} onChange={(e) => setAssunto(e.target.value)} /></FormField>
             <FormField label="Corpo (HTML)"><Textarea value={corpo} onChange={(e) => setCorpo(e.target.value)} rows={10} className="font-mono text-xs" /></FormField>
             <div>
-              <p className="text-[11px] font-semibold text-ink-muted uppercase tracking-wider mb-1.5">Variáveis disponíveis</p>
+              <p className="text-[11px] font-semibold text-ink-muted uppercase tracking-wider mb-1.5 flex items-center gap-1">Variáveis disponíveis
+                <Dica texto="Clique para inserir no fim do corpo. No envio, cada variável vira o dado do cliente ou do documento." rotulo="Variáveis disponíveis" />
+              </p>
               <div className="flex flex-wrap gap-1.5">
                 {VARIAVEIS_DISPONIVEIS.map((v) => (
                   <button key={v} type="button" onClick={() => inserirVar(v)} className="text-[11px] font-mono bg-surface-alt hover:bg-surface-border text-ink-muted px-2 py-0.5 rounded transition-colors">{`{{${v}}}`}</button>
                 ))}
               </div>
             </div>
+            </fieldset>
             <div className="flex justify-end gap-2">
-              <Button variant="secondary" onClick={() => setEditando(null)}>Cancelar</Button>
-              <Button loading={salvando} onClick={salvar}><Check className="w-4 h-4" /> Salvar</Button>
+              <Button variant="secondary" onClick={() => setEditando(null)}>{podeEditar ? "Cancelar" : "Fechar"}</Button>
+              {podeEditar && <Button loading={salvando} onClick={salvar} data-salvar-modelo-email><Check className="w-4 h-4" aria-hidden /> Salvar</Button>}
             </div>
           </div>
           <div>
-            <p className="text-[11px] font-semibold text-ink-muted uppercase tracking-wider mb-1.5">Preview</p>
-            <iframe title="Preview" srcDoc={previewHtml} className="w-full h-[520px] rounded-lg border border-surface-border bg-white" />
+            <p className="text-[11px] font-semibold text-ink-muted uppercase tracking-wider mb-1.5">Prévia</p>
+            <iframe title="Prévia do e-mail" srcDoc={previewHtml} className="w-full h-[520px] rounded-lg border border-surface-border bg-white" />
           </div>
         </div>
       </div>
@@ -102,17 +124,19 @@ export function EmailTemplatesClient() {
   }
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4" data-modelos-email>
       {templates.length === 0 ? (
-        <div className="text-center py-10 border border-dashed border-surface-border rounded-xl space-y-3">
-          <p className="text-sm text-ink-muted">Nenhum modelo personalizado. São usados os textos padrão.</p>
-          <Button onClick={restaurarPadroes}>Carregar templates padrão para editar</Button>
+        <div className="text-center py-10 border border-dashed border-surface-border rounded-xl space-y-3" data-sem-modelos>
+          <p className="text-sm text-ink-muted">Nenhum modelo próprio: os e-mails saem com o texto padrão.</p>
+          {podeEditar ? <Button onClick={carregarPadroes} data-carregar-padroes><Plus className="w-4 h-4" aria-hidden /> Carregar modelos padrão</Button> : <SomenteLeitura className="justify-center" />}
         </div>
       ) : (
         <>
-          <div className="flex items-center justify-between">
-            <p className="text-sm text-ink-muted">{templates.length} template(s)</p>
-            <Button variant="secondary" onClick={restaurarPadroes}>Restaurar padrões</Button>
+          <div className="flex items-center justify-between gap-2 flex-wrap">
+            <p className="text-sm text-ink-muted flex items-center gap-1" data-total-modelos-email>{templates.length} {templates.length === 1 ? "modelo" : "modelos"} <Dica texto={AJUDA} rotulo="Modelos de e-mail" /></p>
+            {podeEditar && templates.length < TEMPLATES_PADRAO.length && (
+              <Button variant="secondary" onClick={carregarPadroes} data-carregar-padroes><Plus className="w-4 h-4" aria-hidden /> Carregar modelos que faltam</Button>
+            )}
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             {templates.map((t) => (
@@ -122,10 +146,11 @@ export function EmailTemplatesClient() {
                   <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${t.ativo ? "bg-success-50 text-success-700" : "bg-surface-alt text-ink-muted"}`}>{t.ativo ? "Ativo" : "Inativo"}</span>
                 </div>
                 <p className="text-xs text-ink-muted mt-1 truncate">{t.assunto}</p>
-                <span className="inline-flex items-center gap-1 text-xs text-primary-600 mt-2"><Pencil className="w-3 h-3" /> Editar</span>
+                <span className="inline-flex items-center gap-1 text-xs text-primary-600 mt-2">{podeEditar ? <><Pencil className="w-3 h-3" aria-hidden /> Editar</> : <><Eye className="w-3 h-3" aria-hidden /> Ver</>}</span>
               </button>
             ))}
           </div>
+          {!podeEditar && <SomenteLeitura />}
         </>
       )}
     </div>

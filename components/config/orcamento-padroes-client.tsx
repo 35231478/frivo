@@ -1,8 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import { Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { toast } from "@/components/ui/avisos";
+import { SomenteLeitura } from "@/components/config/permissao-config";
 import { Input } from "@/components/ui/input";
 import { FormField, FormGrid, FormSection } from "@/components/ui/form-field";
 import {
@@ -20,7 +21,7 @@ export interface PadroesOrcamentoTela {
 /**
  * Configurações › Orçamentos e propostas: o que o orçamento NOVO já traz preenchido (validade,
  * garantias, não incluso e normas). Cada orçamento grava os seus e pode editar; mudar aqui não mexe
- * nos que já existem. Sem permissão de gerenciar: só leitura.
+ * nos que já existem. Salvou: toast. Sem Configurações › gerenciar: só leitura, sem o botão Salvar.
  */
 export function OrcamentoPadroesClient({ inicial, podeEditar }: { inicial: PadroesOrcamentoTela; podeEditar: boolean }) {
   const [validade, setValidade] = useState(String(inicial.orcamentoValidadeDias));
@@ -29,7 +30,7 @@ export function OrcamentoPadroesClient({ inicial, podeEditar }: { inicial: Padro
   const [naoIncluso, setNaoIncluso] = useState(inicial.orcamentoNaoIncluso ?? "");
   const [normas, setNormas] = useState<string[]>(inicial.orcamentoNormas ?? []);
   const [salvando, setSalvando] = useState(false);
-  const [msg, setMsg] = useState<{ tipo: "ok" | "erro"; texto: string } | null>(null);
+  const [msg, setMsg] = useState<string | null>(null);
   const mudou = <T,>(f: (v: T) => void) => (v: T) => { f(v); setMsg(null); };
 
   async function salvar() {
@@ -47,9 +48,10 @@ export function OrcamentoPadroesClient({ inicial, podeEditar }: { inicial: Padro
         }),
       });
       const j = await r.json().catch(() => ({}));
-      setMsg(r.ok ? { tipo: "ok", texto: "Padrões salvos. Valem para os próximos orçamentos criados." } : { tipo: "erro", texto: j.erro ?? "Não foi possível salvar." });
+      if (!r.ok) { setMsg(j.erro ?? "Não foi possível salvar."); return; }
+      toast("Padrões salvos. Valem para os próximos orçamentos.");
     } catch {
-      setMsg({ tipo: "erro", texto: "Sem conexão. Tente de novo." });
+      setMsg("Sem conexão. Tente de novo.");
     } finally { setSalvando(false); }
   }
 
@@ -81,17 +83,13 @@ export function OrcamentoPadroesClient({ inicial, podeEditar }: { inicial: Padro
         </FormSection>
       </fieldset>
 
-      {msg && (
-        <div className={msg.tipo === "ok" ? "bg-ok-claro border border-ok/20 text-ok-texto text-sm rounded-lg px-4 py-3 flex items-center gap-2" : "bg-atrasado-claro border border-atrasado/20 text-atrasado-texto text-sm rounded-lg px-4 py-3"} role="status">
-          {msg.tipo === "ok" && <Check className="w-4 h-4" aria-hidden />} {msg.texto}
-        </div>
-      )}
+      {msg && <div role="alert" className="bg-atrasado-claro border border-atrasado/20 text-atrasado-texto text-sm rounded-lg px-4 py-3" data-erro-padroes-orcamento>{msg}</div>}
       {podeEditar ? (
         <div className="flex justify-end pt-2 border-t border-surface-linha">
           <Button onClick={salvar} loading={salvando} data-salvar-padroes-orcamento>Salvar padrões do orçamento</Button>
         </div>
       ) : (
-        <p className="text-xs text-ink-muted">Somente leitura: requer a permissão Configurações › Gerenciar.</p>
+        <SomenteLeitura />
       )}
     </div>
   );

@@ -1,16 +1,16 @@
 import type { Metadata } from "next";
-import { PageHeader } from "@/components/ui/page-header";
+import { TelaCadastroApoio } from "@/components/config/tela-cadastro-apoio";
 import { ChecklistTemplatesClient } from "@/components/config/checklist-templates-client";
 
 export const metadata: Metadata = { title: "Checklists de veículo" };
 
+/** Frota › Checklists: quem entra é quem tem Frota (moduloDaRota); gravar exige Configurações ou Frota › gerenciar. */
 export default function ChecklistsVeiculoPage() {
   return (
-    <div className="max-w-3xl mx-auto">
-      <PageHeader title="Checklists de veículo" description="Modelos de checklist preenchidos pelos colaboradores." backHref="/configuracoes" />
-      <div className="bg-white rounded-card border border-surface-border p-6">
+    <div className="max-w-5xl mx-auto">
+      <TelaCadastroApoio titulo="Checklists de veículo" descricao="Modelos de checklist preenchidos pelos colaboradores" voltar="/veiculos">
         <ChecklistTemplatesClient />
-      </div>
+      </TelaCadastroApoio>
     </div>
   );
 }

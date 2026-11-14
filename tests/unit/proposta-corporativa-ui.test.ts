@@ -24,6 +24,10 @@ vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: nav.push, refresh: nav.refresh, replace: () => {}, back: nav.back }),
   usePathname: () => "/orcamentos/novo", useSearchParams: () => new URLSearchParams(),
 }));
+vi.mock("@/components/ui/avisos", async (original) => {
+  const real = await original<typeof import("@/components/ui/avisos")>();
+  return { ...real, toast: vi.fn(real.toast) };
+});
 
 let root: Root;
 let caixa: HTMLDivElement;
@@ -222,7 +226,10 @@ describe("Configurações › Orçamentos e propostas", () => {
       orcamentoValidadeDias: "20", orcamentoGarantiaServico: "90 dias", orcamentoGarantiaPecas: "6 meses",
       orcamentoNaoIncluso: "Remoção e descarte do equipamento antigo", orcamentoNormas: ["PMOC"],
     });
-    expect(document.body.textContent).toContain("Padrões salvos");
+    // Leva 3 da padronização: a confirmação do salvar é o toast (não mais a caixa verde na tela)
+    const { toast } = await import("@/components/ui/avisos");
+    expect(vi.mocked(toast).mock.calls.map((c) => c[0])).toContain("Padrões salvos. Valem para os próximos orçamentos.");
+    expect(document.querySelector("[data-erro-padroes-orcamento]")).toBeNull();
   });
   it("erro do servidor aparece; sem permissão de gerenciar = só leitura (sem botão salvar)", async () => {
     const { OrcamentoPadroesClient } = await import("@/components/config/orcamento-padroes-client");

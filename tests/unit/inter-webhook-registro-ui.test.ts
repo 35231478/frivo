@@ -33,7 +33,10 @@ async function montarEGerar(respostaPut: Record<string, unknown>) {
   vi.stubGlobal("fetch", fetchMock);
 
   root = createRoot(caixa);
-  await act(async () => { root.render(createElement(InterConfigClient)); });
+  // Leva 3 da padronização: gerar o webhook exige Configurações › gerenciar (sem ela o botão não aparece)
+  const { PermissoesProvider } = await import("@/components/providers/permissoes-provider");
+  const { permissoesTotais } = await import("@/lib/permissoes");
+  await act(async () => { root.render(createElement(PermissoesProvider, { role: "OPERADOR", permissoes: permissoesTotais(), children: createElement(InterConfigClient) })); });
   await flush();
   const botao = caixa.querySelector("[data-gerar-webhook]") as HTMLButtonElement;
   await act(async () => { botao.click(); });

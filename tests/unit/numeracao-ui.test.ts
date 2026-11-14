@@ -5,7 +5,10 @@
  *  - a trava do mínimo NA TELA: abaixo do maior usado o botão trava e o aviso diz o mínimo;
  *  - salvar manda { tipo, proximo } para a rota e mostra o exemplo que voltou;
  *  - 409 do servidor (outro documento nasceu enquanto isso) vira a mensagem dele e o mínimo novo;
- *  - sem permissão de gerenciar: campos desligados e sem botão.
+ *  - sem permissão de gerenciar: campos desligados, sem botão e o aviso de somente leitura.
+ *
+ * Leva 3 da padronização: a tela passou para o padrão de lista (TabelaPro + cartões no celular) e a
+ * confirmação do salvar virou toast; o erro continua na própria linha.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act, createElement } from "react";
@@ -13,13 +16,18 @@ import { createRoot, type Root } from "react-dom/client";
 import type { NumeracaoTela } from "@/lib/numeracao";
 
 (globalThis as any).IS_REACT_ACT_ENVIRONMENT = true;
+vi.mock("@/components/ui/avisos", async (original) => {
+  const real = await original<typeof import("@/components/ui/avisos")>();
+  return { ...real, toast: vi.fn(real.toast) };
+});
 
 let root: Root;
 let caixa: HTMLDivElement;
 const chamadas: { url: string; metodo: string; corpo: unknown }[] = [];
 let resposta: { status: number; corpo: unknown } = { status: 200, corpo: {} };
 
-beforeEach(() => {
+beforeEach(async () => {
+  vi.mocked((await import("@/components/ui/avisos")).toast).mockClear();
   chamadas.length = 0;
   resposta = { status: 200, corpo: {} };
   vi.stubGlobal("fetch", vi.fn(async (url: string, init: RequestInit = {}) => {
@@ -41,6 +49,9 @@ async function digitar(el: HTMLInputElement, valor: string) {
   });
 }
 const linha = (tipo: string) => $(`[data-numeracao-tipo="${tipo}"]`)!;
+/** O que foi para a rota da numeração (a tabela também lê e grava a preferência de colunas do usuário) */
+const naRota = () => chamadas.filter((c) => !c.url.startsWith("/api/preferencias"));
+const toasts = async () => vi.mocked((await import("@/components/ui/avisos")).toast).mock.calls.map((c) => c[0]);
 
 const INICIAL: NumeracaoTela[] = [
   { tipo: "orcamento", rotulo: "Orçamento", prefixo: "ORC", dica: "d", maiorUsado: 3357, proximo: 3358, configurado: false, exemplo: "ORC-3358" },
@@ -82,7 +93,7 @@ describe("Numeração de documentos", () => {
     await digitar(campo, "abc");
     expect(txt(linha("orcamento").querySelector('[data-msg="aviso"]'))).toBe("Informe um número inteiro.");
     expect(txt(linha("orcamento").querySelector("[data-exemplo]"))).toBe("—");
-    expect(chamadas).toHaveLength(0);
+    expect(naRota()).toHaveLength(0);
   });
 
   it("salvar: PUT { tipo, proximo } na rota; o exemplo que volta vira a confirmação; a linha passa a 'configurada'", async () => {
@@ -90,8 +101,9 @@ describe("Numeração de documentos", () => {
     resposta = { status: 200, corpo: { tipo: "orcamento", proximo: 4000, exemplo: "ORC-4000" } };
     await digitar(linha("orcamento").querySelector("[data-proximo]") as HTMLInputElement, "4000");
     await clicar(linha("orcamento").querySelector("[data-salvar]"));
-    expect(chamadas).toEqual([{ url: "/api/configuracoes/numeracao", metodo: "PUT", corpo: { tipo: "orcamento", proximo: 4000 } }]);
-    expect(txt(linha("orcamento").querySelector('[data-msg="ok"]'))).toBe("Salvo. O próximo orçamento sai como ORC-4000.");
+    expect(naRota()).toEqual([{ url: "/api/configuracoes/numeracao", metodo: "PUT", corpo: { tipo: "orcamento", proximo: 4000 } }]);
+    expect(await toasts()).toEqual(["Numeração salva: o próximo orçamento sai como ORC-4000."]);
+    expect(linha("orcamento").querySelector("[data-msg]")).toBeNull();
     expect((linha("orcamento").querySelector("[data-salvar]") as HTMLButtonElement).disabled).toBe(true); // nada pendente
   });
 
@@ -122,13 +134,31 @@ describe("Numeração de documentos", () => {
     await digitar(campo, "3357");
     await act(async () => { campo.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true })); });
     await esperar();
-    expect(chamadas).toHaveLength(0);
+    expect(naRota()).toHaveLength(0);
     expect(txt(linha("orcamento").querySelector('[data-msg="erro"]'))).toBe("O mínimo permitido é 3358 (o maior já usado é 3357).");
   });
 
-  it("sem Configurações › gerenciar: campos desligados e sem botão Salvar", async () => {
+  it("sem Configurações › gerenciar: campos desligados, sem botão Salvar e o aviso de somente leitura", async () => {
     await montar(false);
     expect($$("[data-proximo]").every((c) => (c as HTMLInputElement).disabled)).toBe(true);
     expect($("[data-salvar]")).toBeNull();
+    expect(txt($("[data-somente-leitura]"))).toBe("Somente leitura: requer a permissão Configurações › gerenciar.");
+    await montar(true);
+    expect($("[data-somente-leitura]")).toBeNull();
+    expect($$("[data-numeracao-tipo] [data-salvar]")).toHaveLength(3);
+  });
+
+  it("padrão de lista: a tabela (desktop) e um cartão por documento (celular), com o mesmo campo e o mesmo salvar", async () => {
+    await montar();
+    expect($("[data-tabela-pro='config-numeracao']")).not.toBeNull();
+    const cartoes = $$("[data-cartoes] [data-cartao]");
+    expect(cartoes.map((c) => c.getAttribute("data-cartao"))).toEqual(["orcamento", "os", "contrato"]);
+    // digitar no cartão vale para a linha (é o mesmo estado) e salva pela mesma rota
+    resposta = { status: 200, corpo: { tipo: "os", proximo: 70, exemplo: "OS-70" } };
+    await digitar(cartoes[1].querySelector("[data-proximo]") as HTMLInputElement, "70");
+    expect((linha("os").querySelector("[data-proximo]") as HTMLInputElement).value).toBe("70");
+    await clicar(cartoes[1].querySelector("[data-salvar]"));
+    expect(naRota()).toEqual([{ url: "/api/configuracoes/numeracao", metodo: "PUT", corpo: { tipo: "os", proximo: 70 } }]);
+    expect(await toasts()).toEqual(["Numeração salva: o próximo ordem de serviço sai como OS-70."]);
   });
 });
