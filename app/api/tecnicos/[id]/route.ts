@@ -1,8 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
+import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { validarDocumentoDataUrl, validarFoto } from "@/lib/anexos-server";
 import { respostaRefEmpresa, validarRefEmpresa, validarRefsEmpresa } from "@/lib/ref-empresa";
 import { tecnicoSchema } from "@/lib/validations";
+import { caixaNome } from "@/lib/texto/zod";
 import { exigirPermissao } from "@/lib/permissoes-server";
 import { pode, type Permissoes } from "@/lib/permissoes";
 import { impactoColaborador, lerMotivo } from "@/lib/inativacao-server";
@@ -188,13 +190,42 @@ export async function DELETE(req: NextRequest, { params }: Params) {
   return NextResponse.json({ ok: true, usuarioInativado: !!usuarioId });
 }
 
-/** Reativa o colaborador (ativo=true + status ATIVO). Exige "gerenciar". Body: { ativo: true } */
+/** Edição parcial pelo "editar no contexto" de um seletor: só nome, telefone e CREA (o resto é da ficha). */
+const edicaoRapidaSchema = z.object({
+  nome: z.string().trim().min(2, "Nome deve ter pelo menos 2 caracteres").transform(caixaNome).optional(),
+  telefone: z.string().trim().min(8, "Telefone inválido").optional(),
+  crea: z.string().trim().max(60).optional(),
+}).strict().refine((d) => Object.keys(d).length > 0, "Nada para alterar");
+
+/**
+ * Exige "gerenciar". Dois usos:
+ * - { ativo: true } reativa o colaborador (ativo=true + status ATIVO);
+ * - { nome?, telefone?, crea? } corrige esses campos sem passar pela ficha inteira.
+ */
 export async function PATCH(req: NextRequest, { params }: Params) {
   const guard = await exigirPermissao("equipes", "gerenciar");
   if (guard.erro) return guard.resposta;
   const empresaId = guard.session.user!.empresaId;
   const { id } = await params;
-  if ((await req.json().catch(() => ({})))?.ativo !== true) return NextResponse.json({ erro: "Ação inválida" }, { status: 400 });
+  const corpo = await req.json().catch(() => null);
+  if (corpo?.ativo !== true) {
+    const parsed = edicaoRapidaSchema.safeParse(corpo);
+    if (!parsed.success) {
+      // Campo conhecido com valor ruim: diz qual; qualquer outra coisa (vazio, { ativo: false }, campo estranho) é ação inválida
+      const campo = parsed.error.issues.find((i) => i.code !== "unrecognized_keys" && i.path.length > 0);
+      return NextResponse.json({ erro: campo?.message ?? "Ação inválida" }, { status: 400 });
+    }
+    const atual = await prisma.tecnico.findFirst({ where: { id, empresaId }, select: { id: true, tipo: true, crea: true } });
+    if (!atual) return NextResponse.json({ erro: "Não encontrado" }, { status: 404 });
+    const { crea, ...resto } = parsed.data;
+    // Responsável técnico não fica sem CREA (é o que sai impresso no orçamento)
+    if (crea !== undefined && !crea && atual.tipo === "RESPONSAVEL_TECNICO") return NextResponse.json({ erro: "Informe o CREA do responsável técnico." }, { status: 400 });
+    const t = await prisma.tecnico.update({
+      where: { id }, data: { ...resto, ...(crea !== undefined && { crea: crea || null }) },
+      select: { id: true, nome: true, telefone: true, crea: true, tipo: true, ativo: true },
+    });
+    return NextResponse.json(t);
+  }
 
   const r = await reativarColaborador(id, { empresaId, usuarioId: guard.session.user!.id, usuarioNome: guard.session.user!.name ?? "usuário" });
   if (!r.ok) return NextResponse.json({ erro: "Não encontrado" }, { status: statusHttp(r) });

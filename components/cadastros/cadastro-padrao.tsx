@@ -29,6 +29,7 @@ import { BaixarPlanilha } from "@/components/importacao/baixar-planilha";
 import { ehEntidadeImportacao } from "@/lib/importacao/entidades";
 import { CADASTROS, type AcaoCadastro, type CampoCadastro, type ColunaCadastro, type DefCadastro, type EntidadeCadastro, type FiltroCadastro } from "@/lib/cadastros/registro";
 import { SeletorCadastro, useCadastro } from "@/components/cadastros/seletor-cadastro";
+import { AbasSituacao } from "@/components/listagem/abas-situacao";
 import { opcoesCadastro } from "@/lib/cadastros/opcoes";
 
 /**
@@ -221,18 +222,7 @@ function Conteudo({ entidade, Editor, celula, acoesLinha, ajuda, aviso, grupos }
         {/* Abas + busca + Novo */}
         <div className="flex flex-col sm:flex-row sm:flex-wrap sm:items-center gap-3">
           <div className="flex items-center gap-1.5 w-full sm:w-auto">
-          <div className="flex flex-1 rounded-lg border border-surface-border p-0.5 bg-surface-alt sm:flex-none" role="tablist">
-            {ABAS.map((a) => (
-              <button
-                key={a.id} type="button" role="tab" aria-selected={aba === a.id} data-aba={a.id}
-                onClick={() => mudarUrl({ aba: a.id === "ativos" ? null : a.id })}
-                className={cn("flex-1 sm:flex-none px-2 sm:px-3 py-1.5 text-sm font-medium rounded-md transition-colors whitespace-nowrap",
-                  aba === a.id ? "bg-white text-primary-700 shadow-sm" : "text-ink-muted hover:text-ink")}
-              >
-                {a.label} <span className="text-xs text-ink-subtle tabular-nums">({contagem ? contagem[a.id].toLocaleString("pt-BR") : "…"})</span>
-              </button>
-            ))}
-          </div>
+          <AbasSituacao abas={ABAS} valor={aba} contagem={contagem ?? null} onChange={(id) => mudarUrl({ aba: id === "ativos" ? null : id })} />
           {ajuda && <Dica texto={ajuda} rotulo={`Sobre ${def.plural}`} lado="direita" />}
           </div>
           {/* A busca não fica espremida: com pouco espaço, os botões descem para a linha de baixo */}

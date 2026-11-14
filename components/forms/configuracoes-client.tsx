@@ -17,6 +17,10 @@ import { formatarCnae } from "@/lib/nfse/servico";
 import { Upload, Trash2, ImageIcon, Building2, SlidersHorizontal } from "lucide-react";
 import { confirmar, toast } from "@/components/ui/avisos";
 import { SomenteLeitura, erroDaResposta } from "@/components/config/permissao-config";
+import { SelectCadastroRapido } from "@/components/ui/select-cadastro-rapido";
+import { RESPONSAVEL_TECNICO, type OpcaoRt } from "@/components/cadastro-rapido/definicoes";
+
+const SEM_RT = "Nenhum (o documento não mostra RT)";
 
 const ESTADOS_BR = [
   "AC","AL","AP","AM","BA","CE","DF","ES","GO","MA","MT","MS","MG",
@@ -40,6 +44,8 @@ interface Props {
 
 export function ConfiguracoesClient({ empresa: initialEmpresa, config: initialConfig, parte, tecnicosRt = [] }: Props) {
   const router = useRouter();
+  // Os responsáveis técnicos do seletor: os do servidor mais os cadastrados aqui mesmo
+  const [rts, setRts] = useState<OpcaoRt[]>(tecnicosRt);
   // CNAE principal é dado fiscal: sem Financeiro › Fiscal fica só para leitura (o servidor confere)
   const permissoes = usePermissoes();
   const podeFiscal = permissoes.pode("financeiro", "fiscal");
@@ -83,6 +89,9 @@ export function ConfiguracoesClient({ empresa: initialEmpresa, config: initialCo
   });
 
   const [cfg, setCfg] = useState<ConfigTela>(initialConfig);
+  // RT inativo só aparece se já é o escolhido (dá para manter, não para escolher de novo)
+  const opcoesRt = rts.filter((t) => t.ativo || t.id === emp.responsavelTecnicoId).map((t) => ({ value: t.id, label: RESPONSAVEL_TECNICO.rotulo(t) }));
+  const rtAtual = rts.find((t) => t.id === emp.responsavelTecnicoId);
   // Texto livre (aceita vírgula); vai como número no salvar
   const [issTexto, setIssTexto] = useState(String(initialConfig.issAliquota ?? 0).replace(".", ","));
 
@@ -302,15 +311,24 @@ export function ConfiguracoesClient({ empresa: initialEmpresa, config: initialCo
 
         <FormSection title="Responsável técnico" dica="Preenchido em cada novo orçamento; nome e CREA são impressos no documento, com a menção “ART emitida após aprovação”. Pode ser alterado em cada orçamento.">
           <FormField label="Responsável técnico padrão" className="max-w-md">
-            <Select value={emp.responsavelTecnicoId} onChange={(e) => updateEmp("responsavelTecnicoId", e.target.value)} placeholder="Nenhum (o documento não mostra RT)" data-rt-padrao>
-              {tecnicosRt.filter((t) => t.ativo || t.id === emp.responsavelTecnicoId).map((t) => (
-                <option key={t.id} value={t.id}>{t.nome}{t.crea ? ` — CREA ${t.crea}` : ""}{t.ativo ? "" : " (inativo)"}</option>
-              ))}
-            </Select>
+            <div data-rt-padrao={emp.responsavelTecnicoId}>
+              <SelectCadastroRapido
+                value={emp.responsavelTecnicoId} onChange={(v) => updateEmp("responsavelTecnicoId", v)} disabled={!podeEditar}
+                textoDesabilitado={rtAtual ? RESPONSAVEL_TECNICO.rotulo(rtAtual) : SEM_RT}
+                // Sem RT nenhum, o seletor mostra o estado vazio com "Cadastrar agora"; com algum, "Nenhum" é uma escolha
+                opcoes={opcoesRt.length ? [{ value: "", label: SEM_RT }, ...opcoesRt] : []}
+                entidade={RESPONSAVEL_TECNICO.entidade} campos={RESPONSAVEL_TECNICO.campos} campoBusca="nome" placeholder={SEM_RT}
+                permissao={RESPONSAVEL_TECNICO.permissao} linkCadastroCompleto={RESPONSAVEL_TECNICO.link}
+                criar={async (v) => {
+                  const t = await RESPONSAVEL_TECNICO.criar(v);
+                  setRts((l) => [...l, t].sort((a, b) => a.nome.localeCompare(b.nome)));
+                  toast("Responsável técnico cadastrado.");
+                  return { value: t.id, label: RESPONSAVEL_TECNICO.rotulo(t) };
+                }}
+                edicao={emp.responsavelTecnicoId ? RESPONSAVEL_TECNICO.edicao((t) => setRts((l) => l.map((x) => (x.id === t.id ? { ...x, nome: t.nome, crea: t.crea } : x)))) : undefined}
+              />
+            </div>
           </FormField>
-          {tecnicosRt.length === 0 && (
-            <p className="text-xs text-ink-muted">Nenhum responsável técnico cadastrado. Cadastre em Equipes › Colaboradores, com o tipo “Responsável técnico” e o CREA.</p>
-          )}
         </FormSection>
 
         </fieldset>

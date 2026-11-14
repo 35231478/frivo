@@ -191,7 +191,8 @@ describe("Formulários", () => {
     expect(txt($("[data-confirmar-sim]"))).toBe("Inativar");
     await clicar($("[data-confirmar-sim]"));
     expect(gravacoes()).toEqual([{ url: "/api/formularios/f1", metodo: "DELETE", corpo: null }]);
-    expect(await toasts()).toEqual([["Formulário inativado.", "sucesso"]]);
+    // Leva 4B: o aviso passou a dizer onde o inativado foi parar (a aba Inativos, de onde se reativa)
+    expect(await toasts()).toEqual([["Formulário inativado. Está na aba Inativos.", "sucesso"]]);
     expect(linhas()).toEqual(["f2"]);
   });
 
@@ -284,7 +285,8 @@ describe("Checklists de veículo", () => {
     await clicar($("[data-modelo='ck2'] [data-inativar-modelo]"));
     expect(txt($("p", confirmacao()!))).toContain("Ainda não foi preenchido.");
     await clicar($("[data-confirmar-sim]"));
-    expect(await toasts()).toEqual([["Modelo de checklist inativado.", "sucesso"]]);
+    // Leva 4B: o aviso passou a dizer onde o inativado foi parar (a aba Inativos, de onde se reativa)
+    expect(await toasts()).toEqual([["Modelo de checklist inativado. Está na aba Inativos.", "sucesso"]]);
     expect(linhas()).toEqual(["ck1"]);
   });
 

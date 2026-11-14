@@ -11,6 +11,7 @@ import { Dica } from "@/components/ui/dica";
 import { confirmar, toast } from "@/components/ui/avisos";
 import { CampoBusca, ListaVazia, SkeletonLista } from "@/components/listagem/listagem-ui";
 import { TabelaPro, type ColunaPro } from "@/components/listagem/tabela-pro";
+import { AbasSituacao } from "@/components/listagem/abas-situacao";
 import { usePermissoes } from "@/components/providers/permissoes-provider";
 import { ItensChecklist } from "@/components/veiculos/itens-checklist";
 import { PLANILHA } from "@/lib/planilha";
@@ -29,6 +30,7 @@ interface Detalhe extends Omit<Linha, "totalItens" | "alertas"> {
   itens: { id: string; itemTemplateId: string; valor: string | null; foto: string | null; alerta: boolean; itemTemplate: ItemDoModelo }[];
 }
 type Aba = "ativos" | "inativos";
+const ABAS: readonly { id: Aba; label: string }[] = [{ id: "ativos", label: "Preenchidos" }, { id: "inativos", label: "Inativos" }];
 
 const AJUDA = "Checklists já enviados. Excluir é reversível: o checklist inativado sai da lista e das contagens, e pode ser reativado na aba Inativos.";
 
@@ -146,14 +148,7 @@ export function ChecklistsPreenchidos({ veiculoId, colaboradores, onMudou }: {
   return (
     <div className="space-y-3" data-checklists-preenchidos>
       <div className="flex flex-wrap items-center gap-2">
-        <div className="inline-flex rounded-lg border border-surface-border bg-white p-0.5" role="tablist" aria-label="Situação dos checklists">
-          {(["ativos", "inativos"] as Aba[]).map((a) => (
-            <button key={a} type="button" role="tab" aria-selected={aba === a} onClick={() => setAba(a)} data-aba-checklists={a}
-              className={cn("px-3 py-1.5 text-sm font-medium rounded-md transition-colors", aba === a ? "bg-primary-50 text-primary-700" : "text-ink-muted hover:text-ink")}>
-              {a === "ativos" ? "Preenchidos" : "Inativos"}
-            </button>
-          ))}
-        </div>
+        <AbasSituacao abas={ABAS} valor={aba} onChange={setAba} rotulo="Situação dos checklists" className="flex-none" />
         <Dica texto={AJUDA} rotulo="Checklists preenchidos" lado="direita" />
         <div className="basis-full sm:basis-0 sm:flex-1 sm:min-w-[12rem]">
           <CampoBusca valor={busca} onChange={setBusca} placeholder={veiculoId ? "Pesquisar por colaborador ou modelo" : "Pesquisar por placa, colaborador ou modelo"} rotulo="Pesquisar checklists" atalho={false} />

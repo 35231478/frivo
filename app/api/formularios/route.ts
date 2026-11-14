@@ -11,9 +11,11 @@ export async function GET(req: NextRequest) {
   const empresaId = session.user!.empresaId;
   const { searchParams } = new URL(req.url);
   const tipoOsId = searchParams.get("tipoOsId");
+  // Por padrão só os ativos (é o que os seletores usam); ?inativos=1 devolve os inativados (aba "Inativos")
+  const inativos = searchParams.get("inativos") === "1";
 
   const formularios = await prisma.formularioTemplate.findMany({
-    where: { empresaId, ativo: true, ...(tipoOsId && { tipoOsId }) },
+    where: { empresaId, ativo: !inativos, ...(tipoOsId && { tipoOsId }) },
     include: {
       campos: { where: { ativo: true }, orderBy: { ordem: "asc" } }, // removidos na edição ficam só no histórico
       tipoOs: { select: { id: true, nome: true, cor: true } },

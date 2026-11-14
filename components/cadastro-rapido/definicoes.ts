@@ -206,6 +206,41 @@ export const TECNICO = {
   },
 };
 
+/* ───────── Responsável técnico (colaborador com CREA — o RT dos orçamentos) ───────── */
+const CAMPO_CREA: CampoRapido = { nome: "crea", label: "CREA", obrigatorio: true, colunas: 3, placeholder: "Ex: 5012345-D/SP", maxLength: 60 };
+export interface OpcaoRt { id: string; nome: string; crea: string | null; ativo: boolean }
+export const RESPONSAVEL_TECNICO = {
+  entidade: { singular: "responsável técnico", plural: "responsáveis técnicos" },
+  permissao: TECNICO.permissao,
+  link: TECNICO.link,
+  campos: [TECNICO.campos[0], { ...TECNICO.campos[1], colunas: 3 }, CAMPO_CREA, { ...TECNICO.campos[2], colunas: 6 }] as CampoRapido[],
+  camposEdicao: [TECNICO.campos[0], { ...TECNICO.campos[2], colunas: 3 }, CAMPO_CREA] as CampoRapido[],
+  /** O rótulo do RT num seletor: nome e CREA */
+  rotulo: (t: Pick<OpcaoRt, "nome" | "crea" | "ativo">) => `${t.nome}${t.crea ? ` — CREA ${t.crea}` : ""}${t.ativo ? "" : " (inativo)"}`,
+  /** Cria o colaborador já como responsável técnico, com o CREA (POST /api/tecnicos). */
+  async criar(v: Record<string, string>): Promise<OpcaoRt> {
+    const cpf = (v.cpf ?? "").replace(/\D/g, "");
+    if (cpf.length !== 11) throw new Error("CPF deve ter 11 dígitos.");
+    if (!(v.crea ?? "").trim()) throw new Error("Informe o CREA.");
+    const t = await postar("/api/tecnicos", {
+      nome: v.nome, cpf: formatarCpfCnpj(cpf), telefone: v.telefone, tipo: "RESPONSAVEL_TECNICO", crea: v.crea.trim(),
+    }, "Erro ao cadastrar o responsável técnico.");
+    return { id: t.id, nome: t.nome, crea: t.crea ?? null, ativo: true };
+  },
+  /** Editar no contexto o RT escolhido: nome, telefone e CREA (é o cadastro do colaborador — referência). */
+  edicao(aoSalvar?: (t: OpcaoRt) => void): EdicaoDoSelecionado {
+    return {
+      escopo: "referencia", alvo: "do responsável técnico", campos: RESPONSAVEL_TECNICO.camposEdicao, permissao: RESPONSAVEL_TECNICO.permissao,
+      linkCadastroCompleto: (id) => `/colaboradores/${id}/editar`, mensagemSucesso: "Responsável técnico atualizado.",
+      valores: async (id) => valoresDe(await ler(`/api/tecnicos/${id}`, "Não foi possível carregar o responsável técnico."), RESPONSAVEL_TECNICO.camposEdicao),
+      async salvar(id, v, alterados) {
+        const t = await alterar<OpcaoRt>(`/api/tecnicos/${id}`, soOQueMudou(v, alterados), "Erro ao salvar o responsável técnico.");
+        aoSalvar?.(t);
+      },
+    };
+  },
+};
+
 /* ───────── Tipo de OS (UX-8/Y3: sem sair da Nova OS ou da atividade) ───────── */
 export const TIPO_OS = {
   entidade: { singular: "tipo de OS", plural: "tipos de OS" },
