@@ -7,7 +7,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { Modal } from "@/components/ui/modal";
-import { BuscaSelect } from "@/components/ui/busca-select";
 import { Dica } from "@/components/ui/dica";
 import { confirmar, toast } from "@/components/ui/avisos";
 import { CampoBusca, ListaVazia } from "@/components/listagem/listagem-ui";
@@ -43,6 +42,9 @@ const COLUNAS: ColunaPro[] = [
   { id: "criado", titulo: "Criado em", largura: 110 },
   { id: "acoes", titulo: "Ações", semTitulo: true, fixa: true, largura: 128, alinhar: "direita" },
 ];
+
+/** Quantos equipamentos o diálogo de vincular mostra de uma vez (o resto vem pela pesquisa) */
+const LIMITE_OPCOES = 50;
 
 /** Lê o erro que a rota devolveu ({ erro }), ou o texto de reserva */
 async function erroDa(res: Response, reserva: string): Promise<string> {
@@ -277,6 +279,10 @@ function ModalGerar({ aberto, onFechar, onPronto, proximoCodigo }: { aberto: boo
 
 function ModalVincular({ item, equipamentos, onFechar, onPronto }: { item: QrItem | null; equipamentos: { id: string; nome: string }[]; onFechar: () => void; onPronto: (codigo: string) => void }) {
   const [equipamentoId, setEquipamentoId] = useState("");
+  const [pesquisa, setPesquisa] = useState("");
+  const termo = pesquisa.trim().toLowerCase();
+  const achados = termo ? equipamentos.filter((e) => e.nome.toLowerCase().includes(termo)) : equipamentos;
+  const limpar = () => { setErro(""); setEquipamentoId(""); setPesquisa(""); };
   const [salvando, setSalvando] = useState(false);
   const [erro, setErro] = useState("");
 
@@ -287,25 +293,37 @@ function ModalVincular({ item, equipamentos, onFechar, onPronto }: { item: QrIte
     try {
       const res = await fetch(`/api/qrcodes/${item.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ equipamentoId }) });
       if (!res.ok) { setErro(await erroDa(res, "Não foi possível vincular a etiqueta.")); return; }
-      setEquipamentoId("");
+      limpar();
       onPronto(item.codigo);
     } catch { setErro("Sem conexão. Tente de novo."); } finally { setSalvando(false); }
   }
 
   return (
-    <Modal aberto={!!item} onFechar={() => { setErro(""); setEquipamentoId(""); onFechar(); }} titulo={item ? `Vincular a etiqueta ${item.codigo}` : "Vincular a etiqueta"} tamanho="sm">
+    <Modal aberto={!!item} onFechar={() => { limpar(); onFechar(); }} titulo={item ? `Vincular a etiqueta ${item.codigo}` : "Vincular a etiqueta"} tamanho="sm">
       <div className="space-y-4" data-modal-vincular>
         {erro && <div role="alert" className="bg-atrasado-claro border border-atrasado/20 text-atrasado-texto text-sm rounded-lg px-4 py-2.5" data-erro-vincular>{erro}</div>}
         {equipamentos.length === 0 ? (
           <p className="text-sm text-ink-muted" data-sem-equipamentos>Não há equipamento sem QR Code.</p>
         ) : (
-          <label className="block">
-            <span className="block text-sm font-medium text-ink mb-1.5">Equipamento</span>
-            <BuscaSelect value={equipamentoId} onChange={setEquipamentoId} options={equipamentos.map((e) => ({ value: e.id, label: e.nome }))} placeholder="Pesquisar equipamento sem QR Code" />
-          </label>
+          // Lista dentro do próprio diálogo (um seletor suspenso ficava cortado pela moldura no celular)
+          <div>
+            <Input value={pesquisa} onChange={(e) => setPesquisa(e.target.value)} placeholder="Pesquisar equipamento sem QR Code" aria-label="Pesquisar equipamento sem QR Code" data-pesquisa-equipamento />
+            <ul role="listbox" aria-label="Equipamentos sem QR Code" className="mt-2 max-h-56 overflow-y-auto border border-surface-border rounded-lg divide-y divide-surface-border" data-opcoes-equipamento>
+              {achados.length === 0 && <li className="px-3 py-3 text-xs text-ink-subtle">Nenhum equipamento encontrado.</li>}
+              {achados.slice(0, LIMITE_OPCOES).map((e) => (
+                <li key={e.id}>
+                  <button type="button" role="option" aria-selected={e.id === equipamentoId} onClick={() => { setEquipamentoId(e.id); setErro(""); }} data-opcao-equipamento={e.id}
+                    className={cn("w-full text-left px-3 py-2 text-sm hover:bg-primary-50", e.id === equipamentoId ? "bg-primary-50 text-primary-700 font-medium" : "text-ink")}>
+                    {e.nome}
+                  </button>
+                </li>
+              ))}
+            </ul>
+            {achados.length > LIMITE_OPCOES && <p className="mt-1 text-xs text-ink-muted" data-mais-opcoes>Mostrando {LIMITE_OPCOES} de {achados.length}. Refine a pesquisa.</p>}
+          </div>
         )}
         <div className="flex justify-end gap-2">
-          <Button variant="secondary" onClick={() => { setErro(""); setEquipamentoId(""); onFechar(); }}>Cancelar</Button>
+          <Button variant="secondary" onClick={() => { limpar(); onFechar(); }}>Cancelar</Button>
           <Button onClick={vincular} loading={salvando} disabled={equipamentos.length === 0} data-confirmar-vincular>Vincular</Button>
         </div>
       </div>

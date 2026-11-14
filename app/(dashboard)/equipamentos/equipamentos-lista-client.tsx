@@ -270,10 +270,11 @@ const COLUNAS: ColunaPro[] = [
   { id: "equipamento", titulo: "Equipamento", ordenar: "tipo", obrigatoria: true, minimo: 200 },
   { id: "identificacao", titulo: "Identificação", largura: 170, classe: "truncate" },
   { id: "ambiente", titulo: "Ambiente", largura: 140, classe: "truncate" },
-  { id: "local", titulo: "Cliente e unidade", largura: 210, ordenar: "cliente" },
+  { id: "local", titulo: "Cliente e unidade", largura: 198, ordenar: "cliente" },
   { id: "garantia", titulo: "Garantia", largura: 96, ordenar: "garantia" },
   { id: "ultimo", titulo: "Últ. atend.", largura: 96, ordenar: "ultimo" },
-  { id: "acoes", titulo: "Ações", fixa: true, semTitulo: true, largura: 124, alinhar: "direita", classe: "py-0.5" },
+  // 4 ícones de 28px + respiro: abaixo disso a célula estoura e a tabela ganha rolagem lateral
+  { id: "acoes", titulo: "Ações", fixa: true, semTitulo: true, largura: 136, alinhar: "direita", classe: "py-0.5" },
 ];
 
 function Tabela({

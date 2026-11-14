@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { corDado } from "@/lib/ui/tokens";
 import { Check, ChevronDown, ExternalLink, Layers, Loader2, Lock, MapPin, Pencil, Plus, Search, X } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -520,6 +520,7 @@ function MiniCadastro({
   const [consultando, setConsultando] = useState<string | null>(null);
   const valoresRef = useRef(valores);
   valoresRef.current = valores;
+  const idBase = useId();
   const [notaConsulta, setNotaConsulta] = useState<{ campo: string; texto: string; erro?: boolean } | null>(null);
 
   // Reinicia a cada abertura (com o texto da busca, se houver)
@@ -594,12 +595,23 @@ function MiniCadastro({
         {contexto && <p className="text-xs text-ink-muted -mt-1">Cadastro rápido {contexto}. Os dados já preenchidos no formulário são mantidos.</p>}
 
         <div className="grid grid-cols-1 sm:grid-cols-6 gap-3">
-          {campos.map((c, i) => (
-            <label key={c.nome} className={cn("block", COLS[c.colunas ?? 6])}>
-              <span className="block text-xs font-medium text-ink mb-1">
+          {campos.map((c, i) => {
+            // Campo com consulta: o botão e a frase não podem ficar dentro do <label> (entrariam no nome do
+            // campo para o leitor de tela). A caixa vira <div> e o rótulo aponta para o campo pelo id.
+            const comConsulta = !!c.consulta && c.consulta.disponivel?.(valores) !== false;
+            const id = `${idBase}-${c.nome}`;
+            const Caixa = comConsulta ? "div" : "label";
+            const titulo = (
+              <>
                 {c.label}{c.obrigatorio && <span className="text-atrasado"> *</span>}
                 {c.tipo === "cep" && buscandoCep && <Loader2 className="inline w-3 h-3 ml-1 animate-spin text-ink-subtle" />}
-              </span>
+              </>
+            );
+            return (
+            <Caixa key={c.nome} className={cn("block", COLS[c.colunas ?? 6])}>
+              {comConsulta
+                ? <label htmlFor={id} className="block text-xs font-medium text-ink mb-1">{titulo}</label>
+                : <span className="block text-xs font-medium text-ink mb-1">{titulo}</span>}
               {c.tipo === "select" ? (
                 <select value={valores[c.nome] ?? ""} onChange={(e) => set(c.nome, e.target.value)} className={cn(inputCls, faltando.has(c.nome) && "border-atrasado/40")}>
                   {!c.obrigatorio || !(valores[c.nome]) ? <option value="">{c.placeholder ?? "Selecione"}</option> : null}
@@ -623,30 +635,38 @@ function MiniCadastro({
                   placeholder={c.placeholder} maxLength={c.maxLength}
                   className={cn(inputCls, "resize-none", faltando.has(c.nome) && "border-atrasado/40")}
                 />
-              ) : (
-                <span className={c.consulta && c.consulta.disponivel?.(valores) !== false ? "flex gap-2" : undefined}>
-                <input
-                  autoFocus={i === 0}
-                  value={valores[c.nome] ?? ""}
-                  onChange={(e) => { set(c.nome, e.target.value); if (c.tipo === "cep") buscarCep(e.target.value); }}
-                  placeholder={c.placeholder} maxLength={c.maxLength ?? (c.tipo === "cep" ? 9 : undefined)}
-                  inputMode={c.tipo === "cep" ? "numeric" : c.inputMode}
-                  className={cn(inputCls, faltando.has(c.nome) && "border-atrasado/40 focus:border-atrasado focus:ring-atrasado/10")}
-                />
-                {c.consulta && c.consulta.disponivel?.(valores) !== false && (
-                  <button type="button" onClick={() => void consultar(c)} disabled={!!consultando || !c.consulta.pronto(valores[c.nome] ?? "")} data-consultar={c.nome}
-                    title={c.consulta.pronto(valores[c.nome] ?? "") ? `Consultar: ${c.consulta.origem.toLowerCase()}` : "Preencha o campo para consultar"}
-                    className="shrink-0 inline-flex items-center gap-1.5 px-3 text-sm font-medium rounded-lg border border-surface-border text-ink hover:bg-surface-alt disabled:opacity-50 disabled:hover:bg-transparent">
-                    {consultando === c.nome ? <Loader2 className="w-4 h-4 animate-spin" aria-hidden /> : <Search className="w-4 h-4" aria-hidden />} Consultar
-                  </button>
-                )}
-                </span>
-              )}
+              ) : (() => {
+                const entrada = (
+                  <input
+                    id={comConsulta ? id : undefined}
+                    autoFocus={i === 0}
+                    value={valores[c.nome] ?? ""}
+                    onChange={(e) => { set(c.nome, e.target.value); if (c.tipo === "cep") buscarCep(e.target.value); }}
+                    placeholder={c.placeholder} maxLength={c.maxLength ?? (c.tipo === "cep" ? 9 : undefined)}
+                    inputMode={c.tipo === "cep" ? "numeric" : c.inputMode}
+                    className={cn(inputCls, faltando.has(c.nome) && "border-atrasado/40 focus:border-atrasado focus:ring-atrasado/10")}
+                  />
+                );
+                // Sem consulta, o campo fica como sempre (direto no rótulo); com ela, ao lado do botão
+                if (!comConsulta || !c.consulta) return entrada;
+                const pronto = c.consulta.pronto(valores[c.nome] ?? "");
+                return (
+                  <div className="flex gap-2">
+                    {entrada}
+                    <button type="button" onClick={() => void consultar(c)} disabled={!!consultando || !pronto} data-consultar={c.nome}
+                      title={pronto ? `Consultar: ${c.consulta.origem.toLowerCase()}` : "Preencha o campo para consultar"}
+                      className="shrink-0 inline-flex items-center gap-1.5 px-3 text-sm font-medium rounded-lg border border-surface-border text-ink hover:bg-surface-alt disabled:opacity-50 disabled:hover:bg-transparent">
+                      {consultando === c.nome ? <Loader2 className="w-4 h-4 animate-spin" aria-hidden /> : <Search className="w-4 h-4" aria-hidden />} Consultar
+                    </button>
+                  </div>
+                );
+              })()}
               {notaConsulta?.campo === c.nome && (
-                <span role="status" data-nota-consulta={notaConsulta.erro ? "erro" : "ok"} className={cn("block text-xs mt-1", notaConsulta.erro ? "text-atrasado" : "text-ink-muted")}>{notaConsulta.texto}</span>
+                <p role="status" data-nota-consulta={notaConsulta.erro ? "erro" : "ok"} className={cn("text-xs mt-1", notaConsulta.erro ? "text-atrasado" : "text-ink-muted")}>{notaConsulta.texto}</p>
               )}
-            </label>
-          ))}
+            </Caixa>
+            );
+          })}
         </div>
         {campos.filter((c) => c.avisoSerie).map((c) => <AvisoSerieDuplicada key={c.nome} numero={valores[c.nome] ?? ""} />)}
 

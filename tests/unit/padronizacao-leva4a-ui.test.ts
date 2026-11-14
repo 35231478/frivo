@@ -258,8 +258,13 @@ describe("QR Codes (lista)", () => {
     await clicar($("[data-confirmar-vincular]"));
     expect(txt($("[data-erro-vincular]"))).toBe("Selecione um equipamento.");
     expect(gravacoes()).toEqual([]);
-    await clicar($("button", modal));
-    await clicar(botao("Carrier 30XA", modal));
+    // a lista fica dentro do diálogo (no celular, o seletor suspenso era cortado pela moldura) e a pesquisa filtra
+    expect($$("[data-opcao-equipamento]", modal).map(txt)).toEqual(["Daikin FTXS", "Carrier 30XA"]);
+    await digitar($("[data-pesquisa-equipamento]"), "carr");
+    expect($$("[data-opcao-equipamento]", modal).map(txt)).toEqual(["Carrier 30XA"]);
+    await clicar($('[data-opcao-equipamento="e3"]'));
+    expect($('[data-opcao-equipamento="e3"]')!.getAttribute("aria-selected")).toBe("true");
+    expect($("[data-erro-vincular]")).toBeNull();
     await clicar($("[data-confirmar-vincular]"));
     expect(gravacoes()).toEqual([{ url: "/api/qrcodes/q2", metodo: "PATCH", corpo: { equipamentoId: "e3" } }]);
     expect(await toasts()).toEqual([["Etiqueta QR-102 vinculada.", "sucesso"]]);
@@ -349,6 +354,7 @@ describe("Clientes: ações da linha", () => {
     await abrir(P(["visualizar", "editar"]));
     expect($("[data-abrir-cliente]")!.getAttribute("aria-label")).toBe("Editar Padaria Pão Quente");
     expect($("[data-inativar-cliente]")).toBeNull();
+    expect($("[data-reativar-cliente]")).toBeNull(); // cliente ativo não tem o que reativar
     act(() => root.unmount());
     await abrir(P(["visualizar", "excluir"]));
     expect($("[data-abrir-cliente]")!.getAttribute("aria-label")).toBe("Ver Padaria Pão Quente");
@@ -624,7 +630,12 @@ describe("CNPJ no cadastro rápido de cliente — na tela", () => {
     }), permissoesTotais());
   }
   const modal = () => $('[role="dialog"]')!;
-  const campo = (rotulo: string) => $$("label", modal()).find((l) => txt($("span", l)).replace(" *", "") === rotulo)!.querySelector<HTMLInputElement>("input")!;
+  /** O campo pelo rótulo: o rótulo envolve o campo ou, no campo com consulta, aponta para ele (htmlFor) */
+  const campo = (rotulo: string) => {
+    const l = $$("label", modal()).find((x) => txt((x as HTMLLabelElement).htmlFor ? x : $("span", x)).replace(" *", "") === rotulo) as HTMLLabelElement;
+    expect(l, `rótulo "${rotulo}"`).toBeTruthy();
+    return (l.htmlFor ? document.getElementById(l.htmlFor) : l.querySelector("input")) as HTMLInputElement;
+  };
   const consultar = () => $<HTMLButtonElement>('[data-consultar="cpfCnpj"]');
 
   it("o botão Consultar fica ao lado do CNPJ, desligado até os 14 dígitos; para pessoa física, some", async () => {
@@ -651,6 +662,9 @@ describe("CNPJ no cadastro rápido de cliente — na tela", () => {
     expect(txt($("[data-nota-consulta='ok']"))).toBe("Dados da Receita Federal: nome / razão social, nome fantasia e telefone. Confira antes de salvar.");
     // nada é travado: a pessoa corrige e é o valor dela que vai
     expect([campo("Nome / Razão social"), campo("Nome fantasia"), campo("Telefone")].some((c) => c.disabled || c.readOnly)).toBe(false);
+    // a frase e o botão ficam FORA do rótulo: para o leitor de tela, o nome do campo é só "CPF / CNPJ"
+    expect($$("label", modal()).filter((l) => /Consultar|Receita/.test(txt(l)))).toEqual([]);
+    expect(campo("CPF / CNPJ").closest("label")).toBeNull();
     await digitar(campo("Nome fantasia"), "Padaria Pão Quente");
     await clicar(botao("SalvarSalvar e selecionar", modal()));
     expect(criado).toEqual([{ tipoPessoa: "JURIDICA", cpfCnpj: "45.723.174/0001-10", nome: "PADARIA PAO QUENTE LTDA", nomeFantasia: "Padaria Pão Quente", telefone: "(11) 3333-9000" }]);
@@ -690,6 +704,32 @@ describe("CNPJ no cadastro rápido de cliente — na tela", () => {
     expect(UNIDADE.campos.some((c) => c.consulta)).toBe(false);
     expect(CLIENTE.campos.filter((c) => c.consulta).map((c) => c.nome)).toEqual(["cpfCnpj"]);
     expect(CLIENTE.campos.find((c) => c.nome === "cpfCnpj")!.consulta!.origem).toBe("Dados da Receita Federal");
+  });
+});
+
+/* ═════════ QR Codes: qual equipamento é qual ═════════ */
+describe("QR Codes: o nome do equipamento diz QUAL é (marca e modelo se repetem)", () => {
+  const BASE = { marca: "LG", modelo: "S4-W12" };
+  it("o apelido vem primeiro; sem apelido, marca e modelo", async () => {
+    const { nomeEquipamentoQr } = await import("@/lib/qrcode-rotulos");
+    expect(nomeEquipamentoQr({ ...BASE, nome: "Split UTI 1" })).toBe("Split UTI 1 · LG S4-W12");
+    expect(nomeEquipamentoQr({ ...BASE, nome: "  " })).toBe("LG S4-W12");
+    expect(nomeEquipamentoQr(BASE)).toBe("LG S4-W12");
+  });
+  it("na lista, o lugar junta unidade e ambiente (o que houver)", async () => {
+    const { localEquipamentoQr } = await import("@/lib/qrcode-rotulos");
+    expect(localEquipamentoQr({ ...BASE, localizacao: "UTI", unidade: { nome: "Matriz" } })).toBe("Matriz · UTI");
+    expect(localEquipamentoQr({ ...BASE, localizacao: null, unidade: { nome: "Matriz" } })).toBe("Matriz");
+    expect(localEquipamentoQr({ ...BASE, localizacao: "UTI" })).toBe("UTI");
+    expect(localEquipamentoQr(BASE)).toBeNull();
+  });
+  it("no vincular, dois splits iguais se distinguem pelo apelido, cliente, unidade e ambiente", async () => {
+    const { rotuloParaVincular } = await import("@/lib/qrcode-rotulos");
+    const santaClara = { nome: "Matriz", cliente: { nome: "Hospital Santa Clara Ltda", nomeFantasia: "Hospital Santa Clara" } };
+    expect(rotuloParaVincular({ ...BASE, nome: "Split UTI 1", localizacao: "UTI", unidade: santaClara })).toBe("Split UTI 1 · LG S4-W12 — Hospital Santa Clara · Matriz · UTI");
+    expect(rotuloParaVincular({ ...BASE, localizacao: "Recepção", unidade: { nome: "Sede", cliente: { nome: "Padaria Ltda", nomeFantasia: null } } })).toBe("LG S4-W12 — Padaria Ltda · Sede · Recepção");
+    expect(rotuloParaVincular(BASE)).toBe("LG S4-W12");
+    expect(fonte("app/(dashboard)/qrcodes/page.tsx")).toContain("nome: rotuloParaVincular(e)");
   });
 });
 
