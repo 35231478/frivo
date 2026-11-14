@@ -1,9 +1,11 @@
 "use client";
 
 import { useState } from "react";
-import { Check, Eye, FileText, Lock, Printer } from "lucide-react";
+import { Eye, FileText, Lock } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dica } from "@/components/ui/dica";
+import { toast } from "@/components/ui/avisos";
+import { SomenteLeitura } from "@/components/config/permissao-config";
 import { cn } from "@/lib/utils";
 import {
   CONFIG_RELATORIO_PADRAO, mostraSecao, SECOES_RELATORIO, type ConfigRelatorioOs, type SecaoRelatorioId,
@@ -12,12 +14,12 @@ import {
 /**
  * Configuração de impressão da OS: liga/desliga cada seção do relatório e escolhe quem vê —
  * "Cliente vê" (sai na versão do cliente e na interna) ou "Só interno" (só na versão interna).
- * Sem permissão de gerenciar: só leitura.
+ * Salvou: toast. Sem Configurações › gerenciar: só leitura, sem os botões.
  */
 export function ImpressaoOsClient({ inicial, podeEditar }: { inicial: ConfigRelatorioOs; podeEditar: boolean }) {
   const [cfg, setCfg] = useState<ConfigRelatorioOs>(inicial);
   const [salvando, setSalvando] = useState(false);
-  const [msg, setMsg] = useState<{ tipo: "ok" | "erro"; texto: string } | null>(null);
+  const [msg, setMsg] = useState<string | null>(null);
 
   const mudar = (id: SecaoRelatorioId, parte: Partial<ConfigRelatorioOs[SecaoRelatorioId]>) => {
     setCfg((c) => ({ ...c, [id]: { ...c[id], ...parte } }));
@@ -30,9 +32,10 @@ export function ImpressaoOsClient({ inicial, podeEditar }: { inicial: ConfigRela
     try {
       const r = await fetch("/api/configuracoes/impressao-os", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(cfg) });
       const j = await r.json().catch(() => ({}));
-      setMsg(r.ok ? { tipo: "ok", texto: "Configuração salva. Vale para os próximos relatórios abertos ou impressos." } : { tipo: "erro", texto: j.erro ?? "Não foi possível salvar." });
+      if (!r.ok) { setMsg(j.erro ?? "Não foi possível salvar."); return; }
+      toast("Configuração salva. Vale para os próximos relatórios abertos ou impressos.");
     } catch {
-      setMsg({ tipo: "erro", texto: "Sem conexão. Tente de novo." });
+      setMsg("Sem conexão. Tente de novo.");
     } finally { setSalvando(false); }
   }
 
@@ -59,7 +62,7 @@ export function ImpressaoOsClient({ inicial, podeEditar }: { inicial: ConfigRela
         <div className="px-4 py-3 border-b border-surface-border bg-surface-alt/40 flex items-center gap-2 text-sm">
           <FileText className="w-4 h-4 text-ink-muted" />
           <span className="font-semibold text-ink">Cabeçalho</span>
-          <Dica texto="Empresa, número da OS, tipo, situação e datas. Impresso sempre, nas duas versões." rotulo="Cabeçalho" lado="direita" />
+          <Dica texto="Empresa, número da OS, tipo, situação e datas. Impresso sempre, nas duas versões. Seção desligada não é impressa; seção sem dados na OS é omitida." rotulo="Cabeçalho" lado="direita" />
         </div>
         <ul className="divide-y divide-surface-border">
           {SECOES_RELATORIO.map((s) => {
@@ -95,16 +98,14 @@ export function ImpressaoOsClient({ inicial, podeEditar }: { inicial: ConfigRela
         </ul>
       </div>
 
-      <p className="text-xs text-ink-muted flex items-center gap-1.5"><Printer className="w-3.5 h-3.5" /> Seções desligadas não são impressas; seções sem dados na OS são omitidas.</p>
-
-      {msg && <p role={msg.tipo === "erro" ? "alert" : "status"} className={cn("text-sm font-medium flex items-center gap-1.5", msg.tipo === "ok" ? "text-success-700" : "text-atrasado")}>{msg.tipo === "ok" && <Check className="w-4 h-4" />}{msg.texto}</p>}
+      {msg && <p role="alert" className="text-sm font-medium text-atrasado">{msg}</p>}
       {podeEditar ? (
         <div className="flex justify-end gap-2">
           <Button type="button" variant="secondary" onClick={() => { setCfg(CONFIG_RELATORIO_PADRAO); setMsg(null); }}>Restaurar padrão</Button>
           <Button type="button" onClick={salvar} loading={salvando}>Salvar</Button>
         </div>
       ) : (
-        <p className="text-sm text-ink-muted" data-somente-leitura>Somente leitura: requer a permissão Configurações › Gerenciar.</p>
+        <SomenteLeitura />
       )}
     </div>
   );

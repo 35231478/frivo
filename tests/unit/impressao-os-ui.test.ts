@@ -11,6 +11,11 @@ import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { CONFIG_RELATORIO_PADRAO } from "@/lib/relatorio-os/config";
 
+vi.mock("@/components/ui/avisos", async (original) => {
+  const real = await original<typeof import("@/components/ui/avisos")>();
+  return { ...real, toast: vi.fn(real.toast) };
+});
+
 let root: Root;
 let caixa: HTMLDivElement;
 let resposta: { status: number; corpo: unknown };
@@ -59,7 +64,10 @@ describe("tela Impressão da OS", () => {
       ...CONFIG_RELATORIO_PADRAO,
       tempos: { ativo: true, cliente: true }, fotos: { ativo: true, cliente: false }, equipe: { ativo: false, cliente: true },
     } }]);
-    expect($('[role="status"]')!.textContent).toContain("Configuração salva.");
+    // Leva 3 da padronização: a confirmação do salvar é o toast (não mais o texto verde na tela)
+    const { toast } = await import("@/components/ui/avisos");
+    expect(vi.mocked(toast).mock.calls.map((c) => c[0])).toEqual(["Configuração salva. Vale para os próximos relatórios abertos ou impressos."]);
+    expect($('[role="alert"]')).toBeNull();
   });
 
   it("erro da API aparece; restaurar padrão volta tudo", async () => {

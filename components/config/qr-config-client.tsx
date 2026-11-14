@@ -6,47 +6,46 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { FormField } from "@/components/ui/form-field";
 import { ToggleSwitch, ToggleGroup } from "@/components/ui/toggle-switch";
+import { toast } from "@/components/ui/avisos";
+import { SomenteLeitura, erroDaResposta, usePodeGerenciarConfig } from "@/components/config/permissao-config";
 import type { QrConfig } from "@/lib/qr-config";
-import { Check } from "lucide-react";
 
 type BoolKey = { [K in keyof QrConfig]: QrConfig[K] extends boolean ? K : never }[keyof QrConfig];
 
+/**
+ * Configurações › QR Code: o que a página pública do equipamento mostra. Só quem tem Configurações ›
+ * gerenciar grava (o servidor recusa de qualquer jeito); sem ela, tudo fica travado e sem o botão Salvar.
+ */
 export function QrConfigClient({ inicial }: { inicial: QrConfig }) {
+  const podeEditar = usePodeGerenciarConfig();
   const [cfg, setCfg] = useState<QrConfig>(inicial);
   const [salvando, setSalvando] = useState(false);
   const [erro, setErro] = useState("");
-  const [sucesso, setSucesso] = useState(false);
 
   function toggle(key: BoolKey) {
     setCfg((c) => ({ ...c, [key]: !c[key] }));
-    setSucesso(false);
   }
   function campo(key: keyof QrConfig, value: string) {
     setCfg((c) => ({ ...c, [key]: value }));
-    setSucesso(false);
   }
 
   async function salvar() {
-    setErro(""); setSucesso(false); setSalvando(true);
+    setErro(""); setSalvando(true);
     try {
       const res = await fetch("/api/configuracoes/qr-code", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(cfg),
       });
-      if (!res.ok) { const e = await res.json(); setErro(e.erro ?? "Erro ao salvar."); return; }
-      setSucesso(true);
-    } catch { setErro("Erro de conexão."); } finally { setSalvando(false); }
+      if (!res.ok) { setErro(await erroDaResposta(res, "Não foi possível salvar.")); return; }
+      toast("Configurações do QR Code salvas.");
+    } catch { setErro("Sem conexão. Tente de novo."); } finally { setSalvando(false); }
   }
 
   return (
-    <div className="bg-white rounded-card border border-surface-border p-6 space-y-8">
-      {erro && <div className="bg-atrasado-claro border border-atrasado/20 text-atrasado-texto text-sm rounded-lg px-4 py-3">{erro}</div>}
-      {sucesso && (
-        <div className="bg-ok-claro border border-ok/20 text-ok-texto text-sm rounded-lg px-4 py-3 flex items-center gap-2">
-          <Check className="w-4 h-4" /> Configurações salvas.
-        </div>
-      )}
+    <div className="bg-white rounded-card border border-surface-border p-4 sm:p-6 space-y-8" data-qr-config>
+      {erro && <div role="alert" className="bg-atrasado-claro border border-atrasado/20 text-atrasado-texto text-sm rounded-lg px-4 py-3" data-erro-qr>{erro}</div>}
+      <fieldset disabled={!podeEditar} className="space-y-8 min-w-0">
 
       <ToggleGroup title="Acesso público" dica="Informações exibidas na página aberta pelo QR Code.">
         <ToggleSwitch label="Página pública ativa" dica="Desativada, a página pública fica inacessível." checked={cfg.paginaPublicaAtiva} onChange={() => toggle("paginaPublicaAtiva")} />
@@ -80,9 +79,15 @@ export function QrConfigClient({ inicial }: { inicial: QrConfig }) {
         <ToggleSwitch label="Formulário de orçamento somente para clientes logados" checked={cfg.orcamentoSomenteLogado} onChange={() => toggle("orcamentoSomenteLogado")} />
       </ToggleGroup>
 
-      <div className="flex justify-end pt-2 border-t border-surface-linha">
-        <Button onClick={salvar} loading={salvando}>Salvar configurações</Button>
-      </div>
+      </fieldset>
+
+      {podeEditar ? (
+        <div className="flex justify-end pt-2 border-t border-surface-linha">
+          <Button onClick={salvar} loading={salvando} data-salvar-qr>Salvar configurações</Button>
+        </div>
+      ) : (
+        <SomenteLeitura />
+      )}
     </div>
   );
 }

@@ -14,7 +14,9 @@ import { ToggleSwitch, ToggleGroup } from "@/components/ui/toggle-switch";
 import type { Empresa, Configuracao } from "@prisma/client";
 import { usePermissoes } from "@/components/providers/permissoes-provider";
 import { formatarCnae } from "@/lib/nfse/servico";
-import { Upload, Trash2, ImageIcon, Check, Building2, SlidersHorizontal } from "lucide-react";
+import { Upload, Trash2, ImageIcon, Building2, SlidersHorizontal } from "lucide-react";
+import { confirmar, toast } from "@/components/ui/avisos";
+import { SomenteLeitura, erroDaResposta } from "@/components/config/permissao-config";
 
 const ESTADOS_BR = [
   "AC","AL","AP","AM","BA","CE","DF","ES","GO","MA","MT","MS","MG",
@@ -39,13 +41,14 @@ interface Props {
 export function ConfiguracoesClient({ empresa: initialEmpresa, config: initialConfig, parte, tecnicosRt = [] }: Props) {
   const router = useRouter();
   // CNAE principal é dado fiscal: sem Financeiro › Fiscal fica só para leitura (o servidor confere)
-  const podeFiscal = usePermissoes().pode("financeiro", "fiscal");
+  const permissoes = usePermissoes();
+  const podeFiscal = permissoes.pode("financeiro", "fiscal");
+  // Gravar (dados, logo, preferências) exige Configurações › gerenciar, como as rotas; sem ela, só leitura
+  const podeEditar = permissoes.pode("configuracoes", "gerenciar");
   const [salvandoEmpresa, setSalvandoEmpresa] = useState(false);
   const [salvandoConfig, setSalvandoConfig] = useState(false);
   const [erroEmpresa, setErroEmpresa] = useState("");
   const [erroConfig, setErroConfig] = useState("");
-  const [sucessoEmpresa, setSucessoEmpresa] = useState(false);
-  const [sucessoConfig, setSucessoConfig] = useState(false);
   const [logo, setLogo] = useState<string | null>(initialEmpresa.logo);
   const [uploadingLogo, setUploadingLogo] = useState(false);
   const logoInputRef = useRef<HTMLInputElement>(null);
@@ -85,17 +88,14 @@ export function ConfiguracoesClient({ empresa: initialEmpresa, config: initialCo
 
   function updateEmp(field: string, value: any) {
     setEmp((f) => ({ ...f, [field]: value }));
-    setSucessoEmpresa(false);
   }
 
   function toggleCfg(key: BoolKey) {
     setCfg((c) => ({ ...c, [key]: !c[key] }));
-    setSucessoConfig(false);
   }
 
   const handleAutoGeocode = useCallback((coords: { lat: number; lng: number }) => {
     setEmp((f) => ({ ...f, latitude: coords.lat, longitude: coords.lng }));
-    setSucessoEmpresa(false);
   }, []);
 
   useAutoGeocode(
@@ -109,7 +109,6 @@ export function ConfiguracoesClient({ empresa: initialEmpresa, config: initialCo
       cidade: e.cidade, estado: e.estado, cep: e.cep,
       latitude: e.latitude, longitude: e.longitude,
     }));
-    setSucessoEmpresa(false);
   }
 
   async function handleLogoUpload(e: React.ChangeEvent<HTMLInputElement>) {
@@ -120,44 +119,52 @@ export function ConfiguracoesClient({ empresa: initialEmpresa, config: initialCo
     fd.append("logo", file);
     try {
       const res = await fetch("/api/empresa/logo", { method: "PUT", body: fd });
-      if (res.ok) { const d = await res.json(); setLogo(d.logo); }
-    } catch {} finally {
+      if (!res.ok) { toast(await erroDaResposta(res, "Não foi possível enviar a logo."), "erro"); return; }
+      const d = await res.json(); setLogo(d.logo);
+      toast("Logo atualizada.");
+    } catch { toast("Sem conexão. Tente de novo.", "erro"); } finally {
       setUploadingLogo(false);
       if (logoInputRef.current) logoInputRef.current.value = "";
     }
   }
 
   async function removerLogo() {
-    await fetch("/api/empresa/logo", { method: "DELETE" });
-    setLogo(null);
+    if (!(await confirmar({ titulo: "Excluir a logo?", mensagem: "Os documentos passam a sair sem a logomarca até outra ser enviada.", perigo: true, confirmarTexto: "Excluir" }))) return;
+    try {
+      const res = await fetch("/api/empresa/logo", { method: "DELETE" });
+      // Recusado: a logo continua na tela e a pessoa fica sabendo por quê
+      if (!res.ok) { toast(await erroDaResposta(res, "Não foi possível excluir a logo."), "erro"); return; }
+      setLogo(null);
+      toast("Logo excluída.");
+    } catch { toast("Sem conexão. Tente de novo.", "erro"); }
   }
 
   async function salvarEmpresa() {
-    setErroEmpresa(""); setSucessoEmpresa(false); setSalvandoEmpresa(true);
+    setErroEmpresa(""); setSalvandoEmpresa(true);
     try {
       const res = await fetch("/api/empresa", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(emp),
       });
-      if (!res.ok) { const e = await res.json(); setErroEmpresa(e.erro ?? "Erro."); return; }
-      setSucessoEmpresa(true);
+      if (!res.ok) { setErroEmpresa(await erroDaResposta(res, "Não foi possível salvar.")); return; }
+      toast("Dados da empresa salvos.");
       router.refresh();
-    } catch { setErroEmpresa("Erro de conexão."); } finally { setSalvandoEmpresa(false); }
+    } catch { setErroEmpresa("Sem conexão. Tente de novo."); } finally { setSalvandoEmpresa(false); }
   }
 
   async function salvarConfig() {
-    setErroConfig(""); setSucessoConfig(false); setSalvandoConfig(true);
+    setErroConfig(""); setSalvandoConfig(true);
     try {
       const res = await fetch("/api/configuracoes", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ ...cfg, issAliquota: issTexto.trim() === "" ? 0 : issTexto }),
       });
-      if (!res.ok) { const e = await res.json(); setErroConfig(e.erro ?? "Erro."); return; }
-      setSucessoConfig(true);
+      if (!res.ok) { setErroConfig(await erroDaResposta(res, "Não foi possível salvar.")); return; }
+      toast("Preferências salvas.");
       router.refresh();
-    } catch { setErroConfig("Erro de conexão."); } finally { setSalvandoConfig(false); }
+    } catch { setErroConfig("Sem conexão. Tente de novo."); } finally { setSalvandoConfig(false); }
   }
 
   return (
@@ -169,12 +176,9 @@ export function ConfiguracoesClient({ empresa: initialEmpresa, config: initialCo
           <h2 className="text-lg font-semibold text-ink">Dados da empresa</h2>
         </div>
 
-        {erroEmpresa && <div className="bg-atrasado-claro border border-atrasado/20 text-atrasado-texto text-sm rounded-lg px-4 py-3">{erroEmpresa}</div>}
-        {sucessoEmpresa && (
-          <div className="bg-ok-claro border border-ok/20 text-ok-texto text-sm rounded-lg px-4 py-3 flex items-center gap-2">
-            <Check className="w-4 h-4" /> Dados da empresa salvos.
-          </div>
-        )}
+        {erroEmpresa && <div role="alert" className="bg-atrasado-claro border border-atrasado/20 text-atrasado-texto text-sm rounded-lg px-4 py-3" data-erro-empresa>{erroEmpresa}</div>}
+        {!podeEditar && <SomenteLeitura />}
+        <fieldset disabled={!podeEditar} className="space-y-6 min-w-0">
 
         {/* Logo */}
         <FormSection title="Logomarca">
@@ -182,14 +186,14 @@ export function ConfiguracoesClient({ empresa: initialEmpresa, config: initialCo
           {logo ? (
             <div className="flex items-center gap-4">
               <img src={logo} alt="Logo" className="w-20 h-20 object-contain rounded-lg border border-surface-border bg-white p-1" />
-              <div className="flex flex-col gap-1.5">
+              {podeEditar && <div className="flex flex-col gap-1.5" data-acoes-logo>
                 <Button type="button" variant="secondary" onClick={() => logoInputRef.current?.click()} loading={uploadingLogo} className="text-xs py-1 px-2.5 h-auto">
                   <Upload className="w-3 h-3" /> Trocar
                 </Button>
                 <Button type="button" variant="ghost" onClick={removerLogo} className="text-xs text-atrasado py-1 px-2.5 h-auto">
                   <Trash2 className="w-3 h-3" /> Excluir
                 </Button>
-              </div>
+              </div>}
             </div>
           ) : (
             <button type="button" onClick={() => logoInputRef.current?.click()}
@@ -309,9 +313,13 @@ export function ConfiguracoesClient({ empresa: initialEmpresa, config: initialCo
           )}
         </FormSection>
 
-        <div className="flex justify-end pt-2 border-t border-surface-linha">
-          <Button onClick={salvarEmpresa} loading={salvandoEmpresa}>Salvar dados da empresa</Button>
-        </div>
+        </fieldset>
+
+        {podeEditar && (
+          <div className="flex justify-end pt-2 border-t border-surface-linha">
+            <Button onClick={salvarEmpresa} loading={salvandoEmpresa} data-salvar-empresa>Salvar dados da empresa</Button>
+          </div>
+        )}
       </div>}
 
       {/* ========== CONFIGURAÇÕES AVANÇADAS ========== */}
@@ -321,12 +329,9 @@ export function ConfiguracoesClient({ empresa: initialEmpresa, config: initialCo
           <h2 className="text-lg font-semibold text-ink">Preferências</h2>
         </div>
 
-        {erroConfig && <div className="bg-atrasado-claro border border-atrasado/20 text-atrasado-texto text-sm rounded-lg px-4 py-3">{erroConfig}</div>}
-        {sucessoConfig && (
-          <div className="bg-ok-claro border border-ok/20 text-ok-texto text-sm rounded-lg px-4 py-3 flex items-center gap-2">
-            <Check className="w-4 h-4" /> Configurações salvas.
-          </div>
-        )}
+        {erroConfig && <div role="alert" className="bg-atrasado-claro border border-atrasado/20 text-atrasado-texto text-sm rounded-lg px-4 py-3" data-erro-preferencias>{erroConfig}</div>}
+        {!podeEditar && <SomenteLeitura />}
+        <fieldset disabled={!podeEditar} className="space-y-8 min-w-0">
 
         <ToggleGroup title="Campos obrigatórios no cadastro de clientes">
           <ToggleSwitch label="E-mail obrigatório" checked={cfg.clienteEmailObrigatorio} onChange={() => toggleCfg("clienteEmailObrigatorio")} />
@@ -375,16 +380,20 @@ export function ConfiguracoesClient({ empresa: initialEmpresa, config: initialCo
               id="cfg-iss"
               inputMode="decimal"
               value={issTexto}
-              onChange={(e) => { setIssTexto(e.target.value.replace(/[^\d.,]/g, "")); setSucessoConfig(false); }}
+              onChange={(e) => { setIssTexto(e.target.value.replace(/[^\d.,]/g, "")); }}
               className="max-w-[140px]"
               placeholder="0"
             />
           </FormField>
         </FormSection>
 
-        <div className="flex justify-end pt-2 border-t border-surface-linha">
-          <Button onClick={salvarConfig} loading={salvandoConfig}>Salvar configurações</Button>
-        </div>
+        </fieldset>
+
+        {podeEditar && (
+          <div className="flex justify-end pt-2 border-t border-surface-linha">
+            <Button onClick={salvarConfig} loading={salvandoConfig} data-salvar-preferencias>Salvar preferências</Button>
+          </div>
+        )}
       </div>}
     </div>
   );

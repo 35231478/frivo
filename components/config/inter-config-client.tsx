@@ -1,15 +1,26 @@
 "use client";
 
-import { confirmar } from "@/components/ui/avisos";
+import { confirmar, toast } from "@/components/ui/avisos";
 import { useState, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { FormField, FormGrid } from "@/components/ui/form-field";
 import { ToggleSwitch } from "@/components/ui/toggle-switch";
-import { Landmark, ExternalLink, CheckCircle2, XCircle, Upload, AlertTriangle, Plug } from "lucide-react";
+import { Landmark, CheckCircle2, XCircle, Upload, AlertTriangle, Plug } from "lucide-react";
+import { Dica } from "@/components/ui/dica";
+import { SomenteLeitura, erroDaResposta, usePodeGerenciarConfig } from "@/components/config/permissao-config";
 
+const COMO_OBTER = "Em developers.inter.co, crie uma aplicação na conta PJ com os escopos Cobrança (boleto) e Webhook. Copie o Client ID e o Client Secret e baixe o certificado e a chave. Teste em Sandbox antes de Produção.";
+
+/**
+ * Configurações › Banco Inter: credenciais, certificado e webhook de baixa automática. Só quem tem
+ * Configurações › gerenciar grava, testa e gera o webhook (o servidor recusa de qualquer jeito); sem
+ * ela, a tela é só leitura. Segredos nunca voltam do servidor. Os avisos de segurança (sandbox, URL
+ * com segredo, registro pendente) ficam VISÍVEIS na tela, não no ⓘ.
+ */
 export function InterConfigClient() {
+  const podeEditar = usePodeGerenciarConfig();
   const [carregando, setCarregando] = useState(true);
   const [salvando, setSalvando] = useState(false);
   const [testando, setTestando] = useState(false);
@@ -63,13 +74,13 @@ export function InterConfigClient() {
       if (chavePrivada) body.chavePrivada = chavePrivada;
       const res = await fetch("/api/integracoes/inter", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
       if (res.ok) {
-        setMsg("Configuração salva.");
+        toast("Configuração do Banco Inter salva.");
         if (clientSecret) setTemSecret(true);
         if (certificado) setTemCert(true);
         if (chavePrivada) setTemChave(true);
         setClientSecret(""); setCertificado(""); setChavePrivada("");
-      } else { const e = await res.json(); setMsg(e.erro ?? "Erro ao salvar."); }
-    } catch { setMsg("Erro de conexão."); } finally { setSalvando(false); }
+      } else { setMsg(await erroDaResposta(res, "Não foi possível salvar.")); }
+    } catch { setMsg("Sem conexão. Tente de novo."); } finally { setSalvando(false); }
   }
 
   /** Gira o segredo do webhook (o link antigo para de valer, a URL nova aparece UMA vez)
@@ -90,9 +101,10 @@ export function InterConfigClient() {
       if (res.ok && d.webhookUrl) {
         setWebhookUrl(d.webhookUrl); setTemWebhook(true);
         setRegistroInter({ ok: !!d.registradoNoInter, pendente: d.registroPendente ?? null });
+        toast("URL do webhook gerada. Copie agora: ela não é mostrada de novo.");
       }
-      else setMsg(d.erro ?? "Erro ao gerar a URL do webhook.");
-    } catch { setMsg("Erro de conexão."); } finally { setGerandoWebhook(false); }
+      else setMsg(d.erro ?? "Não foi possível gerar a URL do webhook.");
+    } catch { setMsg("Sem conexão. Tente de novo."); } finally { setGerandoWebhook(false); }
   }
 
   async function testar() {
@@ -100,7 +112,7 @@ export function InterConfigClient() {
     try {
       const res = await fetch("/api/integracoes/inter", { method: "POST" });
       setResultadoTeste(await res.json());
-    } catch { setResultadoTeste({ ok: false, erro: "Erro de conexão." }); } finally { setTestando(false); }
+    } catch { setResultadoTeste({ ok: false, erro: "Sem conexão. Tente de novo." }); } finally { setTestando(false); }
   }
 
   if (carregando) return <p className="text-sm text-ink-subtle text-center py-8">Carregando…</p>;
@@ -111,13 +123,14 @@ export function InterConfigClient() {
       : <span className="text-xs text-ink-subtle">Nenhum arquivo</span>;
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6" data-inter-config>
       {ambiente === "SANDBOX" && ativo && (
-        <div className="inline-flex items-center gap-1.5 bg-atencao-claro text-atencao-texto text-xs font-bold px-3 py-1.5 rounded-full">
-          <AlertTriangle className="w-3.5 h-3.5" /> MODO SANDBOX — boletos de teste, sem valor real
+        <div className="inline-flex items-center gap-1.5 bg-atencao-claro text-atencao-texto text-xs font-bold px-3 py-1.5 rounded-full" data-aviso-sandbox>
+          <AlertTriangle className="w-3.5 h-3.5" aria-hidden /> Modo sandbox: boletos de teste, sem valor real
         </div>
       )}
 
+      <fieldset disabled={!podeEditar} className="space-y-6 min-w-0">
       <div className="flex items-center gap-3">
         <div className="p-2.5 bg-atencao-claro rounded-lg"><Landmark className="w-5 h-5 text-atencao-texto" /></div>
         <div className="flex-1">
@@ -138,7 +151,7 @@ export function InterConfigClient() {
       </FormGrid>
 
       <FormGrid>
-        <FormField label="Client ID">
+        <FormField label="Client ID" dica={COMO_OBTER}>
           <Input value={clientId} onChange={(e) => setClientId(e.target.value)} placeholder="Client ID da aplicação Inter" />
         </FormField>
         <FormField label="Client Secret" hint={temSecret ? "Deixe em branco para manter o atual" : undefined}>
@@ -163,7 +176,9 @@ export function InterConfigClient() {
         </FormField>
       </div>
 
-      {msg && <div className="text-sm text-ink bg-surface-alt rounded-lg px-3 py-2">{msg}</div>}
+      </fieldset>
+
+      {msg && <div role="alert" className="bg-atrasado-claro border border-atrasado/20 text-atrasado-texto text-sm rounded-lg px-3 py-2" data-erro-inter>{msg}</div>}
       {resultadoTeste && (
         <div className={`flex items-center gap-2 text-sm rounded-lg px-3 py-2 ${resultadoTeste.ok ? "bg-success-50 text-success-700" : "bg-atrasado-claro text-atrasado-texto"}`}>
           {resultadoTeste.ok ? <CheckCircle2 className="w-4 h-4" /> : <XCircle className="w-4 h-4" />}
@@ -171,26 +186,32 @@ export function InterConfigClient() {
         </div>
       )}
 
-      <div className="flex items-center justify-between gap-2 flex-wrap pt-2 border-t border-surface-border">
-        <Button type="button" variant="secondary" loading={testando} onClick={testar}><Plug className="w-4 h-4" /> Testar conexão</Button>
-        <Button type="button" loading={salvando} onClick={salvar}>Salvar configuração</Button>
-      </div>
+      {podeEditar ? (
+        <div className="flex items-center justify-between gap-2 flex-wrap pt-2 border-t border-surface-border">
+          <Button type="button" variant="secondary" loading={testando} onClick={testar} data-testar-inter><Plug className="w-4 h-4" aria-hidden /> Testar conexão</Button>
+          <Button type="button" loading={salvando} onClick={salvar} data-salvar-inter>Salvar configuração</Button>
+        </div>
+      ) : (
+        <SomenteLeitura />
+      )}
 
       <div className="bg-surface-alt border border-surface-border rounded-lg p-4 text-sm space-y-2">
         <p className="font-semibold text-ink">Webhook de baixa automática</p>
         <p className="text-ink-muted">
           {temWebhook
             ? "Há uma URL de webhook ativa. Ela não é exibida: gerar uma nova a substitui."
-            : "Gere a URL para os pagamentos baixarem sozinhos."}
+            : podeEditar ? "Gere a URL para os pagamentos baixarem sozinhos." : "Nenhuma URL de webhook gerada."}
           {" "}Com a integração ativa (credenciais + certificado), a URL é <strong>registrada no Inter automaticamente</strong>.
           {" "}Cada aviso recebido é conferido na API do Inter antes de baixar a conta.
         </p>
-        <Button type="button" variant="secondary" loading={gerandoWebhook} onClick={gerarWebhook} data-gerar-webhook>
-          {temWebhook ? "Gerar nova URL (revoga a atual)" : "Gerar URL do webhook"}
-        </Button>
+        {podeEditar && (
+          <Button type="button" variant="secondary" loading={gerandoWebhook} onClick={gerarWebhook} data-gerar-webhook>
+            {temWebhook ? "Gerar nova URL (revoga a atual)" : "Gerar URL do webhook"}
+          </Button>
+        )}
         {webhookUrl && (
           <div className="bg-atencao-claro border border-atencao/20 rounded-lg p-3 space-y-1.5" data-webhook-url>
-            <p className="text-xs font-semibold text-atencao-texto">Copie agora — esta URL contém o segredo e não será mostrada de novo:</p>
+            <p className="text-xs font-semibold text-atencao-texto">Copie agora: esta URL contém o segredo e não será mostrada de novo.</p>
             <code className="block text-xs break-all select-all">{webhookUrl}</code>
             <button type="button" className="text-xs font-semibold text-primary-700 hover:underline"
               onClick={() => navigator.clipboard?.writeText(webhookUrl)}>Copiar</button>
@@ -199,31 +220,20 @@ export function InterConfigClient() {
         {registroInter?.ok && (
           <div className="flex items-start gap-2 bg-success-50 border border-success-200 text-success-700 text-sm rounded-lg px-3 py-2" data-webhook-registrado>
             <CheckCircle2 className="w-4 h-4 shrink-0 mt-0.5" />
-            <span>URL <strong>registrada no Inter automaticamente</strong> — os avisos de pagamento já chegam nela, nada mais a fazer.</span>
+            <span>URL <strong>registrada no Inter automaticamente</strong>: os avisos de pagamento já chegam nela.</span>
           </div>
         )}
         {registroInter && !registroInter.ok && (
           <div className="flex items-start gap-2 bg-atrasado-claro border border-atrasado/20 text-atrasado-texto text-sm rounded-lg px-3 py-2" data-webhook-pendente>
             <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
             <span>
-              <strong>Registro no Inter PENDENTE</strong> — a URL acima vale do nosso lado, mas o Inter ainda não sabe dela.
+              <strong>Registro no Inter PENDENTE:</strong> a URL acima vale do nosso lado, mas o Inter ainda não sabe dela.
               Motivo: {registroInter.pendente ?? "erro desconhecido"}.
               {" "}Resolva e clique em &ldquo;Gerar nova URL&rdquo; de novo (ela é registrada na hora), ou cadastre esta URL
               via API do Inter (PUT /cobranca/v3/cobrancas/webhook).
             </span>
           </div>
         )}
-      </div>
-
-      <div className="bg-primary-50 border border-primary-100 rounded-lg p-4 text-sm text-ink space-y-1.5">
-        <p className="font-semibold flex items-center gap-1.5"><ExternalLink className="w-4 h-4 text-primary-600" /> Como obter as credenciais</p>
-        <ol className="list-decimal list-inside text-ink-muted space-y-1">
-          <li>Acesse <strong>developers.inter.co</strong> e crie uma aplicação na sua conta PJ.</li>
-          <li>Habilite os escopos de <strong>Cobrança (boleto)</strong> e <strong>Webhook</strong>.</li>
-          <li>Copie o <strong>Client ID</strong> e <strong>Client Secret</strong>.</li>
-          <li>Baixe o <strong>certificado (.crt)</strong> e a <strong>chave (.key)</strong> e envie acima.</li>
-          <li>Use o ambiente <strong>Sandbox</strong> para testar antes de ir para Produção.</li>
-        </ol>
       </div>
     </div>
   );

@@ -1,7 +1,7 @@
 # Padronização de telas — inventário e plano de levas
 
 Inventário das telas do painel contra o checklist da padronização, para planejar as levas por módulo.
-Feito em 14/11/2026, com o código da leva 2.
+Feito em 14/11/2026, com o código da leva 2; a tabela de Configurações e o placar foram revistos na leva 3.
 
 ## Como foi feito (e o limite disto)
 
@@ -21,17 +21,19 @@ os itens dela que tocam em tela estão citados na leva correspondente.
 
 ## Placar
 
+Números da varredura automática, depois da leva 3.
+
 | | Telas |
 |---|---|
 | Telas do painel inventariadas | **111** (fora 35 rotas antigas que só redirecionam) |
-| Já usam a lista padrão | 24 |
-| Com tabela própria | 29 |
-| Sem toast | 57 |
-| Sem ajuda no ⓘ | 36 |
-| Sem checagem de permissão nos botões | 21 |
-| Com seletor e sem cadastro inline | 27 |
+| Já usam a lista padrão | 28 |
+| Com tabela própria | 26 |
+| Sem toast | 47 |
+| Sem ajuda no ⓘ | 34 |
+| Sem checagem de permissão nos botões | 15 |
+| Com seletor e sem cadastro inline | 26 |
 | Com cadastro inline e sem edição no contexto | 19 |
-| Sem classes de celular | 28 |
+| Sem classes de celular | 26 |
 | Com `alert()`/`confirm()` nativo | 0 |
 
 ## O que já está feito
@@ -39,8 +41,13 @@ os itens dela que tocam em tela estão citados na leva correspondente.
 - **Leva 1** (mergeada): componentes compartilhados — editar no contexto, ajuda no ⓘ, padrão de lista —
   e os cadastros de apoio (tipos de OS, tipos de problema, tipos de equipamento, categorias, centros de
   custo, cargos, kits) no mesmo esqueleto. Ver [padronizacao-leva1.md](padronizacao-leva1.md).
-- **Leva 2**: edição no contexto ligada na OS (abertura, central, atividades) e no orçamento (formulário
-  e detalhe), com a trava de registro fechado. Ver [padronizacao-leva2.md](padronizacao-leva2.md).
+- **Leva 2** (mergeada): edição no contexto ligada na OS (abertura, central, atividades) e no orçamento
+  (formulário e detalhe), com a trava de registro fechado — que vale a partir de OS assinada pelo
+  cliente, faturada ou com nota emitida (OS só concluída continua editável). Ver
+  [padronizacao-leva2.md](padronizacao-leva2.md).
+- **Leva 3**: telas pequenas de Configurações — botões de gravar só para quem tem a permissão, padrão
+  de lista em formulários, checklists de veículo, numeração e padronização, toast em toda gravação e
+  instrução no ⓘ. Ver [padronizacao-leva3.md](padronizacao-leva3.md).
 
 ## Próximas levas (ordem sugerida)
 
@@ -49,7 +56,6 @@ diário para o que menos atrapalha, e do menor para o maior.
 
 | Leva | Módulo | Telas | Por que nesta ordem |
 |---|---|---|---|
-| 3 | **Configurações pequenas fora do padrão** | Formulários (checklist de OS), checklists de veículo, numeração, padronização de digitação, e-mail, dados da empresa, orçamento, QR Code, impressão da OS, Banco Inter | São as "telas antigas fracas": tabela própria, sem toast, sem permissão nos botões. Pequenas e sem risco |
 | 4 | **Cadastros principais** | Clientes (lista), equipamentos (lista, ficha, formulários), QR Codes, veículos, colaboradores, equipes | Listas com tabela própria e formulários sem edição no contexto; são os cadastros que a OS e o orçamento usam |
 | 5 | **Operação** | Lista de OS, calendário, prazos, execução da atividade, PMOC | Onde o escritório passa o dia. PMOC é planilha: padroniza, não joga fora |
 | 6 | **Comercial** | Lista de orçamentos, contratos (lista, formulário, reajustes, relatório), leads do site | O formulário de contrato tem 12 seletores e tabela própria |
@@ -84,34 +90,34 @@ que fazer quando há empate ou pouco histórico (a proposta é não sugerir nada
 
 | Tela | Lista no padrão | Busca e página no servidor | Ajuda no ⓘ | Toast | Botões por permissão | Cadastro inline | Edição no contexto | Celular | O que a varredura não viu |
 |---|---|---|---|---|---|---|---|---|---|
-| `/configuracoes` | — | — | — | — | — | — | — | sim | toast; ajuda no ⓘ; botões por permissão |
-| `/configuracoes?secao=banco-inter` | — | — | sim | — | — | — | — | sim | toast; botões por permissão; cadastro inline nos seletores |
+| `/configuracoes` | — | — | — | — | sim | — | — | sim | índice de cartões, conferido na leva 3: os cartões já vêm filtrados pela permissão no servidor |
+| `/configuracoes?secao=banco-inter` | — | — | sim | sim | sim | — | — | sim | feita na leva 3 |
 | `/configuracoes?secao=cargos` | sim | sim | sim | sim | sim | sim | sim | sim | nada apontado pela varredura |
 | `/configuracoes?secao=categorias-financeiras` | sim | sim | sim | sim | sim | sim | sim | sim | nada apontado pela varredura |
 | `/configuracoes?secao=categorias-produto` | sim | sim | sim | sim | sim | sim | sim | sim | nada apontado pela varredura |
 | `/configuracoes?secao=centros-custo` | sim | sim | sim | sim | sim | sim | sim | sim | nada apontado pela varredura |
 | `/configuracoes?secao=dados-fiscais` | — | — | sim | sim | sim | — | — | sim | cadastro inline nos seletores |
-| `/configuracoes?secao=email` | — | — | sim | — | — | — | — | — | toast; botões por permissão; cadastro inline nos seletores; versão de celular |
-| `/configuracoes?secao=email-templates` | — | — | sim | sim | — | — | — | sim | botões por permissão |
-| `/configuracoes?secao=empresa` | — | — | sim | — | sim | — | — | — | toast; cadastro inline nos seletores; versão de celular |
-| `/configuracoes?secao=formularios` | — | — | — | — | — | — | — | — | tabela própria; toast; ajuda no ⓘ; botões por permissão; cadastro inline nos seletores; versão de celular |
-| `/configuracoes?secao=impressao-os` | — | — | sim | — | sim | — | — | sim | toast |
+| `/configuracoes?secao=email` | — | — | sim | sim | sim | — | — | sim | feita na leva 3 |
+| `/configuracoes?secao=email-templates` | — | — | sim | sim | sim | — | — | sim | feita na leva 3 |
+| `/configuracoes?secao=empresa` | — | — | sim | sim | sim | — | — | sim | feita na leva 3; falta o cadastro rápido do responsável técnico (leva dos cadastros principais) |
+| `/configuracoes?secao=formularios` | sim | — | sim | sim | sim | sim | sim | sim | feita na leva 3; a busca é na tela (lista curta, vem inteira); falta reativar o inativado |
+| `/configuracoes?secao=impressao-os` | — | — | sim | sim | sim | — | — | sim | feita na leva 3 |
 | `/configuracoes?secao=kits-material` | sim | sim | sim | sim | sim | sim | sim | sim | nada apontado pela varredura |
-| `/configuracoes?secao=numeracao` | — | — | sim | — | sim | — | — | sim | tabela própria; toast |
-| `/configuracoes?secao=orcamento` | — | — | sim | — | sim | — | — | — | toast; cadastro inline nos seletores; versão de celular |
-| `/configuracoes?secao=padronizacao` | — | — | sim | — | sim | — | — | — | tabela própria; toast; versão de celular |
+| `/configuracoes?secao=numeracao` | sim | — | sim | sim | sim | — | — | sim | feita na leva 3 (lista fixa de documentos) |
+| `/configuracoes?secao=orcamento` | — | — | sim | sim | sim | — | — | sim | feita na leva 3 |
+| `/configuracoes?secao=padronizacao` | sim | — | sim | sim | sim | — | — | sim | feita na leva 3 |
 | `/configuracoes?secao=perfis` | sim | sim | sim | sim | sim | sim | sim | sim | nada apontado pela varredura |
 | `/configuracoes?secao=portal` | sim | sim | sim | sim | sim | sim | sim | sim | nada apontado pela varredura |
 | `/configuracoes?secao=prazos` | sim | sim | sim | sim | sim | sim | sim | sim | nada apontado pela varredura |
 | `/configuracoes?secao=produtos` | sim | sim | sim | sim | sim | sim | sim | sim | nada apontado pela varredura |
-| `/configuracoes?secao=qr-code` | — | — | sim | — | — | — | — | sim | toast; botões por permissão |
+| `/configuracoes?secao=qr-code` | — | — | sim | sim | sim | — | — | sim | feita na leva 3 |
 | `/configuracoes?secao=servicos` | sim | sim | sim | sim | sim | sim | sim | sim | nada apontado pela varredura |
 | `/configuracoes?secao=tabelas-preco` | sim | sim | sim | sim | sim | sim | sim | sim | nada apontado pela varredura |
 | `/configuracoes?secao=termos` | sim | sim | sim | sim | sim | sim | sim | sim | nada apontado pela varredura |
 | `/configuracoes?secao=tipos-equipamento` | sim | sim | sim | sim | sim | sim | sim | sim | nada apontado pela varredura |
 | `/configuracoes?secao=tipos-os` | sim | sim | sim | sim | sim | sim | sim | sim | nada apontado pela varredura |
 | `/configuracoes?secao=usuarios` | sim | sim | sim | sim | sim | sim | sim | sim | nada apontado pela varredura |
-| `/configuracoes/checklists-veiculo` | — | — | — | — | — | — | — | sim | toast; ajuda no ⓘ; botões por permissão; cadastro inline nos seletores |
+| `/configuracoes/checklists-veiculo` | sim | — | sim | sim | sim | — | — | sim | feita na leva 3; a busca é na tela; falta reativar o inativado |
 
 ### Clientes (3)
 
@@ -140,7 +146,7 @@ que fazer quando há empate ou pouco histórico (a proposta é não sugerir nada
 | `/calendario` | — | — | — | sim | sim | — | — | sim | ajuda no ⓘ; cadastro inline nos seletores |
 | `/mapa` | — | — | — | — | sim | — | — | — | toast; ajuda no ⓘ; versão de celular |
 | `/ordens` | sim | sim | sim | — | sim | sim | — | sim | toast; edição no contexto |
-| `/ordens/[id]` | — | — | sim | sim | sim | sim | sim | sim | nada apontado pela varredura |
+| `/ordens/[id]` | — | — | sim | sim | sim | sim | sim | sim | feita na leva 2: referência × uso nos itens; as linhas travam com a OS assinada pelo cliente, faturada ou com nota (só concluída continua editável) |
 | `/ordens/[id]/atividades/[atividadeId]/executar` | — | — | — | sim | sim | — | — | — | ajuda no ⓘ; cadastro inline nos seletores; versão de celular |
 | `/ordens/nova` | — | — | sim | sim | sim | sim | sim | sim | nada apontado pela varredura |
 | `/prazos` | — | sim | — | — | — | — | — | — | toast; ajuda no ⓘ; botões por permissão; cadastro inline nos seletores; versão de celular |

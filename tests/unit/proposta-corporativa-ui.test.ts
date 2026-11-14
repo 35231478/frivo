@@ -77,10 +77,12 @@ afterEach(() => { act(() => root?.unmount()); caixa?.remove(); vi.unstubAllGloba
 
 async function renderizar(el: React.ReactElement) {
   const { PermissoesProvider } = await import("@/components/providers/permissoes-provider");
+  const { Avisos } = await import("@/components/ui/avisos");
   caixa = document.createElement("div");
   document.body.appendChild(caixa);
   root = createRoot(caixa);
-  await act(async () => { root.render(createElement(PermissoesProvider, { role: "OPERADOR", permissoes: permissoesTotais(), children: el })); });
+  // Os avisos (toast) montados junto, como no layout: a confirmação do salvar aparece na tela
+  await act(async () => { root.render(createElement(PermissoesProvider, { role: "OPERADOR", permissoes: permissoesTotais(), children: [createElement("div", { key: "tela" }, el), createElement(Avisos, { key: "avisos" })] })); });
   await esperar();
 }
 async function montarForm(props: Record<string, unknown> = {}) {
@@ -222,7 +224,9 @@ describe("Configurações › Orçamentos e propostas", () => {
       orcamentoValidadeDias: "20", orcamentoGarantiaServico: "90 dias", orcamentoGarantiaPecas: "6 meses",
       orcamentoNaoIncluso: "Remoção e descarte do equipamento antigo", orcamentoNormas: ["PMOC"],
     });
-    expect(document.body.textContent).toContain("Padrões salvos");
+    // Leva 3 da padronização: a confirmação do salvar é o toast (não mais a caixa verde na tela)
+    expect([...document.querySelectorAll("[data-toast='sucesso']")].map((t) => t.textContent?.trim())).toEqual(["Padrões salvos. Valem para os próximos orçamentos."]);
+    expect(document.querySelector("[data-erro-padroes-orcamento]")).toBeNull();
   });
   it("erro do servidor aparece; sem permissão de gerenciar = só leitura (sem botão salvar)", async () => {
     const { OrcamentoPadroesClient } = await import("@/components/config/orcamento-padroes-client");
