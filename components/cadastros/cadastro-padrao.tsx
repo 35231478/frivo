@@ -12,6 +12,7 @@ import { Dica } from "@/components/ui/dica";
 import { ComboboxCodigo } from "@/components/ui/combobox-codigo";
 import { Drawer } from "@/components/ui/drawer";
 import { InativarRegistro } from "@/components/ui/inativar-registro";
+import { toast } from "@/components/ui/avisos";
 import { usePermissoes } from "@/components/providers/permissoes-provider";
 import { BarraAcoesMassa } from "@/components/acoes-massa/barra";
 import { CheckboxLinha, CheckboxPagina, SelecaoMassaProvider } from "@/components/acoes-massa/selecao";
@@ -185,6 +186,8 @@ function Conteudo({ entidade, Editor, celula, acoesLinha, ajuda, aviso, grupos }
   const itens = dados?.itens ?? [];
   const contagem = dados?.contagens;
   const Titulo = def.singular[0].toUpperCase() + def.singular.slice(1);
+  // Toda gravação que dá certo avisa (o painel fecha e a lista recarrega: sem o aviso, parece que nada aconteceu)
+  const avisarSalvo = () => toast(`${Titulo} ${editando === "novo" ? "criad" : "atualizad"}${def.feminino ? "a" : "o"}.`);
   const ordenar = (campo: string) => { const o = proximaOrdem(ordem, campo); mudarUrl({ ordem: o.campo, dir: o.dir === "desc" ? "desc" : null }, true); };
   const vazio = qUrl.trim()
     ? `Nenhum${def.feminino ? "a" : ""} ${def.singular} encontrad${def.feminino ? "a" : "o"}`
@@ -202,7 +205,7 @@ function Conteudo({ entidade, Editor, celula, acoesLinha, ajuda, aviso, grupos }
           url={`/api/cadastros/${entidade}/${item.id}`} modulo={def.permissoes.inativar?.[0]?.[0] ?? def.modulo}
           acaoInativar={def.permissoes.inativar?.[0]?.[1] ?? "gerenciar"} acaoReativar={def.permissoes.reativar?.[0]?.[1] ?? "gerenciar"}
           ativo={item.ativo} nome={item.nome} entidade={def.singular} feminino={def.feminino} comMotivo={false}
-          aoConcluir={() => void carregar()}
+          aoConcluir={() => { toast(`${Titulo} ${item.ativo ? "inativad" : "reativad"}${def.feminino ? "a" : "o"}.`); void carregar(); }}
         />
       )}
     </div>
@@ -308,7 +311,7 @@ function Conteudo({ entidade, Editor, celula, acoesLinha, ajuda, aviso, grupos }
                   id: col.key, titulo: col.label, ordenar: col.ordenar ? col.key : undefined,
                   // A 1ª coluna (ou código + nome) identifica o registro: fica sempre; valores em R$ à direita
                   obrigatoria: i < nTitulo, alinhar: col.formato === "moeda" ? "direita" as const : undefined,
-                  largura: col.formato === "codigo" ? 80 : col.formato === "moeda" ? 120 : i >= nTitulo ? 140 : undefined,
+                  largura: col.formato === "codigo" ? 80 : col.formato === "moeda" ? 120 : i >= nTitulo && !col.larga ? 140 : undefined,
                   classe: "truncate",
                 })),
                 ...(aba === "todos" ? [{ id: "situacao", titulo: "Situação", largura: 96 }] : []),
@@ -339,12 +342,12 @@ function Conteudo({ entidade, Editor, celula, acoesLinha, ajuda, aviso, grupos }
         // Editor próprio: depois de salvar recarrega (contagens e vínculos vêm do servidor)
         <Editor
           item={editando && editando !== "novo" ? editando : null} aberto={!!editando}
-          onFechar={() => setEditando(null)} onSalvo={() => { setEditando(null); void carregar(); }}
+          onFechar={() => setEditando(null)} onSalvo={() => { avisarSalvo(); setEditando(null); void carregar(); }}
         />
       ) : (
         <FormularioCadastro
           def={def} titulo={Titulo} editando={editando} onFechar={() => setEditando(null)} grupos={grupos}
-          onSalvo={() => { setEditando(null); void carregar(); }}
+          onSalvo={() => { avisarSalvo(); setEditando(null); void carregar(); }}
         />
       )}
       {def.massa && <BarraAcoesMassa aoConcluir={() => void carregar()} />}
@@ -509,7 +512,8 @@ function CampoForm({ campo: c, valor, disabled, id, onChange }: {
   if (c.tipo === "cadastro" && c.cadastro) {
     // Vínculo com outro cadastro: seletor da casa (ativos para escolher; o atual fica mesmo inativo; "+ Novo…" inline)
     const outro = CADASTROS[c.cadastro];
-    return <SeletorCadastro entidade={c.cadastro} valor={valor} onChange={(v) => onChange(v)} id={id} nome={c.key} disabled={disabled} vazio={`Sem ${outro.singular.split(" ")[0]}`} />;
+    // `editavel`: o lápis edita o cadastro escolhido aqui mesmo (ex.: a categoria, de dentro do produto)
+    return <SeletorCadastro entidade={c.cadastro} valor={valor} onChange={(v) => onChange(v)} id={id} nome={c.key} disabled={disabled} vazio={`Sem ${outro.singular.split(" ")[0]}`} editavel />;
   }
   if (c.tipo === "estruturado") return null; // só existe dentro da seção própria do grupo
   if (c.tipo === "booleano") {

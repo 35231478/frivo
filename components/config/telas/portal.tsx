@@ -1,7 +1,6 @@
-import { Dica } from "@/components/ui/dica";
 import { PageHeader } from "@/components/ui/page-header";
 import { PortalConfigClient } from "@/components/config/portal-config-client";
-import { CrudCadastro } from "@/components/config/crud-cadastro";
+import { TiposProblemaTela } from "@/components/cadastros/telas/tipos-problema";
 
 export function TelaPortal() {
   return (
@@ -13,16 +12,10 @@ export function TelaPortal() {
         <PortalConfigClient />
       </div>
 
-      <div className="bg-white rounded-card border border-surface-border p-6">
-        <h2 className="text-base font-semibold text-ink mb-4 flex items-center gap-1">
-          Tipos de problema<Dica texto="Opções exibidas ao cliente na abertura de chamado pelo portal." rotulo="Tipos de problema" lado="direita" />
-        </h2>
-        <CrudCadastro
-          titulo="Tipo de problema"
-          apiUrl="/api/tipos-problema"
-          campos={[{ key: "nome", label: "Nome", obrigatorio: true, placeholder: "Ex: Ar não gela, Vazamento, Ruído" }]}
-          colunasLista={[{ key: "nome", label: "Nome" }]}
-        />
+      {/* Cadastro padronizado (lib/cadastros): abas, busca, permissão nos botões e cartões no celular; a explicação fica no ⓘ */}
+      <div className="bg-white rounded-card border border-surface-border p-4 sm:p-6" data-secao-tipos-problema>
+        <h2 className="text-base font-semibold text-ink mb-4">Tipos de problema</h2>
+        <TiposProblemaTela />
       </div>
     </div>
   );

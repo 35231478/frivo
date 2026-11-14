@@ -182,7 +182,23 @@ async function contarUsos(entidade: EntidadeCadastro, id: string, empresaId: str
       ]);
       return [{ rotulo: pl(rec, "conta a receber", "contas a receber"), total: rec }, { rotulo: pl(pag, "conta a pagar", "contas a pagar"), total: pag }];
     }
-     default:
+    case "tipos-os": {
+      const [ativ, contr, locais, forms, pmoc, colab] = await Promise.all([
+        prisma.atividadeOs.count({ where: { empresaId, tipoOsId: id } }),
+        prisma.contrato.count({ where: { empresaId, tipoOsRecorrenciaId: id } }),
+        prisma.contratoRecorrenciaLocal.count({ where: { empresaId, tipoOsId: id } }),
+        prisma.formularioTemplate.count({ where: { empresaId, tipoOsId: id, ativo: true } }),
+        prisma.pmocCronograma.count({ where: { tipoOsId: id, pmoc: { empresaId } } }),
+        prisma.tecnico.count({ where: { empresaId, ativo: true, competencias: { some: { id } } } }),
+      ]);
+      const recorrencias = contr + locais;
+      return [
+        { rotulo: pl(ativ, "atividade de OS", "atividades de OS"), total: ativ }, { rotulo: pl(recorrencias, "recorrência de contrato", "recorrências de contrato"), total: recorrencias },
+        { rotulo: pl(forms, "formulário", "formulários"), total: forms }, { rotulo: pl(pmoc, "cronograma de PMOC", "cronogramas de PMOC"), total: pmoc },
+        { rotulo: pl(colab, "colaborador com a competência", "colaboradores com a competência"), total: colab },
+      ];
+    }
+    default:
       return [];
   }
 }

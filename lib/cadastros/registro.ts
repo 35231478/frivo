@@ -38,10 +38,13 @@ export const ENTIDADES_CADASTRO = [
   "categorias-produto",
   // Estoque E3.2: kit de material (produtos + quantidades), reutilizado na composição do serviço
   "kits-material",
+  // Padronização (leva 1): os dois cadastros de apoio que ainda estavam na tela antiga
+  "tipos-os", "tipos-problema",
 ] as const;
 export type EntidadeCadastro = (typeof ENTIDADES_CADASTRO)[number];
 export type ModeloCadastro = "produto" | "servico" | "cargo" | "categoriaFinanceira" | "perfilAcesso" | "modeloEncargos" | "usuario"
-  | "tipoEquipamentoCustom" | "tabelaPreco" | "termoReferenciaTemplate" | "prazoTemplate" | "fornecedor" | "centroCusto" | "contaBancaria" | "categoriaProduto" | "kitMaterial";
+  | "tipoEquipamentoCustom" | "tabelaPreco" | "termoReferenciaTemplate" | "prazoTemplate" | "fornecedor" | "centroCusto" | "contaBancaria" | "categoriaProduto" | "kitMaterial"
+  | "tipoOs" | "tipoProblema";
 export type AcaoCadastro = "listar" | "criar" | "editar" | "inativar" | "reativar";
 
 /** Basta UMA das permissões. `null` = qualquer usuário logado (catálogo lido nos seletores de outras telas). */
@@ -85,6 +88,8 @@ export interface ColunaCadastro {
   label: string;
   /** "codigo": código do item (fonte mono; no celular vai junto do nome no título do cartão) */
   formato?: "texto" | "moeda" | "cor-nome" | "codigo";
+  /** Coluna de texto longo (descrição): fica elástica na tabela, em vez da largura fixa das demais */
+  larga?: boolean;
   /**
    * Ordenar clicando no cabeçalho: nome do campo (escalar) ou o orderBy do Prisma para a direção
    * (relação/contagem). Sem isto a coluna não é ordenável — o servidor só aceita a lista branca.
@@ -657,6 +662,38 @@ export const CADASTROS: Record<EntidadeCadastro, DefCadastro> = {
     // Nome único na empresa (sem diferença de maiúsculas): regra em especificos.ts
     ...schemas({ nome: nome.max(120), banco: textoOpcional(120), agencia: textoOpcional(20), conta: textoOpcional(30) },
       { banco: null, agencia: null, conta: null }),
+  },
+  "tipos-os": {
+    entidade: "tipos-os", modelo: "tipoOs", singular: "tipo de OS", plural: "tipos de OS",
+    // Catálogo lido nas telas de OS, orçamento, contrato e cliente: qualquer usuário logado lê; gravar: Configurações › gerenciar
+    modulo: "configuracoes", permissoes: PERMISSOES_CONFIG, chave: "id", rota: "/configuracoes/tipos-os",
+    busca: ["nome", "descricao"],
+    // Os formulários ativos vão junto (as telas de OS leem daqui); a contagem alimenta a coluna "Em uso"
+    incluir: { formularios: { where: { ativo: true }, select: { id: true, nome: true } }, _count: { select: { atividades: true } } },
+    campos: [
+      { key: "nome", label: "Nome", obrigatorio: true, placeholder: "Ex: Manutenção Preventiva" },
+      { key: "descricao", label: "Descrição", tipo: "textarea", placeholder: "O que este tipo de serviço cobre" },
+      { key: "cor", label: "Cor", tipo: "cor", ajuda: "Identifica o tipo na agenda e nas listas de OS." },
+      {
+        key: "exigeEquipamento", label: "Exige equipamento para concluir", tipo: "booleano",
+        ajuda: "Sim: a OS só é concluída com ao menos um equipamento atendido e o checklist completo (manutenção, instalação). Não: serviço sem equipamento, como visita técnica, vistoria e orçamento.",
+      },
+    ],
+    colunas: [
+      { key: "nome", label: "Tipo", formato: "cor-nome", ordenar: "nome" }, { key: "descricao", label: "Descrição", ordenar: "descricao", larga: true },
+      { key: "exigeEquipamento", label: "Equipamento", ordenar: "exigeEquipamento" }, { key: "uso", label: "Em uso", ordenar: (dir) => ({ atividades: { _count: dir } }) },
+    ],
+    ...schemas({ nome: nome.max(120), descricao: textoOpcional(1000), cor, exigeEquipamento: booleanoPadraoVerdadeiro },
+      { descricao: null, cor: corDado.azulForte, exigeEquipamento: true }),
+  },
+  "tipos-problema": {
+    entidade: "tipos-problema", modelo: "tipoProblema", singular: "tipo de problema", plural: "tipos de problema",
+    // O que o cliente escolhe ao abrir um chamado pelo portal. Ler: qualquer usuário logado; gravar: Configurações › gerenciar
+    modulo: "configuracoes", permissoes: PERMISSOES_CONFIG, chave: "id", rota: "/configuracoes/portal",
+    busca: ["nome"],
+    campos: [{ key: "nome", label: "Nome", obrigatorio: true, placeholder: "Ex: Ar não gela, Vazamento, Ruído" }],
+    colunas: [{ key: "nome", label: "Tipo de problema", ordenar: "nome" }],
+    ...schemas({ nome: nome.max(100) }),
   },
 };
 

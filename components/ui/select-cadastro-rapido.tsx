@@ -2,9 +2,12 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { corDado } from "@/lib/ui/tokens";
-import { Check, ChevronDown, ExternalLink, Loader2, Plus, Search, X } from "lucide-react";
+import { Check, ChevronDown, ExternalLink, Layers, Loader2, Lock, MapPin, Pencil, Plus, Search, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Modal } from "@/components/ui/modal";
+import { Dica } from "@/components/ui/dica";
+import { toast } from "@/components/ui/avisos";
+import { alcanceDaEdicao, camposAlterados, rotuloDaEdicao, type EscopoEdicao } from "@/lib/edicao-contexto";
 import { usePermissoes } from "@/components/providers/permissoes-provider";
 import type { Acao } from "@/lib/permissoes";
 import { AvisoSerieDuplicada } from "@/components/equipamentos/aviso-serie-duplicada";
@@ -20,6 +23,14 @@ import { AvisoSerieDuplicada } from "@/components/equipamentos/aviso-serie-dupli
  * - RBAC: a criação só aparece com `pode(permissao.modulo, permissao.acao)`.
  * - Não usa <form> (evita aninhar/submeter o formulário principal) e não toca no
  *   estado do formulário principal — os dados já preenchidos ficam intactos.
+ *
+ * EDITAR NO CONTEXTO (prop `edicao`): o mesmo padrão para EDITAR o item já selecionado, sem sair da
+ * tela. O lápis ao lado do seletor abre o mini-formulário com os dados atuais. Regra de ouro
+ * (lib/edicao-contexto): a faixa do topo diz sempre o que está sendo editado —
+ *   - referência: "Editando o cadastro do cliente" (vale em todo lugar);
+ *   - uso: "Editando este item da OS" (vale só ali; o cadastro não muda).
+ * Registro fechado (`travado`): o lápis vira um cadeado, com o motivo no ⓘ. Sem a permissão, o lápis
+ * nem aparece. Salvou: toast, e o formulário principal continua como estava.
  */
 
 export interface OpcaoCadastro {
@@ -44,6 +55,30 @@ export interface CampoRapido {
   inputMode?: "text" | "numeric" | "decimal" | "tel" | "email";
   /** Nº de série de equipamento: avisa (sem bloquear) se já existe outro com a mesma etiqueta. */
   avisoSerie?: boolean;
+}
+
+/**
+ * Editar o item selecionado sem sair da tela. `escopo` + `alvo` formam o rótulo obrigatório do que
+ * está sendo editado (lib/edicao-contexto › rotuloDaEdicao).
+ */
+export interface EdicaoDoSelecionado {
+  escopo: EscopoEdicao;
+  /** referência: "do cliente" → "Editando o cadastro do cliente"; uso: "este item da OS" → "Editando este item da OS" */
+  alvo: string;
+  /** Campos do mini-formulário de edição (padrão: os mesmos de criar) */
+  campos?: CampoRapido[];
+  /** Os valores atuais do item selecionado (o que já está carregado na tela) */
+  valores: (id: string) => Record<string, string>;
+  /** Grava (lance Error(msg) em falha). Recebe todos os valores e a lista do que mudou. */
+  salvar: (id: string, valores: Record<string, string>, alterados: string[]) => Promise<OpcaoCadastro | void>;
+  /** Permissão exigida para editar (ou lista: qualquer uma libera). Sem ela, o lápis não aparece. */
+  permissao?: PermissaoCriar;
+  /** Registro fechado: o motivo (lib/edicao-contexto › motivoDaTrava). Com ele, não edita. */
+  travado?: string | null;
+  /** Para a edição complexa: abre o cadastro completo em nova aba */
+  linkCadastroCompleto?: string | ((id: string) => string);
+  /** Texto do toast ao salvar (padrão: "Alterações salvas.") */
+  mensagemSucesso?: string;
 }
 
 /** Uma permissão, ou uma lista em que QUALQUER uma libera a criação. */
@@ -92,6 +127,8 @@ interface Props {
   className?: string;
   /** Ícone à esquerda do texto no botão (alinha com outros seletores que também têm ícone). */
   icone?: React.ReactNode;
+  /** Editar o item selecionado sem sair da tela (o lápis ao lado do seletor). */
+  edicao?: EdicaoDoSelecionado;
 }
 
 const UFS = ["AC", "AL", "AP", "AM", "BA", "CE", "DF", "ES", "GO", "MA", "MT", "MS", "MG", "PA", "PB", "PR", "PE", "PI", "RJ", "RN", "RS", "RO", "RR", "SC", "SP", "SE", "TO"];
@@ -101,9 +138,11 @@ const inputCls =
 
 export function SelectCadastroRapido({
   value, onChange, opcoes, entidade, campos, criar, permissao, linkCadastroCompleto, contexto,
-  placeholder, disabled, textoDesabilitado, carregando, erro, campoBusca, className, valoresIniciais, icone,
+  placeholder, disabled, textoDesabilitado, carregando, erro, campoBusca, className, valoresIniciais, icone, edicao,
 }: Props) {
   const podeCriar = usePodeCriar(permissao);
+  const podeEditar = usePodeCriar(edicao?.permissao) && !!edicao;
+  const [editando, setEditando] = useState(false);
 
   const novo = entidade.feminino ? "Nova" : "Novo";
   const nenhum = entidade.feminino ? "Nenhuma" : "Nenhum";
@@ -151,8 +190,10 @@ export function SelectCadastroRapido({
     );
   }
 
-  return (
-    <div ref={ref} className={cn("relative", className)}>
+  // Com edição no contexto, o seletor divide a linha com o lápis; sem ela, o DOM é o de sempre
+  const comLapis = podeEditar && !!selecionada && !disabled;
+  const seletor = (
+    <div ref={ref} className={cn("relative", edicao ? "flex-1 min-w-0" : className)}>
       <button
         type="button"
         disabled={disabled}
@@ -224,6 +265,110 @@ export function SelectCadastroRapido({
       />
     </div>
   );
+  if (!edicao) return seletor;
+  const link = typeof edicao.linkCadastroCompleto === "function" ? (value ? edicao.linkCadastroCompleto(value) : undefined) : edicao.linkCadastroCompleto;
+  return (
+    <div className={cn("flex items-center gap-1.5", className)} data-select-com-edicao>
+      {seletor}
+      {comLapis && (
+        <BotaoEditarNoContexto
+          rotulo={`Editar ${entidade.feminino ? "a" : "o"} ${entidade.singular} selecionad${entidade.feminino ? "a" : "o"}`}
+          travado={edicao.travado} onClick={() => setEditando(true)}
+        />
+      )}
+      {comLapis && !edicao.travado && (
+        <EdicaoNoContextoModal
+          aberto={editando} onFechar={() => setEditando(false)} escopo={edicao.escopo} alvo={edicao.alvo}
+          campos={edicao.campos ?? campos} valores={editando ? edicao.valores(value) : {}}
+          salvar={(v, alterados) => edicao.salvar(value, v, alterados)} onSalvo={() => setEditando(false)}
+          linkCadastroCompleto={link} mensagemSucesso={edicao.mensagemSucesso}
+        />
+      )}
+    </div>
+  );
+}
+
+/* ───────── Editar no contexto ───────── */
+/**
+ * O lápis de "editar aqui mesmo". Registro fechado: vira cadeado (desabilitado) com o motivo no ⓘ.
+ * Quem decide se ele aparece é quem chama (permissão e item selecionado).
+ */
+export function BotaoEditarNoContexto({ rotulo, travado, onClick, className }: { rotulo: string; travado?: string | null; onClick: () => void; className?: string }) {
+  const classe = "shrink-0 inline-flex items-center justify-center w-10 h-10 rounded-lg border border-surface-campo bg-white";
+  if (travado) {
+    return (
+      <span className={cn("inline-flex items-center gap-0.5 shrink-0", className)} data-edicao-travada>
+        <button type="button" disabled aria-label={`${rotulo}: edição travada`} className={cn(classe, "text-ink-subtle cursor-not-allowed bg-surface-alt")} data-editar-no-contexto>
+          <Lock className="w-4 h-4" aria-hidden />
+        </button>
+        <Dica texto={travado} rotulo="Edição travada" lado="esquerda" />
+      </span>
+    );
+  }
+  return (
+    <button type="button" onClick={onClick} aria-label={rotulo} title={rotulo} data-editar-no-contexto
+      className={cn(classe, "text-ink-muted hover:text-primary-600 hover:border-primary-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-acento/40", className)}>
+      <Pencil className="w-4 h-4" aria-hidden />
+    </button>
+  );
+}
+
+/**
+ * O mini-formulário de EDIÇÃO sozinho (para telas com seletor próprio ou para a linha de uma
+ * transação). A faixa do topo diz o que está sendo editado e até onde a mudança chega; com `travado`
+ * só mostra o motivo. Nada muda → fecha sem chamar o servidor. Salvou → toast.
+ */
+export function EdicaoNoContextoModal(props: {
+  aberto: boolean; onFechar: () => void;
+  escopo: EscopoEdicao; alvo: string;
+  campos: CampoRapido[];
+  /** Valores atuais (o formulário abre com eles) */
+  valores: Record<string, string>;
+  salvar: (valores: Record<string, string>, alterados: string[]) => Promise<OpcaoCadastro | void>;
+  onSalvo: (o: OpcaoCadastro | void) => void;
+  linkCadastroCompleto?: string;
+  mensagemSucesso?: string;
+  /** Registro fechado: o motivo. Com ele, o formulário não abre para edição. */
+  travado?: string | null;
+}) {
+  const { aberto, onFechar, escopo, alvo, campos, valores, salvar, onSalvo, linkCadastroCompleto, mensagemSucesso, travado } = props;
+  const titulo = rotuloDaEdicao(escopo, alvo);
+  const faixa = (
+    <div data-faixa-edicao={escopo}
+      className={cn("flex items-start gap-2 rounded-lg border px-3 py-2 -mt-1",
+        escopo === "referencia" ? "border-atencao/30 bg-atencao-claro text-atencao-texto" : "border-surface-border bg-surface-alt text-ink")}>
+      {escopo === "referencia" ? <Layers className="w-4 h-4 mt-0.5 shrink-0" aria-hidden /> : <MapPin className="w-4 h-4 mt-0.5 shrink-0" aria-hidden />}
+      {/* O título do painel já diz O QUE está sendo editado; a faixa diz até onde a mudança chega */}
+      <p className="text-sm font-medium" data-alcance-edicao>{alcanceDaEdicao(escopo)}</p>
+    </div>
+  );
+  if (travado) {
+    return (
+      <Modal aberto={aberto} onFechar={onFechar} titulo={titulo} tamanho="sm">
+        <div className="space-y-4" data-edicao-travada-modal>
+          <p className="flex items-start gap-2 text-sm text-ink"><Lock className="w-4 h-4 mt-0.5 shrink-0 text-ink-muted" aria-hidden /> {travado}</p>
+          <div className="flex justify-end">
+            <button type="button" onClick={onFechar} className="px-4 py-2.5 text-sm font-medium rounded-lg border border-surface-border text-ink hover:bg-surface-alt">Fechar</button>
+          </div>
+        </div>
+      </Modal>
+    );
+  }
+  return (
+    <MiniCadastro
+      aberto={aberto} onFechar={onFechar} titulo={titulo} campos={campos} valoresIniciais={valores} linkCadastroCompleto={linkCadastroCompleto}
+      modo="editar" faixa={faixa} rotuloSalvar="Salvar"
+      criar={async (v) => {
+        const alterados = camposAlterados(valores, v, campos.map((c) => c.nome));
+        // Nada mudou: fecha sem chamar o servidor (e sem dizer que salvou)
+        if (!alterados.length) return { value: "", label: "" };
+        const o = await salvar(v, alterados);
+        toast(mensagemSucesso ?? "Alterações salvas.");
+        return o ?? { value: "", label: "" };
+      }}
+      onCriado={(o) => onSalvo(o.value ? o : undefined)}
+    />
+  );
 }
 
 /* ───────── Mini-formulário ───────── */
@@ -242,11 +387,15 @@ export function CadastroRapidoModal(props: {
 }
 
 function MiniCadastro({
-  aberto, onFechar, titulo, contexto, campos, criar, linkCadastroCompleto, valoresIniciais, onCriado, rotuloSalvar,
+  aberto, onFechar, titulo, contexto, campos, criar, linkCadastroCompleto, valoresIniciais, onCriado, rotuloSalvar, modo = "criar", faixa,
 }: {
   aberto: boolean; onFechar: () => void; titulo: string; contexto?: string;
   campos: CampoRapido[]; criar: Props["criar"]; linkCadastroCompleto?: string;
   valoresIniciais: Record<string, string>; onCriado: (o: OpcaoCadastro) => void; rotuloSalvar?: string;
+  /** "editar": manda também os campos esvaziados (limpar um campo é uma mudança) */
+  modo?: "criar" | "editar";
+  /** O que vem antes dos campos (na edição: a faixa que diz o que está sendo editado) */
+  faixa?: React.ReactNode;
 }) {
   const [valores, setValores] = useState<Record<string, string>>({});
   const [salvando, setSalvando] = useState(false);
@@ -285,7 +434,9 @@ function MiniCadastro({
     if (falta.size) { setErro("Preencha os campos obrigatórios."); return; }
     setSalvando(true); setErro("");
     try {
-      const limpos = Object.fromEntries(Object.entries(valores).map(([k, v]) => [k, v.trim()]).filter(([, v]) => v));
+      const aparados = Object.entries(valores).map(([k, v]) => [k, v.trim()] as const);
+      // Criar: campo vazio não vai. Editar: vai (apagar o que estava escrito é uma mudança)
+      const limpos = Object.fromEntries(modo === "editar" ? campos.map((c) => [c.nome, (valores[c.nome] ?? "").trim()]) : aparados.filter(([, v]) => v));
       onCriado(await criar(limpos));
     } catch (e) {
       setErro(e instanceof Error && e.message ? e.message : "Não foi possível salvar. Tente novamente.");
@@ -303,6 +454,7 @@ function MiniCadastro({
           if (e.key === "Enter" && (e.target as HTMLElement).tagName === "INPUT") { e.preventDefault(); e.stopPropagation(); salvar(); }
         }}
       >
+        {faixa}
         {contexto && <p className="text-xs text-ink-muted -mt-1">Cadastro rápido {contexto}. Os dados já preenchidos no formulário são mantidos.</p>}
 
         <div className="grid grid-cols-1 sm:grid-cols-6 gap-3">

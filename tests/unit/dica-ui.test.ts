@@ -74,6 +74,24 @@ describe("acessibilidade", () => {
     await act(async () => { b.blur(); });
     expect(aberta()).toBe(false);
   });
+
+  it.each([["gaveta", "@/components/ui/drawer", "Drawer"], ["modal", "@/components/ui/modal", "Modal"]])("dentro de %s: Esc fecha só o balão; o Esc seguinte é que fecha o painel", async (_n, caminho, nome) => {
+    const Painel = ((await import(/* @vite-ignore */ caminho)) as any)[nome];
+    let fechou = 0;
+    await montar(createElement(Painel, { aberto: true, onFechar: () => { fechou++; }, titulo: "Novo tipo de OS" },
+      createElement("input", { "data-campo": true, defaultValue: "Higienização" }), createElement(Dica, { texto: "Explicação", rotulo: "Campo" })));
+    await act(async () => { await new Promise((r) => setTimeout(r, 30)); });
+    const b = botao(document);
+    await act(async () => { b.focus(); });
+    expect(aberta(b)).toBe(true);
+    // a tecla nasce no ⓘ focado (como no navegador) e sobe até o documento
+    await disparar(b, "keydown", { key: "Escape" });
+    expect(aberta(b)).toBe(false);
+    expect(fechou, "o painel não fecha junto com o balão").toBe(0);
+    expect((document.querySelector("[data-campo]") as HTMLInputElement).value).toBe("Higienização");
+    await disparar(b, "keydown", { key: "Escape" });
+    expect(fechou).toBe(1);
+  });
 });
 
 describe("mouse e toque", () => {

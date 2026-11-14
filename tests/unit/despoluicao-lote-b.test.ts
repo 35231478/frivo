@@ -55,11 +55,15 @@ describe("operacional e técnico", () => {
     expect(ler("components/tecnico/equipamento.tsx")).toContain(">Marcar atenção<");
   });
   it("página pública do QR e etiqueta impressa com cores dos tokens; tipo de OS com padrão da paleta", () => {
-    for (const f of ["app/(publico)/qr/[token]/page.tsx", "app/(dashboard)/qrcodes/imprimir/imprimir-client.tsx", "app/api/tipos-os/route.ts"]) {
+    for (const f of ["app/(publico)/qr/[token]/page.tsx", "app/(dashboard)/qrcodes/imprimir/imprimir-client.tsx"]) {
       const src = ler(f);
       expect(src, f).not.toMatch(/#[0-9A-Fa-f]{6}\b/);
       expect(src, f).toMatch(/from "@\/lib\/ui\/tokens"/);
     }
+    // O tipo de OS passou para o cadastro padrão: a rota só delega, e a cor de um tipo novo vem da paleta, no registro
+    expect(ler("app/api/tipos-os/route.ts")).not.toMatch(/#[0-9A-Fa-f]{6}\b/);
+    expect(ler("lib/cadastros/registro.ts")).toMatch(/descricao: null, cor: corDado\.azulForte, exigeEquipamento: true/);
+    expect(ler("lib/cadastros/registro.ts")).toMatch(/from "@\/lib\/ui\/tokens"/);
   });
   it("orientação do consumo de material sem 'X = Y'; perfil do usuário com o toast da casa", () => {
     expect(ler("components/os/os-separacao.tsx")).toContain("Em branco, assume o separado.");

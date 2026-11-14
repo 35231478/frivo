@@ -6,7 +6,7 @@
  *    outras recusas (checklist incompleto) não oferecem a saída;
  *  - execução desktop: tipo que não exige / recorrente mostram por que dá para concluir sem equipamento;
  *    sem saída, a pendência traz a mensagem e o botão de justificar;
- *  - cadastro de Tipos de OS: "Exige equipamento para concluir" ligado por padrão; desligar grava false;
+ *  - cadastro de Tipos de OS: "Exige equipamento para concluir" marcado por padrão; desmarcar grava false;
  *    a lista mostra "Não exige".
  */
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
@@ -237,28 +237,34 @@ describe("execução desktop: por que dá (ou não) para concluir sem equipament
 });
 
 describe("cadastro de Tipos de OS", () => {
-  it("'Exige equipamento para concluir' vem ligado; desligar grava false; a lista mostra 'Não exige'", async () => {
-    respostas["GET /api/tipos-os"] = { status: 200, corpo: [
-      { id: "t1", nome: "Manutenção Preventiva", descricao: null, cor: "#3b82f6", ativo: true, exigeEquipamento: true },
-      { id: "t2", nome: "Visita Técnica", descricao: null, cor: "#10b981", ativo: true, exigeEquipamento: false },
-    ] };
-    respostas["POST /api/tipos-os"] = { status: 201, corpo: { id: "t3", nome: "Vistoria", descricao: "", cor: "#3b82f6", ativo: true, exigeEquipamento: false } };
+  // A tela passou para o cadastro padrão (lib/cadastros): lista paginada pela rota genérica e o campo
+  // "Exige equipamento" como o booleano do padrão (caixa "Sim / Não"), com a regra no ⓘ do rótulo.
+  it("'Exige equipamento para concluir' vem marcado; desmarcar grava false; a lista mostra 'Não exige'", async () => {
+    const t1 = { id: "t1", nome: "Manutenção Preventiva", descricao: null, cor: "#3b82f6", ativo: true, exigeEquipamento: true };
+    const t2 = { id: "t2", nome: "Visita Técnica", descricao: null, cor: "#10b981", ativo: true, exigeEquipamento: false };
+    const t3 = { id: "t3", nome: "Vistoria", descricao: null, cor: "#3b82f6", ativo: true, exigeEquipamento: false };
+    const pagina = (itens: unknown[]) => ({ status: 200, corpo: { itens, total: itens.length, pagina: 1, porPagina: 50, contagens: { ativos: itens.length, inativos: 0, todos: itens.length } } });
+    respostas["GET /api/cadastros/tipos-os"] = pagina([t1, t2]);
+    respostas["POST /api/cadastros/tipos-os"] = { status: 201, corpo: t3 };
     const { TelaTiposOs: Pagina } = await import("@/components/config/telas/tipos-os");
     await montar(createElement(Pagina));
-    expect($$("[data-exige-equipamento]").map((e) => [e.getAttribute("data-exige-equipamento"), e.textContent])).toEqual([["sim", "Exige para concluir"], ["nao", "Não exige"]]);
-    await clicar($$("button").find((b) => /Novo|Adicionar/.test(b.textContent ?? "")) ?? null);
-    const chave = () => document.querySelector("[data-campo-switch='exigeEquipamento'] [role='switch']") as HTMLElement;
-    expect(chave().getAttribute("aria-checked")).toBe("true");
-    // Princípio 7: a regra fica no ⓘ do switch
-    const dicaSwitch = document.querySelector("[data-campo-switch='exigeEquipamento'] [data-dica]")!;
-    expect(document.getElementById(dicaSwitch.getAttribute("aria-describedby")!)!.textContent).toContain("como visita técnica, vistoria e orçamento");
-    await clicar(chave());
-    expect(chave().getAttribute("aria-checked")).toBe("false");
+    // A lista existe em tabela (desktop) e em cartões (celular): confere a tabela
+    const naTabela = () => $$("table [data-exige-equipamento]").map((e) => [e.getAttribute("data-exige-equipamento"), e.textContent]);
+    expect(naTabela()).toEqual([["sim", "Exige para concluir"], ["nao", "Não exige"]]);
+    await clicar($("[data-acao='novo-cadastro']"));
+    const caixaExige = () => document.querySelector("[data-campo-booleano='exigeEquipamento']") as HTMLInputElement;
+    expect(caixaExige().checked).toBe(true);
+    // Princípio 7: a regra fica no ⓘ do campo
+    const dica = [...document.querySelectorAll("[data-dica]")].find((d) => d.getAttribute("aria-label") === "Ajuda: Exige equipamento para concluir")!;
+    expect(document.getElementById(dica.getAttribute("aria-describedby")!)!.textContent).toContain("como visita técnica, vistoria e orçamento");
+    await clicar(caixaExige());
+    expect(caixaExige().checked).toBe(false);
     const nome = [...document.querySelectorAll("input")].find((i) => i.placeholder?.startsWith("Ex: Manutenção")) ?? null;
     await digitar(nome, "Vistoria");
+    respostas["GET /api/cadastros/tipos-os"] = pagina([t1, t2, t3]);
     await act(async () => { [...document.querySelectorAll("button")].filter((b) => b.textContent?.trim() === "Salvar").at(-1)!.click(); });
     await esperar();
-    expect(chamadas.find((c) => c.metodo === "POST")).toMatchObject({ url: "/api/tipos-os", corpo: { nome: "Vistoria", exigeEquipamento: false } });
-    expect($$("[data-exige-equipamento='nao']")).toHaveLength(2);
+    expect(chamadas.find((c) => c.metodo === "POST")).toMatchObject({ url: "/api/cadastros/tipos-os", corpo: { nome: "Vistoria", exigeEquipamento: "false" } });
+    expect($$("table [data-exige-equipamento='nao']")).toHaveLength(2);
   });
 });

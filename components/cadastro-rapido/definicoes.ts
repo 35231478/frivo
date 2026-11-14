@@ -7,12 +7,20 @@
  * OS, orçamento, contrato e equipamento usam exatamente o mesmo cadastro rápido.
  */
 import { formatarCpfCnpj, LABELS_TIPO_EQUIPAMENTO } from "@/lib/utils";
-import type { CampoRapido, OpcaoCadastro, PermissaoCriar } from "@/components/ui/select-cadastro-rapido";
+import type { CampoRapido, EdicaoDoSelecionado, OpcaoCadastro, PermissaoCriar } from "@/components/ui/select-cadastro-rapido";
 import { hrefSecaoConfig } from "@/lib/navegacao/configuracoes";
 
 /** POST JSON; devolve o corpo ou lança Error com a mensagem da API. */
 async function postar<T = any>(url: string, corpo: unknown, erroPadrao: string): Promise<T> {
   const res = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(corpo) });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data?.erro ?? erroPadrao);
+  return data as T;
+}
+
+/** PATCH JSON (edição parcial): manda só o que mudou; devolve o registro ou lança Error com a mensagem da API. */
+async function alterar<T = any>(url: string, corpo: unknown, erroPadrao: string): Promise<T> {
+  const res = await fetch(url, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(corpo) });
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(data?.erro ?? erroPadrao);
   return data as T;
@@ -109,6 +117,28 @@ export const TIPO_OS = {
   ] as CampoRapido[],
   criar(v: Record<string, string>) {
     return postar("/api/tipos-os", { nome: v.nome }, "Erro ao cadastrar o tipo de OS.");
+  },
+  /**
+   * Editar no contexto (sem sair da OS): muda o CADASTRO do tipo, em todas as OS — o painel diz isso
+   * ("Editando o cadastro do tipo de OS"). Só os campos simples; a regra do equipamento e os
+   * formulários ficam no cadastro completo.
+   */
+  camposEdicao: [
+    { nome: "nome", label: "Nome do tipo", obrigatorio: true },
+    { nome: "descricao", label: "Descrição", tipo: "textarea" },
+    { nome: "cor", label: "Cor", tipo: "cor", colunas: 2 },
+  ] as CampoRapido[],
+  edicao<T extends { id: string; nome: string; descricao?: string | null; cor?: string | null }>(tipos: readonly T[], aoSalvar: (t: T) => void): EdicaoDoSelecionado {
+    return {
+      escopo: "referencia", alvo: "do tipo de OS", campos: TIPO_OS.camposEdicao, permissao: TIPO_OS.permissao,
+      linkCadastroCompleto: TIPO_OS.link, mensagemSucesso: "Tipo de OS atualizado.",
+      valores: (id) => { const t = tipos.find((x) => x.id === id); return { nome: t?.nome ?? "", descricao: t?.descricao ?? "", cor: t?.cor ?? "" }; },
+      async salvar(id, v, alterados) {
+        const t = await alterar<T>(`/api/cadastros/tipos-os/${id}`, Object.fromEntries(alterados.map((k) => [k, v[k]])), "Erro ao salvar o tipo de OS.");
+        aoSalvar(t);
+        return { value: t.id, label: t.nome };
+      },
+    };
   },
 };
 

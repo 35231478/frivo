@@ -1,16 +1,13 @@
 "use client";
 
 import { CadastroPadrao } from "@/components/cadastros/cadastro-padrao";
-import { PageHeader } from "@/components/ui/page-header";
+import { TelaCadastroApoio } from "@/components/config/tela-cadastro-apoio";
 
 /** Cadastro padronizado: campos, colunas, validação e permissões em lib/cadastros/registro.ts. */
 export function TelaCategoriasFinanceiras() {
   return (
-    <div>
-      <PageHeader title="Categorias financeiras" description="Classificação de cobranças e despesas" backHref="/configuracoes" />
-      <div className="bg-white rounded-card border border-surface-border p-4 sm:p-6">
-        <CadastroPadrao entidade="categorias-financeiras" />
-      </div>
-    </div>
+    <TelaCadastroApoio titulo="Categorias financeiras" descricao="Classificação de cobranças e despesas">
+      <CadastroPadrao entidade="categorias-financeiras" />
+    </TelaCadastroApoio>
   );
 }
