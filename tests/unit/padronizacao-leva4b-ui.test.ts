@@ -129,6 +129,9 @@ describe("checklist de veículo — as regras (tela e rota usam as mesmas)", () 
     expect(itemGeraAlerta(item("a"), null)).toBe(false);
     expect(itemGeraAlerta(item("a"), "")).toBe(false);
     expect(itemGeraAlerta(item("a", { tipo: "TEXTO", opcoes: [] }), "qualquer coisa")).toBe(false);
+    // texto livre nunca alerta — nem quando o item ficou com opções de um tipo anterior
+    expect(itemGeraAlerta(item("a", { tipo: "TEXTO" }), "qualquer coisa")).toBe(false);
+    expect(itemGeraAlerta(item("a", { tipo: "FOTO" }), "NOK")).toBe(false);
     expect(itemGeraAlerta(item("a", { tipo: "FOTO", opcoes: [] }), "x")).toBe(false);
     expect(itemGeraAlerta(item("a", { opcoes: [] }), "NOK")).toBe(false);
   });
