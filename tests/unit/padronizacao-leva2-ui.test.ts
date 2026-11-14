@@ -81,11 +81,15 @@ const toasts = async () => vi.mocked((await import("@/components/ui/avisos")).to
 const gravacoes = () => chamadas.filter((c) => c.metodo !== "GET");
 
 beforeAll(async () => {
-  await Promise.all([
-    import("@/components/ui/select-cadastro-rapido"), import("@/components/cadastro-rapido/definicoes"), import("@/components/os/os-orcamento"),
-    import("@/components/orcamento/editar-linha-orcamento"), import("@/components/orcamento/orcamento-documento"), import("@/components/os/central/resumo-os"),
-    import("@/components/providers/permissoes-provider"),
-  ]);
+  // Um de cada vez, com os avisos primeiro: importar em paralelo pode criar duas cópias do módulo
+  // simulado, e o teste passaria a ler um `toast` que não é o da tela (no CI os dois testes dos contatos
+  // do cliente falharam assim, com a lista de toasts vazia)
+  await import("@/components/ui/avisos");
+  for (const m of [
+    () => import("@/components/ui/select-cadastro-rapido"), () => import("@/components/cadastro-rapido/definicoes"), () => import("@/components/os/os-orcamento"),
+    () => import("@/components/orcamento/editar-linha-orcamento"), () => import("@/components/orcamento/orcamento-documento"), () => import("@/components/os/central/resumo-os"),
+    () => import("@/components/providers/permissoes-provider"),
+  ]) await m();
 }, 120_000);
 beforeEach(async () => {
   chamadas.length = 0; respostas = {}; nav.push.mockClear(); nav.refresh.mockClear();
