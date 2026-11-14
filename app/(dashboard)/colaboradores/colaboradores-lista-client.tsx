@@ -232,11 +232,11 @@ function DocSelo({ c }: { c: ColaboradorLinha }) {
 // As larguras somam o que cabe num notebook (1440px com o menu aberto) sem rolar de lado
 const COLUNAS: ColunaPro[] = [
   { id: "colaborador", titulo: "Colaborador", ordenar: "nome", obrigatoria: true, minimo: 200 },
-  { id: "cargo", titulo: "Cargo e função", ordenar: "cargo", largura: 180, classe: "truncate" },
-  { id: "equipe", titulo: "Equipe", largura: 180 },
-  { id: "contato", titulo: "Contato", largura: 150, classe: "truncate" },
+  { id: "cargo", titulo: "Cargo e função", ordenar: "cargo", largura: 168, classe: "truncate" },
+  { id: "equipe", titulo: "Equipe", largura: 164 },
+  { id: "contato", titulo: "Contato", largura: 142, classe: "truncate" },
   { id: "atividades", titulo: "Atividades", largura: 90, alinhar: "direita" },
-  { id: "avisos", titulo: "Avisos", largura: 150 },
+  { id: "avisos", titulo: "Avisos", largura: 132 },
   { id: "status", titulo: "Status", largura: 96 },
   { id: "acoes", titulo: "Ações", fixa: true, semTitulo: true, largura: 76, alinhar: "direita", classe: "py-0.5" },
 ];

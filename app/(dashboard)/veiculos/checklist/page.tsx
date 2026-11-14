@@ -20,7 +20,7 @@ export default async function ChecklistVeiculoPage({ searchParams }: { searchPar
   ]);
 
   return (
-    <div className="max-w-5xl mx-auto">
+    <div className="max-w-6xl mx-auto">
       <PageHeader title="Checklist de veículo" dica={AJUDA} backHref="/veiculos" />
       <ChecklistTela veiculos={veiculos} templates={templates} colaboradores={colaboradores} veiculoInicial={veiculoId} abaInicial={aba} />
     </div>

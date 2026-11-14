@@ -30,7 +30,7 @@ interface Detalhe extends Omit<Linha, "totalItens" | "alertas"> {
   itens: { id: string; itemTemplateId: string; valor: string | null; foto: string | null; alerta: boolean; itemTemplate: ItemDoModelo }[];
 }
 type Aba = "ativos" | "inativos";
-const ABAS: readonly { id: Aba; label: string }[] = [{ id: "ativos", label: "Preenchidos" }, { id: "inativos", label: "Inativos" }];
+const ABAS: readonly { id: Aba; label: string }[] = [{ id: "ativos", label: "Ativos" }, { id: "inativos", label: "Inativos" }];
 
 const AJUDA = "Checklists já enviados. Excluir é reversível: o checklist inativado sai da lista e das contagens, e pode ser reativado na aba Inativos.";
 
@@ -134,14 +134,16 @@ export function ChecklistsPreenchidos({ veiculoId, colaboradores, onMudou }: {
   );
   const resumo = (c: Linha) => `${c.totalItens} ${c.totalItens === 1 ? "item" : "itens"}${c.alertas ? ` · ${c.alertas} ${c.alertas === 1 ? "alerta" : "alertas"}` : ""}`;
 
+  // As larguras cabem na página (1440 com o menu aberto) e na ficha do veículo, que é mais estreita:
+  // lá o modelo fica escondido por padrão e a aba Inativos troca a coluna de itens pela de quem excluiu
   const colunas: ColunaPro[] = [
-    { id: "data", titulo: aba === "inativos" ? "Preenchido em" : "Data", largura: 132, obrigatoria: true },
-    ...(veiculoId ? [] : [{ id: "veiculo", titulo: "Veículo", largura: 190, obrigatoria: true, classe: "truncate" }]),
-    { id: "modelo", titulo: "Modelo de checklist", minimo: 160, classe: "truncate" },
-    { id: "colaborador", titulo: "Colaborador", largura: 170, classe: "truncate" },
-    { id: "itens", titulo: "Itens", largura: 150 },
+    { id: "data", titulo: aba === "inativos" ? "Preenchido em" : "Data", largura: 158, obrigatoria: true, classe: "whitespace-nowrap" },
+    ...(veiculoId ? [] : [{ id: "veiculo", titulo: "Veículo", largura: 180, obrigatoria: true, classe: "truncate" }]),
+    { id: "modelo", titulo: "Modelo de checklist", minimo: 160, classe: "truncate", oculta: !!veiculoId },
+    veiculoId ? { id: "colaborador", titulo: "Colaborador", minimo: 140, classe: "truncate" } : { id: "colaborador", titulo: "Colaborador", largura: 150, classe: "truncate" },
+    ...(aba === "inativos" ? [] : [{ id: "itens", titulo: "Itens", largura: 150 }]),
     { id: "status", titulo: "Status", largura: 116 },
-    ...(aba === "inativos" ? [{ id: "inativado", titulo: "Excluído em", largura: 200, classe: "truncate" }] : []),
+    ...(aba === "inativos" ? [{ id: "inativado", titulo: "Excluído em", largura: 190, classe: "truncate" }] : []),
     { id: "acoes", titulo: "Ações", fixa: true, semTitulo: true, largura: 104, alinhar: "direita" as const, classe: "py-0.5" },
   ];
 
