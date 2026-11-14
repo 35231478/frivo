@@ -208,7 +208,7 @@ export async function impactoVeiculo(id: string, empresaId: string): Promise<Imp
     },
   });
   if (!v) return null;
-  const pendentes = await prisma.checklistPreenchido.count({ where: { veiculoId: id, status: "PENDENTE" } });
+  const pendentes = await prisma.checklistPreenchido.count({ where: { veiculoId: id, status: "PENDENTE", inativadoEm: null } });
   const avisos: string[] = [];
   if (pendentes) avisos.push(`Tem ${plural(pendentes, "checklist pendente", "checklists pendentes")}: ele(s) fica(m) como está(ão) e o veículo sai da lista de checklist.`);
   if (v._count.checklists || v._count.manutencoes)

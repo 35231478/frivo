@@ -13,6 +13,7 @@ import { FormField, FormSection, FormGrid } from "@/components/ui/form-field";
 import { Bloco, Opcionais } from "@/components/ui/bloco-cadastro";
 import { FotosVeiculo } from "@/components/veiculos/fotos-veiculo";
 import { CrlvPorFoto, type DadosCrlv } from "@/components/veiculos/crlv-por-foto";
+import { ChecklistsPreenchidos } from "@/components/veiculos/checklists-preenchidos";
 import { aliviarFotos } from "@/lib/imagem-cliente";
 import { COMBUSTIVEIS } from "@/lib/veiculo-campos";
 import { organizarFotosVeiculo, type RotuloFotoVeiculo } from "@/lib/veiculo-fotos";
@@ -483,34 +484,9 @@ export function VeiculoForm({ initialData, ocorrencias, somenteLeitura = false }
               <Link href={`/veiculos/checklist?veiculoId=${veiculoId ?? ""}`} className="inline-flex items-center gap-2 text-sm font-semibold text-primary-600 hover:text-primary-700">
                 <ClipboardCheck className="w-4 h-4" /> Preencher novo checklist
               </Link>
-              {(initialData?.checklists ?? []).length === 0 ? (
-                <p className="text-sm text-ink-subtle py-4 text-center border border-dashed border-surface-border rounded-lg">Nenhum checklist preenchido ainda.</p>
-              ) : (
-                <div className="border border-surface-border rounded-lg overflow-hidden">
-                  <table className="w-full text-sm">
-                    <thead className="bg-surface-alt border-b border-surface-border">
-                      <tr>
-                        <th className="text-left px-4 py-2.5 font-semibold text-ink-muted text-xs uppercase tracking-wider">Data</th>
-                        <th className="text-left px-4 py-2.5 font-semibold text-ink-muted text-xs uppercase tracking-wider">Colaborador</th>
-                        <th className="text-left px-4 py-2.5 font-semibold text-ink-muted text-xs uppercase tracking-wider">Status</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {(initialData?.checklists ?? []).map((c: any) => (
-                        <tr key={c.id} className="border-b border-surface-border">
-                          <td className="px-4 py-2.5">{formatarData(c.criadoEm)}</td>
-                          <td className="px-4 py-2.5 text-ink-muted">{c.colaborador?.nome ?? "—"}</td>
-                          <td className="px-4 py-2.5">
-                            <span className={cn("text-xs font-semibold px-2 py-0.5 rounded-full",
-                              c.status === "COM_ALERTAS" ? "bg-atencao-claro text-atencao-texto" : c.status === "CONCLUIDO" ? "bg-success-50 text-success-700" : "bg-surface-alt text-ink-muted")}>
-                              {c.status === "COM_ALERTAS" ? "Com alertas" : c.status === "CONCLUIDO" ? "Concluído" : "Pendente"}
-                            </span>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+              {/* Só monta com a aba aberta: a lista vem da rota (com Detalhe, Editar e Excluir por permissão) */}
+              {aba === "checklists" && veiculoId && (
+                <ChecklistsPreenchidos veiculoId={veiculoId} colaboradores={colaboradores} onMudou={() => router.refresh()} />
               )}
             </FormSection>
             {ocorrencias && ocorrencias.length > 0 && (

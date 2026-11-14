@@ -19,8 +19,8 @@ export async function contarAlertasVeiculos(empresaId: string) {
     await Promise.all([
       prisma.checklistTemplate.count({ where: { empresaId, ativo: true } }),
       prisma.veiculo.findMany({ where: { empresaId, status: { not: "INATIVO" } }, select: { id: true } }),
-      prisma.checklistPreenchido.findMany({ where: { empresaId, criadoEm: { gte: inicioHoje } }, select: { veiculoId: true }, distinct: ["veiculoId"] }),
-      prisma.checklistPreenchido.count({ where: { empresaId, status: "COM_ALERTAS", criadoEm: { gte: inicioHoje } } }),
+      prisma.checklistPreenchido.findMany({ where: { empresaId, criadoEm: { gte: inicioHoje }, inativadoEm: null }, select: { veiculoId: true }, distinct: ["veiculoId"] }),
+      prisma.checklistPreenchido.count({ where: { empresaId, status: "COM_ALERTAS", criadoEm: { gte: inicioHoje }, inativadoEm: null } }),
       prisma.veiculo.count({ where: { empresaId, status: "MANUTENCAO" } }),
       prisma.veiculo.findMany({ where: { empresaId, documentos: { some: { dataVencimento: { lte: em30 } } } }, select: { id: true } }),
       prisma.veiculo.findMany({ where: { empresaId, seguroVencimento: { lte: em30 } }, select: { id: true } }),

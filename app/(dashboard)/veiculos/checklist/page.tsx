@@ -2,12 +2,14 @@ import type { Metadata } from "next";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { PageHeader } from "@/components/ui/page-header";
-import { ChecklistPreenchimento } from "@/components/veiculos/checklist-preenchimento";
+import { ChecklistTela } from "@/components/veiculos/checklist-tela";
 
 export const metadata: Metadata = { title: "Checklist de veículo" };
 
-export default async function ChecklistVeiculoPage({ searchParams }: { searchParams: Promise<{ veiculoId?: string }> }) {
-  const { veiculoId = "" } = await searchParams;
+const AJUDA = "Preencha o checklist do veículo. Em Preenchidos ficam os já enviados, com detalhe, edição e exclusão conforme a permissão.";
+
+export default async function ChecklistVeiculoPage({ searchParams }: { searchParams: Promise<{ veiculoId?: string; aba?: string }> }) {
+  const { veiculoId = "", aba = "" } = await searchParams;
   const session = await auth();
   const empresaId = session!.user!.empresaId;
 
@@ -18,14 +20,9 @@ export default async function ChecklistVeiculoPage({ searchParams }: { searchPar
   ]);
 
   return (
-    <div className="max-w-2xl mx-auto">
-      <PageHeader title="Checklist de veículo" description="Preencha o checklist do veículo" backHref="/veiculos" />
-      <ChecklistPreenchimento
-        veiculos={veiculos}
-        templates={templates}
-        colaboradores={colaboradores}
-        veiculoInicial={veiculoId}
-      />
+    <div className="max-w-5xl mx-auto">
+      <PageHeader title="Checklist de veículo" dica={AJUDA} backHref="/veiculos" />
+      <ChecklistTela veiculos={veiculos} templates={templates} colaboradores={colaboradores} veiculoInicial={veiculoId} abaInicial={aba} />
     </div>
   );
 }
