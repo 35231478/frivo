@@ -85,7 +85,10 @@ botão **Consultar** ao lado do CNPJ, usando a mesma consulta do cadastro comple
 - Tudo continua editável. Se a consulta falha, aparece o motivo e o cadastro segue à mão.
 - O botão e a frase ficam fora do rótulo do campo (leitor de tela lê só "CPF / CNPJ").
 
-A consulta traz razão social, nome fantasia e telefone — os campos que o cadastro rápido tem.
+A consulta traz razão social, nome fantasia, telefone e **e-mail**. O campo E-mail (opcional) foi
+acrescentado ao cadastro rápido por decisão na revisão do PR: a pessoa vê o campo, a consulta só o
+preenche se estiver vazio e ele vai para o cadastro do cliente. A **opção pelo Simples não entra**: o
+cadastro rápido não tem esse campo e ele nunca é enviado.
 
 ## Vocabulário
 
@@ -112,9 +115,9 @@ visível** na tela, de propósito.
 
 ## O que não entrou
 
-- E-mail e opção pelo Simples no cadastro rápido de cliente: a Receita devolve os dois, mas o cadastro
-  rápido não tem esses campos e preencher campo que a pessoa não vê seria "preencher no escuro".
-  Fica a pergunta no PR.
+- Opção pelo Simples no cadastro rápido de cliente: a Receita devolve, mas o cadastro rápido não tem
+  esse campo, e preencher campo que a pessoa não vê seria "preencher no escuro". Decidido na revisão:
+  fica de fora (o e-mail entrou).
 - A ficha do cliente (`/clientes/[id]/editar` e `/clientes/novo`): é a referência de ouro e a
   varredura não apontou nada; não foi tocada.
 - Qualquer mudança no RBAC do painel, em pagamento ou em login.
@@ -132,11 +135,12 @@ visível** na tela, de propósito.
   entra em campo vazio.
 - Teste existente atualizado por mudança intencional: `ux3-toast` (o título da confirmação de inativar
   equipamento virou a pergunta curta).
-- **Mutação**: 124 regras quebradas uma por vez (a permissão de cada rota, cada botão, cada confirmação,
-  o "só em campo vazio" do CNPJ). 123 foram pegas de primeira. A que sobreviveu — vincular etiqueta a
-  equipamento de outra empresa — mostrou um teste fraco (o servidor estava certo, mas o teste passava
-  pelo motivo errado); o teste foi reforçado e agora pega.
-- **Navegador de verdade** (Chromium, app real, banco local descartável): 110 conferências em desktop e
+- **Mutação**: 131 regras quebradas uma por vez (a permissão de cada rota, cada botão, cada confirmação,
+  o "só em campo vazio" do CNPJ, o e-mail opcional, o Simples que não pode ser enviado). Na primeira
+  rodada (124), 123 foram pegas; a que sobreviveu — vincular etiqueta a equipamento de outra empresa —
+  mostrou um teste fraco (o servidor estava certo, mas o teste passava pelo motivo errado); o teste foi
+  reforçado e agora pega. Com o e-mail vieram mais 7, todas pegas.
+- **Navegador de verdade** (Chromium, app real, banco local descartável): 112 conferências em desktop e
   celular. A resposta da Receita foi simulada no navegador (o ambiente local não alcança a BrasilAPI);
   a rota de verdade tem teste próprio. O roteiro achou três defeitos que os testes de DOM não pegam,
   corrigidos nesta leva: a lista do seletor de vincular cortada no celular, a coluna de ações de
