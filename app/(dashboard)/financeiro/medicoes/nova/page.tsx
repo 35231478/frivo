@@ -1,5 +1,7 @@
 import type { Metadata } from "next";
+import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
+import { pode } from "@/lib/permissoes";
 import { prisma } from "@/lib/prisma";
 import { MedicaoForm } from "@/components/medicao/medicao-form";
 
@@ -11,8 +13,10 @@ export default async function NovaMedicaoPage({
   searchParams: Promise<{ clienteId?: string }>;
 }) {
   const { clienteId } = await searchParams;
-  const session = await auth();
-  const empresaId = session!.user!.empresaId;
+  const u = (await auth())!.user!;
+  // Criar medição é faturar: Financeiro › medições (a mesma permissão da lista e da rota)
+  if (!pode(u.permissoes, "financeiro", "medicoes", u.role)) redirect("/sem-permissao");
+  const empresaId = u.empresaId;
 
   const [clientes, servicos, produtos] = await Promise.all([
     prisma.cliente.findMany({

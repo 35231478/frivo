@@ -55,6 +55,10 @@ function novoId() {
   return Math.random().toString(36).slice(2);
 }
 
+/** O que a tela explica no ⓘ, nos dois modos. */
+const AJUDA_NOVA = "Medição de contrato: o que foi executado no mês vira um documento para o cliente aprovar. O desconto e as retenções entram depois, na ficha. Fatura de OS ou de orçamento nasce no botão Faturar da própria venda.";
+const AJUDA_EDITAR = "Só a medição em rascunho se edita: depois de enviada, o documento já está com o cliente. Para corrigir uma enviada, cancele e faça outra — o histórico fica.";
+
 export function MedicaoForm({
   mode,
   clientes,
@@ -183,6 +187,7 @@ export function MedicaoForm({
       <PageHeader
         title={mode === "novo" ? "Nova medição" : `Editar ${inicial?.numero ?? "medição"}`}
         description={mode === "novo" ? "Crie uma medição para faturamento" : "Edite os dados desta medição"}
+        dica={mode === "novo" ? AJUDA_NOVA : AJUDA_EDITAR}
         backHref={mode === "novo" ? "/financeiro/medicoes" : `/financeiro/medicoes/${inicial?.id}`}
         actions={
           <>

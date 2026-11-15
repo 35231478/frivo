@@ -1,6 +1,6 @@
 "use client";
 
-import { confirmar } from "@/components/ui/avisos";
+import { confirmar, toast } from "@/components/ui/avisos";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import { chaveHojeBR } from "@/lib/fuso";
 import { InputData } from "@/components/ui/input-data";
+import { usePermissoes } from "@/components/providers/permissoes-provider";
 
 interface MedicaoAcoesProps {
   medicaoId: string;
@@ -27,8 +28,24 @@ interface MedicaoAcoesProps {
 
 type Painel = "PC" | "NF" | "BOLETO" | "PAGAMENTO" | null;
 
+/** O que o toast diz quando a ação dá certo (o documento é "medição" ou "fatura"). */
+const FEITO = (acao: string, doc: string): string => ({
+  ENVIAR: `${doc} enviada para aprovação.`,
+  APROVAR_MANUAL: `Aprovação registrada: a ${doc.toLowerCase()} seguiu no ciclo.`,
+  REGISTRAR_PC: "Pedido de compra registrado.",
+  REGISTRAR_NF: "Nota fiscal registrada.",
+  REGISTRAR_BOLETO: "Boleto registrado.",
+  REGISTRAR_PAGAMENTO: `Pagamento registrado: ${doc.toLowerCase()} quitada.`,
+  CANCELAR: `${doc} cancelada.`,
+}[acao] ?? "Pronto.");
+
 export function MedicaoAcoes({ medicaoId, numero, tokenPublico, status, avulsa }: MedicaoAcoesProps) {
   const router = useRouter();
+  // Enviar, aprovar, registrar PC/NF/boleto/pagamento e cancelar mexem no faturamento: só para quem
+  // tem Financeiro › medições (a mesma permissão que a rota da ação exige). Ver a página do cliente
+  // é leitura e continua para quem só consulta.
+  const podeMexer = usePermissoes().pode("financeiro", "medicoes");
+  const doc = avulsa ? "Fatura" : "Medição";
   const [carregando, setCarregando] = useState<string | null>(null);
   const [feedback, setFeedback] = useState<{ tipo: "ok" | "erro"; msg: string } | null>(null);
   const [painel, setPainel] = useState<Painel>(null);
@@ -64,15 +81,20 @@ export function MedicaoAcoes({ medicaoId, numero, tokenPublico, status, avulsa }
       }
       const data = await res.json();
 
+      // Sucesso é toast (padrão da casa); o erro de validação fica na tela, onde a pessoa está olhando
       if (viaAposta === "mailto") {
-        if (data.mailtoUrl) window.location.href = data.mailtoUrl;
-        else setFeedback({ tipo: "erro", msg: "Cliente sem e-mail de faturamento cadastrado." });
+        if (!data.mailtoUrl) { setFeedback({ tipo: "erro", msg: "Cliente sem e-mail de faturamento cadastrado." }); return false; }
+        toast(FEITO(acao, doc));
+        window.location.href = data.mailtoUrl;
       } else if (viaAposta === "whatsapp") {
-        if (data.whatsappUrl) window.open(data.whatsappUrl, "_blank", "noopener");
-        else setFeedback({ tipo: "erro", msg: "Cliente sem WhatsApp de faturamento cadastrado." });
+        if (!data.whatsappUrl) { setFeedback({ tipo: "erro", msg: "Cliente sem WhatsApp de faturamento cadastrado." }); return false; }
+        toast(FEITO(acao, doc));
+        window.open(data.whatsappUrl, "_blank", "noopener");
       } else if (viaAposta === "copiar") {
         await navigator.clipboard.writeText(publicUrl);
-        setFeedback({ tipo: "ok", msg: "Link copiado." });
+        toast("Link copiado.");
+      } else {
+        toast(FEITO(acao, doc));
       }
       setPainel(null);
       router.refresh();
@@ -98,11 +120,11 @@ export function MedicaoAcoes({ medicaoId, numero, tokenPublico, status, avulsa }
         </div>
       )}
 
-      <div className="flex flex-wrap gap-2">
+      <div className="flex flex-wrap gap-2" data-acoes-medicao>
         {/* RASCUNHO → enviar para aprovação */}
-        {status === "RASCUNHO" && (
+        {podeMexer && status === "RASCUNHO" && (
           <>
-            <Button variant="primary" onClick={() => executar("ENVIAR", {}, "mailto")} loading={carregando === "mailto"}>
+            <Button variant="primary" data-enviar-email onClick={() => executar("ENVIAR", {}, "mailto")} loading={carregando === "mailto"}>
               <Mail className="w-4 h-4" /> Enviar p/ aprovação (E-mail)
             </Button>
             <Button variant="secondary" onClick={() => executar("ENVIAR", {}, "whatsapp")} loading={carregando === "whatsapp"}>
@@ -111,65 +133,71 @@ export function MedicaoAcoes({ medicaoId, numero, tokenPublico, status, avulsa }
             <Button variant="outline" onClick={() => executar("ENVIAR", {}, "copiar")} loading={carregando === "copiar"}>
               <Link2 className="w-4 h-4" /> Copiar link
             </Button>
-            <Link href={`/financeiro/medicoes/${medicaoId}/editar`} className="btn-secondary">
+            <Link href={`/financeiro/medicoes/${medicaoId}/editar`} data-editar-medicao className="btn-secondary">
               <Pencil className="w-4 h-4" /> Editar
             </Link>
           </>
         )}
 
         {/* AGUARDANDO_APROVACAO */}
-        {status === "AGUARDANDO_APROVACAO" && (
+        {podeMexer && status === "AGUARDANDO_APROVACAO" && (
           <>
             <Button variant="primary" onClick={() => executar("ENVIAR", {}, "copiar")} loading={carregando === "copiar"}>
               <Link2 className="w-4 h-4" /> Reenviar / copiar link
             </Button>
-            <Button variant="success" onClick={() => executar("APROVAR_MANUAL")} loading={carregando === "APROVAR_MANUAL"}>
+            <Button variant="success" data-aprovar-manual onClick={() => executar("APROVAR_MANUAL")} loading={carregando === "APROVAR_MANUAL"}>
               <FileCheck className="w-4 h-4" /> Registrar aprovação manual
             </Button>
           </>
         )}
 
         {/* AGUARDANDO_PC */}
-        {status === "AGUARDANDO_PC" && (
-          <Button variant="primary" onClick={() => setPainel(painel === "PC" ? null : "PC")}>
+        {podeMexer && status === "AGUARDANDO_PC" && (
+          <Button variant="primary" data-registrar-pc onClick={() => setPainel(painel === "PC" ? null : "PC")}>
             <ScrollText className="w-4 h-4" /> Registrar PC recebido
           </Button>
         )}
 
         {/* PC_RECEBIDO → registrar NF */}
-        {status === "PC_RECEBIDO" && (
-          <Button variant="primary" onClick={() => setPainel(painel === "NF" ? null : "NF")}>
+        {podeMexer && status === "PC_RECEBIDO" && (
+          <Button variant="primary" data-registrar-nf onClick={() => setPainel(painel === "NF" ? null : "NF")}>
             <Receipt className="w-4 h-4" /> Registrar NF emitida
           </Button>
         )}
 
         {/* NF_EMITIDA → registrar boleto */}
-        {status === "NF_EMITIDA" && (
-          <Button variant="primary" onClick={() => setPainel(painel === "BOLETO" ? null : "BOLETO")}>
+        {podeMexer && status === "NF_EMITIDA" && (
+          <Button variant="primary" data-registrar-boleto onClick={() => setPainel(painel === "BOLETO" ? null : "BOLETO")}>
             <Receipt className="w-4 h-4" /> Registrar boleto gerado
           </Button>
         )}
 
         {/* Registrar pagamento — qualquer status ativo */}
-        {status !== "RASCUNHO" && status !== "PAGO" && status !== "CANCELADA" && (
-          <Button variant="success" onClick={() => setPainel(painel === "PAGAMENTO" ? null : "PAGAMENTO")}>
+        {podeMexer && status !== "RASCUNHO" && status !== "PAGO" && status !== "CANCELADA" && (
+          <Button variant="success" data-registrar-pagamento onClick={() => setPainel(painel === "PAGAMENTO" ? null : "PAGAMENTO")}>
             <DollarSign className="w-4 h-4" /> Registrar pagamento
           </Button>
         )}
 
         {/* Link público sempre disponível */}
         {status !== "RASCUNHO" && (
-          <a href={publicUrl} target="_blank" rel="noopener" className="btn-secondary">
+          <a href={publicUrl} target="_blank" rel="noopener" data-pagina-cliente className="btn-secondary">
             <Send className="w-4 h-4" /> Ver página do cliente
           </a>
         )}
 
         {/* Cancelar */}
-        {status !== "PAGO" && status !== "CANCELADA" && (
+        {podeMexer && status !== "PAGO" && status !== "CANCELADA" && (
           <Button
             variant="ghost"
             size="sm"
-            onClick={async () => { if (await confirmar({ mensagem: avulsa ? "Cancelar esta fatura?" : "Cancelar esta medição?", perigo: true, confirmarTexto: avulsa ? "Cancelar fatura" : "Cancelar medição", cancelarTexto: "Voltar" })) executar("CANCELAR"); }}
+            data-cancelar-medicao
+            onClick={async () => {
+              if (await confirmar({
+                mensagem: `Cancelar ${doc.toLowerCase()} ${numero}? As contas a receber geradas voltam a previsto.`,
+                perigo: true, confirmarTexto: avulsa ? "Cancelar fatura" : "Cancelar medição", cancelarTexto: "Voltar",
+              })) executar("CANCELAR");
+            }}
             loading={carregando === "CANCELAR"}
           >
             <Ban className="w-3.5 h-3.5" /> Cancelar

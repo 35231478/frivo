@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { contasVinculadas } from "@/lib/financeiro/conta-receber-server";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { MedicaoDocumento } from "@/components/medicao/medicao-documento";
@@ -19,6 +19,8 @@ import Link from "next/link";
 
 export const metadata: Metadata = { title: "Medição" };
 
+const AJUDA = "O ciclo do faturamento: enviar para aprovação, registrar o PC do cliente, a nota, o boleto e o pagamento. Cada passo guarda a data. Cancelar devolve as contas a receber geradas ao estado previsto — e com recebimento ou boleto emitido o cancelamento é recusado: resolva antes no Contas a receber.";
+
 export default async function MedicaoDetalhePage({ params, searchParams }: {
   params: Promise<{ id: string }>; searchParams: Promise<Record<string, string | undefined>>;
 }) {
@@ -26,7 +28,10 @@ export default async function MedicaoDetalhePage({ params, searchParams }: {
   // ?nfse=emitir: "Corrigir e reemitir" da central de notas abre a emissão (com o que falta corrigir)
   const abrirEmissao = (await searchParams).nfse === "emitir";
   const session = await auth();
-  const empresaId = session!.user!.empresaId;
+  const u = session!.user!;
+  // A ficha é do faturamento: mesma permissão da lista e da rota de ação (Financeiro › medições)
+  if (!pode(u.permissoes, "financeiro", "medicoes", u.role)) redirect("/sem-permissao");
+  const empresaId = u.empresaId;
 
   const [medicao, empresa, config] = await Promise.all([
     prisma.medicao.findFirst({
@@ -73,6 +78,7 @@ export default async function MedicaoDetalhePage({ params, searchParams }: {
       <PageHeader
         title={rotuloMedicao(medicao)}
         description={medicao.descricao ?? undefined}
+        dica={AJUDA}
         backHref={voltar}
       />
 
