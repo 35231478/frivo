@@ -110,15 +110,15 @@ terminam em `/sem-permissao`.
 ## Acerto pedido na revisão: o ⓘ em cima do ícone do card
 
 Nos cards de resumo (Vencidos, A vencer, Pagos, Total do período) o ⓘ ficava **por cima do ícone do
-card**. A causa estava no componente compartilhado 
-(): o ícone fica no canto superior direito da primeira linha e
-o ⓘ é posicionado em  — o mesmo ponto. O estado "ativo" (o X de limpar o
-filtro) já reservava o espaço com ; faltava fazer o mesmo no estado normal.
+card**. A causa estava no componente compartilhado `CardResumo`
+(`components/listagem/periodo-cards.tsx`): o ícone do card fica no canto superior direito da primeira
+linha e o ⓘ é posicionado em `absolute top-1.5 right-2` — o mesmo ponto. O estado "ativo" (o X de
+limpar o filtro) já reservava o espaço com `mr-5`; faltava fazer o mesmo no estado normal.
 
-Conserto de uma linha, no componente compartilhado — então vale para contas a pagar, contas a
-receber, notas fiscais, reajustes e orçamentos de uma vez. Conferido no navegador, medindo as duas
-caixas:  nos cinco cards, desktop e celular, nas duas listas (folga de 7 px). Tem
-teste de guarda para não voltar, e o print .
+Conserto de uma linha, no componente compartilhado — então vale de uma vez para contas a pagar,
+contas a receber, notas fiscais, reajustes e orçamentos. Conferido no navegador, medindo as duas
+caixas: `sobrepoe: false` nos cinco cards, no desktop e no celular, nas duas listas (folga de 7 px).
+Tem teste de guarda para não voltar, e o print `depois-cards-contas-pagar.png`.
 
 ## Fora de escopo, de propósito
 
