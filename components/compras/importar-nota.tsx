@@ -4,6 +4,7 @@ import { useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { AlertTriangle, FileUp, Loader2 } from "lucide-react";
+import { toast } from "@/components/ui/avisos";
 import { cn } from "@/lib/utils";
 
 /**
@@ -33,6 +34,10 @@ export function ImportarNota({ de }: { de?: string | null }) {
       const r = await fetch("/api/compras/notas", { method: "POST", body: fd });
       const j = await r.json().catch(() => ({}));
       if (!r.ok) { setErro({ texto: j.erro ?? "Não foi possível importar.", notaId: j.notaId }); return; }
+      // Sucesso é toast (padrão da casa) e já diz o que a conciliação vai encontrar
+      const total = Number(j.totalItens ?? 0), prontos = Number(j.preVinculados ?? 0);
+      const quantos = `${prontos} de ${total} ${total === 1 ? "item" : "itens"}`;
+      toast(`NF ${j.nota.numero}/${j.nota.serie} importada: ${quantos} já com produto.`);
       router.push(`/estoque/notas/${j.nota.id}${sufixo}`);
     } catch {
       setErro({ texto: "Sem conexão. Tente de novo." });

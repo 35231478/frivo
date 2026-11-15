@@ -9,7 +9,7 @@
  *   lancarNota     numa ÚNICA transação: entrada de cada item no estoque (função da E1, origem COMPRA,
  *                  refId = nota) já convertida — quantidade × fator, custo = valor unitário ÷ fator —,
  *                  grava o de-para aprendido (com unidade e fator), completa os dados fiscais vazios do
- *                  produto, gera a(s) conta(s) a pagar (uma por parcela do rascunho; padrão = as duplicatas)
+ *                  produto, gera as contas a pagar (uma por parcela do rascunho; padrão = as duplicatas)
  *                  com categoria, centro de custo, forma de pagamento e boleto, aprende a categoria e o
  *                  centro de custo do fornecedor, aplica o preço de venda definido na linha (se houver),
  *                  leva o custo real ao pedido de compra (se informado) e marca a nota como LANCADA. Ou
@@ -347,7 +347,7 @@ export async function lancarNota({ empresaId, usuarioId, notaId, escolhas = [], 
       },
     });
     const semProduto = nota.itens.filter((i) => !i.produtoId);
-    if (semProduto.length) throw new ErroNota(`Falta escolher o produto de ${semProduto.length} item(ns): ${semProduto.map((i) => i.descricaoFornecedor).join("; ")}.`);
+    if (semProduto.length) throw new ErroNota(`Falta escolher o produto de ${semProduto.length === 1 ? "1 item" : `${semProduto.length} itens`}: ${semProduto.map((i) => i.descricaoFornecedor).join("; ")}.`);
     // Preço de venda definido na linha (quem lança sem poder precificar já foi barrado lá em cima)
     const comPreco = nota.itens.filter((i) => i.precoVenda != null || i.margemVenda != null);
     const parcelas = parcelasParaLancar(nota);

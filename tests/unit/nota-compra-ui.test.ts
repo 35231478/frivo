@@ -5,12 +5,21 @@
  *  - conciliação: aprendido já vinculado; buscar e escolher produto; criar novo (nome editável);
  *    unidade diferente pede o fator; "criar para todos"; o corpo enviado para lançar (com o fator);
  *    botão travado sem vínculo/fator/permissão. (Conversão, preço e aviso de custo: estoque-e2-ajuste-ui.test.ts)
+ *
+ * Leva 7B mudou de propósito o aviso de sucesso destas duas telas: era texto na própria tela, virou
+ * toast da casa (o padrão do sistema). Daí o mock de @/components/ui/avisos e as expectativas em
+ * `avisos.lista`; o erro de validação continua na tela, onde sempre esteve.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 
 const nav = vi.hoisted(() => ({ push: vi.fn(), refresh: vi.fn() }));
+const avisos = vi.hoisted(() => ({ lista: [] as [string, string][] }));
+vi.mock("@/components/ui/avisos", async (orig) => ({
+  ...(await orig<typeof import("@/components/ui/avisos")>()),
+  toast: (m: string, t = "sucesso") => { avisos.lista.push([m, t]); },
+}));
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push: nav.push, refresh: nav.refresh, replace: () => {} }) }));
 
 let root: Root;
@@ -20,7 +29,7 @@ const chamadas: { url: string; metodo: string; corpo: any }[] = [];
 
 beforeEach(() => {
   vi.useFakeTimers({ shouldAdvanceTime: true });
-  chamadas.length = 0;
+  chamadas.length = 0; avisos.lista.length = 0;
   nav.push.mockClear(); nav.refresh.mockClear();
   respostas = {};
   vi.stubGlobal("fetch", vi.fn(async (url: string, init: RequestInit = {}) => {
@@ -59,12 +68,13 @@ describe("upload do XML", () => {
   it("envia o arquivo e abre a nota importada", async () => {
     const { ImportarNota } = await import("@/components/compras/importar-nota");
     await montar(createElement(ImportarNota));
-    respostas["/api/compras/notas"] = { status: 201, corpo: { nota: { id: "n1", status: "IMPORTADA" } } };
+    respostas["/api/compras/notas"] = { status: 201, corpo: { nota: { id: "n1", numero: "4521", serie: "1", status: "IMPORTADA" }, preVinculados: 1, totalItens: 3 } };
     await escolherArquivo(new File(["<nfeProc/>"], "35261011222333000181550010000045211000045217-nfe.xml", { type: "text/xml" }));
     expect(chamadas).toHaveLength(1);
     expect(chamadas[0].metodo).toBe("POST");
     expect((chamadas[0].corpo as FormData).get("xml")).toBeInstanceOf(File);
     expect(nav.push).toHaveBeenCalledWith("/estoque/notas/n1");
+    expect(avisos.lista).toEqual([["NF 4521/1 importada: 1 de 3 itens já com produto.", "sucesso"]]);
   });
 
   it("nota repetida: aviso com link para a que já existe; PDF é recusado sem enviar", async () => {
@@ -79,6 +89,7 @@ describe("upload do XML", () => {
     await escolherArquivo(new File(["%PDF"], "danfe.pdf", { type: "application/pdf" }));
     expect($('[role="alert"]')!.textContent).toBe("Envie o arquivo .xml da NF-e (não o PDF/DANFE).");
     expect(chamadas).toEqual([]);
+    expect(avisos.lista).toEqual([]);
   });
 });
 
@@ -162,7 +173,8 @@ describe("conciliação (de-para)", () => {
       financeiro: FIN_CORPO,
       pedidoCompraId: "ped1",
     } });
-    expect($('[role="status"]')!.textContent).toBe("Nota lançada.");
+    expect(avisos.lista).toEqual([["Nota lançada: entrada no estoque e conta a pagar criadas.", "sucesso"]]);
+    expect($('[role="status"]')).toBeNull();
     expect(nav.refresh).toHaveBeenCalled();
   });
 
@@ -172,7 +184,7 @@ describe("conciliação (de-para)", () => {
     respostas["/api/compras/notas/n1/conciliacao"] = { status: 200, corpo: { status: "IMPORTADA", faltam: 2 } };
     await clicar(botao("Salvar rascunho"));
     expect(chamadas.at(-1)).toEqual({ url: "/api/compras/notas/n1/conciliacao", metodo: "PUT", corpo: { itens: [{ itemId: "i1", produtoId: "pGas", fator: 1 }], financeiro: FIN_CORPO } });
-    expect($('[role="status"]')!.textContent).toBe("Rascunho salvo. Faltam 2 item(ns) sem produto.");
+    expect(avisos.lista.at(-1)).toEqual(["Rascunho salvo. Faltam 2 itens sem produto.", "sucesso"]);
     await clicar($("[data-criar-todos]"));
     expect($$('[data-vinculo="novo"]')).toHaveLength(2);
     expect($("[data-criar-todos]")).toBeNull();

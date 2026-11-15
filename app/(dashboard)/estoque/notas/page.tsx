@@ -8,10 +8,14 @@ import { lerPaginacao, paginaValida } from "@/lib/listagem";
 import { listarNotas } from "@/lib/compras/notas";
 import { COR_STATUS_NOTA, LABEL_STATUS_NOTA } from "@/lib/compras/rotulos";
 import { ImportarNota } from "@/components/compras/importar-nota";
-import { ListaUrl, PaginacaoUrl } from "@/components/listagem/lista-url";
+import { ConteudoUrl, ListaUrl, PaginacaoUrl, TabelaProUrl } from "@/components/listagem/lista-url";
+import { ListaVazia } from "@/components/listagem/listagem-ui";
+import { Dica } from "@/components/ui/dica";
+import { PLANILHA } from "@/lib/planilha";
 
 export const metadata: Metadata = { title: "Notas de compra" };
 
+const AJUDA = "O XML da NF-e do fornecedor entra aqui. Ao conciliar, cada item da nota é ligado a um produto do cadastro e, ao lançar, a nota vira entrada no estoque e conta a pagar de uma vez — nos dois lugares com a mesma nota como referência. Nota já lançada não se apaga: o estorno é pela conta a pagar e pelo ajuste de estoque.";
 
 /**
  * Estoque › Notas de compra: importar o XML da NF-e e acompanhar as notas (rota: Estoque › visualizar).
@@ -35,56 +39,59 @@ export default async function NotasCompraPage({ searchParams }: { searchParams: 
           : <Link href="/estoque" className="inline-flex items-center gap-1 text-sm text-ink-muted hover:text-ink"><ArrowLeft className="w-4 h-4" /> Estoque</Link>}
         <div className="flex items-center gap-3">
           <div className="p-2 bg-surface-alt rounded-lg"><FileText className="w-5 h-5 text-ink-muted" /></div>
-          <h1 className="page-title">Notas de compra</h1>
+          <h1 className="page-title flex items-center gap-1.5">Notas de compra <Dica texto={AJUDA} rotulo="Notas de compra" lado="direita" /></h1>
           <span className="text-xs font-semibold text-ink-muted bg-surface-alt border border-surface-border px-2.5 py-1 rounded-full">{total}</span>
         </div>
         {doFinanceiro && <p className="text-sm text-ink-muted -mt-3">Importe o XML: ao confirmar, a nota vira conta a pagar e entrada no estoque de uma vez.</p>}
         {podeImportar && <ImportarNota de={doFinanceiro ? "contas-pagar" : null} />}
 
         <div className="card overflow-hidden">
+          <ConteudoUrl>
           {notas.length === 0 ? (
-            <div className="py-12 text-center" data-lista-vazia>
-              <p className="text-sm font-medium text-ink">Nenhuma nota importada ainda</p>
-              <p className="text-xs text-ink-muted">Importe o XML da NF-e: os itens viram entrada no estoque e a nota vira conta a pagar.</p>
-            </div>
+            <ListaVazia mensagem="Nenhuma nota importada ainda. Comece pelo XML da NF-e." />
           ) : (
-            <>
-              <ul className="md:hidden divide-y divide-surface-border" data-cartoes>
-                {notas.map((n) => (
-                  <li key={n.id} data-nota={n.id} className="px-4 py-3">
-                    <Link href={`/estoque/notas/${n.id}${doFinanceiro ? "?de=contas-pagar" : ""}`} className="font-semibold text-ink hover:text-primary-600">NF {n.numero}/{n.serie}</Link>
-                    <p className="text-xs text-ink-muted truncate">{n.emitenteNome}</p>
-                    <div className="mt-1 flex items-center gap-2 text-xs">
-                      <span className="font-semibold tabular-nums">{formatarMoeda(Number(n.valorTotal))}</span>
-                      <span className="text-ink-subtle">{formatarData(n.dataEmissao)} · {n._count.itens} itens</span>
-                      <span className={cn("text-[10px] font-semibold px-2 py-0.5 rounded-full", COR_STATUS_NOTA[n.status])}>{LABEL_STATUS_NOTA[n.status]}</span>
-                    </div>
-                  </li>
-                ))}
-              </ul>
-              <table className="w-full text-sm hidden md:table">
-                <thead className="bg-surface-alt border-b border-surface-border">
-                  <tr className="text-left text-ink-muted text-xs uppercase tracking-wider">
-                    <th className="px-4 py-3 font-semibold">NF</th><th className="px-4 py-3 font-semibold">Fornecedor</th>
-                    <th className="px-4 py-3 font-semibold">Emissão</th><th className="px-4 py-3 font-semibold text-right">Valor</th>
-                    <th className="px-4 py-3 font-semibold text-right">Itens</th><th className="px-4 py-3 font-semibold">Situação</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {notas.map((n, i) => (
-                    <tr key={n.id} data-nota={n.id} className={cn("border-b border-surface-border hover:bg-primary-50/40", i % 2 === 1 && "bg-surface-alt/30")}>
-                      <td className="px-4 py-3"><Link href={`/estoque/notas/${n.id}${doFinanceiro ? "?de=contas-pagar" : ""}`} className="font-semibold text-ink hover:text-primary-600">{n.numero}/{n.serie}</Link></td>
-                      <td className="px-4 py-3 text-ink-muted">{n.emitenteNome}</td>
-                      <td className="px-4 py-3 text-ink-muted whitespace-nowrap">{formatarData(n.dataEmissao)}</td>
-                      <td className="px-4 py-3 text-right font-semibold tabular-nums">{formatarMoeda(Number(n.valorTotal))}</td>
-                      <td className="px-4 py-3 text-right text-ink-muted">{n._count.itens}</td>
-                      <td className="px-4 py-3"><span className={cn("text-[10px] font-semibold px-2.5 py-1 rounded-full", COR_STATUS_NOTA[n.status])}>{LABEL_STATUS_NOTA[n.status]}</span></td>
-                    </tr>
+            <TabelaProUrl
+              tela="notas-compra"
+              atributos={{ "data-tabela-notas": true }}
+              cartoes={
+                <ul className="divide-y divide-surface-border" data-cartoes>
+                  {notas.map((n) => (
+                    <li key={n.id} data-nota={n.id} className="px-4 py-3">
+                      <Link href={`/estoque/notas/${n.id}${doFinanceiro ? "?de=contas-pagar" : ""}`} className="font-semibold text-ink hover:text-primary-600">NF {n.numero}/{n.serie}</Link>
+                      <p className="text-xs text-ink-muted truncate">{n.emitenteNome}</p>
+                      <div className="mt-1 flex items-center gap-2 text-xs">
+                        <span className="font-semibold tabular-nums">{formatarMoeda(Number(n.valorTotal))}</span>
+                        <span className="text-ink-subtle">{formatarData(n.dataEmissao)} · {n._count.itens} itens</span>
+                        <span className={cn("text-[10px] font-semibold px-2 py-0.5 rounded-full", COR_STATUS_NOTA[n.status])}>{LABEL_STATUS_NOTA[n.status]}</span>
+                      </div>
+                    </li>
                   ))}
-                </tbody>
-              </table>
-            </>
+                </ul>
+              }
+              colunas={[
+                { id: "nf", titulo: "NF", largura: 120, obrigatoria: true },
+                { id: "fornecedor", titulo: "Fornecedor", minimo: 200, obrigatoria: true, classe: "truncate" },
+                { id: "emissao", titulo: "Emissão", largura: 104 },
+                { id: "valor", titulo: "Valor (R$)", alinhar: "direita", largura: 120, obrigatoria: true },
+                { id: "itens", titulo: "Itens", alinhar: "direita", largura: 72 },
+                { id: "situacao", titulo: "Situação", largura: 140 },
+              ]}
+              linhas={notas.map((n) => ({
+                id: n.id,
+                atributos: { "data-nota": n.id },
+                titulos: { fornecedor: n.emitenteNome },
+                celulas: {
+                  nf: <Link href={`/estoque/notas/${n.id}${doFinanceiro ? "?de=contas-pagar" : ""}`} className={cn(PLANILHA.codigo, "font-semibold text-ink hover:text-primary-600")}>{n.numero}/{n.serie}</Link>,
+                  fornecedor: <span className="text-ink-muted">{n.emitenteNome}</span>,
+                  emissao: <span className={cn(PLANILHA.data, PLANILHA.apagado)}>{formatarData(n.dataEmissao)}</span>,
+                  valor: <span className={cn(PLANILHA.numero, "font-semibold text-ink")}>{formatarMoeda(Number(n.valorTotal))}</span>,
+                  itens: <span className="tabular-nums text-ink-muted">{n._count.itens}</span>,
+                  situacao: <span className={cn("text-[10px] font-semibold px-2.5 py-1 rounded-full", COR_STATUS_NOTA[n.status])}>{LABEL_STATUS_NOTA[n.status]}</span>,
+                },
+              }))}
+            />
           )}
+          </ConteudoUrl>
           <div className="px-4 py-3 border-t border-surface-border">
             <PaginacaoUrl total={total} pagina={pagina} porPagina={porPagina} rotulo="notas" />
           </div>

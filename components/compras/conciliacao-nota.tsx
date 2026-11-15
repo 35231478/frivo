@@ -3,9 +3,11 @@
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { AlertTriangle, ArrowRightLeft, Check, Link2, Loader2, PackagePlus, Save, Search, Sparkles, X } from "lucide-react";
+import { toast } from "@/components/ui/avisos";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn, formatarMoeda } from "@/lib/utils";
+import { PLANILHA } from "@/lib/planilha";
 import { formatarQtd } from "@/lib/estoque/regras";
 import { avisoCusto, converterItem, formatarFator, lerNumero, mesmaUnidade } from "@/lib/estoque/preco";
 import { formatarNcm } from "@/lib/compras/rotulos";
@@ -142,7 +144,11 @@ export function ConciliacaoNota({ notaId, itens, pedidos, podeLancar, motivoSemL
       });
       const j = await r.json().catch(() => ({}));
       if (!r.ok) { setMsg({ tipo: "erro", texto: j.erro ?? "Não foi possível concluir." }); return; }
-      setMsg({ tipo: "ok", texto: acao === "salvar" ? (j.faltam ? `Rascunho salvo. Faltam ${j.faltam} item(ns) sem produto.` : "Rascunho salvo: tudo pronto para lançar.") : "Nota lançada." });
+      // Sucesso é toast (padrão da casa); a tela fica só com erro de validação
+      setMsg(null);
+      toast(acao === "salvar"
+        ? (j.faltam ? `Rascunho salvo. ${j.faltam === 1 ? "Falta 1 item" : `Faltam ${j.faltam} itens`} sem produto.` : "Rascunho salvo: tudo pronto para lançar.")
+        : "Nota lançada: entrada no estoque e conta a pagar criadas.");
       router.refresh();
     } catch {
       setMsg({ tipo: "erro", texto: "Sem conexão. Tente de novo." });
@@ -167,7 +173,7 @@ export function ConciliacaoNota({ notaId, itens, pedidos, podeLancar, motivoSemL
             <li key={i.id} data-item={i.numeroItem} className="px-4 py-3 space-y-3">
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
                 <div className="min-w-0">
-                  <p className="text-[11px] text-ink-muted">Item {i.numeroItem} · cód. <span className="font-mono">{i.codigoFornecedor}</span>{i.fiscal.ncm && ` · NCM ${formatarNcm(i.fiscal.ncm)}`}</p>
+                  <p className="text-[11px] text-ink-muted">Item {i.numeroItem} · cód. <span className={PLANILHA.codigo}>{i.codigoFornecedor}</span>{i.fiscal.ncm && ` · NCM ${formatarNcm(i.fiscal.ncm)}`}</p>
                   <p className="text-sm font-semibold text-ink">{i.descricaoFornecedor}</p>
                   <p className="text-xs text-ink-muted mt-0.5 tabular-nums">{formatarQtd(i.quantidade)} {i.unidade} × {moeda4(i.valorUnitario)} = <span className="font-semibold text-ink">{formatarMoeda(i.valorTotal)}</span></p>
                 </div>

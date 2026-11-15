@@ -9,7 +9,11 @@ import { Textarea } from "@/components/ui/textarea";
 import { FormField } from "@/components/ui/form-field";
 import { InputData } from "@/components/ui/input-data";
 import { SeletorCadastro, useCadastro } from "@/components/cadastros/seletor-cadastro";
+import { SugestoesCompra, useSugestoesCompra } from "@/components/compras/sugestoes-compra";
 import { formatarData, formatarMoeda } from "@/lib/utils";
+import { formatarQtd } from "@/lib/estoque/regras";
+import { PLANILHA } from "@/lib/planilha";
+import type { SugestaoCompra } from "@/lib/compras/sugestao-compra";
 import { MOTIVO_AVULSO_PADRAO, textoUltimaCompra, valorSugerido, type PedidoTela, type UltimaCompra } from "@/lib/compras/pedido";
 
 interface ItemForm {
@@ -54,6 +58,8 @@ export function EditorPedido({ pedido, ordemServicoId, orcamentoId, avulso, onSa
   const { itens: fornecedores } = useCadastro("fornecedores");
   const [compradores, setCompradores] = useState<{ id: string; nome: string }[] | null>(null);
   const [ultimas, setUltimas] = useState<Record<string, UltimaCompra | null>>({});
+  // Sugestão do estoque: só no pedido avulso novo, que é o de reposição
+  const sugestoes = useSugestoesCompra(!editando && ehAvulso);
 
   const [itens, setItens] = useState<ItemForm[]>(() => (pedido ? pedido.itens.map(doPedido) : [novoItem()]));
   const [prazo, setPrazo] = useState(pedido?.prazoNecessario ?? "");
@@ -113,6 +119,26 @@ export function EditorPedido({ pedido, ordemServicoId, orcamentoId, avulso, onSa
     });
   }
 
+  /** Sugestão aceita: entra como linha (quantidade = o que falta, valor = o da última compra) e segue editável. */
+  function usarSugestao(sg: SugestaoCompra) {
+    const linha: ItemForm = {
+      ...novoItem(),
+      produtoId: sg.produtoId,
+      descricao: sg.nome,
+      unidade: sg.unidade,
+      quantidade: sg.faltam > 0 ? formatarQtd(sg.faltam) : "1",
+      valorEstimado: sg.valorUnitario == null ? "" : sg.valorUnitario.toFixed(2).replace(".", ","),
+    };
+    // Aproveita a primeira linha ainda em branco, em vez de deixar uma linha vazia sobrando
+    setItens((l) => {
+      const vazia = l.findIndex((it) => !it.produtoId && !it.descricao.trim());
+      if (vazia < 0) return [...l, linha];
+      const nova = [...l];
+      nova[vazia] = { ...linha, _k: l[vazia]._k };
+      return nova;
+    });
+  }
+
   async function salvar() {
     setErro("");
     const validos = itens.filter((i) => i.descricao.trim());
@@ -157,13 +183,18 @@ export function EditorPedido({ pedido, ordemServicoId, orcamentoId, avulso, onSa
       )}
 
       <div className="space-y-2">
+        <SugestoesCompra
+          itens={sugestoes}
+          jaNaLista={(sg) => itens.some((it) => it.produtoId === sg.produtoId)}
+          onUsar={usarSugestao}
+        />
         {itens.map((it) => {
           const u = it.produtoId ? ultimas[it.produtoId] : undefined;
           return (
             <div key={it._k} className="grid grid-cols-12 gap-2 items-end bg-white border border-surface-border rounded-lg p-2" data-item-editor>
               <div className="col-span-12 md:col-span-4">
                 <label className="text-[11px] text-ink-muted">Produto</label>
-                <SeletorCadastro entidade="produtos" itens={produtos} valor={it.produtoId} vazio="Manual / digitar" onChange={(v) => escolherProduto(it._k, v)} />
+                <SeletorCadastro entidade="produtos" itens={produtos} valor={it.produtoId} vazio="Manual / digitar" editavel onChange={(v) => escolherProduto(it._k, v)} />
               </div>
               <div className="col-span-12 md:col-span-3">
                 <label className="text-[11px] text-ink-muted">Descrição</label>
@@ -171,7 +202,7 @@ export function EditorPedido({ pedido, ordemServicoId, orcamentoId, avulso, onSa
               </div>
               <div className="col-span-3 md:col-span-1">
                 <label className="text-[11px] text-ink-muted">Qtd</label>
-                <Input inputMode="decimal" value={it.quantidade} onChange={(e) => patch(it._k, { quantidade: e.target.value })} data-campo="quantidade" />
+                <Input inputMode="decimal" className={PLANILHA.numero} value={it.quantidade} onChange={(e) => patch(it._k, { quantidade: e.target.value })} data-campo="quantidade" />
               </div>
               <div className="col-span-3 md:col-span-1">
                 <label className="text-[11px] text-ink-muted">Un.</label>
@@ -179,7 +210,7 @@ export function EditorPedido({ pedido, ordemServicoId, orcamentoId, avulso, onSa
               </div>
               <div className="col-span-5 md:col-span-2">
                 <label className="text-[11px] text-ink-muted">Estimado (R$/un.)</label>
-                <Input inputMode="decimal" value={it.valorEstimado} onChange={(e) => patch(it._k, { valorEstimado: e.target.value, _auto: false })} placeholder="—" data-campo="valorEstimado" />
+                <Input inputMode="decimal" className={PLANILHA.numero} value={it.valorEstimado} onChange={(e) => patch(it._k, { valorEstimado: e.target.value, _auto: false })} placeholder="—" data-campo="valorEstimado" />
               </div>
               <div className="col-span-1 flex justify-center pb-1.5">
                 <button type="button" aria-label="Excluir item" title="Excluir item" onClick={() => setItens((l) => (l.length > 1 ? l.filter((x) => x._k !== it._k) : [novoItem()]))} className="p-1.5 text-ink-muted hover:text-atrasado">
@@ -218,7 +249,7 @@ export function EditorPedido({ pedido, ordemServicoId, orcamentoId, avulso, onSa
           )}
         </FormField>
         <FormField label="Fornecedor" hint="Quem recebe o PC por e-mail/WhatsApp">
-          <SeletorCadastro entidade="fornecedores" itens={fornecedores} valor={fornecedorId} vazio="A definir" onChange={(v) => setFornecedorId(v)} />
+          <SeletorCadastro entidade="fornecedores" itens={fornecedores} valor={fornecedorId} vazio="A definir" editavel onChange={(v) => setFornecedorId(v)} />
         </FormField>
         {ehAvulso && (
           <FormField label="Motivo (pedido avulso)">
