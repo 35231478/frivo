@@ -102,7 +102,9 @@ async function salvar() {
 }
 
 describe("tipo de documento e validade", () => {
-  it("dentro da OS: só 'Orçamento' (o card de tipo some); no Comercial: os dois tipos", async () => {
+  // A tela não escolhe mais tipo de documento: cria orçamento, e só. (A proposta de contrato será
+  // redefinida; o que já é proposta continua abrindo como proposta — ver a edição, mais abaixo.)
+  it("não existe escolha de tipo: nem dentro da OS nem no Comercial; o orçamento nasce COMUM", async () => {
     await montar({ embutido: { osId: "os1", onSalvo: () => {}, onCancelar: () => {} }, osInicialId: "os1" });
     expect(document.body.textContent).not.toContain("Proposta de Contrato");
     expect(document.body.textContent).not.toContain("Tipo de documento");
@@ -111,8 +113,10 @@ describe("tipo de documento e validade", () => {
     expect(corpo.tipo).toBe("COMUM");
     act(() => root.unmount()); caixa.remove();
     await montar();
-    expect(document.body.textContent).toContain("Tipo de documento");
-    expect(document.body.textContent).toContain("Proposta de Contrato");
+    expect(document.body.textContent).not.toContain("Tipo de documento");
+    expect(document.body.textContent).not.toContain("Proposta de Contrato");
+    await adicionar("Pesquisar serviço por nome ou código...", "Limpeza de split");
+    expect((await salvar()).tipo).toBe("COMUM");
   });
 
   it("validade padrão = hoje (Brasília) + 10 dias, editável", async () => {
@@ -354,25 +358,32 @@ describe("ajustes finos: nome automático, condições, observação ao lado, ti
     expect(corpo.nome).toBe("Corretiva UTI");
   });
 
-  it("prazo de execução e forma de pagamento (uma opção da lista) vão no payload; somem na Proposta de Contrato", async () => {
+  it("prazo de execução e forma de pagamento (uma opção da lista) vão no payload; não existem numa proposta já gravada", async () => {
     await montar();
     await digitar($("[data-prazo-execucao]"), "5 dias úteis após aprovação");
     await escolherOpcao($("[data-forma-pagamento-opcao]"), "PIX");
     await adicionar("Pesquisar serviço por nome ou código...", "Limpeza de split");
     const corpo = await salvar();
     expect(corpo).toMatchObject({ prazoExecucao: "5 dias úteis após aprovação", formaPagamento: "PIX" });
-    await clicar($$("button").find((b) => b.textContent?.includes("Proposta de Contrato")));
+    act(() => root.unmount()); caixa.remove();
+    // Sem seletor, o único jeito de ver a tela de proposta é abrir uma que já existe
+    await montar({ mode: "editar", inicial: {
+        id: "op1", nome: "Proposta antiga", clienteId: "c1", tipo: "PROPOSTA_CONTRATO",
+        descontoServicos: 0, tipoDescontoServicos: "VALOR", descontoProdutos: 0, tipoDescontoProdutos: "VALOR",
+        issAliquota: 0, servicos: [], produtos: [], ordensServicoIds: [], normas: [],
+        proposta: { responsavelTecnicoId: null, artNumero: null, valorMensal: "900" },
+      } });
     expect($("[data-prazo-execucao]")).toBeNull();
     expect($("[data-forma-pagamento]")).toBeNull();
   });
 
-  it("dentro da OS: só 'Orçamento' (nada de Proposta de Contrato nem 'Orçamento comum'); no Comercial o rótulo é 'Orçamento'", async () => {
+  it("nem dentro da OS nem no Comercial sobra cartão de escolha ('Proposta comercial avulsa' / 'Contrato de manutenção')", async () => {
     await montar({ embutido: { osId: "os1", onSalvo: () => {}, onCancelar: () => {} }, osInicialId: "os1" });
     expect(document.body.textContent).not.toMatch(/Proposta de Contrato|Orçamento [Cc]omum/);
     act(() => root.unmount()); caixa.remove();
     await montar();
-    const tipos = $$("button").filter((b) => /Proposta comercial avulsa|Contrato de manutenção/.test(b.textContent ?? "")).map((b) => b.querySelector("p")?.textContent);
-    expect(tipos).toEqual(["Orçamento", "Proposta de Contrato"]);
+    const tipos = $$("button").filter((b) => /Proposta comercial avulsa|Contrato de manutenção/.test(b.textContent ?? ""));
+    expect(tipos).toEqual([]);
   });
 
   it("observação na coluna ao lado da descrição (cabeçalho Descrição | Observação | Qtd | Unitário | Total), na mesma linha do item", async () => {

@@ -183,10 +183,18 @@ describe("construtor: padrões, destinatário e campos corporativos", () => {
     expect([corpo.clienteId, corpo.unidadeId, corpo.contatoClienteId]).toEqual(["c2", null, null]);
   });
 
-  it("Proposta de Contrato: os blocos do orçamento comum (condições, normas, Para:) somem", async () => {
+  // A tela não escolhe mais tipo (a proposta será redefinida): o jeito de ver a tela de proposta é
+  // abrir uma que já está gravada.
+  it("Proposta de Contrato já gravada: os blocos do orçamento comum (condições, normas, Para:) somem", async () => {
     await montarForm();
     expect($("[data-condicoes-comerciais]")).toBeTruthy();
-    await clicar($$("button").find((b) => b.textContent?.includes("Proposta de Contrato")));
+    act(() => root.unmount()); caixa.remove();
+    await montarForm({ mode: "editar", inicial: {
+        id: "op1", nome: "Proposta antiga", clienteId: "c1", tipo: "PROPOSTA_CONTRATO",
+        descontoServicos: 0, tipoDescontoServicos: "VALOR", descontoProdutos: 0, tipoDescontoProdutos: "VALOR",
+        issAliquota: 0, servicos: [], produtos: [], ordensServicoIds: [], normas: [],
+        proposta: { responsavelTecnicoId: null, artNumero: null, valorMensal: "900" },
+      } });
     expect($("[data-condicoes-comerciais]")).toBeNull();
     expect($("[data-destinatario]")).toBeNull();
   });
