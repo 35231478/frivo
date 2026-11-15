@@ -8,6 +8,7 @@ import { OsInativarBotao } from "@/components/os/os-inativar";
 import { CheckboxLinha, CheckboxPagina, useAcoesMassaDisponiveis } from "@/components/acoes-massa/selecao";
 import { usePermissoes } from "@/components/providers/permissoes-provider";
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
+import { Dica } from "@/components/ui/dica";
 import { cn, formatarData, LABELS_STATUS_OS, LABELS_PRIORIDADE, LABELS_ORIGEM_OS } from "@/lib/utils";
 import { BarraPeriodo, type PeriodoTela } from "@/components/listagem/periodo-cards";
 import { BarraFiltros, FiltroTextoUrl, inputFiltro } from "@/components/listagem/barra-filtros";
@@ -41,6 +42,9 @@ const CLASSE_PRIORIDADE: Record<string, string> = {
 
 /** Os filtros do painel "Mais filtros" (o período e a busca ficam fora) */
 const PARAMS_FILTROS_OS = ["status", "prioridade", "origem", "clienteId", "responsavelId", "tipoOsId", "contratoId", "numero"];
+
+/** Princípio 7: o que a lista mostra fica no ⓘ do título, não num parágrafo acima da tabela. */
+const AJUDA = "Todas as OS do período escolhido: o período olha o dia agendado, a previsão de conclusão ou a abertura. OS canceladas ficam fora até o filtro de status pedir.";
 
 export function OrdensListaClient({ ordens, total, pagina, porPagina, opcoes, periodo }: { ordens: OrdemView[]; total: number; pagina: number; porPagina: number; opcoes: Opcoes; periodo: PeriodoTela }) {
   const router = useRouter();
@@ -120,7 +124,7 @@ export function OrdensListaClient({ ordens, total, pagina, porPagina, opcoes, pe
       <div className="flex items-center justify-between gap-3">
         <div className="flex items-center gap-3 min-w-0">
           <div className="p-2 bg-surface-alt rounded-lg"><ClipboardList className="w-5 h-5 text-ink-muted" aria-hidden="true" /></div>
-          <h1 className="page-title">Ordens de serviço</h1>
+          <h1 className="page-title flex items-center gap-1.5">Ordens de serviço <Dica texto={AJUDA} rotulo="Ordens de serviço" lado="direita" /></h1>
           <span className="pill-previsto font-display tabular-nums">{total}</span>
         </div>
         {pode("ordens", "criar") && (

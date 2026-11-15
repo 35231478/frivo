@@ -20,6 +20,8 @@ import { MSG_SEM_EXECUTOR_TELA } from "@/lib/atividade-equipe";
 import { type OpcaoBusca } from "@/components/ui/busca-select";
 import { Repeat, MapPin, CalendarClock, Wrench, AlertTriangle, X, Plus, Check, Lock, Maximize2, Minimize2, GripHorizontal, Car, ListChecks } from "lucide-react";
 import { deLocalBR } from "@/lib/fuso";
+import { toast } from "@/components/ui/avisos";
+import { usePermissoes } from "@/components/providers/permissoes-provider";
 
 export interface CardOs {
   /** Chave única do card (OS + dia): uma OS com visitas em dias diferentes gera um card por dia. */
@@ -130,20 +132,21 @@ function gravarTamanhos(t: Record<string, number>) {
   try { window.localStorage.setItem(CHAVE_TAMANHOS, JSON.stringify(t)); } catch { /* modo privado */ }
 }
 
-type ToastMsg = { id: number; texto: string; tipo: "ok" | "erro" };
 
 export function CalendarioGrid({
   celulas, eventosPorDia, opcoes, dimmedIds,
 }: { celulas: CelulaDia[]; eventosPorDia: Record<string, CardOs[]>; opcoes: Opcoes; dimmedIds?: Set<string> }) {
   const router = useRouter();
+  const { pode } = usePermissoes();
+  // Prioridade 1: quem não pode criar não vê "Nova OS neste dia"; quem não pode editar não arrasta
+  const podeCriar = pode("ordens", "criar");
+  const podeReagendar = pode("ordens", "editar");
   const [eventos, setEventos] = useState(eventosPorDia);
   const [hover, setHover] = useState<{ card: CardOs; rect: DOMRect } | null>(null);
   const [modalDia, setModalDia] = useState<string | null>(null);
   const [criarDia, setCriarDia] = useState<string | null>(null);
   const [arrastando, setArrastando] = useState<{ card: CardOs; fromDay: string } | null>(null);
-  const [toasts, setToasts] = useState<ToastMsg[]>([]);
   const arrastouRef = useRef(false);
-  const toastSeq = useRef(0);
   const semanal = celulas.length === 7;
   // Tamanho escolhido por dia (expandir/arrastar), lembrado neste navegador
   const [tamanhos, setTamanhos] = useState<Record<string, number>>({});
@@ -160,16 +163,10 @@ export function CalendarioGrid({
   // Reconcilia com os dados do servidor após refresh
   useEffect(() => { setEventos(eventosPorDia); }, [eventosPorDia]);
 
-  const sensors = useSensors(
-    useSensor(MouseSensor, { activationConstraint: { distance: 6 } }),
-    useSensor(TouchSensor, { activationConstraint: { delay: 250, tolerance: 8 } }), // long press no mobile
-  );
-
-  function toast(texto: string, tipo: "ok" | "erro" = "ok") {
-    const id = ++toastSeq.current;
-    setToasts((t) => [...t, { id, texto, tipo }]);
-    setTimeout(() => setToasts((t) => t.filter((x) => x.id !== id)), 3500);
-  }
+  const sensorMouse = useSensor(MouseSensor, { activationConstraint: { distance: 6 } });
+  const sensorToque = useSensor(TouchSensor, { activationConstraint: { delay: 250, tolerance: 8 } }); // long press no mobile
+  // Sem "ordens › editar" o arrasto nem começa (o servidor também recusa: PATCH /api/ordens/:id → 403)
+  const sensors = useSensors(...(podeReagendar ? [sensorMouse, sensorToque] : []));
 
   function navegar(card: CardOs) {
     if (arrastouRef.current) return;
@@ -188,7 +185,7 @@ export function CalendarioGrid({
     setTimeout(() => { arrastouRef.current = false; }, 0);
     const data = e.active.data.current as { card: CardOs; fromDay: string } | undefined;
     const destino = e.over?.id ? String(e.over.id) : null;
-    if (!data || !destino || destino === data.fromDay) return;
+    if (!podeReagendar || !data || !destino || destino === data.fromDay) return;
 
     const { card, fromDay } = data;
     // Move otimista
@@ -207,9 +204,9 @@ export function CalendarioGrid({
       });
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
-        throw new Error(err.erro ?? "Falha ao reagendar.");
+        throw new Error(err.erro ?? "Não foi possível reagendar a OS.");
       }
-      toast(`OS #${card.numero} movida para ${dataCurta(destino)}`);
+      toast(`OS ${card.numero} movida para ${dataCurta(destino)}.`);
       router.refresh();
     } catch (err: any) {
       // Reverte
@@ -218,7 +215,7 @@ export function CalendarioGrid({
         const origem = [...(prev[fromDay] ?? []), card].sort((a, b) => (a.hora ?? "99").localeCompare(b.hora ?? "99"));
         return { ...prev, [destino]: alvo, [fromDay]: origem };
       });
-      toast(err.message ?? "Falha ao reagendar.", "erro");
+      toast(err.message ?? "Não foi possível reagendar a OS.", "erro");
     }
   }
 
@@ -243,7 +240,8 @@ export function CalendarioGrid({
               onHover={(card, rect) => setHover({ card, rect })}
               onSairHover={() => setHover(null)}
               onVerMais={() => setModalDia(cel.dateKey)}
-              onCriar={() => setCriarDia(cel.dateKey)}
+              onCriar={podeCriar ? () => setCriarDia(cel.dateKey) : undefined}
+              podeArrastar={podeReagendar}
               maxCards={semanal ? MAX_CARDS_SEMANA : MAX_CARDS_MES}
               alturaBase={semanal ? ALTURA_SEMANA : ALTURA_MES}
               tamanho={tamanhos[cel.dateKey] ?? null}
@@ -266,7 +264,7 @@ export function CalendarioGrid({
           dateKey={modalDia} eventos={eventos[modalDia] ?? []} dimmedIds={dimmedIds}
           onClose={() => setModalDia(null)}
           onNavegar={(c) => { setModalDia(null); router.push(`/ordens/${c.id}`); }}
-          onCriar={() => { const d = modalDia; setModalDia(null); setCriarDia(d); }}
+          onCriar={podeCriar ? () => { const d = modalDia; setModalDia(null); setCriarDia(d); } : undefined}
         />
       )}
 
@@ -276,34 +274,26 @@ export function CalendarioGrid({
           dateKey={criarDia}
           opcoes={opcoes}
           onClose={() => setCriarDia(null)}
-          onCriada={(numero) => { toast(`OS #${numero} criada em ${dataCurta(criarDia)}`); router.refresh(); }}
+          onCriada={(numero) => { toast(`OS ${numero} criada em ${dataCurta(criarDia)}.`); router.refresh(); }}
         />
       )}
 
-      {/* Toasts (canto inferior direito) */}
-      <div className="fixed bottom-5 right-5 z-[60] flex flex-col gap-2 pointer-events-none">
-        {toasts.map((t) => (
-          <div key={t.id} className={cn(
-            "anim-tooltip flex items-center gap-2 px-4 py-2.5 rounded-lg shadow-xl text-sm font-medium text-white",
-            t.tipo === "ok" ? "bg-ink" : "bg-atrasado",
-          )}>
-            {t.tipo === "ok" ? <Check className="w-4 h-4 text-success-400" /> : <AlertTriangle className="w-4 h-4" />}
-            {t.texto}
-          </div>
-        ))}
-      </div>
     </div>
   );
 }
 
 function Celula({
-  cel, cards: cardsDia, dimmedIds, arrastando, arrastouRef, onNavegar, onHover, onSairHover, onVerMais, onCriar,
+  cel, cards: cardsDia, dimmedIds, arrastando, arrastouRef, onNavegar, onHover, onSairHover, onVerMais, onCriar, podeArrastar,
   maxCards, alturaBase, tamanho, onTamanho,
 }: {
   cel: CelulaDia; cards: CardOs[]; dimmedIds?: Set<string>; arrastando: { card: CardOs; fromDay: string } | null;
   arrastouRef: React.MutableRefObject<boolean>;
   onNavegar: (c: CardOs) => void; onHover: (c: CardOs, r: DOMRect) => void; onSairHover: () => void;
-  onVerMais: () => void; onCriar: () => void;
+  onVerMais: () => void;
+  /** Sem a permissão de criar OS, não vem: o dia não oferece "criar aqui". */
+  onCriar?: () => void;
+  /** Sem a permissão de editar OS, o cartão não é arrastável. */
+  podeArrastar: boolean;
   maxCards: number; alturaBase: number; tamanho: number | null; onTamanho: (v: number | null) => void;
 }) {
   const { setNodeRef, isOver } = useDroppable({ id: cel.dateKey, disabled: !cel.inMonth });
@@ -333,7 +323,7 @@ function Celula({
 
   function aoClicarCelula() {
     if (arrastouRef.current) return;
-    onCriar();
+    onCriar?.();
   }
 
   // Alça: arrasta a base do dia para esticar/encolher só este dia (sobreposto aos vizinhos)
@@ -424,20 +414,22 @@ function Celula({
                   {expandido ? <Minimize2 className="w-3.5 h-3.5" /> : <Maximize2 className="w-3.5 h-3.5" />}
                 </button>
               )}
-              <button
-                type="button"
-                onClick={(e) => { e.stopPropagation(); onCriar(); }}
-                title="Criar OS neste dia"
-                className="opacity-0 group-hover/cel:opacity-100 transition-opacity p-0.5 rounded-md text-primary-600 hover:bg-primary-100"
-              >
-                <Plus className="w-4 h-4" />
-              </button>
+              {onCriar && (
+                <button
+                  type="button"
+                  onClick={(e) => { e.stopPropagation(); onCriar(); }}
+                  title="Criar OS neste dia" aria-label="Criar OS neste dia" data-criar-no-dia
+                  className="opacity-0 group-hover/cel:opacity-100 transition-opacity p-0.5 rounded-md text-primary-600 hover:bg-primary-100"
+                >
+                  <Plus className="w-4 h-4" aria-hidden />
+                </button>
+              )}
             </div>
           </div>
 
           <div className={cn("space-y-1 mt-1 min-h-0", expandido && "flex-1 overflow-y-auto pr-0.5")}>
             {visiveis.map((card) => (
-              <CardArrastavel key={card.chave} card={card} fromDay={cel.dateKey} dimmed={dimmedIds?.has(card.chave) ?? false} onNavegar={onNavegar} onHover={onHover} onSairHover={onSairHover} />
+              <CardArrastavel key={card.chave} card={card} fromDay={cel.dateKey} dimmed={dimmedIds?.has(card.chave) ?? false} podeArrastar={podeArrastar} onNavegar={onNavegar} onHover={onHover} onSairHover={onSairHover} />
             ))}
           </div>
 
@@ -473,16 +465,21 @@ function Celula({
 }
 
 function CardArrastavel({
-  card, fromDay, dimmed, onNavegar, onHover, onSairHover,
+  card, fromDay, dimmed, podeArrastar, onNavegar, onHover, onSairHover,
 }: {
   card: CardOs; fromDay: string; dimmed: boolean;
+  /** Sem "ordens › editar" o cartão só abre a OS: nem arrasta nem parece arrastável. */
+  podeArrastar: boolean;
   onNavegar: (c: CardOs) => void; onHover: (c: CardOs, r: DOMRect) => void; onSairHover: () => void;
 }) {
+  // "travada" é a OS concluída (o cadeado no cartão diz isso). Falta de permissão não é cadeado:
+  // o cartão fica normal, só não arrasta.
   const travada = bloqueada(card);
+  const semArrasto = travada || !podeArrastar;
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
     id: card.chave,
     data: { card, fromDay },
-    disabled: travada || dimmed,
+    disabled: semArrasto || dimmed,
   });
 
   // Fora do filtro: apenas contexto visual (esmaecido e não-interativo)
@@ -497,14 +494,14 @@ function CardArrastavel({
   return (
     <div
       ref={setNodeRef}
-      {...(travada ? {} : listeners)}
+      {...(semArrasto ? {} : listeners)}
       {...attributes}
       onClick={(e) => { e.stopPropagation(); onNavegar(card); }}
       onMouseEnter={(e) => onHover(card, e.currentTarget.getBoundingClientRect())}
       onMouseLeave={onSairHover}
-      title={travada ? "Não é possível reagendar OS concluída" : undefined}
+      title={!podeArrastar ? undefined : travada ? "Não é possível reagendar OS concluída" : undefined}
       className={cn(
-        travada ? "cursor-not-allowed" : "cursor-grab active:cursor-grabbing touch-none",
+        !podeArrastar ? "cursor-pointer" : travada ? "cursor-not-allowed" : "cursor-grab active:cursor-grabbing touch-none",
         isDragging && "opacity-40",
       )}
     >
@@ -620,7 +617,7 @@ function Tooltip({ card, rect }: { card: CardOs; rect: DOMRect }) {
 
 function ModalDia({
   dateKey, eventos, dimmedIds, onClose, onNavegar, onCriar,
-}: { dateKey: string; eventos: CardOs[]; dimmedIds?: Set<string>; onClose: () => void; onNavegar: (c: CardOs) => void; onCriar: () => void }) {
+}: { dateKey: string; eventos: CardOs[]; dimmedIds?: Set<string>; onClose: () => void; onNavegar: (c: CardOs) => void; onCriar?: () => void }) {
   useEffect(() => {
     const aoTeclar = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
     window.addEventListener("keydown", aoTeclar);
@@ -663,12 +660,14 @@ function ModalDia({
             </button>
           ))}
         </div>
-        <div className="p-3 border-t border-surface-border">
-          <button type="button" onClick={onCriar}
-            className="w-full inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-sm font-semibold text-primary-600 border border-dashed border-primary-300 hover:bg-primary-50">
-            <Plus className="w-4 h-4" /> Nova OS neste dia
-          </button>
-        </div>
+        {onCriar && (
+          <div className="p-3 border-t border-surface-border">
+            <button type="button" onClick={onCriar} data-criar-no-dia
+              className="w-full inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-sm font-semibold text-primary-600 border border-dashed border-primary-300 hover:bg-primary-50">
+              <Plus className="w-4 h-4" aria-hidden /> Nova OS neste dia
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );

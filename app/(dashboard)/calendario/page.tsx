@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { Dica } from "@/components/ui/dica";
 import { cn, nomeMes, formatarData } from "@/lib/utils";
 import { GerarOsRecorrentes } from "@/components/calendario/gerar-os-recorrentes";
 import { CalendarioPainel } from "@/components/calendario/calendario-painel";
@@ -23,6 +24,9 @@ const FINALIZADAS = ["CONCLUIDA", "CANCELADA"];
 function chave(d: Date) {
   return chaveDiaCivil(d);
 }
+
+/** Princípio 7: como a tela funciona fica no ⓘ do título, não num parágrafo em cima da grade. */
+const AJUDA = "Cada cartão é uma OS agendada no dia. Arraste para reagendar, clique no dia para ver tudo e abrir uma OS nova ali mesmo. Uma OS dividida em visitas aparece em cada dia dela.";
 
 export default async function CalendarioPage({
   searchParams,
@@ -182,8 +186,8 @@ export default async function CalendarioPage({
     <div className="space-y-6">
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div className="flex items-center gap-3">
-          <div className="p-2 bg-surface-alt rounded-lg"><CalendarDays className="w-5 h-5 text-ink-muted" /></div>
-          <h1 className="page-title">Calendário</h1>
+          <div className="p-2 bg-surface-alt rounded-lg"><CalendarDays className="w-5 h-5 text-ink-muted" aria-hidden /></div>
+          <h1 className="page-title flex items-center gap-1.5">Calendário <Dica texto={AJUDA} rotulo="Calendário" lado="direita" /></h1>
         </div>
         <GerarOsRecorrentes mes={mes} ano={ano} />
       </div>

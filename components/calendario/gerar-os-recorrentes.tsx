@@ -3,52 +3,46 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
-import { Repeat, Check, AlertCircle } from "lucide-react";
+import { Repeat } from "lucide-react";
+import { toast } from "@/components/ui/avisos";
+import { usePermissoes } from "@/components/providers/permissoes-provider";
 
+/**
+ * Gera de uma vez as OS dos contratos recorrentes do mês. Ação sensível (cria OS em lote): o botão
+ * só aparece para quem pode criar OS ou editar contratos — a MESMA regra que o servidor exige.
+ */
 export function GerarOsRecorrentes({ mes, ano }: { mes: number; ano: number }) {
   const router = useRouter();
+  const { pode } = usePermissoes();
   const [gerando, setGerando] = useState(false);
-  const [feedback, setFeedback] = useState<{ tipo: "ok" | "erro"; msg: string } | null>(null);
+  if (!pode("ordens", "criar") && !pode("contratos", "editar")) return null;
 
   async function gerar() {
     setGerando(true);
-    setFeedback(null);
     try {
       const res = await fetch("/api/contratos/gerar-os-recorrentes", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ mes, ano }),
       });
-      if (!res.ok) {
-        const e = await res.json().catch(() => ({}));
-        setFeedback({ tipo: "erro", msg: e.erro ?? "Erro ao gerar." });
-        return;
-      }
-      const data = await res.json();
-      setFeedback({ tipo: "ok", msg: `${data.criadas} criada(s), ${data.ignoradas} ignorada(s).` });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) { toast(data.erro ?? "Não foi possível gerar as OS do mês.", "erro"); return; }
+      const criadas = Number(data.criadas) || 0;
+      const ignoradas = Number(data.ignoradas) || 0;
+      toast(criadas === 0
+        ? "Nenhuma OS nova: as do mês já estavam geradas."
+        : `${criadas === 1 ? "1 OS criada" : `${criadas} OS criadas`}${ignoradas ? `. ${ignoradas === 1 ? "1 já existia" : `${ignoradas} já existiam`}.` : "."}`);
       router.refresh();
     } catch {
-      setFeedback({ tipo: "erro", msg: "Erro de conexão." });
+      toast("Erro de conexão.", "erro");
     } finally {
       setGerando(false);
     }
   }
 
   return (
-    <div className="flex items-center gap-2">
-      <Button variant="outline" onClick={gerar} loading={gerando}>
-        <Repeat className="w-4 h-4" /> Gerar OS recorrentes do mês
-      </Button>
-      {feedback && (
-        <span className={
-          feedback.tipo === "ok"
-            ? "inline-flex items-center gap-1 text-xs text-success-700"
-            : "inline-flex items-center gap-1 text-xs text-atrasado-texto"
-        }>
-          {feedback.tipo === "ok" ? <Check className="w-3.5 h-3.5" /> : <AlertCircle className="w-3.5 h-3.5" />}
-          {feedback.msg}
-        </span>
-      )}
-    </div>
+    <Button variant="outline" onClick={gerar} loading={gerando} data-gerar-recorrentes>
+      <Repeat className="w-4 h-4" aria-hidden /> Gerar OS recorrentes do mês
+    </Button>
   );
 }
