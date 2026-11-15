@@ -204,6 +204,8 @@ export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ 
   // Mesma regra da ação em massa (lib/acoes-massa/regras.ts)
   const r = await cancelarOrcamento(id, { empresaId, usuarioId: guard.session.user!.id, usuarioNome: guard.session.user!.name ?? "usuário" });
   if (!r.ok) return NextResponse.json({ erro: r.codigo === "nao_encontrado" ? "Orçamento não encontrado" : r.motivo }, { status: statusHttp(r) });
+  // Quem cancelou e quando, na mesma linha do tempo da troca de status (a tela de Leads do site mostra isso)
+  await registrarEvento({ empresaId, orcamentoId: id, tipo: "STATUS", usuarioId: guard.session.user!.id, detalhe: "Cancelado" });
   return NextResponse.json({ ok: true, status: "CANCELADO" });
 }
 
@@ -218,5 +220,8 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 
   const r = await reativarOrcamento(id, { empresaId, usuarioId: guard.session.user!.id, usuarioNome: guard.session.user!.name ?? "usuário" });
   if (!r.ok) return NextResponse.json({ erro: "Orçamento não encontrado" }, { status: statusHttp(r) });
+  if (r.dados?.status === "RASCUNHO") {
+    await registrarEvento({ empresaId, orcamentoId: id, tipo: "STATUS", usuarioId: guard.session.user!.id, detalhe: "Reaberto" });
+  }
   return NextResponse.json({ ok: true, status: r.dados?.status });
 }

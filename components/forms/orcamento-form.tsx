@@ -10,6 +10,7 @@ import { FormField, FormGrid, FormSection } from "@/components/ui/form-field";
 import { Dica } from "@/components/ui/dica";
 import { PageHeader } from "@/components/ui/page-header";
 import { ItensTabela, type ItemTabela, type CatalogoItem, type TabelaPrecoCliente, type CadastroCatalogo } from "@/components/orcamento/itens-tabela";
+import { SugestoesItens, useSugestoesItens, type ItemSugerido } from "@/components/orcamento/sugestoes-itens";
 import { EditarNoContexto, SelectCadastroRapido } from "@/components/ui/select-cadastro-rapido";
 import { CLIENTE, CONTATO, PRODUTO, SERVICO, UNIDADE } from "@/components/cadastro-rapido/definicoes";
 import { OsVinculadas } from "@/components/orcamento/os-vinculadas";
@@ -339,6 +340,16 @@ export function OrcamentoForm({
 
   // O mesmo cálculo que o servidor grava (lib/orcamentos/calculo.ts)
   // E3.3: as peças (venda à parte) dos materiais de cada serviço viram linhas de produto derivadas (só leitura)
+  // Princípio 9: o histórico deste cliente sugere itens (com o último preço praticado); quem decide
+  // é quem clica — a linha entra editável como qualquer outra.
+  const sugestoesItens = useSugestoesItens(clienteId, inicial?.id);
+  const jaNaLista = (lista: ItemTabela[]) => (s: ItemSugerido) =>
+    lista.some((it) => (s.catalogoId ? it.catalogoId === s.catalogoId : it.descricao.trim().toLowerCase() === s.descricao.trim().toLowerCase()));
+  const linhaDaSugestao = (s: ItemSugerido): ItemTabela => ({
+    id: novoId(), catalogoId: s.catalogoId ?? null, descricao: s.descricao, quantidade: 1,
+    valorUnitario: s.valorUnitario, valorTotal: s.valorUnitario,
+  });
+
   const pecasDerivadas = useMemo<ItemTabela[]>(() => servicos.flatMap((s) => pecasDosMateriais(s.materiais).map((p, i) => ({
     id: `peca:${s.id}:${i}`, catalogoId: p.material.produtoId ?? null, descricao: p.descricao, quantidade: p.quantidade,
     valorUnitario: p.valorUnitario, valorTotal: p.valorTotal, derivada: { deServico: s.descricao || "serviço" },
@@ -675,6 +686,10 @@ export function OrcamentoForm({
       </div>
 
       <div className="card-padded">
+        <SugestoesItens
+          tipo="SERVICO" itens={sugestoesItens} jaNaLista={jaNaLista(servicos)}
+          onUsar={(s) => setServicos((prev) => [...prev, linhaDaSugestao(s)])}
+        />
         <ItensTabela
           titulo={tipo === "PROPOSTA_CONTRATO" ? "Serviços inclusos no contrato" : "Serviços"}
           dica={DICA_LINHAS}
@@ -697,6 +712,10 @@ export function OrcamentoForm({
       </div>
 
       <div className="card-padded">
+        <SugestoesItens
+          tipo="PRODUTO" itens={sugestoesItens} jaNaLista={jaNaLista(produtos)}
+          onUsar={(s) => setProdutos((prev) => [...prev, linhaDaSugestao(s)])}
+        />
         <ItensTabela
           titulo="Produtos"
           dica={DICA_LINHAS}

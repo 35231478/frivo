@@ -64,6 +64,11 @@ A tabela de cada módulo, mais abaixo, traz o estado conferido.
   abrir em somente leitura para quem só visualiza; "Novo contrato" e "Gerar OS" por permissão;
   reajustes e lista na tabela da casa; cliente, responsável técnico e os seletores da recorrência com
   cadastro rápido e editar no contexto. Ver [padronizacao-leva6a.md](padronizacao-leva6a.md).
+- **Leva 6B**: Comercial — a lista de Orçamentos ("Novo orçamento" passa a exigir Orçamentos › criar) e
+  os Leads do site (tabela da casa com cartões no celular, descartar e reabrir pelas rotas que já
+  existiam, filtro "Descartados" com quem descartou e quando, atalho para a ficha do cliente), mais as
+  sugestões de item do orçamento: o que o cliente mais contratou nos últimos 6 meses, com o último
+  preço praticado. Ver [padronizacao-leva6b.md](padronizacao-leva6b.md).
 - **Leva 4B** (🔵, com SQL): Veículos, Colaboradores e Equipes — checklist de veículo preenchido com
   detalhe, edição e exclusão reversível; responsável técnico cadastrado na hora em Dados da empresa;
   aba Inativos com Reativar nos formulários de OS e nos modelos de checklist; listas na tabela da casa e
@@ -179,7 +184,10 @@ que fazer quando há empate ou pouco histórico (a proposta é não sugerir nada
 
 ### Comercial: orçamentos, contratos e leads (10)
 
-> As cinco telas de contrato foram feitas na **leva 6A** (`docs/padronizacao-leva6a.md`). Orçamentos, leads do site e as sugestões de item ficam para a **6B**.
+> As cinco telas de contrato foram feitas na **leva 6A** (`docs/padronizacao-leva6a.md`); a lista de
+> orçamentos, os leads do site e as sugestões de item, na **6B** (`docs/padronizacao-leva6b.md`). As
+> três telas do formulário de orçamento (`/orcamentos/[id]`, `/orcamentos/[id]/editar` e
+> `/orcamentos/novo`) seguem na fila.
 
 | Tela | Lista no padrão | Busca e página no servidor | Ajuda no ⓘ | Toast | Botões por permissão | Cadastro inline | Edição no contexto | Celular | O que a varredura não viu |
 |---|---|---|---|---|---|---|---|---|---|
@@ -188,11 +196,11 @@ que fazer quando há empate ou pouco histórico (a proposta é não sugerir nada
 | `/contratos/novo` | — | — | sim | sim | sim | sim | sim | sim | feita na leva 6A: passa a exigir Contratos › criar (era aberta a todos); mesmo formulário do `/contratos/[id]/editar` |
 | `/contratos/reajustes` | — | — | sim | sim | sim | — | — | sim | feita na leva 6A: tabela própria → TabelaPro (cartões no celular), aplicar/adiar/dispensar só com Contratos › editar. Não tem seletor: é uma fila de decisão |
 | `/contratos/relatorio` | — | — | sim | sim | sim | — | — | sim | feita na leva 6A: ⓘ no título e "Gerar OS" só com Ordens › criar ou Contratos › editar (era o único botão que gravava sem checar nada). Os três campos do topo são filtros, não cadastros; a tela é de cartões expansíveis (já servia no celular) |
-| `/leads-site` | — | sim | — | — | sim | — | — | — | tabela própria; toast; ajuda no ⓘ; versão de celular |
-| `/orcamentos` | — | sim | sim | sim | sim | sim | — | sim | edição no contexto |
+| `/leads-site` | sim | sim | sim | sim | sim | — | — | sim | feita na leva 6B: a tabela própria virou TabelaPro com cartões no celular, a instrução foi para o ⓘ, entraram Descartar (Orçamentos › excluir) e Reabrir (Orçamentos › editar) pelo componente e pelas rotas da casa, com o filtro "Descartados" dizendo quem descartou e quando, e um atalho para a ficha do cliente. Não tem seletor de cadastro: o lead já nasce com cliente |
+| `/orcamentos` | sim | sim | sim | sim | sim | sim | — | sim | feita na leva 6B: ⓘ no título e "Novo orçamento" só com Orçamentos › criar (aparecia para quem só consulta). A edição no contexto é do formulário, não da lista; cancelar/reabrir já estavam no componente da casa e agora deixam rastro de quem e quando |
 | `/orcamentos/[id]` | — | — | sim | sim | sim | sim | sim | sim | tabela própria |
 | `/orcamentos/[id]/editar` | — | — | sim | sim | sim | sim | sim | sim | nada apontado pela varredura |
-| `/orcamentos/novo` | — | — | sim | sim | sim | sim | sim | sim | nada apontado pela varredura |
+| `/orcamentos/novo` | — | — | sim | sim | sim | sim | sim | sim | a leva 6B acrescentou a faixa de sugestões de item (o mais usado do cliente, com o último preço praticado); o resto da tela segue na fila |
 
 ### Estoque e compras (11)
 
