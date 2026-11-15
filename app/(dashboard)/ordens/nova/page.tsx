@@ -13,7 +13,8 @@ import { EditarNoContexto, SelectCadastroRapido } from "@/components/ui/select-c
 import { CLIENTE, UNIDADE, EQUIPAMENTO, TIPO_OS } from "@/components/cadastro-rapido/definicoes";
 import type { OpcaoCadastro } from "@/components/ui/select-cadastro-rapido";
 import { Inbox, Link2, Wrench, X } from "lucide-react";
-import { SeletorExecucao, VALOR_EXECUCAO_VAZIO, corpoExecucao, temExecutor, useOpcoesExecucao, type ValorExecucao } from "@/components/os/seletor-execucao";
+import { SeletorExecucao, VALOR_EXECUCAO_VAZIO, aplicarExecutor, corpoExecucao, temExecutor, useOpcoesExecucao, type ValorExecucao } from "@/components/os/seletor-execucao";
+import { Sugestao, useSugestoesAbertura } from "@/components/os/sugestao-abertura";
 import { MSG_SEM_EXECUTOR_TELA } from "@/lib/atividade-equipe";
 import { GavetaEquipamentos } from "@/components/os/gaveta-equipamentos";
 import { detalheEquipamento, rotuloEquipamento, type EquipamentoResumo } from "@/lib/os/vincular-equipamentos";
@@ -73,6 +74,11 @@ export default function NovaOrdemPage() {
   const [gavetaAberta, setGavetaAberta] = useState(false);
   const [avisoSemCliente, setAvisoSemCliente] = useState(false);
   const [verTodosAtendidos, setVerTodosAtendidos] = useState(false);
+  // Princípio 9: o histórico do cliente SUGERE o tipo e quem executa — nada é preenchido no escuro
+  const sugestoes = useSugestoesAbertura(clienteId);
+  // o mesmo tipo que o seletor usa para filtrar por competência (na solicitação, nenhum)
+  const tipoDoFiltro = solicitacao ? "" : tipoOsId;
+  const execSugerido = sugestoes.executor ? aplicarExecutor(sugestoes.executor, opcoesExecucao, tipoDoFiltro) : null;
 
   useEffect(() => {
     fetch("/api/clientes").then((r) => r.json()).then((d) => setClientes(Array.isArray(d) ? d : [])).catch(() => {})
@@ -374,6 +380,10 @@ export default function NovaOrdemPage() {
                   }}
                   edicao={TIPO_OS.edicao(tiposOs, (t) => setTiposOs((l) => l.map((x) => (x.id === t.id ? { ...x, ...t } : x))))}
                 />
+                {sugestoes.tipoOs && (
+                  <Sugestao oQue="tipo" atributo="tipo" nome={sugestoes.tipoOs.nome} vezes={sugestoes.tipoOs.vezes}
+                    escondida={!!tipoOsId} onUsar={() => setTipoOsId(sugestoes.tipoOs!.id)} />
+                )}
               </FormField>
               {/* O prazo da OS: é o que a central usa para dizer se está no prazo ou atrasada */}
               <FormField label="Prazo para finalizar" dica="Opcional. Após esta data, a OS é sinalizada como atrasada.">
@@ -383,6 +393,10 @@ export default function NovaOrdemPage() {
           )}
           <FormField label="Equipe ou colaboradores" required>
             <SeletorExecucao opcoes={opcoesExecucao} tipoOsId={solicitacao ? "" : tipoOsId} valor={execucao} onChange={(v) => { setExecucao(v); if (temExecutor(v)) { setFaltaExecutor(false); setErro((e) => (e === MSG_SEM_EXECUTOR_TELA ? "" : e)); } }} erro={faltaExecutor} />
+            {sugestoes.executor && execSugerido && (
+              <Sugestao oQue="executor" atributo="executor" nome={sugestoes.executor.nome} vezes={sugestoes.executor.vezes}
+                escondida={temExecutor(execucao)} onUsar={() => { setExecucao(execSugerido); setFaltaExecutor(false); setErro((e) => (e === MSG_SEM_EXECUTOR_TELA ? "" : e)); }} />
+            )}
           </FormField>
         </FormSection>
 

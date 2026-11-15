@@ -12,9 +12,12 @@ import { cn, MESES_PT, LABELS_STATUS_OS, LABELS_PRIORIDADE } from "@/lib/utils";
 import { AvatarTecnico } from "@/components/ui/avatar-tecnico";
 import { InputHora } from "@/components/ui/input-hora";
 import { MSG_HORA_INVALIDA, horaValida } from "@/components/ui/input-data-hora";
-import { SeletorExecucao, VALOR_EXECUCAO_VAZIO, corpoExecucao, temExecutor, useOpcoesExecucao, type ValorExecucao } from "@/components/os/seletor-execucao";
+import { SeletorExecucao, VALOR_EXECUCAO_VAZIO, aplicarExecutor, corpoExecucao, temExecutor, useOpcoesExecucao, type ValorExecucao } from "@/components/os/seletor-execucao";
+import { Sugestao, useSugestoesAbertura } from "@/components/os/sugestao-abertura";
+import { SelectCadastroRapido } from "@/components/ui/select-cadastro-rapido";
+import { CLIENTE, TIPO_OS } from "@/components/cadastro-rapido/definicoes";
 import { MSG_SEM_EXECUTOR_TELA } from "@/lib/atividade-equipe";
-import { BuscaSelect, type OpcaoBusca } from "@/components/ui/busca-select";
+import { type OpcaoBusca } from "@/components/ui/busca-select";
 import { Repeat, MapPin, CalendarClock, Wrench, AlertTriangle, X, Plus, Check, Lock, Maximize2, Minimize2, GripHorizontal, Car, ListChecks } from "lucide-react";
 import { deLocalBR } from "@/lib/fuso";
 
@@ -61,6 +64,8 @@ export interface CelulaDia {
 
 interface TecnicoOpc extends OpcaoBusca { avatar?: string | null }
 interface Opcoes { clientes: OpcaoBusca[]; tiposOs: OpcaoBusca[]; tecnicos: TecnicoOpc[] }
+/** O cadastro do tipo de OS (o que o "editar no contexto" mostra), além do par value/label. */
+type TipoOsCadastro = { id: string; nome: string; ativo?: boolean; descricao?: string | null; cor?: string | null };
 
 const DIAS_SEMANA = ["DOM", "SEG", "TER", "QUA", "QUI", "SEX", "SÁB"];
 const DIAS_LONGO = ["Domingo", "Segunda-feira", "Terça-feira", "Quarta-feira", "Quinta-feira", "Sexta-feira", "Sábado"];
@@ -680,6 +685,14 @@ function CriarOsModal({
   const router = useRouter();
   const [clienteId, setClienteId] = useState("");
   const [tipoOsId, setTipoOsId] = useState("");
+  // Cadastro inline e editar no contexto, como na abertura da OS: as opções já vêm prontas do
+  // servidor, e o cadastro completo dos tipos chega depois (é o que o "editar no contexto" precisa).
+  const [clientes, setClientes] = useState<OpcaoBusca[]>(opcoes.clientes);
+  const [tipos, setTipos] = useState<TipoOsCadastro[]>([]);
+  const tiposOpcoes = tipos.length ? tipos.filter((t) => t.ativo !== false).map((t) => ({ value: t.id, label: t.nome })) : opcoes.tiposOs;
+  useEffect(() => {
+    fetch("/api/tipos-os").then((r) => (r.ok ? r.json() : [])).then((d) => setTipos(Array.isArray(d) ? d : [])).catch(() => {});
+  }, []);
   // Quem executa (OBRIGATÓRIO): equipe ou colaboradores + veículo puxado automaticamente
   const opcoesExecucao = useOpcoesExecucao();
   const [execucao, setExecucao] = useState<ValorExecucao>(VALOR_EXECUCAO_VAZIO);
@@ -690,6 +703,9 @@ function CriarOsModal({
   const [descricao, setDescricao] = useState("");
   const [erro, setErro] = useState("");
   const [salvando, setSalvando] = useState(false);
+  // Princípio 9: o histórico do cliente SUGERE o tipo e quem executa — a pessoa é que aplica
+  const sugestoes = useSugestoesAbertura(clienteId);
+  const execSugerido = sugestoes.executor ? aplicarExecutor(sugestoes.executor, opcoesExecucao, tipoOsId) : null;
 
   const inputCls = "w-full bg-white border border-surface-border rounded-lg px-3 py-2 text-sm text-ink focus:outline-none focus:border-primary-500 focus:ring-4 focus:ring-primary-500/10 transition-all";
 
@@ -705,7 +721,7 @@ function CriarOsModal({
       // A hora escolhida é de Brasília (qualquer que seja o fuso do navegador)
       const dataAgendada = deLocalBR(`${dateKey}T${hora}`)!.toISOString();
       // OS + atividade agendada (com quem executa e o veículo) numa única chamada — tudo ou nada
-      const titulo = opcoes.tiposOs.find((t) => t.value === tipoOsId)?.label ?? "Atendimento agendado";
+      const titulo = tiposOpcoes.find((t) => t.value === tipoOsId)?.label ?? "Atendimento agendado";
       const resOs = await fetch("/api/ordens", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -745,18 +761,48 @@ function CriarOsModal({
 
           <div>
             <label className="text-[11px] font-semibold text-ink-muted">Cliente *</label>
-            <BuscaSelect value={clienteId} onChange={setClienteId} options={opcoes.clientes} placeholder="Pesquisar cliente…" />
+            <SelectCadastroRapido
+              value={clienteId} onChange={setClienteId} opcoes={clientes}
+              entidade={CLIENTE.entidade} placeholder="Pesquisar cliente…"
+              campos={CLIENTE.campos} campoBusca="nome" permissao={CLIENTE.permissao}
+              linkCadastroCompleto={CLIENTE.link} valoresIniciais={CLIENTE.valoresIniciais}
+              criar={async (v) => {
+                const c = await CLIENTE.criar(v);
+                const o = CLIENTE.opcao(c);
+                setClientes((l) => [...l, { value: o.value, label: o.label }]);
+                return o;
+              }}
+              edicao={CLIENTE.edicao()}
+            />
           </div>
 
           <div>
             <label className="text-[11px] font-semibold text-ink-muted">Tipo de OS</label>
-            <BuscaSelect value={tipoOsId} onChange={setTipoOsId} options={opcoes.tiposOs} placeholder="Selecionar tipo…" />
+            <SelectCadastroRapido
+              value={tipoOsId} onChange={setTipoOsId} opcoes={tiposOpcoes}
+              entidade={TIPO_OS.entidade} placeholder="Selecionar tipo…"
+              campos={TIPO_OS.campos} campoBusca="nome" permissao={TIPO_OS.permissao} linkCadastroCompleto={TIPO_OS.link}
+              criar={async (v) => {
+                const t = await TIPO_OS.criar(v);
+                setTipos((l) => [...l, { id: t.id, nome: t.nome, ativo: true }]);
+                return { value: t.id, label: t.nome };
+              }}
+              edicao={TIPO_OS.edicao(tipos, (t) => setTipos((l) => l.map((x) => (x.id === t.id ? { ...x, ...t } : x))))}
+            />
+            {sugestoes.tipoOs && (
+              <Sugestao oQue="tipo" atributo="tipo" nome={sugestoes.tipoOs.nome} vezes={sugestoes.tipoOs.vezes}
+                escondida={!!tipoOsId} onUsar={() => setTipoOsId(sugestoes.tipoOs!.id)} />
+            )}
           </div>
 
           <div data-quem-executa>
             <label className="text-[11px] font-semibold text-ink-muted">Quem executa *</label>
             <SeletorExecucao opcoes={opcoesExecucao} tipoOsId={tipoOsId} valor={execucao}
               onChange={(v) => { setExecucao(v); if (temExecutor(v)) { setFaltaExecutor(false); setErro((e) => (e === MSG_SEM_EXECUTOR_TELA ? "" : e)); } }} erro={faltaExecutor} />
+            {sugestoes.executor && execSugerido && (
+              <Sugestao oQue="executor" atributo="executor" nome={sugestoes.executor.nome} vezes={sugestoes.executor.vezes}
+                escondida={temExecutor(execucao)} onUsar={() => { setExecucao(execSugerido); setFaltaExecutor(false); setErro((e) => (e === MSG_SEM_EXECUTOR_TELA ? "" : e)); }} />
+            )}
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
