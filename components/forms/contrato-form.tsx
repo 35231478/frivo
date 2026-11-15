@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from "react";
 import { useForm, Controller } from "react-hook-form";
 import { SelectCadastroRapido, CadastroRapidoModal, usePodeCriar, type CampoRapido, type PermissaoCriar } from "@/components/ui/select-cadastro-rapido";
-import { CLIENTE, UNIDADE } from "@/components/cadastro-rapido/definicoes";
+import { CLIENTE, RESPONSAVEL_TECNICO, UNIDADE } from "@/components/cadastro-rapido/definicoes";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useRouter, useSearchParams } from "next/navigation";
 import { contratoSchema, MAX_DESCRICAO_SERVICOS, type ContratoInput } from "@/lib/validations";
@@ -34,6 +34,7 @@ import { InputData } from "@/components/ui/input-data";
 import { SeletorCadastro } from "@/components/cadastros/seletor-cadastro";
 import { PreviaCobrancaContrato } from "@/components/contratos/previa-cobranca";
 import { usePermissoes } from "@/components/providers/permissoes-provider";
+import { SomenteLeitura } from "@/components/config/permissao-config";
 import { PERIODICIDADES_COBRANCA, passoCobranca, textoFrequencia } from "@/lib/financeiro/contrato-previsao";
 import { proximoAniversario, sugestaoReajuste, textoCompetencia, valorReajustado, percentualDe } from "@/lib/contratos/reajuste";
 import Link from "next/link";
@@ -84,6 +85,7 @@ interface ContratoComRelacoes extends Contrato {
 
 interface ContratoFormProps {
   initialData?: ContratoComRelacoes;
+  somenteLeitura?: boolean;
 }
 
 function Painel({ ativo, id, children }: { ativo: boolean; id: string; children: React.ReactNode }) {
@@ -118,7 +120,11 @@ const CAMPO_ABA: Record<string, AbaContrato> = {
 /** Campos que ficam em "Mais opções" (a seção abre sozinha se um deles tiver erro) */
 const CAMPOS_MAIS_OPCOES = ["tipo", "ajusteFinsDeSemana", "nfseReferencia"];
 
-export function ContratoForm({ initialData }: ContratoFormProps) {
+/**
+ * `somenteLeitura`: quem tem "Contratos › visualizar" mas não "Contratos › editar" abre a ficha,
+ * lê tudo e não encontra caminho nenhum que o servidor fosse recusar (o PUT exige editar).
+ */
+export function ContratoForm({ initialData, somenteLeitura = false }: ContratoFormProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const isEditing = !!initialData;
@@ -447,7 +453,12 @@ export function ContratoForm({ initialData }: ContratoFormProps) {
   const unidadeIdsAtuais = (watch("unidadeIds") ?? []) as string[];
   const locaisCobertos = unidades.filter((u) => unidadeIdsAtuais.includes(u.id)).map((u) => ({ id: u.id, nome: u.nome }));
 
-  const BotoesAcao = ({ compact = false }: { compact?: boolean }) => (
+  const BotoesAcao = ({ compact = false }: { compact?: boolean }) => somenteLeitura ? (
+    <div className="flex items-center gap-3 flex-wrap">
+      <SomenteLeitura permissao="Contratos › editar" />
+      <Button type="button" variant="secondary" size={compact ? "sm" : "md"} onClick={() => router.push("/contratos")}>Voltar</Button>
+    </div>
+  ) : (
     <div className="flex items-center gap-2 flex-wrap">
       <Button type="button" variant="secondary" size={compact ? "sm" : "md"} onClick={() => router.push("/contratos")}>Cancelar</Button>
       <Button type="button" variant="outline" size={compact ? "sm" : "md"} loading={isSubmitting} onClick={salvarEContinuar}>
@@ -514,7 +525,7 @@ export function ContratoForm({ initialData }: ContratoFormProps) {
           <div className="max-w-7xl mx-auto flex items-center justify-between gap-3 flex-wrap">
             <div className="flex items-center gap-3 flex-wrap min-w-0">
               <h1 className="text-xl font-bold text-ink truncate">{titulo}</h1>
-              {isEditing ? (
+              {isEditing && !somenteLeitura ? (
                 <div className="relative">
                   <button
                     type="button"
@@ -587,7 +598,7 @@ export function ContratoForm({ initialData }: ContratoFormProps) {
             })}
           </nav>
 
-          <div className="p-5 sm:p-6 lg:p-8">
+          <fieldset disabled={somenteLeitura} className="min-w-0 p-5 sm:p-6 lg:p-8">
 
       {/* ABA 1 — Contrato */}
       <Painel ativo={aba === "contrato"} id="contrato">
@@ -615,6 +626,7 @@ export function ContratoForm({ initialData }: ContratoFormProps) {
                       setClientes((l) => [...l, c]);
                       return CLIENTE.opcao(c);
                     }}
+                    edicao={CLIENTE.edicao()}
                   />
                 )}
               />
@@ -942,6 +954,8 @@ export function ContratoForm({ initialData }: ContratoFormProps) {
             locais={locaisCobertos}
             tiposOs={tiposOs}
             tecnicos={tecnicos}
+            aoMudarTiposOs={setTiposOs}
+            aoMudarTecnicos={setTecnicos}
             value={recLocais}
             onChange={onChangeRecLocal}
           />
@@ -952,10 +966,34 @@ export function ContratoForm({ initialData }: ContratoFormProps) {
       <Painel ativo={aba === "rt"} id="rt">
         <FormSection title="Responsável técnico" icon={<HardHat className="w-3.5 h-3.5" />}>
           <FormGrid>
-            <FormField label="Responsável técnico" hint="Colaborador responsável por este contrato">
-              <Select {...register("responsavelTecnicoId")} placeholder="Selecione">
-                {responsaveis.map((rt) => (<option key={rt.id} value={rt.id}>{rt.nome}{rt.crea ? ` — CREA ${rt.crea}` : ""}</option>))}
-              </Select>
+            <FormField label="Responsável técnico" hint="Colaborador responsável por este contrato"
+              dica="Cadastrar ou editar aqui mexe no cadastro do colaborador, valendo em todo o sistema.">
+              <Controller
+                name="responsavelTecnicoId"
+                control={control}
+                render={({ field }) => (
+                  <SelectCadastroRapido
+                    value={(field.value as string) ?? ""}
+                    onChange={field.onChange}
+                    opcoes={responsaveis.map((rt) => ({ value: rt.id, label: RESPONSAVEL_TECNICO.rotulo({ ...rt, ativo: true }) }))}
+                    entidade={RESPONSAVEL_TECNICO.entidade}
+                    placeholder="Selecione"
+                    campos={RESPONSAVEL_TECNICO.campos}
+                    campoBusca="nome"
+                    permissao={RESPONSAVEL_TECNICO.permissao}
+                    linkCadastroCompleto={RESPONSAVEL_TECNICO.link}
+                    criar={async (v) => {
+                      const t = await RESPONSAVEL_TECNICO.criar(v);
+                      setResponsaveis((l) => [...l, { id: t.id, nome: t.nome, crea: t.crea }].sort((a, b) => a.nome.localeCompare(b.nome)));
+                      toast("Responsável técnico cadastrado.");
+                      return { value: t.id, label: RESPONSAVEL_TECNICO.rotulo({ ...t, ativo: true }) };
+                    }}
+                    edicao={RESPONSAVEL_TECNICO.edicao((t) => {
+                      setResponsaveis((l) => l.map((x) => (x.id === t.id ? { ...x, nome: t.nome, crea: t.crea } : x)));
+                    })}
+                  />
+                )}
+              />
             </FormField>
             <FormField label="Número ART" hint="Anotação de Responsabilidade Técnica">
               <Input {...register("artNumero")} placeholder="Ex: ART-2024-005678" />
@@ -1123,7 +1161,7 @@ export function ContratoForm({ initialData }: ContratoFormProps) {
         </FormSection>
       </Painel>
 
-          </div>{/* fim do conteúdo */}
+          </fieldset>{/* fim do conteúdo */}
 
           <div className="flex items-center justify-end gap-3 px-5 sm:px-6 lg:px-8 py-4 bg-surface-alt/40 border-t border-surface-border">
             <BotoesAcao />
