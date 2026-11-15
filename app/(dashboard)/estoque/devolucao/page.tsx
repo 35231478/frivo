@@ -37,7 +37,7 @@ export default async function FilaDevolucaoPage() {
 
       <div className="card overflow-hidden">
         {fila.length === 0 ? (
-          <ListaVazia mensagem="Nada a devolver. Quando sobrar material numa OS (ou uma OS com material reservado for cancelada), ela aparece aqui." />
+          <ListaVazia mensagem="Nada a devolver. Quando sobrar material numa OS, ela aparece aqui." />
         ) : (
           <TabelaPro
             tela="estoque-devolucao"
