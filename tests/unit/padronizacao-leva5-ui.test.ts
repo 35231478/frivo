@@ -283,12 +283,14 @@ describe("Leva 5 — sugestões da abertura da OS (sugere, não preenche no escu
 
   it("servidor fora do ar na sugestão: a abertura da OS segue normal (a sugestão é um extra)", async () => {
     dadosDaAbertura(SUG_COMPLETA);
-    respostas["GET /api/ordens/sugestoes?clienteId=c1"] = { status: 500, corpo: { erro: "ops" } };
+    // a recusa vem com um corpo que PARECE uma sugestão: nada de uma resposta não-ok pode entrar na tela
+    respostas["GET /api/ordens/sugestoes?clienteId=c1"] = { status: 500, corpo: { erro: "ops", janelaMeses: 6, tipoOs: { id: "tpX", nome: "NAO DEVIA APARECER", vezes: 9 }, executor: null } };
     const { default: NovaOrdemPage } = await import("@/app/(dashboard)/ordens/nova/page");
     await montar(createElement(NovaOrdemPage));
     await clicar(botao(/Selecione o cliente|Hospital/));
     await clicar(botao("Hospital Santa Clara"));
     expect($$("[data-sugestao]")).toEqual([]);
+    expect(txt(document.body)).not.toContain("NAO DEVIA APARECER");
     expect(await toasts()).toEqual([]); // nem toast de erro: não é problema de quem está abrindo a OS
   });
 
@@ -334,14 +336,15 @@ describe("Leva 5 — calendário: permissão nos botões que gravam", () => {
 
   it("sem Ordens › editar o cartão não é arrastável — e o cadeado continua só para OS concluída", async () => {
     await abrirCalendario(O(["visualizar"]), { "2026-11-17": [CARD] });
-    const cartao = $('[data-dia="2026-11-17"] [data-card-os], [data-dia="2026-11-17"]')!;
-    expect(cartao.className).not.toMatch(/cursor-grab/);
-    // nenhum cartão aberto mostra o aviso de OS concluída (o cadeado não virou "falta permissão")
+    const agarraveis = () => $$('[data-dia="2026-11-17"] div').filter((d) => /cursor-grab/.test(d.className)).length;
+    expect(txt($('[data-dia="2026-11-17"]')), "o cartão está na tela").toContain("Hospital");
+    expect(agarraveis(), "nenhum cartão agarrável sem a permissão").toBe(0);
+    // e o cadeado não virou "falta permissão" (ele é só da OS concluída)
     expect(txt(document.body)).not.toContain("Não é possível reagendar OS concluída");
 
     act(() => root.unmount()); caixa.remove(); document.body.innerHTML = "";
     await abrirCalendario(O(["visualizar", "editar"]), { "2026-11-17": [CARD] });
-    expect($$('[data-dia="2026-11-17"] div').some((d) => /cursor-grab/.test(d.className))).toBe(true);
+    expect(agarraveis(), "com a permissão, o cartão é agarrável").toBeGreaterThan(0);
   });
 
   it("o diálogo \"Nova OS\" usa os seletores do padrão (cadastrar na hora) e o toast da casa", async () => {

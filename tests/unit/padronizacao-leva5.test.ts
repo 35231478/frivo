@@ -17,6 +17,7 @@ import {
   JANELA_MESES, MINIMO_OS, chaveDoExecutor, inicioDaJanela, maisUsado, notaDaSugestao,
   sugestoesDoCliente, ultimoExecutor, type AtividadeDoHistorico,
 } from "@/lib/os/sugestoes";
+import { valorDaEquipe } from "@/components/os/seletor-tecnicos";
 import { filtroStatusPmoc, lerFiltrosPmoc, wherePmoc } from "@/lib/pmoc";
 import { ORDEM_PMOC, ORDEM_PADRAO_PMOC } from "@/lib/listas/ordenacao";
 import { lerOrdem, ordemPrisma } from "@/lib/listagem";
@@ -122,6 +123,33 @@ describe("sugestão de quem executa: o último, se não foi de passagem", () => 
   });
 });
 
+describe("aplicar a equipe sugerida: os membros APTOS e o líder como responsável", () => {
+  const tec = (id: string, tipos: string[] = []) => ({ id, nome: `Colaborador ${id}`, competencias: tipos.map((t) => ({ id: t })) });
+  const eq = { id: "eq1", nome: "Equipe Azul", cor: "#1d4ed8", liderId: "t1", membroIds: ["t2", "t3"] };
+
+  it("sem tipo de OS, entram todos os cadastrados; o líder é o responsável", () => {
+    expect(valorDaEquipe(eq, [tec("t1"), tec("t2"), tec("t3")])).toEqual({ tecnicoIds: ["t1", "t2", "t3"], responsavelId: "t1", equipeId: "eq1" });
+  });
+
+  it("com tipo de OS, quem NÃO tem a competência fica fora", () => {
+    const tecnicos = [tec("t1", ["tp9"]), tec("t2", ["tp1"]), tec("t3", [])];
+    expect(valorDaEquipe(eq, tecnicos, "tp1")).toEqual({ tecnicoIds: ["t2"], responsavelId: "t2", equipeId: "eq1" });
+  });
+
+  it("líder sem competência: o responsável passa a ser o primeiro apto", () => {
+    const tecnicos = [tec("t1", []), tec("t2", ["tp1"]), tec("t3", ["tp1"])];
+    expect(valorDaEquipe(eq, tecnicos, "tp1")).toMatchObject({ tecnicoIds: ["t2", "t3"], responsavelId: "t2" });
+  });
+
+  it("membro que não está na lista de colaboradores não entra", () => {
+    expect(valorDaEquipe(eq, [tec("t1"), tec("t2")])).toMatchObject({ tecnicoIds: ["t1", "t2"] });
+  });
+
+  it("ninguém apto: a equipe entra sem executor (a tela não oferece a sugestão)", () => {
+    expect(valorDaEquipe(eq, [tec("t1", []), tec("t2", []), tec("t3", [])], "tp1")).toEqual({ tecnicoIds: [], responsavelId: null, equipeId: "eq1" });
+  });
+});
+
 describe("o texto da sugestão diz de onde veio (nada de cara de IA)", () => {
   it("o tipo e o executor têm motivos diferentes, com o número de OS e a janela", () => {
     expect(notaDaSugestao(3, "tipo")).toBe("O tipo mais usado neste cliente — 3 OS nos últimos 6 meses. Confira antes de salvar.");
@@ -201,6 +229,15 @@ describe("Leva 5: as telas da Operação no padrão (guardas de fonte)", () => {
     expect(f).toMatch(/useSensors\(\.\.\.\(podeReagendar \? \[sensorMouse, sensorToque\] : \[\]\)\)/);
     expect(f).toMatch(/if \(!podeReagendar \|\| !data \|\| !destino/);
     expect(f).toMatch(/const travada = bloqueada\(card\);/);
+  });
+
+  it("reagendar pelo arrasto avisa e, se o servidor recusa, desfaz o movimento", () => {
+    // o arrasto do dnd-kit não acontece num DOM de teste: aqui a guarda é na fonte
+    const f = fonte("components/calendario/calendario-grid.tsx");
+    expect(f).toMatch(/toast\(`OS \$\{card\.numero\} movida para \$\{dataCurta\(destino\)\}\.`\);/);
+    expect(f).toMatch(/toast\(err\.message \?\? "Não foi possível reagendar a OS\.", "erro"\);/);
+    // a recusa volta o cartão para o dia de origem antes de avisar
+    expect(f).toMatch(/\/\/ Reverte\s+setEventos\(\(prev\) => \{/);
   });
 
   it("gerar OS recorrentes é ação sensível: botão só com permissão e resultado em toast", () => {
@@ -297,6 +334,23 @@ describe("Leva 5: as telas da Operação no padrão (guardas de fonte)", () => {
     expect(f).toMatch(/CAMPOS_TRAVAVEIS/);
     expect(f).toMatch(/travaDasLinhasDaOs\(id\)/);
     expect(f).toMatch(/status: 409/);
+  });
+
+  it("o histórico da sugestão é lido SÓ da empresa da sessão", () => {
+    // Na resposta o vazamento não dá para ver (os nomes são resolvidos por empresa e viriam nulos):
+    // a guarda é na consulta, que é onde o escopo tem de estar.
+    const f = fonte("app/api/ordens/sugestoes/route.ts");
+    expect(f).toMatch(/where: \{ empresaId, ordemServico: \{ clienteId/);
+    expect(f).toMatch(/const empresaId = guard\.session\.user!\.empresaId;/);
+    for (const r of ["tipoOs", "tecnico", "equipe"]) expect(f, r).toMatch(new RegExp(`prisma\\.${r}\\.findFirst\\(\\{ where: \\{ id: [^}]*empresaId`));
+  });
+
+  it("a sugestão segue o cliente: trocar ou tirar o cliente limpa o que estava na tela", () => {
+    // O seletor de cliente da abertura não oferece "nenhum", então o caminho não existe no DOM:
+    // a guarda é no gancho, que zera o estado quando fica sem cliente.
+    const f = fonte("components/os/sugestao-abertura.tsx");
+    expect(f).toMatch(/if \(!clienteId\) \{ setS\(VAZIO\); return; \}/);
+    expect(f).toMatch(/\}, \[clienteId\]\);/);
   });
 
   it("a sugestão nunca preenche sozinha: só entra no clique em \"Usar\"", () => {

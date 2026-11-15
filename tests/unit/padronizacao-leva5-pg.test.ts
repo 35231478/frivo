@@ -252,6 +252,22 @@ describe.skipIf(!URL_PG)("Leva 5 — Operação (PostgreSQL real)", () => {
       expect(await prisma.ordemServico.findUnique({ where: { id } })).toMatchObject({ prioridade: "NORMAL", descricao: "Serviço", observacoes: null });
     });
 
+    it("a trava cobre CADA campo sozinho: prioridade, descrição, observações, previsão, responsável, endereço e contrato", async () => {
+      const id = await os("c1", [{ tipoOsId: "tp1", tecnicoId: "t1" }]);
+      await prisma.osAceite.create({ data: { id: `ac3-${id}`, empresaId: "e1", ordemServicoId: id, token: `tk3-${id}`, situacao: "CONFIRMADO", metodo: "LOCAL", nome: "Cliente", assinatura: "x", confirmadoEm: new Date() } });
+      const sozinhos: Record<string, unknown>[] = [
+        { prioridade: "ALTA" }, { descricao: "Outra descrição do serviço" }, { observacoes: "Outra obs" },
+        { previsaoConclusao: "2027-01-10" }, { responsavelId: "uA" }, { unidadeId: "u1" }, { contratoId: null },
+      ];
+      for (const corpo of sozinhos) {
+        const r = await salvarOs(id, corpo);
+        expect(r.status, JSON.stringify(corpo)).toBe(409);
+        expect(String(r.json?.erro), JSON.stringify(corpo)).toMatch(/assinada/i);
+      }
+      // nada mudou no banco depois das sete tentativas
+      expect(await prisma.ordemServico.findUnique({ where: { id } })).toMatchObject({ prioridade: "NORMAL", descricao: "Serviço", observacoes: null, previsaoConclusao: null, responsavelId: null });
+    });
+
     it("a OS fechada continua aceitando o que NÃO é campo travado (o status tem regra própria)", async () => {
       const id = await os("c1", [{ tipoOsId: "tp1", tecnicoId: "t1" }], { status: "EM_ANDAMENTO" });
       await prisma.osAceite.create({ data: { id: `ac2-${id}`, empresaId: "e1", ordemServicoId: id, token: `tk2-${id}`, situacao: "CONFIRMADO", metodo: "LOCAL", nome: "Cliente", assinatura: "x", confirmadoEm: new Date() } });
