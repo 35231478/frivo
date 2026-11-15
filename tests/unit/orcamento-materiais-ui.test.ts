@@ -51,7 +51,15 @@ const PRODUTOS = [
 ];
 
 beforeAll(async () => {
-  await Promise.all([import("@/components/forms/orcamento-form"), import("@/components/providers/permissoes-provider"), import("@/components/config/telas/produtos"), import("@/components/orcamento/orcamento-documento")]);
+  // Um de cada vez, com os avisos primeiro: importar em paralelo cria duas cópias do módulo
+  // simulado e o teste passaria a ler um `toast` que não é o da tela
+  await import("@/components/ui/avisos");
+  for (const m of [
+    () => import("@/components/forms/orcamento-form"),
+    () => import("@/components/providers/permissoes-provider"),
+    () => import("@/components/config/telas/produtos"),
+    () => import("@/components/orcamento/orcamento-documento"),
+  ]) await m();
 }, 120_000);
 
 beforeEach(() => {
@@ -96,7 +104,8 @@ async function escolher(sel: Element | null | undefined, v: string) {
   await esperar();
 }
 async function montarForm(props: Record<string, unknown> = {}) {
-  const [{ OrcamentoForm }, { PermissoesProvider }] = await Promise.all([import("@/components/forms/orcamento-form"), import("@/components/providers/permissoes-provider")]);
+  const { OrcamentoForm } = await import("@/components/forms/orcamento-form");
+  const { PermissoesProvider } = await import("@/components/providers/permissoes-provider");
   caixa = document.createElement("div"); document.body.appendChild(caixa); root = createRoot(caixa);
   await act(async () => { root.render(createElement(PermissoesProvider, { role: "OPERADOR", permissoes: permissoesTotais(), children: createElement(OrcamentoForm as any, { mode: "novo", ...BASE, ...props }) })); });
   await esperar();

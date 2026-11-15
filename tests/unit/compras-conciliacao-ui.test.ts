@@ -29,7 +29,14 @@ let respostas: Record<string, { status: number; corpo: unknown }>;
 const chamadas: { url: string; metodo: string; corpo: any }[] = [];
 
 beforeAll(async () => {
-  await Promise.all([import("@/components/compras/conciliacao-nota"), import("@/components/compras/pedido-da-nota"), import("@/components/layout/header")]);
+  // Um de cada vez, com os avisos primeiro: importar em paralelo cria duas cópias do módulo
+  // simulado e o teste passaria a ler um `toast` que não é o da tela
+  await import("@/components/ui/avisos");
+  for (const m of [
+    () => import("@/components/compras/conciliacao-nota"),
+    () => import("@/components/compras/pedido-da-nota"),
+    () => import("@/components/layout/header"),
+  ]) await m();
 }, 120_000);
 beforeEach(() => {
   chamadas.length = 0;
