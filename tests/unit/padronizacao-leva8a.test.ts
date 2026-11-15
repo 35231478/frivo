@@ -172,6 +172,18 @@ describe("cadastro inline e editar no contexto", () => {
   });
 });
 
+describe("o ⓘ do card não fica por cima do ícone do card", () => {
+  it("com ⓘ, o ícone do card abre espaço para ele (nos dois estados do card)", () => {
+    // O ⓘ é posicionado no canto (absolute top-1.5 right-2); sem a margem, os dois se sobrepõem.
+    // O estado "ativo" (X) já reservava o espaço — faltava o estado normal.
+    const src = ler("components/listagem/periodo-cards.tsx");
+    const linha = src.split("\n").find((l) => l.includes("ativo ?") && l.includes("<Icone"))!;
+    expect(linha).toContain('dica && "mr-5"');
+    expect(linha.match(/dica && "mr-5"/g)).toHaveLength(2);
+    expect(src).toContain('<span className="absolute top-1.5 right-2">');
+  });
+});
+
 describe("os números na cara da casa", () => {
   it("valor da conta e do pagamento usam os tokens PLANILHA", () => {
     expect(ler(FORM)).toContain("className={PLANILHA.numero}");

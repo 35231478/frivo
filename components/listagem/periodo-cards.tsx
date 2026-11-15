@@ -140,7 +140,8 @@ export function CardResumo({ id, rotulo, icone: Icone, cor, q, v, legenda, unida
       {/* Tile compacto (estilo Conta Azul): rótulo pequeno + ícone discreto numa linha, valor logo abaixo */}
       <div className="flex items-center justify-between gap-1">
         <p className="text-[11px] text-ink-muted truncate">{rotulo}</p>
-        {ativo ? <X className={cn("w-3.5 h-3.5 text-ink-subtle shrink-0", dica && "mr-5")} /> : <Icone className={cn("w-4 h-4 shrink-0 opacity-80", cor)} />}
+        {/* Com ⓘ, o ícone do card abre espaço para ele (o ⓘ fica no canto): senão os dois se sobrepõem */}
+        {ativo ? <X className={cn("w-3.5 h-3.5 text-ink-subtle shrink-0", dica && "mr-5")} /> : <Icone className={cn("w-4 h-4 shrink-0 opacity-80", cor, dica && "mr-5")} />}
       </div>
       <p className="text-base font-bold text-ink mt-0.5 tabular-nums leading-tight" data-card-valor>{formatarMoeda(v)}</p>
       <p className="text-[10px] text-ink-subtle" data-card-qtd>{legenda ?? `${q} ${unidade ? (q === 1 ? unidade[0] : unidade[1]) : q === 1 ? "nota" : "notas"}`}</p>

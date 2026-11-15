@@ -107,6 +107,19 @@ terminam em `/sem-permissao`.
 > qualquer rolagem (`window.addEventListener("scroll", …, true)`) e o clique do Playwright rola a
 > tabela. Quem prova o conteúdo do ⋮ por permissão é o teste de DOM.
 
+## Acerto pedido na revisão: o ⓘ em cima do ícone do card
+
+Nos cards de resumo (Vencidos, A vencer, Pagos, Total do período) o ⓘ ficava **por cima do ícone do
+card**. A causa estava no componente compartilhado 
+(): o ícone fica no canto superior direito da primeira linha e
+o ⓘ é posicionado em  — o mesmo ponto. O estado "ativo" (o X de limpar o
+filtro) já reservava o espaço com ; faltava fazer o mesmo no estado normal.
+
+Conserto de uma linha, no componente compartilhado — então vale para contas a pagar, contas a
+receber, notas fiscais, reajustes e orçamentos de uma vez. Conferido no navegador, medindo as duas
+caixas:  nos cinco cards, desktop e celular, nas duas listas (folga de 7 px). Tem
+teste de guarda para não voltar, e o print .
+
 ## Fora de escopo, de propósito
 
 - **A lógica de pagamento/baixa/emissão** não foi tocada: esta leva padroniza a tela.
