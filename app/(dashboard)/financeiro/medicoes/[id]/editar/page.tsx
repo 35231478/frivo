@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { notFound, redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
+import { pode } from "@/lib/permissoes";
 import { prisma } from "@/lib/prisma";
 import { MedicaoForm } from "@/components/medicao/medicao-form";
 
@@ -8,8 +9,10 @@ export const metadata: Metadata = { title: "Editar medição" };
 
 export default async function EditarMedicaoPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const session = await auth();
-  const empresaId = session!.user!.empresaId;
+  const u = (await auth())!.user!;
+  // Editar medição é faturar: Financeiro › medições
+  if (!pode(u.permissoes, "financeiro", "medicoes", u.role)) redirect("/sem-permissao");
+  const empresaId = u.empresaId;
 
   const [medicao, clientes, servicos, produtos] = await Promise.all([
     prisma.medicao.findFirst({

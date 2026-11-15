@@ -130,7 +130,7 @@ const FINANCEIRO: Secao[] = [
       {
         tipo: "grupo", label: "Recebimentos", icone: Receipt, itens: [
           { href: "/financeiro/contas-receber", icone: Receipt, label: "Contas a receber", modulo: "financeiro" },
-          { href: "/financeiro/medicoes", icone: FileBarChart, label: "Medições", modulo: "financeiro" },
+          { href: "/financeiro/medicoes", icone: FileBarChart, label: "Medições", modulo: "financeiro", acao: "medicoes" },
           { href: "/financeiro/faturamento-contratos", icone: CalendarClock, label: "Faturamento de contratos", modulo: "financeiro", acao: "medicoes" },
           // "Perdas" saiu daqui: ver perdas = filtro de status "Perda" em Contas a receber; marcar/desmarcar
           // perda virou ação dentro de "Editar" a conta.
