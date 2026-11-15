@@ -299,6 +299,9 @@ describe("checklists preenchidos (Detalhe, Editar, Excluir reversível)", () => 
     expect($$("[data-valor-item]", painel).map(txt)).toEqual(["OK", "Sem ruído"]);
     expect($("[data-foto-item]", painel)!.getAttribute("src")).toBe("data:image/png;base64,FOTO");
     expect($$("[data-opcao], textarea, input, select", painel)).toEqual([]);
+    // nem o botão de tirar a foto, nem o de trocar: a foto do detalhe só se olha
+    expect($$("button", painel).map((b) => b.getAttribute("aria-label"))).not.toContain("Excluir a foto de Foto do painel");
+    expect(txt(painel)).not.toContain("Trocar foto");
     expect(txt($("[data-observacao-checklist]", painel))).toContain("Tudo certo");
     expect($("[data-editar-no-detalhe]")).toBeNull();
     expect($("[data-salvar-checklist]")).toBeNull();
@@ -415,6 +418,9 @@ describe("tela do checklist de veículo (Preencher | Preenchidos)", () => {
 
     await abrir(montarPermissoes({}));
     expect(txt($("[data-somente-leitura]"))).toBe("Somente leitura: requer a permissão Veículos › checklist.");
+    // sem permissão nenhuma a tela não traz o formulário (nem a lista) — só o aviso
+    expect($("[data-checklist-preenchimento]")).toBeNull();
+    expect($("[data-checklists-preenchidos]")).toBeNull();
   });
 
   it("?aba=preenchidos abre direto na lista — só para quem pode ver", async () => {
@@ -460,8 +466,13 @@ describe("tela do checklist de veículo (Preencher | Preenchidos)", () => {
     expect($("[data-checklist-enviado]")).toBeNull();
     expect($('[data-item-checklist="i1"] [data-opcao="OK"]')!.getAttribute("aria-pressed")).toBe("true");
     expect(await toasts()).toEqual([]);
-    // quem só preenche não ganha "Ver preenchidos" (não pode ver a lista)
+
+    // aceito: quem só preenche NÃO ganha "Ver preenchidos" (não pode ver a lista) — sai por "Voltar para veículos"
+    respostas["POST /api/checklists"] = { status: 201, corpo: { id: "novo", temAlerta: false } };
+    await clicar($("[data-enviar-checklist]"));
+    expect($("[data-checklist-enviado]")).toBeTruthy();
     expect($("[data-ver-preenchidos]")).toBeNull();
+    expect(botao("Voltar para veículos")).toBeTruthy();
   });
 
   it("vocabulário: 'modelo de checklist' (nunca 'template') e a instrução da página no ⓘ", () => {
@@ -1175,6 +1186,18 @@ describe("padrão da casa nas telas da leva", () => {
       "components/veiculos/checklists-preenchidos.tsx", "components/veiculos/checklist-preenchimento.tsx", "components/ui/inativar-registro.tsx", "app/(dashboard)/colaboradores/colaboradores-lista-client.tsx"]) {
       expect(fonte(f), f).toMatch(/import \{[^}]*\btoast\b[^}]*\} from "@\/components\/ui\/avisos"/);
     }
+  });
+
+  it("a lista de checklists não carrega as fotos (base64) do banco — só o que ela mostra", () => {
+    // A resposta nunca traz foto (o map descarta os itens), então isto só se vê no código: a leitura
+    // da lista pede apenas o `alerta` de cada item. Sem isso, uma página de 200 checklists traria
+    // dezenas de MB de base64 do banco para contar alertas.
+    const src = fonte("app/api/checklists/route.ts");
+    const lista = src.slice(src.indexOf("export async function GET"), src.indexOf("export async function POST"));
+    expect(lista).toContain("itens: { select: { alerta: true } }");
+    expect(lista).not.toMatch(/\bfoto\b/);
+    // o detalhe, sim, traz a foto (é o que ele mostra)
+    expect(fonte("app/api/checklists/[id]/route.ts")).toContain("itens: { include: { itemTemplate:");
   });
 
   it("as abas de situação são o mesmo componente no cadastro padrão, nos formulários, nos modelos e nos checklists", () => {

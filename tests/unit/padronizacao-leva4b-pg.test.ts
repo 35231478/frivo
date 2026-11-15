@@ -251,7 +251,8 @@ describe.skipIf(!URL_PG)("Leva 4B: Veículos, Colaboradores e Equipes — o serv
       logar(GERENCIA);
       const r = await chamar("checklists/[id]", "PUT", {
         colaboradorId: null, observacaoGeral: "  Corrigido depois  ", status: "CONCLUIDO",
-        itens: [{ itemTemplateId: "i1", valor: "NOK", alerta: false }, { itemTemplateId: "i2", valor: "Reserva" }, { itemTemplateId: "i3", valor: "  " }],
+        // Como a tela manda: TODO item do checklist, e o de foto SEM a chave `foto` quando ela não mudou
+        itens: [{ itemTemplateId: "i1", valor: "NOK", alerta: false }, { itemTemplateId: "i2", valor: "Reserva" }, { itemTemplateId: "i3", valor: "  " }, { itemTemplateId: "i4", valor: null }],
       }, { id: "p1" });
       expect(r.status).toBe(200);
       const c = await p1();
