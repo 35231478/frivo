@@ -12,6 +12,12 @@ import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 
 const nav = vi.hoisted(() => ({ refresh: vi.fn() }));
+const avisos = vi.hoisted(() => ({ lista: [] as [string, string][] }));
+vi.mock("@/components/ui/avisos", async (orig) => ({
+  ...(await orig<typeof import("@/components/ui/avisos")>()),
+  toast: (m: string, t = "sucesso") => { avisos.lista.push([m, t]); },
+}));
+
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push: () => {}, refresh: nav.refresh, replace: () => {} }) }));
 
 let root: Root;
@@ -20,6 +26,7 @@ let respostas: Record<string, { status: number; corpo: unknown }>;
 const chamadas: { url: string; metodo: string; corpo: any }[] = [];
 
 beforeEach(() => {
+  avisos.lista.length = 0;
   chamadas.length = 0;
   nav.refresh.mockClear();
   respostas = {};
@@ -66,7 +73,9 @@ describe("painel de preço de venda", () => {
     respostas["/api/estoque/pGas/preco"] = { status: 200, corpo: { preco: 142.86, margemVenda: 30 } };
     await clicar($("[data-salvar-preco]"));
     expect(chamadas.at(-1)).toEqual({ url: "/api/estoque/pGas/preco", metodo: "PUT", corpo: { modo: "margem", margem: 30, custoBase: 100 } });
-    expect(txt('[role="status"]')).toContain("Preço salvo: R$ 142,86.");
+    // Sucesso é toast (padrão da casa); a tela só fica com erro de validação
+    expect(avisos.lista.map(([m, t]) => [m.replace(/\u00a0/g, " "), t])).toEqual([["Preço salvo: R$ 142,86.", "sucesso"]]);
+    expect(txt('[role="status"]')).toBe("");
     expect(txt("[data-situacao-preco]")).toBe("Preço atual");
     expect(txt("[data-preco-salvo]")).toContain("definido por margem de 30,0% sobre a venda");
     expect(nav.refresh).toHaveBeenCalled();

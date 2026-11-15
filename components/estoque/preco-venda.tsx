@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { toast } from "@/components/ui/avisos";
 import { CheckCircle2, RotateCcw, Tag } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -113,7 +114,9 @@ export function PrecoVenda({ produtoId, unidade, custo, rotuloCusto = "Último c
       if (!r.ok) { setMsg({ tipo: "erro", texto: j.erro ?? "Não foi possível salvar o preço." }); return; }
       setSalvo({ preco: j.preco, margemVenda: j.margemVenda });
       setEditado(false);
-      setMsg({ tipo: "ok", texto: `Preço salvo: ${moeda(j.preco)}.` });
+      // Sucesso é toast (padrão da casa); o que fica na tela é erro de validação
+      setMsg(null);
+      toast(`Preço salvo: ${moeda(j.preco)}.`);
       router.refresh();
     } catch {
       setMsg({ tipo: "erro", texto: "Sem conexão. Tente de novo." });

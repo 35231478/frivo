@@ -11,8 +11,11 @@ import { LancarEstoque } from "@/components/estoque/lancar-estoque";
 import { BarraEstoque } from "@/components/estoque/estoque-barra";
 import { SaldoQtd, SeloSituacao } from "@/components/estoque/situacao";
 import { ConteudoUrl, LimparBuscaUrl, ListaUrl, PaginacaoUrl, TabelaProUrl } from "@/components/listagem/lista-url";
+import { Dica } from "@/components/ui/dica";
 
 export const metadata: Metadata = { title: "Estoque" };
+
+const AJUDA = "O saldo de cada produto que controla estoque: a soma dos movimentos (entrada, saída, ajuste e inventário), que ficam no extrato do produto. Quem gerencia lança movimento aqui mesmo; nenhum movimento é apagado — corrigir é lançar ajuste, e o extrato guarda os dois. No mínimo ou abaixo e negativo aparecem destacados e no aviso de cima.";
 
 /**
  * Estoque (padrão da casa: barra de busca/filtros + TabelaPro): o saldo de cada produto que
@@ -34,10 +37,18 @@ export default async function EstoquePage({ searchParams }: { searchParams: Prom
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-3">
             <div className="p-2 bg-surface-alt rounded-lg"><Package className="w-5 h-5 text-ink-muted" /></div>
-            <h1 className="page-title">Estoque</h1>
+            <h1 className="page-title flex items-center gap-1.5">Estoque <Dica texto={AJUDA} rotulo="Estoque" lado="direita" /></h1>
             <span className="text-xs font-semibold text-ink-muted bg-surface-alt border border-surface-border px-2.5 py-1 rounded-full">{total}</span>
           </div>
-          <Link href="/estoque/notas" className="inline-flex items-center gap-2 bg-primary-500 hover:bg-primary-600 text-white px-4 py-2.5 rounded-lg text-sm font-semibold shadow-sm" data-ir-notas>
+          <Link
+            href="/estoque/notas" data-ir-notas
+            className={cn(
+              "inline-flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-semibold",
+              podeLancar
+                ? "bg-primary-500 hover:bg-primary-600 text-white shadow-sm"
+                : "border border-surface-border bg-white text-ink hover:bg-surface-alt",
+            )}
+          >
             <FileUp className="w-4 h-4" /> {podeLancar ? "Importar NF de compra" : "Notas de compra"}
           </Link>
         </div>

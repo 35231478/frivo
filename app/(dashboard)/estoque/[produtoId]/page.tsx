@@ -18,8 +18,11 @@ import { RecalcularSaldo } from "@/components/estoque/recalcular-saldo";
 import { SaldoQtd, SeloSituacao } from "@/components/estoque/situacao";
 import { PrecoVenda } from "@/components/estoque/preco-venda";
 import { ConteudoUrl, LimparBuscaUrl, ListaUrl, PaginacaoUrl, TabelaProUrl } from "@/components/listagem/lista-url";
+import { Dica } from "@/components/ui/dica";
 
 export const metadata: Metadata = { title: "Extrato do estoque" };
+
+const AJUDA = "Cada movimento deste produto, do mais novo para o mais antigo, com a quantidade com sinal e o saldo que ficou depois dele. O saldo atual é a soma de tudo. Movimento não se apaga nem se edita: para corrigir, lance um ajuste (ou um inventário) — os dois ficam aqui, e dá para ver quem fez e quando.";
 
 const dataHora = (d: Date) => formatarData(d, "dd/MM/yyyy, HH:mm"); // Brasília
 const moeda = (n: number) => n.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
@@ -58,7 +61,10 @@ export default async function ExtratoEstoquePage({ params, searchParams }: {
           <div className="flex items-center gap-3 min-w-0">
             <div className="p-2 bg-surface-alt rounded-lg"><Package className="w-5 h-5 text-ink-muted" /></div>
             <div className="min-w-0">
-              <h1 className="page-title truncate">{p.nome}</h1>
+              <h1 className="page-title flex items-center gap-1.5 min-w-0">
+                <span className="truncate">{p.nome}</span>
+                <Dica texto={AJUDA} rotulo="Extrato do estoque" lado="direita" />
+              </h1>
               <p className="text-xs text-ink-muted">Extrato do estoque{!p.ativo && " · produto inativo"}{!p.controlaEstoque && " · não controla estoque"}</p>
             </div>
           </div>
