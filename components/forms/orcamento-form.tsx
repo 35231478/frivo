@@ -16,9 +16,9 @@ import { CLIENTE, CONTATO, PRODUTO, SERVICO, UNIDADE } from "@/components/cadast
 import { OsVinculadas } from "@/components/orcamento/os-vinculadas";
 import { TotaisBloco, type DescontoGrupoState } from "@/components/orcamento/totais-bloco";
 import { PropostaCampos, PROPOSTA_VAZIA, type PropostaState } from "@/components/orcamento/proposta-campos";
-import { cn, LABELS_TIPO_ORCAMENTO } from "@/lib/utils";
+import { cn } from "@/lib/utils";
 import type { TipoDesconto, TipoOrcamento } from "@prisma/client";
-import { AlertCircle, Tags, Calculator, FileSignature, Sparkles, RefreshCw } from "lucide-react";
+import { AlertCircle, Tags, Sparkles, RefreshCw } from "lucide-react";
 import { chaveDiaCivil, chaveHojeBR } from "@/lib/fuso";
 import { calcularOrcamento, DIAS_VALIDADE_PADRAO, totalDoItem, validadePadrao } from "@/lib/orcamentos/calculo";
 import { pecasDosMateriais, valorDaLinha } from "@/lib/orcamentos/materiais";
@@ -237,9 +237,9 @@ export function OrcamentoForm({
     },
   };
 
-  // Dentro da OS só existe "Orçamento" (proposta de contrato é coisa do módulo Comercial)
-  const tiposPermitidos: TipoOrcamento[] = embutido ? ["COMUM"] : ["COMUM", "PROPOSTA_CONTRATO"];
-  const [tipo, setTipo] = useState<TipoOrcamento>(embutido ? "COMUM" : inicial?.tipo ?? "COMUM");
+  // A tela cria SÓ orçamento: não há escolha de tipo. O que já é proposta de contrato continua
+  // abrindo e salvando como proposta (nada é convertido em silêncio); a proposta será redefinida.
+  const tipo: TipoOrcamento = embutido ? "COMUM" : inicial?.tipo ?? "COMUM";
   // RT/ART valem nos dois tipos; o orçamento novo nasce com o RT padrão da empresa
   const [proposta, setProposta] = useState<PropostaState>(
     inicial ? propostaInicialToState(inicial.proposta) : { ...PROPOSTA_VAZIA, responsavelTecnicoId: padroes?.responsavelTecnicoId ?? "" },
@@ -576,37 +576,6 @@ export function OrcamentoForm({
         <p className="text-xs text-atencao-texto" data-aviso-tabela-inativa>A tabela do cliente (“{tabelaInativa.nome}”) está inativa: valem os preços padrão do catálogo.</p>
       )}
 
-      {tiposPermitidos.length > 1 && <div className="card-padded">
-        <FormSection title="Tipo de documento">
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            {tiposPermitidos.map((t) => {
-              const ativo = tipo === t;
-              const Icone = t === "COMUM" ? Calculator : FileSignature;
-              return (
-                <button
-                  key={t}
-                  type="button"
-                  onClick={() => setTipo(t)}
-                  className={cn(
-                    "flex items-start gap-3 rounded-lg border-2 px-4 py-3 text-left transition-all",
-                    ativo
-                      ? t === "COMUM" ? "border-primary-500 bg-primary-50/60" : "border-success-500 bg-success-50/60"
-                      : "border-surface-border hover:border-surface-border/80 bg-white",
-                  )}
-                >
-                  <Icone className={cn("w-5 h-5 mt-0.5 shrink-0", ativo ? (t === "COMUM" ? "text-primary-600" : "text-success-600") : "text-ink-subtle")} />
-                  <div>
-                    <p className="text-sm font-semibold text-ink">{LABELS_TIPO_ORCAMENTO[t]}</p>
-                    <p className="text-xs text-ink-muted">
-                      {t === "COMUM" ? "Proposta comercial avulsa de serviços e produtos." : "Contrato de manutenção, convertido em contrato após a aprovação."}
-                    </p>
-                  </div>
-                </button>
-              );
-            })}
-          </div>
-        </FormSection>
-      </div>}
 
       <div className="card-padded space-y-6">
         <FormSection title="Identificação">
