@@ -69,6 +69,11 @@ A tabela de cada módulo, mais abaixo, traz o estado conferido.
   existiam, filtro "Descartados" com quem descartou e quando, atalho para a ficha do cliente), mais as
   sugestões de item do orçamento: o que o cliente mais contratou nos últimos 6 meses, com o último
   preço praticado. Ver [padronizacao-leva6b.md](padronizacao-leva6b.md).
+- **Leva 7A**: Estoque que mexe em saldo — ⓘ na lista e no extrato contando a regra do razão (movimento
+  não se apaga: corrigir é ajuste ou inventário), as duas filas (a separar / a devolver) na tabela da
+  casa com cartões no celular, a planilha da separação nos tokens da casa, toast em todo lançamento e
+  no preço de venda, e a prova em teste de que o 403 não muda a tela. Ver
+  [padronizacao-leva7a.md](padronizacao-leva7a.md).
 - **Leva 4B** (🔵, com SQL): Veículos, Colaboradores e Equipes — checklist de veículo preenchido com
   detalhe, edição e exclusão reversível; responsável técnico cadastrado na hora em Dados da empresa;
   aba Inativos com Reativar nos formulários de OS e nos modelos de checklist; listas na tabela da casa e
@@ -204,19 +209,23 @@ que fazer quando há empate ou pouco histórico (a proposta é não sugerir nada
 
 ### Estoque e compras (11)
 
+> As seis telas que mexem em saldo foram feitas na **leva 7A**
+> (`docs/padronizacao-leva7a.md`). As notas de compra e os pedidos ficam para a **7B**, que é o
+> fluxo de comprar de ponta a ponta.
+
 | Tela | Lista no padrão | Busca e página no servidor | Ajuda no ⓘ | Toast | Botões por permissão | Cadastro inline | Edição no contexto | Celular | O que a varredura não viu |
 |---|---|---|---|---|---|---|---|---|---|
 | `/compras/pedidos` | — | sim | — | sim | sim | sim | — | sim | tabela própria; ajuda no ⓘ; edição no contexto |
 | `/compras/pedidos/[id]` | — | — | — | sim | sim | sim | — | sim | tabela própria; ajuda no ⓘ; edição no contexto |
 | `/compras/pedidos/novo` | — | — | — | sim | sim | sim | — | sim | ajuda no ⓘ; edição no contexto |
-| `/estoque` | — | — | sim | — | sim | — | — | sim | toast |
-| `/estoque/[produtoId]` | — | — | sim | sim | sim | — | — | sim | nada apontado pela varredura |
-| `/estoque/devolucao` | — | — | sim | — | sim | — | — | sim | tabela própria; toast |
-| `/estoque/devolucao/[osId]` | — | — | sim | sim | sim | — | — | sim | nada apontado pela varredura |
+| `/estoque` | sim | sim | sim | sim | sim | — | — | sim | feita na leva 7A: ⓘ com a regra do razão, toast no lançamento de movimento (entrada, saída, ajuste, inventário) e o botão do topo deixando de prometer "Importar NF" para quem não gerencia. A lista já era TabelaPro desde a E1; não tem seletor de cadastro (os produtos vêm do cadastro) |
+| `/estoque/[produtoId]` | sim | sim | sim | sim | sim | — | — | sim | feita na leva 7A: ⓘ dizendo que movimento não se apaga nem se edita (corrigir é ajuste/inventário) e o preço de venda confirmando por toast |
+| `/estoque/devolucao` | sim | — | sim | — | sim | — | — | sim | feita na leva 7A: tabela própria → TabelaPro, cartões e lista vazia da casa. Quem grava é a tela da OS |
+| `/estoque/devolucao/[osId]` | — | — | sim | sim | sim | — | — | sim | conferida na leva 7A: já usava os componentes da casa e só gravava depois do ok do servidor; entrou como guarda de teste |
 | `/estoque/notas` | — | sim | — | — | sim | — | — | sim | tabela própria; toast; ajuda no ⓘ |
 | `/estoque/notas/[id]` | — | — | — | sim | sim | sim | sim | sim | ajuda no ⓘ |
-| `/estoque/separacao` | — | — | sim | — | sim | — | — | sim | tabela própria; toast |
-| `/estoque/separacao/[osId]` | — | — | sim | sim | sim | — | — | sim | tabela própria |
+| `/estoque/separacao` | sim | — | sim | — | sim | — | — | sim | feita na leva 7A: a tabela própria virou TabelaPro com os cartões de celular e a lista vazia da casa. Não grava nada (quem grava é a tela da OS): sem toast a acrescentar |
+| `/estoque/separacao/[osId]` | — | — | sim | sim | sim | — | — | sim | feita na leva 7A: a planilha de trabalho passou aos tokens PLANILHA (é formulário, não listagem). Já só gravava depois do ok do servidor — agora com teste provando que o 403 não muda a tela |
 
 ### Financeiro (22)
 

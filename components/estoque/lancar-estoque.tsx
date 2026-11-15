@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { FormField } from "@/components/ui/form-field";
 import { cn } from "@/lib/utils";
+import { toast } from "@/components/ui/avisos";
 import { arred, calcularMovimento, formatarDelta, formatarQtd, lancamentoManualSchema, mensagemLancamento } from "@/lib/estoque/regras";
 
 type Op = "ENTRADA" | "SAIDA" | "AJUSTE" | "INVENTARIO";
@@ -19,6 +20,14 @@ const OPS: { id: Op; label: string; dica: string }[] = [
 ];
 
 export interface ProdutoLancamento { id: string; nome: string; unidade: string; saldo: number }
+
+/** O que o toast diz: "Entrada lançada", "Ajuste lançado"… */
+const FEITO: Record<Op, string> = {
+  ENTRADA: "Entrada lançada",
+  SAIDA: "Saída lançada",
+  AJUSTE: "Ajuste lançado",
+  INVENTARIO: "Inventário lançado",
+};
 
 /** Número digitado ("1.234,5" ou "2,5") → number; vazio/ inválido = null */
 function lerNumero(v: string): number | null {
@@ -68,6 +77,9 @@ export function LancarEstoque({ produto, compacto = false }: { produto: ProdutoL
       const j = await r.json().catch(() => ({}));
       if (!r.ok) { setErro(j.erro ?? "Não foi possível lançar."); return; }
       setFeito({ saldo: j.saldo, aviso: j.aviso ?? null });
+      // Confirmação no lugar de sempre (toast da casa); o aviso de saldo negativo fica no modal,
+      // que não some sozinho e ainda oferece "Lançar outro".
+      toast(`${FEITO[op]}. Saldo agora: ${formatarQtd(j.saldo)} ${un}.`);
       router.refresh();
     } catch {
       setErro("Sem conexão. Tente de novo.");
@@ -84,8 +96,8 @@ export function LancarEstoque({ produto, compacto = false }: { produto: ProdutoL
       <Modal aberto={aberto} onFechar={fechar} titulo={`Lançar estoque · ${produto.nome}`} tamanho="sm">
         {feito ? (
           <div className="space-y-4" data-lancamento-feito>
-            <p className="flex items-center gap-2 text-sm font-semibold text-success-700">
-              <CheckCircle2 className="w-4 h-4" /> Lançado. Saldo agora: {formatarQtd(feito.saldo)} {un}
+            <p className="flex items-center gap-2 text-sm font-semibold text-success-700" data-saldo-depois>
+              <CheckCircle2 className="w-4 h-4" /> Saldo agora: {formatarQtd(feito.saldo)} {un}
             </p>
             {feito.aviso && (
               <p role="alert" className="flex items-start gap-2 text-sm text-atrasado-texto bg-atrasado-claro border border-atrasado/20 rounded-lg px-3 py-2">

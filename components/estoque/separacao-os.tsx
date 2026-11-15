@@ -6,6 +6,7 @@ import { AlertTriangle, ArrowLeft, Check, PackageOpen, Undo2 } from "lucide-reac
 import { Button } from "@/components/ui/button";
 import { StatusPill } from "@/components/ui/status-pill";
 import { Dica } from "@/components/ui/dica";
+import { PLANILHA } from "@/lib/planilha";
 import { confirmar, toast } from "@/components/ui/avisos";
 import { cn, formatarData, formatarDataHora } from "@/lib/utils";
 import { arred, formatarQtd } from "@/lib/estoque/regras";
@@ -152,44 +153,44 @@ export function SeparacaoOs({ inicial }: { inicial: SeparacaoDaOs }) {
           </ul>
 
           {/* Desktop: a planilha */}
-          <table className="hidden md:table w-full text-sm" data-tabela-separacao>
-            <thead className="bg-surface-page text-[11px] font-semibold uppercase tracking-wider text-ink-muted">
-              <tr>
-                <th className="text-left px-3 py-2">Material</th>
-                <th className="text-right px-3 py-2">Necessário</th>
-                <th className="text-right px-3 py-2">Separado</th>
-                <th className="text-right px-3 py-2">
+          <table className={cn("hidden md:table", PLANILHA.tabela)} data-tabela-separacao>
+            <thead>
+              <tr className={PLANILHA.cabecalho}>
+                <th className={cn(PLANILHA.th, "text-left")}>Material</th>
+                <th className={cn(PLANILHA.th, "text-right")}>Necessário</th>
+                <th className={cn(PLANILHA.th, "text-right")}>Separado</th>
+                <th className={cn(PLANILHA.th, "text-right")}>
                   <span className="inline-flex items-center gap-1 justify-end">Disponível <Dica rotulo="Disponível" texto="Saldo atual do produto no estoque (já descontadas as reservas de outras OS). Se não cobrir, fica vermelho: a separação é registrada mesmo assim e o saldo fica negativo até a entrada." /></span>
                 </th>
-                <th className="text-right px-3 py-2">Separar agora</th>
-                <th className="text-left px-3 py-2">Situação</th>
-                <th className="px-3 py-2" />
+                <th className={cn(PLANILHA.th, "text-right")}>Separar agora</th>
+                <th className={cn(PLANILHA.th, "text-left")}>Situação</th>
+                <th className={PLANILHA.th} />
               </tr>
             </thead>
-            <tbody className="divide-y divide-surface-linha">
+            <tbody>
               {materiais.map((m) => {
                 const { aviso, saldoVermelho } = linhaMaterial(m);
                 return (
-                  <tr key={m.id} data-material-sep={m.id} data-situacao-material={m.situacao} className={cn(saldoVermelho && "bg-atrasado-claro/40")}>
-                    <td className="px-3 py-2 min-w-0">
+                  <tr key={m.id} data-material-sep={m.id} data-situacao-material={m.situacao} className={cn(PLANILHA.linha, PLANILHA.linhaHover, saldoVermelho && "bg-atrasado-claro/40 even:bg-atrasado-claro/40 hover:bg-atrasado-claro/60")}>
+                    <td className={cn(PLANILHA.td, "min-w-0")}>
                       <p className="font-medium text-ink">{m.descricao}</p>
                       <p className="text-xs text-ink-subtle">{m.item}{m.kitNome ? ` · Kit ${m.kitNome}` : ""}</p>
                       {aviso && <p className="text-xs text-atrasado-texto flex items-center gap-1 mt-0.5" data-falta-saldo><AlertTriangle className="w-3.5 h-3.5" /> {aviso}</p>}
                     </td>
-                    <td className="px-3 py-2 text-right tabular-nums" data-necessario>{texto(m.quantidade)} <span className="text-xs text-ink-muted">{m.unidade}</span></td>
-                    <td className="px-3 py-2 text-right tabular-nums text-ink-muted" data-separado>{texto(m.quantidadeSeparada)}</td>
-                    <td className={cn("px-3 py-2 text-right tabular-nums font-semibold", saldoVermelho ? "text-atrasado" : "text-ink")} data-saldo>{m.saldo == null ? "—" : texto(m.saldo)}</td>
-                    <td className="px-3 py-2 text-right">
+                    <td className={cn(PLANILHA.td, PLANILHA.numero)} data-necessario>{texto(m.quantidade)} <span className="text-xs text-ink-muted">{m.unidade}</span></td>
+                    <td className={cn(PLANILHA.td, PLANILHA.numero, "text-ink-muted")} data-separado>{texto(m.quantidadeSeparada)}</td>
+                    <td className={cn(PLANILHA.td, PLANILHA.numero, "font-semibold", saldoVermelho ? "text-atrasado" : "text-ink")} data-saldo>{m.saldo == null ? "—" : texto(m.saldo)}</td>
+                    <td className={cn(PLANILHA.td, "text-right")}>
                       {m.falta > 0 && m.produtoId ? (
                         <input type="text" inputMode="decimal" value={agora[m.id] ?? ""} onChange={(e) => setAgora((a) => ({ ...a, [m.id]: e.target.value }))}
                           className={cn("input-base w-24 py-1 text-right tabular-nums", saldoVermelho && "border-atrasado text-atrasado")} aria-label={`Separar agora: ${m.descricao}`} data-alvo />
                       ) : <span className="text-ink-subtle">—</span>}
                     </td>
-                    <td className="px-3 py-2">
+                    <td className={PLANILHA.td}>
                       <StatusPill tom={TOM_SITUACAO_MATERIAL[m.situacao]} tamanho="sm">{LABEL_SITUACAO_MATERIAL[m.situacao]}</StatusPill>
                       {m.quantidadeSeparada > 0 && m.separadoPor && <p className="text-[11px] text-ink-subtle mt-0.5" data-separado-por>por {m.separadoPor}{m.separadoEm ? ` · ${formatarDataHora(m.separadoEm)}` : ""}</p>}
                     </td>
-                    <td className="px-3 py-2 text-right">
+                    <td className={cn(PLANILHA.td, "text-right")}>
                       {m.quantidadeSeparada > 0 && m.estadoSeparacao === "SEPARADO" && (
                         <button type="button" onClick={() => desfazer(m)} disabled={salvando} className="inline-flex items-center gap-1 text-xs font-semibold text-atrasado hover:underline" data-acao="desfazer-separacao"><Undo2 className="w-3.5 h-3.5" /> Desfazer</button>
                       )}

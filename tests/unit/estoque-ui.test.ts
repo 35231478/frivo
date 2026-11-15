@@ -12,6 +12,12 @@ import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 
 const refresh = vi.hoisted(() => vi.fn());
+const avisos = vi.hoisted(() => ({ lista: [] as [string, string][] }));
+vi.mock("@/components/ui/avisos", async (orig) => ({
+  ...(await orig<typeof import("@/components/ui/avisos")>()),
+  toast: (m: string, t = "sucesso") => { avisos.lista.push([m, t]); },
+}));
+
 vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh, push: () => {}, replace: () => {} }) }));
 
 let root: Root;
@@ -20,6 +26,7 @@ let resposta: { status: number; corpo: unknown };
 const enviados: { url: string; corpo: any }[] = [];
 
 beforeEach(() => {
+  avisos.lista.length = 0;
   enviados.length = 0;
   refresh.mockClear();
   resposta = { status: 201, corpo: { saldo: 12, aviso: null, movimentacao: {} } };
@@ -64,7 +71,9 @@ describe("Lançar estoque", () => {
     expect($("[data-previa]")!.textContent).toBe("Lançamento: +10 kg → saldo fica 12 kg");
     await enviar();
     expect(enviados).toEqual([{ url: "/api/estoque/p1/movimentacoes", corpo: { operacao: "ENTRADA", quantidade: 10, custoUnitario: 45.9, observacao: "NF 77" } }]);
-    expect($("[data-lancamento-feito]")!.textContent).toContain("Lançado. Saldo agora: 12 kg");
+    // Sucesso é toast (padrão da casa); o modal fica com o saldo e o "Lançar outro"
+    expect(avisos.lista).toEqual([["Entrada lançada. Saldo agora: 12 kg.", "sucesso"]]);
+    expect($("[data-lancamento-feito]")!.textContent).toContain("Saldo agora: 12 kg");
     expect($('[role="alert"]')).toBeNull();
     expect(refresh).toHaveBeenCalledTimes(1);
   });
