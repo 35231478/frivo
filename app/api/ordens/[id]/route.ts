@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { exigirPermissao } from "@/lib/permissoes-server";
+import { travaDasLinhasDaOs } from "@/lib/os/trava-edicao-server";
 import { bloqueioPainelTecnico } from "@/lib/tecnico/painel";
 import { pode } from "@/lib/permissoes";
 import { motivoBloqueioInativacao } from "@/lib/os-server";
@@ -130,6 +131,16 @@ export async function PUT(req: NextRequest, { params }: Params) {
 
   const body = await req.json();
   const { status, prioridade, descricao, observacoes, unidadeId, contratoId, responsavelId, previsaoConclusao } = body;
+
+  // Registro fechado (OS assinada pelo cliente, já faturada ou com nota emitida): os CAMPOS da OS
+  // não mudam mais — a mesma trava das linhas, agora também para a gaveta "Editar OS". O status
+  // continua livre (reabrir, concluir e o ajuste manual têm regra própria logo abaixo).
+  const CAMPOS_TRAVAVEIS = ["prioridade", "descricao", "observacoes", "unidadeId", "contratoId", "responsavelId", "previsaoConclusao"] as const;
+  if (CAMPOS_TRAVAVEIS.some((c) => body[c] !== undefined)) {
+    const trava = await travaDasLinhasDaOs(id);
+    if (trava) return NextResponse.json({ erro: trava }, { status: 409 });
+  }
+
   // Central da OS: "Voltar ao automático" desliga o ajuste manual e recalcula pelos fatos
   if (body.voltarAutomatico === true) {
     if (existente.status === "CANCELADA")
