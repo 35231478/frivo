@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { AlertTriangle, ArrowLeft, Barcode, CheckCircle2, FileText, Package, Tag, Wallet } from "lucide-react";
+import { Dica } from "@/components/ui/dica";
 import { auth } from "@/lib/auth";
 import { pode } from "@/lib/permissoes";
 import { prisma } from "@/lib/prisma";
@@ -20,6 +21,8 @@ import { sugestoesDaNota, vinculosDaNota } from "@/lib/compras/conciliacao-serve
 import { PEDIDO_ABERTO_PARA_NF, type Avaliacao } from "@/lib/compras/conciliacao";
 
 export const metadata: Metadata = { title: "Nota de compra" };
+
+const AJUDA = "A nota do fornecedor, item a item. Conciliar é dizer qual produto do cadastro é cada item (ou criar o produto na hora); lançar faz a entrada no estoque e cria a conta a pagar, as duas com esta nota como referência. Depois de lançada, a nota não se apaga: corrigir é pela conta a pagar e por ajuste de estoque.";
 
 const diaBr = (d: Date) => formatarData(d); // dia de Brasília
 /** "19/10/2026 às 22:15" no horário de Brasília (o mesmo do aviso de nota repetida) */
@@ -55,7 +58,7 @@ export default async function NotaCompraPage({ params, searchParams }: { params:
           <div className="flex items-start gap-3 min-w-0">
             <div className="p-2 bg-surface-alt rounded-lg shrink-0"><FileText className="w-5 h-5 text-ink-muted" /></div>
             <div className="min-w-0">
-              <h1 className="page-title">NF {nota.numero}/{nota.serie}</h1>
+              <h1 className="page-title flex items-center gap-1.5">NF {nota.numero}/{nota.serie} <Dica texto={AJUDA} rotulo="Nota de compra" lado="direita" /></h1>
               <p className="text-sm text-ink">{nota.fornecedor.nome}</p>
               <p className="text-xs text-ink-muted">CNPJ {formatarCpfCnpj(nota.emitenteCnpj)} · emitida em {diaBr(nota.dataEmissao)}</p>
             </div>
@@ -207,7 +210,7 @@ function Resultado({ nota, movs, avisos, pedido }: { nota: Nota; movs: Awaited<R
   return (
     <div className="space-y-4" data-resultado>
       <p className="flex items-center gap-2 text-sm font-semibold text-success-700 bg-success-50 border border-success-200 rounded-lg px-3 py-2">
-        <CheckCircle2 className="w-4 h-4" /> Nota lançada: {movs.length} entrada(s) no estoque e {nota.contasPagar.length} conta(s) a pagar.
+        <CheckCircle2 className="w-4 h-4" /> Nota lançada: {movs.length === 1 ? "1 entrada" : `${movs.length} entradas`} no estoque e {nota.contasPagar.length === 1 ? "1 conta" : `${nota.contasPagar.length} contas`} a pagar.
       </p>
       {convertidos.length > 0 && (
         <div className="text-xs text-primary-800 bg-primary-50 border border-primary-200 rounded-lg px-3 py-2 space-y-0.5" data-conversoes>

@@ -362,8 +362,10 @@ describe.skipIf(!URL_PG)("Pedido de Compra completo (PostgreSQL real)", () => {
     const r = await chamar("pedidos-compra", "POST", { orcamentoId: "orcNaOs", fornecedorId: "fFrig", itens: [item("Capacitor 35uF")] });
     const { default: Lista } = await import("@/app/(dashboard)/compras/pedidos/page");
     const h = renderToStaticMarkup(await Lista({ searchParams: Promise.resolve({}) }));
-    const linha = h.split(`data-linha="${r.json.id}"`)[1].split("</tr>")[0];
-    expect(texto(linha).replace(/ \)/g, ")")).toContain(`${r.json.numero} Capacitor 35uF (2 un) OS OS-2026-0012 (orçamento ORC-2026-0003) Frigelar — — Solicitado desde`);
+    // Leva 7B: a lista virou a tabela da casa (TabelaPro) — `data-linha` fica no <tr>, e "Comprador"
+    // é coluna oculta por padrão (por isso um "—" só, o do prazo)
+    const linha = h.split(`data-linha="${r.json.id}"`)[1].split("</tr>")[0].split(">").slice(1).join(">");
+    expect(texto(linha).replace(/ \)/g, ")")).toContain(`${r.json.numero} Capacitor 35uF (2 un) OS OS-2026-0012 (orçamento ORC-2026-0003) Frigelar — Solicitado desde`);
     expect(linha).toContain('data-status-pedido="SOLICITADO"');
     expect(linha).toMatch(/data-status-desde="true">desde \d{2}\/\d{2}\/\d{4}/);
     expect(h).toContain('href="/compras/pedidos/novo"');

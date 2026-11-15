@@ -10,6 +10,8 @@ import { PedidoPainel } from "@/components/compras/pedido-painel";
 
 export const metadata: Metadata = { title: "Pedido de compra" };
 
+const AJUDA = "O ciclo do pedido: Solicitado, Cotando, Comprado e Concluído. Cada passo guarda quem fez e quando, e o fornecedor e o valor podem ser ajustados até a compra. Quando a NF-e chegar, importe em Estoque › Notas de compra e ligue a nota a este pedido — é o que vira entrada no estoque e conta a pagar.";
+
 export default async function PedidoCompraDetalhe({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const session = await auth();
@@ -23,7 +25,7 @@ export default async function PedidoCompraDetalhe({ params }: { params: Promise<
 
   return (
     <div className="space-y-6 max-w-5xl mx-auto">
-      <PageHeader title={`Pedido ${pedido.numero}`} description={`Solicitado por ${pedido.solicitante.nome}`} backHref={pode(u.permissoes, "compras", "visualizar", u.role) ? "/compras/pedidos" : "/dashboard"} />
+      <PageHeader title={`Pedido ${pedido.numero}`} description={`Solicitado por ${pedido.solicitante.nome}`} dica={AJUDA} backHref={pode(u.permissoes, "compras", "visualizar", u.role) ? "/compras/pedidos" : "/dashboard"} />
       <div className="card-padded">
         <PedidoPainel inicial={pedidoParaTela(pedido, u)} semNumero />
       </div>

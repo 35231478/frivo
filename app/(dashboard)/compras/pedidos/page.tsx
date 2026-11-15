@@ -10,9 +10,13 @@ import { cn, formatarData } from "@/lib/utils";
 import { CICLO_PEDIDO, LABEL_STATUS_PEDIDO, type StatusPedido } from "@/lib/compras/pedido";
 import { origemDoPedidoCompleto } from "@/lib/compras/pedido-server";
 import { OrigemPedido, StatusPedidoBadge } from "@/components/compras/pedido-painel";
-import { BuscaUrl, ConteudoUrl, FiltroCheckUrl, FiltroSelectUrl, LimparBuscaUrl, ListaUrl, PaginacaoUrl } from "@/components/listagem/lista-url";
+import { BuscaUrl, ConteudoUrl, FiltroCheckUrl, FiltroSelectUrl, LimparBuscaUrl, ListaUrl, PaginacaoUrl, TabelaProUrl } from "@/components/listagem/lista-url";
+import { Dica } from "@/components/ui/dica";
+import { PLANILHA } from "@/lib/planilha";
 
 export const metadata: Metadata = { title: "Pedidos de compra" };
+
+const AJUDA = "Todo pedido de compra da empresa: os que nascem na OS, no orçamento e os avulsos (reposição de estoque). O ciclo vai de Solicitado a Concluído e cada mudança guarda quem fez e quando. Quando a NF-e do fornecedor chegar, importe em Estoque › Notas de compra e ligue a nota a este pedido: os itens viram entrada no estoque e a nota vira conta a pagar.";
 
 /** Status legado aparece como o equivalente do ciclo novo (o SQL migra; isto é só garantia) */
 const statusTela = (s: string): StatusPedido => (s === "COMPRADO" ? "COTANDO" : s === "ENTREGUE" ? "CONCLUIDO" : s) as StatusPedido;
@@ -62,7 +66,7 @@ export default async function PedidosCompraPage({ searchParams }: { searchParams
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-3">
             <div className="p-2 bg-surface-alt rounded-lg"><ShoppingCart className="w-5 h-5 text-ink-muted" /></div>
-            <h1 className="page-title">Pedidos de compra</h1>
+            <h1 className="page-title flex items-center gap-1.5">Pedidos de compra <Dica texto={AJUDA} rotulo="Pedidos de compra" lado="direita" /></h1>
             <span className="text-xs font-semibold text-ink-muted bg-surface-alt border border-surface-border px-2.5 py-1 rounded-full">{total}</span>
           </div>
           {podeCriar && (
@@ -92,53 +96,51 @@ export default async function PedidosCompraPage({ searchParams }: { searchParams
                 <LimparBuscaUrl />
               </div>
             ) : (
-              <>
-                {/* Celular: um cartão por pedido */}
-                <ul className="lg:hidden divide-y divide-surface-border" data-cartoes>
-                  {linhas.map((p) => (
-                    <li key={p.id} className="px-4 py-3 space-y-1" data-cartao={p.id}>
-                      <div className="flex items-start justify-between gap-2">
-                        <Link href={`/compras/pedidos/${p.id}`} className="font-mono font-semibold text-primary-600 hover:underline">{p.numero}</Link>
-                        <StatusPedidoBadge status={p.status} desde={p.statusEm.toISOString()} />
-                      </div>
-                      <p className="text-sm text-ink line-clamp-2">{p.itensTxt}</p>
-                      <p className="text-xs text-ink-muted flex flex-wrap gap-x-2">
-                        <OrigemPedido pedido={p} />
-                        {p.fornecedor && <span>· {p.fornecedor.nome}</span>}
-                        {p.prazoNecessario && <span>· até {formatarData(p.prazoNecessario)}</span>}
-                      </p>
-                    </li>
-                  ))}
-                </ul>
-                <table className="w-full text-sm hidden lg:table">
-                  <thead className="bg-surface-alt border-b border-surface-border">
-                    <tr>
-                      <th className="text-left px-4 py-3 font-semibold text-ink-muted text-xs uppercase tracking-wider">Número</th>
-                      <th className="text-left px-4 py-3 font-semibold text-ink-muted text-xs uppercase tracking-wider">Itens</th>
-                      <th className="text-left px-4 py-3 font-semibold text-ink-muted text-xs uppercase tracking-wider">Origem</th>
-                      <th className="text-left px-4 py-3 font-semibold text-ink-muted text-xs uppercase tracking-wider">Fornecedor</th>
-                      <th className="text-left px-4 py-3 font-semibold text-ink-muted text-xs uppercase tracking-wider hidden xl:table-cell">Comprador</th>
-                      <th className="text-left px-4 py-3 font-semibold text-ink-muted text-xs uppercase tracking-wider">Prazo</th>
-                      <th className="text-left px-4 py-3 font-semibold text-ink-muted text-xs uppercase tracking-wider">Status</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {linhas.map((p, idx) => (
-                      <tr key={p.id} data-linha={p.id} className={cn("border-b border-surface-border hover:bg-primary-50/40 transition-colors", idx % 2 === 1 && "bg-surface-alt/30")}>
-                        <td className="px-4 py-3 whitespace-nowrap">
-                          <Link href={`/compras/pedidos/${p.id}`} className="font-mono font-semibold text-primary-600 hover:underline">{p.numero}</Link>
-                        </td>
-                        <td className="px-4 py-3 text-ink-muted max-w-[280px]"><span className="block truncate" title={p.itensTxt}>{p.itensTxt}</span></td>
-                        <td className="px-4 py-3 text-ink-muted"><OrigemPedido pedido={p} /></td>
-                        <td className="px-4 py-3 text-ink-muted">{p.fornecedor?.nome ?? "—"}</td>
-                        <td className="px-4 py-3 text-ink-muted hidden xl:table-cell">{p.comprador?.nome ?? "—"}</td>
-                        <td className="px-4 py-3 text-ink-muted whitespace-nowrap">{p.prazoNecessario ? formatarData(p.prazoNecessario) : "—"}</td>
-                        <td className="px-4 py-3"><StatusPedidoBadge status={p.status} desde={p.statusEm.toISOString()} /></td>
-                      </tr>
+              <TabelaProUrl
+                tela="pedidos-compra" quebra="md"
+                atributos={{ "data-tabela-pedidos": true }}
+                cartoes={
+                  <ul className="divide-y divide-surface-border" data-cartoes>
+                    {linhas.map((p) => (
+                      <li key={p.id} className="px-4 py-3 space-y-1" data-cartao={p.id}>
+                        <div className="flex items-start justify-between gap-2">
+                          <Link href={`/compras/pedidos/${p.id}`} className={cn(PLANILHA.codigo, "font-semibold text-primary-600 hover:underline")}>{p.numero}</Link>
+                          <StatusPedidoBadge status={p.status} desde={p.statusEm.toISOString()} />
+                        </div>
+                        <p className="text-sm text-ink line-clamp-2">{p.itensTxt}</p>
+                        <p className="text-xs text-ink-muted flex flex-wrap gap-x-2">
+                          <OrigemPedido pedido={p} />
+                          {p.fornecedor && <span>· {p.fornecedor.nome}</span>}
+                          {p.prazoNecessario && <span>· até {formatarData(p.prazoNecessario)}</span>}
+                        </p>
+                      </li>
                     ))}
-                  </tbody>
-                </table>
-              </>
+                  </ul>
+                }
+                colunas={[
+                  { id: "numero", titulo: "Número", largura: 130, obrigatoria: true },
+                  { id: "itens", titulo: "Itens", minimo: 220, obrigatoria: true, classe: "truncate" },
+                  { id: "origem", titulo: "Origem", largura: 150 },
+                  { id: "fornecedor", titulo: "Fornecedor", largura: 180, classe: "truncate" },
+                  { id: "comprador", titulo: "Comprador", largura: 150, oculta: true, classe: "truncate" },
+                  { id: "prazo", titulo: "Prazo", largura: 100 },
+                  { id: "status", titulo: "Status", largura: 170 },
+                ]}
+                linhas={linhas.map((p) => ({
+                  id: p.id,
+                  atributos: { "data-linha": p.id },
+                  titulos: { itens: p.itensTxt, fornecedor: p.fornecedor?.nome ?? "" },
+                  celulas: {
+                    numero: <Link href={`/compras/pedidos/${p.id}`} className={cn(PLANILHA.codigo, "font-semibold text-primary-600 hover:underline")}>{p.numero}</Link>,
+                    itens: <span className="text-ink-muted">{p.itensTxt}</span>,
+                    origem: <OrigemPedido pedido={p} />,
+                    fornecedor: <span className="text-ink-muted">{p.fornecedor?.nome ?? "—"}</span>,
+                    comprador: <span className="text-ink-muted">{p.comprador?.nome ?? "—"}</span>,
+                    prazo: <span className={cn(PLANILHA.data, PLANILHA.apagado)}>{p.prazoNecessario ? formatarData(p.prazoNecessario) : "—"}</span>,
+                    status: <StatusPedidoBadge status={p.status} desde={p.statusEm.toISOString()} />,
+                  },
+                }))}
+              />
             )}
           </ConteudoUrl>
           <div className="px-4 py-3 border-t border-surface-border bg-surface-alt/40">

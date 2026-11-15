@@ -431,7 +431,7 @@ describe("lançar a nota", () => {
   it("falta produto em item: 400 com a lista; produto de outra empresa nas escolhas: 400", async () => {
     const id = (await importar(XML1)).json.nota.id;
     const r = await lancarApi(id, { itens: [{ itemId: itensDa(id)[0].id, produtoId: "pGas" }] });
-    expect([r.status, r.json.erro]).toEqual([400, "Falta escolher o produto de 2 item(ns): CAPACITOR 35UF 440V; TUBO COBRE FLEXIVEL 1/4 ROLO 15M."]);
+    expect([r.status, r.json.erro]).toEqual([400, "Falta escolher o produto de 2 itens: CAPACITOR 35UF 440V; TUBO COBRE FLEXIVEL 1/4 ROLO 15M."]);
     semear(); logar();
     const id2 = (await importar(XML1)).json.nota.id;
     const r2 = await lancarApi(id2, { itens: itensDa(id2).map((i) => ({ itemId: i.id, produtoId: "pB" })) });
@@ -529,7 +529,7 @@ describe("telas", () => {
     await lancarApi(id);
     const h = await detalhe(id);
     expect(h).toContain("data-resultado");
-    expect(h).toContain("Nota lançada: 3 entrada(s) no estoque e 3 conta(s) a pagar.");
+    expect(h).toContain("Nota lançada: 3 entradas no estoque e 3 contas a pagar.");
     expect(attrs(h, "data-conta")).toEqual(["CP-8", "CP-9", "CP-10"]);
     expect(h).toMatch(/R\$\s12,3333/); // custo da NF com 4 casas (espaço do R$ é não separável)
     expect(h).toContain("vence 14/11/2026");

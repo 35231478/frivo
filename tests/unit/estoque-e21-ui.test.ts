@@ -15,6 +15,12 @@ import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 
 const nav = vi.hoisted(() => ({ push: vi.fn(), refresh: vi.fn() }));
+// Leva 7B: o sucesso da conciliação virou toast da casa (a tela fica só com erro de validação)
+const avisos = vi.hoisted(() => ({ lista: [] as [string, string][] }));
+vi.mock("@/components/ui/avisos", async (orig) => ({
+  ...(await orig<typeof import("@/components/ui/avisos")>()),
+  toast: (m: string, t = "sucesso") => { avisos.lista.push([m, t]); },
+}));
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push: nav.push, refresh: nav.refresh, replace: () => {}, back: () => {} }) }));
 
 let root: Root;
@@ -177,7 +183,8 @@ describe("categoria, centro de custo e forma", () => {
     respostas["/api/compras/notas/n1/conciliacao"] = { status: 200, corpo: { faltam: 1 } };
     await clicar(botao("Salvar rascunho"));
     expect(ultima("/api/compras/notas/n1/conciliacao")!.corpo.financeiro).toEqual({ categoriaId: "catMat", centroCustoId: "ccFrota", formaPagamento: "PIX", parcelas: null });
-    expect(txt('[role="status"]')).toBe("Rascunho salvo. Faltam 1 item(ns) sem produto.");
+    expect(avisos.lista.at(-1)).toEqual(["Rascunho salvo. Falta 1 item sem produto.", "sucesso"]);
+    expect($('[role="status"]')).toBeNull();
   });
 
   it("sem Financeiro › fluxo de caixa: tudo do financeiro desabilitado e fora do corpo", async () => {
