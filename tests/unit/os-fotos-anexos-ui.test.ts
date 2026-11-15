@@ -32,7 +32,13 @@ let respostas: Record<string, { status: number; corpo: unknown }>;
 const chamadas: { url: string; metodo: string; corpo: any }[] = [];
 
 beforeAll(async () => {
-  await Promise.all([import("@/components/os/os-fotos-anexos"), import("@/components/providers/permissoes-provider")]);
+  // Um de cada vez, com os avisos primeiro: importar em paralelo cria duas cópias do módulo
+  // simulado e o teste passaria a ler um `toast` que não é o da tela
+  await import("@/components/ui/avisos");
+  for (const m of [
+    () => import("@/components/os/os-fotos-anexos"),
+    () => import("@/components/providers/permissoes-provider"),
+  ]) await m();
 }, 120_000);
 beforeEach(() => {
   chamadas.length = 0;
@@ -66,7 +72,8 @@ const GALERIA = (): Galeria => ({
 });
 
 async function montar(galeria = GALERIA(), permissoes = permissoesTotais(), onMudou = vi.fn()) {
-  const [{ PermissoesProvider }, { OsFotosAnexos }] = await Promise.all([import("@/components/providers/permissoes-provider"), import("@/components/os/os-fotos-anexos")]);
+  const { PermissoesProvider } = await import("@/components/providers/permissoes-provider");
+  const { OsFotosAnexos } = await import("@/components/os/os-fotos-anexos");
   caixa = document.createElement("div");
   document.body.appendChild(caixa);
   root = createRoot(caixa);

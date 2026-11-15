@@ -10,7 +10,7 @@
  *  - a RESSALVA no cartão da OS, o "visto" de quem abre a OS e os avisos do aceite no SINO;
  *  - o portal: as pendências em destaque e o formulário do chamado — livre, bloqueado e emergência.
  */
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { montarPermissoes, permissoesTotais, type Permissoes } from "@/lib/permissoes";
@@ -43,6 +43,21 @@ let respostas: Record<string, { status: number; corpo: unknown } | { status: num
 let aba: { closed: boolean; location: { href: string }; close: ReturnType<typeof vi.fn>; opener: unknown };
 let copiados: string[];
 
+beforeAll(async () => {
+  // Um de cada vez, com os avisos primeiro: importar em paralelo cria duas cópias do módulo
+  // simulado e o teste passaria a ler um `toast` que não é o da tela
+  await import("@/components/ui/avisos");
+  for (const m of [
+    () => import("@/components/providers/permissoes-provider"),
+    () => import("@/components/os/os-aceite"),
+    () => import("@/components/os/aceite-assinatura"),
+    () => import("@/components/os/aceite-publico"),
+    () => import("@/components/layout/header"),
+    () => import("@/components/portal/aceites-pendentes"),
+    () => import("@/components/portal/chamado-form"),
+    () => import("@/components/tecnico/aceite-cliente"),
+  ]) await m();
+}, 120_000);
 beforeEach(() => {
   navegacao.push.mockClear(); navegacao.refresh.mockClear();
   quadro.vazio = false; quadro.limpou = 0; ditos.length = 0; copiados = [];
@@ -143,7 +158,8 @@ describe("Aceite na OS (escritório)", () => {
   const mudancas: unknown[] = [];
   async function abrir(permissoes: Permissoes = permissoesTotais(), statusOs = "CONCLUIDA") {
     mudancas.length = 0;
-    const [{ OsAceite }, { PermissoesProvider }] = await Promise.all([import("@/components/os/os-aceite"), import("@/components/providers/permissoes-provider")]);
+    const { OsAceite } = await import("@/components/os/os-aceite");
+    const { PermissoesProvider } = await import("@/components/providers/permissoes-provider");
     await montar(createElement(PermissoesProvider, { role: "OPERADOR", permissoes, children: createElement(OsAceite, { osId: "os1", numero: "OS-123", cliente: "Hospital Santa Clara", statusOs, aoMudar: (a: unknown) => { mudancas.push(a); } }) }));
   }
   const soVer = montarPermissoes({ ordens: ["visualizar", "concluir"] });
@@ -592,7 +608,8 @@ describe("Sino do escritório: aceite do cliente", () => {
   const ALERTAS = { prazosVencidos: 0, etapasVencendoHoje: 0, pedidosPendentes: 0, atendimentosAtraso: 0, chamadosPortal: 0, checklistPendente: 0, checklistsComAlertas: 0, documentosVencendo: 0, veiculosManutencao: 0, boletosPagos: 0, orcamentosRespondidos: 0, nfPedidos: 0, nfPedidoId: null, total: 0 };
   async function sino(alertas: Record<string, unknown>, permissoes: Permissoes) {
     respostas["GET /api/alertas"] = { status: 200, corpo: { ...ALERTAS, ...alertas } };
-    const [{ Header }, { PermissoesProvider }] = await Promise.all([import("@/components/layout/header"), import("@/components/providers/permissoes-provider")]);
+    const { Header } = await import("@/components/layout/header");
+    const { PermissoesProvider } = await import("@/components/providers/permissoes-provider");
     const sessao = { user: { id: "u1", name: "Ana", email: "a@x.com", empresaId: "e1", role: "OPERADOR", permissoes }, expires: "2099-01-01T00:00:00Z" };
     await montar(createElement(PermissoesProvider, { role: "OPERADOR", permissoes } as any, createElement(Header, { session: sessao, avatarUrl: null } as any)));
     await clicar([...caixa.querySelectorAll("button")].find((b) => b.querySelector("svg.lucide-bell"))!);

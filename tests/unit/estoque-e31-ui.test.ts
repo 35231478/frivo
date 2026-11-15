@@ -34,7 +34,14 @@ const PRODUTOS = [
 let produtosLista = PRODUTOS;
 
 beforeAll(async () => {
-  await Promise.all([import("@/components/config/telas/produtos"), import("@/components/cadastros/telas/categorias-produto"), import("@/components/providers/permissoes-provider")]);
+  // Um de cada vez, com os avisos primeiro: importar em paralelo cria duas cópias do módulo
+  // simulado e o teste passaria a ler um `toast` que não é o da tela
+  await import("@/components/ui/avisos");
+  for (const m of [
+    () => import("@/components/config/telas/produtos"),
+    () => import("@/components/cadastros/telas/categorias-produto"),
+    () => import("@/components/providers/permissoes-provider"),
+  ]) await m();
 }, 120_000);
 beforeEach(() => {
   chamadas.length = 0; nav.qs = ""; nav.replace.mockClear(); produtosLista = PRODUTOS;

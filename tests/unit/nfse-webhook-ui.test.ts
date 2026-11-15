@@ -30,7 +30,13 @@ const chamadas: { url: string; metodo: string }[] = [];
 const area = { escrito: [] as string[], falha: false };
 
 beforeAll(async () => {
-  await Promise.all([import("@/components/fiscal/dados-fiscais-client"), import("@/components/layout/header")]);
+  // Um de cada vez, com os avisos primeiro: importar em paralelo cria duas cópias do módulo
+  // simulado e o teste passaria a ler um `toast` que não é o da tela
+  await import("@/components/ui/avisos");
+  for (const m of [
+    () => import("@/components/fiscal/dados-fiscais-client"),
+    () => import("@/components/layout/header"),
+  ]) await m();
 }, 120_000);
 beforeEach(() => {
   chamadas.length = 0; avisos.toasts = []; avisos.confirmar = true; avisos.perguntas = []; respostas = {};

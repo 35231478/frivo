@@ -8,7 +8,7 @@
  *  - quadro de assinatura (app do técnico e escritório): a mesma avaliação, no local;
  *  - a nota na OS (estrelas + comentário), para quem vê a OS.
  */
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { montarPermissoes, permissoesTotais, type Permissoes } from "@/lib/permissoes";
@@ -35,6 +35,20 @@ let root: Root; let caixa: HTMLDivElement;
 let pedidos: { url: string; metodo: string; corpo: any }[];
 let respostas: Record<string, { status: number; corpo: unknown }>;
 
+beforeAll(async () => {
+  // Um de cada vez, com os avisos primeiro: importar em paralelo cria duas cópias do módulo
+  // simulado e o teste passaria a ler um `toast` que não é o da tela
+  await import("@/components/ui/avisos");
+  for (const m of [
+    () => import("@/components/providers/permissoes-provider"),
+    () => import("@/components/os/os-aceite"),
+    () => import("@/components/os/aceite-assinatura"),
+    () => import("@/components/os/aceite-publico"),
+    () => import("@/components/os/avaliacao-cliente"),
+    () => import("@/components/os/estrelas"),
+    () => import("@/components/tecnico/aceite-cliente"),
+  ]) await m();
+}, 120_000);
 beforeEach(() => {
   navegacao.push.mockClear(); navegacao.refresh.mockClear();
   pedidos = []; respostas = {};
@@ -268,7 +282,8 @@ describe("Avaliação na OS (escritório)", () => {
   });
   async function abrir(corpo: Record<string, unknown>, permissoes: Permissoes = permissoesTotais()) {
     respostas[G] = { status: 200, corpo };
-    const [{ OsAceite }, { PermissoesProvider }] = await Promise.all([import("@/components/os/os-aceite"), import("@/components/providers/permissoes-provider")]);
+    const { OsAceite } = await import("@/components/os/os-aceite");
+    const { PermissoesProvider } = await import("@/components/providers/permissoes-provider");
     await montar(createElement(PermissoesProvider, { role: "OPERADOR", permissoes, children: createElement(OsAceite, { osId: "os1", numero: "OS-123", cliente: "Hospital Santa Clara", statusOs: "CONCLUIDA" }) }));
   }
   const confirmada = (extra: Record<string, unknown> = {}) => ({ estado: "CONFIRMADO", statusOs: "CONCLUIDA", caminhoPublico: "/relatorio/aceite/tok123", pedirAvaliacao: true, aceite: aceite(extra) });
