@@ -21,8 +21,11 @@ import type { Prisma } from "@prisma/client";
 import { janela, lerOrdem, lerPaginacao, ordemPrisma, paginaValida } from "@/lib/listagem";
 import { ORDEM_ORCAMENTOS, ORDEM_PADRAO_ORCAMENTOS } from "@/lib/listas/ordenacao";
 import { ConteudoUrl, LimparBuscaUrl, ListaUrl, PaginacaoUrl, TabelaProUrl } from "@/components/listagem/lista-url";
+import { Dica } from "@/components/ui/dica";
 
 export const metadata: Metadata = { title: "Orçamentos" };
+
+const AJUDA = "Proposta com itens e valores, do rascunho ao envio e à aprovação. Os cartões de cima são do período escolhido e filtram a lista ao clicar. Cancelar não apaga nada: o orçamento sai da lista padrão e pode ser reaberto. Aprovado vira OS ou contrato pelas ações da linha.";
 
 export default async function OrcamentosPage({
   searchParams,
@@ -34,6 +37,8 @@ export default async function OrcamentosPage({
   const session = await auth();
   const empresaId = session!.user!.empresaId;
   const massa = temAcaoMassa(session!.user!.permissoes, session!.user!.role, "orcamentos");
+  // "Novo orçamento" só para quem pode criar — a mesma regra do POST /api/orcamentos
+  const podeCriar = pode(session!.user!.permissoes, "orcamentos", "criar", session!.user!.role);
   // Enviar (e-mail/WhatsApp) exige editar orçamentos, como a rota de envio; baixar o PDF basta ver
   const podeEnviar = pode(session!.user!.permissoes, "orcamentos", "editar", session!.user!.role);
   const { pagina: paginaPedida, porPagina } = lerPaginacao(sp);
@@ -84,15 +89,18 @@ export default async function OrcamentosPage({
           <div className="p-2 bg-primary-50 rounded-lg">
             <Calculator className="w-5 h-5 text-primary-600" />
           </div>
-          <h1 className="page-title">Orçamentos</h1>
+          <h1 className="page-title flex items-center gap-1.5">Orçamentos <Dica texto={AJUDA} rotulo="Orçamentos" lado="direita" /></h1>
           <span className="text-xs font-semibold text-ink-muted bg-surface-alt border border-surface-border px-2.5 py-1 rounded-full">{total}</span>
         </div>
-        <Link
-          href="/orcamentos/novo"
-          className="inline-flex items-center gap-2 bg-primary-500 hover:bg-primary-600 text-white px-4 py-2.5 rounded-lg text-sm font-semibold transition-all shadow-sm hover:shadow"
-        >
-          <Plus className="w-4 h-4" /> Novo Orçamento
-        </Link>
+        {podeCriar && (
+          <Link
+            href="/orcamentos/novo"
+            data-novo-orcamento
+            className="inline-flex items-center gap-2 bg-primary-500 hover:bg-primary-600 text-white px-4 py-2.5 rounded-lg text-sm font-semibold transition-all shadow-sm hover:shadow"
+          >
+            <Plus className="w-4 h-4" /> Novo orçamento
+          </Link>
+        )}
       </div>
 
       {/* Período (pela criação) + cards de funil do período, clicáveis como filtro — padrão da casa */}
