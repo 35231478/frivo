@@ -163,14 +163,21 @@ Não foi aplicado em produção: rodou só no banco local descartável dos teste
 
 ## Como foi verificado
 
-- **Rotas com PostgreSQL de verdade** (`tests/unit/padronizacao-leva4b-pg.test.ts`): quem só visualiza
-  leva 403 em cada uma das 31 gravações das telas da leva, e o banco inteiro fica idêntico (todas as
-  tabelas); sem login, 401; mais as regras do checklist preenchido, do RT, da equipe e do Reativar.
-- **Telas montadas** (`tests/unit/padronizacao-leva4b-ui.test.ts`): cada botão aparece só com a sua
-  permissão; recusa do servidor não muda a tela; cancelar não grava; toasts; abas Inativos.
-- **Mutação**: cada regra foi quebrada de propósito, uma por vez, para conferir que algum teste acusa.
-- **Navegador de verdade** (Chromium, aplicativo rodando, banco local): o caminho inteiro de cada
-  conserto, com conferência no banco, em computador (1440 px) e celular (390 px), sem rolagem lateral.
+- **Rotas com PostgreSQL de verdade** (`tests/unit/padronizacao-leva4b-pg.test.ts`, 54 testes): quem só
+  visualiza leva 403 em cada uma das 31 gravações das telas da leva, e o banco inteiro fica idêntico
+  (todas as tabelas); sem login, 401; mais as regras do checklist preenchido, do RT, da equipe e do
+  Reativar.
+- **Telas montadas** (`tests/unit/padronizacao-leva4b-ui.test.ts`, 69 testes): cada botão aparece só com
+  a sua permissão; recusa do servidor não muda a tela; cancelar não grava; toasts; abas Inativos.
+- **Mutação: 179 regras quebradas de propósito, uma por vez, e as 179 foram acusadas por algum teste.**
+  Na primeira passagem cinco escaparam — o código estava certo, faltava teste — e os testes foram
+  reforçados: editar mantém a foto do item enviado sem a chave `foto` (o caso que a tela usa); o
+  detalhe não traz os botões de tirar e trocar a foto; quem só preenche não ganha "Ver preenchidos", e
+  sem permissão nenhuma não ganha o formulário; a lista não carrega as fotos (base64) do banco.
+- **Navegador de verdade** (Chromium, aplicativo rodando, banco local): 116 conferências em computador
+  (1440 px) e celular (390 px), todas ok — o caminho inteiro de cada conserto com conferência no banco,
+  403 para quem só consulta com o banco idêntico, e nenhuma tela com rolagem lateral. A primeira rodada
+  achou um defeito de verdade, já corrigido: a tabela de colaboradores passava da largura no notebook.
 - A suíte inteira do projeto.
 
 ## Decisões tomadas e perguntas em aberto
