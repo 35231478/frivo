@@ -11,6 +11,7 @@ import { FormField, FormSection, FormGrid } from "@/components/ui/form-field";
 import { ClienteCombobox } from "@/components/ui/cliente-combobox";
 import { AlertCircle } from "lucide-react";
 import { SeletorCadastro } from "@/components/cadastros/seletor-cadastro";
+import { toast } from "@/components/ui/avisos";
 import { InputData } from "@/components/ui/input-data";
 import { EditorParcelas } from "@/components/financeiro/editor-parcelas";
 import { Dica } from "@/components/ui/dica";
@@ -47,7 +48,9 @@ export function CobrancaForm() {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ clienteId, descricao, categoriaId: categoriaId || null, valor: Number(valor), dataVencimento: vencimento || null, formaPagamento: forma || null, contaBancariaId: contaBancariaId || null, centroCustoId: centroCustoId || null, observacao: obs || null, ...(parcelado && { parcelas: plano }) }),
       });
-      if (!res.ok) { const e = await res.json(); setErro(e.erro ?? "Erro ao criar cobrança."); return; }
+      if (!res.ok) { const e = await res.json().catch(() => ({})); setErro(e.erro ?? "Não foi possível criar a cobrança."); return; }
+      // Sucesso é toast (padrão da casa); o erro de validação fica na tela
+      toast(parcelado ? "Cobrança criada em parcelas." : "Cobrança criada.");
       router.push("/financeiro/contas-receber");
       router.refresh();
     } catch { setErro("Erro de conexão."); } finally { setSalvando(false); }
@@ -64,7 +67,7 @@ export function CobrancaForm() {
           <FormGrid>
             <FormField label="Descrição / referência" required><Input value={descricao} onChange={(e) => setDescricao(e.target.value)} placeholder="Ex: Serviço de manutenção" /></FormField>
             <FormField label="Categoria">
-              <SeletorCadastro entidade="categorias-financeiras" valor={categoriaId} vazio="Sem categoria" onChange={setCategoriaId} />
+              <SeletorCadastro entidade="categorias-financeiras" valor={categoriaId} vazio="Sem categoria" editavel onChange={setCategoriaId} />
             </FormField>
           </FormGrid>
           <FormGrid cols={3}>
@@ -97,10 +100,10 @@ export function CobrancaForm() {
           )}
           <FormGrid>
             <FormField label="Conta bancária" dica="Onde o dinheiro entra. Cadastre em Financeiro › Contas bancárias.">
-              <SeletorCadastro entidade="contas-bancarias" valor={contaBancariaId} vazio="Não definida" onChange={setContaBancariaId} nome="contaBancariaId" />
+              <SeletorCadastro entidade="contas-bancarias" valor={contaBancariaId} vazio="Não definida" editavel onChange={setContaBancariaId} nome="contaBancariaId" />
             </FormField>
             <FormField label="Centro de custo">
-              <SeletorCadastro entidade="centros-custo" valor={centroCustoId} vazio="Sem centro de custo" onChange={setCentroCustoId} nome="centroCustoId" />
+              <SeletorCadastro entidade="centros-custo" valor={centroCustoId} vazio="Sem centro de custo" editavel onChange={setCentroCustoId} nome="centroCustoId" />
             </FormField>
           </FormGrid>
           <FormField label="Observação"><Textarea value={obs} onChange={(e) => setObs(e.target.value)} rows={2} /></FormField>

@@ -10,8 +10,10 @@ import { Textarea } from "@/components/ui/textarea";
 import { FormField, FormSection, FormGrid } from "@/components/ui/form-field";
 import { AlertCircle } from "lucide-react";
 import { SeletorCadastro } from "@/components/cadastros/seletor-cadastro";
+import { toast } from "@/components/ui/avisos";
 import { CampoBoleto } from "@/components/financeiro/campo-boleto";
 import { lerBoleto } from "@/lib/financeiro/boleto";
+import { PLANILHA } from "@/lib/planilha";
 import { InputData } from "@/components/ui/input-data";
 
 export function ContaPagarForm({ initialData }: { initialData?: any }) {
@@ -69,7 +71,11 @@ export function ContaPagarForm({ initialData }: { initialData?: any }) {
           boleto: form.boleto.trim() || null,
         }),
       });
-      if (!res.ok) { const e = await res.json(); setErro(e.erro ?? "Erro ao salvar."); return; }
+      if (!res.ok) { const e = await res.json().catch(() => ({})); setErro(e.erro ?? "Não foi possível salvar a conta."); return; }
+      // Sucesso é toast (padrão da casa); o erro de validação fica na tela
+      const salva = await res.json().catch(() => ({}));
+      const fim = isEditing ? "atualizada" : "criada";
+      toast(salva?.numero ? `Conta ${salva.numero} ${fim}.` : `Conta a pagar ${fim}.`);
       router.push("/financeiro/contas-pagar");
       router.refresh();
     } catch { setErro("Erro de conexão."); } finally { setSalvando(false); }
@@ -83,7 +89,7 @@ export function ContaPagarForm({ initialData }: { initialData?: any }) {
         <FormSection title="Fornecedor">
           <FormField label="Fornecedor" required>
             {/* Só ativos para nova escolha; o fornecedor atual segue visível mesmo inativo (“(inativo)”) */}
-            <SeletorCadastro entidade="fornecedores" valor={form.fornecedorId} vazio={textoAntigo ? "Escolha o fornecedor…" : "Selecione o fornecedor…"} onChange={(v) => upd("fornecedorId", v)} />
+            <SeletorCadastro entidade="fornecedores" valor={form.fornecedorId} vazio={textoAntigo ? "Escolha o fornecedor…" : "Selecione o fornecedor…"} editavel onChange={(v) => upd("fornecedorId", v)} />
             {textoAntigo && !form.fornecedorId && (
               <p className="text-xs text-atencao-texto mt-1" data-fornecedor-antigo>
                 Fornecedor antigo: “{textoAntigo}”{initialData?.fornecedorCnpj ? ` (${initialData.fornecedorCnpj})` : ""} — sem cadastro. Escolha o fornecedor para ligar esta conta.
@@ -95,19 +101,19 @@ export function ContaPagarForm({ initialData }: { initialData?: any }) {
             <FormField label="Descrição" required><Input value={form.descricao} onChange={(e) => upd("descricao", e.target.value)} placeholder="Ex: Compra de peças" /></FormField>
             <FormField label="Categoria">
               {/* Só ativas para nova escolha; a categoria atual segue visível mesmo inativa */}
-              <SeletorCadastro entidade="categorias-financeiras" valor={form.categoriaId} vazio="Sem categoria" onChange={(v) => upd("categoriaId", v)} />
+              <SeletorCadastro entidade="categorias-financeiras" valor={form.categoriaId} vazio="Sem categoria" editavel onChange={(v) => upd("categoriaId", v)} />
             </FormField>
           </FormGrid>
           <FormGrid>
             <FormField label="Centro de custo">
-              <SeletorCadastro entidade="centros-custo" valor={form.centroCustoId} vazio="Sem centro de custo" onChange={(v) => upd("centroCustoId", v)} />
+              <SeletorCadastro entidade="centros-custo" valor={form.centroCustoId} vazio="Sem centro de custo" editavel onChange={(v) => upd("centroCustoId", v)} />
             </FormField>
           </FormGrid>
         </FormSection>
 
         <FormSection title="Pagamento">
           <FormGrid cols={3}>
-            <FormField label="Valor total" required><Input type="number" step="0.01" value={form.valorTotal} onChange={(e) => upd("valorTotal", e.target.value)} placeholder="0,00" /></FormField>
+            <FormField label="Valor total" required><Input type="number" step="0.01" className={PLANILHA.numero} value={form.valorTotal} onChange={(e) => upd("valorTotal", e.target.value)} placeholder="0,00" /></FormField>
             <FormField label="Vencimento"><InputData value={form.dataVencimento} onChange={(v) => upd("dataVencimento", v)} /></FormField>
             <FormField label="Forma de pagamento">
               <Select value={form.formaPagamento} onChange={(e) => upd("formaPagamento", e.target.value)}>

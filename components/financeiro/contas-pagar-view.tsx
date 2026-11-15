@@ -143,9 +143,12 @@ function ContasPagarCorpo({
               <FileText className="w-4 h-4 text-primary-600" /> Lançar a partir de NF
             </Link>
           )}
-          <Link href="/financeiro/contas-pagar/nova" className="inline-flex items-center gap-2 bg-primary-500 hover:bg-primary-600 text-white px-4 py-2 rounded-lg text-sm font-semibold transition-all shadow-sm hover:shadow">
-            <Plus className="w-4 h-4" /> Nova Conta
-          </Link>
+          {/* Criar conta mexe em dinheiro: só quem tem Financeiro › fluxo de caixa (a tela /nova barra igual) */}
+          {podeLote && (
+            <Link href="/financeiro/contas-pagar/nova" data-nova-conta className="inline-flex items-center gap-2 bg-primary-500 hover:bg-primary-600 text-white px-4 py-2 rounded-lg text-sm font-semibold transition-all shadow-sm hover:shadow">
+              <Plus className="w-4 h-4" /> Nova conta
+            </Link>
+          )}
         </div>
       </div>
 

@@ -8,11 +8,15 @@ import { cn, formatarCpfCnpj, formatarData, formatarMoeda, LABELS_FORMA_PAGAMENT
 import { statusVisualPagar } from "@/lib/financeiro-status";
 import { fornecedorDaConta } from "@/lib/financeiro/fornecedor";
 import { formatarLinhaDigitavel, lerBoleto } from "@/lib/financeiro/boleto";
+import { Dica } from "@/components/ui/dica";
+import { PLANILHA } from "@/lib/planilha";
 import { ContaPagarAcoes } from "@/components/financeiro/conta-pagar-acoes";
 import { CategoriaBadge } from "@/components/financeiro/categoria-badge";
 import { CopiarCodigo } from "@/components/financeiro/copiar-codigo";
 
 export const metadata: Metadata = { title: "Conta a pagar" };
+
+const AJUDA = "Tudo da conta num lugar: dados, classificação, boleto e os pagamentos já feitos. Pagar aqui registra o pagamento e desconta do saldo — pagamento parcial é aceito e a conta segue em aberto pelo que falta. Conta lançada não se apaga: cancelar deixa a conta no histórico como cancelada, e o que já foi pago continua registrado.";
 
 const diaBr = (iso: string) => iso.split("-").reverse().join("/");
 
@@ -53,7 +57,7 @@ export default async function ContaPagarPage({ params }: { params: Promise<{ id:
           <div className="flex items-start gap-3 min-w-0">
             <div className="p-2 bg-surface-alt rounded-lg shrink-0"><Upload className="w-5 h-5 text-ink-muted" /></div>
             <div className="min-w-0">
-              <h1 className="page-title">{conta.numero}</h1>
+              <h1 className="page-title flex items-center gap-1.5">{conta.numero} <Dica texto={AJUDA} rotulo="Conta a pagar" lado="direita" /></h1>
               <p className="text-sm text-ink">{forn.nome}{forn.documento && <span className="text-ink-muted"> · {formatarCpfCnpj(forn.documento)}</span>}</p>
               <p className="text-xs text-ink-muted">{conta.descricao}</p>
             </div>
@@ -139,9 +143,9 @@ export default async function ContaPagarPage({ params }: { params: Promise<{ id:
         ) : (
           <ul className="divide-y divide-surface-border text-sm">
             {conta.pagamentos.map((p) => (
-              <li key={p.id} className="px-4 py-2.5 flex justify-between gap-3">
-                <span className="text-ink-muted">{formatarData(p.dataPagamento)}{p.formaPagamento ? ` · ${LABELS_FORMA_PAGAMENTO[p.formaPagamento]}` : ""}{p.banco ? ` · ${p.banco}` : ""}</span>
-                <span className="font-semibold tabular-nums">{formatarMoeda(Number(p.valor))}</span>
+              <li key={p.id} className="px-4 py-2.5 flex justify-between gap-3" data-pagamento={p.id}>
+                <span className={cn(PLANILHA.apagado, "min-w-0")}>{formatarData(p.dataPagamento)}{p.formaPagamento ? ` · ${LABELS_FORMA_PAGAMENTO[p.formaPagamento]}` : ""}{p.banco ? ` · ${p.banco}` : ""}</span>
+                <span className={cn(PLANILHA.numero, "font-semibold text-ink")}>{formatarMoeda(Number(p.valor))}</span>
               </li>
             ))}
           </ul>
