@@ -1,16 +1,22 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
+import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
+import { pode } from "@/lib/permissoes";
 import { prisma } from "@/lib/prisma";
 import { PageHeader } from "@/components/ui/page-header";
 import { ContaPagarForm } from "@/components/financeiro/conta-pagar-form";
 
 export const metadata: Metadata = { title: "Editar conta a pagar" };
 
+const AJUDA = "Dá para corrigir dados, classificação e boleto enquanto a conta não está paga ou cancelada. O que já foi pago não muda por aqui: pagamento é registrado na ficha da conta.";
+
 export default async function EditarContaPagarPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const session = await auth();
-  const empresaId = session!.user!.empresaId;
+  const u = (await auth())!.user!;
+  // Editar conta é mexer em dinheiro: Financeiro › fluxo de caixa (a mesma permissão da rota)
+  if (!pode(u.permissoes, "financeiro", "fluxoCaixa", u.role)) redirect("/sem-permissao");
+  const empresaId = u.empresaId;
 
   const conta = await prisma.contaPagar.findFirst({ where: { id, empresaId } });
   if (!conta) notFound();
@@ -23,7 +29,7 @@ export default async function EditarContaPagarPage({ params }: { params: Promise
 
   return (
     <div className="max-w-3xl mx-auto">
-      <PageHeader title={`Editar ${conta.numero}`} description={conta.fornecedor} backHref="/financeiro/contas-pagar" />
+      <PageHeader title={`Editar ${conta.numero}`} description={conta.fornecedor} dica={AJUDA} backHref="/financeiro/contas-pagar" />
       <ContaPagarForm initialData={initialData} />
     </div>
   );

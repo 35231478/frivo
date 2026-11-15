@@ -1,6 +1,6 @@
 "use client";
 
-import { confirmar } from "@/components/ui/avisos";
+import { confirmar, toast } from "@/components/ui/avisos";
 import { useState, useRef } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
@@ -15,6 +15,7 @@ import { DollarSign, History, Pencil, Ban, Upload, Eye } from "lucide-react";
 import { ItemMenu, MenuAcoes, SeparadorMenu } from "@/components/ui/menu-acoes";
 import { chaveHojeBR } from "@/lib/fuso";
 import { InputData } from "@/components/ui/input-data";
+import { usePermissoes } from "@/components/providers/permissoes-provider";
 
 interface Conta {
   id: string; numero: string; fornecedor: string;
@@ -27,14 +28,29 @@ interface Conta {
  */
 export function ContaPagarAcoes({ conta, menu }: { conta: Conta; menu?: boolean }) {
   const router = useRouter();
+  // Pagar, editar e cancelar mexem em dinheiro: só para quem tem Financeiro › fluxo de caixa
+  // (a mesma permissão que o servidor exige nas rotas). Ver detalhes e histórico são leitura.
+  const podeMexer = usePermissoes().pode("financeiro", "fluxoCaixa");
   const [modal, setModal] = useState<null | "pagar" | "historico">(null);
   const fechar = () => setModal(null);
   const finalizada = conta.status === "PAGO_TOTAL" || conta.status === "CANCELADO";
 
   async function cancelar() {
-    if (!(await confirmar({ mensagem: `Cancelar a conta ${conta.numero}?`, perigo: true, confirmarTexto: "Cancelar conta", cancelarTexto: "Voltar" }))) return;
-    await fetch(`/api/contas-pagar/${conta.id}`, { method: "DELETE" });
-    router.refresh();
+    if (!(await confirmar({
+      mensagem: `Cancelar a conta ${conta.numero}? A conta fica no histórico como cancelada; o que já foi pago não é desfeito.`,
+      perigo: true, confirmarTexto: "Cancelar conta", cancelarTexto: "Voltar",
+    }))) return;
+    try {
+      const res = await fetch(`/api/contas-pagar/${conta.id}`, { method: "DELETE" });
+      // Servidor recusou (403, conta travada…): a tela NÃO muda, e o motivo aparece
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}));
+        toast(d.erro ?? "Não foi possível cancelar a conta.", "erro");
+        return;
+      }
+      toast(`Conta ${conta.numero} cancelada.`);
+      router.refresh();
+    } catch { toast("Erro de conexão.", "erro"); }
   }
 
   return (
@@ -45,10 +61,10 @@ export function ContaPagarAcoes({ conta, menu }: { conta: Conta; menu?: boolean 
             {(f) => (
               <>
                 <ItemMenu icone={Eye} href={`/financeiro/contas-pagar/${conta.id}`} id="detalhes">Ver detalhes</ItemMenu>
-                {!finalizada && <ItemMenu icone={DollarSign} onClick={() => { f(); setModal("pagar"); }} id="pagar">Registrar pagamento</ItemMenu>}
+                {podeMexer && !finalizada && <ItemMenu icone={DollarSign} onClick={() => { f(); setModal("pagar"); }} id="pagar">Registrar pagamento</ItemMenu>}
                 <ItemMenu icone={History} onClick={() => { f(); setModal("historico"); }} id="historico">Histórico de pagamentos</ItemMenu>
-                {!finalizada && <ItemMenu icone={Pencil} href={`/financeiro/contas-pagar/${conta.id}/editar`} id="editar">Editar</ItemMenu>}
-                {conta.status !== "CANCELADO" && (
+                {podeMexer && !finalizada && <ItemMenu icone={Pencil} href={`/financeiro/contas-pagar/${conta.id}/editar`} id="editar">Editar</ItemMenu>}
+                {podeMexer && conta.status !== "CANCELADO" && (
                   <>
                     <SeparadorMenu />
                     <ItemMenu icone={Ban} onClick={() => { f(); cancelar(); }} perigo id="cancelar">Cancelar conta</ItemMenu>
@@ -59,16 +75,16 @@ export function ContaPagarAcoes({ conta, menu }: { conta: Conta; menu?: boolean 
           </MenuAcoes>
         </div>
       ) : (
-      <div className="flex items-center justify-end gap-0.5">
-        {!finalizada && (
-          <button type="button" title="Registrar pagamento" onClick={() => setModal("pagar")} className="p-1.5 rounded text-ok-texto hover:bg-surface-alt"><DollarSign className="w-4 h-4" /></button>
+      <div className="flex items-center justify-end gap-0.5" data-acoes-conta>
+        {podeMexer && !finalizada && (
+          <button type="button" title="Registrar pagamento" aria-label="Registrar pagamento" onClick={() => setModal("pagar")} data-registrar-pagamento className="p-1.5 rounded text-ok-texto hover:bg-surface-alt"><DollarSign className="w-4 h-4" /></button>
         )}
-        <button type="button" title="Histórico de pagamentos" onClick={() => setModal("historico")} className="p-1.5 rounded text-ink-muted hover:bg-surface-alt"><History className="w-4 h-4" /></button>
-        {!finalizada && (
-          <Link href={`/financeiro/contas-pagar/${conta.id}/editar`} title="Editar" className="p-1.5 rounded text-primary-600 hover:bg-surface-alt"><Pencil className="w-4 h-4" /></Link>
+        <button type="button" title="Histórico de pagamentos" aria-label="Histórico de pagamentos" onClick={() => setModal("historico")} data-historico-pagamentos className="p-1.5 rounded text-ink-muted hover:bg-surface-alt"><History className="w-4 h-4" /></button>
+        {podeMexer && !finalizada && (
+          <Link href={`/financeiro/contas-pagar/${conta.id}/editar`} title="Editar" aria-label="Editar conta" data-editar-conta className="p-1.5 rounded text-primary-600 hover:bg-surface-alt"><Pencil className="w-4 h-4" /></Link>
         )}
-        {conta.status !== "CANCELADO" && (
-          <button type="button" title="Cancelar conta" onClick={cancelar} className="p-1.5 rounded text-atrasado hover:bg-atrasado-claro"><Ban className="w-4 h-4" /></button>
+        {podeMexer && conta.status !== "CANCELADO" && (
+          <button type="button" title="Cancelar conta" aria-label="Cancelar conta" onClick={cancelar} data-cancelar-conta className="p-1.5 rounded text-atrasado hover:bg-atrasado-claro"><Ban className="w-4 h-4" /></button>
         )}
       </div>
       )}
@@ -118,7 +134,11 @@ function PagamentoParcial({ conta, onPronto }: { conta: Conta; onPronto: () => v
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ valor: valorNum, dataPagamento: data, formaPagamento: forma || null, banco: banco || null, comprovante, observacao: obs || null }),
       });
-      if (!res.ok) { const e = await res.json(); setErro(e.erro ?? "Erro ao registrar pagamento."); return; }
+      if (!res.ok) { const e = await res.json().catch(() => ({})); setErro(e.erro ?? "Não foi possível registrar o pagamento."); return; }
+      // Sucesso é toast (padrão da casa); o erro fica na tela, onde a pessoa está olhando
+      toast(saldoApos > 0
+        ? `Pagamento de ${formatarMoeda(valorNum)} registrado. Saldo de ${formatarMoeda(saldoApos)}.`
+        : `Pagamento de ${formatarMoeda(valorNum)} registrado. Conta quitada.`);
       onPronto();
     } catch { setErro("Erro de conexão."); } finally { setSalvando(false); }
   }

@@ -14,6 +14,8 @@ import { anoBR, chaveDiaCivil, diaDoMesCivil, mesBR } from "@/lib/fuso";
 
 export const metadata: Metadata = { title: "Fluxo de caixa" };
 
+const AJUDA = "Entradas e saídas do mês escolhido, pela data em que o dinheiro se mexeu — não pelo vencimento. Conta a receber vira entrada quando é recebida; conta a pagar, saída quando é paga. O que está em aberto aparece no Dashboard financeiro, não aqui.";
+
 export default async function FluxoCaixaPage({
   searchParams,
 }: {
@@ -120,7 +122,7 @@ export default async function FluxoCaixaPage({
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div className="flex items-center gap-3">
           <div className="p-2 bg-surface-alt rounded-lg"><TrendingUp className="w-5 h-5 text-ink-muted" /></div>
-          <h1 className="page-title">Fluxo de caixa</h1>
+          <h1 className="page-title flex items-center gap-1.5">Fluxo de caixa <Dica texto={AJUDA} rotulo="Fluxo de caixa" lado="direita" /></h1>
         </div>
         <form method="get" className="flex items-center gap-2">
           <select name="mes" defaultValue={mes} className="bg-white border border-surface-border rounded-lg px-3 py-2 text-sm text-ink focus:outline-none focus:border-primary-500 focus:ring-4 focus:ring-primary-500/10">

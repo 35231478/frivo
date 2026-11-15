@@ -13,6 +13,11 @@ import {
 
 export const metadata: Metadata = { title: "Dashboard financeiro" };
 
+/** "1 conta" / "3 contas": o plural escrito do manifesto, nunca a forma abreviada entre parênteses. */
+const plural = (n: number, um: string, muitos: string) => `${n} ${n === 1 ? um : muitos}`;
+
+const AJUDA = "O mês corrente em números: o que entrou, o que saiu e o que ainda está em aberto. Cada card leva para a lista que o explica, com os mesmos filtros. O fechamento do caixa, dia a dia, fica em Fluxo de caixa.";
+
 export default async function FinanceiroDashboardPage() {
   const session = await auth();
   if (!pode(session!.user!.permissoes, "financeiro", "visualizar", session!.user!.role)) redirect("/sem-permissao");
@@ -42,7 +47,7 @@ export default async function FinanceiroDashboardPage() {
     <div className="space-y-6">
       <div className="flex items-center gap-3">
         <div className="p-2 bg-surface-alt rounded-lg"><Wallet className="w-5 h-5 text-ink-muted" /></div>
-        <h1 className="page-title">Dashboard financeiro</h1>
+        <h1 className="page-title flex items-center gap-1.5">Dashboard financeiro <Dica texto={AJUDA} rotulo="Dashboard financeiro" lado="direita" /></h1>
       </div>
 
       {/* Cards do mês */}
@@ -55,7 +60,7 @@ export default async function FinanceiroDashboardPage() {
                 <div className="min-w-0">
                   <p className="text-xs font-semibold uppercase tracking-wider text-ink-muted">{c.titulo}</p>
                   <p className={cn("text-2xl font-bold mt-2 tabular-nums", c.cor)} data-valor-card>{formatarMoeda(c.valor)}</p>
-                  {c.qtd != null && <p className="text-xs text-ink-subtle mt-1">{c.qtd} conta(s)</p>}
+                  {c.qtd != null && <p className="text-xs text-ink-subtle mt-1">{c.qtd === 1 ? "1 conta" : `${c.qtd} contas`}</p>}
                   {c.aFaturar && c.aFaturar.qtd > 0 && (
                     <p className="text-xs text-ink-muted mt-1.5 pr-6" data-a-faturar>
                       inclui <strong className="text-ink tabular-nums">{formatarMoeda(c.aFaturar.valor)}</strong> a faturar · {c.aFaturar.qtd} {c.aFaturar.qtd === 1 ? "orçamento" : "orçamentos"}
@@ -113,8 +118,8 @@ export default async function FinanceiroDashboardPage() {
       <div className="card-padded">
         <h2 className="card-title mb-3">Alertas do dia</h2>
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-          <AlertaItem icone={CalendarClock} cor="text-atencao" bg="bg-atencao-claro" titulo="Vencem hoje" valor={`${r.alertas.vencemHoje} conta(s)`} detalhe={`${r.alertas.vencemHojeReceber} a receber · ${r.alertas.vencemHojePagar} a pagar`} />
-          <AlertaItem icone={AlertTriangle} cor="text-atrasado" bg="bg-atrasado-claro" titulo="Vencidas sem notificação" valor={`${r.alertas.vencidasSemNotificacao} conta(s)`} detalhe="Atrasadas há mais de 3 dias" />
+          <AlertaItem icone={CalendarClock} cor="text-atencao" bg="bg-atencao-claro" titulo="Vencem hoje" valor={plural(r.alertas.vencemHoje, "conta", "contas")} detalhe={`${r.alertas.vencemHojeReceber} a receber · ${r.alertas.vencemHojePagar} a pagar`} />
+          <AlertaItem icone={AlertTriangle} cor="text-atrasado" bg="bg-atrasado-claro" titulo="Vencidas sem notificação" valor={plural(r.alertas.vencidasSemNotificacao, "conta", "contas")} detalhe="Atrasadas há mais de 3 dias" />
           <AlertaItem icone={r.saldoPrevisto >= 0 ? TrendingUp : TrendingDown} cor={r.saldoPrevisto >= 0 ? "text-success-600" : "text-atrasado"} bg={r.saldoPrevisto >= 0 ? "bg-success-50" : "bg-atrasado-claro"} titulo="Saldo previsto do mês" valor={formatarMoeda(r.saldoPrevisto)} detalhe="Receber (com a faturar) − Pagar (em aberto)" />
         </div>
       </div>
