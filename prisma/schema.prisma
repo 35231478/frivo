@@ -872,6 +872,8 @@ model Usuario {
   pmocHistorico PmocHistorico[] @relation("PmocHistoricoUsuario")
   pmocAvisosVistos PmocAviso[] @relation("PmocAvisoVistoPor")
   aceitesColhidos        OsAceite[]             @relation("OsAceiteColhidoPor")
+  checklistsEditados     ChecklistPreenchido[]  @relation("ChecklistEditadoPor")
+  checklistsInativados   ChecklistPreenchido[]  @relation("ChecklistInativadoPor")
 
   desempenhoRevisoes  DesempenhoPenalidade[] @relation("DesempenhoPenalidadeRevisor")
   desempenhoRegistros DesempenhoPenalidade[] @relation("DesempenhoPenalidadeCriador")
@@ -3955,15 +3957,24 @@ model ChecklistPreenchido {
   status          StatusChecklist @default(PENDENTE)
   observacaoGeral String?         @map("observacao_geral") @db.Text
   criadoEm        DateTime        @default(now()) @map("criado_em")
+  /// Última correção das respostas (quem e quando); null = nunca editado depois de enviado
+  editadoEm       DateTime?       @map("editado_em")
+  editadoPorId    String?         @map("editado_por_id")
+  /// Excluir é reversível: o checklist inativado sai das listas e das contagens, mas fica no banco
+  inativadoEm     DateTime?       @map("inativado_em")
+  inativadoPorId  String?         @map("inativado_por_id")
 
-  empresa     Empresa                   @relation(fields: [empresaId], references: [id], onDelete: Cascade)
-  veiculo     Veiculo                   @relation(fields: [veiculoId], references: [id], onDelete: Cascade)
-  template    ChecklistTemplate         @relation(fields: [templateId], references: [id])
-  colaborador Tecnico?                  @relation(fields: [colaboradorId], references: [id])
-  itens       ChecklistItemPreenchido[]
+  empresa      Empresa                   @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  veiculo      Veiculo                   @relation(fields: [veiculoId], references: [id], onDelete: Cascade)
+  template     ChecklistTemplate         @relation(fields: [templateId], references: [id])
+  colaborador  Tecnico?                  @relation(fields: [colaboradorId], references: [id])
+  editadoPor   Usuario?                  @relation("ChecklistEditadoPor", fields: [editadoPorId], references: [id], onDelete: SetNull)
+  inativadoPor Usuario?                  @relation("ChecklistInativadoPor", fields: [inativadoPorId], references: [id], onDelete: SetNull)
+  itens        ChecklistItemPreenchido[]
 
   @@index([empresaId, criadoEm])
   @@index([empresaId, status, criadoEm])
+  @@index([empresaId, inativadoEm, criadoEm])
   @@index([veiculoId])
   @@map("checklist_preenchidos")
 }

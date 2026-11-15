@@ -11,9 +11,10 @@ import { Drawer } from "@/components/ui/drawer";
 import { usePermissoes } from "@/components/providers/permissoes-provider";
 import { SomenteLeitura, erroDaResposta } from "@/components/config/permissao-config";
 import { CampoBusca, ListaVazia, SkeletonLista } from "@/components/listagem/listagem-ui";
+import { ABAS_ATIVOS_INATIVOS, AbasSituacao, type AbaAtivosInativos } from "@/components/listagem/abas-situacao";
 import { TabelaPro, type ColunaPro } from "@/components/listagem/tabela-pro";
 import { PLANILHA } from "@/lib/planilha";
-import { Plus, Pencil, Ban, Trash2, Check, ArrowUp, ListChecks } from "lucide-react";
+import { Plus, Pencil, Ban, Trash2, Check, ArrowUp, ListChecks, RotateCcw } from "lucide-react";
 
 const FREQUENCIAS = [{ v: "DIARIO", l: "Diário" }, { v: "SEMANAL", l: "Semanal" }, { v: "MENSAL", l: "Mensal" }];
 const TIPOS_ITEM = [
@@ -23,7 +24,7 @@ const TIPOS_ITEM = [
   { v: "FOTO", l: "Foto" },
 ];
 
-const AJUDA = "Modelos do checklist que o colaborador preenche no veículo. Inativar tira o modelo dos próximos preenchimentos; os já feitos continuam no histórico do veículo.";
+const AJUDA = "Modelos do checklist que o colaborador preenche no veículo. Inativar tira o modelo dos próximos preenchimentos; os já feitos continuam no histórico do veículo. O inativado volta pela aba Inativos.";
 const PERMISSAO = "Configurações › gerenciar ou Frota › gerenciar";
 
 const COLUNAS: ColunaPro[] = [
@@ -56,6 +57,7 @@ export function ChecklistTemplatesClient() {
   const [erro, setErro] = useState("");
   const [salvando, setSalvando] = useState(false);
   const [busca, setBusca] = useState("");
+  const [aba, setAba] = useState<AbaAtivosInativos>("ativos");
 
   const [nome, setNome] = useState("");
   const [descricao, setDescricao] = useState("");
@@ -126,13 +128,25 @@ export function ChecklistTemplatesClient() {
       // Recusado (sem permissão, modelo de outra empresa…): a lista fica como está e a tela diz por quê
       if (!res.ok) { toast(await erroDaResposta(res, "Não foi possível inativar o modelo."), "erro"); return; }
       setModelos((p) => (p ?? []).map((x) => (x.id === t.id ? { ...x, ativo: false } : x)));
-      toast("Modelo de checklist inativado.");
+      toast("Modelo de checklist inativado. Está na aba Inativos.");
+    } catch { toast("Sem conexão. Tente de novo.", "erro"); }
+  }
+
+  async function reativar(t: Modelo) {
+    try {
+      const res = await fetch(`/api/checklist-templates/${t.id}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ativo: true }) });
+      // Recusado: as duas abas ficam como estão e a tela diz por quê
+      if (!res.ok) { toast(await erroDaResposta(res, "Não foi possível reativar o modelo."), "erro"); return; }
+      setModelos((p) => (p ?? []).map((x) => (x.id === t.id ? { ...x, ativo: true } : x)));
+      toast("Modelo de checklist reativado.");
     } catch { toast("Sem conexão. Tente de novo.", "erro"); }
   }
 
   const q = busca.trim().toLowerCase();
   const ativos = useMemo(() => (modelos ?? []).filter((t) => t.ativo !== false), [modelos]);
-  const filtrados = useMemo(() => (q ? ativos.filter((t) => t.nome.toLowerCase().includes(q)) : ativos), [ativos, q]);
+  const inativos = useMemo(() => (modelos ?? []).filter((t) => t.ativo === false), [modelos]);
+  const daAba = aba === "inativos" ? inativos : ativos;
+  const filtrados = useMemo(() => (q ? daAba.filter((t) => t.nome.toLowerCase().includes(q)) : daAba), [daAba, q]);
   const somenteLeitura = !podeGerenciar;
 
   const acoes = (t: Modelo) => (
@@ -141,10 +155,16 @@ export function ChecklistTemplatesClient() {
         className="p-1.5 text-ink-muted hover:text-primary-600 hover:bg-primary-50 rounded transition-colors">
         {podeGerenciar ? <Pencil className="w-4 h-4" aria-hidden /> : <ListChecks className="w-4 h-4" aria-hidden />}
       </button>
-      {podeGerenciar && (
+      {podeGerenciar && aba === "ativos" && (
         <button type="button" onClick={() => void inativar(t)} aria-label={`Inativar ${t.nome}`} title="Inativar" data-inativar-modelo={t.id}
           className="p-1.5 text-ink-muted hover:text-atrasado hover:bg-atrasado-claro rounded transition-colors">
           <Ban className="w-4 h-4" aria-hidden />
+        </button>
+      )}
+      {podeGerenciar && aba === "inativos" && (
+        <button type="button" onClick={() => void reativar(t)} aria-label={`Reativar ${t.nome}`} title="Reativar" data-reativar-modelo={t.id}
+          className="p-1.5 text-ink-muted hover:text-ok-texto hover:bg-ok-claro rounded transition-colors">
+          <RotateCcw className="w-4 h-4" aria-hidden />
         </button>
       )}
     </span>
@@ -153,6 +173,8 @@ export function ChecklistTemplatesClient() {
   return (
     <div className="space-y-4" data-checklists-veiculo>
       <div className="flex items-center gap-2 flex-wrap">
+        <AbasSituacao abas={ABAS_ATIVOS_INATIVOS} valor={aba} onChange={setAba} rotulo="Situação dos modelos" className="basis-full"
+          contagem={modelos ? { ativos: ativos.length, inativos: inativos.length } : null} />
         <div className="flex-1 min-w-[12rem] max-w-sm">
           <CampoBusca valor={busca} onChange={setBusca} placeholder="Pesquisar modelo" rotulo="Pesquisar modelo de checklist" atalho={false} />
         </div>
@@ -168,7 +190,7 @@ export function ChecklistTemplatesClient() {
         <div className="border border-surface-border rounded-lg"><SkeletonLista linhas={3} /></div>
       ) : filtrados.length === 0 ? (
         <div className="border border-surface-border rounded-lg">
-          <ListaVazia mensagem={q ? "Nenhum modelo encontrado" : "Nenhum modelo de checklist cadastrado"} busca={q ? busca.trim() : undefined} onLimpar={() => setBusca("")} />
+          <ListaVazia mensagem={q ? "Nenhum modelo encontrado" : aba === "inativos" ? "Nenhum modelo inativo" : "Nenhum modelo de checklist cadastrado"} busca={q ? busca.trim() : undefined} onLimpar={() => setBusca("")} />
         </div>
       ) : (
         <>

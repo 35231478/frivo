@@ -14,11 +14,12 @@ import { TIPO_OS } from "@/components/cadastro-rapido/definicoes";
 import { TelaCadastroApoio } from "@/components/config/tela-cadastro-apoio";
 import { SomenteLeitura, erroDaResposta, usePodeGerenciarConfig } from "@/components/config/permissao-config";
 import { CampoBusca, ListaVazia, SkeletonLista } from "@/components/listagem/listagem-ui";
+import { ABAS_ATIVOS_INATIVOS, AbasSituacao, type AbaAtivosInativos } from "@/components/listagem/abas-situacao";
 import { TabelaPro, type ColunaPro } from "@/components/listagem/tabela-pro";
 import { PLANILHA } from "@/lib/planilha";
 import { formatarData } from "@/lib/utils";
 import {
-  Plus, Pencil, Ban, Check, Trash2, ArrowUp,
+  Plus, Pencil, Ban, Check, Trash2, ArrowUp, RotateCcw,
   ListChecks, Link2, History, Loader2, ExternalLink, Boxes, Wrench, AlertTriangle,
 } from "lucide-react";
 
@@ -33,7 +34,7 @@ const TIPOS_CAMPO = [
   { value: "ASSINATURA", label: "Assinatura" },
 ];
 
-const AJUDA = "Formulários (checklists) respondidos pelo técnico na atividade da OS. O vínculo com o equipamento fica em Tipos de equipamento. Inativar tira o formulário das próximas OS; as respostas já dadas continuam no histórico.";
+const AJUDA = "Formulários (checklists) respondidos pelo técnico na atividade da OS. O vínculo com o equipamento fica em Tipos de equipamento. Inativar tira o formulário das próximas OS; as respostas já dadas continuam no histórico. O inativado volta pela aba Inativos.";
 
 const COLUNAS: ColunaPro[] = [
   { id: "nome", titulo: "Nome", obrigatoria: true, minimo: 160 },
@@ -46,6 +47,7 @@ interface Campo { id?: string; label: string; tipo: string; obrigatorio: boolean
 interface Formulario { id: string; nome: string; descricao?: string; tipoOsId?: string | null; campos: Campo[]; tipoOs?: { id: string; nome: string; cor: string } | null }
 interface TipoOs { id: string; nome: string; cor: string; descricao?: string | null; ativo?: boolean }
 
+const porNome = (a: { nome: string }, b: { nome: string }) => a.nome.localeCompare(b.nome, "pt-BR");
 const CAMPO_VAZIO = (ordem: number): Campo => ({ label: "", tipo: "TEXTO_CURTO", obrigatorio: false, ordem });
 
 /**
@@ -65,9 +67,12 @@ export function TelaFormularios() {
   const [salvando, setSalvando] = useState(false);
   const [erro, setErro] = useState("");
   const [busca, setBusca] = useState("");
+  const [aba, setAba] = useState<AbaAtivosInativos>("ativos");
+  const [inativos, setInativos] = useState<Formulario[] | null>(null);
 
   useEffect(() => {
     fetch("/api/formularios").then((r) => (r.ok ? r.json() : [])).then((d) => setFormularios(Array.isArray(d) ? d : [])).catch(() => setFormularios([]));
+    fetch("/api/formularios?inativos=1").then((r) => (r.ok ? r.json() : [])).then((d) => setInativos(Array.isArray(d) ? d : [])).catch(() => setInativos([]));
     fetch("/api/tipos-os").then((r) => (r.ok ? r.json() : [])).then((d) => setTiposOs(Array.isArray(d) ? d : [])).catch(() => {});
   }, []);
 
@@ -136,12 +141,26 @@ export function TelaFormularios() {
       const res = await fetch(`/api/formularios/${f.id}`, { method: "DELETE" });
       if (!res.ok) { toast(await erroDaResposta(res, "Não foi possível inativar o formulário."), "erro"); return; }
       setFormularios((p) => (p ?? []).filter((x) => x.id !== f.id));
-      toast("Formulário inativado.");
+      setInativos((p) => [...(p ?? []), f].sort(porNome));
+      toast("Formulário inativado. Está na aba Inativos.");
+    } catch { toast("Sem conexão. Tente de novo.", "erro"); }
+  }
+
+  async function reativar(f: Formulario) {
+    try {
+      const res = await fetch(`/api/formularios/${f.id}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ativo: true }) });
+      // Recusado: as duas abas ficam como estão e a tela diz por quê
+      if (!res.ok) { toast(await erroDaResposta(res, "Não foi possível reativar o formulário."), "erro"); return; }
+      const salvo: Formulario = await res.json();
+      setInativos((p) => (p ?? []).filter((x) => x.id !== f.id));
+      setFormularios((p) => [...(p ?? []), { ...f, ...salvo }].sort(porNome));
+      toast("Formulário reativado.");
     } catch { toast("Sem conexão. Tente de novo.", "erro"); }
   }
 
   const q = busca.trim().toLowerCase();
-  const filtrados = useMemo(() => (q ? (formularios ?? []).filter((f) => f.nome.toLowerCase().includes(q)) : formularios ?? []), [formularios, q]);
+  const daAba = aba === "inativos" ? inativos : formularios;
+  const filtrados = useMemo(() => (q ? (daAba ?? []).filter((f) => f.nome.toLowerCase().includes(q)) : daAba ?? []), [daAba, q]);
 
   const chipTipo = (f: Formulario) => f.tipoOs
     ? <span className="inline-flex items-center gap-1.5 text-[11px] text-ink-muted bg-surface-page border border-surface-border px-2 py-0.5 rounded-full max-w-full"><span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: f.tipoOs.cor }} aria-hidden /><span className="truncate">{f.tipoOs.nome}</span></span>
@@ -153,10 +172,16 @@ export function TelaFormularios() {
         className="p-1.5 text-ink-muted hover:text-primary-600 hover:bg-primary-50 rounded transition-colors">
         {podeGerenciar ? <Pencil className="w-4 h-4" aria-hidden /> : <ListChecks className="w-4 h-4" aria-hidden />}
       </button>
-      {podeGerenciar && (
+      {podeGerenciar && aba === "ativos" && (
         <button type="button" onClick={() => void inativar(f)} aria-label={`Inativar ${f.nome}`} title="Inativar" data-inativar-formulario={f.id}
           className="p-1.5 text-ink-muted hover:text-atrasado hover:bg-atrasado-claro rounded transition-colors">
           <Ban className="w-4 h-4" aria-hidden />
+        </button>
+      )}
+      {podeGerenciar && aba === "inativos" && (
+        <button type="button" onClick={() => void reativar(f)} aria-label={`Reativar ${f.nome}`} title="Reativar" data-reativar-formulario={f.id}
+          className="p-1.5 text-ink-muted hover:text-ok-texto hover:bg-ok-claro rounded transition-colors">
+          <RotateCcw className="w-4 h-4" aria-hidden />
         </button>
       )}
     </span>
@@ -169,6 +194,8 @@ export function TelaFormularios() {
     <TelaCadastroApoio titulo="Formulários" descricao="Modelos de formulário das atividades da OS">
       <div className="space-y-4" data-formularios>
         <div className="flex items-center gap-2 flex-wrap">
+          <AbasSituacao abas={ABAS_ATIVOS_INATIVOS} valor={aba} onChange={setAba} rotulo="Situação dos formulários" className="basis-full"
+            contagem={formularios && inativos ? { ativos: formularios.length, inativos: inativos.length } : null} />
           <div className="flex-1 min-w-[12rem] max-w-sm">
             <CampoBusca valor={busca} onChange={setBusca} placeholder="Pesquisar formulário" rotulo="Pesquisar formulário" atalho={false} />
           </div>
@@ -180,11 +207,11 @@ export function TelaFormularios() {
           )}
         </div>
 
-        {formularios === null ? (
+        {daAba === null ? (
           <div className="border border-surface-border rounded-lg"><SkeletonLista linhas={4} /></div>
         ) : filtrados.length === 0 ? (
           <div className="border border-surface-border rounded-lg">
-            <ListaVazia mensagem={q ? "Nenhum formulário encontrado" : "Nenhum formulário cadastrado"} busca={q ? busca.trim() : undefined} onLimpar={() => setBusca("")} />
+            <ListaVazia mensagem={q ? "Nenhum formulário encontrado" : aba === "inativos" ? "Nenhum formulário inativo" : "Nenhum formulário cadastrado"} busca={q ? busca.trim() : undefined} onLimpar={() => setBusca("")} />
           </div>
         ) : (
           <>

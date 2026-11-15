@@ -2,7 +2,7 @@
 
 Inventário das telas do painel contra o checklist da padronização, para planejar as levas por módulo.
 Feito em 14/11/2026, com o código da leva 2; a tabela de Configurações e o placar foram revistos na leva 3,
-e as de Clientes e de Equipamentos e QR Codes na leva 4A.
+as de Clientes e de Equipamentos e QR Codes na leva 4A, e a de Equipes, colaboradores e frota na leva 4B.
 
 ## Como foi feito (e o limite disto)
 
@@ -56,6 +56,10 @@ A tabela de cada módulo, mais abaixo, traz o estado conferido.
   desvincular, inativar e reativar por permissão, toast em toda gravação, editar cliente e unidade no
   contexto e a consulta de CNPJ no cadastro rápido de cliente. Ver
   [padronizacao-leva4a.md](padronizacao-leva4a.md).
+- **Leva 4B** (🔵, com SQL): Veículos, Colaboradores e Equipes — checklist de veículo preenchido com
+  detalhe, edição e exclusão reversível; responsável técnico cadastrado na hora em Dados da empresa;
+  aba Inativos com Reativar nos formulários de OS e nos modelos de checklist; listas na tabela da casa e
+  toast em toda gravação. Ver [padronizacao-leva4b.md](padronizacao-leva4b.md).
 
 ## Próximas levas (ordem sugerida)
 
@@ -64,7 +68,6 @@ diário para o que menos atrapalha, e do menor para o maior.
 
 | Leva | Módulo | Telas | Por que nesta ordem |
 |---|---|---|---|
-| 4B | **Cadastros principais (2ª parte)** | Veículos (lista, formulários, checklist), colaboradores, equipes | A 1ª parte (clientes, equipamentos, QR Codes) é a leva 4A. Falta: detalhe, editar e inativar do checklist de veículo; cadastro rápido do responsável técnico; reativar formulário e modelo de checklist inativados |
 | 5 | **Operação** | Lista de OS, calendário, prazos, execução da atividade, PMOC | Onde o escritório passa o dia. PMOC é planilha: padroniza, não joga fora |
 | 6 | **Comercial** | Lista de orçamentos, contratos (lista, formulário, reajustes, relatório), leads do site | O formulário de contrato tem 12 seletores e tabela própria |
 | 7 | **Estoque e compras** | Estoque, separação, devolução, notas de entrada, pedidos de compra | Telas-planilha de operação; padronizar a lista e os avisos |
@@ -229,18 +232,18 @@ que fazer quando há empate ou pouco histórico (a proposta é não sugerir nada
 
 | Tela | Lista no padrão | Busca e página no servidor | Ajuda no ⓘ | Toast | Botões por permissão | Cadastro inline | Edição no contexto | Celular | O que a varredura não viu |
 |---|---|---|---|---|---|---|---|---|---|
-| `/colaboradores` | — | — | sim | — | sim | sim | — | sim | toast; edição no contexto |
+| `/colaboradores` | sim | sim | sim | sim | sim | sim | — | sim | feita na leva 4B; a lista não tem seletor para editar no contexto |
 | `/colaboradores/[id]/editar` | — | — | sim | sim | sim | sim | sim | sim | nada apontado pela varredura |
 | `/colaboradores/novo` | — | — | sim | sim | sim | sim | sim | sim | nada apontado pela varredura |
-| `/equipes` | sim | sim | — | — | sim | — | — | sim | toast; ajuda no ⓘ; cadastro inline nos seletores |
-| `/equipes/[id]/editar` | — | — | — | — | sim | — | — | sim | toast; ajuda no ⓘ; cadastro inline nos seletores |
-| `/equipes/app-colaborador` | — | — | sim | — | sim | — | — | — | toast; versão de celular |
-| `/equipes/montador` | — | — | — | — | sim | — | — | — | toast; ajuda no ⓘ; versão de celular |
-| `/equipes/novo` | — | — | — | — | sim | — | — | sim | toast; ajuda no ⓘ; cadastro inline nos seletores |
-| `/veiculos` | — | — | sim | — | sim | sim | — | sim | toast; edição no contexto |
-| `/veiculos/[id]/editar` | — | — | sim | — | sim | — | — | sim | tabela própria; toast; cadastro inline nos seletores |
-| `/veiculos/checklist` | — | — | — | — | — | — | — | sim | toast; ajuda no ⓘ; botões por permissão; cadastro inline nos seletores |
-| `/veiculos/novo` | — | — | sim | — | sim | — | — | sim | tabela própria; toast; cadastro inline nos seletores |
+| `/equipes` | sim | sim | sim | sim | sim | — | — | sim | feita na leva 4B; continua em cartões (nunca foi tabela) e não tem seletor de cadastro |
+| `/equipes/[id]/editar` | — | — | sim | sim | sim | sim | sim | sim | feita na leva 4B |
+| `/equipes/app-colaborador` | — | — | sim | sim | sim | — | — | sim | feita na leva 4B; conferida no celular |
+| `/equipes/montador` | — | — | sim | sim | sim | — | — | sim | feita na leva 4B; conferida no celular |
+| `/equipes/novo` | — | — | sim | sim | sim | sim | sim | sim | feita na leva 4B |
+| `/veiculos` | sim | sim | sim | sim | sim | — | — | sim | feita na leva 4B; a lista não tem seletor de cadastro |
+| `/veiculos/[id]/editar` | sim | — | sim | sim | sim | sim | sim | sim | feita na leva 4B; a aba Checklists é a lista padrão dos preenchidos |
+| `/veiculos/checklist` | sim | — | sim | sim | sim | — | — | sim | feita na leva 4B (Preencher e Preenchidos); veículo e modelo não têm cadastro rápido (CRLV e editor de itens) |
+| `/veiculos/novo` | — | — | sim | sim | sim | sim | sim | sim | feita na leva 4B |
 
 ### Desempenho (6)
 

@@ -49,7 +49,7 @@ export default async function VeiculosPage({ searchParams }: { searchParams: Pro
       : Promise.resolve([]),
     ids.length
       ? prisma.checklistPreenchido.findMany({
-          where: { veiculoId: { in: ids }, criadoEm: { gte: inicioHojeInstante } },
+          where: { veiculoId: { in: ids }, criadoEm: { gte: inicioHojeInstante }, inativadoEm: null }, // inativado não conta
           select: { veiculoId: true, status: true }, orderBy: { criadoEm: "desc" },
         })
       : Promise.resolve([]),

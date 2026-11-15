@@ -19,7 +19,9 @@ export default async function EditarVeiculoPage({ params }: { params: Promise<{ 
     include: {
       documentos: { orderBy: { criadoEm: "asc" } },
       manutencoes: { orderBy: { dataRealizacao: "desc" } },
+      // Só os ativos: o inativado sai do histórico e das ocorrências (a aba lista os inativos à parte)
       checklists: {
+        where: { inativadoEm: null },
         orderBy: { criadoEm: "desc" },
         include: {
           colaborador: { select: { nome: true } },

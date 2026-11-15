@@ -11,6 +11,7 @@ import { AvatarTecnico } from "@/components/ui/avatar-tecnico";
 import { UsersRound, Plus, Truck, Crown, HardHat, Building2, LayoutDashboard } from "lucide-react";
 import { usePermissoes } from "@/components/providers/permissoes-provider";
 import { InativarRegistro } from "@/components/ui/inativar-registro";
+import { Dica } from "@/components/ui/dica";
 
 interface Membro { id: string; nome: string; avatar: string | null }
 interface Grupo {
@@ -47,13 +48,16 @@ export function EquipesView({ aba, q, grupos, colaboradores, perfis, contagens, 
     ? [["nome:asc", "Nome (A–Z)"], ["nome:desc", "Nome (Z–A)"], ["membros:desc", "Mais membros"], ["membros:asc", "Menos membros"]]
     : [["nome:asc", "Nome (A–Z)"], ["nome:desc", "Nome (Z–A)"], ["cargo:asc", "Cargo (A–Z)"], ["cargo:desc", "Cargo (Z–A)"]];
   const vazio = aba === "grupos" ? "Nenhuma equipe encontrada" : "Nenhum colaborador encontrado";
+  // A ficha (da equipe e do colaborador) só abre para quem tem Equipes › gerenciar: sem ela, o cartão não é link
+  const Caixa = podeGerenciar ? Link : SemLink;
 
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div className="flex items-center gap-3">
-          <div className="p-2 bg-surface-alt rounded-lg"><UsersRound className="w-5 h-5 text-ink-muted" /></div>
+          <div className="p-2 bg-surface-alt rounded-lg"><UsersRound className="w-5 h-5 text-ink-muted" aria-hidden /></div>
           <h1 className="page-title">Equipes</h1>
+          <Dica texto="Grupos de equipe são os times que executam as OS. As outras abas listam os colaboradores de campo e os administrativos." rotulo="Equipes" lado="direita" />
         </div>
         <div className="flex items-center gap-2">
           <Link href="/equipes/montador" data-abrir-montador className="inline-flex items-center gap-2 border border-primary-300 text-primary-700 bg-primary-50 hover:bg-primary-100 px-3 py-2.5 rounded-lg text-sm font-semibold transition-all">
@@ -61,7 +65,7 @@ export function EquipesView({ aba, q, grupos, colaboradores, perfis, contagens, 
           </Link>
           {aba === "grupos" && podeGerenciar && (
             <Link href="/equipes/novo" className="inline-flex items-center gap-2 bg-primary-500 hover:bg-primary-600 text-white px-4 py-2.5 rounded-lg text-sm font-semibold transition-all shadow-sm hover:shadow">
-              <Plus className="w-4 h-4" /> Nova Equipe
+              <Plus className="w-4 h-4" aria-hidden /> Nova equipe
             </Link>
           )}
         </div>
@@ -123,7 +127,7 @@ export function EquipesView({ aba, q, grupos, colaboradores, perfis, contagens, 
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {grupos.map((e) => (
               <div key={e.id} data-card-id={e.id} className="relative">
-              <Link href={`/equipes/${e.id}/editar`} className={cn("block h-full bg-white border border-surface-border rounded-card p-4 pb-10 hover:border-primary-300 hover:shadow-card-hover transition-all", e.status !== "ATIVA" && "opacity-70")}>
+              <Caixa href={`/equipes/${e.id}/editar`} className={cn("block h-full bg-white border border-surface-border rounded-card p-4 pb-10 transition-all", podeGerenciar && "hover:border-primary-300 hover:shadow-card-hover", e.status !== "ATIVA" && "opacity-70")}>
                 <div className="flex items-center justify-between gap-2">
                   <div className="flex items-center gap-2 min-w-0">
                     <span className="w-3.5 h-3.5 rounded-full shrink-0" style={{ backgroundColor: e.cor }} />
@@ -142,12 +146,12 @@ export function EquipesView({ aba, q, grupos, colaboradores, perfis, contagens, 
                 )}
                 <div className="flex items-center justify-between gap-2 mt-3 pt-3 border-t border-surface-border">
                   <div className="flex items-center gap-2">
-                    <span className="text-xs text-ink-muted">{e.membros.length} membro(s)</span>
+                    <span className="text-xs text-ink-muted">{e.membros.length === 1 ? "1 membro" : `${e.membros.length} membros`}</span>
                     <AvatarStack tecnicos={e.membros.map((m) => ({ id: m.id, nome: m.nome, avatar: m.avatar }))} size={26} />
                   </div>
                   {e.veiculos.length > 0 && <span className="inline-flex items-center gap-1 text-xs text-ink-muted"><Truck className="w-3.5 h-3.5" />{e.veiculos.map((v) => v.placa).join(", ")}</span>}
                 </div>
-              </Link>
+              </Caixa>
               <div className="absolute bottom-2 right-2">
                 <InativarRegistro url={`/api/equipes/${e.id}`} modulo="equipes" acaoReativar="gerenciar" ativo={e.status === "ATIVA"} nome={e.nome} entidade="equipe" feminino />
               </div>
@@ -156,18 +160,24 @@ export function EquipesView({ aba, q, grupos, colaboradores, perfis, contagens, 
           </div>
       )}
 
-      {aba !== "grupos" && colaboradores.length > 0 && <ListaColaboradores lista={colaboradores} />}
+      {aba !== "grupos" && colaboradores.length > 0 && <ListaColaboradores lista={colaboradores} podeGerenciar={podeGerenciar} />}
       </div>
       <Paginacao total={total} pagina={pagina} porPagina={porPagina} rotulo={aba === "grupos" ? "equipes" : "colaboradores"} onNavegar={navegar} />
     </div>
   );
 }
 
-function ListaColaboradores({ lista }: { lista: Colaborador[] }) {
+/** O mesmo cartão sem navegação (quem não pode abrir a ficha) */
+function SemLink({ href: _href, children, ...resto }: { href: string; children: React.ReactNode } & React.HTMLAttributes<HTMLDivElement>) {
+  return <div {...resto}>{children}</div>;
+}
+
+function ListaColaboradores({ lista, podeGerenciar }: { lista: Colaborador[]; podeGerenciar: boolean }) {
+  const Caixa = podeGerenciar ? Link : SemLink;
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
       {lista.map((c) => (
-        <Link key={c.id} href={`/colaboradores/${c.id}/editar`} className="flex items-center gap-3 p-4 bg-white border border-surface-border rounded-card hover:border-primary-300 hover:shadow-card-hover transition-all">
+        <Caixa key={c.id} href={`/colaboradores/${c.id}/editar`} data-colaborador-equipe={c.id} className={cn("flex items-center gap-3 p-4 bg-white border border-surface-border rounded-card transition-all", podeGerenciar && "hover:border-primary-300 hover:shadow-card-hover")}>
           <AvatarTecnico nome={c.nome} fotoUrl={c.avatar} size={44} />
           <div className="min-w-0 flex-1">
             <p className="font-semibold text-ink truncate">{c.nome}</p>
@@ -178,7 +188,7 @@ function ListaColaboradores({ lista }: { lista: Colaborador[] }) {
               </span>
             )}
           </div>
-        </Link>
+        </Caixa>
       ))}
     </div>
   );

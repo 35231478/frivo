@@ -73,7 +73,8 @@ export function whereAviso(aviso: AvisoVeiculo, agora = new Date()): Prisma.Veic
       return { proximaRevisaoData: { gte: inicioHoje, lt: limite } };
     case "sem_checklist":
       // Mesma regra do alerta "checklist pendente": veículo em uso sem checklist preenchido hoje
-      return { status: { not: "INATIVO" }, checklists: { none: { criadoEm: { gte: inicioHojeInstante } } } };
+      // (checklist inativado não conta: é como se não tivesse sido preenchido)
+      return { status: { not: "INATIVO" }, checklists: { none: { criadoEm: { gte: inicioHojeInstante }, inativadoEm: null } } };
     default:
       return null;
   }

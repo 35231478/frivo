@@ -14,6 +14,8 @@ import {
 import { cn } from "@/lib/utils";
 import { AvatarTecnico } from "@/components/ui/avatar-tecnico";
 import { InativarRegistro } from "@/components/ui/inativar-registro";
+import { toast } from "@/components/ui/avisos";
+import { Dica } from "@/components/ui/dica";
 
 export interface ColabMontador { id: string; nome: string; funcao: string; ausente: string | null; foto: string | null }
 export interface EquipeMontador {
@@ -124,12 +126,14 @@ export function MontadorEquipes({ equipesIniciais, colaboradores, podeGerenciar 
         body: JSON.stringify({ equipes: equipes.map((e) => ({ id: e.id, chave: e.chave, nome: e.nome.trim(), cor: e.cor, liderId: e.liderId, membroIds: e.membros })) }),
       });
       const d = await res.json().catch(() => ({}));
-      if (!res.ok) { setErro(d.erro ?? "Não foi possível salvar."); return; }
+      // Recusado: a composição montada fica na tela (nada se perde) e a barra diz por quê
+      if (!res.ok) { setErro(d.erro ?? "Não foi possível salvar a composição."); toast(d.erro ?? "Não foi possível salvar a composição.", "erro"); return; }
       const salvas = equipes.map((e) => (d.criadas?.[e.chave] ? { ...e, id: d.criadas[e.chave], chave: d.criadas[e.chave] } : e));
       setEquipes(salvas); setBase(salvas);
       setOk("Composição salva.");
+      toast("Composição salva.");
       router.refresh();
-    } catch { setErro("Erro de conexão."); } finally { setSalvando(false); }
+    } catch { setErro("Sem conexão. Tente de novo."); toast("Sem conexão. Tente de novo.", "erro"); } finally { setSalvando(false); }
   }
 
   const termo = busca.trim().toLowerCase();
@@ -143,12 +147,10 @@ export function MontadorEquipes({ equipesIniciais, colaboradores, podeGerenciar 
         <div className="flex items-start gap-3">
           <Link href="/equipes" title="Voltar" className="mt-1 p-1.5 -ml-1 rounded-lg text-ink-muted hover:text-primary-600 hover:bg-surface-alt"><ChevronLeft className="w-5 h-5" /></Link>
           <div>
-            <h1 className="text-2xl font-bold text-ink tracking-tight">Montar equipes</h1>
-            <p className="text-sm text-ink-muted mt-0.5">
-              {podeGerenciar
-                ? <>Arraste os colaboradores para dentro das equipes. Solte na faixa <Crown className="inline w-3.5 h-3.5 text-atencao-texto" /> para definir o líder.</>
-                : <>Somente leitura: requer a permissão Equipes › gerenciar.</>}
-            </p>
+            <h1 className="text-2xl font-bold text-ink tracking-tight flex items-center gap-1.5">Montar equipes
+              <Dica texto="Arraste os colaboradores para dentro das equipes. Solte na faixa do líder (a da coroa) para definir quem lidera." rotulo="Montar equipes" lado="direita" />
+            </h1>
+            {!podeGerenciar && <p className="text-sm text-ink-muted mt-0.5" data-somente-leitura>Somente leitura: requer a permissão Equipes › gerenciar.</p>}
           </div>
         </div>
         <div className="flex items-center gap-2 text-sm" data-resumo-montador>

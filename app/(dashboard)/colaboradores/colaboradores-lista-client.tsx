@@ -15,7 +15,10 @@ import { InativarRegistro } from "@/components/ui/inativar-registro";
 import { CadastroRapidoModal, type CampoRapido } from "@/components/ui/select-cadastro-rapido";
 import { TECNICO } from "@/components/cadastro-rapido/definicoes";
 import { useListagemUrl } from "@/components/listagem/use-listagem-url";
-import { AlternarVisao, CampoBusca, sugerirPorUrl, ChipResumo, MultiSelect, Paginacao, SelectFiltro, ThOrd, type Opcao } from "@/components/listagem/listagem-ui";
+import { AlternarVisao, CampoBusca, sugerirPorUrl, ChipResumo, MultiSelect, Paginacao, SelectFiltro, type Opcao } from "@/components/listagem/listagem-ui";
+import { TabelaPro, type ColunaPro } from "@/components/listagem/tabela-pro";
+import { PLANILHA } from "@/lib/planilha";
+import { toast } from "@/components/ui/avisos";
 import type { FiltrosColaboradores, OrdemColaboradores } from "@/lib/colaborador-listagem";
 
 export type ColaboradorLinha = {
@@ -159,12 +162,12 @@ export function ColaboradoresListaClient({ itens, total, filtros: f, opcoes, res
               {itens.map((c) => (
                 <div key={c.id} className="flex items-stretch">
                   {massa && <div className="pl-3 pt-4"><CheckboxLinha id={c.id} rotulo={c.nome} /></div>}
-                  <div className="min-w-0 flex-1"><LinhaMobile c={c} /></div>
+                  <div className="min-w-0 flex-1"><LinhaMobile c={c} podeGerenciar={podeGerenciar} /></div>
                 </div>
               ))}
             </div>
             <div className="hidden md:block">
-              {visao === "lista" ? <Tabela massa={massa} itens={itens} f={f} onOrdenar={ordenar} /> : <Cards massa={massa} itens={itens} />}
+              {visao === "lista" ? <Tabela massa={massa} itens={itens} f={f} onOrdenar={ordenar} podeGerenciar={podeGerenciar} /> : <Cards massa={massa} itens={itens} podeGerenciar={podeGerenciar} />}
             </div>
           </>
         )}
@@ -191,7 +194,7 @@ export function ColaboradoresListaClient({ itens, total, filtros: f, opcoes, res
             return { value: d.id, label: d.nome };
           }}
           // Mostra quem acabou de ser cadastrado (senão ele poderia cair em outra página da lista)
-          onCriado={(o) => { setNovoAberto(false); setBusca(o.label); navegar({ q: o.label, status: null, aviso: null, funcoes: null, cargo: null, equipe: null }); }}
+          onCriado={(o) => { setNovoAberto(false); toast("Colaborador cadastrado."); setBusca(o.label); navegar({ q: o.label, status: null, aviso: null, funcoes: null, cargo: null, equipe: null }); }}
         />
       )}
     </div>
@@ -226,71 +229,77 @@ function DocSelo({ c }: { c: ColaboradorLinha }) {
 }
 
 /* ───────── Tabela (desktop) ───────── */
-function Tabela({ massa, itens, f, onOrdenar }: { massa: boolean; itens: ColaboradorLinha[]; f: FiltrosColaboradores; onOrdenar: (k: OrdemColaboradores) => void }) {
-  const router = useRouter();
+// As larguras somam o que cabe num notebook (1440px com o menu aberto) sem rolar de lado
+const COLUNAS: ColunaPro[] = [
+  { id: "colaborador", titulo: "Colaborador", ordenar: "nome", obrigatoria: true, minimo: 200 },
+  { id: "cargo", titulo: "Cargo e função", ordenar: "cargo", largura: 168, classe: "truncate" },
+  { id: "equipe", titulo: "Equipe", largura: 164 },
+  { id: "contato", titulo: "Contato", largura: 142, classe: "truncate" },
+  { id: "atividades", titulo: "Atividades", largura: 90, alinhar: "direita" },
+  { id: "avisos", titulo: "Avisos", largura: 132 },
+  { id: "status", titulo: "Status", largura: 96 },
+  { id: "acoes", titulo: "Ações", fixa: true, semTitulo: true, largura: 76, alinhar: "direita", classe: "py-0.5" },
+];
+
+/**
+ * A ficha do colaborador (CPF, documentos) só abre para quem tem Equipes › gerenciar — a página e a
+ * rota recusam os demais. Sem a permissão, o nome não é link e a linha não tem Editar nem Inativar.
+ */
+function Tabela({ massa, itens, f, onOrdenar, podeGerenciar }: {
+  massa: boolean; itens: ColaboradorLinha[]; f: FiltrosColaboradores; onOrdenar: (k: OrdemColaboradores) => void; podeGerenciar: boolean;
+}) {
   return (
-    <div className="bg-white border border-surface-border rounded-card overflow-x-auto" data-visao="lista">
-      <table className="w-full text-sm">
-        <thead className="bg-surface-alt text-ink-muted text-[11px] uppercase tracking-wide border-b border-surface-border">
-          <tr>
-            {massa && <th className="w-px pl-4 pr-1 py-2.5"><CheckboxPagina /></th>}
-            <ThOrd label="Colaborador" k="nome" ordem={f.ordem} dir={f.dir} onOrdenar={onOrdenar} className={massa ? "pl-2" : "pl-4"} />
-            <ThOrd label="Cargo / função" k="cargo" ordem={f.ordem} dir={f.dir} onOrdenar={onOrdenar} />
-            <th className="text-left px-3 py-2.5 font-semibold">Equipe</th>
-            <th className="text-left px-3 py-2.5 font-semibold">Contato</th>
-            <th className="text-left px-3 py-2.5 font-semibold">Avisos</th>
-            <th className="text-left px-3 py-2.5 font-semibold">Status</th>
-            <th className="text-right pl-2 pr-3 py-2.5 font-semibold">Ações</th>
-          </tr>
-        </thead>
-        <tbody className="divide-y divide-surface-border/70">
-          {itens.map((c) => (
-            <tr key={c.id} data-colaborador-id={c.id} onClick={() => router.push(`/colaboradores/${c.id}/editar`)}
-              className={cn("cursor-pointer hover:bg-primary-50/40 transition-colors", !c.ativo && "opacity-60")}>
-              {massa && <td className="w-px pl-4 pr-1 py-2.5" onClick={(ev) => ev.stopPropagation()}><CheckboxLinha id={c.id} rotulo={c.nome} /></td>}
-              <td className={massa ? "pl-2 pr-3 py-2.5" : "pl-4 pr-3 py-2.5"}>
-                <div className="flex items-center gap-3 min-w-[200px]">
-                  <AvatarTecnico nome={c.nome} fotoUrl={c.foto} size={40} />
-                  <div className="min-w-0">
-                    <p data-nome className="font-semibold text-ink truncate max-w-[240px]">{c.nome}</p>
-                    <p className="text-xs text-ink-muted">{c.atividades} atividade{c.atividades === 1 ? "" : "s"}</p>
-                  </div>
-                </div>
-              </td>
-              <td className="px-3 py-2.5 max-w-[220px]" data-cargo>
-                <p className="text-ink truncate">{c.cargo ?? c.funcaoLabel}</p>
-                {c.cargo && <p className="text-xs text-ink-muted truncate">{c.funcaoLabel}</p>}
-              </td>
-              <td className="px-3 py-2.5"><Equipes c={c} /></td>
-              <td className="px-3 py-2.5 whitespace-nowrap text-xs text-ink-muted">
-                <p className="flex items-center gap-1 text-ink"><Phone className="w-3 h-3 text-ink-subtle" />{formatarTelefone(c.telefone)}</p>
-                {c.email && <p className="truncate max-w-[200px]">{c.email}</p>}
-              </td>
-              <td className="px-3 py-2.5">{c.documento ? <DocSelo c={c} /> : <span className="text-xs text-ink-subtle">—</span>}</td>
-              <td className="px-3 py-2.5"><StatusColaboradorSelo status={c.status} /></td>
-              <td className="pl-2 pr-3 py-2" onClick={(ev) => ev.stopPropagation()}>
-                <div className="flex items-center justify-end gap-0.5">
-                  <Link href={`/colaboradores/${c.id}/editar`} title="Editar" className="p-1 rounded-md text-ink-muted hover:text-primary-600 hover:bg-surface-alt"><Pencil className="w-4 h-4" /></Link>
-                  <InativarRegistro url={`/api/tecnicos/${c.id}`} modulo="equipes" acaoReativar="gerenciar" ativo={c.ativo} nome={c.nome} entidade="colaborador" />
-                </div>
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
+    <TabelaPro
+      tela="colaboradores" className="bg-white border border-surface-border rounded-card overflow-hidden" atributos={{ "data-visao": "lista", "data-tabela-colaboradores": true }}
+      ordenacao={{ ativa: f.ordem, dir: f.dir, onOrdenar: (k) => onOrdenar(k as OrdemColaboradores) }}
+      barra={<span>{itens.length === 1 ? "1 colaborador nesta página" : `${itens.length} colaboradores nesta página`}</span>}
+      colunas={[
+        ...(massa ? [{ id: "sel", titulo: "Selecionar a página", fixa: true, largura: 36, cabecalho: <CheckboxPagina />, classe: "pl-3" }] : []),
+        ...COLUNAS,
+      ]}
+      linhas={itens.map((c) => {
+        const nome = <><AvatarTecnico nome={c.nome} fotoUrl={c.foto} size={26} /><span data-nome className={cn(PLANILHA.nome, "truncate")}>{c.nome}</span></>;
+        const contato = [formatarTelefone(c.telefone), c.email].filter(Boolean).join(" · ");
+        return {
+          id: c.id, atributos: { "data-colaborador-id": c.id }, classe: c.ativo ? undefined : "opacity-60",
+          titulos: { colaborador: c.nome, cargo: funcaoCargo(c), contato },
+          celulas: {
+            sel: massa ? <CheckboxLinha id={c.id} rotulo={c.nome} /> : null,
+            colaborador: podeGerenciar
+              ? <Link href={`/colaboradores/${c.id}/editar`} className="flex items-center gap-2 min-w-0 hover:text-primary-600">{nome}</Link>
+              : <span className="flex items-center gap-2 min-w-0">{nome}</span>,
+            cargo: <span data-cargo className="text-ink">{funcaoCargo(c)}</span>,
+            equipe: <Equipes c={c} max={1} />,
+            contato: <span className={PLANILHA.apagado}>{contato}</span>,
+            atividades: <span className="tabular-nums">{c.atividades}</span>,
+            avisos: c.documento ? <DocSelo c={c} /> : <span className="text-xs text-ink-subtle">—</span>,
+            status: <StatusColaboradorSelo status={c.status} />,
+            acoes: (
+              <span className="inline-flex items-center justify-end gap-0.5" data-acoes-colaborador={c.id}>
+                {podeGerenciar && (
+                  <Link href={`/colaboradores/${c.id}/editar`} title="Editar" aria-label={`Editar ${c.nome}`} data-editar-colaborador
+                    className="p-1.5 rounded text-ink-muted hover:text-primary-600 hover:bg-primary-50"><Pencil className="w-4 h-4" aria-hidden /></Link>
+                )}
+                <InativarRegistro url={`/api/tecnicos/${c.id}`} modulo="equipes" acaoReativar="gerenciar" ativo={c.ativo} nome={c.nome} entidade="colaborador" />
+              </span>
+            ),
+          },
+        };
+      })}
+    />
   );
 }
 
 /* ───────── Celular ───────── */
-function LinhaMobile({ c }: { c: ColaboradorLinha }) {
+function LinhaMobile({ c, podeGerenciar }: { c: ColaboradorLinha; podeGerenciar: boolean }) {
+  const Caixa = podeGerenciar ? Link : SemLink;
   return (
-    <Link href={`/colaboradores/${c.id}/editar`} data-colaborador-id={c.id} className={cn("flex items-start gap-3 p-3 active:bg-surface-alt", !c.ativo && "opacity-60")}>
+    <Caixa href={`/colaboradores/${c.id}/editar`} data-colaborador-id={c.id} className={cn("flex items-start gap-3 p-3 active:bg-surface-alt", !c.ativo && "opacity-60")}>
       <AvatarTecnico nome={c.nome} fotoUrl={c.foto} size={44} />
       <div className="min-w-0 flex-1">
         <div className="flex items-start justify-between gap-2">
           <p data-nome className="font-semibold text-ink leading-tight truncate">{c.nome}</p>
-          <ChevronRight className="w-4 h-4 text-ink-subtle shrink-0 mt-0.5" />
+          {podeGerenciar && <ChevronRight className="w-4 h-4 text-ink-subtle shrink-0 mt-0.5" aria-hidden />}
         </div>
         <p className="text-xs text-ink-muted truncate">{funcaoCargo(c)}</p>
         <div className="flex items-center gap-1.5 flex-wrap mt-1.5">
@@ -299,19 +308,25 @@ function LinhaMobile({ c }: { c: ColaboradorLinha }) {
           <DocSelo c={c} />
         </div>
       </div>
-    </Link>
+    </Caixa>
   );
 }
 
+/** O mesmo cartão sem navegação (quem não pode abrir a ficha) */
+function SemLink({ href: _href, children, ...resto }: { href: string; children: React.ReactNode } & React.HTMLAttributes<HTMLDivElement>) {
+  return <div {...resto}>{children}</div>;
+}
+
 /* ───────── Cards (desktop, alternativo) ───────── */
-function Cards({ massa, itens }: { massa: boolean; itens: ColaboradorLinha[] }) {
+function Cards({ massa, itens, podeGerenciar }: { massa: boolean; itens: ColaboradorLinha[]; podeGerenciar: boolean }) {
+  const Caixa = podeGerenciar ? Link : SemLink;
   return (
     <div className="grid grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 gap-4" data-visao="cards">
       {itens.map((c) => (
         <div key={c.id} className="relative">
         {massa && <CheckboxLinha id={c.id} rotulo={c.nome} className="absolute top-2 left-2 z-10 bg-white rounded p-1.5 m-0 shadow-sm" />}
-        <Link href={`/colaboradores/${c.id}/editar`} data-colaborador-id={c.id}
-          className={cn("h-full group bg-white border border-surface-border rounded-card p-4 hover:shadow-md hover:border-primary-300 transition-all flex flex-col gap-3", !c.ativo && "opacity-60")}>
+        <Caixa href={`/colaboradores/${c.id}/editar`} data-colaborador-id={c.id}
+          className={cn("h-full group bg-white border border-surface-border rounded-card p-4 transition-all flex flex-col gap-3", podeGerenciar && "hover:shadow-md hover:border-primary-300", !c.ativo && "opacity-60")}>
           <div className="flex items-start gap-3">
             <AvatarTecnico nome={c.nome} fotoUrl={c.foto} size={56} />
             <div className="min-w-0 flex-1">
@@ -328,7 +343,7 @@ function Cards({ massa, itens }: { massa: boolean; itens: ColaboradorLinha[] }) 
             <Phone className="w-3.5 h-3.5 shrink-0" /> {formatarTelefone(c.telefone)}
             <span className="ml-auto inline-flex items-center gap-1 text-ink-subtle"><Users className="w-3.5 h-3.5" />{c.atividades} ativ.</span>
           </p>
-        </Link>
+        </Caixa>
         </div>
       ))}
     </div>

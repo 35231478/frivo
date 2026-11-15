@@ -11,20 +11,25 @@ export async function GET(req: NextRequest) {
   const empresaId = session.user!.empresaId;
   const { searchParams } = new URL(req.url);
   const veiculoId = searchParams.get("veiculoId");
+  // Por padrão só os ativos; ?inativos=1 devolve os inativados (para a aba "Inativos" e o Reativar)
+  const inativos = searchParams.get("inativos") === "1";
 
   const checklists = await prisma.checklistPreenchido.findMany({
-    where: { empresaId, ...(veiculoId && { veiculoId }) },
-    include: {
+    where: { empresaId, inativadoEm: inativos ? { not: null } : null, ...(veiculoId && { veiculoId }) },
+    select: {
+      id: true, status: true, criadoEm: true, editadoEm: true, inativadoEm: true, observacaoGeral: true, veiculoId: true,
       veiculo: { select: { placa: true, modelo: true } },
       colaborador: { select: { nome: true } },
       template: { select: { nome: true } },
-      _count: { select: { itens: true } },
+      inativadoPor: { select: { nome: true } },
+      // sem as fotos (base64): a lista só precisa saber quantos itens e quantos em alerta
+      itens: { select: { alerta: true } },
     },
     orderBy: { criadoEm: "desc" },
-    take: 100,
+    take: 200,
   });
 
-  return NextResponse.json(checklists);
+  return NextResponse.json(checklists.map(({ itens, ...c }) => ({ ...c, totalItens: itens.length, alertas: itens.filter((i) => i.alerta).length })));
 }
 
 export async function POST(req: NextRequest) {
@@ -33,12 +38,12 @@ export async function POST(req: NextRequest) {
   const { session } = guard;
   const empresaId = session.user!.empresaId;
 
-  const body = await req.json();
+  const body = await req.json().catch(() => null);
   const parsed = checklistPreenchidoSchema.safeParse(body);
   if (!parsed.success) return NextResponse.json({ erro: "Dados inválidos", detalhes: parsed.error.flatten() }, { status: 400 });
 
   const { veiculoId, templateId, observacaoGeral, itens } = parsed.data;
-  const colaboradorId = (body.colaboradorId as string) || null;
+  const colaboradorId = ((body as { colaboradorId?: string }).colaboradorId as string) || null;
 
   const veiculo = await prisma.veiculo.findFirst({ where: { id: veiculoId, empresaId } });
   if (!veiculo) return NextResponse.json({ erro: "Veículo não encontrado" }, { status: 404 });

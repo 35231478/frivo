@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
+import { z } from "zod";
+import { caixaNome } from "@/lib/texto/zod";
 import { prisma } from "@/lib/prisma";
 import { equipeSchema } from "@/lib/validations";
 import { exigirPermissao } from "@/lib/permissoes-server";
@@ -112,12 +114,30 @@ export async function DELETE(req: NextRequest, { params }: Params) {
   return NextResponse.json({ ok: true });
 }
 
+const edicaoRapidaSchema = z.object({
+  nome: z.string().trim().min(1, "Nome é obrigatório").transform(caixaNome).optional(),
+  cor: z.string().regex(/^#[0-9a-fA-F]{6}$/, "Cor inválida").optional(),
+}).strict().refine((d) => Object.keys(d).length > 0, "Nada para alterar");
+
+/** Exige "gerenciar". { ativo: true } reativa a equipe; { nome?, cor? } corrige esses campos. */
 export async function PATCH(req: NextRequest, { params }: Params) {
   const guard = await exigirPermissao("equipes", "gerenciar");
   if (guard.erro) return guard.resposta;
   const empresaId = guard.session.user!.empresaId;
   const { id } = await params;
-  if ((await req.json().catch(() => ({})))?.ativo !== true) return NextResponse.json({ erro: "Ação inválida" }, { status: 400 });
+  const corpo = await req.json().catch(() => null);
+  if (corpo?.ativo !== true) {
+    // Edição parcial pelo "editar no contexto" de um seletor: só o nome e a cor (membros e veículos são da ficha)
+    const parsed = edicaoRapidaSchema.safeParse(corpo);
+    if (!parsed.success) {
+      const campo = parsed.error.issues.find((i) => i.code !== "unrecognized_keys" && i.path.length > 0);
+      return NextResponse.json({ erro: campo?.message ?? "Ação inválida" }, { status: 400 });
+    }
+    const atual = await prisma.equipe.findFirst({ where: { id, empresaId }, select: { id: true } });
+    if (!atual) return NextResponse.json({ erro: "Não encontrada" }, { status: 404 });
+    const e = await prisma.equipe.update({ where: { id }, data: parsed.data, select: { id: true, nome: true, cor: true, status: true } });
+    return NextResponse.json(e);
+  }
 
   const u = guard.session.user!;
   const r = await reativarEquipe(id, { empresaId, usuarioId: u.id, usuarioNome: u.name ?? "usuário" });

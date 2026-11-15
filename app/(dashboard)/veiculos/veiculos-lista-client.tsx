@@ -5,14 +5,16 @@ import { useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
-  CheckCircle2, ChevronRight, ClipboardCheck, ClipboardX, FileWarning, FileX, Fuel, Loader2, Pencil, Plus,
+  CheckCircle2, ChevronRight, ClipboardCheck, ClipboardX, Eye, FileWarning, FileX, Fuel, Loader2, Pencil, Plus,
   SlidersHorizontal, Truck, UserCog, Users, Wrench, X, Ban,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { usePermissoes } from "@/components/providers/permissoes-provider";
 import { InativarRegistro } from "@/components/ui/inativar-registro";
 import { useListagemUrl } from "@/components/listagem/use-listagem-url";
-import { AlternarVisao, CampoBusca, sugerirPorUrl, ChipResumo, MultiSelect, Paginacao, SelectFiltro, ThOrd, type Opcao } from "@/components/listagem/listagem-ui";
+import { AlternarVisao, CampoBusca, sugerirPorUrl, ChipResumo, MultiSelect, Paginacao, SelectFiltro, type Opcao } from "@/components/listagem/listagem-ui";
+import { TabelaPro, type ColunaPro } from "@/components/listagem/tabela-pro";
+import { PLANILHA } from "@/lib/planilha";
 import { ChecklistSelo, DocumentoSelo, RevisaoSelo, VeiculoStatusSelo } from "@/components/veiculos/selos";
 import type { FiltrosVeiculos, OrdemVeiculos } from "@/lib/veiculo-listagem";
 
@@ -195,68 +197,74 @@ function Avisos({ v, vazio }: { v: VeiculoLinha; vazio?: React.ReactNode }) {
 }
 
 /* ───────── Tabela (desktop) ───────── */
+// As larguras somam o que cabe num notebook (1440px com o menu aberto) sem rolar de lado
+const COLUNAS: ColunaPro[] = [
+  { id: "veiculo", titulo: "Veículo", ordenar: "placa", obrigatoria: true, minimo: 220 },
+  { id: "ano", titulo: "Ano", ordenar: "ano", largura: 96 },
+  { id: "combustivel", titulo: "Combustível e tipo", largura: 150, classe: "truncate" },
+  { id: "responsavel", titulo: "Responsável e equipe", largura: 190 },
+  { id: "avisos", titulo: "Avisos", largura: 190 },
+  { id: "status", titulo: "Status", largura: 124 },
+  // 3 ícones de 28px + respiro
+  { id: "acoes", titulo: "Ações", fixa: true, semTitulo: true, largura: 108, alinhar: "direita", classe: "py-0.5" },
+];
+
 function Tabela({ massa, itens, f, onOrdenar, podeGerenciar, podeChecklist }: {
   massa: boolean; itens: VeiculoLinha[]; f: FiltrosVeiculos; onOrdenar: (k: OrdemVeiculos) => void; podeGerenciar: boolean; podeChecklist: boolean;
 }) {
-  const router = useRouter();
+  const btn = "p-1.5 rounded text-ink-muted hover:text-primary-600 hover:bg-primary-50";
   return (
-    <div className="bg-white border border-surface-border rounded-card overflow-x-auto" data-visao="lista">
-      <table className="w-full text-sm">
-        <thead className="bg-surface-alt text-ink-muted text-[11px] uppercase tracking-wide border-b border-surface-border">
-          <tr>
-            {massa && <th className="w-px pl-4 pr-1 py-2.5"><CheckboxPagina /></th>}
-            <ThOrd label="Veículo (placa · marca/modelo)" k="placa" ordem={f.ordem} dir={f.dir} onOrdenar={onOrdenar} className={massa ? "pl-2" : "pl-4"} />
-            <ThOrd label="Ano" k="ano" ordem={f.ordem} dir={f.dir} onOrdenar={onOrdenar} />
-            <th className="text-left px-3 py-2.5 font-semibold">Combustível</th>
-            <th className="text-left px-3 py-2.5 font-semibold">Responsável / equipe</th>
-            <th className="text-left px-3 py-2.5 font-semibold">Avisos</th>
-            <th className="text-left px-3 py-2.5 font-semibold">Status</th>
-            <th className="text-right pl-2 pr-3 py-2.5 font-semibold">Ações</th>
-          </tr>
-        </thead>
-        <tbody className="divide-y divide-surface-border/70">
-          {itens.map((v) => (
-            <tr key={v.id} data-veiculo-id={v.id} onClick={() => router.push(`/veiculos/${v.id}/editar`)}
-              className={cn("cursor-pointer hover:bg-primary-50/40 transition-colors", v.status === "INATIVO" && "opacity-60")}>
-              {massa && <td className="w-px pl-4 pr-1 py-2.5" onClick={(ev) => ev.stopPropagation()}><CheckboxLinha id={v.id} rotulo={v.placa} /></td>}
-              <td className={massa ? "pl-2 pr-3 py-2.5" : "pl-4 pr-3 py-2.5"}>
-                <div className="flex items-center gap-3 min-w-[220px]">
-                  <Miniatura v={v} />
-                  <div className="min-w-0">
-                    <p data-placa className="font-mono font-bold text-ink tracking-wide">{v.placa}</p>
-                    <p data-marca-modelo className="text-xs text-ink-muted truncate max-w-[260px]">{marcaModelo(v) || "—"}{v.cor ? ` · ${v.cor}` : ""}</p>
-                  </div>
-                </div>
-              </td>
-              <td className="px-3 py-2.5 whitespace-nowrap text-ink" data-ano>{anoTexto(v) ?? <span className="text-ink-subtle">—</span>}</td>
-              <td className="px-3 py-2.5 whitespace-nowrap" data-combustivel>
-                {v.combustivel ? <span className="inline-flex items-center gap-1 text-ink"><Fuel className="w-3.5 h-3.5 text-ink-subtle" />{v.combustivel}</span> : <span className="text-ink-subtle">—</span>}
-                <p className="text-[11px] text-ink-subtle">{v.tipoLabel}</p>
-              </td>
-              <td className="px-3 py-2.5 max-w-[220px]">
-                {v.responsavel || v.equipe ? (
-                  <>
-                    {v.responsavel && <p className="text-ink truncate flex items-center gap-1"><UserCog className="w-3.5 h-3.5 text-ink-subtle shrink-0" />{v.responsavel}</p>}
-                    {v.equipe && <p className="text-xs text-ink-muted truncate flex items-center gap-1"><span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: v.equipe.cor }} />{v.equipe.nome}</p>}
-                  </>
-                ) : <span className="text-ink-subtle">—</span>}
-              </td>
-              <td className="px-3 py-2.5"><Avisos v={v} vazio={<span className="text-xs text-ink-subtle">—</span>} /></td>
-              <td className="px-3 py-2.5"><VeiculoStatusSelo status={v.status} /></td>
-              <td className="pl-2 pr-3 py-2" onClick={(ev) => ev.stopPropagation()}>
-                <div className="flex items-center justify-end gap-0.5">
-                  {podeChecklist && v.status !== "INATIVO" && (
-                    <Link href={`/veiculos/checklist?veiculoId=${v.id}`} title="Preencher checklist" className="p-1 rounded-md text-ink-muted hover:text-primary-600 hover:bg-surface-alt"><ClipboardCheck className="w-4 h-4" /></Link>
-                  )}
-                  <Link href={`/veiculos/${v.id}/editar`} title={podeGerenciar ? "Editar" : "Ver ficha"} className="p-1 rounded-md text-ink-muted hover:text-primary-600 hover:bg-surface-alt"><Pencil className="w-4 h-4" /></Link>
-                  <InativarRegistro url={`/api/veiculos/${v.id}`} modulo="veiculos" acaoReativar="gerenciar" ativo={v.status !== "INATIVO"} nome={v.placa} entidade="veículo" />
-                </div>
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
+    <TabelaPro
+      tela="veiculos" className="bg-white border border-surface-border rounded-card overflow-hidden" atributos={{ "data-visao": "lista", "data-tabela-veiculos": true }}
+      ordenacao={{ ativa: f.ordem, dir: f.dir, onOrdenar: (k) => onOrdenar(k as OrdemVeiculos) }}
+      barra={<span>{itens.length === 1 ? "1 veículo nesta página" : `${itens.length} veículos nesta página`}</span>}
+      colunas={[
+        ...(massa ? [{ id: "sel", titulo: "Selecionar a página", fixa: true, largura: 36, cabecalho: <CheckboxPagina />, classe: "pl-3" }] : []),
+        ...COLUNAS,
+      ]}
+      linhas={itens.map((v) => {
+        const descricao = [marcaModelo(v), v.cor].filter(Boolean).join(" · ");
+        return {
+          id: v.id, atributos: { "data-veiculo-id": v.id }, classe: v.status === "INATIVO" ? "opacity-60" : undefined,
+          titulos: { veiculo: [v.placa, descricao].filter(Boolean).join(" · "), combustivel: [v.combustivel, v.tipoLabel].filter(Boolean).join(" · ") },
+          celulas: {
+            sel: massa ? <CheckboxLinha id={v.id} rotulo={v.placa} /> : null,
+            veiculo: (
+              <Link href={`/veiculos/${v.id}/editar`} className="flex items-center gap-2 min-w-0 hover:text-primary-600">
+                <Miniatura v={v} pequena />
+                <span className="min-w-0 truncate">
+                  <span data-placa className={PLANILHA.codigo}>{v.placa}</span>
+                  {descricao && <span data-marca-modelo className={cn(PLANILHA.apagado, "ml-2")}>{descricao}</span>}
+                </span>
+              </Link>
+            ),
+            ano: <span data-ano className={PLANILHA.apagado}>{anoTexto(v) ?? "—"}</span>,
+            combustivel: v.combustivel || v.tipoLabel
+              ? <span data-combustivel className="inline-flex items-center gap-1 text-ink min-w-0">{v.combustivel && <Fuel className="w-3.5 h-3.5 text-ink-subtle shrink-0" aria-hidden />}<span className="truncate">{[v.combustivel, v.tipoLabel].filter(Boolean).join(" · ")}</span></span>
+              : <span className="text-ink-subtle">—</span>,
+            responsavel: v.responsavel || v.equipe ? (
+              <span className="flex items-center gap-1.5 min-w-0">
+                {v.equipe && <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: v.equipe.cor }} title={v.equipe.nome} />}
+                <span className="truncate text-ink" title={[v.responsavel, v.equipe?.nome].filter(Boolean).join(" · ")}>{[v.responsavel, v.equipe?.nome].filter(Boolean).join(" · ")}</span>
+              </span>
+            ) : <span className="text-ink-subtle">—</span>,
+            avisos: <Avisos v={v} vazio={<span className="text-xs text-ink-subtle">—</span>} />,
+            status: <VeiculoStatusSelo status={v.status} />,
+            acoes: (
+              <span className="inline-flex items-center justify-end gap-0.5" data-acoes-veiculo={v.id}>
+                {podeChecklist && v.status !== "INATIVO" && (
+                  <Link href={`/veiculos/checklist?veiculoId=${v.id}`} title="Preencher checklist" aria-label={`Preencher o checklist de ${v.placa}`} className={btn} data-checklist-veiculo><ClipboardCheck className="w-4 h-4" aria-hidden /></Link>
+                )}
+                <Link href={`/veiculos/${v.id}/editar`} title={podeGerenciar ? "Editar" : "Ver ficha"} aria-label={`${podeGerenciar ? "Editar" : "Ver a ficha de"} ${v.placa}`} className={btn} data-abrir-veiculo>
+                  {podeGerenciar ? <Pencil className="w-4 h-4" aria-hidden /> : <Eye className="w-4 h-4" aria-hidden />}
+                </Link>
+                <InativarRegistro url={`/api/veiculos/${v.id}`} modulo="veiculos" acaoReativar="gerenciar" ativo={v.status !== "INATIVO"} nome={v.placa} entidade="veículo" />
+              </span>
+            ),
+          },
+        };
+      })}
+    />
   );
 }
 
@@ -320,12 +328,13 @@ function Cards({ massa, itens }: { massa: boolean; itens: VeiculoLinha[] }) {
 }
 
 /* ───────── Peças ───────── */
-function Miniatura({ v }: { v: VeiculoLinha }) {
+function Miniatura({ v, pequena }: { v: VeiculoLinha; pequena?: boolean }) {
+  const lado = pequena ? "w-7 h-7 rounded" : "w-12 h-12 rounded-lg";
   if (!v.foto) {
-    return <span className="w-12 h-12 rounded-lg bg-surface-alt border border-surface-border flex items-center justify-center text-ink-subtle shrink-0"><Truck className="w-5 h-5" /></span>;
+    return <span className={cn(lado, "bg-surface-alt border border-surface-border flex items-center justify-center text-ink-subtle shrink-0")}><Truck className={pequena ? "w-3.5 h-3.5" : "w-5 h-5"} aria-hidden /></span>;
   }
   return (
     // eslint-disable-next-line @next/next/no-img-element
-    <img src={v.foto} alt={`${v.placa} — frente`} loading="lazy" decoding="async" width={48} height={48} className="w-12 h-12 rounded-lg object-cover border border-surface-border shrink-0 bg-surface-alt" />
+    <img src={v.foto} alt={`${v.placa} — frente`} loading="lazy" decoding="async" width={pequena ? 28 : 48} height={pequena ? 28 : 48} className={cn(lado, "object-cover border border-surface-border shrink-0 bg-surface-alt")} />
   );
 }
