@@ -107,6 +107,19 @@ validação fica na tela, perto do formulário.
 | `tests/unit/padronizacao-leva6a-pg.test.ts` | as rotas num PostgreSQL real: criar (403/401), salvar, mudar status (403 com o banco intacto, 200 com histórico de quem mudou), gerar OS (403; Ordens › criar basta; Contratos › editar também; repetir não duplica), reajuste (403; aplicar protegido pelo valor esperado; dispensar não mexe no valor) e o contrato de outra empresa (404) |
 | `tests/unit/padronizacao-leva6a-ui.test.ts` | as telas montadas de verdade: a lista (botão por permissão, TabelaPro, ⓘ, lista vazia, cartões, plural), o relatório (botão pelas duas permissões, toast, recusa não muda a tela), os reajustes (decisão por permissão, confirmação, valor esperado, recusa) e a ficha (somente leitura × edição, cliente e RT com editar no contexto) |
 
+**Dois testes antigos mudaram de expectativa (mudança intencional, nada mascarado):**
+
+- `tests/unit/despoluicao-onda2.test.ts` montava a lista de contratos sem o provider de permissões e
+  conferia que "Novo contrato" aparece. Agora o botão só sai para quem tem Contratos › criar, então o
+  teste monta a tela dentro do `PermissoesProvider` (como a página faz) com permissão total — o
+  assunto dele é a pintura dos cartões, não a permissão.
+- `tests/unit/reajustes-ui.test.ts` idem para as três decisões (Aplicar, Adiar, Dispensar), que agora
+  exigem Contratos › editar; e as asserções de `fetch` passaram a ignorar `/api/preferencias/...`,
+  que a `TabelaPro` grava sozinha ao montar.
+
+Quem cobre a permissão nessas duas telas é `padronizacao-leva6a-ui.test.ts`, com as duas pontas (com
+e sem), e a mutação tem um mutante para cada uma.
+
 **Mutação: 37 mutantes, 37 pegos.** Um por regra desta leva — cada permissão de tela e de rota, o
 somente leitura, cada seletor, cada ⓘ, o plural, a chave da preferência de colunas, o mês que o
 "Gerar OS" manda e o valor esperado do reajuste.

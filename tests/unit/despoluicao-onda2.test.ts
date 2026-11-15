@@ -12,6 +12,8 @@ import path from "node:path";
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { acento, status } from "@/lib/ui/tokens";
+import { PermissoesProvider } from "@/components/providers/permissoes-provider";
+import { permissoesTotais } from "@/lib/permissoes";
 
 vi.mock("next/navigation", () => ({
   useSearchParams: () => new URLSearchParams(),
@@ -30,9 +32,13 @@ const ler = (rel: string) => readFileSync(path.join(RAIZ, rel), "utf8");
 
 let root: Root, caixa: HTMLDivElement;
 afterEach(() => { act(() => root?.unmount()); caixa?.remove(); });
+// As telas de contrato ficam dentro do provider de permissões: "Novo contrato" e "Gerar OS" passaram
+// a sair da tela de quem não pode (leva 6A). Aqui o assunto é a pintura, não a permissão.
 async function montar(el: any) {
   caixa = document.createElement("div"); document.body.appendChild(caixa); root = createRoot(caixa);
-  await act(async () => { root.render(el); });
+  await act(async () => {
+    root.render(createElement(PermissoesProvider, { role: "OPERADOR", permissoes: permissoesTotais(), children: el }));
+  });
 }
 const $ = (sel: string) => caixa.querySelector(sel) as HTMLElement | null;
 
