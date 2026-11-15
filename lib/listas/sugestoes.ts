@@ -11,6 +11,7 @@ import { lerFiltrosVeiculos, montarWhereVeiculos } from "@/lib/veiculo-listagem"
 import { lerFiltrosColaboradores, montarWhereColaboradores } from "@/lib/colaborador-listagem";
 import { ranquearSugestoes, type Sugestao } from "@/lib/listagem";
 import { whereEstoque } from "@/lib/estoque/servidor";
+import { dataBR, lerFiltrosPmoc, wherePmoc } from "@/lib/pmoc";
 import { formatarQtd } from "@/lib/estoque/regras";
 
 /** Quantos candidatos o banco devolve antes de ranquear (os 5 melhores saem daqui) */
@@ -73,6 +74,13 @@ export const SUGESTOES: Record<string, DefSugestao> = {
       where: montarWhereColaboradores(empresaId, lerFiltrosColaboradores({ q })), select: { id: true, nome: true, cargo: { select: { nome: true } } },
       orderBy: [{ nome: "asc" }, { id: "asc" }], take: CANDIDATOS,
     })).map((t: any) => ({ id: t.id, rotulo: t.nome, detalhe: t.cargo?.nome ?? null, href: `/colaboradores/${t.id}/editar` })),
+  },
+  pmoc: {
+    modulo: "pmoc",
+    buscar: async (empresaId, q) => (await p.pmoc.findMany({
+      where: wherePmoc(empresaId, lerFiltrosPmoc({ busca: q })), select: { id: true, nome: true, dataExpiracao: true, cliente: { select: { nome: true, nomeFantasia: true } } },
+      orderBy: [{ dataExpiracao: "asc" }, { id: "asc" }], take: CANDIDATOS,
+    })).map((x: any) => ({ id: x.id, rotulo: x.nome, detalhe: `${x.cliente?.nomeFantasia ?? x.cliente?.nome ?? ""} · vence ${dataBR(x.dataExpiracao)}`.trim(), href: `/pmoc/${x.id}` })),
   },
   "pedidos-compra": {
     modulo: "compras",

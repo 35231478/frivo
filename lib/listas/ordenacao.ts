@@ -32,3 +32,13 @@ export const ORDEM_COLABORADORES_EQUIPE: MapaOrdem = {
   nome: (d) => ({ nome: d }),
   cargo: (d) => ({ cargo: { nome: d } }),
 };
+
+export const ORDEM_PMOC: MapaOrdem = {
+  nome: (d) => ({ nome: d }),
+  cliente: (d) => ({ cliente: { nome: d } }),
+  local: (d) => ({ unidade: { nome: d } }),
+  equipamentos: (d) => ({ equipamentos: { _count: d } }),
+  validade: (d) => ({ dataExpiracao: d }),
+};
+/** Inativados no fim; depois o que vence primeiro. */
+export const ORDEM_PADRAO_PMOC = [{ ativo: "desc" }, { dataExpiracao: "asc" }];

@@ -71,6 +71,40 @@ export function filtroStatusPmoc(status: string, agora = new Date(), diasAviso =
   return null;
 }
 
+/** Os filtros da lista de PMOC lidos da URL (o resto é ignorado). */
+export function lerFiltrosPmoc(sp: Record<string, string | string[] | undefined>) {
+  const um = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] ?? "" : v ?? "");
+  return { busca: um(sp.busca).trim(), status: um(sp.status), inativos: um(sp.inativos) === "1" };
+}
+
+/**
+ * O `where` da lista de PMOC: empresa, situação (inclusive "vencendo em N dias") e a busca por
+ * nome do plano, cliente ou local. Inativado (soft-delete) só entra com "Mostrar inativos".
+ * Fora da página para a lista e o typeahead da busca filtrarem igual.
+ */
+export function wherePmoc(
+  empresaId: string,
+  f: { busca?: string; status?: string; inativos?: boolean },
+  diasAviso = DIAS_AVISO_VENCIMENTO,
+  agora = new Date(),
+): Record<string, unknown> {
+  const where: Record<string, unknown> = {
+    empresaId,
+    ...(f.inativos ? {} : { ativo: true }),
+    ...(filtroStatusPmoc(f.status ?? "", agora, diasAviso) ?? {}),
+  };
+  const q = (f.busca ?? "").trim();
+  if (q) {
+    where.OR = [
+      { nome: { contains: q, mode: "insensitive" } },
+      { cliente: { nome: { contains: q, mode: "insensitive" } } },
+      { cliente: { nomeFantasia: { contains: q, mode: "insensitive" } } },
+      { unidade: { nome: { contains: q, mode: "insensitive" } } },
+    ];
+  }
+  return where;
+}
+
 /** Texto técnico/legal padrão (editável em cada PMOC). */
 export const DESCRICAO_PADRAO_PMOC = `Plano de Manutenção, Operação e Controle (PMOC) dos sistemas de climatização do estabelecimento identificado neste documento, elaborado para garantir a qualidade do ar interior, a segurança dos ocupantes e o bom desempenho dos equipamentos.
 

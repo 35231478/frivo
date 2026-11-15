@@ -1,7 +1,9 @@
 import type { Metadata } from "next";
 import { acento } from "@/lib/ui/tokens";
 import { janela, lerPaginacao, paginaValida } from "@/lib/listagem";
-import { ListaUrl, PaginacaoUrl } from "@/components/listagem/lista-url";
+import { ConteudoUrl, FiltroSelectUrl, ListaUrl, PaginacaoUrl } from "@/components/listagem/lista-url";
+import { ListaVazia } from "@/components/listagem/listagem-ui";
+import { Dica } from "@/components/ui/dica";
 import Link from "next/link";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
@@ -14,6 +16,9 @@ import { Timer, AlertTriangle, Clock } from "lucide-react";
 export const metadata: Metadata = { title: "Prazos" };
 
 const PESO_STATUS: Record<string, number> = { ATRASADO: 0, ATIVO: 1, CONCLUIDO: 2, CANCELADO: 3 };
+
+/** Princípio 7: a explicação da tela sai do corpo e vira o ⓘ do título. */
+const AJUDA = "Acompanhamento dos prazos das OS, do mais urgente para o menos: atrasados primeiro, depois pela data limite da etapa atual. Os modelos de prazo e SLA ficam em Configurações; o prazo é cumprido dentro da OS.";
 
 export default async function PrazosPage({
   searchParams,
@@ -70,34 +75,29 @@ export default async function PrazosPage({
     <ListaUrl chave="prazos" paramBusca="q" qAtual="">
     <div className="space-y-6">
       <div className="flex items-center gap-3">
-        <div className="p-2 bg-surface-alt rounded-lg"><Timer className="w-5 h-5 text-ink-muted" /></div>
-        <h1 className="page-title">Prazos</h1>
+        <div className="p-2 bg-surface-alt rounded-lg"><Timer className="w-5 h-5 text-ink-muted" aria-hidden /></div>
+        <h1 className="page-title flex items-center gap-1.5">Prazos <Dica texto={AJUDA} rotulo="Prazos" lado="direita" /></h1>
         <span className="text-xs font-semibold text-ink-muted bg-surface-alt border border-surface-border px-2.5 py-1 rounded-full">{total}</span>
       </div>
 
       <div className="card overflow-hidden">
-        <div className="p-4 border-b border-surface-border bg-surface-alt/40">
-          <form method="get" className="flex flex-wrap gap-2">
-            <select name="status" defaultValue={status} className="bg-white border border-surface-border rounded-lg px-3 py-2 text-sm text-ink focus:outline-none focus:border-primary-500 focus:ring-4 focus:ring-primary-500/10 transition-all">
-              <option value="">Todos status</option>
-              {Object.entries(LABELS_STATUS_OS_PRAZO).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
-            </select>
-            <select name="templateId" defaultValue={templateId} className="bg-white border border-surface-border rounded-lg px-3 py-2 text-sm text-ink focus:outline-none focus:border-primary-500 focus:ring-4 focus:ring-primary-500/10 transition-all">
-              <option value="">Todos tipos</option>
-              {templates.map((t) => <option key={t.id} value={t.id}>{t.nome}</option>)}
-            </select>
-            <button type="submit" className="bg-primary-500 text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-primary-600 transition-all shadow-sm">Filtrar</button>
-          </form>
+        {/* Filtros do padrão da casa: mudam a URL na hora (sem botão "Filtrar") */}
+        <div className="p-4 border-b border-surface-border flex flex-wrap items-center gap-2 bg-surface-alt/40">
+          <FiltroSelectUrl param="status" vazio="Todos os status" rotulo="Filtrar por status"
+            opcoes={Object.entries(LABELS_STATUS_OS_PRAZO).map(([value, label]) => ({ value, label }))} />
+          <FiltroSelectUrl param="templateId" vazio="Todos os tipos" rotulo="Filtrar por tipo de prazo"
+            opcoes={templates.map((t) => ({ value: t.id, label: t.nome }))} />
         </div>
 
+        <ConteudoUrl>
         {paginaDePrazos.length === 0 ? (
-          <p className="text-center text-ink-subtle py-12">Nenhum prazo encontrado</p>
+          <ListaVazia mensagem="Nenhum prazo encontrado" />
         ) : (
           <div className="divide-y divide-surface-border">
             {paginaDePrazos.map(({ p, atual }) => {
               const atrasado = p.status === "ATRASADO";
               return (
-                <Link key={p.id} href={`/ordens/${p.ordemServico.id}`} className="flex items-center justify-between px-4 py-3 hover:bg-primary-50/40 transition-colors gap-3">
+                <Link key={p.id} href={`/ordens/${p.ordemServico.id}`} className="flex flex-col sm:flex-row sm:items-center sm:justify-between px-4 py-3 hover:bg-primary-50/40 transition-colors gap-1.5 sm:gap-3">
                   <div className="flex items-center gap-3 min-w-0">
                     <span className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: p.template?.cor ?? acento.DEFAULT }} />
                     <div className="min-w-0">
@@ -110,7 +110,7 @@ export default async function PrazosPage({
                       </p>
                     </div>
                   </div>
-                  <div className="flex items-center gap-3 shrink-0">
+                  <div className="flex items-center gap-3 shrink-0 pl-6 sm:pl-0">
                     {atual && (
                       <span className={cn("text-xs flex items-center gap-1", atrasado ? "text-atrasado-texto font-semibold" : "text-ink-muted")}>
                         {atrasado ? <AlertTriangle className="w-3.5 h-3.5" /> : <Clock className="w-3.5 h-3.5" />}
@@ -129,6 +129,7 @@ export default async function PrazosPage({
             })}
           </div>
         )}
+        </ConteudoUrl>
         <div className="px-4 py-3 border-t border-surface-border bg-surface-alt/40">
           <PaginacaoUrl total={totalPaginavel} pagina={pagina} porPagina={porPagina} rotulo="prazos" />
         </div>
