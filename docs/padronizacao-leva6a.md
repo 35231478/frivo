@@ -124,9 +124,12 @@ e sem), e a mutação tem um mutante para cada uma.
 somente leitura, cada seletor, cada ⓘ, o plural, a chave da preferência de colunas, o mês que o
 "Gerar OS" manda e o valor esperado do reajuste.
 
-**Navegador real** (Chromium, app de verdade, banco de prints): a lista, a ficha nas duas permissões,
-o relatório gerando a OS do mês e os reajustes aplicando o reajuste, com os prints de desktop,
+**Navegador real** (Chromium, app de verdade, banco de prints): **63 conferências, 0 falhas** — a
+lista, a ficha nas duas permissões, o relatório gerando a OS do mês, os reajustes aplicando o
+reajuste de verdade e as cinco telas pelos olhos de quem só consulta, com os prints de desktop,
 celular e "sem permissão" em `docs/prints/padronizacao-leva6a/`.
+
+**A suíte inteira passou: 392 arquivos, 5770 testes, nenhuma falha.** Typecheck limpo.
 
 ## Decisões que ficaram
 
