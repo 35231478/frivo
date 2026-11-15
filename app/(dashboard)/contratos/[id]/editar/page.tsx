@@ -1,14 +1,23 @@
 import type { Metadata } from "next";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
+import { pode } from "@/lib/permissoes";
 import { prisma } from "@/lib/prisma";
 import { ContratoForm } from "@/components/forms/contrato-form";
 
 export const metadata: Metadata = { title: "Editar contrato" };
 
+/**
+ * Quem só tem "Contratos › visualizar" abre a ficha em somente leitura: lê as cinco abas e não
+ * encontra Salvar nem o menu de status — o PUT e o PATCH exigem "Contratos › editar" e recusariam.
+ * Antes, a tela oferecia tudo a todo mundo e a pessoa só descobria no 403, com o preenchimento perdido.
+ */
 export default async function EditarContratoPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const session = await auth();
+  const podeEditar = pode(session!.user!.permissoes, "contratos", "editar", session!.user!.role);
+  const podeVer = podeEditar || pode(session!.user!.permissoes, "contratos", "visualizar", session!.user!.role);
+  if (!podeVer) redirect("/sem-permissao");
   const empresaId = session!.user!.empresaId;
 
   const contrato = await prisma.contrato.findFirst({
@@ -24,5 +33,5 @@ export default async function EditarContratoPage({ params }: { params: Promise<{
   });
   if (!contrato) notFound();
 
-  return <ContratoForm initialData={contrato} />;
+  return <ContratoForm initialData={contrato} somenteLeitura={!podeEditar} />;
 }

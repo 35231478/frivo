@@ -11,6 +11,7 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vite
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import type { LinhaReajuste } from "@/lib/contratos/reajuste-server";
+import { permissoesTotais } from "@/lib/permissoes";
 
 (globalThis as any).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -42,6 +43,8 @@ const LINHAS = [
   linha({ contratoId: "c", situacao: "ADIADO", adiadoAte: "2026-12-15", valorAtual: 800, valorNovo: 840 }),
   linha({ contratoId: "d", situacao: "EM_BREVE", aniversario: { ano: 2026, mes: 12 }, percentual: 3, valorAtual: 1500, valorNovo: 1545 }),
 ];
+// A TabelaPro grava a preferência de colunas sozinha (coberta na leva 6A): aqui só interessam as ações.
+const acoes = () => chamadas.filter((c) => !c.url.startsWith("/api/preferencias/"));
 const $ = (s: string) => caixa.querySelector(s) as HTMLElement | null;
 const sp = (t: string) => t.replace(/ /g, " ");
 const tr = (id: string) => $(`table [data-linha-reajuste="${id}"]`)!;
@@ -62,9 +65,14 @@ beforeEach(() => {
 });
 afterEach(() => { act(() => root.unmount()); caixa.remove(); document.body.innerHTML = ""; });
 
-async function montar(linhas = LINHAS) {
+// A tela vive dentro do provider de permissões (as três decisões exigem Contratos › editar, coberto
+// em padronizacao-leva6a-ui.test.ts); aqui o assunto é a mecânica do reajuste, com quem pode decidir.
+async function montar(linhas = LINHAS, permissoes = permissoesTotais()) {
   const { ReajustesView } = await import("@/components/contratos/reajustes-view");
-  await act(async () => root.render(createElement(ReajustesView, { linhas })));
+  const { PermissoesProvider } = await import("@/components/providers/permissoes-provider");
+  await act(async () =>
+    root.render(createElement(PermissoesProvider, { role: "OPERADOR", permissoes, children: createElement(ReajustesView, { linhas }) })),
+  );
 }
 
 describe("Reajustes a aplicar", () => {
@@ -92,11 +100,11 @@ describe("Reajustes a aplicar", () => {
     await montar();
     avisos.responder = false;
     await clicar(tr("a").querySelector("[data-aplicar]")!);
-    expect(chamadas).toHaveLength(0);
+    expect(acoes()).toHaveLength(0);
     avisos.responder = true;
     await clicar(tr("a").querySelector("[data-aplicar]")!);
     expect(sp(avisos.perguntas[1])).toMatch(/^Contrato CT-a faz aniversário em nov\/2026 — aplicar reajuste de 5% \(R\$ 1\.000,00 → R\$ 1\.050,00\)\? O valor novo vale só para as cobranças futuras/);
-    expect(chamadas).toEqual([{ url: "/api/contratos/a/reajuste", corpo: { ano: 2026, acao: "APLICAR", valorEsperado: 1000 } }]);
+    expect(acoes()).toEqual([{ url: "/api/contratos/a/reajuste", corpo: { ano: 2026, acao: "APLICAR", valorEsperado: 1000 } }]);
     expect(sp(avisos.lista[0][0])).toBe("Reajuste de 5% aplicado: R$ 1.000,00 → R$ 1.050,00.");
     expect(nav.refresh).toHaveBeenCalledTimes(1);
   });
@@ -105,7 +113,7 @@ describe("Reajustes a aplicar", () => {
     await montar();
     resposta = { status: 409, corpo: { erro: "Este reajuste já foi decidido por outra pessoa. Atualize a tela." } };
     await clicar(tr("b").querySelector("[data-adiar]")!);
-    expect(chamadas[0]).toEqual({ url: "/api/contratos/b/reajuste", corpo: { ano: 2026, acao: "ADIAR", dias: 30 } });
+    expect(acoes()[0]).toEqual({ url: "/api/contratos/b/reajuste", corpo: { ano: 2026, acao: "ADIAR", dias: 30 } });
     expect(avisos.lista).toEqual([["Este reajuste já foi decidido por outra pessoa. Atualize a tela.", "erro"]]);
     expect(nav.refresh).not.toHaveBeenCalled();
   });
@@ -123,7 +131,7 @@ describe("Reajustes a aplicar", () => {
       campo.dispatchEvent(new Event("input", { bubbles: true }));
     });
     await clicar(document.querySelector("[data-confirmar-dispensa]")!);
-    expect(chamadas).toEqual([{ url: "/api/contratos/a/reajuste", corpo: { ano: 2026, acao: "DISPENSAR", motivo: "cliente negociou manter" } }]);
+    expect(acoes()).toEqual([{ url: "/api/contratos/a/reajuste", corpo: { ano: 2026, acao: "DISPENSAR", motivo: "cliente negociou manter" } }]);
     expect(avisos.lista[0]).toEqual(["Reajuste de 2026 dispensado.", "sucesso"]);
     expect(document.querySelector("[data-modal-dispensar]")).toBeNull();
   });

@@ -1,6 +1,9 @@
 "use client";
 
 import { toast } from "@/components/ui/avisos";
+import { Dica } from "@/components/ui/dica";
+import { ListaVazia } from "@/components/listagem/listagem-ui";
+import { usePermissoes } from "@/components/providers/permissoes-provider";
 import { acento, neutro, status } from "@/lib/ui/tokens";
 import { useState } from "react";
 import Link from "next/link";
@@ -34,8 +37,15 @@ const COR_FREQ: Record<string, string> = {
   BIMESTRAL: "bg-previsto-claro text-previsto-texto", TRIMESTRAL: "bg-previsto-claro text-previsto-texto", SEMESTRAL: "bg-previsto-claro text-previsto-texto", ANUAL: "bg-previsto-claro text-previsto-texto",
 };
 
+/** Princípio 7: o que a tela mostra fica no ⓘ do título, não num parágrafo acima da lista. */
+const AJUDA = "Uma linha por contrato com manutenção prevista no mês escolhido. O progresso é das atividades da OS do mês. Atrasado é previsão vencida sem conclusão. Quem tem permissão gera a OS do mês direto daqui.";
+
 export function RelatorioContratosClient({ mes, ano, itens, tecnicos, clientes }: { mes: number; ano: number; itens: Item[]; tecnicos: Opcao[]; clientes: Opcao[] }) {
   const router = useRouter();
+  // A rota POST /api/contratos/[id]/gerar-os exige "Ordens › criar" OU "Contratos › editar";
+  // o botão segue a mesma regra, para ninguém clicar e tomar 403.
+  const { pode } = usePermissoes();
+  const podeGerar = pode("ordens", "criar") || pode("contratos", "editar");
   const [fStatus, setFStatus] = useState("");
   const [fTecnico, setFTecnico] = useState("");
   const [fCliente, setFCliente] = useState("");
@@ -85,8 +95,8 @@ export function RelatorioContratosClient({ mes, ano, itens, tecnicos, clientes }
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div className="flex items-center gap-3">
           <Link href="/contratos" className="p-2 rounded-lg text-ink-muted hover:text-primary-600 hover:bg-surface-alt"><ChevronLeft className="w-5 h-5" /></Link>
-          <div className="p-2 bg-surface-alt rounded-lg"><CalendarDays className="w-5 h-5 text-ink-muted" /></div>
-          <h1 className="page-title">Relatório de manutenções — {nomeMes(mes)}/{ano}</h1>
+          <div className="p-2 bg-surface-alt rounded-lg"><CalendarDays className="w-5 h-5 text-ink-muted" aria-hidden /></div>
+          <h1 className="page-title flex items-center gap-1.5">Relatório de manutenções — {nomeMes(mes)}/{ano} <Dica texto={AJUDA} rotulo="Relatório de manutenções" lado="direita" /></h1>
         </div>
         <div className="flex items-center gap-2">
           <button onClick={() => irPara(mesAnterior.m, mesAnterior.a)} className="p-2 rounded-lg border border-surface-border hover:bg-surface-alt"><ChevronLeft className="w-4 h-4" /></button>
@@ -147,12 +157,12 @@ export function RelatorioContratosClient({ mes, ano, itens, tecnicos, clientes }
           <option value="">Todos clientes</option>
           {clientes.map((c) => <option key={c.value} value={c.value}>{c.label}</option>)}
         </select>
-        <span className="ml-auto self-center text-sm text-ink-muted">{filtrados.length} de {total} contrato(s)</span>
+        <span className="ml-auto self-center text-sm text-ink-muted">{filtrados.length} de {total === 1 ? "1 contrato" : `${total} contratos`}</span>
       </div>
 
       {/* Lista de contratos do mês */}
       {filtrados.length === 0 ? (
-        <div className="card-padded text-center text-ink-muted py-10">Nenhum contrato a atender neste mês com os filtros aplicados.</div>
+        <div className="card-padded"><ListaVazia mensagem="Nenhum contrato a atender neste mês com os filtros aplicados." /></div>
       ) : (
         <div className="space-y-3">
           {filtrados.map((i) => {
@@ -196,12 +206,12 @@ export function RelatorioContratosClient({ mes, ano, itens, tecnicos, clientes }
                     )}
                     <div className="flex items-center gap-2">
                       {i.os ? (
-                        <Link href={`/ordens/${i.os.id}`} className="inline-flex items-center gap-1.5 text-sm font-medium bg-white border border-surface-border px-3 py-1.5 rounded-lg hover:bg-surface-alt"><ExternalLink className="w-3.5 h-3.5" /> Ver OS</Link>
-                      ) : (
-                        <button onClick={() => gerarOs(i.contratoId)} disabled={gerando === i.contratoId} className="inline-flex items-center gap-1.5 text-sm font-medium bg-primary-500 text-white px-3 py-1.5 rounded-lg hover:bg-primary-600 disabled:opacity-60">
-                          {gerando === i.contratoId ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Plus className="w-3.5 h-3.5" />} Gerar OS
+                        <Link href={`/ordens/${i.os.id}`} className="inline-flex items-center gap-1.5 text-sm font-medium bg-white border border-surface-border px-3 py-1.5 rounded-lg hover:bg-surface-alt"><ExternalLink className="w-3.5 h-3.5" aria-hidden /> Ver OS</Link>
+                      ) : podeGerar ? (
+                        <button onClick={() => gerarOs(i.contratoId)} disabled={gerando === i.contratoId} data-gerar-os={i.contratoId} className="inline-flex items-center gap-1.5 text-sm font-medium bg-primary-500 text-white px-3 py-1.5 rounded-lg hover:bg-primary-600 disabled:opacity-60">
+                          {gerando === i.contratoId ? <Loader2 className="w-3.5 h-3.5 animate-spin" aria-hidden /> : <Plus className="w-3.5 h-3.5" aria-hidden />} Gerar OS
                         </button>
-                      )}
+                      ) : null}
                     </div>
                   </div>
                 )}

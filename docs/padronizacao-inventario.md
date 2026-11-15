@@ -56,6 +56,14 @@ A tabela de cada módulo, mais abaixo, traz o estado conferido.
   desvincular, inativar e reativar por permissão, toast em toda gravação, editar cliente e unidade no
   contexto e a consulta de CNPJ no cadastro rápido de cliente. Ver
   [padronizacao-leva4a.md](padronizacao-leva4a.md).
+- **Leva 5**: Operação — o botão "Editar" morto da OS virou a gaveta "Editar OS" (com a trava do
+  registro fechado na tela e no servidor), sugestões do histórico do cliente na abertura da OS,
+  permissão nos botões do calendário e `/prazos`, `/pmoc`, `/calendario` e `/ordens` no padrão. Ver
+  [padronizacao-leva5.md](padronizacao-leva5.md).
+- **Leva 6A**: Comercial — as quatro telas de contrato. A ficha não checava permissão nenhuma e passa a
+  abrir em somente leitura para quem só visualiza; "Novo contrato" e "Gerar OS" por permissão;
+  reajustes e lista na tabela da casa; cliente, responsável técnico e os seletores da recorrência com
+  cadastro rápido e editar no contexto. Ver [padronizacao-leva6a.md](padronizacao-leva6a.md).
 - **Leva 4B** (🔵, com SQL): Veículos, Colaboradores e Equipes — checklist de veículo preenchido com
   detalhe, edição e exclusão reversível; responsável técnico cadastrado na hora em Dados da empresa;
   aba Inativos com Reativar nos formulários de OS e nos modelos de checklist; listas na tabela da casa e
@@ -68,8 +76,7 @@ diário para o que menos atrapalha, e do menor para o maior.
 
 | Leva | Módulo | Telas | Por que nesta ordem |
 |---|---|---|---|
-| 5 | **Operação** | Lista de OS, calendário, prazos, execução da atividade, PMOC | Onde o escritório passa o dia. PMOC é planilha: padroniza, não joga fora |
-| 6 | **Comercial** | Lista de orçamentos, contratos (lista, formulário, reajustes, relatório), leads do site | O formulário de contrato tem 12 seletores e tabela própria |
+| 6B | **Comercial** | Lista de orçamentos, leads do site (com ações) e as sugestões de item no orçamento e no contrato | A 6A fez contratos; sobra o que depende das sugestões do histórico do cliente |
 | 7 | **Estoque e compras** | Estoque, separação, devolução, notas de entrada, pedidos de compra | Telas-planilha de operação; padronizar a lista e os avisos |
 | 8 | **Financeiro** | Contas a pagar e a receber (fichas e formulários), medições, faturas, custo de pessoal, fluxo de caixa | Maior módulo. As listas já estão no padrão; faltam fichas e formulários. **Não mexe em pagamento** |
 | 9 | **Desempenho** | Painel, ficha, fechamento, premiações, configuração, revisão | Módulo novo, com padrão próprio; alinhar por último |
@@ -172,13 +179,15 @@ que fazer quando há empate ou pouco histórico (a proposta é não sugerir nada
 
 ### Comercial: orçamentos, contratos e leads (10)
 
+> As cinco telas de contrato foram feitas na **leva 6A** (`docs/padronizacao-leva6a.md`). Orçamentos, leads do site e as sugestões de item ficam para a **6B**.
+
 | Tela | Lista no padrão | Busca e página no servidor | Ajuda no ⓘ | Toast | Botões por permissão | Cadastro inline | Edição no contexto | Celular | O que a varredura não viu |
 |---|---|---|---|---|---|---|---|---|---|
-| `/contratos` | sim | sim | sim | — | sim | sim | — | sim | tabela própria; toast; edição no contexto |
-| `/contratos/[id]/editar` | — | — | sim | sim | sim | sim | sim | sim | tabela própria |
-| `/contratos/novo` | — | — | sim | sim | sim | sim | sim | sim | tabela própria |
-| `/contratos/reajustes` | — | — | sim | sim | sim | — | — | sim | tabela própria |
-| `/contratos/relatorio` | — | — | — | sim | — | — | — | sim | ajuda no ⓘ; botões por permissão; cadastro inline nos seletores |
+| `/contratos` | sim | sim | sim | — | sim | — | — | sim | feita na leva 6A: a tabela própria virou TabelaPro (colunas escolhíveis, totais na faixa de cima), a instrução foi para o ⓘ, "Novo contrato" só com Contratos › criar, lista vazia da casa e plural escrito. Não grava nada (as ações em massa mostram o resultado na barra compartilhada) e não tem seletor de cadastro: o filtro de cliente só filtra |
+| `/contratos/[id]/editar` | — | — | sim | sim | sim | sim | sim | sim | feita na leva 6A: não checava permissão nenhuma — agora abre em somente leitura (fieldset desabilitado, sem Salvar nem menu de status) para quem só tem Contratos › visualizar; cliente com editar no contexto, RT e os dois seletores da recorrência no cadastro rápido da casa, prévia das próximas OS na planilha |
+| `/contratos/novo` | — | — | sim | sim | sim | sim | sim | sim | feita na leva 6A: passa a exigir Contratos › criar (era aberta a todos); mesmo formulário do `/contratos/[id]/editar` |
+| `/contratos/reajustes` | — | — | sim | sim | sim | — | — | sim | feita na leva 6A: tabela própria → TabelaPro (cartões no celular), aplicar/adiar/dispensar só com Contratos › editar. Não tem seletor: é uma fila de decisão |
+| `/contratos/relatorio` | — | — | sim | sim | sim | — | — | sim | feita na leva 6A: ⓘ no título e "Gerar OS" só com Ordens › criar ou Contratos › editar (era o único botão que gravava sem checar nada). Os três campos do topo são filtros, não cadastros; a tela é de cartões expansíveis (já servia no celular) |
 | `/leads-site` | — | sim | — | — | sim | — | — | — | tabela própria; toast; ajuda no ⓘ; versão de celular |
 | `/orcamentos` | — | sim | sim | sim | sim | sim | — | sim | edição no contexto |
 | `/orcamentos/[id]` | — | — | sim | sim | sim | sim | sim | sim | tabela própria |

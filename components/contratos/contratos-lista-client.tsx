@@ -2,7 +2,11 @@
 
 import { CheckboxLinha, CheckboxPagina, useAcoesMassaDisponiveis } from "@/components/acoes-massa/selecao";
 import { useEffect, useMemo, useState, useTransition } from "react";
-import { CampoBusca, Paginacao, sugerirPorUrl } from "@/components/listagem/listagem-ui";
+import { CampoBusca, ListaVazia, Paginacao, sugerirPorUrl } from "@/components/listagem/listagem-ui";
+import { TabelaPro } from "@/components/listagem/tabela-pro";
+import { PLANILHA } from "@/lib/planilha";
+import { Dica } from "@/components/ui/dica";
+import { usePermissoes } from "@/components/providers/permissoes-provider";
 import { DEBOUNCE_BUSCA_MS, useTamanhoPreferido } from "@/components/listagem/use-listagem-url";
 import Link from "next/link";
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
@@ -11,7 +15,7 @@ import { cn, formatarData, formatarMoeda, LABELS_PERIODICIDADE } from "@/lib/uti
 import { BuscaSelect, type OpcaoBusca } from "@/components/ui/busca-select";
 import { AvatarCliente } from "@/components/ui/avatar-cliente";
 import {
-  FileText, Plus, Search, SlidersHorizontal, X, ArrowUp, ArrowDown, ArrowUpDown,
+  FileText, Plus, Search, SlidersHorizontal, X,
   Filter, BarChart3, Wallet, CalendarClock, AlertTriangle,
 } from "lucide-react";
 import { InputData } from "@/components/ui/input-data";
@@ -38,10 +42,16 @@ const COR_FREQ: Record<string, string> = {
 
 const FILTROS = ["busca", "status", "frequencia", "vigenciaInicio", "vigenciaFim", "valorMin", "valorMax", "clienteId"];
 
+/** Princípio 7: o que a tela mostra fica no ⓘ do título, não num parágrafo acima da lista. */
+const AJUDA = "Contratos de manutenção: o valor é o de CADA cobrança, e o valor por ano segue a frequência. Vencidos e vencendo em 30 dias aparecem destacados. O reajuste anual é decidido em Contratos › Reajustes a aplicar.";
+
 export function ContratosListaClient({ contratos, total, pagina, porPagina, somaMensalFiltrada, resumo, opcoesClientes }: {
   contratos: ContratoView[]; total: number; pagina: number; porPagina: number; somaMensalFiltrada: number; resumo: Resumo; opcoesClientes: OpcaoBusca[];
 }) {
   const massa = useAcoesMassaDisponiveis("contratos");
+  const { pode } = usePermissoes();
+  // Prioridade 1: o formulário recusa quem não pode criar — o botão não oferece o caminho
+  const podeCriar = pode("contratos", "criar");
   const router = useRouter();
   const pathname = usePathname();
   const sp = useSearchParams();
@@ -77,10 +87,6 @@ export function ContratosListaClient({ contratos, total, pagina, porPagina, soma
   }
   function limpar() { setBuscaLocal(""); setValorMin(""); setValorMax(""); router.replace(get("por") ? `${pathname}?por=${get("por")}` : pathname, { scroll: false }); }
 
-  function Seta({ campo }: { campo: string }) {
-    if (sortAtual !== campo) return <ArrowUpDown className="inline w-3 h-3 ml-1 text-ink-subtle" />;
-    return dirAtual === "asc" ? <ArrowUp className="inline w-3 h-3 ml-1 text-primary-600" /> : <ArrowDown className="inline w-3 h-3 ml-1 text-primary-600" />;
-  }
   const selectCls = "w-full bg-white border border-surface-border rounded-lg px-3 py-2 text-sm text-ink focus:outline-none focus:border-primary-500 focus:ring-4 focus:ring-primary-500/10 transition-all";
 
   // Base neutra; a cor só nos dois cartões de alerta, e só quando há o que alertar (cor com função)
@@ -97,17 +103,19 @@ export function ContratosListaClient({ contratos, total, pagina, porPagina, soma
     <div className="space-y-6">
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div className="flex items-center gap-3">
-          <div className="p-2 bg-surface-alt rounded-lg"><FileText className="w-5 h-5 text-ink-muted" /></div>
-          <h1 className="page-title">Contratos</h1>
+          <div className="p-2 bg-surface-alt rounded-lg"><FileText className="w-5 h-5 text-ink-muted" aria-hidden /></div>
+          <h1 className="page-title flex items-center gap-1.5">Contratos <Dica texto={AJUDA} rotulo="Contratos" lado="direita" /></h1>
           <span className="text-xs font-semibold text-ink-muted bg-surface-alt border border-surface-border px-2.5 py-1 rounded-full">{total}</span>
         </div>
         <div className="flex items-center gap-2">
           <Link href="/contratos/relatorio" className="inline-flex items-center gap-2 bg-white border border-surface-border text-ink hover:bg-surface-alt px-4 py-2.5 rounded-lg text-sm font-semibold transition-all">
             <BarChart3 className="w-4 h-4" /> Relatório
           </Link>
-          <Link href="/contratos/novo" className="inline-flex items-center gap-2 bg-primary-500 hover:bg-primary-600 text-white px-4 py-2.5 rounded-lg text-sm font-semibold transition-all shadow-sm hover:shadow">
-            <Plus className="w-4 h-4" /> Novo contrato
-          </Link>
+          {podeCriar && (
+            <Link href="/contratos/novo" data-novo-contrato className="inline-flex items-center gap-2 bg-primary-500 hover:bg-primary-600 text-white px-4 py-2.5 rounded-lg text-sm font-semibold transition-all shadow-sm hover:shadow">
+              <Plus className="w-4 h-4" aria-hidden /> Novo contrato
+            </Link>
+          )}
         </div>
       </div>
 
@@ -163,17 +171,18 @@ export function ContratosListaClient({ contratos, total, pagina, porPagina, soma
           )}
 
           <div className="flex items-center justify-between flex-wrap gap-2 pt-1">
-            <span className="text-sm text-ink-muted" data-contador><strong className="text-ink">{total.toLocaleString("pt-BR")}</strong> contrato(s){filtrosAtivos > 0 && <span className="ml-2 inline-flex items-center gap-1 text-xs font-semibold bg-primary-50 text-primary-700 px-2 py-0.5 rounded-full"><Filter className="w-3 h-3" /> {filtrosAtivos} filtro(s)</span>}</span>
+            <span className="text-sm text-ink-muted" data-contador><strong className="text-ink">{total.toLocaleString("pt-BR")}</strong> {total === 1 ? "contrato" : "contratos"}{filtrosAtivos > 0 && <span className="ml-2 inline-flex items-center gap-1 text-xs font-semibold bg-primary-50 text-primary-700 px-2 py-0.5 rounded-full"><Filter className="w-3 h-3" aria-hidden /> {filtrosAtivos === 1 ? "1 filtro" : `${filtrosAtivos} filtros`}</span>}</span>
             {filtrosAtivos > 0 && <button type="button" onClick={limpar} className="inline-flex items-center gap-1 text-xs font-medium text-atrasado hover:text-atrasado-texto"><X className="w-3.5 h-3.5" /> Limpar filtros</button>}
           </div>
         </div>
 
         <div className={cn("transition-opacity", pendente && "opacity-60")} aria-busy={pendente}>
         {contratos.length === 0 ? (
-          <div className="flex flex-col items-center gap-2 py-12 text-center" data-lista-vazia>
-            <p className="text-sm font-medium text-ink">Nenhum contrato encontrado</p>
-            {buscaLocal && <p className="text-xs text-ink-muted">Nada combina com “{buscaLocal}”.</p>}
-            {filtrosAtivos > 0 && <button type="button" onClick={limpar} className="text-sm text-primary-600 hover:underline">Limpar filtros</button>}
+          <div className="pb-2">
+            <ListaVazia mensagem="Nenhum contrato encontrado" busca={buscaLocal || undefined} onLimpar={limpar} />
+            {filtrosAtivos > 0 && !buscaLocal && (
+              <p className="text-center -mt-1"><button type="button" onClick={limpar} className="text-sm text-primary-600 hover:underline">Limpar filtros</button></p>
+            )}
           </div>
         ) : (<>
         {/* Celular: um cartão por contrato */}
@@ -194,72 +203,62 @@ export function ContratosListaClient({ contratos, total, pagina, porPagina, soma
             </li>
           ))}
         </ul>
-        <div className="overflow-x-auto hidden md:block">
-          <table className="w-full text-sm">
-            <thead className="bg-surface-alt border-b border-surface-border">
-              <tr>
-                {massa && <th className="w-px pl-4 pr-1 py-3"><CheckboxPagina /></th>}
-                <th className="text-left px-4 py-3 font-semibold text-ink-muted text-xs uppercase tracking-wider cursor-pointer select-none hover:text-ink" onClick={() => ordenarPor("numero")}>Número <Seta campo="numero" /></th>
-                <th className="text-left px-4 py-3 font-semibold text-ink-muted text-xs uppercase tracking-wider cursor-pointer select-none hover:text-ink" onClick={() => ordenarPor("cliente")}>Cliente <Seta campo="cliente" /></th>
-                <th className="text-left px-4 py-3 font-semibold text-ink-muted text-xs uppercase tracking-wider hidden md:table-cell">Frequência</th>
-                <th className="text-right px-4 py-3 font-semibold text-ink-muted text-xs uppercase tracking-wider cursor-pointer select-none hover:text-ink" onClick={() => ordenarPor("valorMensal")}>Valor da cobrança <Seta campo="valorMensal" /></th>
-                <th className="text-right px-4 py-3 font-semibold text-ink-muted text-xs uppercase tracking-wider hidden md:table-cell">Valor/ano</th>
-                <th className="text-left px-4 py-3 font-semibold text-ink-muted text-xs uppercase tracking-wider hidden lg:table-cell cursor-pointer select-none hover:text-ink" onClick={() => ordenarPor("dataInicio")}>Início <Seta campo="dataInicio" /></th>
-                <th className="text-left px-4 py-3 font-semibold text-ink-muted text-xs uppercase tracking-wider hidden lg:table-cell cursor-pointer select-none hover:text-ink" onClick={() => ordenarPor("dataFim")}>Fim <Seta campo="dataFim" /></th>
-                <th className="text-left px-4 py-3 font-semibold text-ink-muted text-xs uppercase tracking-wider cursor-pointer select-none hover:text-ink" onClick={() => ordenarPor("status")}>Status <Seta campo="status" /></th>
-                <th className="text-left px-4 py-3 font-semibold text-ink-muted text-xs uppercase tracking-wider hidden xl:table-cell">Próxima OS</th>
-              </tr>
-            </thead>
-            <tbody>
-              {contratos.map((ct, idx) => (
-                <tr key={ct.id} className={cn("border-b border-surface-border hover:bg-surface-alt transition-colors", idx % 2 === 1 && "bg-surface-alt/30", ct.vencido && "bg-atrasado-claro/60 hover:bg-atrasado-claro", (ct.status === "ENCERRADO" || ct.status === "CANCELADO") && "opacity-60")}>
-                  {massa && <td className="w-px pl-4 pr-1 py-3"><CheckboxLinha id={ct.id} rotulo={ct.numero} /></td>}
-                  <td className="px-4 py-3 whitespace-nowrap">
-                    <Link href={`/contratos/${ct.id}`} className="font-mono font-semibold text-primary-600 hover:underline">{ct.numero}</Link>
-                  </td>
-                  <td className="px-4 py-3 text-ink font-medium">
-                    <div className="flex items-center gap-2">
-                      <AvatarCliente nome={ct.cliente} logoUrl={ct.clienteLogo} size={28} />
-                      <span className="truncate">{ct.cliente}</span>
-                    </div>
-                  </td>
-                  <td className="px-4 py-3 hidden md:table-cell"><span className={cn("text-xs font-semibold px-2 py-0.5 rounded-full", COR_FREQ[ct.periodicidade])}>{LABELS_PERIODICIDADE[ct.periodicidade] ?? ct.periodicidade}</span></td>
-                  <td className="px-4 py-3 text-right text-ink font-medium">
-                    {formatarMoeda(ct.valorMensal)}
-                    {passoCobranca(ct.periodicidade) > 1 && <span className="block text-[11px] font-normal text-ink-muted">{textoFrequencia(passoCobranca(ct.periodicidade))}</span>}
-                  </td>
-                  <td className="px-4 py-3 text-right text-ink-muted hidden md:table-cell">{ct.valorMensal != null ? formatarMoeda(ct.valorMensal * 12 / passoCobranca(ct.periodicidade)) : "—"}</td>
-                  <td className="px-4 py-3 text-ink-muted hidden lg:table-cell">{formatarData(ct.dataInicio)}</td>
-                  <td className={cn("px-4 py-3 hidden lg:table-cell", ct.vencido ? "text-atrasado font-medium" : "text-ink-muted")}>{ct.dataFim ? formatarData(ct.dataFim) : "indeterminado"}</td>
-                  <td className="px-4 py-3">
-                    {ct.vencido ? (
-                      <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-atrasado-claro text-atrasado-texto">Vencido</span>
-                    ) : ct.vencendo ? (
-                      <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-atencao-claro text-atencao-texto">Vence em breve</span>
-                    ) : (
-                      <span className={cn("text-xs font-semibold px-2.5 py-1 rounded-full", COR_STATUS[ct.status])}>{LABELS_STATUS[ct.status] ?? ct.status}</span>
-                    )}
-                  </td>
-                  <td className="px-4 py-3 hidden xl:table-cell">
-                    {ct.proximaOs ? (
-                      <Link href={`/ordens/${ct.proximaOs.id}`} className="text-xs text-primary-600 hover:underline">{ct.proximaOs.numero} · {ct.proximaOs.previsaoConclusao ? formatarData(ct.proximaOs.previsaoConclusao) : ""}</Link>
-                    ) : <span className="text-xs text-ink-subtle">—</span>}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-            {contratos.length > 0 && (
-              <tfoot>
-                <tr className="bg-surface-alt border-t-2 border-surface-border">
-                  <td colSpan={3} className="px-4 py-3 text-sm font-semibold text-ink">{total} contrato(s) filtrado(s)</td>
-                  <td className="px-4 py-3 text-right text-sm font-semibold text-ink tabular-nums" title="Equivalente por mês">{formatarMoeda(somaMensalFiltrada)}<span className="text-xs font-normal text-ink-muted">/mês</span></td>
-                  <td className="px-4 py-3 text-right text-sm font-semibold text-ink tabular-nums hidden md:table-cell">{formatarMoeda(somaMensalFiltrada * 12)}</td>
-                  <td colSpan={4} />
-                </tr>
-              </tfoot>
-            )}
-          </table>
-        </div>
+        <TabelaPro
+          tela="contratos" atributos={{ "data-tabela-contratos": true }}
+          ordenacao={{ ativa: sortAtual, dir: dirAtual, onOrdenar: ordenarPor }}
+          barra={
+            <span className="flex flex-wrap items-center gap-x-4 gap-y-1">
+              <span>{total === 1 ? "1 contrato filtrado" : `${total} contratos filtrados`}</span>
+              <span className="tabular-nums" title="Equivalente por mês">{formatarMoeda(somaMensalFiltrada)}<span className="text-ink-muted">/mês</span></span>
+              <span className="tabular-nums" title="Equivalente por ano">{formatarMoeda(somaMensalFiltrada * 12)}<span className="text-ink-muted">/ano</span></span>
+            </span>
+          }
+          colunas={[
+            ...(massa ? [{ id: "sel", titulo: "Selecionar a página", fixa: true, largura: 36, cabecalho: <CheckboxPagina />, classe: "pl-3" }] : []),
+            { id: "numero", titulo: "Número", ordenar: "numero", obrigatoria: true, largura: 120 },
+            { id: "cliente", titulo: "Cliente", ordenar: "cliente", minimo: 200, classe: "truncate" },
+            { id: "frequencia", titulo: "Frequência", largura: 128 },
+            { id: "valor", titulo: "Valor da cobrança", ordenar: "valorMensal", largura: 148, alinhar: "direita" },
+            { id: "ano", titulo: "Valor/ano", largura: 124, alinhar: "direita" },
+            { id: "inicio", titulo: "Início", ordenar: "dataInicio", largura: 104 },
+            { id: "fim", titulo: "Fim", ordenar: "dataFim", largura: 124 },
+            { id: "status", titulo: "Status", ordenar: "status", largura: 148 },
+            { id: "proximaOs", titulo: "Próxima OS", largura: 160, classe: "truncate" },
+          ]}
+          linhas={contratos.map((ct) => ({
+            id: ct.id, atributos: { "data-contrato": ct.id },
+            classe: cn(ct.vencido && "bg-atrasado-claro/60 hover:bg-atrasado-claro", (ct.status === "ENCERRADO" || ct.status === "CANCELADO") && "opacity-60"),
+            titulos: { cliente: ct.cliente, fim: ct.dataFim ? undefined : "Sem data de fim: vigência indeterminada" },
+            celulas: {
+              sel: massa ? <CheckboxLinha id={ct.id} rotulo={ct.numero} /> : null,
+              numero: <Link href={`/contratos/${ct.id}`} className={cn(PLANILHA.codigo, "text-primary-600 hover:underline")}>{ct.numero}</Link>,
+              cliente: (
+                <span className="flex items-center gap-2 min-w-0">
+                  <AvatarCliente nome={ct.cliente} logoUrl={ct.clienteLogo} size={24} />
+                  <span className={cn(PLANILHA.nome, "truncate")}>{ct.cliente}</span>
+                </span>
+              ),
+              frequencia: <span className={cn("text-xs font-semibold px-2 py-0.5 rounded-full whitespace-nowrap", COR_FREQ[ct.periodicidade])}>{LABELS_PERIODICIDADE[ct.periodicidade] ?? ct.periodicidade}</span>,
+              valor: (
+                <span className={PLANILHA.numero}>
+                  {formatarMoeda(ct.valorMensal)}
+                  {passoCobranca(ct.periodicidade) > 1 && <span className="block text-[11px] font-normal text-ink-muted">{textoFrequencia(passoCobranca(ct.periodicidade))}</span>}
+                </span>
+              ),
+              ano: <span className={cn(PLANILHA.numero, PLANILHA.apagado)}>{ct.valorMensal != null ? formatarMoeda(ct.valorMensal * 12 / passoCobranca(ct.periodicidade)) : "—"}</span>,
+              inicio: <span className={cn(PLANILHA.apagado, PLANILHA.data)}>{formatarData(ct.dataInicio)}</span>,
+              fim: <span className={cn(PLANILHA.data, ct.vencido ? "text-atrasado font-medium" : PLANILHA.apagado)}>{ct.dataFim ? formatarData(ct.dataFim) : "indeterminado"}</span>,
+              status: ct.vencido
+                ? <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-atrasado-claro text-atrasado-texto whitespace-nowrap">Vencido</span>
+                : ct.vencendo
+                ? <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-atencao-claro text-atencao-texto whitespace-nowrap">Vence em breve</span>
+                : <span className={cn("text-xs font-semibold px-2.5 py-1 rounded-full whitespace-nowrap", COR_STATUS[ct.status])}>{LABELS_STATUS[ct.status] ?? ct.status}</span>,
+              proximaOs: ct.proximaOs
+                ? <Link href={`/ordens/${ct.proximaOs.id}`} className="text-xs text-primary-600 hover:underline">{ct.proximaOs.numero}{ct.proximaOs.previsaoConclusao ? ` · ${formatarData(ct.proximaOs.previsaoConclusao)}` : ""}</Link>
+                : <span className="text-xs text-ink-subtle">—</span>,
+            },
+          }))}
+        />
         </>)}
         </div>
         <div className="px-4 py-3 border-t border-surface-border">

@@ -4,9 +4,11 @@ import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { CalendarClock, Clock, TrendingUp } from "lucide-react";
-import { cn, formatarData, formatarMoeda } from "@/lib/utils";
+import { formatarData, formatarMoeda } from "@/lib/utils";
 import { CardResumo, GradeCards } from "@/components/listagem/periodo-cards";
-import { PLANILHA, valorSemMoeda } from "@/lib/planilha";
+import { TabelaPro, type ColunaPro } from "@/components/listagem/tabela-pro";
+import { valorSemMoeda } from "@/lib/planilha";
+import { usePermissoes } from "@/components/providers/permissoes-provider";
 import { Dica } from "@/components/ui/dica";
 import { Modal } from "@/components/ui/modal";
 import { Button } from "@/components/ui/button";
@@ -18,6 +20,17 @@ import type { LinhaReajuste } from "@/lib/contratos/reajuste-server";
 
 const ROTULO: Record<LinhaReajuste["situacao"], string> = { PENDENTE: "Para aplicar", ADIADO: "Adiado", EM_BREVE: "Vem chegando" };
 const TOM: Record<LinhaReajuste["situacao"], TomStatus> = { PENDENTE: "atencao", ADIADO: "previsto", EM_BREVE: "acento" };
+
+/** As colunas da planilha: a elástica é "Cliente · contrato"; o resto tem largura fixa. */
+const COLUNAS: ColunaPro[] = [
+  { id: "cliente", titulo: "Cliente · contrato", minimo: 160, obrigatoria: true, classe: "truncate" },
+  { id: "aniversario", titulo: "Aniversário", largura: 112 },
+  { id: "percentual", titulo: "%", largura: 72, alinhar: "direita" },
+  { id: "valorAtual", titulo: "Hoje (R$)", largura: 112, alinhar: "direita" },
+  { id: "valorNovo", titulo: "Novo (R$)", largura: 112, alinhar: "direita" },
+  { id: "situacao", titulo: "Situação", largura: 128 },
+  { id: "decidir", titulo: "Decidir", largura: 200, fixa: true },
+];
 
 /** O aniversário, com o "até" do adiamento */
 function Situacao({ l }: { l: LinhaReajuste }) {
@@ -36,6 +49,10 @@ function Situacao({ l }: { l: LinhaReajuste }) {
  */
 export function ReajustesView({ linhas }: { linhas: LinhaReajuste[] }) {
   const router = useRouter();
+  // Aplicar/adiar/dispensar mexem no valor do contrato: POST /api/contratos/[id]/reajuste exige
+  // "Contratos › editar". Sem a permissão a decisão não aparece — e o servidor recusa de todo modo.
+  const { pode } = usePermissoes();
+  const podeDecidir = pode("contratos", "editar");
   const [ocupado, setOcupado] = useState<string | null>(null);
   const [dispensar, setDispensar] = useState<LinhaReajuste | null>(null);
   const [motivo, setMotivo] = useState("");
@@ -78,6 +95,8 @@ export function ReajustesView({ linhas }: { linhas: LinhaReajuste[] }) {
 
   const Acoes = ({ l }: { l: LinhaReajuste }) => l.situacao === "EM_BREVE" ? (
     <span className="text-[11px] text-ink-subtle">Aplica a partir de {textoCompetencia(l.aniversario)}</span>
+  ) : !podeDecidir ? (
+    <span className="text-[11px] text-ink-subtle" data-sem-permissao={l.contratoId}>Quem cuida de contratos decide</span>
   ) : (
     <span className="flex flex-wrap items-center gap-x-3 gap-y-1" data-acoes={l.contratoId}>
       <button type="button" onClick={() => aplicar(l)} disabled={ocupado === l.contratoId} className="text-xs font-semibold text-acento hover:underline disabled:opacity-50" data-aplicar={l.contratoId}>Aplicar</button>
@@ -112,59 +131,52 @@ export function ReajustesView({ linhas }: { linhas: LinhaReajuste[] }) {
           <p className="text-xs text-ink-muted max-w-sm">Ligue “Reajuste anual” no contrato (aba Gestão), com percentual fixo.</p>
         </div>
       ) : (
-        <section className="card overflow-hidden" data-reajustes-lista>
-          {/* Celular: cartões */}
-          <ul className="md:hidden divide-y divide-surface-border">
-            {linhas.map((l) => (
-              <li key={l.contratoId} className="px-4 py-3 space-y-1.5" data-linha-reajuste={l.contratoId}>
-                <div className="flex items-start justify-between gap-2">
-                  <div className="min-w-0">
-                    <p className="font-medium text-ink truncate">{l.cliente}</p>
-                    <p className="text-xs text-ink-muted truncate"><Link href={`/contratos/${l.contratoId}`} className="hover:underline">{l.numero}</Link> · aniversário {textoCompetencia(l.aniversario)}</p>
+        <TabelaPro
+          tela="contratos-reajustes"
+          atributos={{ "data-reajustes-lista": true }}
+          colunas={COLUNAS}
+          linhas={linhas.map((l) => ({
+            id: l.contratoId,
+            atributos: { "data-linha-reajuste": l.contratoId },
+            titulos: { cliente: l.cliente },
+            classe: "align-top",
+            celulas: {
+              cliente: (
+                <>
+                  <p className="font-medium text-ink truncate">{l.cliente}</p>
+                  <p className="text-[11px] text-ink-subtle truncate"><Link href={`/contratos/${l.contratoId}`} className="hover:underline">{l.numero}</Link></p>
+                </>
+              ),
+              aniversario: <span data-aniversario>{textoCompetencia(l.aniversario)}</span>,
+              percentual: <span data-percentual>{textoPercentual(l.percentual)}</span>,
+              valorAtual: <span className="text-ink-muted" data-valor-atual>{valorSemMoeda(l.valorAtual)}</span>,
+              valorNovo: <span className="font-semibold text-ink" data-valor-novo>{valorSemMoeda(l.valorNovo)}</span>,
+              situacao: <Situacao l={l} />,
+              decidir: <Acoes l={l} />,
+            },
+          }))}
+          cartoes={
+            <ul className="divide-y divide-surface-border">
+              {linhas.map((l) => (
+                <li key={l.contratoId} className="px-4 py-3 space-y-1.5" data-linha-reajuste={l.contratoId}>
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <p className="font-medium text-ink truncate">{l.cliente}</p>
+                      <p className="text-xs text-ink-muted truncate"><Link href={`/contratos/${l.contratoId}`} className="hover:underline">{l.numero}</Link> · aniversário {textoCompetencia(l.aniversario)}</p>
+                    </div>
+                    <Situacao l={l} />
                   </div>
-                  <Situacao l={l} />
-                </div>
-                <p className="text-sm text-ink tabular-nums" data-de-para>
-                  {formatarMoeda(l.valorAtual)} → <span className="font-semibold">{formatarMoeda(l.valorNovo)}</span>
-                  <span className="text-ink-muted"> · {textoPercentual(l.percentual)}</span>
-                </p>
-                <Acoes l={l} />
-              </li>
-            ))}
-          </ul>
-          {/* Desktop: planilha */}
-          <div className="hidden md:block overflow-x-auto">
-            <table className={cn(PLANILHA.tabela, "table-fixed")}>
-              <thead>
-                <tr className={PLANILHA.cabecalho}>
-                  <th scope="col" className={cn(PLANILHA.th, "text-left w-[26%]")}>Cliente · contrato</th>
-                  <th scope="col" className={cn(PLANILHA.th, "text-left w-[7rem]")}>Aniversário</th>
-                  <th scope="col" className={cn(PLANILHA.th, "text-right w-[4.5rem]")}>%</th>
-                  <th scope="col" className={cn(PLANILHA.th, "text-right w-[7rem]")}>Hoje (R$)</th>
-                  <th scope="col" className={cn(PLANILHA.th, "text-right w-[7rem]")}>Novo (R$)</th>
-                  <th scope="col" className={cn(PLANILHA.th, "text-left w-[8rem]")}>Situação</th>
-                  <th scope="col" className={cn(PLANILHA.th, "text-left")}>Decidir</th>
-                </tr>
-              </thead>
-              <tbody>
-                {linhas.map((l) => (
-                  <tr key={l.contratoId} className={PLANILHA.linha} data-linha-reajuste={l.contratoId}>
-                    <td className={cn(PLANILHA.td, "truncate")}>
-                      <p className="font-medium text-ink truncate" title={l.cliente}>{l.cliente}</p>
-                      <p className="text-[11px] text-ink-subtle truncate"><Link href={`/contratos/${l.contratoId}`} className="hover:underline">{l.numero}</Link></p>
-                    </td>
-                    <td className={PLANILHA.td} data-aniversario>{textoCompetencia(l.aniversario)}</td>
-                    <td className={cn(PLANILHA.td, PLANILHA.numero)} data-percentual>{textoPercentual(l.percentual)}</td>
-                    <td className={cn(PLANILHA.td, PLANILHA.numero, "text-ink-muted")} data-valor-atual>{valorSemMoeda(l.valorAtual)}</td>
-                    <td className={cn(PLANILHA.td, PLANILHA.numero, "font-semibold text-ink")} data-valor-novo>{valorSemMoeda(l.valorNovo)}</td>
-                    <td className={PLANILHA.td}><Situacao l={l} /></td>
-                    <td className={PLANILHA.td}><Acoes l={l} /></td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </section>
+                  <p className="text-sm text-ink tabular-nums" data-de-para>
+                    {formatarMoeda(l.valorAtual)} → <span className="font-semibold">{formatarMoeda(l.valorNovo)}</span>
+                    <span className="text-ink-muted"> · {textoPercentual(l.percentual)}</span>
+                  </p>
+                  <Acoes l={l} />
+                </li>
+              ))}
+            </ul>
+          }
+          barra={<span className="text-sm text-ink-muted">{linhas.length === 1 ? "1 contrato" : `${linhas.length} contratos`} para decidir</span>}
+        />
       )}
 
       <Modal aberto={!!dispensar} onFechar={() => setDispensar(null)} titulo="Dispensar o reajuste" tamanho="sm">
