@@ -81,8 +81,9 @@ const PREVIA: PreviaRenovacao = {
   renovacoes: [],
 };
 async function abrirEditor(props: Record<string, unknown> = {}, permissoes: Permissoes = permissoesTotais()) {
+  const { Avisos } = await import("@/components/ui/avisos");
   const [{ PmocEditor }, { PermissoesProvider }] = await Promise.all([import("@/components/pmoc/pmoc-editor"), import("@/components/providers/permissoes-provider")]);
-  await montar(createElement(PermissoesProvider, { role: "OPERADOR", permissoes, children: createElement(PmocEditor, { inicial: plano(), ...props }) }));
+  await montar(createElement(PermissoesProvider, { role: "OPERADOR", permissoes, children: createElement("div", null, createElement(Avisos), createElement(PmocEditor, { inicial: plano(), ...props })) }));
 }
 async function abrirDialogo(previa: PreviaRenovacao | null = PREVIA, permissoes?: Permissoes) {
   if (previa) respostas[`GET ${URL_R}`] = { status: 200, corpo: previa };
@@ -259,7 +260,7 @@ describe("PMOC › Renovar: confirmar", () => {
 describe("PMOC › Renovar: depois de renovar", () => {
   it("o plano novo abre com o aviso do que falta: anexar a nova ART, conferir e publicar", async () => {
     await abrirEditor({ inicial: plano({ id: "p2", status: "RASCUNHO", artNumero: null }), renovadoRecente: true });
-    expect(texto($("[data-msg='ok']"))).toBe("Renovação criada como Rascunho, com o cronograma. Anexe a nova ART, confira e publique.");
+    expect(texto($("[data-toast='sucesso']"))).toBe("Renovação criada como Rascunho, com o cronograma. Anexe a nova ART, confira e publique.");
   });
 
   it("a faixa de vencimento do plano aponta para 'Renovar' (e não mais para a cópia)", async () => {

@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   AlertTriangle, Building2, CalendarClock, ChevronLeft, CircleDollarSign, ClipboardCheck, FileSignature,
-  FileBarChart, Pencil, RotateCcw, SlidersHorizontal, User, Wrench, X,
+  FileBarChart, Lock, Pencil, RotateCcw, SlidersHorizontal, User, Wrench, X,
 } from "lucide-react";
 import { formatarDataHora, formatarMoeda, LABELS_PRIORIDADE, LABELS_STATUS_OS } from "@/lib/utils";
 import { ESTAGIOS_LINHA, ROTULO_ESTAGIO, type EstagioOs } from "@/lib/os/status";
@@ -14,6 +14,9 @@ import { ROTULO_PAGAMENTO, type CentralOs } from "@/lib/os/central";
 import { estadoDoAceite, rotuloDoAceite, temRessalva, textoDoAceite } from "@/lib/os/aceite";
 import { usePermissoes } from "@/components/providers/permissoes-provider";
 import { toast } from "@/components/ui/avisos";
+import { Dica } from "@/components/ui/dica";
+import { motivoDaTrava, situacaoDaOs } from "@/lib/edicao-contexto";
+import { EditarOs } from "@/components/os/central/editar-os";
 import { StatusPill, TOM_ESTAGIO_OS, TOM_PRAZO, TOM_PRIORIDADE } from "@/components/ui/status-pill";
 import { Stepper } from "@/components/ui/stepper";
 import { Kpi } from "@/components/ui/kpi";
@@ -36,6 +39,9 @@ export function CabecalhoOs({ os, central, acoes, onAba, onAtualizado }: {
 }) {
   const { pode } = usePermissoes();
   const podeEditar = pode("ordens", "editar");
+  const [editando, setEditando] = useState(false);
+  // Registro fechado (assinada, faturada ou com nota): a mesma trava das linhas da OS
+  const fechada = motivoDaTrava(situacaoDaOs({ aceite: os.aceite, faturada: !!os.fatura, notaEmitida: !!os.notaEmitida }));
   const { status, prazoOs } = central;
   // "Concluída, aguardando confirmação do cliente" (o status da OS não muda: o aceite é à parte)
   const aceite = estadoDoAceite(os.status, os.aceite);
@@ -98,13 +104,25 @@ export function CabecalhoOs({ os, central, acoes, onAba, onAtualizado }: {
         </div>
         <div className="flex items-center gap-2 flex-wrap justify-end">
           {podeEditar && os.status !== "CANCELADA" && (
-            <Link href={`/ordens/${os.id}/editar`} className="btn-secondary">
-              <Pencil className="w-4 h-4" /> Editar
-            </Link>
+            fechada ? (
+              // Registro fechado: o botão continua à vista, travado, com o motivo no ⓘ (o servidor recusa também)
+              <span className="inline-flex items-center gap-1">
+                <button type="button" disabled className="btn-secondary opacity-60 cursor-not-allowed" data-editar-os-travado>
+                  <Lock className="w-4 h-4" aria-hidden /> Editar
+                </button>
+                <Dica texto={fechada} rotulo="Por que não dá para editar" lado="esquerda" />
+              </span>
+            ) : (
+              <button type="button" onClick={() => setEditando(true)} className="btn-secondary" data-editar-os-abrir>
+                <Pencil className="w-4 h-4" aria-hidden /> Editar
+              </button>
+            )
           )}
           {acoes}
         </div>
       </div>
+
+      <EditarOs os={os} aberto={editando} onFechar={() => setEditando(false)} onAtualizado={onAtualizado} />
 
       {/* Linha 2: barra de progresso (ou faixa de cancelada) */}
       {status.exibido === "CANCELADA" ? (

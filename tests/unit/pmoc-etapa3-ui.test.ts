@@ -79,8 +79,9 @@ const plano = (extra: Partial<PmocDados> = {}): PmocDados => ({
 });
 const DESTINO = { contato: "Maria Lima", whatsapp: "(11) 97777-1234", email: "maria@hospital.com.br" };
 async function abrirEditor(props: Record<string, unknown> = {}, permissoes: Permissoes = permissoesTotais()) {
+  const { Avisos } = await import("@/components/ui/avisos");
   const [{ PmocEditor }, { PermissoesProvider }] = await Promise.all([import("@/components/pmoc/pmoc-editor"), import("@/components/providers/permissoes-provider")]);
-  await montar(createElement(PermissoesProvider, { role: "OPERADOR", permissoes, children: createElement(PmocEditor, { inicial: plano(), destino: DESTINO, ...props }) }));
+  await montar(createElement(PermissoesProvider, { role: "OPERADOR", permissoes, children: createElement("div", null, createElement(PmocEditor, { inicial: plano(), destino: DESTINO, ...props }), createElement(Avisos)) }));
 }
 const SO_VER = montarPermissoes({ pmoc: ["visualizar"] });
 const envios = () => pedidos.filter((p) => p.url === `${URL_P}/enviar`);
@@ -235,7 +236,7 @@ describe("PMOC › aviso de vencimento no plano", () => {
     await abrirEditor();
     await clicar($("[data-ciente]"));
     expect(faixa()).toBeTruthy();
-    expect(texto($("[data-msg='erro']"))).toBe("Sem permissão para esta ação");
+    expect(texto($("[data-erro-pmoc]"))).toBe("Sem permissão para esta ação");
   });
 });
 
@@ -288,13 +289,13 @@ describe("PMOC › ART e texto técnico", () => {
     await abrirEditor();
     expect(texto()).toContain("PDF, JPG ou PNG até 3 MB. Entra no fim do documento do plano.");
     await escolher(arquivo("ART.pdf", "application/pdf", 3 * 1024 * 1024 + 1));
-    expect(texto($("[data-msg='erro']"))).toBe("Arquivo da ART acima de 3 MB.");
+    expect(texto($("[data-erro-pmoc]"))).toBe("Arquivo da ART acima de 3 MB.");
     expect($("[data-art-arquivo]")).toBeNull();
     await escolher(arquivo("ART.pdf", "application/pdf"));
     expect(texto($("[data-art-arquivo]"))).toBe("ART.pdfa salvar");
     expect(reducao.fn).not.toHaveBeenCalled(); // PDF vai como é
     await escolher(arquivo("art.docx", "application/vnd.openxmlformats-officedocument.wordprocessingml.document"));
-    expect(texto($("[data-msg='erro']"))).toBe("A ART deve ser PDF, JPG ou PNG.");
+    expect(texto($("[data-erro-pmoc]"))).toBe("A ART deve ser PDF, JPG ou PNG.");
   });
 
   it("FOTO da ART é reduzida antes de enviar (cabe no pedido e no documento) e vai como JPG; o que é salvo é a foto reduzida", async () => {
@@ -310,7 +311,7 @@ describe("PMOC › ART e texto técnico", () => {
     reducao.fn = vi.fn(async () => ({ imagem: { dataUrl: "data:image/jpeg;base64,AAAA", bytes: 3 * 1024 * 1024 + 1 } }));
     await abrirEditor();
     await escolher(arquivo("enorme.jpg", "image/jpeg", 9 * 1024 * 1024));
-    expect(texto($("[data-msg='erro']"))).toBe("Arquivo da ART acima de 3 MB.");
+    expect(texto($("[data-erro-pmoc]"))).toBe("Arquivo da ART acima de 3 MB.");
     expect($("[data-art-arquivo]")).toBeNull();
   });
 

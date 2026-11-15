@@ -467,9 +467,10 @@ describe("editor do PMOC e OS", () => {
     equipamentos: [{ id: "v1", equipamento: { id: "q1", nome: "Split", marca: "LG", modelo: "S4", patrimonio: "AC-001", tipo: "AR_CONDICIONADO_SPLIT", capacidade: null, setor: null, localizacao: null, ativo: true, unidadeId: "u1" } }], ...extra,
   });
   async function abrirEditor(props: Record<string, unknown>) {
+    const { Avisos } = await import("@/components/ui/avisos");
     const [{ PmocEditor }, { PermissoesProvider }] = await Promise.all([import("@/components/pmoc/pmoc-editor"), import("@/components/providers/permissoes-provider")]);
     if (root) { act(() => root.unmount()); caixa.remove(); }
-    await montar(createElement(PermissoesProvider, { role: "OPERADOR", permissoes: permissoesTotais(), children: createElement(PmocEditor, props) }));
+    await montar(createElement(PermissoesProvider, { role: "OPERADOR", permissoes: permissoesTotais(), children: createElement("div", null, createElement(PmocEditor, props), createElement(Avisos)) }));
   }
 
   it("'Cronograma' é uma aba de verdade (só com o plano salvo); Planejamento, Recomendações e Anexos seguem 'em breve'", async () => {
@@ -491,15 +492,15 @@ describe("editor do PMOC e OS", () => {
 
     respostas["PUT /api/pmocs/p1"] = { status: 200, corpo: { ...plano({ status: "PUBLICADO" }), osGeradas: 12 } };
     await clicar(botao("Publicar"));
-    expect(texto($("[data-msg='ok']"))).toBe("PMOC publicado. 12 OS geradas pelo cronograma.");
+    expect(toast).toHaveBeenLastCalledWith("PMOC publicado. 12 OS geradas pelo cronograma.");
     respostas["PUT /api/pmocs/p1"] = { status: 200, corpo: { ...plano({ status: "PUBLICADO" }), osGeradas: 1 } };
     await clicar(botao("Salvar") ?? $("[role=tab][data-aba='identificacao']"));
     if (!botao("Salvar")) { await clicar($("[role=tab][data-aba='identificacao']")); }
     await clicar(botao("Salvar"));
-    expect(texto($("[data-msg='ok']"))).toBe("Alterações salvas. 1 OS gerada pelo cronograma.");
+    expect(toast).toHaveBeenLastCalledWith("Alterações salvas. 1 OS gerada pelo cronograma.");
     respostas["PUT /api/pmocs/p1"] = { status: 200, corpo: { ...plano({ status: "PUBLICADO" }), osGeradas: 0 } };
     await clicar(botao("Salvar"));
-    expect(texto($("[data-msg='ok']"))).toBe("Alterações salvas.");
+    expect(toast).toHaveBeenLastCalledWith("Alterações salvas.");
   });
 
   it("a OS gerada pelo cronograma mostra o plano no resumo: link para quem vê o PMOC, só o nome para quem não vê", async () => {

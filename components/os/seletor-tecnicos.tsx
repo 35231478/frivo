@@ -14,6 +14,20 @@ export interface ValorTecnicos { tecnicoIds: string[]; responsavelId: string | n
 
 export const VALOR_TECNICOS_VAZIO: ValorTecnicos = { tecnicoIds: [], responsavelId: null, equipeId: null };
 
+/**
+ * O "quem executa" de uma equipe: os membros cadastrados e aptos no tipo de OS, com o líder como
+ * responsável (ou o primeiro apto). Fora do componente para o seletor e a sugestão de abertura
+ * caírem exatamente no mesmo resultado.
+ */
+export function valorDaEquipe(eq: EquipeOpcao, tecnicos: TecnicoOpcao[], tipoOsId?: string): ValorTecnicos {
+  const porId = new Map(tecnicos.map((t) => [t.id, t]));
+  const apto = (id: string) => !tipoOsId || (porId.get(id)?.competencias ?? []).some((c) => c.id === tipoOsId);
+  const todos = [...new Set([eq.liderId, ...eq.membroIds].filter(Boolean) as string[])].filter((m) => porId.has(m));
+  const aptos = todos.filter(apto);
+  const resp = eq.liderId && aptos.includes(eq.liderId) ? eq.liderId : aptos[0] ?? null;
+  return { tecnicoIds: aptos, responsavelId: resp, equipeId: eq.id };
+}
+
 /** Valor inicial a partir de uma atividade já salva (responsável + demais + equipe). */
 export function valorDaAtividade(a: any): ValorTecnicos {
   const resp = a?.tecnico?.id ?? a?.tecnicoId ?? null;
@@ -69,10 +83,7 @@ export function SeletorTecnicos({ tecnicos, equipes, tipoOsId, valor, onChange, 
     if (!id) { onChange({ ...valor, equipeId: null }); return; }
     const eq = equipes.find((e) => e.id === id);
     if (!eq) return;
-    const todos = [...new Set([eq.liderId, ...eq.membroIds].filter(Boolean) as string[])].filter((m) => porId.has(m));
-    const aptos = todos.filter(temCompetencia);
-    const resp = eq.liderId && aptos.includes(eq.liderId) ? eq.liderId : aptos[0] ?? null;
-    onChange({ tecnicoIds: aptos, responsavelId: resp, equipeId: eq.id });
+    onChange(valorDaEquipe(eq, tecnicos, tipoOsId));
   }
   function adicionar(id: string) {
     if (!id || valor.tecnicoIds.includes(id)) return;

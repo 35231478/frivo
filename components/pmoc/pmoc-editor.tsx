@@ -8,13 +8,16 @@ import {
   ChevronLeft, Save, Loader2, AlertTriangle, CheckCircle2, Upload, FileText, Trash2, Send, Undo2, Plus, X, Info, History, ShieldAlert, ShieldX,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { TabelaPro } from "@/components/listagem/tabela-pro";
+import { PLANILHA } from "@/lib/planilha";
 import { formatarCapacidade, rotuloTipoEquipamento } from "@/lib/equipamento-descricao";
 import { Input } from "@/components/ui/input";
 import { InputData } from "@/components/ui/input-data";
 import { Textarea } from "@/components/ui/textarea";
 import { FormField, FormGrid, FormSection } from "@/components/ui/form-field";
 import { SelectCadastroRapido, type OpcaoCadastro } from "@/components/ui/select-cadastro-rapido";
-import { CLIENTE, UNIDADE } from "@/components/cadastro-rapido/definicoes";
+import { CLIENTE, RESPONSAVEL_TECNICO, UNIDADE, type OpcaoRt } from "@/components/cadastro-rapido/definicoes";
+import { toast } from "@/components/ui/avisos";
 import { usePermissoes } from "@/components/providers/permissoes-provider";
 import { InativarRegistro } from "@/components/ui/inativar-registro";
 import { PmocStatusSelo } from "@/components/pmoc/pmoc-status-selo";
@@ -54,6 +57,7 @@ const ABAS = [
 // As abas que só existem com o plano salvo
 const SO_SALVO: Aba[] = ["equipamentos", "cronograma", "ocorrencias", "historico"];
 const MSG_ART_GRANDE = "Arquivo da ART acima de 3 MB.";
+const RT_MANUAL = "Digitar manualmente";
 const ABAS_FUTURAS = [
   { rotulo: "Planejamento", icone: ListChecks },
   { rotulo: "Recomendações", icone: Lightbulb },
@@ -117,24 +121,39 @@ export function PmocEditor({ inicial, abaInicial, copiaRecente, criadoRecente, r
   const [artNova, setArtNova] = useState<{ dataUrl: string; nome: string } | null>(null);
   const [removerArt, setRemoverArt] = useState(false);
   const [salvando, setSalvando] = useState<string | null>(null);
-  const [msg, setMsg] = useState<{ tipo: "ok" | "erro"; texto: string } | null>(
-    renovadoRecente ? { tipo: "ok", texto: "Renovação criada como Rascunho, com o cronograma. Anexe a nova ART, confira e publique." }
-    : copiaRecente ? { tipo: "ok", texto: "Cópia criada como Rascunho. A ART não é copiada: informe a ART deste novo plano." }
-    : criadoRecente ? { tipo: "ok", texto: "PMOC criado como Rascunho. Agora adicione os equipamentos cobertos e publique." } : null);
+  // Erro fica NA TELA (perto do formulário); o que deu certo vira toast, como no resto do painel
+  const [erro, setErro] = useState("");
+  // Chegou de uma gravação da tela anterior (criar, copiar, renovar): o aviso é um toast
+  useEffect(() => {
+    const t = renovadoRecente ? "Renovação criada como Rascunho, com o cronograma. Anexe a nova ART, confira e publique."
+      : copiaRecente ? "Cópia criada como Rascunho. A ART não é copiada: informe a ART deste novo plano."
+      : criadoRecente ? "PMOC criado como Rascunho. Agora adicione os equipamentos cobertos e publique." : "";
+    if (t) toast(t);
+  }, [renovadoRecente, copiaRecente, criadoRecente]);
 
   // Clientes / unidades / RTs
   const [clientes, setClientes] = useState<OpcaoCadastro[]>(inicial ? [CLIENTE.opcao(inicial.cliente)] : []);
   const [carregandoClientes, setCarregandoClientes] = useState(true);
   const [unidades, setUnidades] = useState<any[]>(inicial ? [{ ...inicial.unidade, clienteId: inicial.clienteId }] : []);
   const [carregandoUnidades, setCarregandoUnidades] = useState(false);
-  const [rts, setRts] = useState<{ id: string; nome: string; crea: string | null }[]>([]);
+  // O RT deste plano entra na lista desde o começo (o que está gravado aparece mesmo antes de carregar)
+  const [rts, setRts] = useState<OpcaoRt[]>(inicial?.responsavelTecnicoId
+    ? [{ id: inicial.responsavelTecnicoId, nome: inicial.rtNome || "Responsável técnico", crea: inicial.rtCrea, ativo: true }] : []);
   const inputArt = useRef<HTMLInputElement>(null);
+  // Inativado continua na lista só enquanto estiver escolhido neste plano (o vínculo não desaparece)
+  const opcoesRt = rts.filter((t) => t.ativo || t.id === form.responsavelTecnicoId).map((t) => ({ value: t.id, label: RESPONSAVEL_TECNICO.rotulo(t) }));
 
   useEffect(() => {
     fetch("/api/clientes").then((r) => (r.ok ? r.json() : [])).then((l) => {
       if (Array.isArray(l) && l.length) setClientes(l.map(CLIENTE.opcao));
     }).catch(() => {}).finally(() => setCarregandoClientes(false));
-    fetch("/api/tecnicos?tipo=RESPONSAVEL_TECNICO").then((r) => (r.ok ? r.json() : [])).then((l) => setRts(Array.isArray(l) ? l : [])).catch(() => {});
+    // A API devolve só os ATIVOS (e sem o campo `ativo`): quem está no plano e não voltou da API
+    // foi inativado depois — continua na lista, marcado, em vez de o campo parecer vazio.
+    fetch("/api/tecnicos?tipo=RESPONSAVEL_TECNICO").then((r) => (r.ok ? r.json() : [])).then((l: OpcaoRt[]) => {
+      if (!Array.isArray(l)) return;
+      const ativos = l.map((t) => ({ id: t.id, nome: t.nome, crea: t.crea ?? null, ativo: true }));
+      setRts((antes) => [...ativos, ...antes.filter((a) => !ativos.some((t) => t.id === a.id)).map((a) => ({ ...a, ativo: false }))]);
+    }).catch(() => {});
   }, []);
   useEffect(() => {
     if (!form.clienteId) { setUnidades([]); return; }
@@ -151,18 +170,18 @@ export function PmocEditor({ inicial, abaInicial, copiaRecente, criadoRecente, r
     const f = e.target.files?.[0];
     e.target.value = "";
     if (!f) return;
-    if (!(TIPOS_ART as readonly string[]).includes(f.type)) { setMsg({ tipo: "erro", texto: "A ART deve ser PDF, JPG ou PNG." }); return; }
+    if (!(TIPOS_ART as readonly string[]).includes(f.type)) { setErro("A ART deve ser PDF, JPG ou PNG."); return; }
     // Foto da ART (celular: 3 a 8 MB) é reduzida antes de enviar: continua legível e cabe no documento
     if (f.type !== "application/pdf") {
       try {
         const { imagem } = await reduzirImagem(f, 2200, 0.85);
-        if (imagem.bytes > TAMANHO_MAX_ART) { setMsg({ tipo: "erro", texto: MSG_ART_GRANDE }); return; }
-        setArtNova({ dataUrl: imagem.dataUrl, nome: f.name.replace(/\.[^.]+$/, "") + ".jpg" }); setRemoverArt(false); setMsg(null);
+        if (imagem.bytes > TAMANHO_MAX_ART) { setErro(MSG_ART_GRANDE); return; }
+        setArtNova({ dataUrl: imagem.dataUrl, nome: f.name.replace(/\.[^.]+$/, "") + ".jpg" }); setRemoverArt(false); setErro("");
         return;
       } catch { /* não deu para reduzir: segue com o arquivo como veio */ }
     }
-    if (f.size > TAMANHO_MAX_ART) { setMsg({ tipo: "erro", texto: MSG_ART_GRANDE }); return; }
-    setArtNova({ dataUrl: await lerArquivo(f), nome: f.name }); setRemoverArt(false); setMsg(null);
+    if (f.size > TAMANHO_MAX_ART) { setErro(MSG_ART_GRANDE); return; }
+    setArtNova({ dataUrl: await lerArquivo(f), nome: f.name }); setRemoverArt(false); setErro("");
   }
 
   // Aviso de vencimento: calculado pela data; some quando alguém dá ciência (até a próxima fase)
@@ -182,18 +201,18 @@ export function PmocEditor({ inicial, abaInicial, copiaRecente, criadoRecente, r
     try {
       const res = await fetch(`/api/pmocs/${pmoc.id}/aviso`, { method: "POST" });
       const d = await res.json().catch(() => ({}));
-      if (!res.ok) { setMsg({ tipo: "erro", texto: d.erro ?? "Não foi possível registrar a ciência." }); return; }
+      if (!res.ok) { setErro(d.erro ?? "Não foi possível registrar a ciência."); return; }
       setCiente(d.tipo); setHistoricoVersao((v) => v + 1);
       router.refresh();
-    } catch { setMsg({ tipo: "erro", texto: "Erro de conexão." }); } finally { setDandoCiencia(false); }
+    } catch { setErro("Erro de conexão."); } finally { setDandoCiencia(false); }
   }
 
   async function salvar(statusDesejado?: "RASCUNHO" | "PUBLICADO") {
-    setMsg(null);
+    setErro("");
     const status = statusDesejado ?? pmoc?.status ?? "RASCUNHO";
     if (status === "PUBLICADO") {
       const faltam = pendenciasPublicacao(form, pmoc?.equipamentos.length ?? 0);
-      if (faltam.length) { setMsg({ tipo: "erro", texto: `Para publicar, falta: ${faltam.join(", ")}.` }); return; }
+      if (faltam.length) { setErro(`Para publicar, falta: ${faltam.join(", ")}.`); return; }
     }
     setSalvando(statusDesejado ?? "salvar");
     try {
@@ -206,14 +225,14 @@ export function PmocEditor({ inicial, abaInicial, copiaRecente, criadoRecente, r
         method: novo ? "POST" : "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
       });
       const d = await res.json().catch(() => ({}));
-      if (!res.ok) { setMsg({ tipo: "erro", texto: d.erro ?? "Não foi possível salvar." }); return; }
+      if (!res.ok) { setErro(d.erro ?? "Não foi possível salvar."); return; }
       if (novo) { router.push(`/pmoc/${d.id}?aba=equipamentos&criado=1`); return; }
       setPmoc(serializar(d)); setArtNova(null); setRemoverArt(false); setHistoricoVersao((v) => v + 1);
       const geradas = Number(d.osGeradas) || 0;
       const sufixo = geradas ? ` ${geradas === 1 ? "1 OS gerada" : `${geradas} OS geradas`} pelo cronograma.` : "";
-      setMsg({ tipo: "ok", texto: (statusDesejado === "PUBLICADO" ? "PMOC publicado." : statusDesejado === "RASCUNHO" ? "PMOC voltou para Rascunho." : "Alterações salvas.") + sufixo });
+      toast((statusDesejado === "PUBLICADO" ? "PMOC publicado." : statusDesejado === "RASCUNHO" ? "PMOC voltou para Rascunho." : "Alterações salvas.") + sufixo);
       router.refresh();
-    } catch { setMsg({ tipo: "erro", texto: "Erro de conexão." }); } finally { setSalvando(null); }
+    } catch { setErro("Erro de conexão."); } finally { setSalvando(null); }
   }
 
   const titulo = novo ? "Novo PMOC" : pmoc!.nome;
@@ -277,9 +296,9 @@ export function PmocEditor({ inicial, abaInicial, copiaRecente, criadoRecente, r
           )}
         </div>
       )}
-      {msg && (
-        <div data-msg={msg.tipo} className={cn("flex items-start gap-2 text-sm rounded-lg px-3 py-2 border", msg.tipo === "ok" ? "text-ok-texto bg-ok-claro border-ok/20" : "text-atrasado-texto bg-atrasado-claro border-atrasado/20")}>
-          {msg.tipo === "ok" ? <CheckCircle2 className="w-4 h-4 shrink-0 mt-0.5" /> : <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />} <span>{msg.texto}</span>
+      {erro && (
+        <div role="alert" data-erro-pmoc className="flex items-start gap-2 text-sm rounded-lg px-3 py-2 border text-atrasado-texto bg-atrasado-claro border-atrasado/20">
+          <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" aria-hidden /> <span>{erro}</span>
         </div>
       )}
 
@@ -321,6 +340,7 @@ export function PmocEditor({ inicial, abaInicial, copiaRecente, criadoRecente, r
                   campos={CLIENTE.campos} valoresIniciais={CLIENTE.valoresIniciais} campoBusca="nome" permissao={CLIENTE.permissao}
                   linkCadastroCompleto={CLIENTE.link} disabled={somenteLeitura}
                   criar={async (v) => { const c = await CLIENTE.criar(v); setClientes((l) => [...l, CLIENTE.opcao(c)]); return CLIENTE.opcao(c); }}
+                  edicao={CLIENTE.edicao()}
                 />
               </FormField>
               <FormField label="Unidade / local" required>
@@ -331,6 +351,7 @@ export function PmocEditor({ inicial, abaInicial, copiaRecente, criadoRecente, r
                   campos={UNIDADE.campos} campoBusca="nome" permissao={UNIDADE.permissao}
                   linkCadastroCompleto={form.clienteId ? UNIDADE.link(form.clienteId) : undefined}
                   criar={async (v) => { const u = await UNIDADE.criar(form.clienteId, v, unidades.length === 0); setUnidades((l) => [...l, u]); return UNIDADE.opcao(u); }}
+                  edicao={UNIDADE.edicao<{ id: string; nome: string }>(form.clienteId, (u) => setUnidades((l) => l.map((x) => (x.id === u.id ? { ...x, ...u } : x))))}
                 />
               </FormField>
             </FormGrid>
@@ -345,17 +366,31 @@ export function PmocEditor({ inicial, abaInicial, copiaRecente, criadoRecente, r
           </FormSection>
 
           <FormSection title="Responsável técnico e ART">
-            {rts.length > 0 && !somenteLeitura && (
-              <FormField label="Preencher com um responsável técnico cadastrado" hint="Opcional: copia nome e CREA do cadastro de colaboradores">
-                <select aria-label="Responsável técnico cadastrado" value={form.responsavelTecnicoId}
-                  onChange={(e) => {
-                    const rt = rts.find((r) => r.id === e.target.value);
-                    setForm((f) => ({ ...f, responsavelTecnicoId: e.target.value, ...(rt ? { rtNome: rt.nome, rtCrea: rt.crea ?? f.rtCrea } : {}) }));
+            {!somenteLeitura && (
+              <FormField label="Responsável técnico cadastrado" hint="Opcional: copia nome e CREA do cadastro de colaboradores"
+                dica="Escolher aqui preenche o nome e o CREA abaixo, que continuam editáveis só neste plano. Cadastrar ou editar o responsável mexe no cadastro do colaborador, valendo em todo o sistema.">
+                <SelectCadastroRapido
+                  value={form.responsavelTecnicoId} placeholder={RT_MANUAL}
+                  // Sem RT nenhum, o seletor mostra o estado vazio com "Cadastrar agora"; com algum, digitar à mão é uma escolha
+                  opcoes={opcoesRt.length ? [{ value: "", label: RT_MANUAL }, ...opcoesRt] : []}
+                  onChange={(v) => {
+                    const rt = rts.find((r) => r.id === v);
+                    setForm((f) => ({ ...f, responsavelTecnicoId: v, ...(rt ? { rtNome: rt.nome, rtCrea: rt.crea ?? f.rtCrea } : {}) }));
                   }}
-                  className="w-full bg-white border border-surface-border rounded-lg px-3 py-2.5 text-sm text-ink focus:outline-none focus:border-primary-500">
-                  <option value="">— Digitar manualmente —</option>
-                  {rts.map((r) => <option key={r.id} value={r.id}>{r.nome}{r.crea ? ` (CREA ${r.crea})` : ""}</option>)}
-                </select>
+                  entidade={RESPONSAVEL_TECNICO.entidade} campos={RESPONSAVEL_TECNICO.campos} campoBusca="nome"
+                  permissao={RESPONSAVEL_TECNICO.permissao} linkCadastroCompleto={RESPONSAVEL_TECNICO.link}
+                  criar={async (v) => {
+                    const t = await RESPONSAVEL_TECNICO.criar(v);
+                    setRts((l) => [...l, t].sort((a, b) => a.nome.localeCompare(b.nome)));
+                    setForm((f) => ({ ...f, responsavelTecnicoId: t.id, rtNome: t.nome, rtCrea: t.crea ?? f.rtCrea }));
+                    toast("Responsável técnico cadastrado.");
+                    return { value: t.id, label: RESPONSAVEL_TECNICO.rotulo(t) };
+                  }}
+                  edicao={form.responsavelTecnicoId ? RESPONSAVEL_TECNICO.edicao((t) => {
+                    setRts((l) => l.map((x) => (x.id === t.id ? { ...x, nome: t.nome, crea: t.crea } : x)));
+                    setForm((f) => ({ ...f, rtNome: t.nome, rtCrea: t.crea ?? f.rtCrea }));
+                  }) : undefined}
+                />
               </FormField>
             )}
             <FormGrid>
@@ -417,7 +452,7 @@ export function PmocEditor({ inicial, abaInicial, copiaRecente, criadoRecente, r
 
       {/* ── Equipamentos AVAC ── */}
       {aba === "equipamentos" && pmoc && (
-        <EquipamentosPmoc pmoc={pmoc} somenteLeitura={somenteLeitura} onAtualizar={(d) => setPmoc(serializar(d))} onErro={(t) => setMsg({ tipo: "erro", texto: t })} />
+        <EquipamentosPmoc pmoc={pmoc} somenteLeitura={somenteLeitura} onAtualizar={(d) => setPmoc(serializar(d))} onErro={setErro} />
       )}
 
       {/* ── Cronograma (Etapa 2): relê ao mudar o status, a validade ou os equipamentos do plano ── */}
@@ -502,45 +537,48 @@ function EquipamentosPmoc({ pmoc, somenteLeitura, onAtualizar, onErro }: {
         {pmoc.equipamentos.length === 0 ? (
           <p className="text-sm text-ink-muted text-center py-8 px-4">Nenhum equipamento neste PMOC ainda.{!somenteLeitura && " Adicione abaixo os equipamentos do local."}</p>
         ) : (
-          <>
-            <div className="hidden md:block overflow-x-auto">
-              <table className="w-full text-sm" data-tabela-cobertos>
-                <thead className="bg-surface-alt text-xs uppercase tracking-wider text-ink-muted text-left">
-                  <tr>
-                    <th className="px-4 py-2.5 font-semibold">TAG</th><th className="px-4 py-2.5 font-semibold">Equipamento</th>
-                    <th className="px-4 py-2.5 font-semibold">Tipo</th><th className="px-4 py-2.5 font-semibold">Capacidade</th>
-                    <th className="px-4 py-2.5 font-semibold">Ambiente / local</th><th className="w-10" />
-                  </tr>
-                </thead>
-                <tbody>
-                  {pmoc.equipamentos.map(({ equipamento: e }) => (
-                    <tr key={e.id} data-coberto={e.id} className="border-t border-surface-border">
-                      <td className="px-4 py-2.5 font-mono text-xs">{e.patrimonio || "—"}</td>
-                      <td className="px-4 py-2.5"><Link href={`/equipamentos/${e.id}`} className="text-ink hover:text-primary-600 font-medium">{rotuloEquip(e)}</Link>
-                        {!e.ativo && <span className="ml-1 text-[10px] text-ink-muted bg-surface-linha px-1 rounded">inativo</span>}</td>
-                      <td className="px-4 py-2.5 text-ink-muted">{tipoEquip(e)}</td>
-                      <td className="px-4 py-2.5 text-ink-muted">{capacidadeEquip(e) || "—"}</td>
-                      <td className="px-4 py-2.5 text-ink-muted">{localEquip(e)}{e.unidade && e.unidadeId !== pmoc.unidadeId ? ` (${e.unidade.nome})` : ""}</td>
-                      <td className="px-2">
-                        {!somenteLeitura && (
-                          <button type="button" title="Excluir do PMOC" aria-label="Excluir do PMOC" disabled={ocupado} onClick={() => remover(e.id)} className="p-1.5 rounded-md text-ink-muted hover:text-atrasado hover:bg-atrasado-claro disabled:opacity-50"><X className="w-4 h-4" /></button>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-            <ul className="md:hidden divide-y divide-surface-border">
-              {pmoc.equipamentos.map(({ equipamento: e }) => (
-                <li key={e.id} data-coberto-card={e.id} className="flex items-center gap-3 px-4 py-3">
-                  {linhaEquip(e, !somenteLeitura && (
-                    <button type="button" title="Excluir do PMOC" aria-label="Excluir do PMOC" disabled={ocupado} onClick={() => remover(e.id)} className="p-1.5 rounded-md text-ink-muted hover:text-atrasado shrink-0"><X className="w-4 h-4" /></button>
-                  ))}
-                </li>
-              ))}
-            </ul>
-          </>
+          <TabelaPro
+            tela="pmoc-cobertos" atributos={{ "data-tabela-cobertos": true }}
+            colunas={[
+              { id: "tag", titulo: "TAG", largura: 120 },
+              { id: "equipamento", titulo: "Equipamento", obrigatoria: true, minimo: 200 },
+              { id: "tipo", titulo: "Tipo", largura: 150, classe: "truncate" },
+              { id: "capacidade", titulo: "Capacidade", largura: 130 },
+              { id: "local", titulo: "Ambiente / local", minimo: 160, classe: "truncate" },
+              ...(somenteLeitura ? [] : [{ id: "acoes", titulo: "Ações", fixa: true, semTitulo: true, largura: 56, alinhar: "direita" as const, classe: "py-0.5" }]),
+            ]}
+            linhas={pmoc.equipamentos.map(({ equipamento: e }) => ({
+              id: e.id, atributos: { "data-coberto": e.id },
+              titulos: { tipo: tipoEquip(e), local: localEquip(e) },
+              celulas: {
+                tag: <span className={cn(PLANILHA.codigo, "text-ink-muted")}>{e.patrimonio || "—"}</span>,
+                equipamento: (
+                  <span className="flex items-center gap-1.5 min-w-0">
+                    <Link href={`/equipamentos/${e.id}`} className={cn(PLANILHA.nome, "truncate hover:text-primary-600")}>{rotuloEquip(e)}</Link>
+                    {!e.ativo && <span className="text-[10px] text-ink-muted bg-surface-linha px-1 rounded whitespace-nowrap">inativo</span>}
+                  </span>
+                ),
+                tipo: <span className={PLANILHA.apagado}>{tipoEquip(e)}</span>,
+                capacidade: <span className={PLANILHA.apagado}>{capacidadeEquip(e) || "—"}</span>,
+                local: <span className={PLANILHA.apagado}>{localEquip(e)}{e.unidade && e.unidadeId !== pmoc.unidadeId ? ` (${e.unidade.nome})` : ""}</span>,
+                acoes: somenteLeitura ? null : (
+                  <button type="button" title="Excluir do PMOC" aria-label="Excluir do PMOC" disabled={ocupado} onClick={() => remover(e.id)}
+                    className="p-1.5 rounded-md text-ink-muted hover:text-atrasado hover:bg-atrasado-claro disabled:opacity-50"><X className="w-4 h-4" aria-hidden /></button>
+                ),
+              },
+            }))}
+            cartoes={
+              <ul className="divide-y divide-surface-border">
+                {pmoc.equipamentos.map(({ equipamento: e }) => (
+                  <li key={e.id} data-coberto-card={e.id} className="flex items-center gap-3 px-4 py-3">
+                    {linhaEquip(e, !somenteLeitura && (
+                      <button type="button" title="Excluir do PMOC" aria-label="Excluir do PMOC" disabled={ocupado} onClick={() => remover(e.id)} className="p-1.5 rounded-md text-ink-muted hover:text-atrasado shrink-0"><X className="w-4 h-4" aria-hidden /></button>
+                    ))}
+                  </li>
+                ))}
+              </ul>
+            }
+          />
         )}
       </div>
 

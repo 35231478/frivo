@@ -154,21 +154,21 @@ que fazer quando há empate ou pouco histórico (a proposta é não sugerir nada
 
 | Tela | Lista no padrão | Busca e página no servidor | Ajuda no ⓘ | Toast | Botões por permissão | Cadastro inline | Edição no contexto | Celular | O que a varredura não viu |
 |---|---|---|---|---|---|---|---|---|---|
-| `/calendario` | — | — | — | sim | sim | — | — | sim | ajuda no ⓘ; cadastro inline nos seletores |
+| `/calendario` | — | — | sim | sim | sim | sim | sim | sim | feita na leva 5: ⓘ no título, toast da casa (tinha um próprio), cadastro inline e editar no contexto no diálogo "Nova OS", criar e arrastar conforme a permissão; os filtros do painel seguem filtros |
 | `/mapa` | — | — | — | — | sim | — | — | — | toast; ajuda no ⓘ; versão de celular |
-| `/ordens` | sim | sim | sim | — | sim | sim | — | sim | toast; edição no contexto |
-| `/ordens/[id]` | — | — | sim | sim | sim | sim | sim | sim | feita na leva 2: referência × uso nos itens; as linhas travam com a OS assinada pelo cliente, faturada ou com nota (só concluída continua editável) |
+| `/ordens` | sim | sim | sim | — | sim | sim | — | sim | conferida na leva 5: ⓘ acrescentado; a tela não grava nada (as ações em massa mostram o resultado item a item na barra compartilhada) |
+| `/ordens/[id]` | — | — | sim | sim | sim | sim | sim | sim | feita na leva 2 (referência × uso nos itens; as linhas travam com a OS assinada, faturada ou com nota) e na leva 5: o botão "Editar" era morto (rota que só redirecionava) e passou a abrir a gaveta "Editar OS", com a mesma trava na tela e no servidor (409) |
 | `/ordens/[id]/atividades/[atividadeId]/executar` | — | — | — | sim | sim | — | — | — | ajuda no ⓘ; cadastro inline nos seletores; versão de celular |
-| `/ordens/nova` | — | — | sim | sim | sim | sim | sim | sim | nada apontado pela varredura |
-| `/prazos` | — | sim | — | — | — | — | — | — | toast; ajuda no ⓘ; botões por permissão; cadastro inline nos seletores; versão de celular |
+| `/ordens/nova` | — | — | sim | sim | sim | sim | sim | sim | feita na leva 5: sugestões do histórico do cliente (tipo e quem executa), que dizem de onde vêm e só entram no "Usar" |
+| `/prazos` | sim | sim | sim | — | — | — | — | sim | feita na leva 5: ⓘ, filtros da casa, estado vazio compartilhado, celular. Não grava nada e não tem botão destrutivo (o prazo é cumprido dentro da OS): sem toast e sem permissão a acrescentar; os dois campos são filtros, não cadastros |
 
 ### PMOC (3)
 
 | Tela | Lista no padrão | Busca e página no servidor | Ajuda no ⓘ | Toast | Botões por permissão | Cadastro inline | Edição no contexto | Celular | O que a varredura não viu |
 |---|---|---|---|---|---|---|---|---|---|
-| `/pmoc` | — | — | sim | sim | sim | — | — | sim | tabela própria; cadastro inline nos seletores |
-| `/pmoc/[id]` | — | — | sim | sim | sim | sim | — | sim | tabela própria; edição no contexto |
-| `/pmoc/novo` | — | — | sim | sim | sim | sim | — | sim | tabela própria; edição no contexto |
+| `/pmoc` | sim | sim | sim | sim | sim | — | — | sim | feita na leva 5: a tabela própria (e o `take: 500` sem paginação) virou TabelaPro com busca, filtros e página pela URL; a base legal foi para o ⓘ. Não tem seletor de cadastro: a lista só filtra |
+| `/pmoc/[id]` | sim | — | sim | sim | sim | sim | sim | sim | feita na leva 5: equipamentos cobertos em TabelaPro, toast na gravação (erro fica na tela), cliente/unidade com editar no contexto e o RT no cadastro rápido da casa |
+| `/pmoc/novo` | — | — | sim | sim | sim | sim | sim | sim | feita na leva 5: o mesmo editor do `/pmoc/[id]` (as abas de equipamentos e cronograma só existem com o plano salvo) |
 
 ### Comercial: orçamentos, contratos e leads (10)
 

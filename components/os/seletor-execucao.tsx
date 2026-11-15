@@ -5,7 +5,7 @@ import { Car } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { rotuloVeiculo, sufixoStatusVeiculo, sugerirVeiculo, type VeiculoResumo } from "@/lib/veiculo-sugestao";
 import {
-  SeletorTecnicos, VALOR_TECNICOS_VAZIO, corpoTecnicos, valorDaAtividade,
+  SeletorTecnicos, VALOR_TECNICOS_VAZIO, corpoTecnicos, valorDaAtividade, valorDaEquipe,
   type EquipeOpcao, type TecnicoOpcao, type ValorTecnicos,
 } from "@/components/os/seletor-tecnicos";
 
@@ -55,6 +55,32 @@ export function corpoExecucao(v: ValorExecucao) {
 }
 
 export const temExecutor = (v: ValorTecnicos) => v.tecnicoIds.length > 0;
+
+/**
+ * Aplica a sugestão de quem executa (Princípio 9): a equipe entra com os membros aptos, o
+ * colaborador entra como responsável — e o veículo é puxado do jeito de sempre. Devolve null
+ * quando o sugerido não está mais na lista (inativado, ou sem competência no tipo escolhido):
+ * aí a tela não oferece a sugestão em vez de oferecer um atalho que não funciona.
+ */
+export function aplicarExecutor(
+  exec: { tipo: "tecnico" | "equipe"; id: string },
+  opcoes: OpcoesExecucao,
+  tipoOsId: string,
+): ValorExecucao | null {
+  const veiculoDe = (id: string) => opcoes.tecnicos.find((t) => t.id === id)?.veiculoId ?? null;
+  if (exec.tipo === "equipe") {
+    const eq = opcoes.equipes.find((e) => e.id === exec.id);
+    if (!eq) return null;
+    const base = valorDaEquipe(eq, opcoes.tecnicos, tipoOsId);
+    if (!temExecutor(base)) return null;
+    return { ...base, veiculoId: sugerirVeiculo(base, opcoes.veiculos, veiculoDe).veiculoId };
+  }
+  const t = opcoes.tecnicos.find((x) => x.id === exec.id);
+  if (!t) return null;
+  if (tipoOsId && !(t.competencias ?? []).some((c) => c.id === tipoOsId)) return null;
+  const base: ValorTecnicos = { tecnicoIds: [t.id], responsavelId: t.id, equipeId: null };
+  return { ...base, veiculoId: sugerirVeiculo(base, opcoes.veiculos, veiculoDe).veiculoId };
+}
 
 /**
  * Seleção OBRIGATÓRIA de quem executa (reaproveita o SeletorTecnicos: equipe, colaboradores,

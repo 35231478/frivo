@@ -165,8 +165,10 @@ const plano = (extra: Partial<PmocDados> = {}): PmocDados => ({
   equipamentos: [], ...extra,
 });
 async function abrirEditor(props: Record<string, unknown> = {}, permissoes: Permissoes = permissoesTotais()) {
+  // avisos primeiro, sozinho: o toast tem de ser o MESMO módulo que o editor usa
+  const { Avisos } = await import("@/components/ui/avisos");
   const [{ PmocEditor }, { PermissoesProvider }] = await Promise.all([import("@/components/pmoc/pmoc-editor"), import("@/components/providers/permissoes-provider")]);
-  await montar(createElement(PermissoesProvider, { role: "OPERADOR", permissoes, children: createElement(PmocEditor, props) }));
+  await montar(createElement(PermissoesProvider, { role: "OPERADOR", permissoes, children: createElement("div", null, createElement(PmocEditor, props), createElement(Avisos)) }));
 }
 
 describe("PMOC: selo de status", () => {
@@ -235,14 +237,14 @@ describe("PMOC: editor (Identificação e Equipamentos AVAC)", () => {
     respostas["POST /api/pmocs"] = { status: 400, corpo: { erro: "Selecione o cliente." } };
     await abrirEditor();
     await clicar(botao("Criar PMOC"));
-    expect(texto($("[data-msg='erro']"))).toBe("Selecione o cliente.");
+    expect(texto($("[data-erro-pmoc]"))).toBe("Selecione o cliente.");
     expect(navegacao.push).not.toHaveBeenCalled();
   });
 
   it("publicar sem RT, ART e equipamento: a tela diz o que falta e NÃO chama o servidor", async () => {
     await abrirEditor({ inicial: plano() });
     await clicar(botao("Publicar"));
-    expect(texto($("[data-msg='erro']"))).toBe("Para publicar, falta: nome do Responsável Técnico, registro CREA do Responsável Técnico, número da ART, pelo menos 1 equipamento coberto.");
+    expect(texto($("[data-erro-pmoc]"))).toBe("Para publicar, falta: nome do Responsável Técnico, registro CREA do Responsável Técnico, número da ART, pelo menos 1 equipamento coberto.");
     expect(pedidos.filter((p) => p.metodo === "PUT")).toEqual([]);
   });
 
@@ -254,7 +256,7 @@ describe("PMOC: editor (Identificação e Equipamentos AVAC)", () => {
     await clicar(botao("Publicar"));
     expect(pedidos.find((p) => p.metodo === "PUT")!.corpo).toMatchObject({ status: "PUBLICADO", rtNome: "Eng. Paula", rtCrea: "SP-1", artNumero: "123" });
     expect($("[data-status-pmoc]")!.getAttribute("data-status-pmoc")).toBe("VIGENTE");
-    expect(texto($("[data-msg='ok']"))).toBe("PMOC publicado.");
+    expect(texto($("[data-toast='sucesso']"))).toBe("PMOC publicado.");
     expect(botao("Publicar")).toBeUndefined();
     expect(botao("Voltar para rascunho")).toBeTruthy();
   });
@@ -284,7 +286,7 @@ describe("PMOC: editor (Identificação e Equipamentos AVAC)", () => {
     expect(pedidos.find((p) => p.metodo === "POST")).toMatchObject({ url: "/api/pmocs/p1/equipamentos", corpo: { equipamentoIds: ["q2"] } });
     expect($$("[data-coberto]").map((l) => l.getAttribute("data-coberto"))).toEqual(["q1", "q2"]);
     await clicar($("[data-coberto='q1'] button[title='Excluir do PMOC']"));
-    expect(texto($("[data-msg='erro']"))).toContain("precisa de pelo menos 1 equipamento");
+    expect(texto($("[data-erro-pmoc]"))).toContain("precisa de pelo menos 1 equipamento");
     expect($$("[data-coberto]")).toHaveLength(2); // o servidor recusou: nada some da tela
   });
 
