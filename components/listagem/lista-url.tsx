@@ -52,6 +52,15 @@ export function BuscaUrl({ lista, placeholder, rotulo }: { lista: string; placeh
   );
 }
 
+/**
+ * Busca ao vivo SEM typeahead: para a lista curta (ou sem sugestões próprias), onde um menu de
+ * sugestões não ajudaria — e sem depender de uma lista em /api/listas/sugestoes.
+ */
+export function BuscaSimplesUrl({ placeholder, rotulo }: { placeholder: string; rotulo?: string }) {
+  const { busca, setBusca, pendente } = useLista();
+  return <CampoBusca valor={busca} onChange={setBusca} placeholder={placeholder} rotulo={rotulo} carregando={pendente} />;
+}
+
 export function FiltroSelectUrl({ param, vazio, opcoes, rotulo, className }: { param: string; vazio: string; opcoes: Opcao[]; rotulo?: string; className?: string }) {
   const { navegar } = useLista();
   const sp = useSearchParams();

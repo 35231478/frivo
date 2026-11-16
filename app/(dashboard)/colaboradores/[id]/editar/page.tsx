@@ -6,6 +6,8 @@ import { prisma } from "@/lib/prisma";
 import { PageHeader } from "@/components/ui/page-header";
 import { InativarRegistro } from "@/components/ui/inativar-registro";
 import { ColaboradorForm } from "@/components/forms/colaborador-form";
+import { VALIDADE_PADRAO } from "@/lib/admissao/admissao";
+import { admissaoDoColaborador, configDaEmpresa } from "@/lib/admissao/admissao-server";
 
 export const metadata: Metadata = { title: "Editar colaborador" };
 
@@ -31,6 +33,16 @@ export default async function EditarColaboradorPage({ params }: { params: Promis
     ? await prisma.usuario.findFirst({ where: { empresaId, email: { equals: loginEmail, mode: "insensitive" } }, select: { ativo: true, role: true } })
     : null;
   const acessoInicial = { email: colaborador.email ?? null, temLogin: !!loginUsuario, acessoAtivo: !!loginUsuario?.ativo, role: loginUsuario?.role ?? null };
+
+  // Admissão digital: dado sensível de pessoa, permissão própria ("Admissão digital › gerenciar")
+  const podeAdmissao = pode(user.permissoes, "admissao", "gerenciar", user.role);
+  const [admissao, cfgAdmissao, cargos] = podeAdmissao
+    ? await Promise.all([
+        admissaoDoColaborador(empresaId, colaborador.id),
+        configDaEmpresa(empresaId),
+        prisma.cargo.findMany({ where: { empresaId, ativo: true }, orderBy: { nome: "asc" }, select: { id: true, nome: true } }),
+      ])
+    : [null, null, []];
 
   // Serializa para o client (Decimal/Date → tipos simples). O salário NÃO vai para o navegador:
   // quem tem a permissão de folha vê/edita na aba "Dados financeiros / Folha" (API própria).
@@ -62,6 +74,10 @@ export default async function EditarColaboradorPage({ params }: { params: Promis
         podeFolha={podeFolha}
         podeAcesso={podeAcesso}
         acessoInicial={acessoInicial}
+        podeAdmissao={podeAdmissao}
+        admissao={admissao}
+        cargosAdmissao={cargos.map((c) => ({ value: c.id, label: c.nome }))}
+        validadeAdmissao={cfgAdmissao?.validadeDias ?? VALIDADE_PADRAO}
       />
     </div>
   );

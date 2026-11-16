@@ -44,6 +44,14 @@ export const AJUDA_SITUACAO: Record<SituacaoAdmissao, string> = {
   EXPIRADA: "O link passou da validade sem ser concluído. Reenviar gera um prazo novo.",
 };
 
+/** O caminho normal da admissão, na ordem — é a barra de andamento que o RH vê. */
+export const FLUXO: readonly SituacaoAdmissao[] = [
+  "CONVIDADO", "PREENCHENDO", "AGUARDANDO_ASSINATURA", "ASSINADO", "ENVIADO_CONTADOR", "ADMITIDO",
+];
+
+/** Onde a admissão está no fluxo (-1 = fora dele: cancelada ou expirada). */
+export const passoDoFluxo = (situacao: string) => FLUXO.indexOf(situacao as SituacaoAdmissao);
+
 /** Situação encerrada: não aceita mais mudança pelo link. */
 export const ENCERRADAS: readonly SituacaoAdmissao[] = ["ADMITIDO", "CANCELADA"];
 
@@ -71,6 +79,12 @@ const PROXIMAS: Record<SituacaoAdmissao, readonly SituacaoAdmissao[]> = {
 export const podeIr = (de: SituacaoAdmissao, para: SituacaoAdmissao): boolean =>
   PROXIMAS[de]?.includes(para) ?? false;
 
+/** Situações em que ainda existe link para (re)enviar: a tela e a rota leem a mesma lista. */
+export const REENVIAVEIS: readonly SituacaoAdmissao[] = [
+  "CONVIDADO", "PREENCHENDO", "AGUARDANDO_ASSINATURA", "EXPIRADA",
+];
+export const podeReenviar = (s: string) => REENVIAVEIS.includes(s as SituacaoAdmissao);
+
 /** O link ainda vale? Expirado e encerrado valem a mesma coisa para quem tem o link. */
 export function linkValido(a: { situacao: string; expiraEm: Date | string }, agora = new Date()): boolean {
   if (!ABERTAS_AO_COLABORADOR.includes(a.situacao as SituacaoAdmissao)) return false;
@@ -92,6 +106,16 @@ export const ROTULO_ETAPA: Record<Etapa, string> = {
   ENDERECO: "Endereço",
   DOCUMENTOS: "Documentos",
   BANCO: "Conta para o salário",
+  DEPENDENTES: "Dependentes",
+  CONTRATO: "Contrato",
+};
+
+/** O mesmo nome, curto, para caber no andamento do celular sem cortar palavra. */
+export const ROTULO_ETAPA_CURTO: Record<Etapa, string> = {
+  DADOS: "Dados",
+  ENDERECO: "Endereço",
+  DOCUMENTOS: "Documentos",
+  BANCO: "Banco",
   DEPENDENTES: "Dependentes",
   CONTRATO: "Contrato",
 };

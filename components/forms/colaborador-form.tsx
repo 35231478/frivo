@@ -17,10 +17,13 @@ import { AvatarTecnico } from "@/components/ui/avatar-tecnico";
 import { reduzirImagem } from "@/lib/imagem-cliente";
 import { FolhaColaborador } from "@/components/folha/folha-colaborador";
 import { AcessoAppColaborador } from "@/components/forms/acesso-app-colaborador";
+import { PainelAdmissao } from "@/components/admissao/painel-admissao";
+import type { OpcaoCargo } from "@/components/admissao/nova-admissao";
+import type { AdmissaoDoRh } from "@/lib/admissao/admissao-server";
 import { SeletorCadastro, useCadastro } from "@/components/cadastros/seletor-cadastro";
 import { AvisoInativacaoStatus } from "@/components/ui/aviso-inativacao-status";
 import {
-  X, Plus, Upload, Trash2, AlertCircle, User, Briefcase, ListChecks, FileText, Wallet, KeyRound,
+  X, Plus, Upload, Trash2, AlertCircle, User, Briefcase, ListChecks, FileText, Wallet, KeyRound, UserPlus,
 } from "lucide-react";
 import { InputData } from "@/components/ui/input-data";
 import { InputHora } from "@/components/ui/input-hora";
@@ -45,7 +48,7 @@ interface ColaboradorFormProps {
   initialData?: any;
 }
 
-type Aba = "pessoais" | "profissionais" | "competencias" | "documentos" | "folha" | "acesso";
+type Aba = "pessoais" | "profissionais" | "competencias" | "documentos" | "folha" | "acesso" | "admissao";
 
 interface EstadoAcessoInicial { email: string | null; temLogin: boolean; acessoAtivo: boolean; role: string | null }
 
@@ -59,8 +62,10 @@ function vencendoEm30(data: string | null): boolean {
 /**
  * `podeFolha` (permissão "Financeiro › Custo de pessoal") mostra a aba "Dados financeiros / Folha".
  * Sem ela, salário e benefícios não aparecem nem chegam ao navegador.
+ * `podeAdmissao` (permissão "Admissão digital › gerenciar") mostra a aba "Admissão": o convite, o
+ * progresso do link e a prova da assinatura.
  */
-export function ColaboradorForm({ initialData, somenteLeitura = false, podeFolha = false, podeAcesso = false, acessoInicial }: ColaboradorFormProps & { somenteLeitura?: boolean; podeFolha?: boolean; podeAcesso?: boolean; acessoInicial?: EstadoAcessoInicial }) {
+export function ColaboradorForm({ initialData, somenteLeitura = false, podeFolha = false, podeAcesso = false, acessoInicial, podeAdmissao = false, admissao = null, cargosAdmissao = [], validadeAdmissao = 7 }: ColaboradorFormProps & { somenteLeitura?: boolean; podeFolha?: boolean; podeAcesso?: boolean; acessoInicial?: EstadoAcessoInicial; podeAdmissao?: boolean; admissao?: AdmissaoDoRh | null; cargosAdmissao?: OpcaoCargo[]; validadeAdmissao?: number }) {
   const router = useRouter();
   const isEditing = !!initialData;
   const [aba, setAba] = useState<Aba>("pessoais");
@@ -227,6 +232,7 @@ export function ColaboradorForm({ initialData, somenteLeitura = false, podeFolha
     { id: "profissionais", label: "Dados profissionais", icone: Briefcase },
     { id: "competencias", label: "Competências", icone: ListChecks, badge: competenciaIds.length },
     { id: "documentos", label: "Documentos", icone: FileText, badge: documentos.length },
+    ...(podeAdmissao ? [{ id: "admissao" as const, label: "Admissão", icone: UserPlus }] : []),
     ...(podeAcesso ? [{ id: "acesso" as const, label: "Acesso ao app", icone: KeyRound }] : []),
     ...(podeFolha ? [{ id: "folha" as const, label: "Dados financeiros / Folha", icone: Wallet }] : []),
   ];
@@ -263,7 +269,7 @@ export function ColaboradorForm({ initialData, somenteLeitura = false, podeFolha
           })}
         </nav>
 
-        <fieldset disabled={somenteLeitura} className={cn("min-w-0 p-5 sm:p-6 lg:p-8 space-y-8", (aba === "folha" || aba === "acesso") && "hidden")}>
+        <fieldset disabled={somenteLeitura} className={cn("min-w-0 p-5 sm:p-6 lg:p-8 space-y-8", (aba === "folha" || aba === "acesso" || aba === "admissao") && "hidden")}>
           {/* ABA 1 — Dados Pessoais */}
           <div className={cn("space-y-8", aba !== "pessoais" && "hidden")}>
             <FormSection title="Identificação">
@@ -535,6 +541,22 @@ export function ColaboradorForm({ initialData, somenteLeitura = false, podeFolha
             </FormSection>
           </div>
         </fieldset>
+
+        {/* ABA — Admissão digital (o convite e o acompanhamento; tudo por API própria) */}
+        {podeAdmissao && aba === "admissao" && (
+          <div className="p-5 sm:p-6 lg:p-8">
+            <FormSection title="Admissão digital">
+              {isEditing ? (
+                <PainelAdmissao
+                  colaborador={{ id: initialData.id, nome: initialData.nome, cargoId: initialData.cargoId ?? null }}
+                  admissao={admissao} cargos={cargosAdmissao} validadePadrao={validadeAdmissao}
+                />
+              ) : (
+                <p className="text-sm text-ink-muted">Salve o colaborador primeiro para gerar o convite de admissão.</p>
+              )}
+            </FormSection>
+          </div>
+        )}
 
         {/* ABA — Acesso ao app (login de técnico; salva por API própria, fora do cadastro) */}
         {podeAcesso && aba === "acesso" && (

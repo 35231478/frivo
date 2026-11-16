@@ -67,18 +67,17 @@ CONVIDADO → PREENCHENDO → AGUARDANDO_ASSINATURA → ASSINADO → ENVIADO_CON
 
 | PR | O que entrega | Estado |
 | --- | --- | --- |
-| **PR1** (este) | Banco (SQL aditivo + schema), regras puras, servidor completo, rotas do RH e do link, permissão, limites | pronto |
-| **PR2** | As telas: painel na ficha do colaborador, lista `/admissoes`, o link mobile-first em etapas, a tela de orientações finais, a configuração por empresa e o item no sino | a fazer |
+| **PR1** | Banco (SQL aditivo + schema), regras puras, servidor completo, rotas do RH e do link, permissão, limites | pronto (#211) |
+| **PR2** | As telas: lista `/admissoes`, painel na ficha do colaborador, o link mobile-first em etapas, as orientações finais, a configuração por empresa, o item no menu e no sino | pronto |
 | **PR3** | Ficha de Admissão em PDF (formato do eSocial), zip dos documentos, PDF do contrato assinado nos anexos e o marco "enviado ao contador" com o download | a fazer |
 
 Fora de escopo, como combinado: criar o acesso ao app do técnico na admissão (Fase 3), guardar o
 ASO do exame e export específico do eSocial além do PDF.
 
-## 5. Telas × botões (o que o PR2 tem de pendurar)
+## 5. Telas × botões (entregues no PR2)
 
-Nenhum botão foi para tela alguma neste PR — ele é só banco, regras e servidor. A tabela abaixo é o
-contrato do PR2: cada rota já existe e está testada, e cada botão tem a permissão escondendo E o
-servidor recusando.
+Cada botão tem a permissão escondendo E o servidor recusando. Prints desktop e celular de todas
+estas telas em `docs/prints/admissao-digital/`.
 
 | Tela | Botão / ação | Rota | Permissão |
 | --- | --- | --- | --- |
@@ -87,7 +86,7 @@ servidor recusando.
 | Lista `/admissoes` (nova) | **Nova admissão** (pré-cadastro: nome + CPF + cargo + salário) | `POST /api/admissoes` | `admissao.gerenciar` |
 | Lista `/admissoes` | busca + filtro por situação; por linha: reenviar, invalidar, cancelar, ver progresso | `GET /api/admissoes?busca=&situacao=` | `admissao.gerenciar` |
 | Lista `/admissoes` | **Enviado ao contador**, **Admitir** (só depois de assinado) | `POST …/[id]/contador`, `POST …/[id]/admitir` | `admissao.gerenciar` |
-| Lista `/admissoes` | **Baixar Ficha de Admissão (PDF)**, **Baixar documentos (zip)** | PR3 | `admissao.gerenciar` |
+| Lista `/admissoes` | **Baixar Ficha de Admissão (PDF)**, **Baixar documentos (zip)** | PR3 (a lista avisa que vem na próxima leva, sem botão morto) | `admissao.gerenciar` |
 | Configurações › Admissão (nova) | **Salvar** modelo de contrato, orientações, documentos (obrigatório × opcional), validade do link, experiência | `GET`/`PUT /api/admissoes/config` | `admissao.gerenciar` |
 | Link do colaborador `/admissao/[token]` | **Aceito o tratamento dos dados** (LGPD) | `POST /api/publico/admissao/[token]/consentimento` | token |
 | Link do colaborador | **Salvar e continuar** (a cada etapa) | `PUT …/rascunho` | token |
@@ -116,12 +115,28 @@ servidor recusando.
 
 ## 7. Perguntas em aberto (para o Zé decidir no PR2)
 
-1. **A lista `/admissoes` fica onde?** O módulo está na seção **Equipe** das permissões; o item do
-   menu pode ficar em Equipe (ao lado de Colaboradores) ou dentro de Configurações › Equipe.
-   Sugestão: Equipe › Admissões.
+1. **A lista `/admissoes` fica onde?** Ficou em **Equipe › Admissões** no menu (a sugestão do PR1),
+   com a configuração em Configurações › Acesso e pessoas › Admissão digital. Se preferir outro
+   lugar, é só dizer: mudar o item de grupo é uma linha.
 2. **O preset de perfil que já ganha a permissão.** Hoje só o ADMINISTRADOR tem (por
    `permissoesTotais`); SUPERVISOR e FINANCEIRO ficaram de fora porque admissão mexe com dado
    sensível de pessoa. Se o RH da Frivo usa um perfil específico, digo qual preset recebe.
 3. **Quem é "o contador"?** Hoje "Enviado ao contador" é um marco (quem e quando) com o download
    pelo RH. Se o contador tiver de receber por e-mail automático, isso é um campo de configuração a
    mais (e-mail do contador) no PR3.
+
+## 8. O que o PR2 acrescentou (telas)
+
+| Tela | Arquivo | Reaproveitou |
+| --- | --- | --- |
+| Lista `/admissoes` | `app/(dashboard)/admissoes/page.tsx` | `ListaUrl`/`TabelaProUrl`/`PaginacaoUrl`, `StatusPill`, `MenuAcoes`, `Dica`, tokens `PLANILHA` |
+| Ações (lista e ficha) | `components/admissao/acoes-admissao.tsx` | `Modal`, `confirmar`/`toast`, `ItemMenu`, `FormField` |
+| Nova admissão (pré-cadastro) | `components/admissao/nova-admissao.tsx` | `Modal`, `BuscaSelect`, `InputData`, `FormGrid` |
+| Painel na ficha | `components/admissao/painel-admissao.tsx` + aba no `colaborador-form` | o mesmo desenho da aba "Acesso ao app" |
+| Link do colaborador | `app/(publico)/admissao/[token]/page.tsx` + `components/admissao/admissao-publica.tsx` e `campos-admissao.tsx` | `Stepper`, `FormField`, `Select`, `InputData`, `lib/cep` |
+| Configuração | `components/config/telas/admissao.tsx` + `admissao-config-client.tsx` | a gaveta de Configurações, `Textarea`, `Dica` |
+
+Duas peças da casa nasceram aqui porque faltavam: **`BuscaSimplesUrl`** (busca ao vivo sem
+typeahead, no kit de listas) e **`lib/cep.ts`** (a consulta ao ViaCEP que estava copiada em três
+telas — cadastro rápido, unidades do cliente e unidades locais — agora numa função só; cada tela
+mantém a própria regra de mesclagem).

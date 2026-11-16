@@ -12,6 +12,7 @@ import { contarFilaSeparacao } from "@/lib/estoque/separacao-server";
 import { contarFilaDevolucao } from "@/lib/estoque/devolucao-server";
 import { contarAvisosPmoc, registrarAvisosPmoc } from "@/lib/pmoc-avisos-server";
 import { SEM_AVISOS_DE_ACEITE, avisosDeAceite } from "@/lib/os/aceite-server";
+import { contarAdmissoesAssinadas } from "@/lib/admissao/admissao-server";
 import { escopoDaSessao, filtroEscopo } from "@/lib/tecnico/escopo";
 
 export async function GET() {
@@ -32,6 +33,7 @@ export async function GET() {
   const editarContratos = pode(permissoes, "contratos", "editar", role);
   const separaMaterial = pode(permissoes, "estoque", "separar", role);
   const verPmoc = pode(permissoes, "pmoc", "visualizar", role);
+  const verAdmissoes = pode(permissoes, "admissao", "gerenciar", role);
 
   // NFS-e paradas sem aviso do PlugNotas: o sino (2 em 2 min) puxa a reconciliação da empresa
   // DEPOIS de responder (no máximo 1 rodada por minuto por empresa; não atrasa o sino)
@@ -46,7 +48,7 @@ export async function GET() {
   const zeroVeiculos = { checklistPendente: 0, checklistsComAlertas: 0, documentosVencendo: 0, veiculosManutencao: 0, revisaoChegando: 0 };
   const zeroNfse = { nfseAutorizadas: 0, nfseAutorizadaMedicaoId: null, nfseRejeitadas: 0, nfseRejeitadaMedicaoId: null, nfseAguardando: 0, nfseAguardandoMedicaoId: null };
   const desde24h = new Date(Date.now() - 24 * 60 * 60 * 1000);
-  const [prazosBrutos, veiculosBrutos, boletosPagos, orcamentosRespondidos, leadsSite, nfsDoPedido, nfse, faturamentoContratos, reajustesContrato, separacoesPendentes, devolucoesPendentes, pmoc, aceites] = await Promise.all([
+  const [prazosBrutos, veiculosBrutos, boletosPagos, orcamentosRespondidos, leadsSite, nfsDoPedido, nfse, faturamentoContratos, reajustesContrato, separacoesPendentes, devolucoesPendentes, pmoc, aceites, admissoes] = await Promise.all([
     verOrdens || verCompras ? contarAlertasPrazos(empresaId) : Promise.resolve(null),
     verVeiculos ? contarAlertasVeiculos(empresaId) : Promise.resolve(null),
     verBoletos
@@ -82,6 +84,8 @@ export async function GET() {
     // Aceite do cliente: confirmou pelo link (ou assinou com o técnico) e ninguém do escritório abriu a OS
     // ainda — as ressalvas à parte. Só para quem vê OS; o técnico, só das OS em que tem atividade
     verOrdens ? avisosDeAceite(empresaId, filtroEscopo(escopoDaSessao(session))) : Promise.resolve(SEM_AVISOS_DE_ACEITE),
+    // Admissão assinada esperando ir para o contador (Equipe › Admissões)
+    verAdmissoes ? contarAdmissoesAssinadas(empresaId) : Promise.resolve({ admissoesAssinadas: 0, admissaoAssinadaId: null }),
   ]);
 
   const prazos = {
@@ -111,6 +115,7 @@ export async function GET() {
     devolucoesPendentes,
     ...pmoc,
     ...aceites,
-    total: totalPrazos + totalVeiculos + boletosPagos + orcamentosRespondidos + leadsSite + nfsDoPedido.length + nfse.nfseAutorizadas + nfse.nfseRejeitadas + nfse.nfseAguardando + faturamentoContratos + reajustesContrato + separacoesPendentes + devolucoesPendentes + pmoc.pmocsVencendo + pmoc.pmocsExpirados + aceites.aceitesRessalva + aceites.aceitesConfirmados,
+    ...admissoes,
+    total: totalPrazos + totalVeiculos + boletosPagos + orcamentosRespondidos + leadsSite + nfsDoPedido.length + nfse.nfseAutorizadas + nfse.nfseRejeitadas + nfse.nfseAguardando + faturamentoContratos + reajustesContrato + separacoesPendentes + devolucoesPendentes + pmoc.pmocsVencendo + pmoc.pmocsExpirados + aceites.aceitesRessalva + aceites.aceitesConfirmados + admissoes.admissoesAssinadas,
   });
 }

@@ -57,6 +57,13 @@ export const TOM_PRIORIDADE: Record<string, TomStatus> = {
   BAIXA: "previsto", NORMAL: "previsto", ALTA: "atencao", URGENTE: "atrasado", CRITICO: "atrasado-solido",
 };
 
+/** Situação da ADMISSÃO digital (lib/admissao/admissao) → tom. */
+export const TOM_SITUACAO_ADMISSAO: Record<string, TomStatus> = {
+  CONVIDADO: "previsto", PREENCHENDO: "atencao", AGUARDANDO_ASSINATURA: "atencao",
+  ASSINADO: "ok", ENVIADO_CONTADOR: "ok", ADMITIDO: "ok-solido",
+  CANCELADA: "atrasado", EXPIRADA: "atrasado",
+};
+
 /** Situação de prazo (lib/os/prazos) → tom. */
 export const TOM_PRAZO: Record<string, TomStatus> = {
   ATRASADO: "atrasado", VENCE_HOJE: "atencao", NO_PRAZO: "previsto", CUMPRIDO: "ok", SEM_PRAZO: "previsto",

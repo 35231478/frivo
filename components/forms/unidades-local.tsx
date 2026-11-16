@@ -10,6 +10,7 @@ import { FormField, FormGrid } from "@/components/ui/form-field";
 import { MapaEndereco } from "@/components/ui/mapa-endereco";
 import { EnderecoAutocomplete, type EnderecoSelecionado } from "@/components/ui/endereco-autocomplete";
 import { Plus, Pencil, Trash2, X, Check, ChevronDown, Search } from "lucide-react";
+import { buscarCep, cepCompleto } from "@/lib/cep";
 import { cn, comparaNatural } from "@/lib/utils";
 
 const ESTADOS_BR = [
@@ -63,24 +64,21 @@ export function UnidadesLocal({ unidades, onChange }: UnidadesLocalProps) {
     handleAutoGeocode,
   );
 
-  async function buscarCep() {
-    const cep = form.cep.replace(/\D/g, "");
-    if (cep.length !== 8) return;
+  async function buscarCepDaUnidade() {
+    if (!cepCompleto(form.cep)) return;
     setBuscandoCep(true);
     try {
-      const res = await fetch(`https://viacep.com.br/ws/${cep}/json/`);
-      const data = await res.json();
-      if (!data.erro) {
-        setForm((f) => ({
-          ...f,
-          logradouro: data.logradouro ?? f.logradouro,
-          bairro: data.bairro ?? f.bairro,
-          cidade: data.localidade ?? f.cidade,
-          estado: data.uf ?? f.estado,
-          complemento: data.complemento ?? f.complemento,
-        }));
-      }
-    } catch {} finally { setBuscandoCep(false); }
+      const d = await buscarCep(form.cep);
+      if (!d) return; // sem rede ou CEP que não existe: a pessoa digita
+      setForm((f) => ({
+        ...f,
+        logradouro: d.logradouro || f.logradouro,
+        bairro: d.bairro || f.bairro,
+        cidade: d.cidade || f.cidade,
+        estado: d.estado || f.estado,
+        complemento: d.complemento || f.complemento,
+      }));
+    } finally { setBuscandoCep(false); }
   }
 
   function toggleExpand(id: string) {
@@ -206,7 +204,7 @@ export function UnidadesLocal({ unidades, onChange }: UnidadesLocalProps) {
         <FormField label="CEP" hint="Digite o CEP e clique na lupa para preencher o endereço">
           <div className="flex gap-2 max-w-[300px]">
             <Input value={form.cep} onChange={(e) => updateField("cep", e.target.value)} placeholder="00000-000" maxLength={9} />
-            <Button type="button" variant="secondary" loading={buscandoCep} onClick={buscarCep} className="shrink-0 px-3">
+            <Button type="button" variant="secondary" loading={buscandoCep} onClick={buscarCepDaUnidade} className="shrink-0 px-3">
               <Search className="w-4 h-4" />
             </Button>
           </div>

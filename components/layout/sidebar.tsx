@@ -14,7 +14,7 @@ import {
   Wrench, Calculator, Wallet, Receipt, TrendingUp, FileBarChart, ShoppingCart, Timer, CalendarDays, QrCode, MapPinned,
   Truck, UsersRound, BadgeDollarSign, ClipboardCheck, Smartphone, UserCog, Upload, Landmark, Globe, Coins,
   PanelLeftClose, PanelLeftOpen, MoreVertical, LogOut, Package, FileBadge,
-  CalendarClock, PackageOpen, PackageMinus, Trophy,
+  CalendarClock, PackageOpen, PackageMinus, Trophy, UserPlus,
 } from "lucide-react";
 
 type Icone = React.ComponentType<{ className?: string }>;
@@ -100,6 +100,8 @@ const OPERACIONAL: Secao[] = [
       {
         tipo: "grupo", label: "Equipes", icone: UsersRound, itens: [
           { href: "/colaboradores", icone: HardHat, label: "Colaboradores" },
+          // Admissão digital: dado sensível de pessoa, permissão própria (não é "ver equipes")
+          { href: "/admissoes", icone: UserPlus, label: "Admissões", modulo: "admissao", acao: "gerenciar", somenteAcao: true },
           { href: "/equipes", icone: UsersRound, label: "Equipes" },
           { href: "/desempenho", icone: Trophy, label: "Desempenho" },
           { href: "/equipes/app-colaborador", icone: Smartphone, label: "App do colaborador", modulo: "configuracoes", acao: "gerenciar", somenteAcao: true },

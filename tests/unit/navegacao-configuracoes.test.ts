@@ -63,7 +63,9 @@ describe("estrutura: 3 abas com cartões; cada item tem id, tela e a rota antiga
     expect(sub("financeiras")).toEqual([["Classificação", ["Categorias financeiras", "Centros de custo"]], ["Integrações", ["Banco Inter"]], ["Fiscal", ["Dados fiscais (NFS-e)"]]]);
     expect(sub("conta")).toEqual([
       ["Empresa", ["Dados da empresa", "Preferências", "Numeração de documentos"]],
-      ["Acesso e pessoas", ["Usuários", "Perfis de acesso", "Cargos"]],
+      // "Admissão digital" entrou aqui na leva da admissão: é configuração de pessoas (contrato,
+      // documentos pedidos e orientações do link), atrás da permissão "Admissão digital › gerenciar"
+      ["Acesso e pessoas", ["Usuários", "Perfis de acesso", "Cargos", "Admissão digital"]],
       ["Integrações", ["E-mail transacional", "Portal do cliente", "QR Code"]],
       ["Manutenção de dados", ["Padronização de digitação"]],
     ]);
