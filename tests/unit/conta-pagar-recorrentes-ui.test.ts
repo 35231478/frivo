@@ -18,6 +18,7 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vite
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { permissoesTotais, type Permissoes } from "@/lib/permissoes";
+import { escolherNaBusca } from "../util/busca-select";
 
 (globalThis as any).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -205,14 +206,10 @@ describe("Nova conta a pagar: 'Repetir lançamento?'", () => {
     await digitar("[data-ocorrencias]", "4");
     await clicar("[data-confirmar-personalizar]");
     await clicar("[data-valor-estimado] input");
-    // o favorecido: o seletor de fornecedor já está na tela
-    await escolher("[data-campos-recorrencia]", "").catch(() => {});
-    const seletorFornecedor = ($$("select") as HTMLSelectElement[]).find((s) => [...s.options].some((o) => o.textContent?.includes("Imobiliária Centro")));
+    // o favorecido: o seletor de fornecedor é o campo COM BUSCA da casa (abre a lista e clica)
+    const seletorFornecedor = $("[data-seletor-cadastro='fornecedores']");
     expect(seletorFornecedor).toBeTruthy();
-    await act(async () => {
-      Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, "value")!.set!.call(seletorFornecedor, "f1");
-      seletorFornecedor!.dispatchEvent(new Event("change", { bubbles: true }));
-    });
+    await escolherNaBusca(seletorFornecedor, "f1");
     await esperar();
 
     await clicarBotao("Criar conta a pagar");
