@@ -3,7 +3,11 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { ChevronLeft, Loader2 } from "lucide-react";
-import { formatarData, formatarMoeda } from "@/lib/utils";
+import { cn, formatarData, formatarMoeda } from "@/lib/utils";
+import { Dica } from "@/components/ui/dica";
+import { ListaVazia } from "@/components/listagem/listagem-ui";
+import { TabelaPro } from "@/components/listagem/tabela-pro";
+import { PLANILHA } from "@/lib/planilha";
 import { StatusPill, type TomStatus } from "@/components/ui/status-pill";
 import {
   ROTULO_METRICA, ROTULO_PENALIDADE, ROTULO_SITUACAO, ROTULO_TIPO_PERFIL, competenciaCurta, formatarEscore, rotuloCompetencia,
@@ -14,6 +18,9 @@ import { BarraEscore, Erro, SeletorDeMes, SeloFaixa, posicaoTexto } from "./comu
 import { PremioEmDisputa } from "./painel-client";
 
 const TOM_SITUACAO: Record<SituacaoPenalidade, TomStatus> = { A_REVISAR: "atencao", CONTA: "atrasado", NAO_CONTA: "previsto" };
+const AJUDA_COMPOSICAO = "Cada métrica vale um peso dentro do escore. Métrica sem medição no mês não vira zero: o peso dela é repartido entre as outras. Penalidades marcadas \"Conta\" na revisão descontam pontos do total.";
+const AJUDA_PENALIDADES = "Retorno e ressalva do cliente entram sozinhos; reclamação é registrada à mão. Só pesa no escore o que a revisão marcou \"Conta\": registrar um problema nunca penaliza.";
+
 const pontos = (n: number | null) => (n === null ? "—" : n.toLocaleString("pt-BR", { minimumFractionDigits: 1, maximumFractionDigits: 1 }));
 
 /**
@@ -93,49 +100,59 @@ function Conteudo({ ficha }: { ficha: FichaDoColaborador }) {
 
       <section className="bg-white border border-surface-border rounded-xl overflow-hidden" data-composicao>
         <div className="px-4 py-3 border-b border-surface-border">
-          <h2 className="font-semibold text-ink">Composição do escore</h2>
-          <p className="text-xs text-ink-muted">Métrica sem medição no mês não vira zero: o peso dela é repartido entre as outras.</p>
+          <h2 className="font-semibold text-ink flex items-center gap-1.5">Composição do escore <Dica texto={AJUDA_COMPOSICAO} rotulo="Composição do escore" /></h2>
         </div>
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="text-left text-xs text-ink-muted border-b border-surface-border">
-                <th className="px-4 py-2 font-medium">Métrica</th><th className="px-4 py-2 font-medium">Os números</th>
-                <th className="px-4 py-2 font-medium text-right">Resultado</th><th className="px-4 py-2 font-medium text-right">Peso</th>
-                <th className="px-4 py-2 font-medium text-right">Pontos</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-surface-border">
+        <TabelaPro
+          tela="desempenho-composicao"
+          atributos={{ "data-tabela-composicao": true }}
+          barra={
+            <p data-fecho-composicao>
+              Qualidade <strong className="text-ink" data-ficha-base>{pontos(linha.base)}</strong>
+              {" · "}Penalidades que contam <strong className="text-ink" data-ficha-desconto>{descontou ? `− ${pontos(linha.desconto)}` : pontos(0)}</strong>
+              <span className="hidden sm:inline"> ({linha.penalidades.retornos} de retorno, {linha.penalidades.reclamacoes} de reclamação)</span>
+              {" · "}Escore <strong className="text-ink">{formatarEscore(linha.escore)}</strong>
+            </p>
+          }
+          cartoes={
+            <ul className="divide-y divide-surface-border" data-composicao-cartoes>
               {linha.composicao.map((c) => (
-                <tr key={c.metrica} data-metrica={c.metrica}>
-                  <td className="px-4 py-2 font-medium text-ink">{ROTULO_METRICA[ficha.perfil.tipo][c.metrica]}</td>
-                  <td className="px-4 py-2 text-ink-muted" data-metrica-detalhe>{c.detalhe}</td>
-                  <td className="px-4 py-2 text-right tabular-nums" data-metrica-valor>{formatarEscore(c.valor)}</td>
-                  <td className="px-4 py-2 text-right tabular-nums text-ink-muted">{c.peso}%</td>
-                  <td className="px-4 py-2 text-right tabular-nums font-medium" data-metrica-pontos>{pontos(c.pontos)}</td>
-                </tr>
+                <li key={c.metrica} className="px-4 py-3" data-metrica={c.metrica}>
+                  <div className="flex items-start justify-between gap-3">
+                    <p className="text-sm font-medium text-ink">{ROTULO_METRICA[ficha.perfil.tipo][c.metrica]} <span className="text-xs font-normal text-ink-muted">· peso {c.peso}%</span></p>
+                    <span className={cn(PLANILHA.numero, "text-sm font-semibold text-ink")} data-metrica-pontos>{pontos(c.pontos)}</span>
+                  </div>
+                  <p className="text-xs text-ink-muted" data-metrica-detalhe>{c.detalhe}</p>
+                </li>
               ))}
-            </tbody>
-            <tfoot className="border-t border-surface-border text-sm">
-              <tr><td className="px-4 py-2 text-ink-muted" colSpan={4}>Qualidade (soma das métricas)</td><td className="px-4 py-2 text-right tabular-nums" data-ficha-base>{pontos(linha.base)}</td></tr>
-              <tr data-linha-desconto>
-                <td className="px-4 py-2 text-ink-muted" colSpan={4}>
-                  Penalidades que contam: {linha.penalidades.retornos} de retorno, {linha.penalidades.reclamacoes} de reclamação
-                </td>
-                <td className="px-4 py-2 text-right tabular-nums" data-ficha-desconto>{descontou ? `− ${pontos(linha.desconto)}` : pontos(0)}</td>
-              </tr>
-              <tr className="font-semibold text-ink"><td className="px-4 py-2" colSpan={4}>Escore</td><td className="px-4 py-2 text-right tabular-nums">{formatarEscore(linha.escore)}</td></tr>
-            </tfoot>
-          </table>
-        </div>
+            </ul>
+          }
+          colunas={[
+            { id: "metrica", titulo: "Métrica", minimo: 160, obrigatoria: true },
+            { id: "detalhe", titulo: "Os números", minimo: 180 },
+            { id: "valor", titulo: "Resultado", alinhar: "direita", largura: 110 },
+            { id: "peso", titulo: "Peso", alinhar: "direita", largura: 80 },
+            { id: "pontos", titulo: "Pontos", alinhar: "direita", largura: 100, obrigatoria: true },
+          ]}
+          linhas={linha.composicao.map((c) => ({
+            id: c.metrica,
+            atributos: { "data-metrica": c.metrica },
+            titulos: { metrica: ROTULO_METRICA[ficha.perfil.tipo][c.metrica] },
+            celulas: {
+              metrica: <span className="font-medium text-ink">{ROTULO_METRICA[ficha.perfil.tipo][c.metrica]}</span>,
+              detalhe: <span className={PLANILHA.apagado} data-metrica-detalhe>{c.detalhe}</span>,
+              valor: <span className={PLANILHA.numero} data-metrica-valor>{formatarEscore(c.valor)}</span>,
+              peso: <span className={cn(PLANILHA.numero, "text-ink-muted")}>{c.peso}%</span>,
+              pontos: <span className={cn(PLANILHA.numero, "font-medium")} data-metrica-pontos>{pontos(c.pontos)}</span>,
+            },
+          }))}
+        />
       </section>
 
       <section className="bg-white border border-surface-border rounded-xl overflow-hidden" data-penalidades-ficha>
         <div className="px-4 py-3 border-b border-surface-border">
-          <h2 className="font-semibold text-ink">Retornos e reclamações do mês</h2>
-          <p className="text-xs text-ink-muted">Só pesa o que a revisão marcou “Conta”. Registrar um problema nunca penaliza.</p>
+          <h2 className="font-semibold text-ink flex items-center gap-1.5">Retornos e reclamações do mês <Dica texto={AJUDA_PENALIDADES} rotulo="Retornos e reclamações" /></h2>
         </div>
-        {ficha.penalidades.length === 0 ? <p className="text-sm text-ink-muted px-4 py-6" data-sem-penalidades>Nada registrado em {competenciaCurta(ficha.competencia)}.</p> : (
+        {ficha.penalidades.length === 0 ? <ListaVazia mensagem={`Nada registrado em ${competenciaCurta(ficha.competencia)}.`} /> : (
           <ul className="divide-y divide-surface-border">
             {ficha.penalidades.map((p) => (
               <li key={p.id} className="px-4 py-3 flex flex-wrap items-start gap-x-4 gap-y-1" data-penalidade-ficha={p.situacao}>
