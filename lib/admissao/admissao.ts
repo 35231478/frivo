@@ -71,6 +71,12 @@ const PROXIMAS: Record<SituacaoAdmissao, readonly SituacaoAdmissao[]> = {
 export const podeIr = (de: SituacaoAdmissao, para: SituacaoAdmissao): boolean =>
   PROXIMAS[de]?.includes(para) ?? false;
 
+/** Situações em que ainda existe link para (re)enviar: a tela e a rota leem a mesma lista. */
+export const REENVIAVEIS: readonly SituacaoAdmissao[] = [
+  "CONVIDADO", "PREENCHENDO", "AGUARDANDO_ASSINATURA", "EXPIRADA",
+];
+export const podeReenviar = (s: string) => REENVIAVEIS.includes(s as SituacaoAdmissao);
+
 /** O link ainda vale? Expirado e encerrado valem a mesma coisa para quem tem o link. */
 export function linkValido(a: { situacao: string; expiraEm: Date | string }, agora = new Date()): boolean {
   if (!ABERTAS_AO_COLABORADOR.includes(a.situacao as SituacaoAdmissao)) return false;

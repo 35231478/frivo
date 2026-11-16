@@ -1,7 +1,7 @@
 "use client";
 
 import { signOut } from "next-auth/react";
-import { Bell, ShieldAlert, ShieldX, ChevronRight, LogOut, Search, AlertTriangle, Clock, ShoppingCart, Timer, Headset, ClipboardCheck, FileWarning, Wrench, Menu, Barcode, MessageSquareReply, PackageCheck, FileCheck2, FileX2, Hourglass, CalendarX2, TrendingUp, PackageOpen, PackageMinus, Globe, BadgeCheck, MessageSquareWarning } from "lucide-react";
+import { Bell, ShieldAlert, ShieldX, ChevronRight, LogOut, Search, AlertTriangle, Clock, ShoppingCart, Timer, Headset, ClipboardCheck, FileWarning, Wrench, Menu, Barcode, MessageSquareReply, PackageCheck, FileCheck2, FileX2, Hourglass, CalendarX2, TrendingUp, PackageOpen, PackageMinus, Globe, BadgeCheck, MessageSquareWarning, UserPlus } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -41,6 +41,9 @@ interface Alertas {
   aceiteRessalvaOsId?: string | null;
   aceitesConfirmados?: number;
   aceiteConfirmadoOsId?: string | null;
+  /** Admissão digital: assinada e esperando ir para o contador */
+  admissoesAssinadas?: number;
+  admissaoAssinadaId?: string | null;
   total: number;
 }
 
@@ -275,6 +278,7 @@ export function Header({ session, avatarUrl }: HeaderProps) {
                   {/* Aceite do cliente: confirmou pelo link (ou assinou com o técnico) e ninguém abriu a OS ainda; a ressalva primeiro */}
                   {podeVer("ordens") && (alertas?.aceitesRessalva ?? 0) > 0 && <AlertaItem href={hrefOs(alertas?.aceiteRessalvaOsId)} icone={MessageSquareWarning} cor="text-atencao" label="Ressalvas de clientes" valor={alertas?.aceitesRessalva ?? 0} onClick={() => setSinoAberto(false)} />}
                   {podeVer("ordens") && (alertas?.aceitesConfirmados ?? 0) > 0 && <AlertaItem href={hrefOs(alertas?.aceiteConfirmadoOsId)} icone={BadgeCheck} cor="text-ok" label="Serviços confirmados pelo cliente" valor={alertas?.aceitesConfirmados ?? 0} onClick={() => setSinoAberto(false)} />}
+                  {podeVer("admissao", "gerenciar") && (alertas?.admissoesAssinadas ?? 0) > 0 && <AlertaItem href="/admissoes?situacao=ASSINADO" icone={UserPlus} cor="text-ok" label="Admissões assinadas" valor={alertas?.admissoesAssinadas ?? 0} onClick={() => setSinoAberto(false)} />}
                   {/* NFS-e: só aparece quando há o que ver (resultado não visto ou nota parada) */}
                   {podeVer("financeiro", "fiscal") && (alertas?.nfseRejeitadas ?? 0) > 0 && <AlertaItem href={hrefMedicao(alertas?.nfseRejeitadaMedicaoId)} icone={FileX2} cor="text-atrasado" label="NFS-e não aceitas" valor={alertas?.nfseRejeitadas ?? 0} onClick={() => setSinoAberto(false)} />}
                   {podeVer("financeiro", "fiscal") && (alertas?.nfseAguardando ?? 0) > 0 && <AlertaItem href={hrefMedicao(alertas?.nfseAguardandoMedicaoId)} icone={Hourglass} cor="text-atencao" label="NFS-e aguardando a prefeitura" valor={alertas?.nfseAguardando ?? 0} onClick={() => setSinoAberto(false)} />}

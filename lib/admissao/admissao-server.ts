@@ -38,7 +38,7 @@ import {
   MSG_JA_ASSINADO, MSG_LINK_INVALIDO, MSG_MOTIVO, MSG_SEM_CONSENTIMENTO, MSG_VALIDADE,
   ROTULO_SITUACAO, VALIDADE_PADRAO, caminhoPublicoAdmissao, codigoValido, documentosDaEmpresa,
   emailConfere, enderecoEmLinha, etapaPendente, expiraEm, faltaNaEtapa, linkValido, montarContrato,
-  motivoValido, normalizarForm, obrigatoriosDa, podeIr, textoJornada, validadeValida,
+  motivoValido, normalizarForm, obrigatoriosDa, podeIr, podeReenviar, textoJornada, validadeValida,
   type DadosContrato, type DocumentoPedido, type Etapa, type FormAdmissao, type SituacaoAdmissao,
 } from "@/lib/admissao/admissao";
 
@@ -339,7 +339,7 @@ export async function reenviarConvite(
   const a = await daEmpresa(ator.empresaId, admissaoId);
   const situacao = a.situacao as SituacaoAdmissao;
   if (situacao === "CANCELADA") throw new ErroAdmissao(MSG_CANCELADA, 409);
-  if (!["CONVIDADO", "PREENCHENDO", "AGUARDANDO_ASSINATURA", "EXPIRADA"].includes(situacao)) {
+  if (!podeReenviar(situacao)) {
     throw new ErroAdmissao(`Esta admissão já está em "${ROTULO_SITUACAO[situacao]}": não há link para reenviar.`, 409);
   }
   const cfg = await configDaEmpresa(ator.empresaId);
