@@ -358,10 +358,18 @@ describe("tabelas de preço", () => {
     const { SeletorCadastro } = await import("@/components/cadastros/seletor-cadastro");
     const itens = db.t.tabelaPreco.filter((t) => t.empresaId === "e1").map((t) => ({ id: t.id, nome: t.nome, ativo: t.ativo }));
     const html = (valor: string) => renderToStaticMarkup(createElement(SeletorCadastro, { entidade: "tabelas-preco", itens, valor, vazio: "Padrão (automático)", onChange: () => {} }));
-    expect(html("tp-velha")).toMatch(/<option value="tp-velha"[^>]*selected[^>]*>Tabela 2023 \(inativa\)/);
-    expect(html("tp-velha")).not.toMatch(/<option value=""[^>]*selected/);
-    expect(html("")).not.toContain("Tabela 2023");
-    expect(html("")).toContain("Contrato Belma");
+    // o que a TELA mostra escolhido: a tabela real, marcada "(inativa)" — não "Padrão (automático)"
+    expect(html("tp-velha")).toContain('data-valor-escolhido="tp-velha"');
+    expect(html("tp-velha")).toContain("Tabela 2023 (inativa)");
+    expect(html("")).toContain("Padrão (automático)");
+    // o que o seletor OFERECE (a lista abre na busca, não vem no HTML): a inativa só quando é o valor atual
+    const { opcoesCadastro } = await import("@/lib/cadastros/opcoes");
+    const { CADASTROS } = await import("@/lib/cadastros/registro");
+    const def = CADASTROS["tabelas-preco"];
+    const oferece = (atual: string) => opcoesCadastro(itens, [atual], def.chave, { feminino: def.feminino }).map((o) => o.rotulo);
+    expect(oferece("tp-velha")).toContain("Tabela 2023 (inativa)");
+    expect(oferece("")).not.toContain("Tabela 2023 (inativa)");
+    expect(oferece("")).toContain("Contrato Belma");
   });
 
   it("impacto: clientes ativos que passam a valer o catálogo padrão (nenhuma tabela empurra para outra)", async () => {
@@ -417,9 +425,12 @@ describe("modelos de prazo", () => {
   it("seletor da OS: só modelos ativos", async () => {
     const { SeletorCadastro } = await import("@/components/cadastros/seletor-cadastro");
     const itens = db.t.prazoTemplate.filter((t) => t.empresaId === "e1").map((t) => ({ id: t.id, nome: t.nome, ativo: t.ativo }));
-    const html = renderToStaticMarkup(createElement(SeletorCadastro, { entidade: "modelos-prazo", itens, valor: "", onChange: () => {} }));
-    expect(html).toContain("Compra de material");
-    expect(html).not.toContain("SLA antigo");
+    renderToStaticMarkup(createElement(SeletorCadastro, { entidade: "modelos-prazo", itens, valor: "", onChange: () => {} }));
+    // a lista do seletor com busca abre no clique: o que ele oferece é a regra de opcoesCadastro
+    const { opcoesCadastro } = await import("@/lib/cadastros/opcoes");
+    const oferecidos = opcoesCadastro(itens, [""]).map((o) => o.rotulo);
+    expect(oferecidos).toContain("Compra de material");
+    expect(oferecidos).not.toContain("SLA antigo");
   });
 });
 
@@ -439,8 +450,10 @@ describe("termos de referência", () => {
   it("“Carregar de um template” na proposta: só termos ativos", async () => {
     const { SeletorCadastro } = await import("@/components/cadastros/seletor-cadastro");
     const itens = db.t.termoReferenciaTemplate.map((t) => ({ id: t.id, nome: t.nome, ativo: t.ativo }));
-    const html = renderToStaticMarkup(createElement(SeletorCadastro, { entidade: "termos-referencia", itens, valor: "", onChange: () => {} }));
-    expect(html).toContain("Contrato anual");
-    expect(html).not.toContain("Termo 2019");
+    renderToStaticMarkup(createElement(SeletorCadastro, { entidade: "termos-referencia", itens, valor: "", onChange: () => {} }));
+    const { opcoesCadastro } = await import("@/lib/cadastros/opcoes");
+    const oferecidos = opcoesCadastro(itens, [""]).map((o) => o.rotulo);
+    expect(oferecidos).toContain("Contrato anual");
+    expect(oferecidos).not.toContain("Termo 2019");
   });
 });

@@ -13,6 +13,7 @@ import { act, createElement, useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { PermissoesProvider } from "@/components/providers/permissoes-provider";
 import { permissoesTotais, montarPermissoes } from "@/lib/permissoes";
+import { abrirBusca, escolhidoNaBusca, opcoesDaBusca, valorDaBusca } from "../util/busca-select";
 
 (globalThis as any).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -79,14 +80,15 @@ describe("UX-1: SeletorCadastro cria sem sair da tela", () => {
   it("'+ Novo fornecedor…' abre o mini-cadastro, cria pela API e já seleciona o criado", async () => {
     const chamadas = stubApiCadastros();
     await montarSeletor();
-    const select = $("select[data-seletor-cadastro=fornecedores]")!;
-    expect(select.textContent).toContain("Frigelar");
-    expect($("option[data-criar]")!.textContent).toContain("Novo fornecedor");
+    const campo = $("[data-seletor-cadastro=fornecedores]")!;
+    const lista = await abrirBusca(campo, "fornecedores");
+    expect(opcoesDaBusca(lista)).toContain("Frigelar");
+    expect($("[data-acao-busca]")!.textContent).toContain("Novo fornecedor");
 
-    await escolher(select, "__criar__");
-    // abriu o modal (sem gravar nada) e o select não ficou preso na opção de criar
+    await clicar($("[data-acao-busca]"));
+    // abriu o modal (sem gravar nada) e o campo não ficou preso em nada
     expect($("[role=dialog]")).not.toBeNull();
-    expect((select as HTMLSelectElement).value).toBe("");
+    expect(valorDaBusca(campo)).toBe("");
     // campos do registro (sem os de grupo): nome, documento, telefone, e-mail, observações
     expect($("[role=dialog]")!.textContent).toContain("Nome / razão social");
     expect($("[role=dialog]")!.textContent).toContain("CNPJ / CPF");
@@ -106,14 +108,15 @@ describe("UX-1: SeletorCadastro cria sem sair da tela", () => {
     // modal fechou, o criado entrou na lista e JÁ está selecionado
     expect($("[role=dialog]")).toBeNull();
     expect($("[data-valor]")!.textContent).toBe("f9");
-    expect((select as HTMLSelectElement).value).toBe("f9");
-    expect(select.textContent).toContain("Nova Peças Ltda");
+    expect(valorDaBusca(campo)).toBe("f9");
+    expect(escolhidoNaBusca(campo)).toBe("Nova Peças Ltda");
   });
 
   it("erro da API aparece dentro do mini-cadastro e nada é selecionado", async () => {
     stubApiCadastros({ postStatus: 400, postResposta: { erro: "Já existe um fornecedor com esse nome." } });
     await montarSeletor();
-    await escolher($("select[data-seletor-cadastro=fornecedores]"), "__criar__");
+    await abrirBusca($("[data-seletor-cadastro=fornecedores]"), "fornecedores");
+    await clicar($("[data-acao-busca]"));
     await digitar($("[role=dialog] input"), "Frigelar");
     await clicar($$("[role=dialog] button").find((b) => b.textContent!.includes("Salvar")));
     expect($("[role=dialog]")!.textContent).toContain("Já existe um fornecedor com esse nome.");
@@ -124,8 +127,9 @@ describe("UX-1: SeletorCadastro cria sem sair da tela", () => {
     stubApiCadastros();
     // financeiro.visualizar lista fornecedores, mas criar exige fluxoCaixa (ou configurações.gerenciar)
     await montarSeletor({}, montarPermissoes({ financeiro: ["visualizar"] }));
-    expect($("select[data-seletor-cadastro=fornecedores]")!.textContent).toContain("Frigelar");
-    expect($("option[data-criar]")).toBeNull();
+    const lista = await abrirBusca($("[data-seletor-cadastro=fornecedores]"), "fornecedores");
+    expect(opcoesDaBusca(lista)).toContain("Frigelar");
+    expect($("[data-acao-busca]")).toBeNull();
   });
 
   it("cadastro com editor próprio e seletor com semCriar ficam sem a opção", async () => {
@@ -135,8 +139,10 @@ describe("UX-1: SeletorCadastro cria sem sair da tela", () => {
       createElement(SeletorCadastro, { entidade: "modelos-prazo", valor: "", onChange: () => {} }),
       createElement(SeletorCadastro, { entidade: "fornecedores", valor: "", onChange: () => {}, semCriar: true }),
     ));
-    expect($("select[data-seletor-cadastro=modelos-prazo]")!.querySelector("option[data-criar]")).toBeNull();
-    expect($("select[data-seletor-cadastro=fornecedores]")!.querySelector("option[data-criar]")).toBeNull();
+    await abrirBusca($("[data-seletor-cadastro=modelos-prazo]"), "modelos-prazo");
+    expect($("[data-acao-busca]"), "editor próprio não cria inline").toBeNull();
+    await abrirBusca($("[data-seletor-cadastro=fornecedores]"), "fornecedores");
+    expect($("[data-acao-busca]"), "semCriar desliga a ação").toBeNull();
   });
 });
 
