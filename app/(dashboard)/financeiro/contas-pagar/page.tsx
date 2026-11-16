@@ -87,6 +87,8 @@ export default async function ContasPagarPage({
         fornecedor: fornecedorDaConta(c),
         temBoleto: !!c.linhaDigitavel,
         notaCompra: c.notaCompra ?? null, pedidoCompra: c.pedidoCompra ?? null,
+        recorrenciaId: c.recorrenciaId ?? null, refAno: c.refAno ?? null, refMes: c.refMes ?? null,
+        valorEstimado: c.valorEstimado,
       }))}
       resumo={resumo}
       periodo={periodoTela(periodo)}
