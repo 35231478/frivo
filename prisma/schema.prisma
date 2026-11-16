@@ -541,6 +541,7 @@ model Empresa {
   checklistsPreenchidos  ChecklistPreenchido[]
   perfisAcesso           PerfilAcesso[]
   contasPagar            ContaPagar[]
+  recorrenciasPagar      ContaPagarRecorrencia[]
   categoriasFinanceiras  CategoriaFinanceira[]
   centrosCusto           CentroCusto[]
   categoriasProduto      CategoriaProduto[]
@@ -989,6 +990,8 @@ model Tecnico {
   posicao               TecnicoPosicao?
 
   pmocsResponsavel Pmoc[] @relation("PmocResponsavelTecnico")
+  contasPagar      ContaPagar[]
+  recorrenciasPagar ContaPagarRecorrencia[]
 
   desempenhoParticipante DesempenhoParticipante?
   desempenhoPenalidades  DesempenhoPenalidade[]
@@ -3168,6 +3171,7 @@ model CategoriaFinanceira {
   empresa            Empresa        @relation(fields: [empresaId], references: [id], onDelete: Cascade)
   contasReceber      ContaReceber[]
   contasPagar        ContaPagar[]
+  recorrenciasPagar  ContaPagarRecorrencia[]
   /// Fornecedores que têm esta categoria como padrão (aprendida na nota de compra)
   fornecedoresPadrao Fornecedor[]
   notasCompra        NotaCompra[]
@@ -3271,6 +3275,7 @@ model CentroCusto {
 
   empresa            Empresa        @relation(fields: [empresaId], references: [id], onDelete: Cascade)
   contasPagar        ContaPagar[]
+  recorrenciasPagar  ContaPagarRecorrencia[]
   contasReceber      ContaReceber[]
   fornecedoresPadrao Fornecedor[]
   notasCompra        NotaCompra[]
@@ -3300,6 +3305,7 @@ model Fornecedor {
   categoriaPadrao   CategoriaFinanceira?      @relation(fields: [categoriaPadraoId], references: [id], onDelete: SetNull)
   centroCustoPadrao CentroCusto?              @relation(fields: [centroCustoPadraoId], references: [id], onDelete: SetNull)
   contasPagar       ContaPagar[]
+  recorrenciasPagar ContaPagarRecorrencia[]
   notasCompra       NotaCompra[]
   deParas           DeParaProdutoFornecedor[]
   pedidosCompra     PedidoCompraInterno[]
@@ -3336,6 +3342,16 @@ model ContaPagar {
   categoriaId        String?          @map("categoria_id")
   /// Centro de custo (E2.1), por ID
   centroCustoId      String?          @map("centro_custo_id")
+  /// DESPESA RECORRENTE: a regra que gerou esta conta e a competência dela (uma conta por
+  /// competência da regra — o índice único abaixo é o que impede gerar duas vezes). A conta é
+  /// INDEPENDENTE: pagar, ajustar ou cancelar uma ocorrência não mexe na regra nem nas outras.
+  recorrenciaId      String?          @map("recorrencia_id")
+  refAno             Int?             @map("ref_ano")
+  refMes             Int?             @map("ref_mes")
+  /// Valor que ainda vai ser confirmado (energia, água, cartão): a conta nasce "a confirmar"
+  valorEstimado      Boolean          @default(false) @map("valor_estimado")
+  /// Favorecido colaborador (salário, pró-labore): o nome continua em `fornecedor`
+  tecnicoId          String?          @map("tecnico_id")
   /// Boleto desta conta (E2.1, "DDA manual"): linha digitável (47 dígitos, boleto bancário; 48,
   /// convênio/arrecadação) e o código de barras (44) — os dois só com dígitos, DVs conferidos
   linhaDigitavel     String?          @map("linha_digitavel")
@@ -3350,15 +3366,78 @@ model ContaPagar {
   centroCusto         CentroCusto?          @relation(fields: [centroCustoId], references: [id], onDelete: SetNull)
   fornecedorCadastro  Fornecedor?           @relation(fields: [fornecedorId], references: [id], onDelete: SetNull)
   notaCompra          NotaCompra?           @relation(fields: [notaCompraId], references: [id], onDelete: SetNull)
+  recorrencia         ContaPagarRecorrencia? @relation(fields: [recorrenciaId], references: [id], onDelete: SetNull)
+  tecnico             Tecnico?              @relation(fields: [tecnicoId], references: [id], onDelete: SetNull)
   pagamentos          PagamentoContaPagar[]
 
   @@unique([numero, empresaId])
+  /// Uma conta por competência da regra: é esta trava que impede a geração dobrada
+  @@unique([recorrenciaId, refAno, refMes])
   @@index([categoriaId])
   @@index([centroCustoId])
   @@index([fornecedorId])
   @@index([notaCompraId])
   @@index([empresaId, status])
+  @@index([recorrenciaId])
+  @@index([tecnicoId])
   @@map("contas_pagar")
+}
+
+/// DESPESA RECORRENTE (contas a pagar): a REGRA que se repete — aluguel, internet, assinatura,
+/// salário. Cada ocorrência vira uma conta a pagar independente, ligada por `recorrenciaId` +
+/// competência. A regra guarda só o que se repete; o que a pessoa ajustar numa conta fica na conta.
+model ContaPagarRecorrencia {
+  id             String          @id @default(cuid())
+  empresaId      String          @map("empresa_id")
+  descricao      String
+  /// Favorecido: fornecedor cadastrado OU colaborador (salário/pró-labore). O nome vai sempre em
+  /// `favorecidoNome`, que é o que a conta gerada grava em `fornecedor`.
+  fornecedorId   String?         @map("fornecedor_id")
+  tecnicoId      String?         @map("tecnico_id")
+  favorecidoNome String          @map("favorecido_nome")
+  /// Herdados por cada ocorrência
+  categoriaId    String?         @map("categoria_id")
+  centroCustoId  String?         @map("centro_custo_id")
+  formaPagamento FormaPagamento? @map("forma_pagamento")
+  observacao     String?
+  /// A cada quantos meses repete: 1 mensal, 2 bimestral, 3 trimestral, 4 quadrimestral,
+  /// 6 semestral, 12 anual — ou qualquer N (a cada N meses)
+  passoMeses     Int             @default(1) @map("passo_meses")
+  diaVencimento  Int             @map("dia_vencimento")
+  /// Quando o vencimento cai em fim de semana: ADIANTAR | POSTERGAR | MANTER (o mesmo do contrato)
+  ajusteDiaNaoUtil String        @default("MANTER") @map("ajuste_dia_nao_util")
+  /// O valor de CADA ocorrência (não multiplica: trimestral de R$ 900 é R$ 900 a cada 3 meses)
+  valor          Decimal         @db.Decimal(12, 2)
+  /// Valor estimado: a conta nasce "a confirmar", para ajustar quando chega o boleto
+  valorEstimado  Boolean         @default(false) @map("valor_estimado")
+  /// Primeira competência (mês/ano) que gera conta
+  inicioAno      Int             @map("inicio_ano")
+  inicioMes      Int             @map("inicio_mes")
+  /// Término: por competência final (fimAno/fimMes), por número de ocorrências, ou nenhum dos dois
+  /// = indefinido (o horizonte rolante cuida)
+  fimAno         Int?            @map("fim_ano")
+  fimMes         Int?            @map("fim_mes")
+  ocorrencias    Int?
+  /// ATIVA | PAUSADA | ENCERRADA. Pausada não gera; encerrada não gera mais e não volta.
+  situacao       String          @default("ATIVA")
+  pausadaEm      DateTime?       @map("pausada_em")
+  encerradaEm    DateTime?       @map("encerrada_em")
+  encerramentoMotivo String?     @map("encerramento_motivo")
+  criadoPorId    String?         @map("criado_por_id")
+  criadoEm       DateTime        @default(now()) @map("criado_em")
+  atualizadoEm   DateTime        @updatedAt @map("atualizado_em")
+
+  empresa             Empresa              @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  fornecedorCadastro  Fornecedor?          @relation(fields: [fornecedorId], references: [id], onDelete: SetNull)
+  tecnico             Tecnico?             @relation(fields: [tecnicoId], references: [id], onDelete: SetNull)
+  categoriaFinanceira CategoriaFinanceira? @relation(fields: [categoriaId], references: [id], onDelete: SetNull)
+  centroCusto         CentroCusto?         @relation(fields: [centroCustoId], references: [id], onDelete: SetNull)
+  contas              ContaPagar[]
+
+  @@index([empresaId, situacao])
+  @@index([fornecedorId])
+  @@index([tecnicoId])
+  @@map("contas_pagar_recorrencias")
 }
 
 model PagamentoContaPagar {
