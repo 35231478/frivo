@@ -40,6 +40,10 @@ export const ROTULO_GRUPO: Record<GrupoCategoria, string> = {
 export const CATEGORIAS: CategoriaDoc[] = [
   { id: "contrato", rotulo: "Contrato de trabalho", grupo: "CONTRATO" },
   { id: "registro", rotulo: "Ficha de registro", grupo: "CONTRATO" },
+  // Nascem do motor de Modelos de documento (lib/documentos/modelos.ts), que gera o papel e o
+  // guarda aqui como qualquer outro — sem lista paralela.
+  { id: "termo_responsabilidade", rotulo: "Termo de responsabilidade", grupo: "CONTRATO" },
+  { id: "disciplinar", rotulo: "Advertência e suspensão", grupo: "CONTRATO" },
   { id: "documento_pessoal", rotulo: "Documento pessoal", grupo: "PESSOAL" },
   { id: "comprovante_residencia", rotulo: "Comprovante de residência", grupo: "PESSOAL" },
   { id: "dados_bancarios", rotulo: "Dados bancários", grupo: "PESSOAL" },
@@ -115,14 +119,16 @@ export const categoriaDoPedido = (docId: string): string =>
 
 /* ───────────────────────── origem ───────────────────────── */
 
-export type OrigemDoc = "MANUAL" | "ADMISSAO";
+/** MANUAL: o RH anexou. ADMISSAO: o colaborador mandou pelo link. GERADO: saiu de um modelo. */
+export type OrigemDoc = "MANUAL" | "ADMISSAO" | "GERADO";
 
 export const ROTULO_ORIGEM: Record<OrigemDoc, string> = {
   MANUAL: "Anexado pelo RH",
   ADMISSAO: "Enviado na admissão",
+  GERADO: "Gerado por modelo",
 };
 
-export const origemValida = (v: unknown): v is OrigemDoc => v === "MANUAL" || v === "ADMISSAO";
+export const origemValida = (v: unknown): v is OrigemDoc => v === "MANUAL" || v === "ADMISSAO" || v === "GERADO";
 
 /* ───────────────────────── validade ───────────────────────── */
 

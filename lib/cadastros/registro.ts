@@ -10,6 +10,8 @@ import { descricaoLc116, LISTA_LC116 } from "@/lib/nfse/lc116";
 import type { OpcaoCodigo } from "@/lib/nfse/busca-codigo";
 import { erroAliquota, formatarCnae, normalizarCnae, normalizarLc116, TRIBUTACOES_ISS } from "@/lib/nfse/servico";
 import { padronizarNome, type TipoTexto } from "@/lib/texto/normalizar";
+import { CATEGORIAS } from "@/lib/colaborador/documentos";
+import { TIPOS, TIPOS_DOCUMENTO } from "@/lib/documentos/modelos";
 
 /**
  * Cadastros padronizados — registro DECLARATIVO (mesmo espírito do ENTIDADE das ações em massa).
@@ -40,11 +42,14 @@ export const ENTIDADES_CADASTRO = [
   "kits-material",
   // Padronização (leva 1): os dois cadastros de apoio que ainda estavam na tela antiga
   "tipos-os", "tipos-problema",
+  // Modelos de documento: o texto com os campos entre chaves que vira ficha de EPI, termo,
+  // advertência ou aditivo na ficha do colaborador
+  "modelos-documento",
 ] as const;
 export type EntidadeCadastro = (typeof ENTIDADES_CADASTRO)[number];
 export type ModeloCadastro = "produto" | "servico" | "cargo" | "categoriaFinanceira" | "perfilAcesso" | "modeloEncargos" | "usuario"
   | "tipoEquipamentoCustom" | "tabelaPreco" | "termoReferenciaTemplate" | "prazoTemplate" | "fornecedor" | "centroCusto" | "contaBancaria" | "categoriaProduto" | "kitMaterial"
-  | "tipoOs" | "tipoProblema";
+  | "tipoOs" | "tipoProblema" | "documentoModelo";
 export type AcaoCadastro = "listar" | "criar" | "editar" | "inativar" | "reativar";
 
 /** Basta UMA das permissões. `null` = qualquer usuário logado (catálogo lido nos seletores de outras telas). */
@@ -255,6 +260,8 @@ const ITENS_DO_KIT = { orderBy: { ordem: "asc" }, select: { produtoId: true, qua
 
 const SO_GESTOR: Requisito = [["configuracoes", "gerenciar"]];
 const SO_FOLHA: Requisito = [["financeiro", "folha"]];
+/** Mexer nos MODELOS de documento é configuração do RH, não de quem só gera o papel. */
+const SO_MODELOS: Requisito = [["documentos", "gerenciar"]];
 const PERMISSOES_CONFIG: Record<AcaoCadastro, Requisito> = {
   listar: null, criar: SO_GESTOR, editar: SO_GESTOR, inativar: SO_GESTOR, reativar: SO_GESTOR,
 };
@@ -686,6 +693,45 @@ export const CADASTROS: Record<EntidadeCadastro, DefCadastro> = {
     ...schemas({ nome: nome.max(120), descricao: textoOpcional(1000), cor, exigeEquipamento: booleanoPadraoVerdadeiro },
       { descricao: null, cor: corDado.azulForte, exigeEquipamento: true }),
   },
+  /**
+   * MODELOS DE DOCUMENTO: o texto da empresa que vira ficha de EPI, termo de responsabilidade,
+   * advertência ou aditivo. Quem GERA precisa listar (escolher o modelo na ficha de alguém); só
+   * quem tem "Documentos do colaborador › gerenciar" cria, edita e inativa.
+   */
+  "modelos-documento": {
+    entidade: "modelos-documento", modelo: "documentoModelo", massa: true,
+    singular: "modelo de documento", plural: "modelos de documento",
+    modulo: "documentos",
+    permissoes: {
+      listar: [["documentos", "criar"], ["documentos", "gerenciar"]],
+      criar: SO_MODELOS, editar: SO_MODELOS, inativar: SO_MODELOS, reativar: SO_MODELOS,
+    },
+    chave: "id", editorProprio: true, rota: "/configuracoes/modelos-documento",
+    busca: ["nome", "texto"],
+    campos: [
+      { key: "nome", label: "Nome", obrigatorio: true, placeholder: "Ex: Ficha de entrega de EPI" },
+      { key: "tipo", label: "Tipo", tipo: "select", opcoes: TIPOS.map((x) => ({ value: x.id, label: x.rotulo })), obrigatorio: true },
+      { key: "texto", label: "Texto do documento", tipo: "textarea" },
+      { key: "categoria", label: "Gaveta na ficha", tipo: "select", opcoes: CATEGORIAS.map((c) => ({ value: c.id, label: c.rotulo })) },
+      { key: "temItens", label: "Tem lista de itens", tipo: "booleano" },
+      { key: "validadeDias", label: "Validade (dias)", tipo: "inteiro" },
+      { key: "exigeAssinatura", label: "Pede assinatura", tipo: "booleano" },
+    ],
+    colunas: [
+      { key: "nome", label: "Modelo", ordenar: "nome" },
+      { key: "tipo", label: "Tipo", ordenar: "tipo" },
+    ],
+    ...schemas({
+      nome: nome.max(80),
+      tipo: z.enum(TIPOS_DOCUMENTO),
+      texto: z.preprocess((v) => (v == null ? "" : v), z.string().max(20_000)),
+      categoria: textoOpcional(60),
+      temItens: z.boolean(),
+      validadeDias: z.preprocess((v) => (vazio(v) ? null : Number(v)), z.number().int().min(1).max(3650).nullable()),
+      exigeAssinatura: z.boolean(),
+    }, { categoria: null, temItens: false, validadeDias: null, exigeAssinatura: true }),
+  },
+
   "tipos-problema": {
     entidade: "tipos-problema", modelo: "tipoProblema", singular: "tipo de problema", plural: "tipos de problema",
     // O que o cliente escolhe ao abrir um chamado pelo portal. Ler: qualquer usuário logado; gravar: Configurações › gerenciar

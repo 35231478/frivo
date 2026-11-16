@@ -13,11 +13,10 @@
  * do PMOC.
  */
 
-import { PDFDocument, StandardFonts, type PDFImage } from "pdf-lib";
+import { PDFDocument, StandardFonts } from "pdf-lib";
 import { C, Desenho, MARGEM } from "@/lib/pdf/desenho";
+import { embutirFoto } from "@/lib/pdf/imagem";
 import type { ArquivoGerado } from "@/lib/pdf/resposta";
-import { identificarTipo } from "@/lib/anexos";
-import { decodificarDataUrl } from "@/lib/anexos-server";
 
 /** O traço que ocupa o lugar do campo não preenchido. */
 export const VAZIO = "—";
@@ -57,39 +56,6 @@ export interface DadosFicha {
 
 /* ───────────────────────── o desenho ───────────────────────── */
 
-/**
- * Duas colunas de "rótulo: valor". É a forma que o contador lê rápido — e a que sobrevive a um
- * valor comprido, porque cada campo quebra dentro da sua coluna.
- */
-function campos(d: Desenho, linhas: LinhaFicha[]) {
-  const colunas = 2;
-  const vao = 16;
-  const largura = (d.util - vao * (colunas - 1)) / colunas;
-  const tamanhoRotulo = 7, tamanhoValor = 9.5;
-
-  for (let i = 0; i < linhas.length; i += colunas) {
-    const dupla = linhas.slice(i, i + colunas);
-    // a altura da faixa é a do campo mais alto dela: o par nunca é partido entre folhas
-    const alturas = dupla.map((l) => d.linhas(l.valor, largura, tamanhoValor).length * (tamanhoValor * 1.35));
-    const altura = Math.max(...alturas) + tamanhoRotulo + 9;
-    d.garantir(altura);
-
-    const topo = d.y;
-    dupla.forEach((linha, n) => {
-      const x = MARGEM + n * (largura + vao);
-      d.escrever(linha.rotulo.toUpperCase(), x, topo, { tamanho: tamanhoRotulo, fonte: d.negrito, cor: C.apoio });
-      let y = topo + tamanhoRotulo + 5;
-      for (const t of d.linhas(linha.valor, largura, tamanhoValor)) {
-        d.escrever(t, x, y, { tamanho: tamanhoValor });
-        y += tamanhoValor * 1.35;
-      }
-    });
-    d.y = topo + altura;
-    d.reta(MARGEM, d.y - 3, MARGEM + d.util, d.y - 3, C.linha);
-  }
-  d.y += 8;
-}
-
 function capaDaFicha(d: Desenho, dados: DadosFicha) {
   d.novaPagina();
   // Faixa do topo, por cima do cabeçalho corrido
@@ -109,7 +75,7 @@ function capaDaFicha(d: Desenho, dados: DadosFicha) {
 function bloco(d: Desenho, numero: number, titulo: string, linhas: LinhaFicha[]) {
   if (!linhas.length) return;
   d.secao(numero, titulo);
-  campos(d, linhas);
+  d.campos(linhas);
 }
 
 /**
@@ -206,18 +172,6 @@ export interface DadosContratoPdf {
   selfie: string | null;
 }
 
-/** A selfie só entra se for mesmo uma imagem (o tipo sai dos BYTES); qualquer outra coisa fica de fora. */
-async function embutirSelfie(doc: PDFDocument, selfie: string | null): Promise<PDFImage | null> {
-  if (!selfie) return null;
-  const bytes = decodificarDataUrl(selfie);
-  if (!bytes) return null;
-  const tipo = identificarTipo(bytes, "selfie");
-  try {
-    if (tipo === "image/png") return await doc.embedPng(bytes);
-    if (tipo === "image/jpeg") return await doc.embedJpg(bytes);
-  } catch { return null; }
-  return null;
-}
 
 /**
  * O contrato como prova: o texto que a pessoa leu e aceitou, mais quem assinou, quando, de onde e
@@ -250,14 +204,14 @@ export async function gerarContratoPdf(dados: DadosContratoPdf): Promise<Arquivo
 
   d.y += 10;
   d.secao(1, "Prova da assinatura");
-  campos(d, [
+  d.campos([
     { rotulo: "Assinado por", valor: ou(dados.assinatura.nome) },
     { rotulo: "Data e hora", valor: ou(dados.assinatura.em) },
     { rotulo: "Endereço de IP", valor: ou(dados.assinatura.ip) },
     { rotulo: "Navegador", valor: ou(dados.assinatura.navegador) },
   ]);
 
-  const selfie = await embutirSelfie(doc, dados.selfie);
+  const selfie = await embutirFoto(doc, dados.selfie);
   if (selfie) {
     const largura = Math.min(190, d.util);
     const altura = (selfie.height / selfie.width) * largura;
