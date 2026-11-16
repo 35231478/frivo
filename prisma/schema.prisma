@@ -573,6 +573,9 @@ model Empresa {
   desempenhoFechamentos       DesempenhoFechamento[]
   desempenhoFechamentoLinhas  DesempenhoFechamentoLinha[]
 
+  admissoes      Admissao[]
+  admissaoConfig AdmissaoConfig?
+
   @@map("empresas")
 }
 
@@ -881,6 +884,10 @@ model Usuario {
   desempenhoFechamentos DesempenhoFechamento[] @relation("DesempenhoFechamentoFechou")
   desempenhoReaberturas DesempenhoFechamento[] @relation("DesempenhoFechamentoReabriu")
 
+  admissoesCriadas     Admissao[] @relation("AdmissaoCriadaPor")
+  admissoesCanceladas  Admissao[] @relation("AdmissaoCanceladaPor")
+  admissoesAoContador  Admissao[] @relation("AdmissaoContadorPor")
+
   @@unique([email, empresaId])
   @@index([empresaId, ativo])
   @@map("usuarios")
@@ -946,6 +953,31 @@ model Tecnico {
   estado         String?
   cep            String?
 
+  // Admissão digital — o que o eSocial pede e o cadastro não guardava (tudo opcional)
+  pis            String?
+  ctpsNumero     String? @map("ctps_numero")
+  ctpsSerie      String? @map("ctps_serie")
+  ctpsUf         String? @map("ctps_uf")
+  nomeMae        String? @map("nome_mae")
+  nomePai        String? @map("nome_pai")
+  /// SOLTEIRO | CASADO | DIVORCIADO | VIUVO | UNIAO_ESTAVEL
+  estadoCivil    String? @map("estado_civil")
+  /// FUNDAMENTAL_INCOMPLETO | FUNDAMENTAL | MEDIO_INCOMPLETO | MEDIO | TECNICO | SUPERIOR_INCOMPLETO | SUPERIOR | POS
+  escolaridade   String?
+  nacionalidade  String?
+  naturalidade   String?
+  /// M | F | OUTRO
+  sexo           String?
+  tituloEleitor  String? @map("titulo_eleitor")
+  reservista     String?
+  /// Dados bancários da folha
+  banco          String?
+  agencia        String?
+  conta          String?
+  /// CORRENTE | POUPANCA | SALARIO
+  contaTipo      String? @map("conta_tipo")
+  pixChave       String? @map("pix_chave")
+
   // Dados profissionais
   cargoId           String?           @map("cargo_id")
   perfilAcessoId    String?           @map("perfil_acesso_id")
@@ -996,6 +1028,9 @@ model Tecnico {
   desempenhoParticipante DesempenhoParticipante?
   desempenhoPenalidades  DesempenhoPenalidade[]
   desempenhoFechamentoLinhas DesempenhoFechamentoLinha[]
+
+  admissoes   Admissao[]
+  dependentes ColaboradorDependente[]
 
   @@unique([cpf, empresaId])
   @@index([empresaId, ativo])
@@ -3875,6 +3910,8 @@ model Cargo {
   empresaId String   @map("empresa_id")
   nome      String
   descricao String?
+  /// Código da ocupação (CBO) — a Ficha de Admissão pede
+  cbo       String?
   ativo     Boolean  @default(true)
   criadoEm  DateTime @default(now()) @map("criado_em")
 
@@ -5040,4 +5077,117 @@ model DesempenhoFechamentoLinha {
   @@index([tecnicoId])
   @@index([empresaId])
   @@map("desempenho_fechamento_linhas")
+}
+
+// ─────────────────────────────────────────────
+// ADMISSÃO DIGITAL — o colaborador preenche a própria ficha por um link, assina o contrato,
+// e o RH baixa tudo pronto para o contador.
+// ─────────────────────────────────────────────
+
+/// O CONVITE de admissão: uma linha por admissão de um colaborador já pré-cadastrado pelo RH.
+/// A SITUAÇÃO mora só aqui — o cadastro do colaborador não guarda uma segunda verdade.
+model Admissao {
+  id            String @id @default(cuid())
+  empresaId     String @map("empresa_id")
+  colaboradorId String @map("colaborador_id")
+  /// Token forte do link público (randomBytes(32).base64url)
+  token         String @unique
+  /// CONVIDADO | PREENCHENDO | AGUARDANDO_ASSINATURA | ASSINADO | ENVIADO_CONTADOR | ADMITIDO | CANCELADA | EXPIRADA
+  situacao      String @default("CONVIDADO")
+  expiraEm      DateTime @map("expira_em")
+  criadoPorId   String?  @map("criado_por_id")
+
+  enviadoEm    DateTime? @map("enviado_em")
+  /// EMAIL | WHATSAPP | LINK
+  enviadoCanal String?   @map("enviado_canal")
+  enviadoPara  String?   @map("enviado_para")
+  envios       Int       @default(0)
+
+  /// Primeira abertura do link pelo colaborador
+  abertoEm DateTime? @map("aberto_em")
+
+  /// Consentimento LGPD: sem ele o formulário não abre
+  consentimentoEm        DateTime? @map("consentimento_em")
+  consentimentoIp        String?   @map("consentimento_ip")
+  consentimentoUserAgent String?   @map("consentimento_user_agent")
+
+  /// Rascunho etapa a etapa (fecha e volta sem perder nada) e onde parou
+  rascunho    Json?
+  etapa       String?
+  concluidoEm DateTime? @map("concluido_em")
+
+  /// Prova da assinatura — a mesma do aceite da OS
+  assinaturaNome      String?   @map("assinatura_nome")
+  assinaturaIp        String?   @map("assinatura_ip")
+  assinaturaUserAgent String?   @map("assinatura_user_agent")
+  assinaturaEm        DateTime? @map("assinatura_em")
+  /// Selfie da assinatura (data URL) — dado sensível
+  selfie              String?   @db.Text
+  /// O contrato preenchido, congelado no momento da assinatura
+  contratoTexto       String?   @map("contrato_texto") @db.Text
+
+  /// Cancelamento: nunca apaga, muda a situação e guarda a razão
+  canceladaEm        DateTime? @map("cancelada_em")
+  canceladaPorId     String?   @map("cancelada_por_id")
+  cancelamentoMotivo String?   @map("cancelamento_motivo")
+
+  enviadoContadorEm    DateTime? @map("enviado_contador_em")
+  enviadoContadorPorId String?   @map("enviado_contador_por_id")
+  admitidoEm           DateTime? @map("admitido_em")
+
+  criadoEm     DateTime @default(now()) @map("criado_em")
+  atualizadoEm DateTime @updatedAt @map("atualizado_em")
+
+  empresa           Empresa  @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  colaborador       Tecnico  @relation(fields: [colaboradorId], references: [id], onDelete: Cascade)
+  criadoPor         Usuario? @relation("AdmissaoCriadaPor", fields: [criadoPorId], references: [id], onDelete: SetNull)
+  canceladaPor      Usuario? @relation("AdmissaoCanceladaPor", fields: [canceladaPorId], references: [id], onDelete: SetNull)
+  enviadoContadorPor Usuario? @relation("AdmissaoContadorPor", fields: [enviadoContadorPorId], references: [id], onDelete: SetNull)
+
+  @@index([empresaId, situacao])
+  @@index([colaboradorId])
+  @@map("admissoes")
+}
+
+/// A configuração da admissão POR EMPRESA. Nada hardcoded: o que varia entre empresas mora aqui.
+model AdmissaoConfig {
+  id        String @id @default(cuid())
+  empresaId String @unique @map("empresa_id")
+  /// Modelo do contrato com os campos entre chaves ({{nome}}, {{cargo}}…). Vazio = a empresa ainda
+  /// não definiu; o sistema não inventa cláusula.
+  contratoModelo String? @map("contrato_modelo") @db.Text
+  /// Orientações finais (exame admissional, o que levar no primeiro dia, contato do responsável)
+  orientacoes    String? @db.Text
+  /// [{ "id": "rg", "rotulo": "RG (frente e verso)", "obrigatorio": true }, …]
+  documentos     Json?
+  validadeDias   Int     @default(7) @map("validade_dias")
+  /// Período de experiência do modelo de contrato (45 + 45 é o padrão da CLT)
+  experienciaDias            Int @default(45) @map("experiencia_dias")
+  experienciaProrrogacaoDias Int @default(45) @map("experiencia_prorrogacao_dias")
+
+  criadoEm     DateTime @default(now()) @map("criado_em")
+  atualizadoEm DateTime @updatedAt @map("atualizado_em")
+
+  empresa Empresa @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+
+  @@map("admissao_config")
+}
+
+/// Dependentes do colaborador (IRRF e salário-família) — a Ficha de Admissão pede.
+model ColaboradorDependente {
+  id            String    @id @default(cuid())
+  colaboradorId String    @map("colaborador_id")
+  nome          String
+  nascimento    DateTime?
+  cpf           String?
+  /// FILHO | CONJUGE | ENTEADO | OUTRO
+  parentesco    String    @default("FILHO")
+  irrf          Boolean   @default(false)
+  salarioFamilia Boolean  @default(false) @map("salario_familia")
+  criadoEm      DateTime  @default(now()) @map("criado_em")
+
+  colaborador Tecnico @relation(fields: [colaboradorId], references: [id], onDelete: Cascade)
+
+  @@index([colaboradorId])
+  @@map("colaborador_dependentes")
 }
