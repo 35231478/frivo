@@ -132,7 +132,12 @@ export async function fecharMes(empresaId: string, competencia: string, criadoPo
     prisma.folhaSnapshot.deleteMany({ where: { empresaId, competencia } }),
     prisma.folhaSnapshot.createMany({ data }),
   ]);
-  return { colaboradores: data.length, total: Math.round(data.reduce((s, d) => s + d.custoTotal, 0) * 100) / 100 };
+  // `comDados` só conta: a foto grava todo colaborador ativo, inclusive quem entra com custo zero
+  return {
+    colaboradores: data.length,
+    comDados: linhas.filter((l) => !l.semDados).length,
+    total: Math.round(data.reduce((s, d) => s + d.custoTotal, 0) * 100) / 100,
+  };
 }
 
 /** Evolução mês a mês (meses fechados), das `meses` competências até `ate` (inclusive). */

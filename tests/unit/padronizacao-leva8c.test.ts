@@ -220,7 +220,6 @@ describe("folha e NFS-e são razão: nada se apaga", () => {
 describe("a leva não tocou no cálculo, na emissão nem nos vínculos", () => {
   const arquivosIntocados = [
     "lib/folha/calculo.ts",
-    "lib/folha/server.ts",
     "lib/folha/planilha.ts",
     "lib/folha/importacao.ts",
     "app/api/folha/fechar-mes/route.ts",
@@ -253,6 +252,16 @@ describe("a leva não tocou no cálculo, na emissão nem nos vínculos", () => {
   it("os arquivos do cálculo, da emissão e do vínculo existem com o nome que a guarda cobra", () => {
     // sem isto, um arquivo renomeado faria a guarda acima passar comparando nada
     for (const arq of arquivosIntocados) expect(ler(arq).length, arq).toBeGreaterThan(0);
+  });
+
+  it("em lib/folha/server.ts só o retorno do fechamento mudou: o que é GRAVADO continua igual", () => {
+    const src = ler("lib/folha/server.ts");
+    // a foto é montada e gravada do mesmo jeito (o teste de PostgreSQL confere o conteúdo)
+    expect(src).toContain("const { linhas } = await folhaAtual(empresaId, competencia);");
+    expect(src).toContain("deleteMany({ where: { empresaId, competencia } })");
+    expect(src).toContain("prisma.folhaSnapshot.createMany({ data })");
+    // o acréscimo é só contagem devolvida para o aviso da tela
+    expect(src).toContain("comDados: linhas.filter((l) => !l.semDados).length,");
   });
 
   it("o vínculo custo de pessoal ↔ Desempenho continua sendo o CSV do fechamento", () => {

@@ -76,7 +76,7 @@ describe("fechar o mês", () => {
   }
 
   it("pergunta antes e avisa por toast, com o plural escrito", async () => {
-    respostas["POST /api/folha/fechar-mes"] = { status: 200, corpo: { ok: true, colaboradores: 8, total: 41234.5 } };
+    respostas["POST /api/folha/fechar-mes"] = { status: 200, corpo: { ok: true, colaboradores: 8, comDados: 8, total: 41234.5 } };
     await montarFechar();
     await clicar($('[data-acao="fechar-mes"]'));
     const o = avisos.confirmar.mock.calls[0][0] as { mensagem: string; titulo: string };
@@ -84,14 +84,24 @@ describe("fechar o mês", () => {
     expect(o.mensagem).toContain("novembro de 2026");
     expect(chamadas.at(-1)).toMatchObject({ url: "/api/folha/fechar-mes", metodo: "POST", corpo: { competencia: "2026-11" } });
     expect(avisos.lista).toEqual([["novembro de 2026 fechado: 8 colaboradores na foto do mês.", "sucesso"]]);
+    // todos com dados: sem parêntese, que só serviria para repetir o mesmo número
     expect(nav.refresh).toHaveBeenCalled();
   });
 
   it("um colaborador só: o toast fala no singular", async () => {
-    respostas["POST /api/folha/fechar-mes"] = { status: 200, corpo: { ok: true, colaboradores: 1, total: 4100 } };
+    respostas["POST /api/folha/fechar-mes"] = { status: 200, corpo: { ok: true, colaboradores: 1, comDados: 1, total: 4100 } };
     await montarFechar();
     await clicar($('[data-acao="fechar-mes"]'));
     expect(avisos.lista.at(-1)![0]).toContain("1 colaborador na foto do mês.");
+  });
+
+  it("com gente sem dados de folha, o toast mostra os dois números", async () => {
+    // a foto fotografa todo mundo (quem está sem salário entra com custo zero); o card da tela
+    // conta só quem tem dados — os dois juntos para o leitor não achar que um deles está errado
+    respostas["POST /api/folha/fechar-mes"] = { status: 200, corpo: { ok: true, colaboradores: 5, comDados: 4, total: 26540.77 } };
+    await montarFechar();
+    await clicar($('[data-acao="fechar-mes"]'));
+    expect(avisos.lista).toEqual([["novembro de 2026 fechado: 5 colaboradores (4 com dados) na foto do mês.", "sucesso"]]);
   });
 
   it("refazer avisa que a foto anterior é substituída, e o botão muda de nome", async () => {

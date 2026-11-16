@@ -50,7 +50,7 @@ de antes da chamada**.
 | totais no rodapé da tabela | totais na **faixa da tabela** (a casa não tem rodapé de tabela); no celular, o título "Por colaborador · 5 ativos" |
 | sem ⓘ | ⓘ no título: de onde vem o custo, o que são os encargos e o que "Fechar o mês" guarda |
 | "4 colaborador(es) com dados", "4 técnico(s)", "1 colaborador(es) sem salário/dados de folha", "5 ativo(s)" | plural escrito: "4 colaboradores com dados", "4 técnicos", "1 colaborador sem salário ou dados de folha", "5 ativos" |
-| "Mês fechado (5 colaboradores)" em verde, fixo ao lado do botão | **toast**: "novembro de 2026 fechado: 5 colaboradores na foto do mês." — e o **erro continua na tela**, ao lado do botão |
+| "Mês fechado (5 colaboradores)" em verde, fixo ao lado do botão | **toast**: "novembro de 2026 fechado: 5 colaboradores (4 com dados) na foto do mês." — e o **erro continua na tela**, ao lado do botão |
 | números com classes soltas | tokens `PLANILHA.numero` (alinhado pelos algarismos) |
 | lista vazia escrita na tela | `ListaVazia` da casa |
 
@@ -95,7 +95,7 @@ como guarda de teste.
 
 ## O que esta leva não encostou
 
-- **cálculo da folha** (`lib/folha/calculo.ts`), montagem das linhas e fechamento (`lib/folha/server.ts`);
+- **cálculo da folha** (`lib/folha/calculo.ts`) e montagem das linhas;
 - **importação** (`lib/folha/planilha.ts`, `lib/folha/importacao.ts`) e as rotas de folha;
 - **emissão de NFS-e** (`lib/nfse/*`) e o vínculo nota ↔ medição/conta a pagar;
 - **Desempenho**: o vínculo com o custo de pessoal é o **CSV do fechamento**
@@ -103,6 +103,12 @@ como guarda de teste.
 
 Isso não é promessa: um teste compara, com `git diff` contra o merge-base do master, a lista desses
 arquivos — se qualquer um deles mudar, o teste cai.
+
+**A única exceção, consciente:** `lib/folha/server.ts` ganhou **uma linha** no retorno de
+`fecharMes` — a contagem `comDados`, para o toast poder dizer "5 colaboradores (4 com dados)". O que
+é **gravado** não mudou: a foto é montada e escrita do mesmo jeito, e o teste de PostgreSQL confere
+o conteúdo (bate centavo por centavo com `calcularCusto`). Um teste de fonte cobra que só o retorno
+mudou: as três linhas que montam, apagam e gravam a foto continuam ali.
 
 > O brief citava `modulo-custo-de-pessoal-folha.md` como referência do vínculo. Esse arquivo não
 > existe em `docs/` (o que há sobre fechamento e folha de bônus está em `docs/desempenho.md`). Usei
@@ -118,7 +124,7 @@ arquivos — se qualquer um deles mudar, o teste cai.
 
 ## Testes
 
-Três arquivos novos, 46 casos:
+Três arquivos novos, 49 casos:
 
 - `tests/unit/padronizacao-leva8c.test.ts` — guardas de fonte: trava em cada tela e cada rota,
   TabelaPro sem `<table>` à mão, totais na faixa, tokens de planilha, ⓘ em todas as telas, plural
@@ -136,9 +142,10 @@ Três arquivos novos, 46 casos:
 sucesso **e** o toast. Agora cobra o toast e exige que o recado **não** fique na tela — é a mudança
 intencional desta leva, não um teste afrouxado.
 
-**Mutação: 7 quebras propositais, 7 pegas.** Tirar a trava da tela do emitente, trocar o toast do
+**Mutação: 8 quebras propositais, 8 pegas.** Tirar a trava da tela do emitente, trocar o toast do
 fechamento por recado na tela, atualizar a tela mesmo com 403, voltar ao plural abreviado, afrouxar
-a permissão da rota de fechar o mês, fazer o refazer não substituir a foto, tirar o ⓘ do título.
+a permissão da rota de fechar o mês, fazer o refazer não substituir a foto, tirar o ⓘ do título,
+sumir com o "(4 com dados)" do toast.
 
 Suíte inteira verde.
 
@@ -160,10 +167,9 @@ igual ao das levas anteriores).
 
 ## ❓ Para conferir
 
-1. **O toast do fechamento conta 5, o card conta 4.** A foto do mês fotografa **todos os
-   colaboradores ativos** (quem está sem salário entra com custo zero), enquanto o card diz "4
-   colaboradores com dados". Os dois números estão certos, mas ficam lado a lado na tela. Mantive
-   como está (era assim antes, e mudar mexeria no que o fechamento grava). Se preferir, o toast pode
-   dizer "5 colaboradores (4 com dados)".
+1. **O toast do fechamento mostra os dois números — decidido pelo Zé.** A foto fotografa **todos os
+   colaboradores ativos** (quem está sem salário entra com custo zero) e o card conta só quem tem
+   dados; o toast agora diz "5 colaboradores (4 com dados)", para os dois números não parecerem
+   erro. Quando todos têm dados o parêntese não aparece (repetiria o mesmo número).
 2. **Coluna Descontos oculta por padrão.** Foi escolha minha para a tabela caber sem rolagem
    horizontal no notebook. Fica a um clique em "Colunas", e a escolha é lembrada por usuário.

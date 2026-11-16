@@ -196,7 +196,7 @@ describe.skipIf(!URL_PG)("Leva 8C — folha e fiscal (PostgreSQL real)", () => {
   it("a foto do mês bate centavo por centavo com o cálculo de lib/folha/calculo", async () => {
     const r = await fecharMes("2026-10");
     expect(r.status).toBe(200);
-    expect(r.json).toMatchObject({ ok: true, colaboradores: 1 });
+    expect(r.json).toMatchObject({ ok: true, colaboradores: 1, comDados: 1 });
 
     const esperado = custoEsperado([{ nome: "INSS patronal", percentual: 20 }, { nome: "FGTS", percentual: 8 }]);
     const foto = await prisma.folhaSnapshot.findFirst({ where: { competencia: "2026-10", colaboradorId: "t1" } });
@@ -243,6 +243,17 @@ describe.skipIf(!URL_PG)("Leva 8C — folha e fiscal (PostgreSQL real)", () => {
     expect(await prisma.folhaSnapshot.count({ where: { empresaId: "e1" } })).toBe(2);
     const outra = await prisma.folhaSnapshot.findFirst({ where: { empresaId: "e2" } });
     expect([outra.colaboradorId, Number(outra.custoTotal)]).toEqual(["outro", 1000]);
+  });
+
+  it("quem está sem dados de folha entra na foto com custo zero, e a rota devolve as duas contagens", async () => {
+    await prisma.tecnico.create({ data: {
+      id: "t2", empresaId: "e1", nome: "Sem folha", cpf: "168.995.350-09", telefone: "11988880000",
+      tipo: "ADMINISTRATIVO", jornadaDias: ["SEG"],
+    } });
+    const r = await fecharMes("2026-10");
+    expect(r.json).toMatchObject({ colaboradores: 2, comDados: 1 });
+    const foto = await prisma.folhaSnapshot.findFirst({ where: { colaboradorId: "t2" } });
+    expect([Number(foto.custoTotal), foto.detalhe.semDados]).toEqual([0, true]);
   });
 
   it("mês futuro é recusado (400) e não grava foto nenhuma", async () => {

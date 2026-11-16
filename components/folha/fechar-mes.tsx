@@ -23,7 +23,11 @@ export function FecharMes({ competencia, rotulo, jaFechado }: { competencia: str
       // Sucesso é toast (padrão da casa); o erro fica na tela, ao lado do botão
       if (!r.ok) { setMsg({ ok: false, texto: d.erro ?? "Não foi possível fechar o mês." }); return; }
       const n = Number(d.colaboradores ?? 0);
-      toast(`${rotulo} fechado: ${n === 1 ? "1 colaborador" : `${n} colaboradores`} na foto do mês.`);
+      const comDados = Number(d.comDados ?? n);
+      const quantos = n === 1 ? "1 colaborador" : `${n} colaboradores`;
+      // quem está sem salário entra na foto com custo zero: os dois números juntos para não parecer erro
+      const detalhe = comDados === n ? "" : ` (${comDados} com dados)`;
+      toast(`${rotulo} fechado: ${quantos}${detalhe} na foto do mês.`);
       router.refresh();
     } catch {
       setMsg({ ok: false, texto: "Erro de conexão." });
