@@ -226,17 +226,33 @@ describe("a leva não tocou no cálculo, na emissão nem nos vínculos", () => {
     "app/api/folha/fechar-mes/route.ts",
     "app/api/folha/importar/route.ts",
     "app/api/folha/colaboradores/[id]/route.ts",
-    "lib/nfse/emissao.ts",
+    "lib/nfse/emissao-server.ts",
+    "lib/nfse/plugnotas.ts",
     "lib/nfse/nota.ts",
     "lib/desempenho/fechamento.ts",
     "lib/desempenho/fechamento-server.ts",
   ];
 
-  it("cálculo da folha, importação, emissão de NFS-e e CSV do Desempenho continuam como no master", () => {
-    const base = execFileSync("git", ["merge-base", "HEAD", "origin/master"], { cwd: RAIZ, encoding: "utf8" }).trim();
-    const mudados = execFileSync("git", ["diff", "--name-only", base, "--", ...arquivosIntocados], { cwd: RAIZ, encoding: "utf8" })
+  /** A base da comparação. No CI os shards clonam raso: sem a base, não há o que comparar. */
+  const base = (() => {
+    for (const ref of ["origin/master", "master", process.env.GITHUB_BASE_REF && `origin/${process.env.GITHUB_BASE_REF}`]) {
+      if (!ref) continue;
+      try {
+        return execFileSync("git", ["merge-base", "HEAD", ref], { cwd: RAIZ, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }).trim();
+      } catch { /* ref não está neste clone */ }
+    }
+    return null;
+  })();
+
+  it.skipIf(!base)("cálculo da folha, importação, emissão de NFS-e e CSV do Desempenho continuam como no master", () => {
+    const mudados = execFileSync("git", ["diff", "--name-only", base!, "--", ...arquivosIntocados], { cwd: RAIZ, encoding: "utf8" })
       .split("\n").filter(Boolean);
     expect(mudados).toEqual([]);
+  });
+
+  it("os arquivos do cálculo, da emissão e do vínculo existem com o nome que a guarda cobra", () => {
+    // sem isto, um arquivo renomeado faria a guarda acima passar comparando nada
+    for (const arq of arquivosIntocados) expect(ler(arq).length, arq).toBeGreaterThan(0);
   });
 
   it("o vínculo custo de pessoal ↔ Desempenho continua sendo o CSV do fechamento", () => {
