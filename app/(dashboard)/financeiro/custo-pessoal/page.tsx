@@ -9,9 +9,14 @@ import { cn, formatarMoeda } from "@/lib/utils";
 import { agrupar, evolucao, folhaAtual } from "@/lib/folha/server";
 import { AVISO_GESTAO, FUNCOES_CUSTO_HORA, REGIME_LABEL, competenciaDe, rotuloCompetencia } from "@/lib/folha/calculo";
 import { FecharMes } from "@/components/folha/fechar-mes";
+import { TabelaPro } from "@/components/listagem/tabela-pro";
+import { ListaVazia } from "@/components/listagem/listagem-ui";
+import { PLANILHA } from "@/lib/planilha";
 import { AlertTriangle, BadgeDollarSign, Clock, FileSpreadsheet, Info, Percent, Settings2, Users } from "lucide-react";
 
 export const metadata: Metadata = { title: "Custo de pessoal" };
+
+const AJUDA = "O custo de cada colaborador no mês: remuneração, adicionais e horas extras, mais encargos e benefícios pelos percentuais de Encargos. Os dados vêm do cadastro do colaborador — a planilha importada preenche os mesmos campos. \"Fechar o mês\" guarda a foto do custo: reajuste depois não muda mês fechado.";
 
 /**
  * Custo de Pessoal (gestão de folha). Gate: "Financeiro › Custo de pessoal" — o middleware só exige
@@ -54,7 +59,7 @@ export default async function CustoPessoalPage() {
         <div className="flex items-center gap-3">
           <div className="p-2 bg-surface-alt rounded-lg"><BadgeDollarSign className="w-5 h-5 text-ink-muted" /></div>
           <div>
-            <h1 className="page-title">Custo de pessoal</h1>
+            <h1 className="page-title flex items-center gap-1.5">Custo de pessoal <Dica texto={AJUDA} rotulo="Custo de pessoal" lado="direita" /></h1>
             <p className="page-subtitle first-letter:uppercase">{rotuloCompetencia(competencia, true)} · folha estimada com encargos e benefícios</p>
           </div>
         </div>
@@ -76,17 +81,17 @@ export default async function CustoPessoalPage() {
 
       {/* Indicadores */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <Indicador titulo="Folha do mês (com encargos)" valor={formatarMoeda(total)} detalhe={`${comDados.length} colaborador(es) com dados`} icone={BadgeDollarSign} />
+        <Indicador titulo="Folha do mês (com encargos)" valor={formatarMoeda(total)} detalhe={`${plural(comDados.length, "colaborador", "colaboradores")} com dados`} icone={BadgeDollarSign} />
         <Indicador titulo="Encargos" valor={formatarMoeda(encargos)} detalhe={remuneracao > 0 ? `${((encargos / remuneracao) * 100).toLocaleString("pt-BR", { maximumFractionDigits: 1 })}% sobre a remuneração` : "—"} icone={Percent} />
         <Indicador titulo="Benefícios" valor={formatarMoeda(beneficios)} detalhe="VT, VA/VR, saúde e outros" icone={Users} />
-        <Indicador titulo="Custo-hora médio (técnicos)" valor={formatarMoeda(custoHoraTecnico)} detalhe={tecnicos.length ? `${tecnicos.length} técnico(s) · insumo da margem` : "Sem técnicos com dados"} icone={Clock} />
+        <Indicador titulo="Custo-hora médio (técnicos)" valor={formatarMoeda(custoHoraTecnico)} detalhe={tecnicos.length ? `${plural(tecnicos.length, "técnico", "técnicos")} · insumo da margem` : "Sem técnicos com dados"} icone={Clock} />
       </div>
 
       {pendentes.length > 0 && (
         <div className="flex gap-2 rounded-lg border border-surface-border bg-white px-3 py-2.5 text-sm text-ink" data-pendentes>
           <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5 text-atencao-texto" aria-hidden />
           <p>
-            <strong>{pendentes.length} colaborador(es) sem salário/dados de folha</strong> (entram com custo zero):{" "}
+            <strong>{plural(pendentes.length, "colaborador", "colaboradores")} sem salário ou dados de folha</strong> (entram com custo zero):{" "}
             {pendentes.slice(0, 6).map((p, i) => (
               <span key={p.id}>{i > 0 && ", "}<Link href={`/financeiro/custo-pessoal/colaborador/${p.id}`} className="text-primary-600 hover:underline">{p.nome}</Link></span>
             ))}
@@ -129,98 +134,98 @@ export default async function CustoPessoalPage() {
         <Distribuicao titulo="Por equipe" itens={porEquipe} total={total} />
       </div>
 
-      {/* Por colaborador */}
-      <section className="bg-white rounded-card border border-surface-border shadow-card" aria-labelledby="titulo-colaboradores">
-        <div className="flex items-center justify-between gap-2 px-4 sm:px-5 py-4 border-b border-surface-border">
-          <h2 id="titulo-colaboradores" className="card-title">Por colaborador</h2>
-          <span className="text-xs text-ink-muted">{linhas.length} ativo(s)</span>
-        </div>
+      {/* Por colaborador — tabela da casa: colunas escolhíveis, cartões no celular */}
+      <section className="bg-white rounded-card border border-surface-border shadow-card overflow-hidden" aria-labelledby="titulo-colaboradores">
+        <h2 id="titulo-colaboradores" className="sr-only">Por colaborador</h2>
         {linhas.length === 0 ? (
-          <p className="p-6 text-sm text-ink-muted text-center">Nenhum colaborador ativo. Cadastre em Equipes → Colaboradores ou importe uma planilha.</p>
+          <ListaVazia mensagem="Nenhum colaborador ativo. Cadastre em Equipes › Colaboradores ou importe uma planilha." />
         ) : (
-          <>
-            {/* Celular: cartões */}
-            <ul className="md:hidden divide-y divide-surface-border">
-              {linhas.map((l) => (
-                <li key={l.id} className="px-4 py-3">
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0">
-                      <Link href={`/financeiro/custo-pessoal/colaborador/${l.id}`} className="text-sm font-semibold text-ink hover:text-primary-600 block truncate">{l.nome}</Link>
-                      <p className="text-xs text-ink-muted truncate">{l.funcao} · {REGIME_LABEL[l.regime]}{l.equipe ? ` · ${l.equipe}` : ""}</p>
-                    </div>
-                    <div className="text-right shrink-0">
-                      <p className="text-sm font-semibold text-ink tabular-nums">{l.semDados ? "—" : formatarMoeda(l.custo.total)}</p>
-                      <p className="text-[11px] text-ink-muted tabular-nums">{l.semDados ? "sem dados" : `${formatarMoeda(l.custo.custoHora)}/h`}</p>
-                    </div>
-                  </div>
-                  {!l.semDados && (
-                    <p className="mt-1 text-[11px] text-ink-muted">
-                      Base {formatarMoeda(l.custo.base)} · Encargos {formatarMoeda(l.custo.encargos)} · Benefícios {formatarMoeda(l.custo.beneficios)}
-                    </p>
-                  )}
-                </li>
-              ))}
-            </ul>
-            {/* Desktop: tabela */}
-            <div className="hidden md:block overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="text-left text-xs uppercase tracking-wider text-ink-muted border-b border-surface-border">
-                    <th className="px-4 py-2.5 font-semibold">Colaborador</th>
-                    <th className="px-3 py-2.5 font-semibold">Contrato</th>
-                    <th className="px-3 py-2.5 font-semibold text-right">Base</th>
-                    <th className="px-3 py-2.5 font-semibold text-right">Adicionais + HE</th>
-                    <th className="px-3 py-2.5 font-semibold text-right">Encargos</th>
-                    <th className="px-3 py-2.5 font-semibold text-right">Benefícios</th>
-                    <th className="px-3 py-2.5 font-semibold text-right">Descontos</th>
-                    <th className="px-3 py-2.5 font-semibold text-right">Custo total</th>
-                    <th className="px-4 py-2.5 font-semibold text-right">Custo-hora</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-surface-border">
+          <TabelaPro
+            tela="custo-pessoal"
+            atributos={{ "data-tabela-custo-pessoal": true }}
+            barra={
+              <p className="text-xs text-ink-muted" data-resumo-folha>
+                Por colaborador · {plural(linhas.length, "ativo", "ativos")}
+                <span className="hidden sm:inline">
+                  {" · "}Base {formatarMoeda(soma((l) => l.custo.base))}
+                  {" · "}Adicionais e HE {formatarMoeda(soma((l) => l.custo.adicional + l.custo.horasExtras))}
+                  {" · "}Descontos {formatarMoeda(soma((l) => l.custo.descontos))}
+                </span>
+              </p>
+            }
+            cartoes={
+              <>
+                {/* No celular a faixa da tabela não aparece: o título e a contagem vêm aqui */}
+                <div className="flex items-center justify-between gap-3 px-4 py-2.5 border-b border-surface-border">
+                  <h3 className="text-sm font-semibold text-ink">Por colaborador</h3>
+                  <span className="text-xs text-ink-muted">{plural(linhas.length, "ativo", "ativos")}</span>
+                </div>
+                <ul className="divide-y divide-surface-border" data-cartoes>
                   {linhas.map((l) => (
-                    <tr key={l.id} className="hover:bg-surface-alt/50">
-                      <td className="px-4 py-2.5 min-w-[200px]">
-                        <Link href={`/financeiro/custo-pessoal/colaborador/${l.id}`} className="font-medium text-ink hover:text-primary-600">{l.nome}</Link>
-                        <p className="text-xs text-ink-muted">{l.funcao}{l.equipe ? ` · ${l.equipe}` : ""}{l.admitidoNoMes ? " · admitido neste mês" : ""}</p>
-                      </td>
-                      <td className="px-3 py-2.5 text-ink-muted whitespace-nowrap">{REGIME_LABEL[l.regime]}</td>
-                      {l.semDados ? (
-                        <td colSpan={7} className="px-3 py-2.5 text-right text-xs text-atencao-texto">Sem salário/dados de folha</td>
-                      ) : (
-                        <>
-                          <Num v={l.custo.base} />
-                          <Num v={l.custo.adicional + l.custo.horasExtras} />
-                          <Num v={l.custo.encargos} />
-                          <Num v={l.custo.beneficios} />
-                          <Num v={l.custo.descontos} negativo />
-                          <td className="px-3 py-2.5 text-right font-semibold text-ink tabular-nums whitespace-nowrap">{formatarMoeda(l.custo.total)}</td>
-                          <td className="px-4 py-2.5 text-right text-ink-muted tabular-nums whitespace-nowrap">{formatarMoeda(l.custo.custoHora)}</td>
-                        </>
-                      )}
-                    </tr>
-                  ))}
-                </tbody>
-                <tfoot>
-                  <tr className="border-t-2 border-surface-border font-semibold text-ink">
-                    <td className="px-4 py-3" colSpan={2}>Total</td>
-                    <Num v={soma((l) => l.custo.base)} forte />
-                    <Num v={soma((l) => l.custo.adicional + l.custo.horasExtras)} forte />
-                    <Num v={encargos} forte />
-                    <Num v={beneficios} forte />
-                    <Num v={soma((l) => l.custo.descontos)} negativo forte />
-                    <td className="px-3 py-3 text-right tabular-nums whitespace-nowrap">{formatarMoeda(total)}</td>
-                    <td />
-                  </tr>
-                </tfoot>
-              </table>
-            </div>
-          </>
+                      <li key={l.id} className="px-4 py-3" data-colaborador={l.id}>
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <Link href={`/financeiro/custo-pessoal/colaborador/${l.id}`} className="text-sm font-semibold text-ink hover:text-primary-600 block truncate">{l.nome}</Link>
+                            <p className="text-xs text-ink-muted truncate">{l.funcao} · {REGIME_LABEL[l.regime]}{l.equipe ? ` · ${l.equipe}` : ""}</p>
+                          </div>
+                          <div className="text-right shrink-0">
+                            <p className={cn(PLANILHA.numero, "text-sm font-semibold text-ink")}>{l.semDados ? "—" : formatarMoeda(l.custo.total)}</p>
+                            <p className={cn(PLANILHA.numero, "text-[11px] text-ink-muted")}>{l.semDados ? "sem dados" : `${formatarMoeda(l.custo.custoHora)}/h`}</p>
+                          </div>
+                        </div>
+                        {!l.semDados && (
+                          <p className="mt-1 text-[11px] text-ink-muted">
+                            Base {formatarMoeda(l.custo.base)} · Encargos {formatarMoeda(l.custo.encargos)} · Benefícios {formatarMoeda(l.custo.beneficios)}
+                          </p>
+                        )}
+                      </li>
+                      ))}
+                  </ul>
+              </>
+            }
+            colunas={[
+              { id: "nome", titulo: "Colaborador", minimo: 200, obrigatoria: true, classe: "truncate" },
+              { id: "contrato", titulo: "Contrato", largura: 130 },
+              { id: "base", titulo: "Base", alinhar: "direita", largura: 110 },
+              { id: "adicionais", titulo: "Adicionais e HE", alinhar: "direita", largura: 130 },
+              { id: "encargos", titulo: "Encargos", alinhar: "direita", largura: 110 },
+              { id: "beneficios", titulo: "Benefícios", alinhar: "direita", largura: 110 },
+              { id: "descontos", titulo: "Descontos", alinhar: "direita", largura: 110, oculta: true },
+              { id: "total", titulo: "Custo total", alinhar: "direita", largura: 120, obrigatoria: true },
+              { id: "hora", titulo: "Custo-hora", alinhar: "direita", largura: 110 },
+            ]}
+            linhas={linhas.map((l) => ({
+              id: l.id,
+              atributos: { "data-linha": l.id },
+              titulos: { nome: l.nome },
+              celulas: {
+                nome: (
+                  <>
+                    <Link href={`/financeiro/custo-pessoal/colaborador/${l.id}`} className="font-medium text-ink hover:text-primary-600">{l.nome}</Link>
+                    <p className="text-xs text-ink-muted truncate">{l.funcao}{l.equipe ? ` · ${l.equipe}` : ""}{l.admitidoNoMes ? " · admitido neste mês" : ""}</p>
+                  </>
+                ),
+                contrato: <span className={PLANILHA.apagado}>{REGIME_LABEL[l.regime]}</span>,
+                base: <Num v={l.custo.base} vazio={l.semDados} />,
+                adicionais: <Num v={l.custo.adicional + l.custo.horasExtras} vazio={l.semDados} />,
+                encargos: <Num v={l.custo.encargos} vazio={l.semDados} />,
+                beneficios: <Num v={l.custo.beneficios} vazio={l.semDados} />,
+                descontos: <Num v={l.custo.descontos} negativo vazio={l.semDados} />,
+                total: l.semDados
+                  ? <span className="text-xs text-atencao-texto">Sem dados de folha</span>
+                  : <span className={cn(PLANILHA.numero, "font-semibold text-ink")}>{formatarMoeda(l.custo.total)}</span>,
+                hora: <Num v={l.custo.custoHora} vazio={l.semDados} />,
+              },
+            }))}
+          />
         )}
       </section>
     </div>
   );
 }
+
+/** "1 colaborador" / "8 colaboradores": o plural escrito do manifesto. */
+const plural = (n: number, um: string, muitos: string) => `${n} ${n === 1 ? um : muitos}`;
 
 function abreviar(v: number) {
   if (v >= 1_000_000) return `R$ ${(v / 1_000_000).toLocaleString("pt-BR", { maximumFractionDigits: 1 })} mi`;
@@ -228,11 +233,12 @@ function abreviar(v: number) {
   return formatarMoeda(v);
 }
 
-function Num({ v, negativo, forte }: { v: number; negativo?: boolean; forte?: boolean }) {
+/** Valor da planilha: alinhado pelos algarismos; zero e sem dados viram travessão. */
+function Num({ v, negativo, vazio }: { v: number; negativo?: boolean; vazio?: boolean }) {
   return (
-    <td className={cn("px-3 py-2.5 text-right tabular-nums whitespace-nowrap", forte ? "py-3" : "text-ink-muted")}>
-      {v === 0 ? "—" : `${negativo ? "− " : ""}${formatarMoeda(v)}`}
-    </td>
+    <span className={cn(PLANILHA.numero, "text-ink-muted")}>
+      {vazio || v === 0 ? "—" : `${negativo ? "− " : ""}${formatarMoeda(v)}`}
+    </span>
   );
 }
 

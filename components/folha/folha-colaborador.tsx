@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { AlertCircle, Check, Info, Loader2 } from "lucide-react";
+import { AlertCircle, Info, Loader2 } from "lucide-react";
+import { toast } from "@/components/ui/avisos";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
@@ -38,7 +39,6 @@ const valorNum = (s: string) => { const v = lerValor(s); return v == null || Num
 export function FolhaColaborador({ colaboradorId }: { colaboradorId: string }) {
   const [carregando, setCarregando] = useState(true);
   const [erro, setErro] = useState("");
-  const [ok, setOk] = useState(false);
   const [salvando, setSalvando] = useState(false);
   const [modelos, setModelos] = useState<Modelo[]>([]);
   const [e, setE] = useState<Estado | null>(null);
@@ -60,7 +60,7 @@ export function FolhaColaborador({ colaboradorId }: { colaboradorId: string }) {
       .finally(() => setCarregando(false));
   }, [colaboradorId]);
 
-  const set = <K extends keyof Estado>(k: K, v: Estado[K]) => { setOk(false); setE((p) => (p ? { ...p, [k]: v } : p)); };
+  const set = <K extends keyof Estado>(k: K, v: Estado[K]) => setE((p) => (p ? { ...p, [k]: v } : p));
 
   const modelosDoRegime = useMemo(() => modelos.filter((m) => e && m.regime === e.regime), [modelos, e]);
   // Cálculo: só modelos ATIVOS (igual ao servidor); o escolhido inativo cai no padrão — e a tela avisa
@@ -82,7 +82,7 @@ export function FolhaColaborador({ colaboradorId }: { colaboradorId: string }) {
 
   async function salvar() {
     if (!e) return;
-    setErro(""); setOk(false);
+    setErro("");
     for (const c of CAMPOS_VALOR) {
       if (e[c].trim() && Number.isNaN(lerValor(e[c]))) { setErro("Confira os valores: use números como 3200,00."); return; }
     }
@@ -100,7 +100,8 @@ export function FolhaColaborador({ colaboradorId }: { colaboradorId: string }) {
       const d = await r.json().catch(() => ({}));
       if (!r.ok) { setErro(d.erro ?? "Erro ao salvar os dados financeiros."); return; }
       aplicar(d);
-      setOk(true);
+      // Sucesso é toast (padrão da casa); o erro de validação fica na tela
+      toast("Dados financeiros salvos.");
     } catch {
       setErro("Erro de conexão. Tente novamente.");
     } finally {
@@ -241,7 +242,7 @@ export function FolhaColaborador({ colaboradorId }: { colaboradorId: string }) {
 
       {erro && <p className="flex items-center gap-2 text-sm text-atrasado"><AlertCircle className="w-4 h-4" /> {erro}</p>}
       <div className="flex items-center justify-end gap-3">
-        {ok && <span className="flex items-center gap-1 text-sm text-success-600"><Check className="w-4 h-4" /> Dados financeiros salvos</span>}
+
         <Button type="button" onClick={salvar} loading={salvando} data-acao="salvar-folha">Salvar dados financeiros</Button>
       </div>
     </div>
