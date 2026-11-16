@@ -10,20 +10,21 @@
  *    exige só visualizar para abrir, e esconde as ações de quem não pode mexer.
  */
 import { describe, expect, it } from "vitest";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import {
-  anosDoSeletor, corpoDaRecorrencia, formDaRegra, formRecorrenciaInicial, validarRegra,
-  type FormRecorrencia,
+  ATALHOS_REPETICAO, anosDoSeletor, atalhoDaRegra, corpoDaRecorrencia, formDaRegra, formRecorrenciaInicial,
+  previaDaRegra, textoRepeticao, validarRegra, type FormRecorrencia,
 } from "@/lib/financeiro/conta-pagar-recorrencia";
 
 const RAIZ = path.resolve(__dirname, "../..");
 const ler = (rel: string) => readFileSync(path.join(RAIZ, rel), "utf8");
+const existe = (rel: string) => existsSync(path.join(RAIZ, rel));
 
 describe("o formulário da despesa recorrente (regras puras)", () => {
   it("abre mensal, com o dia do vencimento e o início sugerido (mês corrente se o dia ainda não passou)", () => {
     const antes = formRecorrenciaInicial({ ano: 2026, mes: 11, dia: 5 }, 10);
-    expect([antes.frequencia, antes.diaVencimento, antes.inicioMes, antes.inicioAno]).toEqual(["MENSAL", "10", "11", "2026"]);
+    expect([antes.passoMeses, antes.diaVencimento, antes.inicioMes, antes.inicioAno]).toEqual(["1", "10", "11", "2026"]);
     // dia já passou: começa no mês seguinte
     const depois = formRecorrenciaInicial({ ano: 2026, mes: 11, dia: 20 }, 10);
     expect([depois.inicioMes, depois.inicioAno]).toEqual(["12", "2026"]);
@@ -52,11 +53,22 @@ describe("o formulário da despesa recorrente (regras puras)", () => {
     expect(validarRegra({ ...porData, descricao: "Aluguel", valor: 100 })).toBeNull();
   });
 
-  it("'a cada N meses' usa o passo digitado; as frequências nomeadas usam o passo delas", () => {
+  it("os atalhos e o 'Personalizar…' escrevem o PASSO, e é ele que vai para a rota", () => {
     const base = formRecorrenciaInicial({ ano: 2026, mes: 11, dia: 1 }, 10);
-    expect(corpoDaRecorrencia({ ...base, frequencia: "TRIMESTRAL", passoMeses: "99" }).passoMeses).toBe(3);
-    expect(corpoDaRecorrencia({ ...base, frequencia: "ANUAL" }).passoMeses).toBe(12);
-    expect(corpoDaRecorrencia({ ...base, frequencia: "CUSTOM", passoMeses: "7" }).passoMeses).toBe(7);
+    // a tela não guarda uma "frequência" paralela ao passo: seria uma segunda verdade
+    expect(corpoDaRecorrencia({ ...base, passoMeses: "3" }).passoMeses).toBe(3);
+    expect(corpoDaRecorrencia({ ...base, passoMeses: "12" }).passoMeses).toBe(12);
+    expect(corpoDaRecorrencia({ ...base, passoMeses: "7" }).passoMeses).toBe(7);
+    // e cada atalho do seletor é a regra inteira: passo + término
+    for (const a of ATALHOS_REPETICAO) {
+      const corpo = corpoDaRecorrencia({
+        ...base, passoMeses: String(a.passoMeses),
+        termino: a.ocorrencias ? "OCORRENCIAS" : "INDEFINIDO",
+        ocorrencias: a.ocorrencias ? String(a.ocorrencias) : "",
+      });
+      expect([corpo.passoMeses, corpo.ocorrencias], a.id).toEqual([a.passoMeses, a.ocorrencias ?? null]);
+      expect(atalhoDaRegra({ ...corpo }), a.id).toBe(a.id);
+    }
   });
 
   it("uma regra que já existe volta inteira para o formulário e sai dele igual (ida e volta)", () => {
@@ -65,15 +77,17 @@ describe("o formulário da despesa recorrente (regras puras)", () => {
       inicioAno: 2026, inicioMes: 11, fimAno: 2027, fimMes: 6, ocorrencias: null, situacao: "ATIVA", valorEstimado: true,
     };
     const form = formDaRegra(regra);
-    expect([form.frequencia, form.termino, form.valorEstimado]).toEqual(["TRIMESTRAL", "DATA", true]);
+    expect([form.passoMeses, form.termino, form.valorEstimado]).toEqual(["3", "DATA", true]);
     const volta = corpoDaRecorrencia(form);
     expect(volta).toMatchObject({
       passoMeses: 3, diaVencimento: 15, ajusteDiaNaoUtil: "POSTERGAR",
       inicioAno: 2026, inicioMes: 11, fimAno: 2027, fimMes: 6, ocorrencias: null, valorEstimado: true,
     });
-    // passo que não é frequência nomeada volta como "a cada N meses", sem perder o N
-    expect(formDaRegra({ ...regra, passoMeses: 5 }).frequencia).toBe("CUSTOM");
+    // passo que não é atalho nenhum volta inteiro e o seletor mostra "Personalizar…"
+    expect(atalhoDaRegra({ ...regra, passoMeses: 5 })).toBe("CUSTOM");
     expect(corpoDaRecorrencia(formDaRegra({ ...regra, passoMeses: 5 })).passoMeses).toBe(5);
+    expect(textoRepeticao({ passoMeses: 5, ocorrencias: 8 })).toBe("A cada 5 meses, 8 vezes");
+    expect(textoRepeticao({ passoMeses: 1 })).toBe("Todo mês, sem data para terminar");
     // término por número volta como número
     expect(formDaRegra({ ...regra, fimAno: null, fimMes: null, ocorrencias: 12 }).termino).toBe("OCORRENCIAS");
   });
@@ -84,8 +98,8 @@ describe("o formulário da despesa recorrente (regras puras)", () => {
       validarRegra({ ...corpoDaRecorrencia({ ...base, ...f }), descricao: "Aluguel", valor: 100, ...extra });
     expect(com({ diaVencimento: "0" })).toBe("Dia de vencimento: de 1 a 31.");
     expect(com({ diaVencimento: "32" })).toBe("Dia de vencimento: de 1 a 31.");
-    expect(com({ frequencia: "CUSTOM", passoMeses: "0" })).toBe("Repetir a cada: de 1 a 60 meses.");
-    expect(com({ frequencia: "CUSTOM", passoMeses: "61" })).toBe("Repetir a cada: de 1 a 60 meses.");
+    expect(com({ passoMeses: "0" })).toBe("Repetir a cada: de 1 a 60 meses.");
+    expect(com({ passoMeses: "61" })).toBe("Repetir a cada: de 1 a 60 meses.");
     expect(com({}, { valor: 0 })).toBe("Informe o valor de cada ocorrência.");
     expect(com({}, { descricao: "  " })).toBe("Descreva a despesa (ex.: Aluguel do galpão).");
     // término antes do início
@@ -126,29 +140,35 @@ describe("guardas das telas da despesa recorrente", () => {
     expect(src).toContain("guard.session.user.empresaId");
   });
 
-  it("a tela de regras abre com visualizar e as ações só aparecem para quem pode mexer", () => {
-    const pagina = ler("app/(dashboard)/financeiro/contas-pagar/recorrentes/page.tsx");
-    expect(pagina).toContain('pode(u.permissoes, "financeiro", "visualizar", u.role)');
-    expect(pagina).toContain('pode(u.permissoes, "financeiro", "fluxoCaixa", u.role)');
-    expect(pagina).toContain("redirect(\"/sem-permissao\")");
-    // a lista é por empresa, sempre
-    expect(pagina.match(/empresaId/g)?.length).toBeGreaterThan(3);
+  it("não existe tela de regras: a repetição mora dentro da conta", () => {
+    expect(existe("app/(dashboard)/financeiro/contas-pagar/recorrentes/page.tsx"), "a tela foi removida").toBe(false);
+    expect(existe("components/financeiro/recorrentes-view.tsx")).toBe(false);
+    for (const arq of ["components/financeiro/contas-pagar-view.tsx", "components/financeiro/conta-pagar-acoes.tsx", "app/(dashboard)/financeiro/contas-pagar/[id]/page.tsx"]) {
+      expect(ler(arq), arq).not.toContain("contas-pagar/recorrentes");
+    }
+  });
 
-    const view = ler("components/financeiro/recorrentes-view.tsx");
-    for (const acao of ["pausar", "retomar", "encerrar", "gerar", "editar"]) {
-      const i = view.indexOf(`id="${acao}"`);
-      expect(i, acao).toBeGreaterThan(0);
-      // o item só é montado dentro de uma guarda de permissão (o trecho antes dele a declara)
-      expect(view.slice(Math.max(0, i - 300), i), acao).toContain("podeMexer &&");
-    }
-    // as colunas do padrão cabem na tela: as secundárias nascem no menu "Colunas"
-    for (const secundaria of ["termino", "categoria", "centro", "contas"]) {
-      const i = view.indexOf(`id: "${secundaria}"`);
-      expect(i, secundaria).toBeGreaterThan(0);
-      expect(view.slice(i, i + 200), secundaria).toContain("oculta: true");
-    }
-    // ver as ocorrências é leitura: não depende de poder mexer
-    expect(view).toMatch(/ItemMenu icone=\{Repeat\} onClick=\{\(\) => \{ f\(\); setVendo\(r\); \}\} id="ocorrencias"/);
+  it("cancelar uma conta repetida pergunta o alcance, e 'esta e as próximas' encerra a regra", () => {
+    const src = ler("components/financeiro/recorrencia-da-conta.tsx");
+    // não é a confirmação de sempre: é uma escolha de até onde vai
+    expect(src).toContain('if (escopo === "ESTA_E_PROXIMAS")');
+    expect(src).toContain('acao: "ENCERRAR"');
+    // e em qualquer um dos dois a conta é CANCELADA pela rota de pular, nunca apagada
+    expect(src).toContain("/pular");
+    expect(src).not.toMatch(/method: "DELETE"/);
+    expect(ler("components/financeiro/conta-pagar-acoes.tsx")).toContain('if (conta.recorrenciaId) { setModal("cancelar"); return; }');
+  });
+
+  it("a prévia mostra todas as ocorrências da regra (e o horizonte quando não tem fim)", () => {
+    const base = { passoMeses: 1, diaVencimento: 10, ajusteDiaNaoUtil: "MANTER", inicioAno: 2026, inicioMes: 11 };
+    const hoje = { ano: 2026, mes: 11 };
+    expect(previaDaRegra({ ...base, ocorrencias: 4, descricao: "Aluguel", valor: 100 }, hoje)).toHaveLength(4);
+    expect(previaDaRegra({ ...base, fimAno: 2027, fimMes: 2, descricao: "Aluguel", valor: 100 }, hoje)).toHaveLength(4);
+    // sem término, o horizonte rolante: é o que o sistema abre de uma vez
+    expect(previaDaRegra({ ...base, descricao: "Aluguel", valor: 100 }, hoje)).toHaveLength(13);
+    const primeira = previaDaRegra({ ...base, ocorrencias: 2, descricao: "Aluguel", valor: 100 }, hoje)[0];
+    expect(primeira.descricao).toBe("Aluguel — nov/2026");
+    expect(primeira.valor).toBe(100);
   });
 
   it("a conta gerada continua independente: a lista e o detalhe só MOSTRAM o vínculo", () => {

@@ -16,14 +16,12 @@ import { lerBoleto } from "@/lib/financeiro/boleto";
 import { PLANILHA } from "@/lib/planilha";
 import { InputData } from "@/components/ui/input-data";
 import { Dica } from "@/components/ui/dica";
-import { CamposRecorrencia } from "@/components/financeiro/campos-recorrencia";
+import { AJUDA_REPETIR, CamposRecorrencia } from "@/components/financeiro/campos-recorrencia";
 import { chaveHojeBR } from "@/lib/fuso";
 import {
   AJUDA_ESCOPO, ESCOPOS, ROTULO_ESCOPO, corpoDaRecorrencia, formRecorrenciaInicial, validarRegra,
   type EscopoEdicao,
 } from "@/lib/financeiro/conta-pagar-recorrencia";
-
-const AJUDA_REPETIR = "Para a despesa que volta todo mês (aluguel, internet, assinatura, contador). A regra é descrita uma vez e o sistema abre uma conta a pagar por mês, cada uma independente: pagar, ajustar ou cancelar uma não mexe nas outras.";
 
 /** hoje em Brasília, em partes (o início sugerido da regra sai daqui) */
 function hojeBR() {
@@ -105,8 +103,8 @@ export function ContaPagarForm({ initialData }: { initialData?: any }) {
       if (!res.ok) { const e = await res.json().catch(() => ({})); setErro(e.erro ?? "Não foi possível criar a despesa recorrente."); return; }
       const criada = await res.json().catch(() => ({}));
       const n = Number(criada?.contasGeradas ?? 0);
-      toast(n > 0 ? `Despesa recorrente criada. ${n} ${n === 1 ? "conta gerada" : "contas geradas"}.` : "Despesa recorrente criada.");
-      router.push("/financeiro/contas-pagar/recorrentes");
+      toast(n > 0 ? `Lançamento repetido criado: ${n} ${n === 1 ? "conta aberta" : "contas abertas"}.` : "Lançamento repetido criado.");
+      router.push("/financeiro/contas-pagar");
       router.refresh();
     } catch { setErro("Erro de conexão."); } finally { setSalvando(false); }
   }
@@ -266,22 +264,21 @@ export function ContaPagarForm({ initialData }: { initialData?: any }) {
           <FormField label="Observação"><Textarea value={form.observacao} onChange={(e) => upd("observacao", e.target.value)} rows={2} /></FormField>
         </FormSection>
 
-        {/* DESPESA RECORRENTE: só na conta nova — a conta que já existe vira recorrente pela ficha dela */}
+        {/* A REPETIÇÃO mora dentro da conta: ligando aqui, a conta passa a se repetir sozinha.
+            Só na conta nova — a que já existe se repete pela ficha dela ("Tornar recorrente"). */}
         {!isEditing && (
           <FormSection title="Repetição">
-            <label className="flex items-start gap-2 cursor-pointer" data-toggle-recorrente>
-              <input type="checkbox" className="mt-1" checked={recorrente} onChange={(e) => setRecorrente(e.target.checked)} />
-              <span className="min-w-0">
-                <span className="text-sm font-medium text-ink inline-flex items-center gap-1.5">
-                  <Repeat className="w-4 h-4 text-primary-600" /> Repetir (recorrente)
-                  <Dica texto={AJUDA_REPETIR} rotulo="Despesa recorrente" />
-                </span>
-                <span className="block text-xs text-ink-muted">Aluguel, internet, assinatura, salário: uma regra, uma conta por mês.</span>
+            <label className="flex items-center gap-2 cursor-pointer" data-toggle-recorrente>
+              <input type="checkbox" className="shrink-0" checked={recorrente} onChange={(e) => setRecorrente(e.target.checked)} />
+              <span className="text-sm font-medium text-ink inline-flex items-center gap-1.5">
+                <Repeat className="w-4 h-4 text-primary-600" /> Repetir lançamento?
+                <Dica texto={AJUDA_REPETIR} rotulo="Repetir lançamento" />
               </span>
             </label>
             {recorrente && (
               <div className="mt-4 pt-4 border-t border-surface-border">
-                <CamposRecorrencia valor={rec} onChange={setRec} anoBase={hojeBR().ano} />
+                <CamposRecorrencia valor={rec} onChange={setRec} anoBase={hojeBR().ano}
+                  descricao={form.descricao} valorOcorrencia={Number(form.valorTotal) || 0} />
               </div>
             )}
           </FormSection>

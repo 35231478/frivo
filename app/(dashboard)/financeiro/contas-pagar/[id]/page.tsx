@@ -71,9 +71,9 @@ export default async function ContaPagarPage({ params }: { params: Promise<{ id:
                 {sv.linhaVermelha && <AlertTriangle className="w-3 h-3" />}{sv.label}
               </span>
               {conta.recorrenciaId && (
-                <Link href="/financeiro/contas-pagar/recorrentes" className="inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded-full bg-surface-alt text-ink-muted hover:text-ink" data-selo-recorrente={conta.recorrenciaId}>
+                <span className="inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded-full bg-surface-alt text-ink-muted" data-selo-recorrente={conta.recorrenciaId}>
                   <Repeat className="w-3 h-3" /> recorrente
-                </Link>
+                </span>
               )}
               {conta.valorEstimado && (
                 <span className="inline-flex items-center text-xs font-semibold px-2.5 py-1 rounded-full bg-atencao-claro text-atencao-texto" title="Valor estimado: ajuste quando o boleto chegar" data-selo-estimado>a confirmar</span>
@@ -113,12 +113,12 @@ export default async function ContaPagarPage({ params }: { params: Promise<{ id:
                 <ShoppingCart className="w-3.5 h-3.5" /> {conta.pedidoCompra.numero}
               </Link>
             ))}
-            {conta.recorrencia && linha("Despesa recorrente", (
-              <Link href="/financeiro/contas-pagar/recorrentes" className="inline-flex items-center gap-1 font-semibold text-primary-600 hover:underline" data-recorrencia-origem={conta.recorrencia.id}>
-                <Repeat className="w-3.5 h-3.5" />
+            {conta.recorrencia && linha("Repetição", (
+              <span className="inline-flex items-center gap-1 text-ink" data-recorrencia-origem={conta.recorrencia.id}>
+                <Repeat className="w-3.5 h-3.5 text-ink-muted" />
                 {textoFrequencia(conta.recorrencia.passoMeses)}, dia {conta.recorrencia.diaVencimento}
                 {conta.refAno && conta.refMes ? ` · ${rotuloCompetencia(conta.refAno, conta.refMes)}` : ""}
-              </Link>
+              </span>
             ))}
             {conta.observacao && linha("Observação", <span className="text-ink-muted [overflow-wrap:anywhere]">{conta.observacao}</span>)}
           </dl>

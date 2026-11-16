@@ -154,8 +154,7 @@ export const AJUDA_TERMINO = "Sem data para terminar, o sistema mantém sempre u
 
 /** O formulário guarda texto (é o que o <input> devolve); `corpoDaRecorrencia` converte. */
 export interface FormRecorrencia {
-  frequencia: FrequenciaId;
-  /** meses entre uma ocorrência e a próxima — só vale quando a frequência é "CUSTOM" */
+  /** meses entre uma ocorrência e a próxima (1 = todo mês) — é ele que manda */
   passoMeses: string;
   diaVencimento: string;
   ajusteDiaNaoUtil: string;
@@ -173,7 +172,7 @@ export function formRecorrenciaInicial(hoje: { ano: number; mes: number; dia: nu
   const dia = diaValido(diaVencimento) ? (diaVencimento as number) : hoje.dia;
   const inicio = inicioSugerido(hoje, dia);
   return {
-    frequencia: "MENSAL", passoMeses: "1", diaVencimento: String(dia), ajusteDiaNaoUtil: "MANTER",
+    passoMeses: "1", diaVencimento: String(dia), ajusteDiaNaoUtil: "MANTER",
     inicioAno: String(inicio.ano), inicioMes: String(inicio.mes),
     termino: "INDEFINIDO", fimAno: "", fimMes: "", ocorrencias: "", valorEstimado: false,
   };
@@ -183,7 +182,7 @@ export function formRecorrenciaInicial(hoje: { ano: number; mes: number; dia: nu
 export function formDaRegra(r: RegraRecorrencia & { valorEstimado?: boolean | null }): FormRecorrencia {
   const passo = Math.max(1, Math.floor(r.passoMeses || 1));
   return {
-    frequencia: frequenciaDoPasso(passo), passoMeses: String(passo),
+    passoMeses: String(passo),
     diaVencimento: String(r.diaVencimento), ajusteDiaNaoUtil: r.ajusteDiaNaoUtil || "MANTER",
     inicioAno: String(r.inicioAno), inicioMes: String(r.inicioMes),
     termino: r.fimAno && r.fimMes ? "DATA" : r.ocorrencias ? "OCORRENCIAS" : "INDEFINIDO",
@@ -201,7 +200,7 @@ const inteiro = (v: string) => { const n = Number(v); return Number.isFinite(n) 
  */
 export function corpoDaRecorrencia(f: FormRecorrencia) {
   return {
-    passoMeses: f.frequencia === "CUSTOM" ? inteiro(f.passoMeses) : passoDaFrequencia(f.frequencia),
+    passoMeses: inteiro(f.passoMeses),
     diaVencimento: inteiro(f.diaVencimento),
     ajusteDiaNaoUtil: f.ajusteDiaNaoUtil || "MANTER",
     inicioAno: inteiro(f.inicioAno),
@@ -215,6 +214,60 @@ export function corpoDaRecorrencia(f: FormRecorrencia) {
 
 /** Os anos que o seletor de competência oferece: do ano corrente até 5 à frente. */
 export const anosDoSeletor = (ano: number) => Array.from({ length: 6 }, (_, i) => ano + i);
+
+/* ───────── atalhos de repetição e prévia ───────── */
+
+/**
+ * Os atalhos do seletor "Configurações de repetição" — o que quase todo mundo escolhe, sem abrir
+ * o "Personalizar…". Cada um é a regra inteira (passo + término), como o rótulo diz.
+ */
+export const ATALHOS_REPETICAO = [
+  { id: "MENSAL_SEM_FIM", passoMeses: 1, ocorrencias: null, rotulo: "Mensal: todo mês, sem data para terminar" },
+  { id: "MENSAL_12", passoMeses: 1, ocorrencias: 12, rotulo: "Mensal: todo mês, 12 vezes" },
+  { id: "MENSAL_24", passoMeses: 1, ocorrencias: 24, rotulo: "Mensal: todo mês, 24 vezes" },
+  { id: "TRIMESTRAL_SEM_FIM", passoMeses: 3, ocorrencias: null, rotulo: "Trimestral: a cada 3 meses, sem data para terminar" },
+  { id: "ANUAL_SEM_FIM", passoMeses: 12, ocorrencias: null, rotulo: "Anual: todo ano, sem data para terminar" },
+] as const;
+export type AtalhoId = (typeof ATALHOS_REPETICAO)[number]["id"] | "CUSTOM";
+export const PERSONALIZAR = "CUSTOM";
+
+/** O atalho que uma regra representa, ou "CUSTOM" quando ela não é nenhum deles. */
+export function atalhoDaRegra(r: { passoMeses: number; ocorrencias?: number | null; fimAno?: number | null; fimMes?: number | null }): AtalhoId {
+  if (r.fimAno && r.fimMes) return PERSONALIZAR;
+  const a = ATALHOS_REPETICAO.find((x) => x.passoMeses === r.passoMeses && (x.ocorrencias ?? null) === (r.ocorrencias ?? null));
+  return a?.id ?? PERSONALIZAR;
+}
+
+/** Como o seletor resume a regra quando ela não é um atalho: "A cada 2 meses, 18 vezes". */
+export function textoRepeticao(r: { passoMeses: number; ocorrencias?: number | null; fimAno?: number | null; fimMes?: number | null }): string {
+  const base = textoFrequencia(r.passoMeses);
+  if (r.fimAno && r.fimMes) return `${base}, até ${rotuloCompetencia(r.fimAno, r.fimMes)}`;
+  if (r.ocorrencias) return `${base}, ${r.ocorrencias} ${r.ocorrencias === 1 ? "vez" : "vezes"}`;
+  return `${base}, sem data para terminar`;
+}
+
+/** Uma linha da prévia "Recorrências previstas" (o que a pessoa vê ANTES de salvar). */
+export interface PreviaOcorrencia { ano: number; mes: number; vencimento: Date; descricao: string; valor: number }
+
+/**
+ * A prévia das contas que a regra vai abrir. Com término (data ou número) mostra TODAS; sem
+ * término, os meses do horizonte rolante — que é exatamente o que o sistema gera de uma vez.
+ */
+export function previaDaRegra(
+  regra: RegraRecorrencia & { descricao?: string; valor?: number | null },
+  hoje: Competencia,
+  meses = 12,
+): PreviaOcorrencia[] {
+  const limite = regra.fimAno && regra.fimMes ? { ano: regra.fimAno, mes: regra.fimMes } : horizonteRolante(hoje, meses);
+  return competenciasDaRegra({ ...regra, situacao: "ATIVA" }, limite)
+    .filter((c) => !competenciaAntes(c, hoje))
+    .map((c) => ({
+      ano: c.ano, mes: c.mes,
+      vencimento: vencimentoDaOcorrencia(regra, c.ano, c.mes),
+      descricao: descricaoDaOcorrencia(regra.descricao ?? "", c.ano, c.mes),
+      valor: Number(regra.valor ?? 0),
+    }));
+}
 
 /* ───────── editar com escopo ───────── */
 

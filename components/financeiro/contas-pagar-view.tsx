@@ -140,14 +140,14 @@ function ContasPagarCorpo({
    * `link` só no desktop: no cartão do celular isto fica DENTRO do link do cartão, e um <a> dentro
    * de outro <a> é HTML inválido — o navegador reorganiza a árvore e a hidratação quebra.
    */
-  const marcaRecorrente = (c: ContaPagarView, link = false, className?: string) => {
+  const marcaRecorrente = (c: ContaPagarView, className?: string) => {
     if (!c.recorrenciaId) return null;
-    const titulo = `Conta de uma despesa recorrente${c.refAno && c.refMes ? ` (${rotuloCompetencia(c.refAno, c.refMes)})` : ""}`;
-    const classe = cn("inline-flex items-center gap-1 text-[11px] text-ink-muted", className);
-    const dentro = <><Repeat className="w-3 h-3 shrink-0" /><span className="truncate">recorrente</span></>;
-    return link
-      ? <Link href="/financeiro/contas-pagar/recorrentes" title={titulo} className={cn(classe, "hover:text-ink hover:underline")} data-selo-recorrente={c.recorrenciaId}>{dentro}</Link>
-      : <span title={titulo} className={classe} data-selo-recorrente={c.recorrenciaId}>{dentro}</span>;
+    const titulo = `Conta de uma despesa que se repete${c.refAno && c.refMes ? ` (${rotuloCompetencia(c.refAno, c.refMes)})` : ""}. A repetição se ajusta dentro da própria conta.`;
+    return (
+      <span title={titulo} className={cn("inline-flex items-center gap-1 text-[11px] text-ink-muted", className)} data-selo-recorrente={c.recorrenciaId}>
+        <Repeat className="w-3 h-3 shrink-0" /><span className="truncate">recorrente</span>
+      </span>
+    );
   };
 
   /** "a confirmar": o valor é estimado e vai mudar quando o boleto chegar — fica junto do valor */
@@ -171,9 +171,6 @@ function ContasPagarCorpo({
           <h1 className="page-title">Contas a pagar</h1>
         </div>
         <div className="flex flex-wrap items-center justify-end gap-2">
-          <Link href="/financeiro/contas-pagar/recorrentes" data-ir-recorrentes className="inline-flex items-center gap-2 bg-white border border-surface-border hover:border-primary-300 hover:bg-primary-50/40 text-ink px-4 py-2 rounded-lg text-sm font-semibold transition-all shadow-sm">
-            <Repeat className="w-4 h-4 text-primary-600" /> Despesas recorrentes
-          </Link>
           {podeImportarNf && (
             <Link href="/estoque/notas?de=contas-pagar" data-lancar-nf className="inline-flex items-center gap-2 bg-white border border-surface-border hover:border-primary-300 hover:bg-primary-50/40 text-ink px-4 py-2 rounded-lg text-sm font-semibold transition-all shadow-sm">
               <FileText className="w-4 h-4 text-primary-600" /> Lançar a partir de NF
@@ -305,7 +302,7 @@ function ContasPagarCorpo({
                     <div className="flex items-baseline gap-1.5 min-w-0">
                       <span className="min-w-0 truncate text-ink" title={c.descricao}>{c.descricao}</span>
                       <Origem c={c} className="shrink-0 max-w-[45%]" />
-                      {marcaRecorrente(c, true, "shrink-0")}
+                      {marcaRecorrente(c, "shrink-0")}
                     </div>
                   ),
                   categoria: <CategoriaBadge conta={c} categorias={categorias} linhaUnica />,

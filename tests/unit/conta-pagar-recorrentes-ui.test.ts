@@ -1,6 +1,7 @@
 // @vitest-environment happy-dom
 /**
- * DESPESAS RECORRENTES — P2, nas telas de verdade (DOM):
+ * REPETIR LANÇAMENTO — a recorrência DENTRO da conta a pagar, nas telas de verdade (DOM).
+ * Não há tela de regras: tudo acontece na própria conta.
  *
  *  - "Repetir (recorrente)" desligado: a nova conta a pagar continua exatamente como era (POST em
  *    /api/contas-pagar). Ligado: a tela cria a REGRA (POST em /api/contas-pagar/recorrencias) com o
@@ -43,9 +44,8 @@ beforeAll(async () => {
   await import("@/components/ui/avisos");
   for (const m of [
     () => import("@/components/financeiro/campos-recorrencia"),
-    () => import("@/components/financeiro/regra-recorrente-form"),
+    () => import("@/components/financeiro/recorrencia-da-conta"),
     () => import("@/components/financeiro/conta-pagar-form"),
-    () => import("@/components/financeiro/recorrentes-view"),
     () => import("@/components/financeiro/contas-pagar-view"),
     () => import("@/components/providers/permissoes-provider"),
   ]) await m();
@@ -114,7 +114,7 @@ async function montar(el: React.ReactElement, permissoes: Permissoes = permissoe
 
 /* ───────── Nova conta a pagar: o toggle ───────── */
 
-describe("Nova conta a pagar: 'Repetir (recorrente)'", () => {
+describe("Nova conta a pagar: 'Repetir lançamento?'", () => {
   const form = async (initialData?: object) => {
     const { ContaPagarForm } = await import("@/components/financeiro/conta-pagar-form");
     await montar(createElement(ContaPagarForm, { initialData }));
@@ -130,21 +130,54 @@ describe("Nova conta a pagar: 'Repetir (recorrente)'", () => {
     expect(texto()).toContain("Valor total");
   });
 
-  it("ligado, abre a regra, troca o rótulo do valor e esconde o que é de uma conta só", async () => {
+  it("ligado, abre as configurações de repetição e a condição de pagamento da repetição", async () => {
     await form();
     await clicar("[data-toggle-recorrente] input");
     expect($("[data-campos-recorrencia]")).toBeTruthy();
     expect(texto()).toContain("Valor de cada ocorrência");
-    expect(texto()).toContain("Não multiplica: é o valor de cada mês");
-    // vencimento único, boleto e pedido de compra não fazem sentido numa regra
+    expect(texto()).toContain("Configurações de repetição");
+    expect(texto()).toContain("Cobrar sempre no");
+    expect(texto()).toContain("1º vencimento");
+    // vencimento único, boleto e pedido de compra não fazem sentido quando o lançamento se repete
     expect(texto()).not.toContain("Vincular a pedido de compra");
     expect(texto()).not.toContain("Banco do fornecedor");
-    // os campos da regra estão lá, com o término em três opções
-    expect($("[data-frequencia]")).toBeTruthy();
+    expect($("[data-config-repeticao]")).toBeTruthy();
     expect($("[data-dia-vencimento]")).toBeTruthy();
     expect($("[data-ajuste-dia]")).toBeTruthy();
-    expect($$("[data-termino]").length).toBe(3);
     expect($("[data-valor-estimado]")).toBeTruthy();
+  });
+
+  it("a prévia mostra, antes de salvar, as contas que vão nascer", async () => {
+    await form();
+    await clicar("[data-toggle-recorrente] input");
+    await digitar("input[placeholder='Ex: Compra de peças']", "Aluguel do galpão");
+    await digitar("input[placeholder='0,00']", "2500");
+    await escolher("[data-config-repeticao]", "MENSAL_12");
+    expect($("[data-previa-recorrencias]")).toBeTruthy();
+    // fechada por padrão (não polui a tela), com a contagem no título
+    expect($("[data-previa-linha]")).toBeFalsy();
+    expect(texto($("[data-abrir-previa]"))).toContain("(12)");
+    await clicar("[data-abrir-previa]");
+    expect($$("[data-previa-linha]")).toHaveLength(12);
+    const primeira = texto($("[data-previa-linha]"));
+    expect(primeira).toContain("Aluguel do galpão \u2014");
+    expect(primeira.replace(/\u00a0/g, " ")).toContain("R$ 2.500,00");
+  });
+
+  it("'Personalizar…' abre a frequência e o término, e o que ele confirma vale", async () => {
+    await form();
+    await clicar("[data-toggle-recorrente] input");
+    await escolher("[data-config-repeticao]", "CUSTOM");
+    expect($("[data-personalizar-recorrencia]"), "o modal da recorrência abre").toBeTruthy();
+    await digitar("[data-passo-meses]", "2");
+    await clicar("[data-termino='OCORRENCIAS'] input[type=radio]");
+    await digitar("[data-ocorrencias]", "6");
+    await clicar("[data-confirmar-personalizar]");
+    expect($("[data-personalizar-recorrencia]")).toBeFalsy();
+    // o seletor passa a mostrar a regra montada e a prévia acompanha
+    expect(texto($("[data-config-repeticao]"))).toContain("A cada 2 meses, 6 vezes");
+    await clicar("[data-abrir-previa]");
+    expect($$("[data-previa-linha]")).toHaveLength(6);
   });
 
   it("cria a REGRA com o que a tela montou (e não uma conta solta)", async () => {
@@ -152,11 +185,14 @@ describe("Nova conta a pagar: 'Repetir (recorrente)'", () => {
     await clicar("[data-toggle-recorrente] input");
     await digitar("input[placeholder='Ex: Compra de peças']", "Aluguel do galpão");
     await digitar("input[placeholder='0,00']", "2500");
-    await escolher("[data-frequencia]", "TRIMESTRAL");
-    await digitar("[data-dia-vencimento]", "10");
+    await escolher("[data-dia-vencimento]", "10");
     await escolher("[data-ajuste-dia]", "POSTERGAR");
-    await clicar("[data-termino='OCORRENCIAS'] input");
+    // frequência e término pelo "Personalizar…"
+    await escolher("[data-config-repeticao]", "CUSTOM");
+    await digitar("[data-passo-meses]", "3");
+    await clicar("[data-termino='OCORRENCIAS'] input[type=radio]");
     await digitar("[data-ocorrencias]", "4");
+    await clicar("[data-confirmar-personalizar]");
     await clicar("[data-valor-estimado] input");
     // o favorecido: o seletor de fornecedor já está na tela
     await escolher("[data-campos-recorrencia]", "").catch(() => {});
@@ -177,8 +213,8 @@ describe("Nova conta a pagar: 'Repetir (recorrente)'", () => {
       ajusteDiaNaoUtil: "POSTERGAR", ocorrencias: 4, fimAno: null, fimMes: null, valorEstimado: true, fornecedorId: "f1", tecnicoId: null,
     });
     // sucesso é toast, com quantas contas nasceram, e a tela vai para a lista de regras
-    expect(toasts()[0]).toBe("Despesa recorrente criada. 12 contas geradas.");
-    expect(nav.push).toHaveBeenCalledWith("/financeiro/contas-pagar/recorrentes");
+    expect(toasts()[0]).toBe("Lançamento repetido criado: 12 contas abertas.");
+    expect(nav.push).toHaveBeenCalledWith("/financeiro/contas-pagar");
   });
 
   it("favorecido colaborador: manda tecnicoId e não exige fornecedor", async () => {
@@ -207,12 +243,20 @@ describe("Nova conta a pagar: 'Repetir (recorrente)'", () => {
     await form();
     await clicar("[data-toggle-recorrente] input");
     await digitar("input[placeholder='Ex: Compra de peças']", "Internet");
-    await digitar("input[placeholder='0,00']", "300");
-    await digitar("[data-dia-vencimento]", "45");
     await clicarBotao("Criar conta a pagar");
-    expect(texto()).toContain("Dia de vencimento: de 1 a 31.");
+    expect(texto()).toContain("Informe o valor de cada ocorrência.");
     expect(toasts()).toEqual([]);
     expect(enviados("POST", "/recorrencias")).toHaveLength(0);
+  });
+
+  it("o 'Personalizar…' recusa o que a rota recusaria, sem fechar o diálogo", async () => {
+    await form();
+    await clicar("[data-toggle-recorrente] input");
+    await escolher("[data-config-repeticao]", "CUSTOM");
+    await digitar("[data-passo-meses]", "99");
+    await clicar("[data-confirmar-personalizar]");
+    expect(texto($("[data-erro-personalizar]"))).toContain("Repetir a cada: de 1 a 60 meses.");
+    expect($("[data-personalizar-recorrencia]"), "o diálogo fica aberto para corrigir").toBeTruthy();
   });
 });
 
@@ -271,137 +315,6 @@ describe("Editar a conta de uma despesa recorrente: o alcance", () => {
   });
 });
 
-/* ───────── A tela das regras ───────── */
-
-const REGRA = {
-  id: "r1", descricao: "Aluguel do galpão",
-  favorecido: { nome: "Imobiliária Centro", tipo: "FORNECEDOR" as const, ativo: true, semCadastro: false },
-  passoMeses: 1, diaVencimento: 10, ajusteDiaNaoUtil: "MANTER",
-  valor: 2500, valorEstimado: false,
-  inicioAno: 2026, inicioMes: 11, fimAno: null, fimMes: null, ocorrencias: null,
-  situacao: "ATIVA", encerramentoMotivo: null,
-  categoriaId: "cat1", categoria: null, centroCusto: null, fornecedorId: "f1", tecnicoId: null,
-  formaPagamento: null, observacao: null, contas: 12, proximoVencimento: "2026-12-10T00:00:00.000Z",
-};
-const PAUSADA = { ...REGRA, id: "r2", descricao: "Internet da loja", situacao: "PAUSADA", valorEstimado: true, valor: 320, contas: 3, proximoVencimento: null };
-
-describe("Tela de despesas recorrentes", () => {
-  const abrir = async (permissoes: Permissoes = permissoesTotais(), regras = [REGRA, PAUSADA]) => {
-    const { RecorrentesView } = await import("@/components/financeiro/recorrentes-view");
-    await montar(createElement(RecorrentesView, {
-      regras, categorias: [{ id: "cat1", nome: "Aluguel", cor: "#888", ativo: true }],
-      podeMexer: permissoes.financeiro?.fluxoCaixa === true, emAberto: { v: 7820, q: 15 },
-    }), permissoes);
-  };
-
-  it("a mesma informação no desktop e no celular, com os números na faixa (não em rodapé)", async () => {
-    await abrir();
-    expect($("[data-tabela-recorrentes]")).toBeTruthy();
-    expect($$("[data-linha-regra]")).toHaveLength(2);
-    expect($$("[data-cartao-regra]")).toHaveLength(2); // celular
-    // a faixa aparece nas duas versões (a barra da TabelaPro é só do desktop)
-    expect($$("[data-barra-recorrentes]").length).toBe(2);
-    expect(texto($("[data-barra-recorrentes]"))).toContain("1 ativa");
-    expect(texto($("[data-barra-recorrentes]"))).toContain("1 pausada");
-    expect(texto($("[data-barra-recorrentes]")).replace(/ /g, " ")).toContain("R$ 7.820,00");
-    // a repetição e o término em palavras
-    expect(texto($("[data-linha-regra='r1'] [data-frequencia]"))).toBe("Todo mês, dia 10");
-    // Termina, Categoria, Centro de custo e Contas saem do padrão (o menu "Colunas" liga):
-    // com elas, as larguras passavam da tela e empurravam Valor e Ações para fora.
-    expect($("[data-linha-regra='r1'] [data-termino]")).toBeFalsy();
-    expect(texto($("[data-linha-regra='r1'] [data-proxima]"))).toBe("10/12/2026");
-    // o selo "a confirmar" só na regra de valor estimado
-    expect($("[data-linha-regra='r2'] [data-selo-estimado]")).toBeTruthy();
-    expect($("[data-linha-regra='r1'] [data-selo-estimado]")).toBeFalsy();
-    // no celular o cartão abre as ocorrências (no desktop é o nome da despesa)
-    expect($("[data-cartao-regra='r1'] [data-abrir-regra='r1']")).toBeTruthy();
-    expect($("[data-linha-regra='r1'] [data-abrir-regra='r1']")).toBeTruthy();
-  });
-
-  it("lista vazia explica onde a despesa recorrente nasce", async () => {
-    await abrir(permissoesTotais(), []);
-    expect($("[data-lista-vazia]")).toBeTruthy();
-    expect(texto($("[data-lista-vazia]"))).toContain("Nova conta a pagar");
-    expect($("[data-ir-nova-conta]")).toBeTruthy();
-  });
-
-  it("quem só visualiza não vê ação de dinheiro nenhuma (nem o botão de criar)", async () => {
-    await abrir({ financeiro: { visualizar: true } } as Permissoes);
-    expect($("[data-nova-recorrente]")).toBeFalsy();
-    await clicar("[data-linha-regra='r1'] button[aria-label^='Ações']");
-    const itens = texto($("[role=menu]") ?? document.body);
-    expect(itens).toContain("Ver ocorrências");
-    for (const proibido of ["Pausar", "Retomar", "Encerrar", "Editar a regra", "Gerar as contas que faltam"]) {
-      expect(itens, proibido).not.toContain(proibido);
-    }
-  });
-
-  it("pausar manda a ação, avisa quantas ocorrências futuras foram canceladas e recarrega", async () => {
-    await abrir();
-    respostas["POST /api/contas-pagar/recorrencias/r1/acao"] = { status: 200, corpo: { ok: true, canceladas: 2 } };
-    await clicar("[data-linha-regra='r1'] button[aria-label^='Ações']");
-    await clicarBotao("Pausar");
-    expect(enviados("POST", "/recorrencias/r1/acao")[0].corpo).toMatchObject({ acao: "PAUSAR" });
-    expect(toasts()[0]).toBe("Despesa pausada. 2 ocorrências futuras canceladas.");
-    expect(nav.refresh).toHaveBeenCalled();
-  });
-
-  it("quando o servidor recusa, a tela NÃO muda e o motivo aparece", async () => {
-    await abrir();
-    respostas["POST /api/contas-pagar/recorrencias/r1/acao"] = { status: 403, corpo: { erro: "Sem permissão para esta ação" } };
-    await clicar("[data-linha-regra='r1'] button[aria-label^='Ações']");
-    await clicarBotao("Pausar");
-    expect(avisos.toasts[0]).toEqual({ m: "Sem permissão para esta ação", tipo: "erro" });
-    expect(nav.refresh).not.toHaveBeenCalled();
-    // a regra continua ATIVA na tela
-    expect(texto($("[data-linha-regra='r1'] [data-situacao]"))).toBe("Ativa");
-  });
-
-  it("encerrar passa pela confirmação da casa; recusar não chama o servidor", async () => {
-    await abrir();
-    avisos.responder = false;
-    await clicar("[data-linha-regra='r1'] button[aria-label^='Ações']");
-    await clicarBotao("Encerrar");
-    expect(avisos.confirmacoes[0].mensagem).toContain("O histórico fica");
-    expect(enviados("POST", "/acao")).toHaveLength(0);
-
-    avisos.responder = true;
-    respostas["POST /api/contas-pagar/recorrencias/r1/acao"] = { status: 200, corpo: { ok: true, canceladas: 1 } };
-    await clicar("[data-linha-regra='r1'] button[aria-label^='Ações']");
-    await clicarBotao("Encerrar");
-    expect(enviados("POST", "/acao")[0].corpo).toMatchObject({ acao: "ENCERRAR" });
-    expect(toasts().at(-1)).toBe("Despesa encerrada. 1 ocorrência futura cancelada.");
-  });
-
-  it("'gerar as contas que faltam' diz quando não havia nada a gerar", async () => {
-    await abrir();
-    respostas["POST /api/contas-pagar/recorrencias/r1/acao"] = { status: 200, corpo: { ok: true, contas: 0 } };
-    await clicar("[data-linha-regra='r1'] button[aria-label^='Ações']");
-    await clicarBotao("Gerar as contas que faltam");
-    expect(toasts()[0]).toBe("Nada a gerar: o horizonte já está completo.");
-  });
-
-  it("as ocorrências: a paga não oferece pular; a em aberto cancela aquela conta só", async () => {
-    await abrir();
-    respostas["GET /api/contas-pagar/recorrencias/r1"] = { status: 200, corpo: { contas: [
-      { id: "cp1", numero: "CP-1", refAno: 2026, refMes: 11, status: "PAGO_TOTAL", valorTotal: 2500, valorPago: 2500, valorEstimado: false, dataVencimento: "2026-11-10" },
-      { id: "cp2", numero: "CP-2", refAno: 2026, refMes: 12, status: "PENDENTE", valorTotal: 2500, valorPago: 0, valorEstimado: false, dataVencimento: "2026-12-10" },
-    ] } };
-    await clicar("[data-abrir-regra='r1']");
-    expect($$("[data-ocorrencia]")).toHaveLength(2);
-    expect($("[data-pular='cp1']"), "conta paga não pula").toBeFalsy();
-    expect(texto($("[data-ocorrencia='cp1']"))).toContain("não muda");
-    expect($("[data-pular='cp2']")).toBeTruthy();
-    expect(texto($("[data-resumo-regra]")).replace(/ /g, " ")).toContain("Todo mês, dia 10 · R$ 2.500,00 · sem data para terminar");
-
-    respostas["POST /api/contas-pagar/cp2/pular"] = { status: 200, corpo: { ok: true } };
-    await clicar("[data-pular='cp2']");
-    expect(avisos.confirmacoes.at(-1)!.mensagem).toContain("A despesa recorrente continua valendo");
-    expect(enviados("POST", "/cp2/pular")).toHaveLength(1);
-    expect(toasts().at(-1)).toBe("Ocorrência de dez/2026 cancelada.");
-  });
-});
-
 /* ───────── Os selos na lista de contas a pagar ───────── */
 
 describe("Selos na lista de contas a pagar", () => {
@@ -435,59 +348,59 @@ describe("Selos na lista de contas a pagar", () => {
     expect($$("[data-selo-estimado]").length).toBe(2);
   });
 
-  it("no cartão do celular o selo NÃO é link: <a> dentro de <a> quebra a hidratação", async () => {
+  it("o selo é texto, nunca link: no cartão ele fica DENTRO do link da conta, e <a> dentro de <a> quebra a hidratação", async () => {
     await abrir();
     // o cartão inteiro já é um link para a conta
     expect($("[data-cartao-conta='cp1'] a")).toBeTruthy();
     expect($("[data-cartao-conta='cp1'] [data-selo-recorrente]")!.tagName).toBe("SPAN");
     expect($("[data-cartao-conta='cp1'] a [data-selo-recorrente] a")).toBeFalsy();
-    // no desktop, fora de qualquer link, o selo leva para a regra
-    const naTabela = $("[data-linha-conta='cp1'] [data-selo-recorrente]")!;
-    expect(naTabela.tagName).toBe("A");
-    expect(naTabela.getAttribute("href")).toBe("/financeiro/contas-pagar/recorrentes");
+    // no desktop também: a repetição se ajusta dentro da própria conta, não há tela para onde ir
+    expect($("[data-linha-conta='cp1'] [data-selo-recorrente]")!.tagName).toBe("SPAN");
+    expect($("[data-ir-recorrentes]"), "não existe tela de regras").toBeFalsy();
   });
 
-  it("o filtro Origem oferece a despesa recorrente e a lista leva para a tela das regras", async () => {
+  it("a conta repetida aparece marcada nas duas versões, e a avulsa não", async () => {
     await abrir();
-    expect($("[data-ir-recorrentes]")!.getAttribute("href")).toBe("/financeiro/contas-pagar/recorrentes");
-    expect(texto()).toContain("Despesas recorrentes");
+    expect($$("[data-selo-recorrente]")).toHaveLength(2); // linha do desktop + cartão do celular
+    expect(texto($("[data-linha-conta='cp1']"))).toContain("recorrente");
   });
 });
 
 /* ───────── Tornar uma conta avulsa em recorrente ───────── */
 
-describe("Tornar recorrente uma conta que já existe", () => {
+describe("Repetir o lançamento de uma conta que já existe", () => {
   const conta = { id: "cp9", numero: "CP-9", fornecedor: "Imobiliária Centro", valorTotal: 1200, valorPago: 0, saldoRestante: 1200, status: "PENDENTE", descricao: "Aluguel", dataVencimento: "2026-11-10T00:00:00.000Z" };
 
   it("o menu oferece para a avulsa e NÃO para a que já é de uma regra", async () => {
     const { ContaPagarAcoes } = await import("@/components/financeiro/conta-pagar-acoes");
     await montar(createElement(ContaPagarAcoes, { conta, menu: true }));
     await clicar("button[aria-label^='Ações']");
-    expect(texto($("[role=menu]") ?? document.body)).toContain("Tornar recorrente");
+    expect(texto($("[role=menu]") ?? document.body)).toContain("Repetir lançamento");
 
     act(() => root.unmount()); caixa.remove(); document.body.innerHTML = "";
     await montar(createElement(ContaPagarAcoes, { conta: { ...conta, recorrenciaId: "r1" }, menu: true }));
     await clicar("button[aria-label^='Ações']");
-    const menu = texto($("[role=menu]") ?? document.body);
-    expect(menu).not.toContain("Tornar recorrente");
-    expect(menu).toContain("Ver a despesa recorrente");
+    // a que já se repete não oferece de novo, e não há tela de regras para onde mandar
+    expect(texto($("[role=menu]") ?? document.body)).not.toContain("Repetir lançamento");
   });
 
   it("a conta não é recriada: o diálogo diz isso e a rota recebe a regra", async () => {
     const { ContaPagarAcoes } = await import("@/components/financeiro/conta-pagar-acoes");
     await montar(createElement(ContaPagarAcoes, { conta, menu: true }));
     await clicar("button[aria-label^='Ações']");
-    await clicarBotao("Tornar recorrente");
+    await clicarBotao("Repetir lançamento");
     expect(texto($("[data-aviso-tornar]"))).toContain("mesmo número, mesmos pagamentos, mesmo histórico");
-    // a descrição e o valor da conta já vêm preenchidos
-    expect(($("[data-descricao-regra]") as HTMLInputElement).value).toBe("Aluguel");
-    expect(($("[data-valor-regra]") as HTMLInputElement).value).toBe("1200");
+    // a descrição e o valor da conta já viajam com ela (a prévia mostra os dois)
+    await clicar("[data-abrir-previa]");
+    const primeira = texto($("[data-previa-linha]"));
+    expect(primeira).toContain("Aluguel \u2014");
+    expect(primeira.replace(/\u00a0/g, " ")).toContain("R$ 1.200,00");
 
     respostas["POST /api/contas-pagar/cp9/tornar-recorrente"] = { status: 201, corpo: { ok: true, regra: { id: "r9" } } };
-    await clicarBotao("Tornar recorrente");
+    await clicar("[data-confirmar-recorrencia]");
     const [pedido] = enviados("POST", "/tornar-recorrente");
     expect(pedido.corpo).toMatchObject({ descricao: "Aluguel", valor: 1200, passoMeses: 1, diaVencimento: 10 });
-    expect(toasts().at(-1)).toBe("Conta CP-9 agora é a primeira ocorrência de uma despesa recorrente.");
+    expect(toasts().at(-1)).toBe("Conta CP-9 agora se repete. As próximas já estão abertas.");
     expect(nav.refresh).toHaveBeenCalled();
   });
 
@@ -495,6 +408,36 @@ describe("Tornar recorrente uma conta que já existe", () => {
     const { ContaPagarAcoes } = await import("@/components/financeiro/conta-pagar-acoes");
     await montar(createElement(ContaPagarAcoes, { conta, menu: true }), { financeiro: { visualizar: true } } as Permissoes);
     await clicar("button[aria-label^='Ações']");
-    expect(texto($("[role=menu]") ?? document.body)).not.toContain("Tornar recorrente");
+    expect(texto($("[role=menu]") ?? document.body)).not.toContain("Repetir lançamento");
+  });
+
+  it("cancelar uma conta que se repete pergunta ATÉ ONDE, e 'esta e as próximas' encerra a repetição", async () => {
+    const { ContaPagarAcoes } = await import("@/components/financeiro/conta-pagar-acoes");
+    await montar(createElement(ContaPagarAcoes, { conta: { ...conta, recorrenciaId: "r1" }, menu: true }));
+    await clicar("button[aria-label^='Ações']");
+    await clicarBotao("Cancelar conta");
+    expect($("[data-cancelar-alcance]"), "não é 'tem certeza': é até onde").toBeTruthy();
+    expect($$("[data-escopo-cancelar]")).toHaveLength(2);
+    expect(avisos.confirmacoes, "a confirmação da casa não entra aqui").toEqual([]);
+
+    respostas["POST /api/contas-pagar/recorrencias/r1/acao"] = { status: 200, corpo: { ok: true, canceladas: 3 } };
+    respostas["POST /api/contas-pagar/cp9/pular"] = { status: 200, corpo: { ok: true } };
+    await clicar("[data-escopo-cancelar='ESTA_E_PROXIMAS'] input");
+    await clicar("[data-confirmar-cancelar]");
+    expect(enviados("POST", "/recorrencias/r1/acao")[0].corpo).toMatchObject({ acao: "ENCERRAR" });
+    expect(enviados("POST", "/cp9/pular")).toHaveLength(1);
+    expect(toasts().at(-1)).toBe("Conta CP-9 cancelada e repetição encerrada.");
+  });
+
+  it("'só esta ocorrência' cancela o mês e NÃO encerra a repetição", async () => {
+    const { ContaPagarAcoes } = await import("@/components/financeiro/conta-pagar-acoes");
+    await montar(createElement(ContaPagarAcoes, { conta: { ...conta, recorrenciaId: "r1" }, menu: true }));
+    await clicar("button[aria-label^='Ações']");
+    await clicarBotao("Cancelar conta");
+    respostas["POST /api/contas-pagar/cp9/pular"] = { status: 200, corpo: { ok: true } };
+    await clicar("[data-confirmar-cancelar]");
+    expect(enviados("POST", "/acao"), "a regra não é encerrada").toHaveLength(0);
+    expect(enviados("POST", "/cp9/pular")).toHaveLength(1);
+    expect(toasts().at(-1)).toBe("Conta CP-9 cancelada. A repetição continua.");
   });
 });
