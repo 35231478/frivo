@@ -210,8 +210,10 @@ export function ColaboradorForm({ initialData, somenteLeitura = false, podeFolha
         </div>
       )}
 
-      {/* Documento vencido é sinal da FICHA, não só da aba: aparece em qualquer aba, com o atalho. */}
-      {validade.vencidos > 0 && (
+      {/* Documento vencido é sinal da FICHA, não só da aba: aparece em qualquer aba, com o atalho.
+          Dentro da própria aba, não: lá a seção já avisa, e com mais detalhe — dois avisos iguais
+          na mesma tela são poluição. */}
+      {validade.vencidos > 0 && aba !== "documentos" && (
         <button
           type="button" onClick={() => setAba("documentos")} data-ficha-doc-vencido
           className="flex w-full items-center gap-2 bg-atrasado-claro border border-atrasado/20 text-atrasado-texto text-sm rounded-lg px-4 py-3 text-left hover:bg-atrasado-claro/70 transition-colors"
@@ -231,6 +233,9 @@ export function ColaboradorForm({ initialData, somenteLeitura = false, podeFolha
             return (
               <button
                 key={t.id} type="button" onClick={() => setAba(t.id)}
+                // No celular a tira de abas rola: a ativa tem de vir para a vista, senão trocar de
+                // aba pelo atalho do aviso deixa a tira mostrando outra aba
+                ref={ativa ? ((el) => el?.scrollIntoView({ block: "nearest", inline: "nearest" })) : undefined}
                 className={cn(
                   "flex items-center gap-2 px-4 py-2.5 text-sm font-medium rounded-card whitespace-nowrap transition-all",
                   ativa ? "bg-primary-500 text-white shadow-sm" : "text-ink-muted hover:text-ink hover:bg-surface-alt",

@@ -15,8 +15,8 @@ import { PLANILHA } from "@/lib/planilha";
 import { cn, formatarData } from "@/lib/utils";
 import {
   CATEGORIA_PADRAO, NOME_MAX, ROTULO_ORIGEM, TOM_VALIDADE,
-  categoriasPorGrupo, formatoEmPalavras, resumoValidade, rotuloCategoria, rotuloValidade,
-  situacaoValidade, tamanhoEmPalavras,
+  categoriaVenceNormalmente, categoriasPorGrupo, formatoEmPalavras, resumoValidade, rotuloCategoria,
+  rotuloValidade, situacaoValidade, tamanhoEmPalavras,
 } from "@/lib/colaborador/documentos";
 import type { DocumentoLinha } from "@/lib/colaborador/documentos-server";
 
@@ -47,8 +47,10 @@ function SeloValidade({ data }: { data: string | null }) {
   const v = situacaoValidade(data);
   const texto = rotuloValidade(v);
   if (!texto) {
+    // Sem selo (em dia): a data é informação secundária — mesmo tamanho do resto da linha, no
+    // cartão do celular e na planilha do desktop.
     return data
-      ? <span className={cn(PLANILHA.data, PLANILHA.apagado)}>{formatarData(data)}</span>
+      ? <span className={cn(PLANILHA.data, PLANILHA.apagado, "text-xs")}>{formatarData(data)}</span>
       : <span className="text-ink-subtle">—</span>;
   }
   return (
@@ -220,7 +222,7 @@ export function DocumentosColaborador({
                   {detalheArquivo(d) ? ` · ${detalheArquivo(d)}` : ""}
                 </p>
                 <div className="flex items-center gap-2 flex-wrap">
-                  <SeloValidade data={d.dataVencimento} />
+                  {d.dataVencimento && <SeloValidade data={d.dataVencimento} />}
                   <span className="text-xs text-ink-subtle">{formatarData(d.criadoEm)} · {quemEnviou(d)}</span>
                 </div>
               </div>
@@ -397,6 +399,12 @@ function ModalAnexar({ colaboradorId, onFechar, onPronto }: {
         <FormField label="Validade" hint="Deixe em branco para documento sem vencimento">
           <InputData value={validade} onChange={(v) => setValidade(v)} />
         </FormField>
+        {categoriaVenceNormalmente(categoria) && !validade && (
+          <p className="-mt-2 text-sm text-atencao-texto" data-lembrete-validade>
+            {rotuloCategoria({ categoria })} costuma ter validade. Sem ela, este documento não entra
+            nos avisos de vencimento.
+          </p>
+        )}
 
         <input ref={campo} type="file" onChange={escolher} className="hidden" accept="application/pdf,image/*" data-campo-arquivo />
         <div className="flex items-center gap-2 flex-wrap">

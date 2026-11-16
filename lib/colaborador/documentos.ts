@@ -60,6 +60,13 @@ const POR_ID = new Map(CATEGORIAS.map((c) => [c.id, c]));
 
 export const categoriaValida = (id: string | null | undefined): boolean => !!id && POR_ID.has(id);
 
+/**
+ * Esta gaveta costuma ter validade? A tela lembra de preencher — é o dado de que os avisos de
+ * vencimento (e o pacote que vai ao cliente) dependem.
+ */
+export const categoriaVenceNormalmente = (id: string | null | undefined): boolean =>
+  !!id && POR_ID.get(id)?.venceNormalmente === true;
+
 /** As categorias agrupadas, na ordem da tela — o `<optgroup>` sai daqui. */
 export function categoriasPorGrupo(): { grupo: GrupoCategoria; rotulo: string; itens: CategoriaDoc[] }[] {
   const ordem: GrupoCategoria[] = ["CONTRATO", "PESSOAL", "SMT", "OUTROS"];

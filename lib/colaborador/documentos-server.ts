@@ -128,7 +128,11 @@ export async function anexarDocumento(
 ): Promise<DocumentoLinha> {
   await exigirColaborador(colaboradorId, empresaId);
 
-  const categoria = categoriaValida(dados.categoria) ? String(dados.categoria) : CATEGORIA_PADRAO;
+  // Categoria vazia é "Outros"; categoria que NÃO EXISTE é erro. Engolir e arquivar em "Outros"
+  // seria pôr o papel na gaveta errada sem ninguém ficar sabendo (o PATCH já recusava).
+  const pedida = typeof dados.categoria === "string" ? dados.categoria.trim() : "";
+  if (pedida && !categoriaValida(pedida)) throw new ErroDocumento("Categoria inválida", 400);
+  const categoria = pedida || CATEGORIA_PADRAO;
   const vencimento = lerVencimento(dados.dataVencimento);
 
   const quantos = await prisma.colaboradorDocumento.count({ where: { colaboradorId, excluidoEm: null } });
@@ -209,22 +213,20 @@ export async function alterarDocumento(
  * Exclui COM RASTRO: sai da ficha, fica no banco com quem apagou e quando. Documento de colaborador
  * não some sem deixar registro — nem o que o RH anexou, nem o que o colaborador mandou.
  *
- * `excluidoEm: null` no filtro faz a operação ser idempotente de verdade: dois cliques não
- * reescrevem o rastro do primeiro.
+ * UMA instrução só: quem decide se achou é a contagem do próprio UPDATE, não uma leitura antes.
+ * Com `excluidoEm: null` no filtro, dois cliques simultâneos gravam uma vez só — o segundo não
+ * encontra linha para atualizar e vira 404, sem reescrever o rastro do primeiro. Ler primeiro e
+ * escrever depois deixaria o segundo clique passar pela brecha entre as duas idas ao banco.
  */
 export async function excluirDocumento(
   documentoId: string, colaboradorId: string, empresaId: string,
   autor: { usuarioId: string }, agora: Date = new Date(),
 ): Promise<void> {
-  const atual = await prisma.colaboradorDocumento.findFirst({
+  const { count } = await prisma.colaboradorDocumento.updateMany({
     where: { id: documentoId, colaboradorId, excluidoEm: null, colaborador: { empresaId } },
-    select: { id: true },
-  });
-  if (!atual) throw new ErroDocumento(MSG_NAO_ENCONTRADO, 404);
-  await prisma.colaboradorDocumento.updateMany({
-    where: { id: atual.id, excluidoEm: null },
     data: { excluidoEm: agora, excluidoPorId: autor.usuarioId },
   });
+  if (!count) throw new ErroDocumento(MSG_NAO_ENCONTRADO, 404);
 }
 
 /** O arquivo em si, para a resposta de download. 404 quando não há arquivo guardado. */
