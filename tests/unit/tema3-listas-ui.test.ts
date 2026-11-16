@@ -12,6 +12,7 @@ import { NextRequest } from "next/server";
 import { permissoesTotais } from "@/lib/permissoes";
 import { sufixoStatusVeiculo, sugerirVeiculo } from "@/lib/veiculo-sugestao";
 import { BUSCA_VEICULOS_A_PARTIR, filtrarVeiculos } from "@/components/forms/equipe-form";
+import { abrirBusca, opcoesDaBusca } from "../util/busca-select";
 
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn(), refresh: vi.fn(), replace: vi.fn(), back: vi.fn() }), usePathname: () => "/equipes", useSearchParams: () => new URLSearchParams() }));
 vi.mock("next-auth/react", () => ({ useSession: () => ({ data: null }), signOut: vi.fn() }));
@@ -115,19 +116,24 @@ describe("seletor de quem executa a OS (equipe + veículo)", () => {
     function Tela() { const opcoes = useOpcoesExecucao(); return createElement(SeletorExecucao, { opcoes, tipoOsId: "", valor, onChange() {} } as any); }
     await montar(createElement(Tela));
   }
-  const opcoesVeiculo = () => $$("[data-seletor-veiculo] option").map((o) => o.textContent);
+  // o veículo virou o campo COM BUSCA: as opções vivem na lista aberta, e "Sem veículo" é o estado
+  // vazio do campo (o × limpa a escolha), não mais uma linha da lista
+  const opcoesVeiculo = async () => {
+    const raiz = await abrirBusca($("[data-campo-veiculo]"), "veículo");
+    return ["Sem veículo", ...opcoesDaBusca(raiz)];
+  };
 
   it("veículo: só os ATIVOS aparecem para escolher (inativo e em manutenção ficam de fora)", async () => {
     await montarSeletor({ tecnicoIds: ["t1"], responsavelId: "t1", equipeId: null, veiculoId: null });
-    expect(opcoesVeiculo()).toEqual(["Sem veículo", "AAA1A11 — Fiat Fiorino"]);
+    expect(await opcoesVeiculo()).toEqual(["Sem veículo", "AAA1A11 — Fiat Fiorino"]);
   });
 
   it("veículo já escolhido que saiu de uso continua na lista, com o motivo certo — 'em manutenção' ou 'inativo'", async () => {
     await montarSeletor({ tecnicoIds: ["t1"], responsavelId: "t1", equipeId: null, veiculoId: "v3" });
-    expect(opcoesVeiculo()).toEqual(["Sem veículo", "AAA1A11 — Fiat Fiorino", "CCC3C33 — Fiat Strada (em manutenção)"]);
+    expect(await opcoesVeiculo()).toEqual(["Sem veículo", "AAA1A11 — Fiat Fiorino", "CCC3C33 — Fiat Strada (em manutenção)"]);
     act(() => root.unmount()); caixa.remove();
     await montarSeletor({ tecnicoIds: ["t1"], responsavelId: "t1", equipeId: null, veiculoId: "v2" });
-    expect(opcoesVeiculo()).toEqual(["Sem veículo", "AAA1A11 — Fiat Fiorino", "BBB2B22 — VW Saveiro (inativo)"]);
+    expect(await opcoesVeiculo()).toEqual(["Sem veículo", "AAA1A11 — Fiat Fiorino", "BBB2B22 — VW Saveiro (inativo)"]);
   });
 
   it("equipe ativa escolhida aparece normal; a lista só tem as ativas", async () => {

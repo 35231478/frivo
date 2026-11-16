@@ -15,6 +15,7 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vite
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { permissoesTotais, type Permissoes } from "@/lib/permissoes";
+import { escolherNaBusca } from "../util/busca-select";
 
 (globalThis as any).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -69,8 +70,11 @@ async function digitar(el: Element | null, v: string) {
   await act(async () => { Object.getOwnPropertyDescriptor(proto, "value")!.set!.call(el, v); el!.dispatchEvent(new Event("input", { bubbles: true })); });
   await esperar();
 }
-async function escolher(el: Element | null, v: string) {
-  expect(el).not.toBeNull();
+async function escolher(el: Element | null | undefined, v: string) {
+  expect(el).toBeTruthy();
+  // O seletor de cadastro virou o campo COM BUSCA da casa: aqui o teste faz o que a pessoa
+  // faz (abre a lista e clica). O <select> nativo (enum curto) continua sendo setado direto.
+  if (!(el instanceof HTMLSelectElement)) { await escolherNaBusca(el, v); await esperar(); return; }
   await act(async () => { Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, "value")!.set!.call(el, v); el!.dispatchEvent(new Event("change", { bubbles: true })); });
   await esperar();
 }
@@ -148,7 +152,7 @@ describe("Contas a Receber", () => {
     expect($<HTMLInputElement>('[data-form-lote] input[aria-label="Data"]')!.value).toBe("15/11/2026"); // padrão: hoje
     expect(txt($("[data-confirmar-lote]"))).toBe("Dar como recebido (4)");
     await escolher($("[data-forma-lote]"), "PIX");
-    await escolher($('select[name="contaBancariaId"]'), "cb1");
+    await escolher($('[name="contaBancariaId"]'), "cb1"); // conta bancária é cadastro: campo com busca
     await clicar($("[data-confirmar-lote]"));
     expect(posts()).toHaveLength(1);
     expect(posts()[0].url).toBe("/api/contas-receber/lote");

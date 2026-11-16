@@ -153,13 +153,15 @@ describe.skipIf(!URL_PG)("Conciliação NF ↔ Pedido de Compra (PostgreSQL real
     expect(t).toContain("2 de 2 itens batem: Filtro secador (produto); Gás R410A (produto)");
     expect(t).toContain("Quantidades: a NF cobre tudo o que falta");
     expect(h).toContain("data-vai-sozinho");
-    expect(h).toContain(">Automático (o pedido idêntico)</option>");
+    // o campo com busca nasce fechado: o que a página mostra é o estado vazio dele
+    expect(h).toContain("Automático (o pedido idêntico)");
     expect(h).toContain('data-escolher-pedido="pcA"');
     // o B também combina (mesmo fornecedor e produtos), mas não é idêntico: aparece como "também pode ser"
     expect(t).toContain("Também pode ser do Pedido PCI-2026-0002 — vincular?");
     // pedido fechado e de outra empresa: nem no select
     expect(h).not.toContain("PCI-2026-0003");
-    expect(h.match(/<option value="pc[^"]*"/g)).toEqual(['<option value="pcB"', '<option value="pcA"']); // mais novo primeiro
+    // as opções só existem no cliente; a ORDEM em que chegaram do servidor fica no campo
+    expect(h).toContain('data-pedidos="pcB,pcA"'); // mais novo primeiro
 
     // sem Compras › gerenciar: vê a sugestão, mas não escolhe (o idêntico vincula sozinho mesmo assim)
     logar(ESTOQUE_FIN, "uAdm");

@@ -204,9 +204,15 @@ describe("seletor de categoria e inativação", () => {
   it("SeletorCadastro: a inativa já usada aparece “(inativa)”; em nova escolha não é oferecida (valor = id)", async () => {
     const { SeletorCadastro } = await import("@/components/cadastros/seletor-cadastro");
     const html = (valor: string) => renderToStaticMarkup(createElement(SeletorCadastro, { entidade: "categorias-financeiras", itens: CATEGORIAS(), valor, vazio: "Sem categoria", onChange: () => {} }));
-    expect(html("cat-pecas")).toMatch(/<option value="cat-pecas"[^>]*selected[^>]*>Peças \(tabela antiga\) \(inativa\)/);
+    // o seletor é o campo COM BUSCA: fechado, ele mostra o escolhido; a lista é quem tem as opções
+    expect(html("cat-pecas")).toContain("Peças (tabela antiga) (inativa)");
     expect(html("")).not.toContain("Peças");
-    expect(html("")).toContain('<option value="cat-mensal">Contrato mensal</option>');
+    // e a regra em si, na fonte das opções: a inativa só existe quando é o valor atual
+    const { opcoesCadastro } = await import("@/lib/cadastros/opcoes");
+    const rotulos = (atual: string) => opcoesCadastro(CATEGORIAS(), [atual], "id", { feminino: true }).map((o) => o.rotulo);
+    expect(rotulos("cat-pecas")).toContain("Peças (tabela antiga) (inativa)");
+    expect(rotulos("")).not.toContain("Peças (tabela antiga) (inativa)");
+    expect(rotulos("")).toContain("Contrato mensal");
   });
   it("inativar categoria em uso: avisa “usada em N contas” e deixa inativar; as contas seguem ligadas", async () => {
     db.t.contaPagar.push({ id: "cp2", empresaId: "e1", numero: "CP-2026-0002", fornecedor: "X", descricao: "Y", valorTotal: 1, valorPago: 0, saldoRestante: 1, status: "PENDENTE", categoriaId: "cat-mensal" });

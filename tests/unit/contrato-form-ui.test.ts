@@ -13,6 +13,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { permissoesTotais, permissoesVazias, type Permissoes } from "@/lib/permissoes";
+import { abrirBusca, escolherNaBusca, limparBusca, opcoesDaBusca, valorDaBusca } from "../util/busca-select";
 
 const nav = vi.hoisted(() => ({ sp: new URLSearchParams(), push: [] as string[] }));
 vi.mock("next/navigation", () => ({
@@ -267,9 +268,12 @@ describe("1º local coberto vem do cadastro do cliente", () => {
 // ═════════════════════════ Serviço padrão + prévia da cobrança (PR2) ═════════════════════════
 describe("serviço da nota e prévia: cobrança − retenções = cobrado", () => {
   const esperar = async (ms = 300) => { await act(async () => { await new Promise((r) => setTimeout(r, ms)); }); await flush(); };
-  const seletor = () => $<HTMLSelectElement>('[data-servico-padrao] select[name="servicoId"]')!;
+  // o serviço da nota é o campo COM BUSCA da casa: escolher é abrir a lista e clicar; "" é limpar
+  const seletor = () => $('[data-servico-padrao] [name="servicoId"]')!;
+  const servicoEscolhido = () => valorDaBusca(seletor(), "serviço da nota");
   const escolher = async (v: string) => {
-    await act(async () => { seletor().value = v; seletor().dispatchEvent(new Event("change", { bubbles: true })); });
+    if (v === "") await limparBusca(seletor(), "serviço da nota");
+    else await escolherNaBusca(seletor(), v);
     await esperar();
   };
   const previas = () => chamadas.filter((c) => c.url.startsWith("/api/contratos/previa-cobranca"));
@@ -281,9 +285,12 @@ describe("serviço da nota e prévia: cobrança − retenções = cobrado", () =
   it("sem serviço: aviso curto + ⓘ (fora de botão) dizendo que definir libera a emissão automática; nada é calculado", async () => {
     await montar();
     expect(painel("contrato").textContent).toContain("Serviço da nota");
-    expect(seletor().value).toBe("");
-    expect([...seletor().options].map((o) => o.textContent)).toEqual(expect.arrayContaining(["Sem serviço padrão", "Manutenção preventiva", "Consultoria"]));
-    expect([...seletor().options].some((o) => o.textContent?.startsWith("Antigo"))).toBe(false); // inativo não é escolha nova
+    expect(servicoEscolhido()).toBe("");
+    expect(seletor().textContent).toContain("Sem serviço padrão"); // o vazio é o estado do campo
+    const lista = opcoesDaBusca(await abrirBusca(seletor(), "serviço da nota"));
+    expect(lista).toEqual(expect.arrayContaining(["Manutenção preventiva", "Consultoria"]));
+    expect(lista.some((o) => o.startsWith("Antigo"))).toBe(false); // inativo não é escolha nova
+    await clicar(seletor()); // fecha a lista para o resto do teste
     const aviso = $("[data-sem-servico]")!;
     expect(aviso.textContent).toContain("Sem serviço padrão, a nota da mensalidade fica pendente até alguém escolher o serviço.");
     const dica = aviso.querySelector<HTMLButtonElement>('button[aria-label*="Serviço padrão"]')!;
@@ -297,7 +304,7 @@ describe("serviço da nota e prévia: cobrança − retenções = cobrado", () =
     rotas["PUT /api/contratos/ct1"] = { id: "ct1" };
     await montar(permissoesTotais(), editar({ servicoId: "s1" }));
     await esperar();
-    expect(seletor().value).toBe("s1");
+    expect(servicoEscolhido()).toBe("s1");
     const p = $("[data-previa-cobranca]")!;
     expect(p.textContent!.replace(/\s+/g, " ")).toContain("Cobrança R$ 1.000,00 − retenções R$ 65,00 = cobrado R$ 935,00");
     expect($("[data-previa-retencoes]")!.textContent!.replace(/\s/g, " ")).toBe("ISS retido 5% (−R$ 50,00) · IR 1,5% (−R$ 15,00)");
@@ -321,7 +328,7 @@ describe("serviço da nota e prévia: cobrança − retenções = cobrado", () =
     nav.sp = new URLSearchParams();
     await montar(permissoesTotais(), editar({ servicoId: "s9" }));
     await esperar();
-    expect(seletor().value).toBe("s9");
+    expect(servicoEscolhido()).toBe("s9");
     expect($("[data-servico-inativo]")!.textContent).toBe("Este serviço está inativo. Ele continua valendo neste contrato.");
     await digitar($<HTMLInputElement>('input[name="valorMensal"]')!, "");
     await esperar();

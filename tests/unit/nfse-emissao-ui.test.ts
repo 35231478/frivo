@@ -13,6 +13,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { montarPermissoes } from "@/lib/permissoes";
+import { escolherNaBusca } from "../util/busca-select";
 
 (globalThis as any).IS_REACT_ACT_ENVIRONMENT = true;
 vi.mock("next/navigation", () => ({
@@ -266,10 +267,11 @@ describe("o modal Emitir NFS-e", () => {
     ]);
     expect((p.querySelector('a[href="/clientes/c1/editar"]') as HTMLAnchorElement).target).toBe("_blank");
     expect(confirmar().disabled).toBe(true);
-    const sel = p.querySelector('[data-item-sem-servico="i9"] select') as HTMLSelectElement;
+    // o serviço do item é o campo COM BUSCA da casa: escolher é abrir a lista e clicar
+    const sel = p.querySelector('[data-item-sem-servico="i9"] [data-seletor-cadastro]')!;
     expect(texto(p.querySelector('[data-item-sem-servico="i9"]'))).toContain("Visita · R$ 80,00");
     previa.pendencias = []; previa.itensSemServico = [];
-    await digitar(sel, "sMan");
+    await escolherNaBusca(sel, "sMan"); await esperar();
     expect(enviados.at(-1)).toEqual({ url: "/api/fiscal/notas/vincular-servico", corpo: { medicaoId: "m1", itemId: "i9", servicoId: "sMan" } });
     expect(modal()!.querySelector("[data-pendencias]")).toBeNull();
     expect(confirmar().disabled).toBe(false);

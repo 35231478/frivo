@@ -10,6 +10,7 @@
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
+import { escolherNaBusca } from "../util/busca-select";
 
 (globalThis as any).IS_REACT_ACT_ENVIRONMENT = true;
 vi.mock("next/navigation", () => ({
@@ -74,6 +75,9 @@ async function digitar(el: Element | null | undefined, v: string) {
 }
 async function escolher(sel: Element | null | undefined, v: string) {
   expect(sel).toBeTruthy();
+  // O seletor de cadastro virou o campo COM BUSCA da casa: aqui o teste faz o que a pessoa
+  // faz (abre a lista e clica). O <select> nativo (enum curto) continua sendo setado direto.
+  if (!(sel instanceof HTMLSelectElement)) { await escolherNaBusca(sel, v); await esperar(); return; }
   await act(async () => { Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, "value")!.set!.call(sel, v); sel!.dispatchEvent(new Event("change", { bubbles: true })); });
   await esperar();
 }
@@ -95,7 +99,7 @@ describe("Itens da OS sem orçamento", () => {
     await montar();
     expect(txt(document.body)).toContain("Nenhum item na OS.");
     await clicar($('[data-acao="novo-servico"]'));
-    await escolher($("select[name='servicoId']"), "sInst");
+    await escolher($("[name='servicoId']"), "sInst");
     expect(chamadas.some((c) => c.url === "/api/ordens/os1/orcamento/catalogo?servicoId=sInst")).toBe(true);
     const painel = $("[data-materiais-linha]")!;
     expect(painel.getAttribute("data-total-materiais")).toBe("3");
@@ -130,7 +134,7 @@ describe("Itens da OS sem orçamento", () => {
   it("valor manual + Recalcular; produto do catálogo vira item PRODUTO; linha livre como sempre; editar um item regrava pelo PUT", async () => {
     await montar();
     await clicar($('[data-acao="novo-servico"]'));
-    await escolher($("select[name='servicoId']"), "sInst");
+    await escolher($("[name='servicoId']"), "sInst");
     await digitar($("[data-total-item-edicao]"), "1000");
     expect(txt($("[data-materiais-linha] [data-valor-manual]"))).toMatch(/Valor manual na linha: R\$\s?1\.000,00/);
     await salvarItem();
@@ -150,7 +154,7 @@ describe("Itens da OS sem orçamento", () => {
     expect(put.corpo.materiais).toHaveLength(3);
     // Produto do catálogo
     await clicar($('[data-acao="novo-produto"]'));
-    await escolher($("select[name='produtoId']"), "fita");
+    await escolher($("[name='produtoId']"), "fita");
     expect($("[data-materiais-linha]")).toBeNull();
     await digitar($("[data-quantidade-item]"), "3");
     await salvarItem();

@@ -24,6 +24,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { montarPermissoes, permissoesTotais, type Permissoes } from "@/lib/permissoes";
 import { TRAVA_ASSINADA, TRAVA_NOTA, motivoDaTrava } from "@/lib/edicao-contexto";
 import type { EdicaoDoSelecionado } from "@/components/ui/select-cadastro-rapido";
+import { escolhidoNaBusca, valorDaBusca } from "../util/busca-select";
 
 (globalThis as any).IS_REACT_ACT_ENVIRONMENT = true;
 vi.mock("next/navigation", () => ({
@@ -463,9 +464,9 @@ describe("editar no contexto — SeletorCadastro › editavel (cadastros do regi
     expect(await toasts()).toEqual(["Cargo atualizado."]);
     expect(painel()).toBeNull();
     // o seletor mostra o nome novo, com o mesmo item escolhido
-    const select = $("[data-seletor-cadastro='cargos']") as HTMLSelectElement;
-    expect(select.value).toBe("c1");
-    expect(txt(select.selectedOptions[0])).toBe("Técnico sênior");
+    const select = $("[data-seletor-cadastro='cargos']")!;
+    expect(valorDaBusca(select, "cargo")).toBe("c1");
+    expect(escolhidoNaBusca(select, "cargo")).toBe("Técnico sênior");
     expect(aoEditar).toHaveBeenCalledWith({ ...cargos[0], nome: "Técnico sênior" });
     expect(aoMudar).not.toHaveBeenCalled();
     // reabrir parte do que foi salvo

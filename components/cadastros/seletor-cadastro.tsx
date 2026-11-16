@@ -1,7 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Select } from "@/components/ui/select";
+import { BuscaSelect } from "@/components/ui/busca-select";
+import { cn } from "@/lib/utils";
 import { CADASTROS, type DefCadastro, type EntidadeCadastro } from "@/lib/cadastros/registro";
 import { opcoesCadastro, type ItemCadastro } from "@/lib/cadastros/opcoes";
 import { BotaoEditarNoContexto, CadastroRapidoModal, EdicaoNoContextoModal, usePodeCriar, type CampoRapido, type PermissaoCriar } from "@/components/ui/select-cadastro-rapido";
@@ -64,8 +65,6 @@ export function valoresDoItem(def: DefCadastro, item: ItemCadastro): Record<stri
     return [c.nome, v == null ? "" : campo?.formatar ? campo.formatar(String(v)) : String(v)];
   }));
 }
-
-const VALOR_CRIAR = "__criar__";
 
 /**
  * Seletor padrão de um cadastro (cargo, produto, serviço, categoria…): só ativos para nova
@@ -159,22 +158,17 @@ export function SeletorCadastro({
   return (
     <div>
       <div className={comEditar ? "flex items-center gap-1.5" : undefined} data-seletor-com-edicao={comEditar || undefined}>
-      <Select
-        id={id} name={nome} className={className} disabled={disabled || carregando}
-        value={valor ?? ""} data-seletor-cadastro={entidade}
-        onChange={(e) => {
-          if (e.target.value === VALOR_CRIAR) { setModal(true); return; }
-          onChange(e.target.value, opcoes.find((o) => o.valor === e.target.value)?.item ?? null);
-        }}
-      >
-        <option value="">{carregando ? "Carregando…" : textoVazio}</option>
-        {opcoes.map((o) => (
-          <option key={o.valor} value={o.valor} data-inativo={o.inativo || undefined}>{o.rotulo}</option>
-        ))}
-        {comCriar && !carregando && (
-          <option value={VALOR_CRIAR} data-criar>＋ {def.feminino ? "Nova" : "Novo"} {def.singular}…</option>
-        )}
-      </Select>
+      {/* Escolha única COM BUSCA (components/ui/busca-select): digitar filtra. Cadastro cresce —
+          produto, cliente, equipamento, fornecedor —, então rolar uma lista inteira não serve. */}
+      <BuscaSelect
+        id={id} nome={nome} className={cn("flex-1", className)} disabled={disabled || carregando}
+        value={valor ?? ""} rotulo={Titulo}
+        placeholder={carregando ? "Carregando…" : textoVazio}
+        atributos={{ "data-seletor-cadastro": entidade }}
+        options={opcoes.map((o) => ({ value: o.valor, label: o.rotulo, inativo: o.inativo, atributos: { "data-inativo": o.inativo ? "" : undefined } }))}
+        acao={comCriar && !carregando ? { rotulo: `${def.feminino ? "Nova" : "Novo"} ${def.singular}…`, onClick: () => setModal(true) } : undefined}
+        onChange={(v) => onChange(v, opcoes.find((o) => o.valor === v)?.item ?? null)}
+      />
       {comEditar && (
         <BotaoEditarNoContexto rotulo={`Editar ${def.feminino ? "a" : "o"} ${def.singular} selecionad${def.feminino ? "a" : "o"}`} onClick={() => setEditando(true)} />
       )}

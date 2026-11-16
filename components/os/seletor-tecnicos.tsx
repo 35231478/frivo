@@ -3,6 +3,7 @@
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { AlertTriangle, Check, ChevronDown, Crown, UserPlus, Users, X } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { BuscaSelect } from "@/components/ui/busca-select";
 import { AvatarTecnico } from "@/components/ui/avatar-tecnico";
 import { SelectCadastroRapido, usePodeCriar } from "@/components/ui/select-cadastro-rapido";
 import { TECNICO } from "@/components/cadastro-rapido/definicoes";
@@ -162,16 +163,13 @@ export function SeletorTecnicos({ tecnicos, equipes, tipoOsId, valor, onChange, 
           </p>
           {/* Y6: saída INLINE — habilita a competência sem abandonar o formulário (quem pode gerenciar colaboradores) */}
           {podeGerenciar && onCompetencia && (
-            <select
-              aria-label="Habilitar competência neste tipo de OS" data-habilitar-competencia value="" disabled={habilitando}
-              onChange={(e) => void habilitarCompetencia(e.target.value)}
-              className="w-full bg-white border border-dashed border-primary-300 text-primary-700 rounded-lg px-2.5 py-1.5 text-xs font-semibold focus:outline-none disabled:opacity-60"
-            >
-              <option value="">{habilitando ? "Habilitando…" : "＋ Habilitar a competência num colaborador…"}</option>
-              {tecnicos.filter((t) => !temCompetencia(t.id) && !valor.tecnicoIds.includes(t.id)).map((t) => (
-                <option key={t.id} value={t.id}>{t.nome}</option>
-              ))}
-            </select>
+            <BuscaSelect
+              rotulo="Habilitar competência neste tipo de OS" atributos={{ "data-habilitar-competencia": "" }}
+              value="" disabled={habilitando} onChange={(v) => void habilitarCompetencia(v)}
+              placeholder={habilitando ? "Habilitando…" : "＋ Habilitar a competência num colaborador…"}
+              className="[&>button]:border-dashed [&>button]:border-primary-300 [&>button]:text-primary-700 [&>button]:text-xs [&>button]:font-semibold"
+              options={tecnicos.filter((t) => !temCompetencia(t.id) && !valor.tecnicoIds.includes(t.id)).map((t) => ({ value: t.id, label: t.nome }))}
+            />
           )}
         </div>
       )}

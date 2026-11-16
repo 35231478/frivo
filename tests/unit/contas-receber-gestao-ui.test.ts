@@ -14,6 +14,7 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vite
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { permissoesTotais, type Permissoes } from "@/lib/permissoes";
+import { escolherNaBusca } from "../util/busca-select";
 
 (globalThis as any).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -81,8 +82,11 @@ async function digitar(el: Element | null, v: string) {
   await act(async () => { Object.getOwnPropertyDescriptor(proto, "value")!.set!.call(el, v); el!.dispatchEvent(new Event("input", { bubbles: true })); });
   await esperar();
 }
-async function escolher(el: Element | null, v: string) {
-  expect(el).not.toBeNull();
+async function escolher(el: Element | null | undefined, v: string) {
+  expect(el).toBeTruthy();
+  // O seletor de cadastro virou o campo COM BUSCA da casa: aqui o teste faz o que a pessoa
+  // faz (abre a lista e clica). O <select> nativo (enum curto) continua sendo setado direto.
+  if (!(el instanceof HTMLSelectElement)) { await escolherNaBusca(el, v); await esperar(); return; }
   await act(async () => { Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, "value")!.set!.call(el, v); el!.dispatchEvent(new Event("change", { bubbles: true })); });
   await esperar();
 }
@@ -163,12 +167,12 @@ describe("edição completa", () => {
     await menu({ banco: "Itaú (texto antigo)", categoriaId: null });
     await clicar(itemMenu("editar"));
     const form = $("[data-editar-conta]")!;
-    expect(form.querySelector('select[data-seletor-cadastro="contas-bancarias"]')).not.toBeNull();
-    expect(form.querySelector('select[data-seletor-cadastro="centros-custo"]')).not.toBeNull();
+    expect(form.querySelector('[data-seletor-cadastro="contas-bancarias"]')).not.toBeNull();
+    expect(form.querySelector('[data-seletor-cadastro="centros-custo"]')).not.toBeNull();
     expect(txt($("[data-banco-antigo]"))).toBe("Banco informado antes: “Itaú (texto antigo)”.");
     expect(txt($("[data-origem-leitura]"))).toBe("Lançamento manual");
-    await escolher(form.querySelector('select[data-seletor-cadastro="contas-bancarias"]'), "cb1");
-    await escolher(form.querySelector('select[data-seletor-cadastro="centros-custo"]'), "cc1");
+    await escolher(form.querySelector('[data-seletor-cadastro="contas-bancarias"]'), "cb1");
+    await escolher(form.querySelector('[data-seletor-cadastro="centros-custo"]'), "cc1");
     await escolher(form.querySelector('select[aria-label="Forma de pagamento"]'), "PIX");
     await escolher($("[data-cliente-select]"), "c2");
     await clicar($("[data-salvar-conta]"));
@@ -221,7 +225,7 @@ describe("receber, cancelar, excluir", () => {
     expect(m.querySelector<HTMLInputElement>("[data-valor-recebido]")!.value).toBe("1234.56");
     expect(m.querySelector("[data-aviso-parcial]")).toBeNull();
     await escolher(m.querySelector('select[aria-label="Forma de pagamento"]'), "PIX");
-    await escolher(m.querySelector('select[data-seletor-cadastro="contas-bancarias"]'), "cb1");
+    await escolher(m.querySelector('[data-seletor-cadastro="contas-bancarias"]'), "cb1");
     await digitar(m.querySelector("textarea"), "Comprovante no e-mail");
     expect(txt($("[data-confirmar-recebimento]"))).toBe("Confirmar recebimento");
     await clicar($("[data-confirmar-recebimento]"));

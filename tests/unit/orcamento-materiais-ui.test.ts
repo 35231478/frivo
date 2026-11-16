@@ -15,6 +15,7 @@ import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { renderToStaticMarkup } from "react-dom/server";
 import { montarPermissoes, permissoesTotais, type Permissoes } from "@/lib/permissoes";
+import { escolherNaBusca } from "../util/busca-select";
 
 (globalThis as any).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -100,6 +101,9 @@ async function digitar(el: Element | null | undefined, v: string) {
 }
 async function escolher(sel: Element | null | undefined, v: string) {
   expect(sel).toBeTruthy();
+  // O seletor de cadastro virou o campo COM BUSCA da casa: aqui o teste faz o que a pessoa
+  // faz (abre a lista e clica). O <select> nativo (enum curto) continua sendo setado direto.
+  if (!(sel instanceof HTMLSelectElement)) { await escolherNaBusca(sel, v); await esperar(); return; }
   await act(async () => { Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, "value")!.set!.call(sel, v); sel!.dispatchEvent(new Event("change", { bubbles: true })); });
   await esperar();
 }
@@ -180,7 +184,7 @@ describe("materiais e peças no construtor", () => {
     await clicar($("[data-material='suporte'] button[aria-label^='Voltar a usar']"));
     expect($("[data-ajuste]")!.getAttribute("data-ajuste")).toBe("40");
     // Avulso (padrão 0): entra integral (1 × 15) e some de vez ao tirar
-    await escolher($("select[name='material-avulso']"), "fita");
+    await escolher($("[name='material-avulso']"), "fita");
     expect($("[data-materiais-linha]")!.getAttribute("data-total-materiais")).toBe("5");
     expect(txt($("[data-material='fita']"))).toContain("Avulso");
     expect($("[data-ajuste]")!.getAttribute("data-ajuste")).toBe("55");

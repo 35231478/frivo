@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
+import { BuscaSelect } from "@/components/ui/busca-select";
 import { Textarea } from "@/components/ui/textarea";
 import { FormField, FormGrid, FormSection } from "@/components/ui/form-field";
 import { PageHeader } from "@/components/ui/page-header";
@@ -224,11 +225,8 @@ export function MedicaoForm({
         <FormSection title="Identificação">
           <FormGrid cols={2}>
             <FormField label="Cliente" required>
-              <Select value={clienteId} onChange={(e) => { setClienteId(e.target.value); setContratoId(""); }} placeholder="Selecione...">
-                {clientes.map((c) => (
-                  <option key={c.id} value={c.id}>{c.nomeFantasia ?? c.nome}</option>
-                ))}
-              </Select>
+              <BuscaSelect value={clienteId} onChange={(v) => { setClienteId(v); setContratoId(""); }} rotulo="Cliente"
+                options={clientes.map((c) => ({ value: c.id, label: c.nomeFantasia ?? c.nome }))} />
             </FormField>
             <FormField label="Tipo">
               <Select value={tipo} onChange={(e) => setTipo(e.target.value)}>
@@ -238,11 +236,8 @@ export function MedicaoForm({
               </Select>
             </FormField>
             <FormField label="Contrato vinculado" hint="Opcional — contratos do cliente selecionado">
-              <Select value={contratoId} onChange={(e) => setContratoId(e.target.value)} placeholder="Nenhum">
-                {contratos.map((c) => (
-                  <option key={c.id} value={c.id}>{c.numero}</option>
-                ))}
-              </Select>
+              <BuscaSelect value={contratoId} onChange={setContratoId} rotulo="Contrato vinculado" placeholder="Nenhum"
+                options={contratos.map((c) => ({ value: c.id, label: c.numero }))} />
             </FormField>
           </FormGrid>
           <FormGrid cols={2}>
