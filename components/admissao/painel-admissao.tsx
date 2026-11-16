@@ -3,8 +3,9 @@
 import Link from "next/link";
 import { CalendarClock, Check, FileSignature, Mail, Send, ShieldCheck, UserPlus } from "lucide-react";
 import { Dica } from "@/components/ui/dica";
+import { Stepper } from "@/components/ui/stepper";
 import { formatarData } from "@/lib/utils";
-import { AJUDA_SITUACAO, type SituacaoAdmissao } from "@/lib/admissao/admissao";
+import { AJUDA_SITUACAO, FLUXO, ROTULO_SITUACAO, passoDoFluxo, type SituacaoAdmissao } from "@/lib/admissao/admissao";
 import type { AdmissaoDoRh } from "@/lib/admissao/admissao-server";
 import { AcoesAdmissao, SeloSituacao } from "@/components/admissao/acoes-admissao";
 import { NovaAdmissao, type OpcaoCargo } from "@/components/admissao/nova-admissao";
@@ -55,6 +56,14 @@ export function PainelAdmissao({ colaborador, admissao, cargos, validadePadrao }
         <SeloSituacao situacao={s} />
         <span className="text-sm text-ink-muted">{AJUDA_SITUACAO[s]}</span>
       </div>
+
+      {/* Onde a admissão está, do convite à admissão — fora do fluxo (cancelada/expirada) não cabe barra */}
+      {passoDoFluxo(s) >= 0 && (
+        <Stepper
+          passos={FLUXO.map((f) => ({ id: f, rotulo: ROTULO_SITUACAO[f] }))}
+          atual={passoDoFluxo(s)} rotulo="Andamento da admissão" data-andamento-admissao=""
+        />
+      )}
 
       <dl className="grid grid-cols-2 sm:grid-cols-3 gap-4 rounded-lg border border-surface-border bg-surface-alt/40 px-4 py-3">
         {linha("Convite criado em", <>{formatarData(admissao.criadoEm)}{admissao.criadoPor && <span className="text-ink-muted font-normal"> · {admissao.criadoPor}</span>}</>)}

@@ -44,6 +44,14 @@ export const AJUDA_SITUACAO: Record<SituacaoAdmissao, string> = {
   EXPIRADA: "O link passou da validade sem ser concluído. Reenviar gera um prazo novo.",
 };
 
+/** O caminho normal da admissão, na ordem — é a barra de andamento que o RH vê. */
+export const FLUXO: readonly SituacaoAdmissao[] = [
+  "CONVIDADO", "PREENCHENDO", "AGUARDANDO_ASSINATURA", "ASSINADO", "ENVIADO_CONTADOR", "ADMITIDO",
+];
+
+/** Onde a admissão está no fluxo (-1 = fora dele: cancelada ou expirada). */
+export const passoDoFluxo = (situacao: string) => FLUXO.indexOf(situacao as SituacaoAdmissao);
+
 /** Situação encerrada: não aceita mais mudança pelo link. */
 export const ENCERRADAS: readonly SituacaoAdmissao[] = ["ADMITIDO", "CANCELADA"];
 

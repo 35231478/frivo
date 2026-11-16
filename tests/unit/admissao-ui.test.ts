@@ -19,8 +19,8 @@ import { createRoot, type Root } from "react-dom/client";
 import { AcoesAdmissao } from "@/components/admissao/acoes-admissao";
 import { PainelAdmissao } from "@/components/admissao/painel-admissao";
 import { AdmissaoPublicaCliente } from "@/components/admissao/admissao-publica";
-import { DOCUMENTOS_PADRAO, formVazio, type SituacaoAdmissao } from "@/lib/admissao/admissao";
-import { PRESETS, moduloDaRota, montarPermissoes, pode } from "@/lib/permissoes";
+import { DOCUMENTOS_PADRAO, FLUXO, formVazio, type SituacaoAdmissao } from "@/lib/admissao/admissao";
+import { ACOES_LABEL, MODULOS, PRESETS, SECOES, moduloDaRota, montarPermissoes, pode } from "@/lib/permissoes";
 import { SECOES_CONFIGURACOES } from "@/lib/navegacao/configuracoes";
 import { temTelaConfig } from "@/components/config/telas";
 import type { AdmissaoDoRh, AdmissaoPublica } from "@/lib/admissao/admissao-server";
@@ -208,6 +208,16 @@ describe("o painel da admissão na ficha do colaborador", () => {
     expect($("[data-acao-enviar]")).toBeTruthy();
   });
 
+  it("a barra de andamento mostra em que passo a admissão está, e some quando ela sai do fluxo", async () => {
+    await montar(createElement(PainelAdmissao, props(ADMISSAO("AGUARDANDO_ASSINATURA"))));
+    const passos = $$("[data-andamento-admissao] [data-etapa]");
+    expect(passos.map((x) => x.getAttribute("data-etapa"))).toEqual([...FLUXO]);
+    expect(passos.map((x) => x.getAttribute("data-estado"))).toEqual(["feito", "feito", "atual", "futuro", "futuro", "futuro"]);
+
+    await remontar(createElement(PainelAdmissao, props(ADMISSAO("CANCELADA", { cancelamentoMotivo: "Desistiu" }))));
+    expect($("[data-andamento-admissao]"), "cancelada não tem andamento, tem razão").toBeNull();
+  });
+
   it("assinada: mostra quem assinou, quando e o IP", async () => {
     await montar(createElement(PainelAdmissao, props(ADMISSAO("ASSINADO", {
       assinaturaEm: "2026-11-17T10:00:00.000Z", assinaturaNome: "Marina Alves Pereira", assinaturaIp: "191.7.7.7",
@@ -337,6 +347,17 @@ describe("quem entra nas telas da admissão", () => {
     }
     // Quem gerencia equipes NÃO herda a admissão
     expect(pode(montarPermissoes({ equipes: ["visualizar", "gerenciar", "excluir"] }), "admissao", "gerenciar")).toBe(false);
+  });
+
+  it("a permissão aparece na matriz de perfis de acesso, na seção Equipe, com a ação Gerenciar", () => {
+    const equipe = SECOES.find((x) => x.id === "equipe");
+    const modulo = equipe?.modulos.find((m) => m.id === "admissao");
+    expect(modulo, "o módulo está na seção Equipe (é lá que o dono liga por perfil)").toMatchObject({
+      id: "admissao", label: "Admissão digital", acoes: ["gerenciar"],
+    });
+    // o editor de perfis desenha um interruptor por ação, com o rótulo vindo de ACOES_LABEL
+    expect(ACOES_LABEL.gerenciar).toBeTruthy();
+    expect(MODULOS.some((m) => m.id === "admissao"), "entra na lista achatada que a matriz usa").toBe(true);
   });
 
   it("o item de Configurações › Admissão digital pede a mesma permissão", () => {
