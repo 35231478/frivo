@@ -11,13 +11,15 @@
  *    linha só sai da tela quando a rota aceita (rota que recusa não muda a tela);
  *  - BAIXAR aponta para a rota do documento, e some quando o documento não tem arquivo;
  *  - ANEXAR só manda com arquivo escolhido, e manda categoria, nome e validade;
- *  - o contrato assinado da admissão aparece na seção e abre o texto congelado;
+ *  - o contrato assinado da admissão aparece na seção e abre o texto congelado — e, quando o
+ *    PDF dele já está guardado nos anexos, aparece UMA vez só (o PDF manda);
  *  - somente leitura não mostra anexar, editar nem excluir.
  */
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { DocumentosColaborador } from "@/components/colaborador/documentos-colaborador";
+import { TIPO_CONTRATO_ASSINADO } from "@/lib/admissao/admissao-entrega-regras";
 import type { DocumentoLinha } from "@/lib/colaborador/documentos-server";
 
 (globalThis as any).IS_REACT_ACT_ENVIRONMENT = true;
@@ -318,6 +320,22 @@ describe("Documentos da ficha: o contrato da admissão e a leitura", () => {
   it("sem admissão assinada não há linha de contrato", async () => {
     await montar(createElement(DocumentosColaborador, props()));
     expect($("[data-linha-contrato]")).toBeNull();
+  });
+
+  it("com o PDF do contrato guardado, o contrato aparece UMA vez — o PDF, não o texto", async () => {
+    const pdfDoContrato = DOC({
+      id: "d-contrato", tipo: TIPO_CONTRATO_ASSINADO, categoria: "contrato",
+      nome: "Contrato assinado - Marina Alves", origem: "ADMISSAO", criadoPorNome: null,
+    });
+    await montar(createElement(DocumentosColaborador, props({
+      documentosIniciais: [pdfDoContrato, DOC()],
+      contratoAssinado: { texto: "CONTRATO DE TRABALHO\nEntre as partes…", assinadoEm: "2026-11-10T12:00:00.000Z", assinadoPor: "Marina Alves" },
+    })));
+    // o PDF é o anexo de verdade: dá para baixar, e traz a prova e a foto
+    expect($("[data-documento='d-contrato']")).toBeTruthy();
+    // e a linha do texto congelado sai de cena, em vez de repetir "Contrato assinado"
+    expect($("[data-linha-contrato]"), "sem linha repetida").toBeNull();
+    expect($("[data-cartao-contrato]"), "nem no celular").toBeNull();
   });
 
   it("somente leitura: nem anexar, nem editar, nem excluir — mas baixar continua", async () => {

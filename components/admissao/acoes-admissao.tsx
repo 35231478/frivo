@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import {
-  AlertCircle, Ban, Check, Copy, Eye, FileSignature, Link2Off, Mail, Pencil, Send, UserCheck,
+  AlertCircle, Ban, Check, Copy, Eye, FileSignature, FileText, FolderDown, Link2Off, Mail, Pencil, Send, UserCheck,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Modal } from "@/components/ui/modal";
@@ -18,6 +18,7 @@ import {
   podeIr, podeReenviar, type Etapa, type SituacaoAdmissao,
 } from "@/lib/admissao/admissao";
 import type { AdmissaoDoRh, ProgressoAdmissao } from "@/lib/admissao/admissao-server";
+import { temEntrega } from "@/lib/admissao/admissao-entrega-regras";
 
 /** A pílula da situação, com o ⓘ do que ela significa no texto do title. */
 export function SeloSituacao({ situacao, className }: { situacao: string; className?: string }) {
@@ -28,6 +29,12 @@ export function SeloSituacao({ situacao, className }: { situacao: string; classN
     </StatusPill>
   );
 }
+
+/**
+ * Baixar é uma navegação, não uma ação: `<a>` de verdade (o Button da casa é um `<button>`). O
+ * traje é o do botão secundário, para a faixa de ações ficar uniforme.
+ */
+const BOTAO_LINK = "inline-flex items-center gap-2 px-4 py-2.5 text-sm font-medium rounded-lg border border-surface-border text-ink hover:bg-surface-alt transition-colors";
 
 const linkDa = (token: string) =>
   `${typeof window === "undefined" ? "" : window.location.origin}${caminhoPublicoAdmissao(token)}`;
@@ -139,6 +146,10 @@ export function AcoesAdmissao({ admissao, variante = "menu" }: {
 
   const temLink = podeReenviar(s);
   const podeCancelarAgora = podeIr(s, "CANCELADA");
+  // A ficha e o pacote existem de ASSINADO em diante — a MESMA regra do servidor, para o botão
+  // nunca oferecer o que a rota recusaria.
+  const temEntregaAgora = temEntrega(s);
+  const baseEntrega = `/api/admissoes/${admissao.id}`;
   const podeContador = podeIr(s, "ENVIADO_CONTADOR");
   const podeAdmitir = podeIr(s, "ADMITIDO");
   const fichaHref = `/colaboradores/${admissao.colaborador.id}/editar`;
@@ -276,6 +287,16 @@ export function AcoesAdmissao({ admissao, variante = "menu" }: {
         <Button type="button" variant="secondary" onClick={verProgresso} loading={ocupado === "progresso"} data-acao-progresso>
           <Eye className="w-4 h-4" /> Ver o progresso
         </Button>
+        {temEntregaAgora && (
+          <>
+            <a href={`${baseEntrega}/ficha`} className={BOTAO_LINK} data-acao-ficha>
+              <FileText className="w-4 h-4" /> Baixar a ficha (PDF)
+            </a>
+            <a href={`${baseEntrega}/documentos`} className={BOTAO_LINK} data-acao-pacote>
+              <FolderDown className="w-4 h-4" /> Baixar os documentos (zip)
+            </a>
+          </>
+        )}
         {podeContador && (
           <Button type="button" variant="secondary" onClick={contador} loading={ocupado === "contador"} data-acao-contador>
             <FileSignature className="w-4 h-4" /> Enviado ao contador
@@ -316,6 +337,14 @@ export function AcoesAdmissao({ admissao, variante = "menu" }: {
             )}
             <ItemMenu id="progresso" icone={Eye} onClick={() => { fechar(); verProgresso(); }}>Ver o progresso</ItemMenu>
             <ItemMenu id="editar" icone={Pencil} href={fichaHref}>Editar os dados</ItemMenu>
+            {temEntregaAgora && (
+              <>
+                <SeparadorMenu />
+                <ItemMenu id="ficha-pdf" icone={FileText} href={`${baseEntrega}/ficha`} novaAba>Baixar a ficha (PDF)</ItemMenu>
+                <ItemMenu id="pacote" icone={FolderDown} href={`${baseEntrega}/documentos`} novaAba>Baixar os documentos (zip)</ItemMenu>
+                <ItemMenu id="contrato-pdf" icone={FileSignature} href={`${baseEntrega}/contrato`} novaAba>Baixar o contrato (PDF)</ItemMenu>
+              </>
+            )}
             {(podeContador || podeAdmitir) && <SeparadorMenu />}
             {podeContador && <ItemMenu id="contador" icone={FileSignature} onClick={() => { fechar(); contador(); }}>Enviado ao contador</ItemMenu>}
             {podeAdmitir && <ItemMenu id="admitir" icone={UserCheck} onClick={() => { fechar(); admitir(); }}>Admitir</ItemMenu>}

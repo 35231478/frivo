@@ -113,7 +113,7 @@ estas telas em `docs/prints/admissao-digital/`.
 - **Dados sensíveis** (selfie, documentos) ficam no banco como os outros anexos do sistema, servidos
   só por rota autenticada.
 
-## 7. Perguntas em aberto (para o Zé decidir no PR2)
+## 7. Perguntas em aberto
 
 1. **A lista `/admissoes` fica onde?** Ficou em **Equipe › Admissões** no menu (a sugestão do PR1),
    com a configuração em Configurações › Acesso e pessoas › Admissão digital. Se preferir outro
@@ -121,9 +121,9 @@ estas telas em `docs/prints/admissao-digital/`.
 2. **O preset de perfil que já ganha a permissão.** Hoje só o ADMINISTRADOR tem (por
    `permissoesTotais`); SUPERVISOR e FINANCEIRO ficaram de fora porque admissão mexe com dado
    sensível de pessoa. Se o RH da Frivo usa um perfil específico, digo qual preset recebe.
-3. **Quem é "o contador"?** Hoje "Enviado ao contador" é um marco (quem e quando) com o download
-   pelo RH. Se o contador tiver de receber por e-mail automático, isso é um campo de configuração a
-   mais (e-mail do contador) no PR3.
+3. ~~**Quem é "o contador"?**~~ **Respondido no PR3:** sem e-mail automático. "Enviado ao contador"
+   continua sendo o marco (quem e quando); quem manda é o RH, com a ficha e o pacote na mão. Se um
+   dia o envio tiver de sair sozinho, aí entra o campo "e-mail do contador" na configuração.
 
 ## 8. O que o PR2 acrescentou (telas)
 
@@ -140,3 +140,95 @@ Duas peças da casa nasceram aqui porque faltavam: **`BuscaSimplesUrl`** (busca 
 typeahead, no kit de listas) e **`lib/cep.ts`** (a consulta ao ViaCEP que estava copiada em três
 telas — cadastro rápido, unidades do cliente e unidades locais — agora numa função só; cada tela
 mantém a própria regra de mesclagem).
+
+## 9. O que o PR3 acrescentou (a entrega ao contador)
+
+A última peça: o RH baixa a documentação pronta e manda ao escritório de contabilidade.
+
+### A Ficha de Admissão em PDF
+
+Segue os blocos do **eSocial — evento S-2200** ("Cadastramento Inicial do Vínculo e Admissão"):
+
+1. **Identificação** — nome, nascimento, nome da mãe e do pai, sexo, estado civil, nacionalidade,
+   naturalidade, escolaridade, telefone e e-mail
+2. **Documentos** — CPF, RG, PIS/NIS, CTPS (número, série e UF), título de eleitor, reservista
+3. **Endereço** — logradouro, número, complemento, bairro, cidade, estado e CEP
+4. **Contrato de trabalho** — cargo, **CBO**, salário, data de admissão, jornada e o empregador
+5. **Dependentes** — nome, parentesco, nascimento, CPF e os marcadores de **IRRF** e **salário-família**
+6. **Dados bancários** — banco, agência, conta, tipo e chave PIX
+7. **Assinatura do colaborador** — quem assinou, quando, de onde, e o consentimento da LGPD
+
+Não é o XML do eSocial: é a ficha em papel que o escritório usa para lançar o evento, com os campos
+na ordem em que ele os procura. Qualquer empresa que use o Frivo recebe a mesma ficha — o formato é
+do eSocial, não da Termofrio.
+
+**Nada inventa dado.** O que vale é o cadastro (é para lá que o preenchimento passou os dados); o
+rascunho entra só como segunda fonte, para o campo que o cadastro não guarda. Campo que ninguém
+preencheu sai como **—**, nunca em branco, e no fim da ficha há a lista do que ficou sem resposta:
+o traço diz "foi perguntado e não veio", o vazio deixaria a dúvida de se o sistema esqueceu.
+
+### O contrato assinado em PDF
+
+O texto **congelado no momento da assinatura** (mudar o modelo depois não altera este), mais a prova
+— nome digitado, data e hora, endereço de IP, navegador — e a **foto tirada na assinatura**. É o
+arquivo que responde "o que foi assinado?" dois anos depois.
+
+Na hora da assinatura ele é guardado **nos anexos do colaborador**, com categoria "Contrato de
+trabalho" e origem "Enviado na admissão": aparece na seção Documentos da ficha junto com o resto dos
+papéis da pessoa. Se a geração do PDF falhar, a assinatura **não cai** — ela já está gravada, e a
+rota do contrato gera o arquivo na hora.
+
+A seção Documentos já tinha, desde a leva anterior, uma linha "Contrato assinado" que abria o
+**texto** congelado num diálogo. Com o PDF guardado, as duas apareceriam juntas dizendo a mesma
+coisa. Agora o PDF manda: a linha do texto só aparece para quem assinou **antes** desta leva e por
+isso não tem o arquivo. Um contrato, uma linha.
+
+### O pacote (zip)
+
+A ficha, o contrato e os documentos que o colaborador enviou, numa coisa só. Os arquivos enviados
+vão numa pasta `Documentos enviados/`, com o **rótulo que a empresa pediu** ("RG (frente e verso)",
+"Comprovante de residência") e a extensão vinda dos **bytes**, nunca do nome prometido.
+
+O zip é montado pelo próprio sistema, com o `node:zlib` que já vem no Node — o projeto não tem
+biblioteca de zip e não ganhou uma. Nome repetido vira "(2)" em vez de sobrescrever, e nome perigoso
+(`../../etc/passwd`, barra no começo) nunca escreve fora da pasta onde o zip for aberto.
+
+### Quando os downloads existem
+
+De **ASSINADO** em diante (assinado, enviado ao contador, admitido). Antes disso a ficha sairia pela
+metade, e meia ficha no contador é pior do que nenhuma. Marcar **"Enviado ao contador"** continua
+sendo o registro de que o RH mandou — não é o que destrava o download, senão ele teria de marcar
+como enviado *antes* de conseguir baixar o que vai enviar.
+
+A regra mora em `lib/admissao/admissao-entrega-regras.ts`, lida pela tela **e** pelo servidor: o
+botão nunca oferece o que a rota recusaria.
+
+### Telas × botões
+
+| Tela | Botões que ganhou |
+| --- | --- |
+| **Equipe › Admissões** (`/admissoes`), no ⋮ de cada linha | **Baixar a ficha (PDF)**, **Baixar os documentos (zip)**, **Baixar o contrato (PDF)** |
+| **Ficha do colaborador › aba Admissão** | **Baixar a ficha (PDF)** e **Baixar os documentos (zip)** |
+| **Ficha do colaborador › aba Documentos** | Nada novo — o contrato assinado passou a cair ali sozinho, como anexo de verdade |
+
+O rodapé do PR2 que dizia "entram na próxima leva" saiu: a promessa foi cumprida, e texto que já não
+é verdade é poluição.
+
+### As rotas
+
+| Rota | O que entrega | Permissão |
+| --- | --- | --- |
+| `GET /api/admissoes/[id]/ficha` | A Ficha de Admissão em PDF (`?ver=1` abre na aba) | admissao.gerenciar |
+| `GET /api/admissoes/[id]/documentos` | O pacote (zip) | admissao.gerenciar |
+| `GET /api/admissoes/[id]/contrato` | O contrato assinado em PDF | admissao.gerenciar |
+
+Sem sessão 401, sem a permissão 403, admissão de outra empresa 404 — nunca o arquivo. Antes de
+assinar, 409 dizendo o porquê.
+
+### Reuso, não cópia
+
+A maquinaria de desenho (folha A4, cabeçalho corrido, seção, parágrafo que quebra de página, tabela
+com cabeçalho que se repete, rodapé numerado) **nasceu no documento do PMOC** e saiu para
+`lib/pdf/desenho.ts` quando a ficha precisou da mesma coisa. O que amarrava ao PMOC era só o
+cabeçalho e o rodapé: viraram um descritor. O documento do PMOC continua idêntico — os 24 testes
+dele são a prova.

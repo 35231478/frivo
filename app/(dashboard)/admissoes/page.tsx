@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import Link from "next/link";
-import { CalendarClock, FileText, Send, UserPlus } from "lucide-react";
+import { CalendarClock, Send, UserPlus } from "lucide-react";
 import { auth } from "@/lib/auth";
 import { pode } from "@/lib/permissoes";
 import { prisma } from "@/lib/prisma";
@@ -177,12 +177,6 @@ export default async function AdmissoesPage({ searchParams }: { searchParams: Pr
 
         <PaginacaoUrl total={todas.length} pagina={pagina} porPagina={POR_PAGINA} rotulo="admissões" />
       </ListaUrl>
-
-      {/* O que ainda não existe fica dito, não escondido num botão morto */}
-      <p className="text-xs text-ink-subtle flex items-center gap-1.5">
-        <FileText className="w-3.5 h-3.5" aria-hidden />
-        A Ficha de Admissão em PDF e o pacote dos documentos entram na próxima leva.
-      </p>
     </div>
   );
 }
