@@ -200,6 +200,41 @@ export class Desenho {
     this.y += 10;
   }
 
+  /**
+   * Campos rotulados em duas colunas, com uma linha fina separando as faixas — o jeito da casa de
+   * mostrar "rótulo em cima, valor embaixo" num documento. Nasceu na Ficha de Admissão e virou
+   * método aqui quando o motor de Modelos de documento precisou do mesmo bloco.
+   *
+   * A altura da faixa é a do campo mais alto dela: o par nunca é partido entre duas folhas.
+   */
+  campos(linhas: { rotulo: string; valor: string }[], op: { colunas?: number } = {}) {
+    const colunas = op.colunas ?? 2;
+    const vao = 16;
+    const largura = (this.util - vao * (colunas - 1)) / colunas;
+    const tamanhoRotulo = 7, tamanhoValor = 9.5;
+
+    for (let i = 0; i < linhas.length; i += colunas) {
+      const dupla = linhas.slice(i, i + colunas);
+      const alturas = dupla.map((l) => this.linhas(l.valor, largura, tamanhoValor).length * (tamanhoValor * 1.35));
+      const altura = Math.max(...alturas) + tamanhoRotulo + 9;
+      this.garantir(altura);
+
+      const topo = this.y;
+      dupla.forEach((linha, n) => {
+        const x = MARGEM + n * (largura + vao);
+        this.escrever(linha.rotulo.toUpperCase(), x, topo, { tamanho: tamanhoRotulo, fonte: this.negrito, cor: C.apoio });
+        let y = topo + tamanhoRotulo + 5;
+        for (const texto of this.linhas(linha.valor, largura, tamanhoValor)) {
+          this.escrever(texto, x, y, { tamanho: tamanhoValor });
+          y += tamanhoValor * 1.35;
+        }
+      });
+      this.y = topo + altura;
+      this.reta(MARGEM, this.y - 3, MARGEM + this.util, this.y - 3, C.linha);
+    }
+    this.y += 8;
+  }
+
   rodapes(total: number) {
     this.paginas.forEach((p, i) => {
       this.pagina = p;

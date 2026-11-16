@@ -575,6 +575,8 @@ model Empresa {
 
   admissoes      Admissao[]
   admissaoConfig AdmissaoConfig?
+  documentoModelos  DocumentoModelo[]
+  documentosEmitidos DocumentoEmitido[]
 
   @@map("empresas")
 }
@@ -887,6 +889,9 @@ model Usuario {
   admissoesCriadas    Admissao[]             @relation("AdmissaoCriadaPor")
   admissoesCanceladas Admissao[]             @relation("AdmissaoCanceladaPor")
   admissoesAoContador Admissao[]             @relation("AdmissaoContadorPor")
+  documentoModelosCriados    DocumentoModelo[]  @relation("DocumentoModeloCriadoPor")
+  documentosEmitidosCriados  DocumentoEmitido[] @relation("DocumentoEmitidoCriadoPor")
+  documentosEmitidosCancelados DocumentoEmitido[] @relation("DocumentoEmitidoCanceladoPor")
   documentosAnexados  ColaboradorDocumento[] @relation("DocumentoColaboradorCriadoPor")
   documentosExcluidos ColaboradorDocumento[] @relation("DocumentoColaboradorExcluidoPor")
 
@@ -1032,6 +1037,7 @@ model Tecnico {
   desempenhoFechamentoLinhas DesempenhoFechamentoLinha[]
 
   admissoes   Admissao[]
+  documentosEmitidos DocumentoEmitido[]
   dependentes ColaboradorDependente[]
 
   @@unique([cpf, empresaId])
@@ -3953,6 +3959,8 @@ model ColaboradorDocumento {
   colaborador Tecnico  @relation(fields: [colaboradorId], references: [id], onDelete: Cascade)
   criadoPor   Usuario? @relation("DocumentoColaboradorCriadoPor", fields: [criadoPorId], references: [id], onDelete: SetNull)
   excluidoPor Usuario? @relation("DocumentoColaboradorExcluidoPor", fields: [excluidoPorId], references: [id], onDelete: SetNull)
+  /// Preenchido quando o anexo nasceu de um modelo (Gerar documento)
+  emitido     DocumentoEmitido?
 
   @@index([colaboradorId, excluidoEm])
   @@map("colaborador_documentos")
@@ -5220,4 +5228,91 @@ model ColaboradorDependente {
 
   @@index([colaboradorId])
   @@map("colaborador_dependentes")
+}
+
+/// MODELO DE DOCUMENTO da empresa: o texto com os campos entre chaves que vira ficha de entrega de
+/// EPI, termo de responsabilidade, advertência ou aditivo de contrato. Nada hardcoded — cada
+/// empresa escreve o seu, como já acontece com o modelo de contrato da admissão.
+model DocumentoModelo {
+  id        String @id @default(cuid())
+  empresaId String @map("empresa_id")
+  nome      String
+  /// EPI | TERMO | ADVERTENCIA | ADITIVO | OUTRO (TIPOS em lib/documentos/modelos.ts)
+  tipo      String
+  /// O texto da empresa, com os campos entre chaves ({{nome}}, {{cargo}}…). O sistema preenche o
+  /// que conhece; campo desconhecido fica visível, porque esconder só atrasaria a descoberta.
+  texto     String @db.Text
+  /// A gaveta na seção Documentos da ficha (CATEGORIAS em lib/colaborador/documentos.ts).
+  /// NULL = a categoria padrão do tipo.
+  categoria String?
+  /// Documento com lista de itens — a ficha de EPI precisa (item, CA, quantidade, entrega)
+  temItens  Boolean @default(false) @map("tem_itens")
+  /// Dias de validade a partir da entrega. NULL = não vence. Alimenta o aviso de vencimento que a
+  /// ficha e a lista de colaboradores já têm.
+  validadeDias Int? @map("validade_dias")
+  /// Pede a assinatura do colaborador na entrega (EPI e termo pedem; aditivo arquivado, não)
+  exigeAssinatura Boolean @default(true) @map("exige_assinatura")
+  ativo           Boolean @default(true)
+
+  criadoPorId  String?  @map("criado_por_id")
+  criadoEm     DateTime @default(now()) @map("criado_em")
+  atualizadoEm DateTime @updatedAt @map("atualizado_em")
+
+  empresa   Empresa            @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  criadoPor Usuario?           @relation("DocumentoModeloCriadoPor", fields: [criadoPorId], references: [id], onDelete: SetNull)
+  emitidos  DocumentoEmitido[]
+
+  @@unique([empresaId, nome])
+  @@index([empresaId, ativo])
+  @@map("documento_modelos")
+}
+
+/// DOCUMENTO EMITIDO: o papel que foi gerado para uma pessoa — o que, quando, por quem, e assinado
+/// ou não. O texto é congelado na emissão: mudar o modelo depois não altera o que foi entregue.
+model DocumentoEmitido {
+  id            String  @id @default(cuid())
+  empresaId     String  @map("empresa_id")
+  colaboradorId String  @map("colaborador_id")
+  /// O modelo que deu origem. SetNull: apagar o modelo não apaga o papel assinado.
+  modeloId      String? @map("modelo_id")
+  /// Copiados do modelo na emissão — o histórico não muda quando o modelo mudar
+  tipo          String
+  titulo        String
+  texto         String  @db.Text
+  /// O que o usuário completou na hora: { "motivo": "…", "equipamento": "…" }
+  valores       Json?
+  /// Os itens entregues: [{ "descricao": "Luva de vaqueta", "ca": "12345", "quantidade": 2, "entregaEm": "2026-11-16" }]
+  itens         Json?
+
+  /// Prova da assinatura — a mesma da admissão (nome digitado, foto, IP, navegador e hora)
+  assinaturaNome      String?   @map("assinatura_nome")
+  assinaturaIp        String?   @map("assinatura_ip")
+  assinaturaUserAgent String?   @map("assinatura_user_agent")
+  assinaturaEm        DateTime? @map("assinatura_em")
+  /// Foto tirada na assinatura (data URL) — dado sensível
+  selfie              String?   @db.Text
+
+  /// O anexo que este papel virou na seção Documentos da ficha. SetNull: excluir o anexo (que já é
+  /// com rastro) não apaga o histórico de que o documento existiu.
+  documentoId String? @unique @map("documento_id")
+
+  /// Cancelamento: nunca apaga, guarda a razão e quem
+  canceladoEm        DateTime? @map("cancelado_em")
+  canceladoPorId     String?   @map("cancelado_por_id")
+  cancelamentoMotivo String?   @map("cancelamento_motivo")
+
+  criadoPorId  String?  @map("criado_por_id")
+  criadoEm     DateTime @default(now()) @map("criado_em")
+  atualizadoEm DateTime @updatedAt @map("atualizado_em")
+
+  empresa     Empresa               @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  colaborador Tecnico               @relation(fields: [colaboradorId], references: [id], onDelete: Cascade)
+  modelo      DocumentoModelo?      @relation(fields: [modeloId], references: [id], onDelete: SetNull)
+  documento   ColaboradorDocumento? @relation(fields: [documentoId], references: [id], onDelete: SetNull)
+  criadoPor   Usuario?              @relation("DocumentoEmitidoCriadoPor", fields: [criadoPorId], references: [id], onDelete: SetNull)
+  canceladoPor Usuario?             @relation("DocumentoEmitidoCanceladoPor", fields: [canceladoPorId], references: [id], onDelete: SetNull)
+
+  @@index([empresaId, tipo])
+  @@index([colaboradorId, canceladoEm])
+  @@map("documento_emitidos")
 }

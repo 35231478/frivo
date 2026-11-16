@@ -12,6 +12,7 @@
  * lista de documentos, o texto das orientações e a validade do link são configuração da empresa.
  */
 import { cpfValido, digitos } from "@/lib/documento";
+import { camposDesconhecidosEm, preencherModelo } from "@/lib/texto/modelo";
 
 /* ───────── situações ───────── */
 
@@ -309,19 +310,16 @@ export const CAMPOS_CONTRATO = [
 /**
  * Preenche o modelo da empresa: troca {{campo}} pelo valor. Campo desconhecido fica como está —
  * é erro de quem escreveu o modelo, e esconder isso só atrasaria a descoberta.
+ *
+ * O motor mora em `lib/texto/modelo.ts`, porque o contrato deixou de ser o único papel com campos
+ * entre chaves: a ficha de EPI, o termo, a advertência e o aditivo usam o MESMO.
  */
-export function montarContrato(modelo: string, dados: DadosContrato): string {
-  return modelo.replace(/\{\{\s*(\w+)\s*\}\}/g, (inteiro, campo: string) => {
-    const v = (dados as unknown as Record<string, unknown>)[campo];
-    return v === undefined || v === null ? inteiro : String(v);
-  });
-}
+export const montarContrato = (modelo: string, dados: DadosContrato): string =>
+  preencherModelo(modelo, dados as unknown as Record<string, unknown>);
 
 /** Os campos que o modelo usa e o sistema não conhece — a tela de configuração avisa. */
-export function camposDesconhecidos(modelo: string): string[] {
-  const usados = [...modelo.matchAll(/\{\{\s*(\w+)\s*\}\}/g)].map((m) => m[1]);
-  return [...new Set(usados.filter((c) => !CAMPOS_CONTRATO.includes(c as never)))];
-}
+export const camposDesconhecidos = (modelo: string): string[] =>
+  camposDesconhecidosEm(modelo, CAMPOS_CONTRATO);
 
 /* ───────── validade do link ───────── */
 

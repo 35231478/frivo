@@ -8,7 +8,7 @@ import { corDado } from "@/lib/ui/tokens";
 export type Acao =
   | "visualizar" | "criar" | "editar" | "excluir" | "concluir" | "aprovar"
   | "gerenciar" | "medicoes" | "contasReceber" | "fluxoCaixa" | "folha" | "fiscal" | "perdas" | "checklist" | "exportar"
-  | "separar" | "revisar";
+  | "separar" | "revisar" | "disciplinar";
 
 export type Permissoes = Record<string, Partial<Record<Acao, boolean>>>;
 
@@ -16,7 +16,7 @@ export type Permissoes = Record<string, Partial<Record<Acao, boolean>>>;
 export type IconeModulo =
   | "ClipboardList" | "Users" | "Thermometer" | "CalendarDays" | "QrCode" | "Package" | "ShoppingCart" | "Calculator"
   | "FileText" | "Landmark" | "Wallet" | "UsersRound" | "Truck" | "Settings" | "BarChart3" | "LayoutDashboard" | "FileBadge" | "Trophy"
-  | "UserPlus";
+  | "UserPlus" | "FileSignature";
 export interface ModuloDef { id: string; label: string; icone: IconeModulo; acoes: Acao[] }
 export interface SecaoDef { id: string; label: string; modulos: ModuloDef[] }
 
@@ -38,6 +38,7 @@ export const ACOES_LABEL: Record<Acao, string> = {
   exportar: "Exportar",
   separar: "Separar material",
   revisar: "Revisar penalidades",
+  disciplinar: "Advertência e suspensão",
 };
 
 /** Matriz de permissões agrupada por seção (fonte da verdade da UI e dos defaults). */
@@ -83,6 +84,10 @@ export const SECOES: SecaoDef[] = [
       // Admissão digital: gerar o convite, acompanhar o preenchimento, baixar a ficha e os
       // documentos, cancelar. Dado sensível do colaborador — fica separado de "Equipes".
       { id: "admissao", label: "Admissão digital", icone: "UserPlus", acoes: ["gerenciar"] },
+      // Documentos do colaborador: "gerenciar" = os MODELOS da empresa (Configurações); "criar" =
+      // gerar e assinar um documento na ficha de alguém; "disciplinar" = advertência e suspensão,
+      // que é papel sensível — quem não tem não gera E não vê na lista de documentos da pessoa.
+      { id: "documentos", label: "Documentos do colaborador", icone: "FileSignature", acoes: ["criar", "gerenciar", "disciplinar"] },
     ],
   },
   {
