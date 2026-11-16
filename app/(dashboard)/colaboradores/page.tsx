@@ -37,7 +37,7 @@ export default async function ColaboradoresPage({ searchParams }: { searchParams
     ids.length ? prisma.$queryRaw<{ id: string }[]>`SELECT id FROM tecnicos WHERE id = ANY(${ids}) AND avatar IS NOT NULL AND avatar <> ''` : Promise.resolve([]),
     ids.length
       ? prisma.colaboradorDocumento.findMany({
-          where: { colaboradorId: { in: ids }, dataVencimento: { not: null, lt: limite } },
+          where: { colaboradorId: { in: ids }, excluidoEm: null, dataVencimento: { not: null, lt: limite } },
           select: { colaboradorId: true, nome: true, dataVencimento: true }, orderBy: { dataVencimento: "asc" },
         })
       : Promise.resolve([]),

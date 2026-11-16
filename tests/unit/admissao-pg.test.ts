@@ -515,9 +515,17 @@ describe.skipIf(!URL_PG)("Admissão digital (PostgreSQL real)", () => {
     const pub = await chamar("pub", "GET", { token: a.token });
     expect(pub.json.enviados).toEqual([{ id: r.json.id, docId: "rg", nome: "rg frente.png" }]);
     expect(JSON.stringify(pub.json)).not.toContain("base64");
-    // e ele mesmo apaga o que mandou errado
+    // e ele mesmo apaga o que mandou errado. A EXPECTATIVA MUDOU na leva dos documentos da ficha:
+    // apagar não remove mais a linha, marca. O arquivo sai da lista do link e da ficha do RH, e
+    // fica o registro de quando saiu — documento de colaborador não some sem rastro. Sem autor:
+    // quem apagou foi o próprio colaborador, pelo link, e ele não é usuário do sistema.
     expect((await chamar("doc", "DELETE", { token: a.token, documentoId: r.json.id })).json).toEqual({ ok: true });
-    expect(await prisma.colaboradorDocumento.count()).toBe(0);
+    const apagado = await prisma.colaboradorDocumento.findUnique({ where: { id: r.json.id } });
+    expect(apagado.excluidoEm).not.toBeNull();
+    expect(apagado.excluidoPorId).toBeNull();
+    expect(apagado.arquivoUrl, "o arquivo também fica").not.toBeNull();
+    // para o link e para a admissão, porém, ele não existe mais
+    expect((await chamar("pub", "GET", { token: a.token })).json.enviados).toEqual([]);
     expect(await erro(chamar("doc", "DELETE", { token: a.token, documentoId: r.json.id }))).toBe("404 Documento não encontrado");
   });
 

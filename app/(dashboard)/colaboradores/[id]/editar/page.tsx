@@ -6,6 +6,7 @@ import { prisma } from "@/lib/prisma";
 import { PageHeader } from "@/components/ui/page-header";
 import { InativarRegistro } from "@/components/ui/inativar-registro";
 import { ColaboradorForm } from "@/components/forms/colaborador-form";
+import { documentosDoColaborador } from "@/lib/colaborador/documentos-server";
 import { VALIDADE_PADRAO } from "@/lib/admissao/admissao";
 import { admissaoDoColaborador, configDaEmpresa } from "@/lib/admissao/admissao-server";
 
@@ -20,12 +21,16 @@ export default async function EditarColaboradorPage({ params }: { params: Promis
 
   const colaborador = await prisma.tecnico.findFirst({
     where: { id, empresaId },
-    include: { competencias: { select: { id: true } }, documentos: { orderBy: { criadoEm: "asc" } } },
+    include: { competencias: { select: { id: true } } },
   });
   if (!colaborador) notFound();
 
   const user = session!.user!;
   const podeFolha = pode(user.permissoes, "financeiro", "folha", user.role);
+  // Documentos da ficha: ver e anexar pede a mesma permissão da ficha completa (já conferida
+  // acima); EXCLUIR pede a permissão alta, a mesma de inativar/apagar o colaborador.
+  const podeExcluirDocumento = pode(user.permissoes, "equipes", "excluir", user.role);
+  const documentos = await documentosDoColaborador(colaborador.id, empresaId);
   // Acesso ao app (criar/ligar login de técnico) é gestão de usuários → exige Configurações › gerenciar.
   const podeAcesso = pode(user.permissoes, "configuracoes", "gerenciar", user.role);
   const loginEmail = (colaborador.email ?? "").trim();
@@ -36,13 +41,23 @@ export default async function EditarColaboradorPage({ params }: { params: Promis
 
   // Admissão digital: dado sensível de pessoa, permissão própria ("Admissão digital › gerenciar")
   const podeAdmissao = pode(user.permissoes, "admissao", "gerenciar", user.role);
-  const [admissao, cfgAdmissao, cargos] = podeAdmissao
+  const [admissao, cfgAdmissao, cargos, contratoLinha] = podeAdmissao
     ? await Promise.all([
         admissaoDoColaborador(empresaId, colaborador.id),
         configDaEmpresa(empresaId),
         prisma.cargo.findMany({ where: { empresaId, ativo: true }, orderBy: { nome: "asc" }, select: { id: true, nome: true } }),
+        // O contrato assinado aparece na MESMA seção Documentos. Só para quem tem a permissão da
+        // admissão: é lá que esse papel nasce.
+        prisma.admissao.findFirst({
+          where: { empresaId, colaboradorId: colaborador.id, assinaturaEm: { not: null } },
+          orderBy: { assinaturaEm: "desc" },
+          select: { assinaturaEm: true, assinaturaNome: true, contratoTexto: true },
+        }),
       ])
-    : [null, null, []];
+    : [null, null, [], null];
+  const contratoAssinado = contratoLinha?.contratoTexto && contratoLinha.assinaturaEm
+    ? { texto: contratoLinha.contratoTexto, assinadoEm: contratoLinha.assinaturaEm.toISOString(), assinadoPor: contratoLinha.assinaturaNome }
+    : null;
 
   // Serializa para o client (Decimal/Date → tipos simples). O salário NÃO vai para o navegador:
   // quem tem a permissão de folha vê/edita na aba "Dados financeiros / Folha" (API própria).
@@ -51,10 +66,6 @@ export default async function EditarColaboradorPage({ params }: { params: Promis
     ...semSalario,
     dataNascimento: colaborador.dataNascimento ? colaborador.dataNascimento.toISOString() : null,
     dataAdmissao: colaborador.dataAdmissao ? colaborador.dataAdmissao.toISOString() : null,
-    documentos: colaborador.documentos.map((d) => ({
-      tipo: d.tipo, nome: d.nome, arquivoUrl: d.arquivoUrl,
-      dataVencimento: d.dataVencimento ? d.dataVencimento.toISOString() : null,
-    })),
   };
 
   return (
@@ -78,6 +89,9 @@ export default async function EditarColaboradorPage({ params }: { params: Promis
         admissao={admissao}
         cargosAdmissao={cargos.map((c) => ({ value: c.id, label: c.nome }))}
         validadeAdmissao={cfgAdmissao?.validadeDias ?? VALIDADE_PADRAO}
+        documentosIniciais={documentos}
+        podeExcluirDocumento={podeExcluirDocumento}
+        contratoAssinado={contratoAssinado}
       />
     </div>
   );

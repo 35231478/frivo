@@ -17,13 +17,16 @@ import { AvatarTecnico } from "@/components/ui/avatar-tecnico";
 import { reduzirImagem } from "@/lib/imagem-cliente";
 import { FolhaColaborador } from "@/components/folha/folha-colaborador";
 import { AcessoAppColaborador } from "@/components/forms/acesso-app-colaborador";
+import { AJUDA_DOCUMENTOS, DocumentosColaborador, type ContratoAssinado } from "@/components/colaborador/documentos-colaborador";
+import { resumoValidade } from "@/lib/colaborador/documentos";
+import type { DocumentoLinha } from "@/lib/colaborador/documentos-server";
 import { PainelAdmissao } from "@/components/admissao/painel-admissao";
 import type { OpcaoCargo } from "@/components/admissao/nova-admissao";
 import type { AdmissaoDoRh } from "@/lib/admissao/admissao-server";
 import { SeletorCadastro, useCadastro } from "@/components/cadastros/seletor-cadastro";
 import { AvisoInativacaoStatus } from "@/components/ui/aviso-inativacao-status";
 import {
-  X, Plus, Upload, Trash2, AlertCircle, User, Briefcase, ListChecks, FileText, Wallet, KeyRound, UserPlus,
+  X, Plus, Upload, Trash2, AlertCircle, CalendarClock, User, Briefcase, ListChecks, FileText, Wallet, KeyRound, UserPlus,
 } from "lucide-react";
 import { InputData } from "@/components/ui/input-data";
 import { InputHora } from "@/components/ui/input-hora";
@@ -39,10 +42,7 @@ const DIAS_SEMANA = [
   { code: "DOM", label: "Dom" },
 ];
 
-const TIPOS_DOC = ["CNH", "Certificado NR-35", "Certificado NR-10", "ASO", "Carteira de Trabalho", "Diploma", "Outro"];
-
 interface TipoOsOpt { id: string; nome: string; cor: string }
-interface DocItem { tipo: string; nome: string; arquivoUrl: string | null; dataVencimento: string | null }
 
 interface ColaboradorFormProps {
   initialData?: any;
@@ -52,20 +52,13 @@ type Aba = "pessoais" | "profissionais" | "competencias" | "documentos" | "folha
 
 interface EstadoAcessoInicial { email: string | null; temLogin: boolean; acessoAtivo: boolean; role: string | null }
 
-function vencendoEm30(data: string | null): boolean {
-  if (!data) return false;
-  const venc = new Date(data).getTime();
-  const limite = Date.now() + 30 * 864e5;
-  return venc <= limite;
-}
-
 /**
  * `podeFolha` (permissão "Financeiro › Custo de pessoal") mostra a aba "Dados financeiros / Folha".
  * Sem ela, salário e benefícios não aparecem nem chegam ao navegador.
  * `podeAdmissao` (permissão "Admissão digital › gerenciar") mostra a aba "Admissão": o convite, o
  * progresso do link e a prova da assinatura.
  */
-export function ColaboradorForm({ initialData, somenteLeitura = false, podeFolha = false, podeAcesso = false, acessoInicial, podeAdmissao = false, admissao = null, cargosAdmissao = [], validadeAdmissao = 7 }: ColaboradorFormProps & { somenteLeitura?: boolean; podeFolha?: boolean; podeAcesso?: boolean; acessoInicial?: EstadoAcessoInicial; podeAdmissao?: boolean; admissao?: AdmissaoDoRh | null; cargosAdmissao?: OpcaoCargo[]; validadeAdmissao?: number }) {
+export function ColaboradorForm({ initialData, somenteLeitura = false, podeFolha = false, podeAcesso = false, acessoInicial, podeAdmissao = false, admissao = null, cargosAdmissao = [], validadeAdmissao = 7, documentosIniciais = [], podeExcluirDocumento = false, contratoAssinado = null }: ColaboradorFormProps & { somenteLeitura?: boolean; podeFolha?: boolean; podeAcesso?: boolean; acessoInicial?: EstadoAcessoInicial; podeAdmissao?: boolean; admissao?: AdmissaoDoRh | null; cargosAdmissao?: OpcaoCargo[]; validadeAdmissao?: number; documentosIniciais?: DocumentoLinha[]; podeExcluirDocumento?: boolean; contratoAssinado?: ContratoAssinado | null }) {
   const router = useRouter();
   const isEditing = !!initialData;
   const [aba, setAba] = useState<Aba>("pessoais");
@@ -81,12 +74,10 @@ export function ColaboradorForm({ initialData, somenteLeitura = false, podeFolha
   const [competenciaIds, setCompetenciaIds] = useState<string[]>(
     initialData?.competencias?.map((c: any) => c.id) ?? [],
   );
-  const [documentos, setDocumentos] = useState<DocItem[]>(
-    (initialData?.documentos ?? []).map((d: any) => ({
-      tipo: d.tipo, nome: d.nome, arquivoUrl: d.arquivoUrl ?? null,
-      dataVencimento: d.dataVencimento ? String(d.dataVencimento).slice(0, 10) : null,
-    })),
-  );
+  // Os documentos têm vida própria (API por documento): o estado aqui em cima serve ao contador da
+  // aba e ao aviso de vencido, e é a seção que o atualiza.
+  const [documentos, setDocumentos] = useState<DocumentoLinha[]>(documentosIniciais);
+  const validade = resumoValidade(documentos.map((d) => ({ dataVencimento: d.dataVencimento })));
 
   const [tiposOs, setTiposOs] = useState<TipoOsOpt[]>([]);
   // Perfis (ativos e inativos): o SeletorCadastro só oferece os ativos e mantém o atual se inativo
@@ -96,8 +87,6 @@ export function ColaboradorForm({ initialData, somenteLeitura = false, podeFolha
   // Veículo "padrão" (opcional): puxado automaticamente na OS quando ele executa sozinho
   const [veiculoId, setVeiculoId] = useState<string>(initialData?.veiculoId ?? "");
   const [veiculos, setVeiculos] = useState<VeiculoResumo[]>([]);
-  const docRef = useRef<HTMLInputElement>(null);
-  const docIdx = useRef<number | null>(null);
 
   useEffect(() => {
     fetch("/api/tipos-os").then((r) => r.json()).then((d) => setTiposOs(Array.isArray(d) ? d.filter((t: any) => t.ativo !== false) : [])).catch(() => {});
@@ -172,33 +161,8 @@ export function ColaboradorForm({ initialData, somenteLeitura = false, podeFolha
     } catch { setErroFoto("Não foi possível abrir esta imagem."); }
   }
 
-  function addDocumento() {
-    setDocumentos((p) => [...p, { tipo: "Outro", nome: "", arquivoUrl: null, dataVencimento: null }]);
-  }
-  function updDoc(idx: number, campo: keyof DocItem, valor: string | null) {
-    setDocumentos((p) => p.map((d, i) => (i === idx ? { ...d, [campo]: valor } : d)));
-  }
-  function removeDoc(idx: number) {
-    setDocumentos((p) => p.filter((_, i) => i !== idx));
-  }
-  function escolherArquivoDoc(idx: number) {
-    docIdx.current = idx;
-    docRef.current?.click();
-  }
-  function handleDocFile(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    const idx = docIdx.current;
-    if (docRef.current) docRef.current.value = "";
-    if (!file || idx == null) return;
-    if (file.size > 3 * 1024 * 1024) { setErroGlobal("Documento muito grande. Máximo 3 MB."); return; }
-    const reader = new FileReader();
-    reader.onload = () => updDoc(idx, "arquivoUrl", typeof reader.result === "string" ? reader.result : null);
-    reader.readAsDataURL(file);
-  }
-
   async function onSubmit(data: TecnicoInput) {
     setErroGlobal("");
-    if (documentos.some((d) => !d.nome.trim())) { setErroGlobal("Preencha o nome de todos os documentos."); setAba("documentos"); return; }
     try {
       const url = isEditing ? `/api/tecnicos/${initialData.id}` : "/api/tecnicos";
       const res = await fetch(url, {
@@ -211,7 +175,6 @@ export function ColaboradorForm({ initialData, somenteLeitura = false, podeFolha
           veiculoId: veiculoId || null,
           tipoEquipe,
           especialidades, competenciaIds, jornadaDias,
-          documentos,
           ...(inativandoPeloStatus && { motivoInativacao }),
         }),
       });
@@ -247,6 +210,22 @@ export function ColaboradorForm({ initialData, somenteLeitura = false, podeFolha
         </div>
       )}
 
+      {/* Documento vencido é sinal da FICHA, não só da aba: aparece em qualquer aba, com o atalho.
+          Dentro da própria aba, não: lá a seção já avisa, e com mais detalhe — dois avisos iguais
+          na mesma tela são poluição. */}
+      {validade.vencidos > 0 && aba !== "documentos" && (
+        <button
+          type="button" onClick={() => setAba("documentos")} data-ficha-doc-vencido
+          className="flex w-full items-center gap-2 bg-atrasado-claro border border-atrasado/20 text-atrasado-texto text-sm rounded-lg px-4 py-3 text-left hover:bg-atrasado-claro/70 transition-colors"
+        >
+          <CalendarClock className="w-4 h-4 shrink-0" />
+          <span className="flex-1">
+            <strong>{validade.vencidos === 1 ? "1 documento vencido" : `${validade.vencidos} documentos vencidos`}</strong> nesta ficha.
+          </span>
+          <span className="underline underline-offset-2">Ver os documentos</span>
+        </button>
+      )}
+
       <div className="bg-white rounded-card shadow-card border border-surface-border overflow-hidden">
         <nav className="flex gap-1.5 overflow-x-auto px-4 pt-4 pb-4 border-b border-surface-border">
           {ABAS.map((t) => {
@@ -254,6 +233,9 @@ export function ColaboradorForm({ initialData, somenteLeitura = false, podeFolha
             return (
               <button
                 key={t.id} type="button" onClick={() => setAba(t.id)}
+                // No celular a tira de abas rola: a ativa tem de vir para a vista, senão trocar de
+                // aba pelo atalho do aviso deixa a tira mostrando outra aba
+                ref={ativa ? ((el) => el?.scrollIntoView({ block: "nearest", inline: "nearest" })) : undefined}
                 className={cn(
                   "flex items-center gap-2 px-4 py-2.5 text-sm font-medium rounded-card whitespace-nowrap transition-all",
                   ativa ? "bg-primary-500 text-white shadow-sm" : "text-ink-muted hover:text-ink hover:bg-surface-alt",
@@ -269,7 +251,7 @@ export function ColaboradorForm({ initialData, somenteLeitura = false, podeFolha
           })}
         </nav>
 
-        <fieldset disabled={somenteLeitura} className={cn("min-w-0 p-5 sm:p-6 lg:p-8 space-y-8", (aba === "folha" || aba === "acesso" || aba === "admissao") && "hidden")}>
+        <fieldset disabled={somenteLeitura} className={cn("min-w-0 p-5 sm:p-6 lg:p-8 space-y-8", (aba === "folha" || aba === "acesso" || aba === "admissao" || aba === "documentos") && "hidden")}>
           {/* ABA 1 — Dados Pessoais */}
           <div className={cn("space-y-8", aba !== "pessoais" && "hidden")}>
             <FormSection title="Identificação">
@@ -490,57 +472,29 @@ export function ColaboradorForm({ initialData, somenteLeitura = false, podeFolha
               </FormField>
             </FormSection>
           </div>
+        </fieldset>
 
-          {/* ABA 4 — Documentos */}
-          <div className={cn("space-y-6", aba !== "documentos" && "hidden")}>
-            <input ref={docRef} type="file" onChange={handleDocFile} className="hidden" />
-            <FormSection title="Documentos">
-              <p className="text-sm text-ink-muted -mt-1">CNH, certificados, ASO e outros. Vencimento em até 30 dias é destacado.</p>
-              {documentos.length === 0 ? (
-                <p className="text-sm text-ink-subtle py-4 text-center border border-dashed border-surface-border rounded-lg">Nenhum documento adicionado.</p>
+        {/* ABA — Documentos (cada arquivo tem a sua própria rota; salvar o cadastro não mexe neles) */}
+        {aba === "documentos" && (
+          <div className="p-5 sm:p-6 lg:p-8">
+            <FormSection title="Documentos" dica={AJUDA_DOCUMENTOS}>
+              {isEditing ? (
+                <DocumentosColaborador
+                  colaboradorId={initialData.id}
+                  documentosIniciais={documentos}
+                  podeExcluir={podeExcluirDocumento}
+                  somenteLeitura={somenteLeitura}
+                  contratoAssinado={contratoAssinado}
+                  onMudou={setDocumentos}
+                />
               ) : (
-                <div className="space-y-3">
-                  {documentos.map((doc, idx) => {
-                    const venc = doc.dataVencimento;
-                    const vencido = venc && new Date(venc).getTime() < Date.now();
-                    const alerta = !vencido && vencendoEm30(venc);
-                    return (
-                      <div key={idx} className="border border-surface-border rounded-lg p-3 space-y-3">
-                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                          <FormField label="Tipo">
-                            <select value={doc.tipo} onChange={(e) => updDoc(idx, "tipo", e.target.value)} className={inputCls}>
-                              {TIPOS_DOC.map((t) => <option key={t} value={t}>{t}</option>)}
-                            </select>
-                          </FormField>
-                          <FormField label="Nome / descrição">
-                            <Input value={doc.nome} onChange={(e) => updDoc(idx, "nome", e.target.value)} placeholder="Ex: CNH categoria D" />
-                          </FormField>
-                          <FormField label="Vencimento">
-                            <InputData value={doc.dataVencimento ?? ""} onChange={(v) => updDoc(idx, "dataVencimento", v || null)} />
-                          </FormField>
-                        </div>
-                        <div className="flex items-center justify-between gap-2 flex-wrap">
-                          <div className="flex items-center gap-2">
-                            <Button type="button" variant="secondary" onClick={() => escolherArquivoDoc(idx)} className="text-xs py-1 px-2.5 h-auto">
-                              <Upload className="w-3.5 h-3.5" /> {doc.arquivoUrl ? "Trocar arquivo" : "Anexar arquivo"}
-                            </Button>
-                            {doc.arquivoUrl && <span className="text-xs text-success-600">Arquivo anexado</span>}
-                            {vencido && <span className="text-xs font-semibold bg-atrasado-claro text-atrasado-texto px-2 py-0.5 rounded-full">Vencido</span>}
-                            {alerta && <span className="text-xs font-semibold bg-atencao-claro text-atencao-texto px-2 py-0.5 rounded-full">Vence em 30 dias</span>}
-                          </div>
-                          <button type="button" onClick={() => removeDoc(idx)} className="text-atrasado hover:text-atrasado-texto p-1.5"><Trash2 className="w-4 h-4" /></button>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
+                <p className="text-sm text-ink-muted">
+                  Salve o colaborador primeiro para anexar os documentos dele.
+                </p>
               )}
-              <Button type="button" variant="secondary" onClick={addDocumento} className="w-full justify-center border-dashed">
-                <Plus className="w-4 h-4" /> Adicionar documento
-              </Button>
             </FormSection>
           </div>
-        </fieldset>
+        )}
 
         {/* ABA — Admissão digital (o convite e o acompanhamento; tudo por API própria) */}
         {podeAdmissao && aba === "admissao" && (
@@ -581,7 +535,7 @@ export function ColaboradorForm({ initialData, somenteLeitura = false, podeFolha
         )}
       </div>
 
-      {aba === "folha" || aba === "acesso" ? null : somenteLeitura ? (
+      {aba === "folha" || aba === "acesso" || aba === "documentos" ? null : somenteLeitura ? (
         <p data-somente-leitura className="text-right text-xs text-ink-muted pt-1">Somente leitura: requer a permissão Equipes › gerenciar.</p>
       ) : (
         <div className="flex items-center justify-end gap-3 pt-1">
