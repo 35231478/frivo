@@ -748,7 +748,38 @@ export const contaPagarSchema = z.object({
   boleto: z.string().max(80).optional().nullable(),
 });
 
-export const contaPagarUpdateSchema = contaPagarSchema.partial();
+export const contaPagarUpdateSchema = contaPagarSchema.partial().extend({
+  /** DESPESA RECORRENTE: alcance da edição de uma conta gerada. Ausente = só esta ocorrência. */
+  escopo: z.enum(["ESTA", "ESTA_E_PROXIMAS"]).optional(),
+});
+
+/**
+ * DESPESA RECORRENTE (contas a pagar): a regra que se repete. As travas finas (dia, passo, término
+ * coerente) ficam em lib/financeiro/conta-pagar-recorrencia.ts — a mesma função valida na tela e no
+ * servidor.
+ */
+export const recorrenciaSchema = z.object({
+  descricao: z.string().min(1, "Descrição é obrigatória"),
+  /** Favorecido: um dos dois (a rota recusa quando os dois faltam) */
+  fornecedorId: z.string().optional().nullable(),
+  tecnicoId: z.string().optional().nullable(),
+  categoriaId: z.string().optional().nullable(),
+  centroCustoId: z.string().optional().nullable(),
+  formaPagamento: z.nativeEnum(FormaPagamento).optional().nullable(),
+  observacao: z.string().optional().nullable(),
+  passoMeses: z.number().int().min(1).max(60),
+  diaVencimento: z.number().int().min(1).max(31),
+  ajusteDiaNaoUtil: z.enum(["ADIANTAR", "POSTERGAR", "MANTER"]).optional().nullable(),
+  valor: valorObrigatorio,
+  valorEstimado: z.boolean().optional(),
+  inicioAno: z.number().int().min(2000).max(2100),
+  inicioMes: z.number().int().min(1).max(12),
+  fimAno: z.number().int().min(2000).max(2100).optional().nullable(),
+  fimMes: z.number().int().min(1).max(12).optional().nullable(),
+  ocorrencias: z.number().int().min(1).max(600).optional().nullable(),
+});
+
+export const recorrenciaUpdateSchema = recorrenciaSchema.partial();
 
 export const pagamentoContaPagarSchema = z.object({
   valor: valorObrigatorio,
