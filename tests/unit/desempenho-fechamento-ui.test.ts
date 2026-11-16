@@ -94,19 +94,21 @@ describe("Fechamento do mês e folha de bônus", () => {
     expect($("[data-fechamento-desempenho]")?.getAttribute("data-situacao")).toBe("ABERTO");
     expect(texto($("[data-mes-aberto]"))).toContain("Os valores abaixo são projeção");
     expect($("[data-folha]")?.getAttribute("data-folha-definitiva")).toBe("nao");
-    expect(texto($("[data-folha] thead"))).toContain("Bônus projetado");
-    expect($$("[data-linha-folha]").map((l) => ["nome", "perfil", "posicao", "escore", "faixa", "valor"].map((c) => reais(l.querySelector(`[data-folha-${c}]`))).join("|"))).toEqual([
+    // Leva 9: a folha é a tabela da casa — colunas escolhíveis no desktop, cartões no celular
+    expect(texto($("[data-tabela-folha] thead"))).toContain("Bônus projetado");
+    expect($$("[data-tabela-folha] [data-linha-folha]").map((l) => ["nome", "perfil", "posicao", "escore", "faixa", "valor"].map((c) => reais(l.querySelector(`[data-folha-${c}]`))).join("|"))).toEqual([
       "Ana Dias|Preventiva|1º|100,0%|Ouro|R$ 350,00", "Bia Reis|Preventiva|2º|85,0%|Prata|R$ 350,00", "Novato|Corretiva|—|—|—|R$ 0,00",
     ]);
-    // No celular as colunas de perfil e posição somem e os dois descem para baixo do nome — o bônus cabe sem rolar
-    expect($$("[data-folha-resumo]").map((r) => `${texto(r)}|${r.className.includes("sm:hidden")}`)).toEqual(["Preventiva · 1º|true", "Preventiva · 2º|true", "Corretiva · —|true"]);
-    expect($$("[data-folha-perfil], [data-folha-posicao]").every((c) => c.className.includes("hidden sm:table-cell"))).toBe(true);
-    expect($$("[data-folha-valor], [data-folha-total]").some((c) => c.className.includes("hidden"))).toBe(false);
+    // No celular, perfil, posição, escore e faixa descem para baixo do nome — o bônus cabe sem rolar
+    expect($$("[data-folha-cartoes] [data-folha-resumo]").map((r) => texto(r))).toEqual([
+      "Preventiva · 1º · 100,0% · Ouro", "Preventiva · 2º · 85,0% · Prata", "Corretiva · — · —",
+    ]);
     expect(reais($("[data-folha-total]"))).toBe("R$ 700,00");
-    expect(texto($("[data-folha]"))).toContain("Pagamento, imposto e encargo são lançados no financeiro");
+    // a ressalva do financeiro saiu do parágrafo e virou o ⓘ do título
+    expect($('[data-folha] [data-dica][aria-label="Ajuda: Folha de bônus"]')).toBeTruthy();
     expect($("[data-exportar]")).toBeNull(); // só mês fechado exporta
     expect($("[data-reabrir]")).toBeNull();
-    expect(texto($("[data-historico-vazio]"))).toBe("Nenhum mês foi fechado ainda.");
+    expect(texto($("[data-historico] [data-lista-vazia]"))).toContain("Nenhum mês foi fechado ainda.");
   });
 
   it("PREMIAÇÃO: quem ganha e POR QUÊ (o critério do desempate); prêmio dividido tem aviso; sem ninguém acima da meta, sem ganhador", async () => {
@@ -134,7 +136,7 @@ describe("Fechamento do mês e folha de bônus", () => {
     await clicar("[data-confirmar-fechar]");
     expect(enviados("POST")).toEqual([{ url: "/api/desempenho/fechamentos", metodo: "POST", corpo: { competencia: MES } }]);
     expect($("[data-modal-fechar]")).toBeNull();
-    expect(enviados("GET")).toHaveLength(2); // recarrega a tela
+    expect(enviados("GET", "/fechamentos?mes=")).toHaveLength(2); // recarrega a tela
   });
 
   it("FECHAR com avisos: sem marcar a confirmação NÃO chama o servidor; marcada, manda 'ciente'; erro do servidor fica no diálogo", async () => {
@@ -158,7 +160,7 @@ describe("Fechamento do mês e folha de bônus", () => {
     await abrir(aberto({ bloqueio: "Nenhum colaborador participa do Desempenho: não há o que fechar.", folha: { linhas: [], total: 0 }, premios: [] }));
     expect(($("[data-fechar]") as HTMLButtonElement).disabled).toBe(true);
     expect(texto($("[data-mes-aberto]"))).toBe("Nenhum colaborador participa do Desempenho: não há o que fechar.");
-    expect(texto($("[data-folha-vazia]"))).toBe("Nenhum colaborador nesta folha.");
+    expect(texto($("[data-folha] [data-lista-vazia]"))).toContain("Nenhum colaborador nesta folha.");
     expect($("[data-premiados]")).toBeNull();
   });
 
@@ -191,7 +193,7 @@ describe("Fechamento do mês e folha de bônus", () => {
     await clicar("[data-confirmar-reabrir]");
     expect(enviados("POST")).toEqual([{ url: "/api/desempenho/fechamentos/f1/reabrir", metodo: "POST", corpo: { motivo: "Faltou revisar a ressalva da Bia" } }]);
     expect($("[data-modal-reabrir]")).toBeNull();
-    expect(enviados("GET")).toHaveLength(2);
+    expect(enviados("GET", "/fechamentos?mes=")).toHaveLength(2);
   });
 
   it("HISTÓRICO (só leitura): mês, versão, quem fechou, total, premiados — e a reabertura com quem, quando e por quê", async () => {
@@ -206,7 +208,9 @@ describe("Fechamento do mês e folha de bônus", () => {
     expect(linhas[0].querySelector("[data-reabertura]")).toBeNull();
     expect(texto(linhas[1].querySelector("[data-reabertura]"))).toBe("Reaberto em 03/11/2026 por Ana Admin: Faltou revisar a ressalva");
     // O histórico não tem ação que mude nada: só "Ver folha"
-    expect($$("[data-historico] button").map((b) => texto(b))).toEqual(["Ver folha", "Ver folha"]);
+    expect($$("[data-historico] [data-ver-folha]").map((b) => texto(b))).toEqual(["Ver folha", "Ver folha"]);
+    // nenhuma outra ação no histórico (o ⓘ do título não conta: é explicação, não ação)
+    expect($$("[data-historico] button").filter((b) => !b.hasAttribute("data-dica") && !b.hasAttribute("data-ver-folha"))).toEqual([]);
   });
 
   it("'Ver folha' de um fechamento antigo: busca AQUELA folha, mostra só leitura, avisa que foi reaberto e exporta aquele arquivo", async () => {
@@ -229,7 +233,7 @@ describe("Fechamento do mês e folha de bônus", () => {
     expect(($("[data-mes-seguinte]") as HTMLButtonElement).disabled).toBe(false);
     responder(`GET /api/desempenho/fechamentos?mes=${ATUAL}`, { erro: "Sem permissão para esta ação" }, 403);
     await clicar("[data-mes-seguinte]");
-    expect(enviados("GET").map((p) => p.url)).toEqual([`/api/desempenho/fechamentos?mes=${MES}`, `/api/desempenho/fechamentos?mes=${ATUAL}`]);
+    expect(enviados("GET", "/fechamentos?mes=").map((p) => p.url)).toEqual([`/api/desempenho/fechamentos?mes=${MES}`, `/api/desempenho/fechamentos?mes=${ATUAL}`]);
     expect(texto($("[data-erro-fechamento]"))).toBe("Sem permissão para esta ação");
     expect(($("[data-mes-seguinte]") as HTMLButtonElement).disabled).toBe(true);
     expect($("[data-folha]")).toBeNull();
@@ -294,7 +298,8 @@ describe("Mês fechado no painel, na ficha e na revisão", () => {
     }
     expect($('[data-penalidade="abertoD"] [data-conta]')).toBeTruthy();
     expect($('[data-penalidade="abertoD"] [data-mes-fechado-item]')).toBeNull();
-    expect(texto()).toContain("Retorno e ressalva do cliente entram aqui sozinhos.");
+    // Leva 9: a instrução saiu do parágrafo e foi para o ⓘ do título
+    expect($$("[data-dica]").map((d) => d.getAttribute("aria-label")).filter(Boolean)).toContain("Ajuda: A revisar");
   });
 });
 

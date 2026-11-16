@@ -3,6 +3,8 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { ClipboardCheck, Gift, Loader2, Lock, Settings, Trophy, UsersRound } from "lucide-react";
+import { Dica } from "@/components/ui/dica";
+import { ListaVazia } from "@/components/listagem/listagem-ui";
 import { cn, formatarData } from "@/lib/utils";
 import { ROTULO_TIPO_PERFIL, formatarEscore } from "@/lib/desempenho/regras";
 import type { GrupoRanking, PremiacaoNaTela } from "@/lib/desempenho/painel";
@@ -138,7 +140,7 @@ function Ranking({ grupo, mes, gerenciar }: { grupo: GrupoRanking; mes: string; 
             </p>
           )}
       </div>
-      {linhas.length === 0 ? <p className="text-sm text-ink-muted px-4 py-6" data-ranking-vazio>Nenhum colaborador neste perfil.</p> : (
+      {linhas.length === 0 ? <ListaVazia mensagem="Nenhum colaborador neste perfil." /> : (
         <ol className="divide-y divide-surface-border">
           {linhas.map((l) => (
             <li key={l.tecnicoId} data-linha-ranking={l.nome} data-posicao={l.posicao ?? ""}>
@@ -160,8 +162,9 @@ function PorEquipe({ equipes }: { equipes: PainelDoMes["equipes"] }) {
   return (
     <section className="bg-white border border-surface-border rounded-xl overflow-hidden" data-por-equipe>
       <div className="px-4 py-3 border-b border-surface-border">
-        <h2 className="font-semibold text-ink">Por equipe</h2>
-        <p className="text-xs text-ink-muted">Média dos escores individuais dos membros que participam. A base é sempre a pessoa.</p>
+        <h2 className="font-semibold text-ink flex items-center gap-1.5">
+          Por equipe <Dica texto="Média dos escores individuais dos membros que participam do Desempenho. A base é sempre a pessoa: a equipe não tem escore próprio, e quem está sem medição no mês não entra na média." rotulo="Por equipe" />
+        </h2>
       </div>
       <ul className="divide-y divide-surface-border">
         {equipes.map((e) => (

@@ -2,13 +2,16 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { CheckCircle2, ClipboardCheck, Loader2, Pencil, Plus, Trash2, Undo2, XCircle } from "lucide-react";
+import { CheckCircle2, Loader2, Pencil, Plus, Trash2, Undo2, XCircle } from "lucide-react";
 import { formatarData } from "@/lib/utils";
+import { confirmar, toast } from "@/components/ui/avisos";
 import { Button } from "@/components/ui/button";
+import { Dica } from "@/components/ui/dica";
 import { FormField } from "@/components/ui/form-field";
 import { Input } from "@/components/ui/input";
 import { InputData } from "@/components/ui/input-data";
 import { Modal } from "@/components/ui/modal";
+import { ListaVazia } from "@/components/listagem/listagem-ui";
 import { Select } from "@/components/ui/select";
 import { StatusPill, type TomStatus } from "@/components/ui/status-pill";
 import { Textarea } from "@/components/ui/textarea";
@@ -24,6 +27,8 @@ const TOM_SITUACAO: Record<SituacaoPenalidade, TomStatus> = { A_REVISAR: "atenca
 const TOM_TIPO: Record<TipoPenalidade, TomStatus> = { RETORNO: "acento", RESSALVA: "atencao", RECLAMACAO: "previsto" };
 type Filtro = SituacaoPenalidade | "";
 
+const AJUDA_REVISAO = "Retorno e ressalva do cliente entram nesta lista sozinhos; reclamação por telefone ou WhatsApp é registrada à mão. Nada pesa no escore antes de alguém marcar \"Conta\", com motivo — e \"Não conta\" também pede motivo. Dá para rever a decisão enquanto o mês estiver aberto.";
+
 /**
  * Lista "A revisar": retorno, ressalva do cliente e reclamação. Nada pesa no escore sozinho — só
  * depois de alguém marcar "Conta", com motivo. "Não conta" também pede motivo; dá para rever.
@@ -34,7 +39,6 @@ export function RevisaoDesempenho({ pode }: { pode: PodeDesempenho }) {
   const [erro, setErro] = useState("");
   const [decidindo, setDecidindo] = useState<{ item: PenalidadeNaLista; situacao: "CONTA" | "NAO_CONTA" } | null>(null);
   const [formulario, setFormulario] = useState<PenalidadeNaLista | "nova" | null>(null);
-  const [excluindo, setExcluindo] = useState<PenalidadeNaLista | null>(null);
   const [ocupada, setOcupada] = useState<string | null>(null);
 
   const carregar = useCallback(async (situacao: Filtro) => {
@@ -55,10 +59,29 @@ export function RevisaoDesempenho({ pode }: { pode: PodeDesempenho }) {
       const r = await fetch(`/api/desempenho/penalidades/${item.id}/decisao`, { method: "POST", headers: JSON_HEADERS, body: JSON.stringify({ situacao: "A_REVISAR" }) });
       const d = await r.json().catch(() => ({}));
       if (!r.ok) { setErro(d.erro ?? "Não foi possível rever a decisão."); return; }
+      toast("Decisão desfeita: o item voltou para a revisão.");
       await carregar(filtro);
     } catch { setErro("Erro de conexão."); } finally { setOcupada(null); }
   }
-  const aposMudar = () => { setDecidindo(null); setFormulario(null); setExcluindo(null); void carregar(filtro); };
+
+  /** Excluir a reclamação registrada à mão: pergunta antes (a da casa) e avisa por toast. */
+  async function excluir(item: PenalidadeNaLista) {
+    const ok = await confirmar({
+      titulo: "Excluir reclamação",
+      mensagem: `A reclamação de ${item.tecnico.nome} em ${formatarData(item.dataFato)} sai da lista e do escore.`,
+      confirmarTexto: "Excluir", perigo: true,
+    });
+    if (!ok) return;
+    setOcupada(item.id); setErro("");
+    try {
+      const r = await fetch(`/api/desempenho/penalidades/${item.id}`, { method: "DELETE" });
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) { setErro(d.erro ?? "Não foi possível excluir a reclamação."); return; }
+      toast("Reclamação excluída.");
+      await carregar(filtro);
+    } catch { setErro("Erro de conexão."); } finally { setOcupada(null); }
+  }
+  const aposMudar = () => { setDecidindo(null); setFormulario(null); void carregar(filtro); };
 
   return (
     <div className="space-y-4" data-revisao-desempenho>
@@ -67,9 +90,9 @@ export function RevisaoDesempenho({ pode }: { pode: PodeDesempenho }) {
 
       <div className="bg-white border border-surface-border rounded-xl overflow-hidden">
         <div className="px-4 py-3 border-b border-surface-border flex flex-wrap items-center justify-between gap-3">
-          <p className="text-sm text-ink-muted max-w-2xl">
-            Retorno e ressalva do cliente entram aqui sozinhos. Só pesam depois de marcados “Conta”, com motivo.
-          </p>
+          <h2 className="text-sm font-semibold text-ink flex items-center gap-1.5">
+            A revisar <Dica texto={AJUDA_REVISAO} rotulo="A revisar" />
+          </h2>
           <Select aria-label="Situação" value={filtro} onChange={(e) => setFiltro(e.target.value as Filtro)} className="w-44" data-filtro-situacao>
             {SITUACOES_PENALIDADE.map((s) => <option key={s} value={s}>{ROTULO_SITUACAO[s]}</option>)}
             <option value="">Todas</option>
@@ -77,13 +100,9 @@ export function RevisaoDesempenho({ pode }: { pode: PodeDesempenho }) {
         </div>
         {erro && <p role="alert" className="text-sm text-atrasado-texto bg-atrasado-claro border-b border-atrasado/20 px-4 py-2" data-erro-revisao>{erro}</p>}
         {!dados ? (!erro && <p className="text-sm text-ink-muted px-4 py-6 flex items-center gap-2"><Loader2 className="w-4 h-4 animate-spin" /> Carregando…</p>)
-          : !dados.ativo ? <p className="text-sm text-ink-muted px-4 py-8 text-center" data-revisao-inativa>O Desempenho ainda não foi configurado nesta empresa.</p>
-          : dados.itens.length === 0 ? (
-            <div className="text-center px-4 py-10 space-y-2" data-revisao-vazia>
-              <ClipboardCheck className="w-6 h-6 text-ink-subtle mx-auto" aria-hidden />
-              <p className="text-sm text-ink-muted">{filtro === "A_REVISAR" ? "Nada esperando revisão." : "Nenhum item nesta situação."}</p>
-            </div>
-          ) : (
+          : !dados.ativo ? <ListaVazia mensagem="O Desempenho ainda não foi configurado nesta empresa." />
+          : dados.itens.length === 0 ? <ListaVazia mensagem={filtro === "A_REVISAR" ? "Nada esperando revisão." : "Nenhum item nesta situação."} />
+          : (
             <ul className="divide-y divide-surface-border" data-lista-revisao>
               {dados.itens.map((p) => (
                 <li key={p.id} className="px-4 py-3 flex flex-col lg:flex-row lg:items-start gap-2 lg:gap-4" data-penalidade={p.id} data-tipo={p.tipo} data-situacao={p.situacao}>
@@ -124,7 +143,7 @@ export function RevisaoDesempenho({ pode }: { pode: PodeDesempenho }) {
                       <>
                         <button type="button" title="Editar reclamação" aria-label="Editar reclamação" onClick={() => setFormulario(p)} data-editar
                           className="p-1.5 rounded-md text-ink-muted hover:text-ink hover:bg-surface-alt"><Pencil className="w-4 h-4" /></button>
-                        <button type="button" title="Excluir reclamação" aria-label="Excluir reclamação" onClick={() => setExcluindo(p)} data-excluir
+                        <button type="button" title="Excluir reclamação" aria-label="Excluir reclamação" onClick={() => void excluir(p)} data-excluir
                           className="p-1.5 rounded-md text-ink-muted hover:text-atrasado hover:bg-atrasado-claro"><Trash2 className="w-4 h-4" /></button>
                       </>
                     )}
@@ -140,7 +159,6 @@ export function RevisaoDesempenho({ pode }: { pode: PodeDesempenho }) {
         <Reclamacao key={formulario === "nova" ? "nova" : formulario.id} item={formulario === "nova" ? null : formulario} colaboradores={dados.colaboradores}
           aoFechar={() => setFormulario(null)} aoSalvar={aposMudar} />
       )}
-      {excluindo && <Excluir key={excluindo.id} item={excluindo} aoFechar={() => setExcluindo(null)} aoSalvar={aposMudar} />}
     </div>
   );
 }
@@ -160,6 +178,7 @@ function Decisao({ item, situacao, aoFechar, aoSalvar }: PropsDialogo & { item: 
       const r = await fetch(`/api/desempenho/penalidades/${item.id}/decisao`, { method: "POST", headers: JSON_HEADERS, body: JSON.stringify({ situacao, motivo }) });
       const d = await r.json().catch(() => ({}));
       if (!r.ok) { setErro(d.erro ?? "Não foi possível gravar a decisão."); return; }
+      toast(conta ? "Decisão registrada: conta no escore." : "Decisão registrada: não conta no escore.");
       aoSalvar();
     } catch { setErro("Erro de conexão."); } finally { setSalvando(false); }
   }
@@ -205,6 +224,7 @@ function Reclamacao({ item, colaboradores, aoFechar, aoSalvar }: PropsDialogo & 
       });
       const d = await r.json().catch(() => ({}));
       if (!r.ok) { setErro(d.erro ?? "Não foi possível salvar a reclamação."); return; }
+      toast(item ? "Reclamação salva." : "Reclamação registrada: entra como item a revisar.");
       aoSalvar();
     } catch { setErro("Erro de conexão."); } finally { setSalvando(false); }
   }
@@ -235,32 +255,6 @@ function Reclamacao({ item, colaboradores, aoFechar, aoSalvar }: PropsDialogo & 
         <div className="flex justify-end gap-2 pt-2 border-t border-surface-border">
           <Button type="button" variant="secondary" onClick={aoFechar}>Cancelar</Button>
           <Button type="button" loading={salvando} onClick={salvar} data-salvar-reclamacao>{item ? "Salvar" : "Registrar"}</Button>
-        </div>
-      </div>
-    </Modal>
-  );
-}
-
-function Excluir({ item, aoFechar, aoSalvar }: PropsDialogo & { item: PenalidadeNaLista }) {
-  const [erro, setErro] = useState("");
-  const [salvando, setSalvando] = useState(false);
-  async function excluir() {
-    setErro(""); setSalvando(true);
-    try {
-      const r = await fetch(`/api/desempenho/penalidades/${item.id}`, { method: "DELETE" });
-      const d = await r.json().catch(() => ({}));
-      if (!r.ok) { setErro(d.erro ?? "Não foi possível excluir a reclamação."); return; }
-      aoSalvar();
-    } catch { setErro("Erro de conexão."); } finally { setSalvando(false); }
-  }
-  return (
-    <Modal aberto onFechar={aoFechar} titulo="Excluir reclamação" tamanho="sm">
-      <div className="space-y-4" data-modal-excluir-reclamacao>
-        <p className="text-sm text-ink">A reclamação de <span className="font-medium">{item.tecnico.nome}</span> em {formatarData(item.dataFato)} sai da lista e do escore.</p>
-        <Erro texto={erro} />
-        <div className="flex justify-end gap-2 pt-2 border-t border-surface-border">
-          <Button type="button" variant="secondary" onClick={aoFechar}>Cancelar</Button>
-          <Button type="button" variant="danger" loading={salvando} onClick={excluir} data-confirmar-exclusao>Excluir</Button>
         </div>
       </div>
     </Modal>

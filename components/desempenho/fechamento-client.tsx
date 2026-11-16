@@ -3,9 +3,14 @@
 import { useCallback, useEffect, useState } from "react";
 import { Download, History, Loader2, Lock, LockOpen, Trophy } from "lucide-react";
 import { cn, formatarData, formatarDataHora, formatarMoeda } from "@/lib/utils";
+import { toast } from "@/components/ui/avisos";
 import { Button } from "@/components/ui/button";
+import { Dica } from "@/components/ui/dica";
 import { FormField } from "@/components/ui/form-field";
 import { Modal } from "@/components/ui/modal";
+import { ListaVazia } from "@/components/listagem/listagem-ui";
+import { TabelaPro } from "@/components/listagem/tabela-pro";
+import { PLANILHA } from "@/lib/planilha";
 import { StatusPill } from "@/components/ui/status-pill";
 import { Textarea } from "@/components/ui/textarea";
 import { MOTIVO_REABERTURA_MIN, MSG_MOTIVO_REABERTURA, TEXTO_CRITERIO, type Folha, type PremioFechado } from "@/lib/desempenho/fechamento";
@@ -14,6 +19,10 @@ import { competenciaCurta, formatarEscore, rotuloCompetencia } from "@/lib/desem
 import { CabecalhoDesempenho, Erro, JSON_HEADERS, SeletorDeMes, posicaoTexto, type PodeDesempenho } from "./comum";
 
 interface Dados { mes: PreviaDoFechamento; historico: FechamentoResumo[] }
+const AJUDA_FOLHA = "Só o valor do bônus é registrado aqui: pagamento, imposto e encargo são lançados no financeiro. Enquanto o mês está aberto, o valor é projeção e muda com atividade, avaliação e revisão novas.";
+const AJUDA_PREMIACAO = "O prêmio do mês vai para quem tem o maior escore na disputa. Empate divide o prêmio; ninguém acima da meta mínima deixa o prêmio sem ganhador.";
+const AJUDA_HISTORICO = "Cada fechamento do mês fica guardado, inclusive os reabertos: a folha daquele momento, quem fechou, quem reabriu e o motivo.";
+
 const urlDoCsv = (id: string) => `/api/desempenho/fechamentos/${id}/exportar`;
 
 /**
@@ -90,51 +99,62 @@ export function FechamentoDesempenho({ mesInicial, mesAtual, pode }: { mesInicia
   );
 }
 
-/** Célula da folha: mais estreita no celular. Perfil e posição só têm coluna própria em tela larga. */
-const CEL = "px-3 sm:px-4 py-2";
-const SO_TELA_LARGA = "hidden sm:table-cell";
-
 function TabelaDaFolha({ folha, definitiva }: { folha: Folha; definitiva: boolean }) {
+  const rotuloValor = definitiva ? "Bônus" : "Bônus projetado";
   return (
     <section className="bg-white border border-surface-border rounded-xl overflow-hidden" data-folha data-folha-definitiva={definitiva ? "sim" : "nao"}>
       <div className="px-4 py-3 border-b border-surface-border">
-        <h2 className="font-semibold text-ink">Folha de bônus</h2>
-        <p className="text-xs text-ink-muted">Só o valor do bônus é registrado aqui. Pagamento, imposto e encargo são lançados no financeiro.</p>
+        <h2 className="font-semibold text-ink flex items-center gap-1.5">Folha de bônus <Dica texto={AJUDA_FOLHA} rotulo="Folha de bônus" /></h2>
       </div>
-      {folha.linhas.length === 0 ? <p className="text-sm text-ink-muted px-4 py-6" data-folha-vazia>Nenhum colaborador nesta folha.</p> : (
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="text-left text-xs text-ink-muted border-b border-surface-border">
-                <th className={cn(CEL, "font-medium")}>Colaborador</th><th className={cn(CEL, SO_TELA_LARGA, "font-medium")}>Perfil</th>
-                <th className={cn(CEL, SO_TELA_LARGA, "font-medium text-right")}>Posição</th><th className={cn(CEL, "font-medium text-right")}>Escore</th>
-                <th className={cn(CEL, "font-medium")}>Faixa</th><th className={cn(CEL, "font-medium text-right")}>{definitiva ? "Bônus" : "Bônus projetado"}</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-surface-border">
+      {folha.linhas.length === 0 ? <ListaVazia mensagem="Nenhum colaborador nesta folha." /> : (
+        <TabelaPro
+          tela="desempenho-folha"
+          atributos={{ "data-tabela-folha": true }}
+          barra={
+            <p data-folha-resumo-barra>
+              {folha.linhas.length === 1 ? "1 colaborador" : `${folha.linhas.length} colaboradores`}
+              {" · "}Total do mês <strong className="text-ink" data-folha-total>{formatarMoeda(folha.total)}</strong>
+            </p>
+          }
+          cartoes={
+            <ul className="divide-y divide-surface-border" data-folha-cartoes>
               {folha.linhas.map((l, i) => (
-                <tr key={`${l.tecnicoId ?? l.nome}-${i}`} data-linha-folha={l.nome}>
-                  <td className={cn(CEL, "font-medium text-ink")}>
-                    <span data-folha-nome>{l.nome}</span>
-                    {/* No celular, perfil e posição descem para baixo do nome: o valor do bônus cabe sem rolar */}
-                    <span className="block text-xs font-normal text-ink-muted sm:hidden" data-folha-resumo>{l.perfil} · {posicaoTexto(l.posicao)}</span>
-                  </td>
-                  <td className={cn(CEL, SO_TELA_LARGA, "text-ink-muted")} data-folha-perfil>{l.perfil}</td>
-                  <td className={cn(CEL, SO_TELA_LARGA, "text-right tabular-nums")} data-folha-posicao>{posicaoTexto(l.posicao)}</td>
-                  <td className={cn(CEL, "text-right tabular-nums")} data-folha-escore>{formatarEscore(l.escore)}</td>
-                  <td className={CEL} data-folha-faixa>{l.faixa ?? "—"}</td>
-                  <td className={cn(CEL, "text-right tabular-nums font-medium whitespace-nowrap")} data-folha-valor>{formatarMoeda(l.valor)}</td>
-                </tr>
+                <li key={`${l.tecnicoId ?? l.nome}-${i}`} className="px-4 py-3 flex items-start justify-between gap-3" data-linha-folha={l.nome}>
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium text-ink break-words" data-folha-nome>{l.nome}</p>
+                    <p className="text-xs text-ink-muted" data-folha-resumo>{l.perfil} · {posicaoTexto(l.posicao)} · {formatarEscore(l.escore)}{l.faixa ? ` · ${l.faixa}` : ""}</p>
+                  </div>
+                  <span className={cn(PLANILHA.numero, "text-sm font-semibold text-ink")} data-folha-valor>{formatarMoeda(l.valor)}</span>
+                </li>
               ))}
-            </tbody>
-            <tfoot className="border-t border-surface-border">
-              <tr className="font-semibold text-ink">
-                <td className={CEL}>Total do mês</td><td className={cn(CEL, SO_TELA_LARGA)} colSpan={2} /><td className={CEL} colSpan={2} />
-                <td className={cn(CEL, "text-right tabular-nums whitespace-nowrap")} data-folha-total>{formatarMoeda(folha.total)}</td>
-              </tr>
-            </tfoot>
-          </table>
-        </div>
+              <li className="px-4 py-3 flex items-center justify-between gap-3 bg-surface-alt/60">
+                <span className="text-sm font-semibold text-ink">Total do mês</span>
+                <span className={cn(PLANILHA.numero, "text-sm font-semibold text-ink")}>{formatarMoeda(folha.total)}</span>
+              </li>
+            </ul>
+          }
+          colunas={[
+            { id: "nome", titulo: "Colaborador", minimo: 180, obrigatoria: true, classe: "break-words" },
+            { id: "perfil", titulo: "Perfil", largura: 150 },
+            { id: "posicao", titulo: "Posição", alinhar: "direita", largura: 90 },
+            { id: "escore", titulo: "Escore", alinhar: "direita", largura: 90 },
+            { id: "faixa", titulo: "Faixa", largura: 120 },
+            { id: "valor", titulo: rotuloValor, alinhar: "direita", largura: 130, obrigatoria: true },
+          ]}
+          linhas={folha.linhas.map((l, i) => ({
+            id: `${l.tecnicoId ?? l.nome}-${i}`,
+            atributos: { "data-linha-folha": l.nome },
+            titulos: { nome: l.nome },
+            celulas: {
+              nome: <span className="font-medium text-ink" data-folha-nome>{l.nome}</span>,
+              perfil: <span className={PLANILHA.apagado} data-folha-perfil>{l.perfil}</span>,
+              posicao: <span className={PLANILHA.numero} data-folha-posicao>{posicaoTexto(l.posicao)}</span>,
+              escore: <span className={PLANILHA.numero} data-folha-escore>{formatarEscore(l.escore)}</span>,
+              faixa: <span data-folha-faixa>{l.faixa ?? "—"}</span>,
+              valor: <span className={cn(PLANILHA.numero, "font-medium")} data-folha-valor>{formatarMoeda(l.valor)}</span>,
+            },
+          }))}
+        />
       )}
     </section>
   );
@@ -147,7 +167,9 @@ function Premiados({ premios, definitivo }: { premios: PremioFechado[]; definiti
   return (
     <section className="bg-white border border-surface-border rounded-xl overflow-hidden" data-premiados>
       <div className="px-4 py-3 border-b border-surface-border">
-        <h2 className="font-semibold text-ink flex items-center gap-2"><Trophy className="w-4 h-4" aria-hidden /> Premiação do mês</h2>
+        <h2 className="font-semibold text-ink flex items-center gap-2">
+          <Trophy className="w-4 h-4" aria-hidden /> Premiação do mês <Dica texto={AJUDA_PREMIACAO} rotulo="Premiação do mês" />
+        </h2>
         <p className="text-xs text-ink-muted">{definitivo ? "Quem ganhou cada prêmio." : "Quem ganharia cada prêmio se o mês fechasse agora."}</p>
       </div>
       <ul className="divide-y divide-surface-border">
@@ -177,10 +199,11 @@ function Historico({ historico, aoVer }: { historico: FechamentoResumo[]; aoVer:
   return (
     <section className="bg-white border border-surface-border rounded-xl overflow-hidden" data-historico>
       <div className="px-4 py-3 border-b border-surface-border">
-        <h2 className="font-semibold text-ink flex items-center gap-2"><History className="w-4 h-4" aria-hidden /> Histórico de fechamentos</h2>
-        <p className="text-xs text-ink-muted">Só leitura. Um mês reaberto continua aqui, com quem reabriu e o motivo.</p>
+        <h2 className="font-semibold text-ink flex items-center gap-2">
+          <History className="w-4 h-4" aria-hidden /> Histórico de fechamentos <Dica texto={AJUDA_HISTORICO} rotulo="Histórico de fechamentos" />
+        </h2>
       </div>
-      {historico.length === 0 ? <p className="text-sm text-ink-muted px-4 py-6" data-historico-vazio>Nenhum mês foi fechado ainda.</p> : (
+      {historico.length === 0 ? <ListaVazia mensagem="Nenhum mês foi fechado ainda." /> : (
         <ul className="divide-y divide-surface-border">
           {historico.map((f) => (
             <li key={f.id} className="px-4 py-3 flex flex-wrap items-start gap-x-4 gap-y-1" data-fechamento={f.competencia} data-versao={f.versao} data-situacao-fechamento={f.situacao}>
@@ -227,6 +250,9 @@ function Fechar({ previa, aoFechar, aoSalvar }: PropsDialogo & { previa: PreviaD
       const r = await fetch("/api/desempenho/fechamentos", { method: "POST", headers: JSON_HEADERS, body: JSON.stringify({ competencia: previa.competencia, ...(precisaConfirmar && { ciente: true }) }) });
       const d = await r.json().catch(() => ({}));
       if (!r.ok) { setErro(d.erro ?? "Não foi possível fechar o mês."); return; }
+      // Sucesso é toast (padrão da casa); o erro fica no diálogo
+      const total = formatarMoeda(d?.folha?.total ?? previa.folha.total);
+      toast(`${rotuloCompetencia(previa.competencia)} fechado. Bônus: ${total}.`);
       aoSalvar();
     } catch { setErro("Erro de conexão."); } finally { setSalvando(false); }
   }
@@ -272,6 +298,7 @@ function Reabrir({ fechamento, aoFechar, aoSalvar }: PropsDialogo & { fechamento
       const r = await fetch(`/api/desempenho/fechamentos/${fechamento.id}/reabrir`, { method: "POST", headers: JSON_HEADERS, body: JSON.stringify({ motivo }) });
       const d = await r.json().catch(() => ({}));
       if (!r.ok) { setErro(d.erro ?? "Não foi possível reabrir o mês."); return; }
+      toast(`${rotuloCompetencia(fechamento.competencia)} reaberto: os valores voltam a ser projeção.`);
       aoSalvar();
     } catch { setErro("Erro de conexão."); } finally { setSalvando(false); }
   }

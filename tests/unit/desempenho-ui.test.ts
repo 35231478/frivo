@@ -20,6 +20,15 @@ vi.mock("next/link", async () => {
   const React = await import("react");
   return { default: ({ href, children, ...resto }: any) => React.createElement("a", { href, ...resto }, children) };
 });
+// Leva 9: as telas passaram a avisar por toast e a perguntar com a confirmação da casa
+const avisos = vi.hoisted(() => ({ toasts: [] as string[], confirmacoes: [] as { titulo?: string; mensagem: string }[], responder: true }));
+vi.mock("@/components/ui/avisos", () => ({
+  toast: (m: string) => { avisos.toasts.push(m); },
+  confirmar: async (o: { titulo?: string; mensagem: string } | string) => {
+    avisos.confirmacoes.push(typeof o === "string" ? { mensagem: o } : o);
+    return avisos.responder;
+  },
+}));
 const reducao = vi.hoisted(() => ({ dataUrl: "data:image/jpeg;base64,QUJD" }));
 vi.mock("@/lib/imagem-cliente", () => ({ reduzirImagem: vi.fn(async () => ({ imagem: { dataUrl: reducao.dataUrl, largura: 10, altura: 10, bytes: 3 }, qualidade: {} })) }));
 
@@ -29,6 +38,7 @@ let respostas: Record<string, { status: number; corpo: unknown }>;
 
 beforeEach(() => {
   pedidos = []; respostas = {};
+  avisos.toasts = []; avisos.confirmacoes = []; avisos.responder = true;
   vi.stubGlobal("fetch", vi.fn(async (entrada: RequestInfo | URL, init?: RequestInit) => {
     const u = String(entrada); const metodo = init?.method ?? "GET";
     pedidos.push({ url: u, metodo, corpo: init?.body ? JSON.parse(String(init.body)) : undefined });
@@ -105,7 +115,7 @@ describe("Painel Desempenho", () => {
     expect(linhas[0].querySelector("a")?.getAttribute("href")).toBe(`/desempenho/colaborador/t1?mes=${MES}`);
     expect(texto($('[data-ranking="Preventiva"] [data-resumo-regra]'))).toBe("Meta mínima 70% · Bronze a partir de 70% · Prata a partir de 80% · Ouro a partir de 90%");
     expect(texto($('[data-ranking="Instalação"]'))).toContain("Sem regra em vigor neste mês");
-    expect(texto($('[data-ranking="Instalação"] [data-ranking-vazio]'))).toBe("Nenhum colaborador neste perfil.");
+    expect(texto($('[data-ranking="Instalação"] [data-lista-vazia]'))).toContain("Nenhum colaborador neste perfil.");
   });
 
   it("o painel NUNCA mostra valor em reais; prêmio em disputa e resumo por equipe aparecem", async () => {
@@ -191,11 +201,11 @@ describe("Ficha do colaborador", () => {
     expect(texto($("[data-ficha-posicao]"))).toBe("1º");
     expect(texto($("[data-resumo-ficha]"))).toContain("Entre 2 colaboradores");
     expect(texto($("[data-ficha-faixas]"))).toBe("Bronze 70% · Prata 80% · Ouro 90%");
-    const linhas = $$("[data-metrica]").map((l) => [...l.querySelectorAll("td")].map((c) => texto(c)).join("|"));
+    const linhas = $$("[data-tabela-composicao] [data-metrica]").map((l) => [...l.querySelectorAll("td")].map((c) => texto(c)).join("|"));
     expect(linhas).toEqual(["Concluídas no prazo|3 de 4 atividades|75,0%|40%|30,0", "Relatórios completos|4 de 4 relatórios|100,0%|30%|30,0", "Avaliação do cliente|sem avaliação no mês|—|30%|—"]);
     expect(texto($("[data-ficha-base]"))).toBe("88,0");
     expect(texto($("[data-ficha-desconto]"))).toBe("0,0");
-    expect(texto($("[data-sem-penalidades]"))).toBe("Nada registrado em 11/2026.");
+    expect(texto($("[data-penalidades-ficha] [data-lista-vazia]"))).toContain("Nada registrado em 11/2026.");
   });
 
   it("bônus projetado: aparece em reais quando o servidor manda; sem o valor, a tela diz que é só para a gestão", async () => {
@@ -216,9 +226,10 @@ describe("Ficha do colaborador", () => {
         { id: "x2", tipo: "RESSALVA", situacao: "A_REVISAR", descricao: "OS-3: ficou barulho", dataFato: "2026-11-11T15:00:00Z", motivo: null },
       ],
     }));
-    expect($$("[data-metrica] td:first-child").map((c) => texto(c))).toEqual(["Equipe no prazo", "Relatórios completos da equipe", "Satisfação da equipe"]);
+    expect($$("[data-tabela-composicao] [data-metrica] td:first-child").map((c) => texto(c))).toEqual(["Equipe no prazo", "Relatórios completos da equipe", "Satisfação da equipe"]);
     expect(texto($("[data-ficha-desconto]"))).toBe("− 10,0");
-    expect(texto($("[data-linha-desconto]"))).toContain("1 de retorno, 1 de reclamação");
+    // o fecho (qualidade, penalidades, escore) saiu do rodapé da tabela e foi para a faixa de cima
+    expect(texto($("[data-fecho-composicao]"))).toContain("1 de retorno, 1 de reclamação");
     expect($$("[data-penalidade-ficha]").map((p) => `${p.getAttribute("data-penalidade-ficha")}|${texto(p)}`)).toEqual([
       "CONTA|10/11/2026RetornoOS-2 aberta 5 dias depoisMotivo da decisão: Faltou reapertoConta", "A_REVISAR|11/11/2026Ressalva do clienteOS-3: ficou barulhoA revisar",
     ]);
@@ -306,8 +317,8 @@ describe("Lista 'A revisar'", () => {
     expect($('[data-penalidade="pe2"] [data-editar]')).toBeTruthy();
     expect(texto($('[data-penalidade="pe2"]'))).toContain("Registrada por Gil");
     await clicar('[data-penalidade="pe2"] [data-excluir]');
-    expect(texto($("[data-modal-excluir-reclamacao]"))).toContain("Ana Dias");
-    await clicar("[data-confirmar-exclusao]");
+    // Leva 9: a pergunta é a confirmação da casa, não um diálogo próprio
+    expect(avisos.confirmacoes.at(-1)?.mensagem).toContain("Ana Dias");
     expect(enviados("DELETE").map((p) => p.url)).toEqual(["/api/desempenho/penalidades/pe2"]);
   });
 
@@ -340,14 +351,14 @@ describe("Lista 'A revisar'", () => {
 
   it("filtro por situação pede ao servidor; lista vazia e módulo não configurado têm mensagem própria", async () => {
     await abrir(lista([]));
-    expect(texto($("[data-revisao-vazia]"))).toBe("Nada esperando revisão.");
+    expect(texto($("[data-lista-vazia]"))).toContain("Nada esperando revisão.");
     responder("GET /api/desempenho/penalidades?situacao=CONTA", lista([]));
     await escolher("[data-filtro-situacao]", "CONTA");
-    expect(texto($("[data-revisao-vazia]"))).toBe("Nenhum item nesta situação.");
+    expect(texto($("[data-lista-vazia]"))).toContain("Nenhum item nesta situação.");
     responder("GET /api/desempenho/penalidades", lista([], { ativo: false }));
     await escolher("[data-filtro-situacao]", "");
     expect(enviados("GET").map((p) => p.url)).toEqual(["/api/desempenho/penalidades?situacao=A_REVISAR", "/api/desempenho/penalidades?situacao=CONTA", "/api/desempenho/penalidades"]);
-    expect(texto($("[data-revisao-inativa]"))).toContain("ainda não foi configurado");
+    expect(texto($("[data-lista-vazia]"))).toContain("ainda não foi configurado");
     expect($("[data-nova-reclamacao]")).toBeNull();
   });
 });
@@ -410,10 +421,12 @@ describe("Premiação do mês", () => {
 
   it("excluir pede confirmação; a premiação é por mês (o mês seguinte já pode ser cadastrado)", async () => {
     await abrir();
+    avisos.responder = false; // primeiro, recusando a confirmação: nada é excluído
     await clicar('[data-premiacao="Vale-jantar"] [data-excluir]');
     expect(enviados("DELETE")).toHaveLength(0);
-    expect(texto($("[data-modal-excluir-premiacao]"))).toContain("Vale-jantar");
-    await clicar("[data-confirmar-exclusao]");
+    expect(avisos.confirmacoes.at(-1)?.mensagem).toContain("Vale-jantar");
+    avisos.responder = true;
+    await clicar('[data-premiacao="Vale-jantar"] [data-excluir]');
     expect(enviados("DELETE").map((p) => p.url)).toEqual(["/api/desempenho/premiacoes/pr2"]);
     responder("GET /api/desempenho/premiacoes?mes=2026-12", []);
     await clicar("[data-mes-seguinte]");
@@ -526,6 +539,7 @@ describe("Configuração do Desempenho", () => {
     expect(($(campo("metaMinima")) as HTMLInputElement).value).toBe("60");
     await clicar("[data-modal-regra] button"); // Cancelar não manda nada
     await clicar("[data-descartar-agendada]");
+    expect(avisos.confirmacoes.at(-1)?.titulo).toBe("Descartar a mudança");
     expect(enviados("DELETE").map((p) => p.url)).toEqual(["/api/desempenho/perfis/p1/regra"]);
   });
 
@@ -547,7 +561,7 @@ describe("Configuração do Desempenho", () => {
     expect(enviados("PUT").at(-1)).toEqual({ url: "/api/desempenho/perfis/p1", metodo: "PUT", corpo: { nome: "Preventiva A", tipo: "TECNICO" } });
     responder("DELETE /api/desempenho/perfis/p1", { erro: "Este perfil tem colaboradores. Mude-os de perfil ou tire-os do Desempenho antes de excluir." }, 409);
     await clicar('[data-perfil="Preventiva"] [data-excluir-perfil]');
-    await clicar("[data-confirmar-exclusao]");
+    expect(avisos.confirmacoes.at(-1)?.titulo).toBe("Excluir perfil");
     expect(texto($("[data-erro-excluir-perfil]"))).toContain("Este perfil tem colaboradores");
   });
 
@@ -563,9 +577,11 @@ describe("Configuração do Desempenho", () => {
     expect(enviados("POST")[1].corpo).toEqual({ tecnicoId: "t3", perfilId: "p4" });
     responder("DELETE /api/desempenho/participantes/t3", { erro: "Este colaborador não está no Desempenho." }, 404);
     await clicar(`${prev} [data-participante="Edu Prado"] [data-tirar-participante]`);
+    expect(avisos.confirmacoes.at(-1)?.titulo).toBe("Tirar do ranking");
     expect(enviados("DELETE").map((p) => p.url)).toEqual(["/api/desempenho/participantes/t3"]);
     expect(texto($(`${prev} [data-erro-perfil]`))).toBe("Este colaborador não está no Desempenho.");
     expect(texto($('[data-perfil="Encarregado"] [data-sem-participantes]'))).toBe("Ninguém neste perfil.");
+    expect(avisos.toasts).toContain("Colaborador adicionado ao perfil.");
   });
 
   it("ajustes: prazo do retorno e os tipos que contam como corretiva; nota baixa NÃO é ajuste (a tela explica); prazo fora de 1 a 365 é recusado", async () => {
@@ -585,13 +601,13 @@ describe("Configuração do Desempenho", () => {
     await clicar('[data-tipo-corretiva="Manutenção Corretiva"]');
     await clicar("[data-salvar-ajustes]");
     expect(enviados("PUT")).toEqual([{ url: "/api/desempenho/configuracao", metodo: "PUT", corpo: { retornoDias: 45, tiposRetorno: ["to2"] } }]);
-    expect(texto($("[data-ajustes-salvos]"))).toBe("Ajustes salvos.");
+    expect(avisos.toasts.at(-1)).toBe("Ajustes salvos.");
   });
 
   it("modo TV: desligado oferece gerar o link; ligado mostra o link público, trocar e desligar", async () => {
     await abrir();
     expect($("[data-secao-tv]")?.getAttribute("data-tv")).toBe("desligado");
-    expect(texto($("[data-secao-tv]"))).toContain("Nunca mostra valor em reais");
+    expect($('[data-secao-tv] [data-dica][aria-label="Ajuda: Modo TV"]')).toBeTruthy();
     await clicar("[data-gerar-link]");
     expect(enviados("POST", "/api/desempenho/tv")).toHaveLength(1);
     act(() => root.unmount()); caixa.remove();

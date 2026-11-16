@@ -2,10 +2,13 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Gift, ImagePlus, Loader2, Pencil, Plus, Trash2 } from "lucide-react";
+import { confirmar, toast } from "@/components/ui/avisos";
 import { Button } from "@/components/ui/button";
+import { Dica } from "@/components/ui/dica";
 import { FormField } from "@/components/ui/form-field";
 import { Input } from "@/components/ui/input";
 import { Modal } from "@/components/ui/modal";
+import { ListaVazia } from "@/components/listagem/listagem-ui";
 import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { reduzirImagem } from "@/lib/imagem-cliente";
@@ -14,6 +17,8 @@ import type { PremiacaoNaLista } from "@/lib/desempenho/premiacoes-server";
 import { CabecalhoDesempenho, Erro, JSON_HEADERS, SeletorDeMes, type PodeDesempenho } from "./comum";
 
 interface PerfilOpcao { id: string; nome: string }
+
+const AJUDA_PREMIACAO = "O brinde em disputa no mês: todo mundo que vê o Desempenho vê a premiação, e ela também aparece no modo TV. Ganha quem tiver o maior escore na disputa escolhida; empate divide o prêmio. Cadastrar, editar e excluir é de quem tem Desempenho › Gerenciar.";
 
 /**
  * Premiação do mês: o brinde em disputa (texto + imagem). Todos que veem o Desempenho veem a
@@ -24,7 +29,6 @@ export function PremiacoesDesempenho({ mesAtual, pode, perfis }: { mesAtual: str
   const [lista, setLista] = useState<PremiacaoNaLista[] | null>(null);
   const [erro, setErro] = useState("");
   const [formulario, setFormulario] = useState<PremiacaoNaLista | "nova" | null>(null);
-  const [excluindo, setExcluindo] = useState<PremiacaoNaLista | null>(null);
   // A imagem trocada precisa ser pedida de novo ao servidor
   const [versao, setVersao] = useState(0);
 
@@ -38,7 +42,25 @@ export function PremiacoesDesempenho({ mesAtual, pode, perfis }: { mesAtual: str
     } catch { setErro("Erro de conexão."); }
   }, []);
   useEffect(() => { setLista(null); void carregar(mes); }, [carregar, mes]);
-  const aposMudar = () => { setFormulario(null); setExcluindo(null); setVersao((v) => v + 1); void carregar(mes); };
+  const aposMudar = () => { setFormulario(null); setVersao((v) => v + 1); void carregar(mes); };
+
+  /** Excluir a premiação: pergunta antes (a da casa) e avisa por toast; o erro fica na tela. */
+  async function excluir(p: PremiacaoNaLista) {
+    const ok = await confirmar({
+      titulo: "Excluir premiação",
+      mensagem: `${p.titulo}, de ${rotuloCompetencia(p.competencia)}, deixa de aparecer no painel e na TV.`,
+      confirmarTexto: "Excluir", perigo: true,
+    });
+    if (!ok) return;
+    setErro("");
+    try {
+      const r = await fetch(`/api/desempenho/premiacoes/${p.id}`, { method: "DELETE" });
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) { setErro(d.erro ?? "Não foi possível excluir a premiação."); return; }
+      toast("Premiação excluída.");
+      aposMudar();
+    } catch { setErro("Erro de conexão."); }
+  }
 
   return (
     <div className="space-y-4" data-premiacoes-desempenho data-mes={mes}>
@@ -49,12 +71,14 @@ export function PremiacoesDesempenho({ mesAtual, pode, perfis }: { mesAtual: str
           {pode.gerenciar && <Button type="button" size="sm" onClick={() => setFormulario("nova")} data-nova-premiacao><Plus className="w-4 h-4" /> Nova premiação</Button>}
         </>
       )} />
+      <h2 className="text-sm font-semibold text-ink flex items-center gap-1.5">
+        Premiação do mês <Dica texto={AJUDA_PREMIACAO} rotulo="Premiação do mês" />
+      </h2>
       <Erro texto={erro} data-erro-premiacoes="" />
       {!lista ? (!erro && <p className="text-sm text-ink-muted flex items-center gap-2"><Loader2 className="w-4 h-4 animate-spin" /> Carregando…</p>)
         : lista.length === 0 ? (
-          <div className="bg-white border border-surface-border rounded-xl text-center px-4 py-12 space-y-2" data-sem-premiacao>
-            <Gift className="w-7 h-7 text-ink-subtle mx-auto" aria-hidden />
-            <p className="text-sm text-ink-muted">Nenhuma premiação cadastrada para {rotuloCompetencia(mes)}.</p>
+          <div className="bg-white border border-surface-border rounded-xl" data-sem-premiacao>
+            <ListaVazia mensagem={`Nenhuma premiação cadastrada para ${rotuloCompetencia(mes)}.`} />
           </div>
         ) : (
           <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3" data-lista-premiacoes>
@@ -72,7 +96,7 @@ export function PremiacoesDesempenho({ mesAtual, pode, perfis }: { mesAtual: str
                 {pode.gerenciar && (
                   <div className="px-3 py-2 border-t border-surface-border flex justify-end gap-1">
                     <Button type="button" variant="ghost" size="sm" onClick={() => setFormulario(p)} data-editar><Pencil className="w-3.5 h-3.5" /> Editar</Button>
-                    <Button type="button" variant="ghost" size="sm" onClick={() => setExcluindo(p)} data-excluir className="hover:text-atrasado"><Trash2 className="w-3.5 h-3.5" /> Excluir</Button>
+                    <Button type="button" variant="ghost" size="sm" onClick={() => void excluir(p)} data-excluir className="hover:text-atrasado"><Trash2 className="w-3.5 h-3.5" /> Excluir</Button>
                   </div>
                 )}
               </li>
@@ -83,7 +107,6 @@ export function PremiacoesDesempenho({ mesAtual, pode, perfis }: { mesAtual: str
         <Formulario key={formulario === "nova" ? "nova" : formulario.id} premiacao={formulario === "nova" ? null : formulario} mes={mes} perfis={perfis} versao={versao}
           aoFechar={() => setFormulario(null)} aoSalvar={aposMudar} />
       )}
-      {excluindo && <Excluir key={excluindo.id} premiacao={excluindo} aoFechar={() => setExcluindo(null)} aoSalvar={aposMudar} />}
     </div>
   );
 }
@@ -125,6 +148,7 @@ function Formulario({ premiacao, mes, perfis, versao, aoFechar, aoSalvar }: Prop
       });
       const d = await r.json().catch(() => ({}));
       if (!r.ok) { setErro(d.erro ?? "Não foi possível salvar a premiação."); return; }
+      toast(premiacao ? "Premiação salva." : "Premiação cadastrada.");
       aoSalvar();
     } catch { setErro("Erro de conexão."); } finally { setSalvando(false); }
   }
@@ -167,32 +191,6 @@ function Formulario({ premiacao, mes, perfis, versao, aoFechar, aoSalvar }: Prop
         <div className="flex justify-end gap-2 pt-2 border-t border-surface-border">
           <Button type="button" variant="secondary" onClick={aoFechar}>Cancelar</Button>
           <Button type="button" loading={salvando} onClick={salvar} data-salvar-premiacao>{premiacao ? "Salvar" : "Cadastrar premiação"}</Button>
-        </div>
-      </div>
-    </Modal>
-  );
-}
-
-function Excluir({ premiacao, aoFechar, aoSalvar }: PropsDialogo & { premiacao: PremiacaoNaLista }) {
-  const [erro, setErro] = useState("");
-  const [salvando, setSalvando] = useState(false);
-  async function excluir() {
-    setErro(""); setSalvando(true);
-    try {
-      const r = await fetch(`/api/desempenho/premiacoes/${premiacao.id}`, { method: "DELETE" });
-      const d = await r.json().catch(() => ({}));
-      if (!r.ok) { setErro(d.erro ?? "Não foi possível excluir a premiação."); return; }
-      aoSalvar();
-    } catch { setErro("Erro de conexão."); } finally { setSalvando(false); }
-  }
-  return (
-    <Modal aberto onFechar={aoFechar} titulo="Excluir premiação" tamanho="sm">
-      <div className="space-y-4" data-modal-excluir-premiacao>
-        <p className="text-sm text-ink">A premiação <span className="font-medium">{premiacao.titulo}</span> de {rotuloCompetencia(premiacao.competencia)} deixa de aparecer no painel e na TV.</p>
-        <Erro texto={erro} />
-        <div className="flex justify-end gap-2 pt-2 border-t border-surface-border">
-          <Button type="button" variant="secondary" onClick={aoFechar}>Cancelar</Button>
-          <Button type="button" variant="danger" loading={salvando} onClick={excluir} data-confirmar-exclusao>Excluir</Button>
         </div>
       </div>
     </Modal>

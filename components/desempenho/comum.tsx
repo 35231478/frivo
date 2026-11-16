@@ -3,10 +3,13 @@
 import Link from "next/link";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { Dica } from "@/components/ui/dica";
 import { StatusPill } from "@/components/ui/status-pill";
 import { competenciaAnterior, competenciaSeguinte, formatarEscore, rotuloCompetencia } from "@/lib/desempenho/regras";
 
 export const JSON_HEADERS = { "Content-Type": "application/json" };
+
+const AJUDA_MODULO = "O escore mede a qualidade do trabalho do mês, não o volume: prazo, relatório e avaliação do cliente, cada um com o seu peso, menos as penalidades que a revisão marcou \"Conta\". Fechar o mês congela escore, faixa e bônus. Valor em reais só aparece para quem tem Desempenho › Gerenciar.";
 
 export type AbaDesempenho = "painel" | "revisao" | "premiacoes" | "fechamento" | "configuracao";
 export interface PodeDesempenho { revisar: boolean; gerenciar: boolean }
@@ -25,7 +28,9 @@ export function CabecalhoDesempenho({ ativa, pode, aRevisar, acoes }: { ativa: A
     <header className="space-y-3" data-cabecalho-desempenho>
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
-          <h1 className="font-display text-2xl font-bold text-ink tracking-tight">Desempenho</h1>
+          <h1 className="font-display text-2xl font-bold text-ink tracking-tight flex items-center gap-1.5">
+            Desempenho <Dica texto={AJUDA_MODULO} rotulo="Desempenho" lado="direita" />
+          </h1>
           <p className="text-sm text-ink-muted mt-1">Índice de qualidade da manutenção, por colaborador e por mês.</p>
         </div>
         {acoes && <div className="flex flex-wrap items-center gap-2">{acoes}</div>}

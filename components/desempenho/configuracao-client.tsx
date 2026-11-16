@@ -3,10 +3,14 @@
 import { useCallback, useEffect, useState } from "react";
 import { CalendarClock, Copy, ExternalLink, Loader2, Lock, Pencil, Plus, Trash2, Tv, UserPlus } from "lucide-react";
 import { cn, formatarMoeda } from "@/lib/utils";
+import { confirmar, toast } from "@/components/ui/avisos";
 import { Button } from "@/components/ui/button";
+import { Dica } from "@/components/ui/dica";
 import { FormField } from "@/components/ui/form-field";
 import { Input } from "@/components/ui/input";
 import { Modal } from "@/components/ui/modal";
+import { ListaVazia } from "@/components/listagem/listagem-ui";
+import { PLANILHA } from "@/lib/planilha";
 import { Select } from "@/components/ui/select";
 import { ToggleSwitch } from "@/components/ui/toggle-switch";
 import {
@@ -32,6 +36,9 @@ async function chamar(url: string, metodo: string, corpo?: unknown): Promise<str
  * Configuração do Desempenho: perfis (com a regra de cada um e quem participa), ajustes gerais e o
  * link do modo TV. A regra é travada no mês: a primeira vale já; mudança depois vale no mês seguinte.
  */
+const AJUDA_PERFIS = "Cada colaborador participa por um perfil, e cada perfil tem a sua regra: o peso de cada métrica, a meta mínima, as faixas e o bônus de cada faixa. Quem não está em nenhum perfil fica fora do ranking. A regra em vigor no mês não muda: uma alteração vale a partir do mês seguinte.";
+const AJUDA_TV = "O modo TV mostra o ranking e o prêmio em disputa numa tela da empresa, sem login e só para leitura. Quem tem o link vê o ranking, então trocar o link desliga o anterior. Valor em reais nunca aparece ali.";
+
 export function ConfiguracaoDesempenho({ pode }: { pode: PodeDesempenho }) {
   const [cfg, setCfg] = useState<Cfg | null>(null);
   const [erro, setErro] = useState("");
@@ -66,28 +73,46 @@ export function ConfiguracaoDesempenho({ pode }: { pode: PodeDesempenho }) {
 function Perfis({ cfg, aoMudar }: { cfg: Cfg; aoMudar: () => Promise<void> }) {
   const [editando, setEditando] = useState<PerfilNaConfiguracao | "novo" | null>(null);
   const [regraDe, setRegraDe] = useState<PerfilNaConfiguracao | null>(null);
-  const [excluindo, setExcluindo] = useState<PerfilNaConfiguracao | null>(null);
-  const fechar = () => { setEditando(null); setRegraDe(null); setExcluindo(null); };
+  const [erroPerfil, setErroPerfil] = useState("");
+  const fechar = () => { setEditando(null); setRegraDe(null); };
   const aposSalvar = async () => { fechar(); await aoMudar(); };
+
+  /** Excluir o perfil: pergunta antes (a da casa) e avisa por toast; o erro fica na seção. */
+  async function excluir(perfil: PerfilNaConfiguracao) {
+    const ok = await confirmar({
+      titulo: "Excluir perfil",
+      mensagem: `O perfil ${perfil.nome} e as regras dele são excluídos. Só dá para excluir um perfil sem colaboradores.`,
+      confirmarTexto: "Excluir", perigo: true,
+    });
+    if (!ok) return;
+    setErroPerfil("");
+    const falha = await chamar(`/api/desempenho/perfis/${perfil.id}`, "DELETE");
+    if (falha) { setErroPerfil(falha); return; }
+    toast("Perfil excluído.");
+    await aoMudar();
+  }
 
   return (
     <section className="space-y-3" data-secao-perfis>
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h2 className="font-semibold text-ink">Perfis e regras</h2>
-          <p className="text-sm text-ink-muted">Cada colaborador participa por um perfil. Quem não está em nenhum perfil fica fora do ranking.</p>
+          <h2 className="font-semibold text-ink flex items-center gap-1.5">Perfis e regras <Dica texto={AJUDA_PERFIS} rotulo="Perfis e regras" /></h2>
         </div>
         <Button type="button" size="sm" variant="outline" onClick={() => setEditando("novo")} data-novo-perfil><Plus className="w-4 h-4" /> Novo perfil</Button>
       </div>
-      {cfg.perfis.length === 0 && <p className="bg-white border border-surface-border rounded-xl px-4 py-8 text-sm text-ink-muted text-center" data-sem-perfis>Nenhum perfil cadastrado.</p>}
+      <Erro texto={erroPerfil} data-erro-excluir-perfil="" />
+      {cfg.perfis.length === 0 && (
+        <div className="bg-white border border-surface-border rounded-xl" data-sem-perfis>
+          <ListaVazia mensagem="Nenhum perfil cadastrado." />
+        </div>
+      )}
       <div className="grid gap-3 lg:grid-cols-2">
         {cfg.perfis.map((p) => (
-          <CartaoPerfil key={p.id} perfil={p} cfg={cfg} aoMudar={aoMudar} aoEditar={() => setEditando(p)} aoRegra={() => setRegraDe(p)} aoExcluir={() => setExcluindo(p)} />
+          <CartaoPerfil key={p.id} perfil={p} cfg={cfg} aoMudar={aoMudar} aoEditar={() => setEditando(p)} aoRegra={() => setRegraDe(p)} aoExcluir={() => void excluir(p)} />
         ))}
       </div>
       {editando && <FormularioPerfil key={editando === "novo" ? "novo" : editando.id} perfil={editando === "novo" ? null : editando} aoFechar={fechar} aoSalvar={aposSalvar} />}
       {regraDe && <FormularioRegra key={regraDe.id} perfil={regraDe} cfg={cfg} aoFechar={fechar} aoSalvar={aposSalvar} />}
-      {excluindo && <ExcluirPerfil key={excluindo.id} perfil={excluindo} aoFechar={fechar} aoSalvar={aposSalvar} />}
     </section>
   );
 }
@@ -120,10 +145,12 @@ function CartaoPerfil({ perfil, cfg, aoMudar, aoEditar, aoRegra, aoExcluir }: {
   const [novo, setNovo] = useState("");
   const [erro, setErro] = useState("");
   const [ocupado, setOcupado] = useState(false);
-  const fazer = async (url: string, metodo: string, corpo?: unknown) => {
+  /** Faz a mudança e avisa por toast; o erro fica no cartão do perfil. */
+  const fazer = async (url: string, metodo: string, corpo?: unknown, aviso?: string) => {
     setOcupado(true); setErro("");
     const falha = await chamar(url, metodo, corpo);
-    if (falha) setErro(falha); else { setNovo(""); await aoMudar(); }
+    if (falha) setErro(falha);
+    else { setNovo(""); if (aviso) toast(aviso); await aoMudar(); }
     setOcupado(false);
   };
   const botaoIcone = "p-1.5 rounded-md text-ink-muted hover:text-ink hover:bg-surface-alt";
@@ -157,7 +184,10 @@ function CartaoPerfil({ perfil, cfg, aoMudar, aoEditar, aoRegra, aoExcluir }: {
             <p className="text-xs font-medium text-atencao-texto flex items-center gap-1.5"><CalendarClock className="w-3.5 h-3.5" aria-hidden /> Mudança que vale a partir de {competenciaCurta(perfil.agendada.vigenteDesde)}</p>
             <ResumoRegra regra={perfil.agendada} tipo={perfil.tipo} />
             <button type="button" className="text-xs font-medium text-ink underline disabled:opacity-50" disabled={ocupado} data-descartar-agendada
-              onClick={() => fazer(`/api/desempenho/perfis/${perfil.id}/regra`, "DELETE")}>Descartar esta mudança</button>
+              onClick={async () => {
+                const ok = await confirmar({ titulo: "Descartar a mudança", mensagem: `A regra agendada do perfil ${perfil.nome} é descartada e a regra em vigor continua valendo.`, confirmarTexto: "Descartar", perigo: true });
+                if (ok) await fazer(`/api/desempenho/perfis/${perfil.id}/regra`, "DELETE", undefined, "Mudança agendada descartada.");
+              }}>Descartar esta mudança</button>
           </div>
         )}
         <Button type="button" size="sm" variant={perfil.vigente ? "secondary" : "primary"} onClick={aoRegra} data-definir-regra>{perfil.vigente ? "Editar regra" : "Definir regra"}</Button>
@@ -171,11 +201,14 @@ function CartaoPerfil({ perfil, cfg, aoMudar, aoEditar, aoRegra, aoExcluir }: {
             <li key={x.tecnicoId} className="flex items-center gap-2" data-participante={x.nome}>
               <span className="flex-1 min-w-0 text-sm text-ink truncate">{x.nome}</span>
               <Select aria-label={`Perfil de ${x.nome}`} value={perfil.id} disabled={ocupado} className="w-40 text-xs py-1.5" data-mudar-perfil
-                onChange={(e) => fazer("/api/desempenho/participantes", "POST", { tecnicoId: x.tecnicoId, perfilId: e.target.value })}>
+                onChange={(e) => fazer("/api/desempenho/participantes", "POST", { tecnicoId: x.tecnicoId, perfilId: e.target.value }, `${x.nome} mudou de perfil.`)}>
                 {cfg.perfis.map((p) => <option key={p.id} value={p.id}>{p.nome}</option>)}
               </Select>
               <button type="button" className={cn(botaoIcone, "hover:text-atrasado hover:bg-atrasado-claro")} disabled={ocupado} title="Tirar do ranking" aria-label={`Tirar ${x.nome} do Desempenho`}
-                onClick={() => fazer(`/api/desempenho/participantes/${x.tecnicoId}`, "DELETE")} data-tirar-participante><Trash2 className="w-4 h-4" /></button>
+                onClick={async () => {
+                  const ok = await confirmar({ titulo: "Tirar do ranking", mensagem: `${x.nome} sai do ranking e deixa de ser medido. O histórico dos meses já fechados continua como está.`, confirmarTexto: "Tirar do ranking", perigo: true });
+                  if (ok) await fazer(`/api/desempenho/participantes/${x.tecnicoId}`, "DELETE", undefined, `${x.nome} saiu do ranking.`);
+                }} data-tirar-participante><Trash2 className="w-4 h-4" /></button>
             </li>
           ))}
         </ul>
@@ -185,7 +218,7 @@ function CartaoPerfil({ perfil, cfg, aoMudar, aoEditar, aoRegra, aoExcluir }: {
             {cfg.disponiveis.map((t) => <option key={t.id} value={t.id}>{t.cargo ? `${t.nome} (${t.cargo})` : t.nome}</option>)}
           </Select>
           <Button type="button" size="sm" variant="outline" disabled={!novo} loading={ocupado && !!novo} data-adicionar-participante
-            onClick={() => fazer("/api/desempenho/participantes", "POST", { tecnicoId: novo, perfilId: perfil.id })}><UserPlus className="w-3.5 h-3.5" /> Adicionar</Button>
+            onClick={() => fazer("/api/desempenho/participantes", "POST", { tecnicoId: novo, perfilId: perfil.id }, "Colaborador adicionado ao perfil.")}><UserPlus className="w-3.5 h-3.5" /> Adicionar</Button>
         </div>
         <Erro texto={erro} data-erro-perfil="" />
       </div>
@@ -207,7 +240,9 @@ function FormularioPerfil({ perfil, aoFechar, aoSalvar }: PropsDialogo & { perfi
     setSalvando(true);
     const falha = await chamar(perfil ? `/api/desempenho/perfis/${perfil.id}` : "/api/desempenho/perfis", perfil ? "PUT" : "POST", { nome, tipo });
     setSalvando(false);
-    if (falha) setErro(falha); else await aoSalvar();
+    if (falha) { setErro(falha); return; }
+    toast(perfil ? "Perfil salvo." : "Perfil criado.");
+    await aoSalvar();
   }
 
   return (
@@ -232,29 +267,6 @@ function FormularioPerfil({ perfil, aoFechar, aoSalvar }: PropsDialogo & { perfi
         <div className="flex justify-end gap-2 pt-2 border-t border-surface-border">
           <Button type="button" variant="secondary" onClick={aoFechar}>Cancelar</Button>
           <Button type="button" loading={salvando} onClick={salvar} data-salvar-perfil>{perfil ? "Salvar" : "Criar perfil"}</Button>
-        </div>
-      </div>
-    </Modal>
-  );
-}
-
-function ExcluirPerfil({ perfil, aoFechar, aoSalvar }: PropsDialogo & { perfil: PerfilNaConfiguracao }) {
-  const [erro, setErro] = useState("");
-  const [salvando, setSalvando] = useState(false);
-  async function excluir() {
-    setSalvando(true);
-    const falha = await chamar(`/api/desempenho/perfis/${perfil.id}`, "DELETE");
-    setSalvando(false);
-    if (falha) setErro(falha); else await aoSalvar();
-  }
-  return (
-    <Modal aberto onFechar={aoFechar} titulo="Excluir perfil" tamanho="sm">
-      <div className="space-y-4" data-modal-excluir-perfil>
-        <p className="text-sm text-ink">O perfil <span className="font-medium">{perfil.nome}</span> e as regras dele são excluídos. Só é possível excluir um perfil sem colaboradores.</p>
-        <Erro texto={erro} data-erro-excluir-perfil="" />
-        <div className="flex justify-end gap-2 pt-2 border-t border-surface-border">
-          <Button type="button" variant="secondary" onClick={aoFechar}>Cancelar</Button>
-          <Button type="button" variant="danger" loading={salvando} onClick={excluir} data-confirmar-exclusao>Excluir</Button>
         </div>
       </div>
     </Modal>
@@ -295,7 +307,9 @@ function FormularioRegra({ perfil, cfg, aoFechar, aoSalvar }: PropsDialogo & { p
     setSalvando(true);
     const falha = await chamar(`/api/desempenho/perfis/${perfil.id}/regra`, "PUT", parsed.data);
     setSalvando(false);
-    if (falha) setErro(falha); else await aoSalvar();
+    if (falha) { setErro(falha); return; }
+    toast(primeira ? "Regra salva: vale a partir deste mês." : "Mudança agendada: vale no mês que vem.");
+    await aoSalvar();
   }
 
   const campoNumero = (campo: keyof typeof f, rotulo: string, sufixo: string) => (
@@ -345,11 +359,11 @@ function FormularioRegra({ perfil, cfg, aoFechar, aoSalvar }: PropsDialogo & { p
               <li key={i} className="grid grid-cols-[1fr_6rem_8rem_auto] gap-2 items-end" data-faixa-linha={i}>
                 <FormField label={i === 0 ? "Faixa" : ""}><Input aria-label={`Nome da faixa ${i + 1}`} value={x.nome} maxLength={30} onChange={(e) => setFaixa(i, "nome", e.target.value)} data-faixa-nome /></FormField>
                 <FormField label={i === 0 ? "A partir de" : ""}>
-                  <Input aria-label={`Escore mínimo da faixa ${i + 1}`} inputMode="numeric" value={x.minimo} className="tabular-nums" data-faixa-minimo
+                  <Input aria-label={`Escore mínimo da faixa ${i + 1}`} inputMode="numeric" value={x.minimo} className={PLANILHA.numero} data-faixa-minimo
                     onChange={(e) => setFaixa(i, "minimo", e.target.value.replace(/\D/g, "").slice(0, 3))} />
                 </FormField>
                 <FormField label={i === 0 ? "Bônus (R$)" : ""}>
-                  <Input aria-label={`Valor do bônus da faixa ${i + 1}`} inputMode="decimal" value={x.valor} className="tabular-nums" data-faixa-valor
+                  <Input aria-label={`Valor do bônus da faixa ${i + 1}`} inputMode="decimal" value={x.valor} className={PLANILHA.numero} data-faixa-valor
                     onChange={(e) => setFaixa(i, "valor", e.target.value.replace(/[^\d.,]/g, "").slice(0, 12))} />
                 </FormField>
                 <button type="button" title="Excluir faixa" aria-label={`Excluir faixa ${i + 1}`} disabled={faixas.length <= 1} data-excluir-faixa
@@ -381,9 +395,9 @@ function Ajustes({ cfg, aoMudar }: { cfg: Cfg; aoMudar: () => Promise<void> }) {
   const [dias, setDias] = useState(String(cfg.ajustes.retornoDias));
   const [tipos, setTipos] = useState<string[]>(cfg.ajustes.tiposRetorno);
   const [erro, setErro] = useState("");
-  const [salvo, setSalvo] = useState(false);
+
   const [salvando, setSalvando] = useState(false);
-  const mexeu = () => { setErro(""); setSalvo(false); };
+  const mexeu = () => setErro("");
 
   async function salvar() {
     const retornoDias = Number(dias);
@@ -392,7 +406,8 @@ function Ajustes({ cfg, aoMudar }: { cfg: Cfg; aoMudar: () => Promise<void> }) {
     const falha = await chamar("/api/desempenho/configuracao", "PUT", { retornoDias, tiposRetorno: tipos });
     setSalvando(false);
     if (falha) { setErro(falha); return; }
-    setSalvo(true); await aoMudar();
+    toast("Ajustes salvos.");
+    await aoMudar();
   }
 
   return (
@@ -430,7 +445,6 @@ function Ajustes({ cfg, aoMudar }: { cfg: Cfg; aoMudar: () => Promise<void> }) {
         </fieldset>
         <Erro texto={erro} data-erro-ajustes="" />
         <div className="flex items-center justify-end gap-3">
-          {salvo && <span className="text-sm text-ok-texto" role="status" data-ajustes-salvos>Ajustes salvos.</span>}
           <Button type="button" loading={salvando} onClick={salvar} data-salvar-ajustes>Salvar ajustes</Button>
         </div>
       </div>
@@ -448,19 +462,24 @@ function ModoTv({ cfg, aoMudar }: { cfg: Cfg; aoMudar: () => Promise<void> }) {
   useEffect(() => { setOrigem(window.location.origin); }, []);
   const link = cfg.tvToken ? `${origem}/relatorio/desempenho/${cfg.tvToken}` : "";
 
-  const fazer = async (metodo: "POST" | "DELETE") => {
+  const fazer = async (metodo: "POST" | "DELETE", aviso: string) => {
     setOcupado(true); setErro(""); setCopiado(false);
     const falha = await chamar("/api/desempenho/tv", metodo);
-    if (falha) setErro(falha); else await aoMudar();
+    if (falha) setErro(falha); else { toast(aviso); await aoMudar(); }
     setOcupado(false);
+  };
+  const desligar = async () => {
+    const ok = await confirmar({ titulo: "Desligar o modo TV", mensagem: "O link para de funcionar e a tela da empresa deixa de mostrar o ranking.", confirmarTexto: "Desligar", perigo: true });
+    if (ok) await fazer("DELETE", "Modo TV desligado.");
   };
   const copiar = async () => { try { await navigator.clipboard.writeText(link); setCopiado(true); } catch { setErro("Não foi possível copiar. Selecione o link e copie."); } };
 
   return (
     <section className="bg-white border border-surface-border rounded-xl overflow-hidden" data-secao-tv data-tv={cfg.tvToken ? "ligado" : "desligado"}>
       <div className="px-4 py-3 border-b border-surface-border">
-        <h2 className="font-semibold text-ink flex items-center gap-2"><Tv className="w-4 h-4" aria-hidden /> Modo TV</h2>
-        <p className="text-sm text-ink-muted">Ranking e prêmio em disputa numa tela da empresa, sem login e só para leitura. Nunca mostra valor em reais.</p>
+        <h2 className="font-semibold text-ink flex items-center gap-2">
+          <Tv className="w-4 h-4" aria-hidden /> Modo TV <Dica texto={AJUDA_TV} rotulo="Modo TV" />
+        </h2>
       </div>
       <div className="px-4 py-4 space-y-3">
         {cfg.tvToken ? (
@@ -473,14 +492,14 @@ function ModoTv({ cfg, aoMudar }: { cfg: Cfg; aoMudar: () => Promise<void> }) {
               <a href={link} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 text-xs font-medium text-acento px-3 py-1.5 rounded-lg border border-surface-border hover:bg-acento-claro" data-abrir-tv>
                 <ExternalLink className="w-3.5 h-3.5" /> Abrir a tela
               </a>
-              <Button type="button" size="sm" variant="secondary" loading={ocupado} onClick={() => fazer("POST")} data-trocar-link>Trocar link</Button>
-              <Button type="button" size="sm" variant="ghost" disabled={ocupado} onClick={() => fazer("DELETE")} data-desligar-tv>Desligar</Button>
+              <Button type="button" size="sm" variant="secondary" loading={ocupado} onClick={() => fazer("POST", "Link novo gerado: o anterior parou de funcionar.")} data-trocar-link>Trocar link</Button>
+              <Button type="button" size="sm" variant="ghost" disabled={ocupado} onClick={() => void desligar()} data-desligar-tv>Desligar</Button>
             </div>
           </>
         ) : (
           <div className="flex flex-wrap items-center justify-between gap-3">
             <p className="text-sm text-ink-muted" data-tv-desligado>O modo TV está desligado.</p>
-            <Button type="button" size="sm" loading={ocupado} onClick={() => fazer("POST")} data-gerar-link>Gerar link da TV</Button>
+            <Button type="button" size="sm" loading={ocupado} onClick={() => fazer("POST", "Modo TV ligado: o link está pronto para copiar.")} data-gerar-link>Gerar link da TV</Button>
           </div>
         )}
         <Erro texto={erro} data-erro-tv="" />
