@@ -94,7 +94,8 @@ describe("o que mexe em dinheiro só aparece para quem pode", () => {
   it("no ⋮ da lista: com a permissão, o menu traz as ações de dinheiro", async () => {
     await montar(permissoesTotais(), { menu: true });
     await clicar($("button[aria-label^='Ações']"));
-    expect(itensDoMenu()).toEqual(["detalhes", "pagar", "historico", "editar", "cancelar"]);
+    // "tornar-recorrente" é da despesa recorrente e também mexe em dinheiro: entra na mesma guarda
+    expect(itensDoMenu()).toEqual(["detalhes", "pagar", "historico", "editar", "tornar-recorrente", "cancelar"]);
   });
 
   it("conta já paga: nem com permissão aparece pagar ou editar (só o histórico)", async () => {
