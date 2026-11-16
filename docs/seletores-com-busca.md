@@ -95,3 +95,21 @@ relatado. Mas são dois componentes da casa fazendo a mesma coisa.
 contexto, descrição por opção e ícone; fundir os dois é uma leva inteira, com risco em telas
 centrais (OS e orçamento). Fica anotado como a próxima da fila, para a casa terminar com **um**
 seletor com busca, não dois.
+
+---
+
+## Testes
+
+| Arquivo | O que prova |
+| --- | --- |
+| `tests/unit/busca-select-ui.test.ts` | o componente em si, num DOM de verdade: digitar filtra sem acento e sem caixa ("jose" acha "José"); ↓ abre, ↑↓ andam, Home/End vão às pontas, Enter escolhe, Esc fecha e devolve o foco, Tab sai; o × limpa; lista de 200 desenha 60 e diz que faltam 140, e a busca aperta; a lista vazia diz o que foi procurado; "+ Novo …" só com a permissão de criar e fora da lista de opções; desabilitado não abre; combobox/listbox/option para o leitor de tela |
+| `tests/util/busca-select.ts` | a ajuda que todos os testes de tela usam: abrir, digitar, ler as opções, escolher, limpar, ler o escolhido. O teste passa pelo mesmo caminho da pessoa |
+| as telas | cada tela convertida continua com o teste que já tinha, agora falando com o campo de busca: pedido de compra, nota de compra, OS, orçamento, kits, contas a pagar e a receber, contratos, fiscal, portal, configurações |
+
+**Rodada de mutação: 12 de 12 pegas** — a busca voltando a ser sensível a acento e a caixa, a lista
+grande desenhando tudo, Esc sem devolver o foco, Enter que não escolhe, as setas que não andam, o ×
+que não limpa, o veículo voltando a oferecer os inativos, o atalho de competência oferecendo quem já
+tem, o pedido da conciliação perdendo o `data-pedido`, a troca de unidade no portal deixando o
+equipamento pendurado, e o "+ Novo" aparecendo sem a permissão de criar.
+
+As três últimas escaparam na primeira rodada: eram buracos de teste de verdade, e viraram teste.
