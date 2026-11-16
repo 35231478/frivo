@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import { BuscaSelect } from "@/components/ui/busca-select";
 import { reduzirImagem, FOTO_GALERIA } from "@/lib/imagem-cliente";
 import { AlertCircle, Siren, Upload, X, Send } from "lucide-react";
 
@@ -97,17 +98,20 @@ export function ChamadoForm({ unidades, equipamentos, tiposProblema, confirmacoe
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div>
           <label className="text-sm font-semibold text-ink">Endereço / unidade</label>
-          <select value={unidadeId} onChange={(e) => { setUnidadeId(e.target.value); setEquipamentoId(""); }} className={inputCls}>
-            <option value="">Selecione</option>
-            {unidades.map((u) => <option key={u.id} value={u.id}>{u.nome}</option>)}
-          </select>
+          {/* Um cliente pode ter muitas unidades e muitos equipamentos: campo com busca */}
+          <BuscaSelect
+            rotulo="Endereço / unidade" atributos={{ "data-unidade": "" }} placeholder="Selecione"
+            value={unidadeId} onChange={(v) => { setUnidadeId(v); setEquipamentoId(""); }}
+            options={unidades.map((u) => ({ value: u.id, label: u.nome }))}
+          />
         </div>
         <div>
           <label className="text-sm font-semibold text-ink">Equipamento</label>
-          <select value={equipamentoId} onChange={(e) => setEquipamentoId(e.target.value)} className={inputCls}>
-            <option value="">Selecione (opcional)</option>
-            {equipsDaUnidade.map((e) => <option key={e.id} value={e.id}>{e.nome}</option>)}
-          </select>
+          <BuscaSelect
+            rotulo="Equipamento" atributos={{ "data-equipamento": "" }} placeholder="Selecione (opcional)"
+            value={equipamentoId} onChange={setEquipamentoId}
+            options={equipsDaUnidade.map((e) => ({ value: e.id, label: e.nome }))}
+          />
         </div>
       </div>
 

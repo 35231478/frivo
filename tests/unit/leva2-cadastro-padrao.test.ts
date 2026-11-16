@@ -284,12 +284,15 @@ describe("SeletorCadastro: inativo não é oferecido, mas o valor atual inativo 
   it("componente: renderiza o valor inativo selecionado e não oferece os outros inativos", async () => {
     const { SeletorCadastro } = await import("@/components/cadastros/seletor-cadastro");
     const html = (valor: string) => renderToStaticMarkup(createElement(SeletorCadastro, { entidade: "cargos", itens: cargos, valor, onChange: () => {} }));
+    // o seletor é o campo COM BUSCA: fechado, ele mostra o escolhido no lugar das opções
     const antigo = html("z");
     expect(antigo).toContain("Encarregado (inativo)");
-    expect(antigo).toMatch(/<option value="z"[^>]*selected/);
+    expect(antigo).toMatch(/data-valor-escolhido="z"/);
     const novo = html("");
     expect(novo).not.toContain("Encarregado");
-    expect(novo).toContain("Técnico");
+    // e a lista, que é quem oferece: o ativo entra, o inativo não
+    expect(opcoesCadastro(cargos, [""], "id").map((o) => o.rotulo)).toContain("Técnico");
+    expect(opcoesCadastro(cargos, [""], "id").map((o) => o.rotulo)).not.toContain("Encarregado (inativo)");
   });
 });
 

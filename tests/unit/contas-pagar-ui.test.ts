@@ -14,6 +14,7 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vite
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { permissoesTotais } from "@/lib/permissoes";
+import { abrirBusca, escolherNaBusca, opcoesDaBusca, valorDaBusca } from "../util/busca-select";
 
 (globalThis as any).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -39,7 +40,10 @@ const $$ = (sel: string, base: ParentNode = document) => [...base.querySelectorA
 const txt = (el: Element | null) => (el?.textContent ?? "").replace(/\s+/g, " ").trim();
 const clicar = async (el: Element | null) => { expect(el).not.toBeNull(); await act(async () => { (el as HTMLElement).click(); }); await esperar(); };
 async function escolher(el: Element | null, v: string) {
-  expect(el).not.toBeNull();
+  expect(el).toBeTruthy();
+  // O filtro de cadastro virou o campo COM BUSCA da casa: aqui o teste faz o que a pessoa faz
+  // (abre a lista e clica). O <select> nativo (enum curto) continua sendo setado direto.
+  if (!(el instanceof HTMLSelectElement)) { await escolherNaBusca(el, v); await esperar(); return; }
   await act(async () => { Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, "value")!.set!.call(el, v); el!.dispatchEvent(new Event("change", { bubbles: true })); });
   await esperar();
 }
@@ -199,14 +203,16 @@ describe("busca e painel de filtros", () => {
     await clicar($("[data-mais-filtros]"));
     expect($$("[data-filtro-opcao]").map(txt)).toEqual(["Status", "Fornecedor", "Categoria", "Centro de custo", "Origem", "Mostrar cancelados"]);
     await clicar($("[data-filtro-opcao=centro]"));
-    expect(txt($("[data-filtro=centro]"))).toContain("Obra encerrada (inativo)");
+    // o filtro virou o campo COM BUSCA: as opções (e o inativo marcado) vivem na lista aberta
+    expect(opcoesDaBusca(await abrirBusca($("[data-filtro=centro]"), "centro de custo")))
+      .toContain("Obra encerrada (inativo)");
     await escolher($("[data-filtro=centro]"), "ccObra");
     expect(ultimaUrl()).toBe("/financeiro/contas-pagar?mes=2026-10&card=VENCIDO&centro=ccObra");
     nav.qs = "mes=2026-10&centro=ccObra&origem=NF";
     await montarTela({ filtros: { ...props().filtros, centro: "ccObra", origem: "NF" } });
     expect($$("[data-filtro-caixa]").map((c) => c.getAttribute("data-filtro-caixa"))).toEqual(["centro", "origem"]); // os ativos aparecem sozinhos
     expect(txt($("[data-filtros-ativos]"))).toBe("2");
-    expect(($("[data-filtro=centro]") as HTMLSelectElement).value).toBe("ccObra"); // marcado
+    expect(valorDaBusca($("[data-filtro=centro]"), "centro de custo")).toBe("ccObra"); // marcado
     await clicar($("[data-limpar-filtros]"));
     expect(ultimaUrl()).toBe("/financeiro/contas-pagar?mes=2026-10");
   });

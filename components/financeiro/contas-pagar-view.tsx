@@ -165,16 +165,16 @@ function ContasPagarCorpo({
             </select>
           ) },
           { id: "fornecedorId", label: "Fornecedor", params: ["fornecedorId"], render: () => (
-            <FiltroBusca rotulo="Fornecedor cadastrado" valor={filtros.fornecedorId} onChange={(v) => navegar({ fornecedorId: v || null })}
+            <FiltroBusca param="fornecedorId" rotulo="Fornecedor cadastrado" valor={filtros.fornecedorId} onChange={(v) => navegar({ fornecedorId: v || null })}
               opcoes={fornecedores.map((x) => ({ value: x.id, label: x.ativo ? x.nome : `${x.nome} (inativo)` }))} />
           ) },
           { id: "categoria", label: "Categoria", params: ["categoria"], render: () => (
             /* Filtro: inclui as inativas (contas antigas continuam filtráveis) */
-            <FiltroBusca rotulo="Categoria" vazio="Todas" valor={filtros.categoria} onChange={(v) => navegar({ categoria: v || null })}
+            <FiltroBusca param="categoria" rotulo="Categoria" vazio="Todas" valor={filtros.categoria} onChange={(v) => navegar({ categoria: v || null })}
               opcoes={categorias.map((x) => ({ value: x.id, label: x.ativo ? x.nome : `${x.nome} (inativa)` }))} />
           ) },
           { id: "centro", label: "Centro de custo", params: ["centro"], render: () => (
-            <FiltroBusca rotulo="Centro de custo" valor={filtros.centro} onChange={(v) => navegar({ centro: v || null })}
+            <FiltroBusca param="centro" rotulo="Centro de custo" valor={filtros.centro} onChange={(v) => navegar({ centro: v || null })}
               opcoes={centros.map((x) => ({ value: x.id, label: x.ativo ? x.nome : `${x.nome} (inativo)` }))} />
           ) },
           { id: "origem", label: "Origem", params: ["origem"], render: () => (

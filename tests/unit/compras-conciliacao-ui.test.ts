@@ -12,6 +12,7 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vite
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { montarPermissoes } from "@/lib/permissoes";
+import { valorDaBusca } from "../util/busca-select";
 
 (globalThis as any).IS_REACT_ACT_ENVIRONMENT = true;
 const nav = vi.hoisted(() => ({ refresh: vi.fn() }));
@@ -95,7 +96,8 @@ describe("central da NF: sugestão antes de lançar", () => {
     expect(a.querySelector("[data-vai-sozinho]")).toBeTruthy();
     expect(txt(b)).toContain("Também pode ser do Pedido PCI-2026-0002 — vincular?");
     expect(b.querySelector("[data-vai-sozinho]")).toBeNull();
-    expect(txt($("select[data-pedido] option"))).toBe("Automático (o pedido idêntico)");
+    // o pedido virou o campo COM BUSCA: fechado, ele mostra o estado vazio
+    expect(txt($("[data-pedido]"))).toContain("Automático (o pedido idêntico)");
     await clicar(lancarBtn());
     expect(ultima("/api/compras/notas/n1/lancar")!.corpo.pedidoCompraId).toBeNull();
   });
@@ -103,7 +105,7 @@ describe("central da NF: sugestão antes de lançar", () => {
   it("1 clique em Vincular escolhe o pedido (vai no lançamento); 'Não vincular' desfaz", async () => {
     await central();
     await clicar($('[data-escolher-pedido="pcB"]'));
-    expect($<HTMLSelectElement>("select[data-pedido]")!.value).toBe("pcB");
+    expect(valorDaBusca($("[data-pedido]"), "pedido de compra")).toBe("pcB");
     const b = $('[data-sugestao-pedido="pcB"]')!;
     expect(txt(b)).toContain("Pedido PCI-2026-0002.");
     expect(b.querySelector("[data-escolhido]")).toBeTruthy();
@@ -113,7 +115,7 @@ describe("central da NF: sugestão antes de lançar", () => {
     expect(ultima("/api/compras/notas/n1/lancar")!.corpo.pedidoCompraId).toBe("pcB");
 
     await clicar($("[data-desfazer-escolha]"));
-    expect($<HTMLSelectElement>("select[data-pedido]")!.value).toBe("");
+    expect(valorDaBusca($("[data-pedido]"), "pedido de compra")).toBe("");
     expect($("[data-escolhido]")).toBeNull();
     expect($("[data-vai-sozinho]")).toBeTruthy();
     await clicar(lancarBtn());
@@ -122,7 +124,7 @@ describe("central da NF: sugestão antes de lançar", () => {
 
   it("sem idêntico: a 1ª opção é 'Sem pedido' e ninguém vai sozinho", async () => {
     await central({ sugestoes: [SUG_B], automaticoId: null });
-    expect(txt($("select[data-pedido] option"))).toBe("Sem pedido");
+    expect(txt($("[data-pedido]"))).toContain("Sem pedido");
     expect($("[data-vai-sozinho]")).toBeNull();
     expect(txt($("[data-sugestao-pedido]"))).toContain("Esta NF parece ser do Pedido PCI-2026-0002");
   });
@@ -132,7 +134,7 @@ describe("central da NF: sugestão antes de lançar", () => {
     expect($("[data-sugestoes-pedido]")).toBeTruthy();
     expect($("[data-sem-compras]")).toBeTruthy();
     expect($("[data-escolher-pedido]")).toBeNull();
-    expect($("select[data-pedido]")).toBeNull();
+    expect($("[data-pedido]")).toBeNull();
   });
 
   it("sem sugestão e sem pedidos: o cartão do pedido nem aparece", async () => {

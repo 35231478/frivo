@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { AlertTriangle, ArrowRightLeft, Check, Link2, Loader2, PackagePlus, Save, Search, Sparkles, X } from "lucide-react";
 import { toast } from "@/components/ui/avisos";
 import { Button } from "@/components/ui/button";
+import { BuscaSelect } from "@/components/ui/busca-select";
 import { Input } from "@/components/ui/input";
 import { cn, formatarMoeda } from "@/lib/utils";
 import { PLANILHA } from "@/lib/planilha";
@@ -196,15 +197,18 @@ export function ConciliacaoNota({ notaId, itens, pedidos, podeLancar, motivoSemL
           <SugestoesPedido sugestoes={sugestoes} automaticoId={automaticoId} escolhido={pedidoId} podeEscolher={pedidos.length > 0}
             onEscolher={(id) => { setPedidoId(id); setMsg(null); }} />
           {pedidos.length > 0 && (
-            <label className="block text-sm max-w-md">
+            <div className="block text-sm max-w-md">
               <span className="text-[11px] uppercase tracking-wider font-semibold text-ink-muted">Pedido de compra (opcional)</span>
-              <select value={pedidoId} onChange={(e) => setPedidoId(e.target.value)} data-pedido
-                className="mt-1 w-full bg-white border border-surface-border rounded-lg px-3 py-2 text-sm">
-                <option value="">{automaticoId ? "Automático (o pedido idêntico)" : "Sem pedido"}</option>
-                {pedidos.map((p) => <option key={p.id} value={p.id}>{p.numero}</option>)}
-              </select>
+              {/* Pedidos em aberto crescem: o seletor com busca da casa (digitar filtra pelo número) */}
+              <div className="mt-1">
+                <BuscaSelect
+                  rotulo="Pedido de compra" atributos={{ "data-pedido": "" }} value={pedidoId} onChange={setPedidoId}
+                  placeholder={automaticoId ? "Automático (o pedido idêntico)" : "Sem pedido"}
+                  options={pedidos.map((p) => ({ value: p.id, label: p.numero }))}
+                />
+              </div>
               <span className="text-xs text-ink-muted">Itens da nota casados com os do pedido: o custo real vai para o pedido, que fica Parcial ou Concluído.</span>
-            </label>
+            </div>
           )}
         </div>
       )}

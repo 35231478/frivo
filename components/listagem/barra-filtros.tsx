@@ -176,16 +176,19 @@ export const inputFiltro = (ativo: unknown) => cn(INPUT_FILTRO, ativo ? "border-
  * fornecedor, categoria, centro de custo, tipo de OS). Para lista fixa e curta (status, origem) a
  * barra continua com o `<select>` nativo: busca ali não ajuda e o nativo é melhor no celular.
  */
-export function FiltroBusca({ valor, onChange, opcoes, rotulo, vazio = "Todos" }: {
+export function FiltroBusca({ valor, onChange, opcoes, rotulo, vazio = "Todos", param }: {
   valor: string;
   onChange: (v: string) => void;
   opcoes: { value: string; label: string }[];
   rotulo: string;
   vazio?: string;
+  /** Nome do filtro na URL — vira `data-filtro`, como no `<select>` que ele substituiu */
+  param?: string;
 }) {
   return (
     <BuscaSelect
       value={valor} onChange={onChange} options={opcoes} rotulo={rotulo} placeholder={vazio}
+      atributos={param ? { "data-filtro": param } : undefined}
       className={cn("[&>button]:px-2.5 [&>button]:py-1.5", valor && "[&>button]:border-primary-300 [&>button]:bg-primary-50/50")}
     />
   );

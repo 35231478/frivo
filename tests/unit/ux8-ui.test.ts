@@ -17,6 +17,7 @@ import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { permissoesTotais, permissoesVazias, type Permissoes } from "@/lib/permissoes";
 import { completo, faltasEquipamento, paraPendencia, verificarConclusao } from "@/lib/execucao/pendencias";
+import { abrirBusca, escolherNaBusca, opcoesDaBusca } from "../util/busca-select";
 
 (globalThis as any).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -163,12 +164,18 @@ describe("Nova OS: competência e tipo de OS sem sair do formulário", () => {
     await montarNova();
     await escolherTipo("Higienização");
     expect(await colaboradores()).not.toContain("Maria Souza");
-    const habilitar = $("[data-habilitar-competencia]") as HTMLSelectElement;
+    // o atalho virou o campo COM BUSCA: abrir a lista e clicar no colaborador
+    const habilitar = $("[data-habilitar-competencia]");
     expect(habilitar).not.toBeNull();
-    await escolher(habilitar, "t2");
+    expect(opcoesDaBusca(await abrirBusca(habilitar, "habilitar competência"))).toContain("Maria Souza");
+    await escolherNaBusca(habilitar, "t2");
     const post = chamadas.find((c) => c.metodo === "POST" && c.url === "/api/tecnicos/t2/competencias");
     expect(post?.corpo).toEqual({ tipoOsId: "to2" });
     expect(await colaboradores()).toContain("Maria Souza");
+    // e ela sai do atalho: agora tem a competência, então não é mais alguém a habilitar
+    const aindaFalta = $("[data-habilitar-competencia]");
+    expect(aindaFalta ? opcoesDaBusca(await abrirBusca(aindaFalta, "habilitar competência")) : [])
+      .not.toContain("Maria Souza");
     expect(botaoTipo().textContent).toContain("Higienização"); // o tipo escolhido não se perdeu
   });
 

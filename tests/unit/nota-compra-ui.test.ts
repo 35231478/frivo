@@ -13,6 +13,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
+import { escolherNaBusca } from "../util/busca-select";
 
 const nav = vi.hoisted(() => ({ push: vi.fn(), refresh: vi.fn() }));
 const avisos = vi.hoisted(() => ({ lista: [] as [string, string][] }));
@@ -161,11 +162,8 @@ describe("conciliação (de-para)", () => {
     await digitar(nome, "Tubo de cobre 1/4");
     expect($("[data-vinculados]")!.textContent).toBe("3");
 
-    await act(async () => {
-      const sel = $("[data-pedido]") as HTMLSelectElement;
-      Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, "value")!.set!.call(sel, "ped1");
-      sel.dispatchEvent(new Event("change", { bubbles: true }));
-    });
+    // o pedido virou o campo COM BUSCA: escolher é abrir a lista e clicar
+    await escolherNaBusca($("[data-pedido]"), "ped1");
     respostas["/api/compras/notas/n1/lancar"] = { status: 201, corpo: { entradas: [], contas: [] } };
     await clicar(botao("Confirmar e lançar"));
     expect(chamadas.at(-1)).toEqual({ url: "/api/compras/notas/n1/lancar", metodo: "POST", corpo: {

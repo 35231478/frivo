@@ -6,6 +6,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
+import { abrirBusca, escolherNaBusca, opcoesDaBusca, valorDaBusca } from "../util/busca-select";
 
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }) }));
 vi.mock("@/lib/imagem-cliente", () => ({
@@ -55,5 +56,35 @@ describe("I14 — chamado-form comprime as fotos antes de enviar", () => {
     expect(corpo.fotos).toHaveLength(1);
     expect(corpo.fotos[0].conteudo).toBe("data:image/jpeg;base64,REDUZIDA"); // o reduzido, não o original
     expect(corpo.fotos[0].tamanho).toBe(42);
+  });
+
+  it("trocar de unidade limpa o equipamento escolhido (um não pertence à outra)", async () => {
+    const { ChamadoForm } = await import("@/components/portal/chamado-form");
+    const unidades = [{ id: "u1", nome: "Matriz" }, { id: "u2", nome: "Filial Norte" }];
+    const equipamentos = [
+      { id: "e1", nome: "Split sala 1", unidadeId: "u1" },
+      { id: "e2", nome: "Split recepção", unidadeId: "u2" },
+    ];
+    root = createRoot(caixa);
+    await act(async () => { root.render(createElement(ChamadoForm, { unidades, equipamentos, tiposProblema: [] } as never)); });
+    await flush();
+
+    await escolherNaBusca(caixa.querySelector("[data-unidade]"), "u1");
+    await flush();
+    await escolherNaBusca(caixa.querySelector("[data-equipamento]"), "e1");
+    await flush();
+    expect(valorDaBusca(caixa.querySelector("[data-equipamento]"), "equipamento")).toBe("e1");
+
+    // a Filial Norte não tem o split da Matriz: a escolha anterior não pode ficar pendurada
+    await escolherNaBusca(caixa.querySelector("[data-unidade]"), "u2");
+    await flush();
+    expect(valorDaBusca(caixa.querySelector("[data-equipamento]"), "equipamento")).toBe("");
+    expect(opcoesDaBusca(await abrirBusca(caixa.querySelector("[data-equipamento]"), "equipamento")))
+      .toEqual(["Split recepção"]);
+
+    // e voltando para a Matriz o campo continua vazio: a escolha foi apagada, não escondida
+    await escolherNaBusca(caixa.querySelector("[data-unidade]"), "u1");
+    await flush();
+    expect(valorDaBusca(caixa.querySelector("[data-equipamento]"), "equipamento")).toBe("");
   });
 });

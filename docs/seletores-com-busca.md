@@ -62,21 +62,27 @@ item inativo que continua visível quando é o valor atual, e a permissão de cr
 | Listagens | Itens por página, Ordenar por | lista fixa |
 | Qualquer tela | UF | 27 itens fixos — nativo é melhor no celular |
 
-## Ainda nativo, a converter na próxima parte
+## Os `<select>` soltos que também viraram busca
 
-Estes apontam para cadastro que cresce e continuam `<select>`; estão na leva seguinte para não
-inchar esta:
+Estes não passavam pelo `SeletorCadastro` — eram `<select>` escritos na própria tela. Viraram o
+mesmo `BuscaSelect`:
 
-| Onde | Seletor |
-| --- | --- |
-| OS › execução | Veículo |
-| OS › colaboradores | "Habilitar a competência num colaborador…" |
-| Nota de compra › conciliação | Pedido de compra |
-| Relatório de contratos | Técnico, Cliente |
-| Ordens (lista) | Tipo de OS |
-| Portal do cliente › chamado | Unidade, Equipamento |
-| App do técnico › execução | Equipamento da foto, equipamento do serviço extra |
-| Equipes | Perfil (filtro) |
+| Onde | Seletor | Por quê |
+| --- | --- | --- |
+| OS › quem executa | **Veículo** | a frota cresce; digitar filtra placa e modelo |
+| OS › colaboradores | **"Habilitar a competência num colaborador…"** | lista de colaboradores |
+| Nota de compra › conciliação | **Pedido de compra** | pedidos em aberto crescem |
+| Relatório de contratos (filtros) | **Colaborador**, **Cliente** | cadastros que crescem |
+| Portal do cliente › abrir chamado | **Unidade**, **Equipamento** | um cliente pode ter muitas das duas |
+
+## Olhados e mantidos nativos de propósito
+
+| Onde | Seletor | Por quê |
+| --- | --- | --- |
+| Ordens (lista) | Tipo de OS | cadastro de apoio: na prática são poucos, e o filtro é curto |
+| Equipes (lista) | Perfil de acesso | uma empresa tem meia dúzia |
+| App do técnico › execução | Equipamento da foto, equipamento do serviço extra | são os equipamentos **daquela OS** (lista curta), e com a luva o seletor nativo do celular é melhor |
+| App do técnico › cadastro em campo | Tipo de equipamento, unidade da capacidade | lista fixa |
 
 ## O que existe de paralelo (e a decisão)
 

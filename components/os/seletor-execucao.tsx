@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Car } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { BuscaSelect } from "@/components/ui/busca-select";
 import { rotuloVeiculo, sufixoStatusVeiculo, sugerirVeiculo, type VeiculoResumo } from "@/lib/veiculo-sugestao";
 import {
   SeletorTecnicos, VALOR_TECNICOS_VAZIO, corpoTecnicos, valorDaAtividade, valorDaEquipe,
@@ -125,16 +126,12 @@ export function SeletorExecucao({ opcoes, tipoOsId, valor, onChange, erro }: {
       </div>
       <div data-seletor-veiculo>
         <label className="flex items-center gap-1.5 text-xs font-semibold text-ink-muted mb-1"><Car className="w-3.5 h-3.5" /> Veículo</label>
-        <select
-          aria-label="Veículo" value={valor.veiculoId ?? ""} onChange={(e) => onChange({ ...valor, veiculoId: e.target.value || null })}
-          className={cn("w-full bg-white border rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-primary-500",
-            valor.veiculoId ? "border-primary-300 text-ink" : "border-surface-border text-ink-muted")}
-        >
-          <option value="">Sem veículo</option>
-          {listaVeiculos.map((v) => (
-            <option key={v.id} value={v.id}>{rotuloVeiculo(v)}{sufixoStatusVeiculo(v.status)}</option>
-          ))}
-        </select>
+        {/* Frota cresce: o seletor com busca da casa (digitar filtra placa e modelo) */}
+        <BuscaSelect
+          rotulo="Veículo" value={valor.veiculoId ?? ""} onChange={(v) => onChange({ ...valor, veiculoId: v || null })}
+          placeholder="Sem veículo" atributos={{ "data-campo-veiculo": "" }}
+          options={listaVeiculos.map((v) => ({ value: v.id, label: `${rotuloVeiculo(v)}${sufixoStatusVeiculo(v.status)}` }))}
+        />
         <p className="text-[11px] text-ink-subtle mt-1" data-origem-veiculo>
           {origem}
           {veiculoSel && valor.veiculoId !== sugestao.veiculoId && sugestao.veiculoId && (

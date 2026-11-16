@@ -151,7 +151,12 @@ export function BuscaSelect({
             />
           </div>
           <div className="max-h-56 overflow-y-auto" role="listbox" id={idLista} aria-label={rotulo} ref={listaRef}>
-            {visiveis.length === 0 && <p className="px-3 py-3 text-xs text-ink-subtle italic" data-busca-vazia>Nenhum resultado.</p>}
+            {/* Diz o que foi procurado: sem isso, "Nenhum resultado" não ajuda a corrigir o termo */}
+            {visiveis.length === 0 && (
+              <p className="px-3 py-3 text-xs text-ink-subtle italic" data-busca-vazia>
+                Nenhum resultado{query.trim() ? ` para “${query.trim()}”` : ""}.
+              </p>
+            )}
             {visiveis.map((o, i) => (
               <button
                 key={o.value} type="button" role="option" aria-selected={o.value === value}

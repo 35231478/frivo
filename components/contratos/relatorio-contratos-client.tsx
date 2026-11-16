@@ -2,6 +2,7 @@
 
 import { toast } from "@/components/ui/avisos";
 import { Dica } from "@/components/ui/dica";
+import { FiltroBusca } from "@/components/listagem/barra-filtros";
 import { ListaVazia } from "@/components/listagem/listagem-ui";
 import { usePermissoes } from "@/components/providers/permissoes-provider";
 import { acento, neutro, status } from "@/lib/ui/tokens";
@@ -149,14 +150,9 @@ export function RelatorioContratosClient({ mes, ano, itens, tecnicos, clientes }
           <option value="">Todos status do mês</option>
           {Object.entries(LABEL_STATUS).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
         </select>
-        <select value={fTecnico} onChange={(e) => setFTecnico(e.target.value)} className="bg-white border border-surface-border rounded-lg px-3 py-2 text-sm">
-          <option value="">Todos técnicos</option>
-          {tecnicos.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
-        </select>
-        <select value={fCliente} onChange={(e) => setFCliente(e.target.value)} className="bg-white border border-surface-border rounded-lg px-3 py-2 text-sm">
-          <option value="">Todos clientes</option>
-          {clientes.map((c) => <option key={c.value} value={c.value}>{c.label}</option>)}
-        </select>
+        {/* Colaboradores e clientes crescem: filtro com busca (digitar filtra) */}
+        <FiltroBusca valor={fTecnico} onChange={setFTecnico} opcoes={tecnicos} param="tecnico" rotulo="Colaborador" vazio="Todos técnicos" />
+        <FiltroBusca valor={fCliente} onChange={setFCliente} opcoes={clientes} param="cliente" rotulo="Cliente" vazio="Todos clientes" />
         <span className="ml-auto self-center text-sm text-ink-muted">{filtrados.length} de {total === 1 ? "1 contrato" : `${total} contratos`}</span>
       </div>
 

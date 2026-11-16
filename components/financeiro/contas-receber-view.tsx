@@ -179,12 +179,12 @@ function ContasReceberCorpo({
         paramBusca="q" navegar={navegar}
         filtros={[
           { id: "clienteId", label: "Cliente", params: ["clienteId"], render: () => (
-            <FiltroBusca rotulo="Cliente" valor={filtros.clienteId} onChange={(v) => navegar({ clienteId: v || null })}
+            <FiltroBusca param="clienteId" rotulo="Cliente" valor={filtros.clienteId} onChange={(v) => navegar({ clienteId: v || null })}
               opcoes={clientes.map((c) => ({ value: c.id, label: c.nome }))} />
           ) },
           { id: "categoria", label: "Categoria", params: ["categoria"], render: () => (
             /* Filtro: inclui as inativas (contas antigas continuam filtráveis) */
-            <FiltroBusca rotulo="Categoria" vazio="Todas" valor={filtros.categoria} onChange={(v) => navegar({ categoria: v || null })}
+            <FiltroBusca param="categoria" rotulo="Categoria" vazio="Todas" valor={filtros.categoria} onChange={(v) => navegar({ categoria: v || null })}
               opcoes={categorias.map((c) => ({ value: c.id, label: c.ativo ? c.nome : `${c.nome} (inativa)` }))} />
           ) },
           { id: "forma", label: "Forma de pagamento", params: ["forma"], render: () => (
