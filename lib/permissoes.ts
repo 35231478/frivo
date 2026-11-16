@@ -15,7 +15,8 @@ export type Permissoes = Record<string, Partial<Record<Acao, boolean>>>;
 /** Nome do ícone (lucide-react) que representa o módulo na UI — este arquivo não importa a biblioteca. */
 export type IconeModulo =
   | "ClipboardList" | "Users" | "Thermometer" | "CalendarDays" | "QrCode" | "Package" | "ShoppingCart" | "Calculator"
-  | "FileText" | "Landmark" | "Wallet" | "UsersRound" | "Truck" | "Settings" | "BarChart3" | "LayoutDashboard" | "FileBadge" | "Trophy";
+  | "FileText" | "Landmark" | "Wallet" | "UsersRound" | "Truck" | "Settings" | "BarChart3" | "LayoutDashboard" | "FileBadge" | "Trophy"
+  | "UserPlus";
 export interface ModuloDef { id: string; label: string; icone: IconeModulo; acoes: Acao[] }
 export interface SecaoDef { id: string; label: string; modulos: ModuloDef[] }
 
@@ -79,6 +80,9 @@ export const SECOES: SecaoDef[] = [
       // lista de penalidades e registrar reclamação; gerenciar = configurar perfis, pesos, faixas, valores,
       // premiação e o link da TV (e ver os valores em reais)
       { id: "desempenho", label: "Desempenho", icone: "Trophy", acoes: ["visualizar", "revisar", "gerenciar"] },
+      // Admissão digital: gerar o convite, acompanhar o preenchimento, baixar a ficha e os
+      // documentos, cancelar. Dado sensível do colaborador — fica separado de "Equipes".
+      { id: "admissao", label: "Admissão digital", icone: "UserPlus", acoes: ["gerenciar"] },
     ],
   },
   {
@@ -195,6 +199,7 @@ const ROTA_MODULO: Record<string, string> = {
   financeiro: "financeiro",
   equipes: "equipes",
   colaboradores: "equipes",
+  admissoes: "admissao",
   desempenho: "desempenho",
   veiculos: "veiculos",
   estoque: "estoque",

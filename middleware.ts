@@ -30,6 +30,7 @@ const rotasPublicas = [
   "/medicao/",
   "/relatorio/",
   "/api/publico/",
+  "/admissao/",      // link da admissão digital (a barra final não libera "/admissoes", do RH)
   "/qr/",
   "/api/qr/",
   "/calculadora",     // calculadora de BTU pública (lead do site, sem login)

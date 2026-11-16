@@ -6,9 +6,10 @@
 --      Guarda o token do link e a validade, a situação (CONVIDADO → PREENCHENDO → AGUARDANDO_
 --      ASSINATURA → ASSINADO → ENVIADO_CONTADOR → ADMITIDO, mais CANCELADA e EXPIRADA), o envio
 --      (quando, por onde, para quem, quantas vezes), o consentimento LGPD (data, IP e navegador),
---      o rascunho em JSON (o colaborador fecha e volta sem perder nada), a prova da assinatura
---      (nome digitado, IP, navegador, data/hora), a selfie, o texto do contrato congelado no
---      momento da assinatura, e os marcos de cancelamento, envio ao contador e admissão.
+--      o rascunho em JSON (o colaborador fecha e volta sem perder nada), a verificação do e-mail
+--      por código, a prova da assinatura (nome digitado, IP, navegador, data/hora), a selfie, o
+--      texto do contrato congelado no momento da assinatura, e os marcos de cancelamento, envio
+--      ao contador e admissão.
 --   2. "admissao_config": a configuração POR EMPRESA — modelo de contrato, texto das orientações
 --      finais, lista de documentos (obrigatórios × opcionais) em JSON, validade padrão do link e o
 --      período de experiência. Nada hardcoded: o que varia entre empresas mora aqui.
@@ -64,6 +65,14 @@ CREATE TABLE IF NOT EXISTS "admissoes" (
     "consentimento_ip" TEXT,
     "consentimento_user_agent" TEXT,
 
+    -- Verificação do e-mail por código: o hash do código (nunca o código), a validade e as
+    -- tentativas. O e-mail só conta como verificado quando o código certo chega.
+    "email_verificado" TEXT,
+    "email_verificado_em" TIMESTAMP(3),
+    "email_codigo_hash" TEXT,
+    "email_codigo_expira_em" TIMESTAMP(3),
+    "email_codigo_tentativas" INTEGER NOT NULL DEFAULT 0,
+
     -- Rascunho etapa a etapa (fecha e volta sem perder nada) e onde parou
     "rascunho" JSONB,
     "etapa" TEXT,
@@ -98,6 +107,14 @@ CREATE TABLE IF NOT EXISTS "admissoes" (
 CREATE UNIQUE INDEX IF NOT EXISTS "admissoes_token_key" ON "admissoes" ("token");
 CREATE INDEX IF NOT EXISTS "admissoes_empresa_id_situacao_idx" ON "admissoes" ("empresa_id", "situacao");
 CREATE INDEX IF NOT EXISTS "admissoes_colaborador_id_idx" ON "admissoes" ("colaborador_id");
+
+-- Rodou uma versão anterior deste script antes da verificação de e-mail entrar? As colunas abaixo
+-- entram sem tocar no que já existe (num banco novo o CREATE TABLE acima já as criou).
+ALTER TABLE "admissoes" ADD COLUMN IF NOT EXISTS "email_verificado" TEXT;
+ALTER TABLE "admissoes" ADD COLUMN IF NOT EXISTS "email_verificado_em" TIMESTAMP(3);
+ALTER TABLE "admissoes" ADD COLUMN IF NOT EXISTS "email_codigo_hash" TEXT;
+ALTER TABLE "admissoes" ADD COLUMN IF NOT EXISTS "email_codigo_expira_em" TIMESTAMP(3);
+ALTER TABLE "admissoes" ADD COLUMN IF NOT EXISTS "email_codigo_tentativas" INTEGER NOT NULL DEFAULT 0;
 
 -- 2. A configuração por empresa (uma linha por empresa)
 CREATE TABLE IF NOT EXISTS "admissao_config" (

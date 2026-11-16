@@ -5111,6 +5111,13 @@ model Admissao {
   consentimentoIp        String?   @map("consentimento_ip")
   consentimentoUserAgent String?   @map("consentimento_user_agent")
 
+  /// Verificação do e-mail por código: guarda o HASH do código, nunca o código
+  emailVerificado        String?   @map("email_verificado")
+  emailVerificadoEm      DateTime? @map("email_verificado_em")
+  emailCodigoHash        String?   @map("email_codigo_hash")
+  emailCodigoExpiraEm    DateTime? @map("email_codigo_expira_em")
+  emailCodigoTentativas  Int       @default(0) @map("email_codigo_tentativas")
+
   /// Rascunho etapa a etapa (fecha e volta sem perder nada) e onde parou
   rascunho    Json?
   etapa       String?

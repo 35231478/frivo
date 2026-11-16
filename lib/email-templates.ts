@@ -22,6 +22,7 @@ export const VARIAVEIS_DISPONIVEIS = [
   "mes_referencia", "data_aprovacao",
   "usuario_nome", "link_definir_senha", "validade_convite", "validade_link",
   "fornecedor_nome", "numero_pedido", "prazo_necessario", "link_pedido",
+  "colaborador_nome", "cargo_nome", "link_admissao", "codigo",
 ] as const;
 
 export const TEMPLATES_PADRAO: DefTemplate[] = [
@@ -83,6 +84,12 @@ export const TEMPLATES_PADRAO: DefTemplate[] = [
   { tipo: "PEDIDO_COMPRA", nome: "Pedido de Compra ao fornecedor", assunto: "Pedido de Compra {{numero_pedido}} — {{empresa_nome}}",
     corpo: "<p>Olá <strong>{{fornecedor_nome}}</strong>,</p><p>Segue o Pedido de Compra <strong>{{numero_pedido}}</strong> para cotação{{prazo_necessario}}. Por favor, informe preço, validade da proposta e prazo de entrega de cada item.</p>",
     botaoLabel: "Ver pedido de compra", botaoVar: "link_pedido" },
+  // Admissão digital: o link para o colaborador preencher a própria ficha e assinar o contrato
+  { tipo: "ADMISSAO_CONVITE", nome: "Convite de admissão", assunto: "Admissão na {{empresa_nome}} — preencha os seus dados",
+    corpo: "<p>Olá <strong>{{colaborador_nome}}</strong>,</p><p>Seja bem-vindo(a) à <strong>{{empresa_nome}}</strong>. Para concluir a admissão no cargo de <strong>{{cargo_nome}}</strong>, preencha os seus dados, envie os documentos e assine o contrato pelo botão abaixo. Dá para fazer tudo pelo celular, em poucos minutos, e o preenchimento fica salvo se precisar parar no meio.</p><p style=\"color:#64748b;font-size:13px\">O link é pessoal e vale por {{validade_link}}. Se o prazo passar, peça um link novo a quem enviou este e-mail.</p>",
+    botaoLabel: "Preencher a minha admissão", botaoVar: "link_admissao" },
+  { tipo: "ADMISSAO_CODIGO", nome: "Código de verificação da admissão", assunto: "Código de verificação: {{codigo}}",
+    corpo: "<p>Olá <strong>{{colaborador_nome}}</strong>,</p><p>O código para confirmar este e-mail na admissão da <strong>{{empresa_nome}}</strong> é:</p><p style=\"font-size:28px;font-weight:700;letter-spacing:6px;text-align:center;margin:20px 0\">{{codigo}}</p><p style=\"color:#64748b;font-size:13px\">O código vale por {{validade_link}}. Se não foi pedido por quem está lendo, basta ignorar este e-mail.</p>" },
 ];
 
 export function substituirVariaveis(texto: string, vars: Record<string, string>): string {

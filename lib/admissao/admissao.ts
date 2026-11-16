@@ -317,5 +317,100 @@ export function expiraEm(dias: number, agora = new Date()): Date {
   return d;
 }
 
+/* ───────── verificação do e-mail por código ───────── */
+
+export const CODIGO_TAMANHO = 6;
+/** Minutos que o código vale. Curto de propósito: é um código de uma vez. */
+export const CODIGO_VALIDADE_MIN = 15;
+/** Erradas demais no mesmo código: o código morre e tem de ser pedido outro. */
+export const CODIGO_MAX_TENTATIVAS = 5;
+
+export const codigoValido = (s: string) => new RegExp(`^\\d{${CODIGO_TAMANHO}}$`).test((s ?? "").trim());
+
+export const MSG_CODIGO_FORMATO = `O código tem ${CODIGO_TAMANHO} números.`;
+export const MSG_CODIGO_ERRADO = "Código incorreto. Confira o e-mail e tente de novo.";
+export const MSG_CODIGO_VENCIDO = "O código venceu. Peça outro.";
+export const MSG_EMAIL_NAO_VERIFICADO = "Confirme o e-mail com o código antes de continuar.";
+
+/** O e-mail digitado é o mesmo que foi verificado? Trocar o e-mail derruba a verificação. */
+export const emailConfere = (digitado: string, verificado: string | null | undefined) =>
+  !!verificado && digitado.trim().toLowerCase() === verificado.trim().toLowerCase();
+
+/* ───────── cancelar: razão é razão ───────── */
+
+export const MOTIVO_MIN = 5;
+export const MOTIVO_MAX = 500;
+export const MSG_MOTIVO = `Diga o motivo do cancelamento (pelo menos ${MOTIVO_MIN} caracteres).`;
+export const motivoValido = (s: string) => {
+  const t = (s ?? "").trim();
+  return t.length >= MOTIVO_MIN && t.length <= MOTIVO_MAX;
+};
+
 /** O caminho do link público (a tela monta a URL com a origem da requisição). */
 export const caminhoPublicoAdmissao = (token: string) => `/admissao/${token}`;
+
+/* ───────── o rascunho que chega pelo link (dado de fora: nunca entra cru no banco) ───────── */
+
+/** Teto de cada campo de texto do formulário. O que passar é cortado, não recusado. */
+export const CAMPO_MAX = 200;
+/** Teto de dependentes por admissão. */
+export const DEPENDENTES_MAX = 20;
+
+const texto = (v: unknown, max = CAMPO_MAX) => (typeof v === "string" ? v.trim().slice(0, max) : "");
+
+/**
+ * Reconstrói o formulário SÓ com os campos conhecidos, cada um cortado no teto. O rascunho vem de
+ * um link público: gravar o JSON como chegou deixaria qualquer coisa entrar no banco.
+ */
+export function normalizarForm(bruto: unknown): FormAdmissao {
+  const o = (bruto && typeof bruto === "object" ? bruto : {}) as Record<string, unknown>;
+  const base = formVazio();
+  const f: FormAdmissao = { ...base };
+  for (const k of Object.keys(base) as (keyof FormAdmissao)[]) {
+    if (k === "dependentes") continue;
+    (f[k] as string) = texto(o[k]);
+  }
+  const brutos = Array.isArray(o.dependentes) ? o.dependentes.slice(0, DEPENDENTES_MAX) : [];
+  f.dependentes = brutos.map((d) => {
+    const x = (d && typeof d === "object" ? d : {}) as Record<string, unknown>;
+    return {
+      nome: texto(x.nome), nascimento: texto(x.nascimento, 20), cpf: texto(x.cpf, 20),
+      parentesco: PARENTESCOS.some(([v]) => v === x.parentesco) ? String(x.parentesco) : "FILHO",
+      irrf: x.irrf === true, salarioFamilia: x.salarioFamilia === true,
+    };
+  });
+  // Campo que nasce preenchido volta ao padrão quando chega vazio
+  if (!f.nacionalidade) f.nacionalidade = base.nacionalidade;
+  if (!f.contaTipo) f.contaTipo = base.contaTipo;
+  return f;
+}
+
+/* ───────── textos que o contrato e a ficha usam ───────── */
+
+const DIAS_JORNADA: [string, string][] = [
+  ["SEG", "segunda"], ["TER", "terça"], ["QUA", "quarta"], ["QUI", "quinta"],
+  ["SEX", "sexta"], ["SAB", "sábado"], ["DOM", "domingo"],
+];
+
+/** "08:00 às 18:00, de segunda a sexta" — vazio quando a jornada não foi preenchida. */
+export function textoJornada(j: { entrada?: string | null; saida?: string | null; dias?: readonly string[] | null }): string {
+  const horario = j.entrada && j.saida ? `${j.entrada} às ${j.saida}` : "";
+  const indices = DIAS_JORNADA.map((_, i) => i).filter((i) => (j.dias ?? []).includes(DIAS_JORNADA[i][0]));
+  let trecho = "";
+  if (indices.length) {
+    const nomes = indices.map((i) => DIAS_JORNADA[i][1]);
+    const seguidos = indices.length > 2 && indices[indices.length - 1] - indices[0] === indices.length - 1;
+    trecho = seguidos ? `de ${nomes[0]} a ${nomes[nomes.length - 1]}` : nomes.join(", ");
+  }
+  return [horario, trecho].filter(Boolean).join(", ");
+}
+
+/** O endereço numa linha, como vai no contrato e na ficha. */
+export function enderecoEmLinha(e: {
+  endereco?: string | null; numero?: string | null; complemento?: string | null;
+  bairro?: string | null; cidade?: string | null; estado?: string | null; cep?: string | null;
+}): string {
+  const rua = [e.endereco, e.numero].filter(Boolean).join(", ");
+  const local = [e.cidade, e.estado].filter(Boolean).join("/");
+  return [rua, e.complemento, e.bairro, local, e.cep].map((p) => (p ?? "").trim()).filter(Boolean).join(" — ");
+}
