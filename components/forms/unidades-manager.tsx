@@ -2,6 +2,7 @@
 
 import { confirmar } from "@/components/ui/avisos";
 import { useState, useEffect, useCallback } from "react";
+import { buscarCep, cepCompleto } from "@/lib/cep";
 import { useAutoGeocode } from "@/hooks/use-auto-geocode";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -148,24 +149,21 @@ export function UnidadesManager({ clienteId, unidadesIniciais, enderecoCliente }
     setForm((f) => ({ ...f, [field]: value }));
   }
 
-  async function buscarCep() {
-    const cep = form.cep.replace(/\D/g, "");
-    if (cep.length !== 8) return;
+  async function buscarCepDaUnidade() {
+    if (!cepCompleto(form.cep)) return;
     setBuscandoCep(true);
     try {
-      const res = await fetch(`https://viacep.com.br/ws/${cep}/json/`);
-      const data = await res.json();
-      if (!data.erro) {
-        setForm((f) => ({
-          ...f,
-          logradouro: data.logradouro ?? f.logradouro,
-          bairro: data.bairro ?? f.bairro,
-          cidade: data.localidade ?? f.cidade,
-          estado: data.uf ?? f.estado,
-          complemento: data.complemento ?? f.complemento,
-        }));
-      }
-    } catch {} finally { setBuscandoCep(false); }
+      const d = await buscarCep(form.cep);
+      if (!d) return; // sem rede ou CEP que não existe: a pessoa digita
+      setForm((f) => ({
+        ...f,
+        logradouro: d.logradouro || f.logradouro,
+        bairro: d.bairro || f.bairro,
+        cidade: d.cidade || f.cidade,
+        estado: d.estado || f.estado,
+        complemento: d.complemento || f.complemento,
+      }));
+    } finally { setBuscandoCep(false); }
   }
 
   function handleEnderecoSelect(e: EnderecoSelecionado) {
@@ -291,7 +289,7 @@ export function UnidadesManager({ clienteId, unidadesIniciais, enderecoCliente }
         <FormField label="CEP" hint="Digite o CEP e clique na lupa para preencher o endereço">
           <div className="flex gap-2 max-w-[300px]">
             <Input value={form.cep} onChange={(e) => updateField("cep", e.target.value)} placeholder="00000-000" maxLength={9} />
-            <Button type="button" variant="secondary" loading={buscandoCep} onClick={buscarCep} className="shrink-0 px-3">
+            <Button type="button" variant="secondary" loading={buscandoCep} onClick={buscarCepDaUnidade} className="shrink-0 px-3">
               <Search className="w-4 h-4" />
             </Button>
           </div>

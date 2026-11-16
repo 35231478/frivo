@@ -142,7 +142,7 @@ export default async function AdmissoesPage({ searchParams }: { searchParams: Pr
       <ListaUrl chave="admissoes" paramBusca="q" qAtual={busca}>
         <div className="flex flex-col sm:flex-row gap-2 sm:items-center">
           <div className="flex-1 min-w-0">
-            <BuscaSimplesUrl placeholder="Buscar por nome ou CPF" rotulo="Buscar admissões" />
+            <BuscaSimplesUrl placeholder="Pesquisar por nome ou CPF" rotulo="Pesquisar admissões" />
           </div>
           <FiltroSelectUrl
             param="situacao" vazio="Todas as situações" rotulo="Situação"

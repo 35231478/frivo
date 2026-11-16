@@ -4,6 +4,7 @@ import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { corDado } from "@/lib/ui/tokens";
 import { Check, ChevronDown, ExternalLink, Layers, Loader2, Lock, MapPin, Pencil, Plus, Search, X } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { buscarCep, cepCompleto } from "@/lib/cep";
 import { Modal } from "@/components/ui/modal";
 import { Dica } from "@/components/ui/dica";
 import { toast } from "@/components/ui/avisos";
@@ -531,21 +532,19 @@ function MiniCadastro({
 
   const set = (k: string, v: string) => setValores((s) => ({ ...s, [k]: v }));
 
-  async function buscarCep(cepBruto: string) {
-    const cep = cepBruto.replace(/\D/g, "");
-    if (cep.length !== 8) return;
+  async function preencherPeloCep(cepBruto: string) {
+    if (!cepCompleto(cepBruto)) return;
     setBuscandoCep(true);
     try {
-      const d = await (await fetch(`https://viacep.com.br/ws/${cep}/json/`)).json();
-      if (!d.erro) {
-        const mapa: Record<string, string | undefined> = { logradouro: d.logradouro, bairro: d.bairro, cidade: d.localidade, estado: d.uf };
-        setValores((s) => {
-          const novo = { ...s };
-          for (const c of campos) if (mapa[c.nome] && !s[c.nome]) novo[c.nome] = mapa[c.nome]!;
-          return novo;
-        });
-      }
-    } catch { /* sem rede: o usuário digita */ } finally { setBuscandoCep(false); }
+      const d = await buscarCep(cepBruto);
+      if (!d) return; // sem rede ou CEP que não existe: a pessoa digita
+      const mapa: Record<string, string | undefined> = { logradouro: d.logradouro, bairro: d.bairro, cidade: d.cidade, estado: d.estado };
+      setValores((s) => {
+        const novo = { ...s };
+        for (const c of campos) if (mapa[c.nome] && !s[c.nome]) novo[c.nome] = mapa[c.nome]!;
+        return novo;
+      });
+    } finally { setBuscandoCep(false); }
   }
 
   /** A consulta do campo sugere os outros: só entra no que está vazio, e a tela diz o que entrou */
@@ -641,7 +640,7 @@ function MiniCadastro({
                     id={comConsulta ? id : undefined}
                     autoFocus={i === 0}
                     value={valores[c.nome] ?? ""}
-                    onChange={(e) => { set(c.nome, e.target.value); if (c.tipo === "cep") buscarCep(e.target.value); }}
+                    onChange={(e) => { set(c.nome, e.target.value); if (c.tipo === "cep") preencherPeloCep(e.target.value); }}
                     placeholder={c.placeholder} maxLength={c.maxLength ?? (c.tipo === "cep" ? 9 : undefined)}
                     inputMode={c.tipo === "cep" ? "numeric" : c.inputMode}
                     className={cn(inputCls, faltando.has(c.nome) && "border-atrasado/40 focus:border-atrasado focus:ring-atrasado/10")}
