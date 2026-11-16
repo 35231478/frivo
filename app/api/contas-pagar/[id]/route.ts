@@ -5,6 +5,7 @@ import { exigirPermissao } from "@/lib/permissoes-server";
 import { recalcularContaPagar } from "@/lib/financeiro-server";
 import { categoriaParaGravar, centroCustoParaGravar, fornecedorParaGravar, respostaRefEmpresa } from "@/lib/ref-empresa";
 import { boletoParaGravar } from "@/lib/financeiro/boleto-conta";
+import { editarOcorrenciaComEscopo, ErroRecorrencia } from "@/lib/financeiro/conta-pagar-recorrencia-server";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -33,6 +34,23 @@ export async function PUT(req: NextRequest, { params }: Params) {
   const parsed = contaPagarUpdateSchema.safeParse(await req.json());
   if (!parsed.success) return NextResponse.json({ erro: "Dados inválidos" }, { status: 400 });
   const d = parsed.data;
+
+  // DESPESA RECORRENTE: editar uma conta gerada com alcance "esta e as próximas" muda a REGRA daqui
+  // para a frente e repassa às futuras em aberto. Sem escopo (ou "ESTA"), segue o caminho de sempre:
+  // a conta é independente e só ela muda.
+  if (d.escopo === "ESTA_E_PROXIMAS" && existente.recorrenciaId) {
+    try {
+      const r = await editarOcorrenciaComEscopo(empresaId, id, "ESTA_E_PROXIMAS", {
+        ...(d.valorTotal !== undefined && { valorTotal: d.valorTotal }),
+        ...(d.dataVencimento !== undefined && { dataVencimento: d.dataVencimento ? new Date(d.dataVencimento) : null }),
+      });
+      const conta = await prisma.contaPagar.findUnique({ where: { id } });
+      return NextResponse.json({ ...conta, ...r });
+    } catch (e) {
+      if (e instanceof ErroRecorrencia) return NextResponse.json({ erro: e.message }, { status: e.status });
+      throw e;
+    }
+  }
   // Categoria nova precisa ser ativa e da empresa; manter a atual (mesmo inativa) é aceito
   // Fornecedor: novo precisa ser ativo e da empresa; manter o atual (mesmo inativo) é aceito.
   // Sem fornecedorId no corpo nada muda (conta antiga sem cadastro segue com o texto).
