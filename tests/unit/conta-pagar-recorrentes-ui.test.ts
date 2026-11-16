@@ -46,6 +46,7 @@ beforeAll(async () => {
     () => import("@/components/financeiro/regra-recorrente-form"),
     () => import("@/components/financeiro/conta-pagar-form"),
     () => import("@/components/financeiro/recorrentes-view"),
+    () => import("@/components/financeiro/contas-pagar-view"),
     () => import("@/components/providers/permissoes-provider"),
   ]) await m();
 }, 120_000);
@@ -159,7 +160,7 @@ describe("Nova conta a pagar: 'Repetir (recorrente)'", () => {
     await clicar("[data-valor-estimado] input");
     // o favorecido: o seletor de fornecedor já está na tela
     await escolher("[data-campos-recorrencia]", "").catch(() => {});
-    const seletorFornecedor = $$("select").find((s) => [...s.options].some((o) => o.textContent?.includes("Imobiliária Centro")));
+    const seletorFornecedor = ($$("select") as HTMLSelectElement[]).find((s) => [...s.options].some((o) => o.textContent?.includes("Imobiliária Centro")));
     expect(seletorFornecedor).toBeTruthy();
     await act(async () => {
       Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, "value")!.set!.call(seletorFornecedor, "f1");
@@ -310,6 +311,9 @@ describe("Tela de despesas recorrentes", () => {
     // o selo "a confirmar" só na regra de valor estimado
     expect($("[data-linha-regra='r2'] [data-selo-estimado]")).toBeTruthy();
     expect($("[data-linha-regra='r1'] [data-selo-estimado]")).toBeFalsy();
+    // no celular o cartão abre as ocorrências (no desktop é o nome da despesa)
+    expect($("[data-cartao-regra='r1'] [data-abrir-regra='r1']")).toBeTruthy();
+    expect($("[data-linha-regra='r1'] [data-abrir-regra='r1']")).toBeTruthy();
   });
 
   it("lista vazia explica onde a despesa recorrente nasce", async () => {
@@ -393,6 +397,58 @@ describe("Tela de despesas recorrentes", () => {
     expect(avisos.confirmacoes.at(-1)!.mensagem).toContain("A despesa recorrente continua valendo");
     expect(enviados("POST", "/cp2/pular")).toHaveLength(1);
     expect(toasts().at(-1)).toBe("Ocorrência de dez/2026 cancelada.");
+  });
+});
+
+/* ───────── Os selos na lista de contas a pagar ───────── */
+
+describe("Selos na lista de contas a pagar", () => {
+  const conta = {
+    id: "cp1", numero: "CP-1", descricao: "Aluguel do galpão — nov/2026",
+    valorTotal: 2500, valorPago: 0, saldoRestante: 2500, dataVencimento: "2026-11-10T00:00:00.000Z", status: "PENDENTE",
+    categoriaId: null, categoria: null, centroCusto: null,
+    fornecedor: { id: "f1", nome: "Imobiliária Centro", documento: null, ativo: true, semCadastro: false },
+    temBoleto: false, notaCompra: null, pedidoCompra: null,
+    recorrenciaId: "r1", refAno: 2026, refMes: 11, valorEstimado: true,
+  };
+  const zero = { v: 0, q: 0 };
+
+  const abrir = async () => {
+    const { ContasPagarView } = await import("@/components/financeiro/contas-pagar-view");
+    await montar(createElement(ContasPagarView, {
+      contas: [conta as never], resumo: { VENCIDO: zero, VENCE_HOJE: zero, A_VENCER: zero, PAGO: zero, TOTAL: zero } as never,
+      periodo: { tipo: "mes", rotulo: "Novembro de 2026" } as never,
+      filtros: { fornecedor: "", card: "", status: "", fornecedorId: "", categoria: "", centro: "", origem: "" },
+      categorias: [], centros: [], fornecedores: [],
+      total: 1, pagina: 1, porPagina: 50, totalFiltrado: 2500, totalAberto: 2500, podeImportarNf: false,
+    }));
+  };
+
+  it("os dois selos aparecem na linha do desktop e no cartão do celular", async () => {
+    await abrir();
+    const naTabela = $("[data-linha-conta='cp1'] [data-selo-recorrente]");
+    const noCartao = $("[data-cartao-conta='cp1'] [data-selo-recorrente]");
+    expect(naTabela, "desktop").toBeTruthy();
+    expect(noCartao, "celular").toBeTruthy();
+    expect($$("[data-selo-estimado]").length).toBe(2);
+  });
+
+  it("no cartão do celular o selo NÃO é link: <a> dentro de <a> quebra a hidratação", async () => {
+    await abrir();
+    // o cartão inteiro já é um link para a conta
+    expect($("[data-cartao-conta='cp1'] a")).toBeTruthy();
+    expect($("[data-cartao-conta='cp1'] [data-selo-recorrente]")!.tagName).toBe("SPAN");
+    expect($("[data-cartao-conta='cp1'] a [data-selo-recorrente] a")).toBeFalsy();
+    // no desktop, fora de qualquer link, o selo leva para a regra
+    const naTabela = $("[data-linha-conta='cp1'] [data-selo-recorrente]")!;
+    expect(naTabela.tagName).toBe("A");
+    expect(naTabela.getAttribute("href")).toBe("/financeiro/contas-pagar/recorrentes");
+  });
+
+  it("o filtro Origem oferece a despesa recorrente e a lista leva para a tela das regras", async () => {
+    await abrir();
+    expect($("[data-ir-recorrentes]")!.getAttribute("href")).toBe("/financeiro/contas-pagar/recorrentes");
+    expect(texto()).toContain("Despesas recorrentes");
   });
 });
 

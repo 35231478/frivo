@@ -132,21 +132,32 @@ function ContasPagarCorpo({
     </span>
   ) : null;
 
-  /** Selos da despesa recorrente: de onde a conta veio e se o valor ainda vai mudar */
-  const selosRecorrente = (c: ContaPagarView) => (
-    <>
-      {c.recorrenciaId && (
-        <Link href="/financeiro/contas-pagar/recorrentes" title={`Conta de uma despesa recorrente${c.refAno && c.refMes ? ` (${rotuloCompetencia(c.refAno, c.refMes)})` : ""}`}
-          className="inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-full bg-surface-alt text-ink-muted hover:text-ink" data-selo-recorrente={c.recorrenciaId}>
-          <Repeat className="w-3 h-3" /> recorrente
-        </Link>
-      )}
-      {c.valorEstimado && (
-        <span className="inline-flex items-center text-[11px] font-semibold px-2 py-0.5 rounded-full bg-atencao-claro text-atencao-texto"
-          title="Valor estimado: ajuste quando o boleto chegar" data-selo-estimado>a confirmar</span>
-      )}
-    </>
-  );
+  /**
+   * Selos da despesa recorrente: de onde a conta veio e se o valor ainda vai mudar.
+   * `link` só no desktop: no cartão do celular o selo fica DENTRO do link do cartão, e um <a>
+   * dentro de outro <a> é HTML inválido — o navegador reorganiza a árvore e a hidratação quebra.
+   */
+  const selosRecorrente = (c: ContaPagarView, link = false) => {
+    const classe = "inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-full bg-surface-alt text-ink-muted";
+    const titulo = `Conta de uma despesa recorrente${c.refAno && c.refMes ? ` (${rotuloCompetencia(c.refAno, c.refMes)})` : ""}`;
+    return (
+      <>
+        {c.recorrenciaId && (link ? (
+          <Link href="/financeiro/contas-pagar/recorrentes" title={titulo} className={cn(classe, "hover:text-ink")} data-selo-recorrente={c.recorrenciaId}>
+            <Repeat className="w-3 h-3" /> recorrente
+          </Link>
+        ) : (
+          <span title={titulo} className={classe} data-selo-recorrente={c.recorrenciaId}>
+            <Repeat className="w-3 h-3" /> recorrente
+          </span>
+        ))}
+        {c.valorEstimado && (
+          <span className="inline-flex items-center text-[11px] font-semibold px-2 py-0.5 rounded-full bg-atencao-claro text-atencao-texto"
+            title="Valor estimado: ajuste quando o boleto chegar" data-selo-estimado>a confirmar</span>
+        )}
+      </>
+    );
+  };
 
   const marcasFornecedor = (c: ContaPagarView) => (
     <>
@@ -305,7 +316,7 @@ function ContasPagarCorpo({
                       <span className={cn("inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-full", sv.classe)} data-situacao>
                         {sv.linhaVermelha && <AlertTriangle className="w-3 h-3" />}{sv.label}
                       </span>
-                      {selosRecorrente(c)}
+                      {selosRecorrente(c, true)}
                       {c.temBoleto && <span className="inline-flex text-primary-600" title="Boleto colado: veja no detalhe da conta" data-tem-boleto><Barcode className="w-3.5 h-3.5" /></span>}
                     </span>
                   ),

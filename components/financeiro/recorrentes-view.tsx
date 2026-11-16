@@ -180,7 +180,9 @@ export function RecorrentesView({ regras, categorias, podeMexer, emAberto }: {
           <li className="px-4 py-2.5 bg-surface-alt/40">{barra}</li>
           {regras.length === 0 ? <li><Vazio /></li> : regras.map((r) => (
             <li key={r.id} className="flex items-start gap-3 px-4 py-3" data-cartao-regra={r.id}>
-              <div className="flex-1 min-w-0">
+              {/* toque no cartão abre as ocorrências (o mesmo que o nome no desktop) */}
+              <button type="button" onClick={() => setVendo(r)} className="flex-1 min-w-0 text-left" data-abrir-regra={r.id}
+                aria-label={`Ver as ocorrências de ${r.descricao}`}>
                 <div className="flex items-start justify-between gap-2">
                   <p className="font-medium text-ink truncate">{r.descricao}</p>
                   <p className="font-bold text-ink shrink-0 tabular-nums">{formatarMoeda(r.valor)}</p>
@@ -192,7 +194,7 @@ export function RecorrentesView({ regras, categorias, podeMexer, emAberto }: {
                     {r.proximoVencimento ? `Próxima ${formatarData(r.proximoVencimento)}` : "Nenhuma em aberto"}
                   </span>
                 </div>
-              </div>
+              </button>
               <div className="shrink-0 -mr-1">{menu(r)}</div>
             </li>
           ))}
