@@ -7,11 +7,14 @@
  * fim (as páginas do PDF dela, ou a imagem numa página); se o total passar do limite de resposta da
  * hospedagem, o documento sai sem o arquivo e diz que a ART segue em arquivo separado.
  */
-import { PDFDocument, StandardFonts, rgb, type PDFFont, type PDFImage, type PDFPage, type RGB } from "pdf-lib";
-import { acento, neutro, status } from "@/lib/ui/tokens";
+import { PDFDocument, StandardFonts, type PDFImage, type RGB } from "pdf-lib";
+import { acento, status } from "@/lib/ui/tokens";
 import { identificarTipo } from "@/lib/anexos";
 import { rotuloMes, type ModeloDocumento } from "@/lib/pmoc-documento";
 import { nomeComPmoc } from "@/lib/pmoc-cronograma";
+// A folha, o cabeçalho corrido, a seção, o parágrafo, a tabela e o rodapé moram em lib/pdf: esta
+// maquinaria nasceu aqui e saiu quando a Ficha de Admissão passou a precisar da mesma coisa.
+import { A4, C, Desenho, MARGEM, cor } from "@/lib/pdf/desenho";
 
 /** Tamanho máximo do PDF entregue: a resposta de uma função da Vercel vai até 4,5 MB */
 export const TAMANHO_MAX_DOCUMENTO = 4_000_000;
@@ -31,20 +34,6 @@ export interface DocumentoPdf {
   nomeArquivo: string;
 }
 
-const A4: [number, number] = [595.28, 841.89];
-const MARGEM = 42;
-const RODAPE = 34;
-
-const cor = (hex: string): RGB => {
-  const n = parseInt(hex.replace("#", ""), 16);
-  return rgb(((n >> 16) & 255) / 255, ((n >> 8) & 255) / 255, (n & 255) / 255);
-};
-const C = {
-  acento: cor(acento.DEFAULT), acentoClaro: cor(acento.claro), texto: cor(neutro.texto), apoio: cor(neutro.secundario),
-  borda: cor(neutro.borda), linha: cor(neutro.linha), fundo: cor(neutro.fundo), branco: rgb(1, 1, 1),
-  ok: cor(status.ok.texto), okClaro: cor(status.ok.claro), atrasado: cor(status.atrasado.texto), atrasadoClaro: cor(status.atrasado.claro),
-  previsto: cor(status.previsto.texto), previstoClaro: cor(status.previsto.claro),
-};
 /** Fundo e letra de cada serviço na tabela do cronograma (repete depois do 5º) */
 const TONS: { fundo: RGB; letra: RGB }[] = [
   { fundo: C.acentoClaro, letra: cor(acento.hover) },
@@ -54,176 +43,6 @@ const TONS: { fundo: RGB; letra: RGB }[] = [
   { fundo: C.atrasadoClaro, letra: C.atrasado },
 ];
 
-/** Troca o que a Helvetica do PDF não escreve (ela cobre o português, não setas nem emojis) */
-const TROCAS: Record<string, string> = { "→": "->", "←": "<-", "≤": "<=", "≥": ">=", "≠": "<>", "✓": "", "✔": "", " ": " ", "\t": " ", "‑": "-", "−": "-" };
-
-class Desenho {
-  pagina!: PDFPage;
-  /** Distância do topo da folha até onde o próximo conteúdo entra */
-  y = 0;
-  largura = A4[0];
-  altura = A4[1];
-  paisagem = false;
-  /** Páginas do documento (as da ART, anexadas depois, não entram aqui) */
-  paginas: PDFPage[] = [];
-  private escreve: Set<number>;
-  /** Chamado quando uma tabela continua noutra folha: redesenha o cabeçalho dela */
-  aoQuebrar: (() => void) | null = null;
-
-  constructor(readonly doc: PDFDocument, readonly normal: PDFFont, readonly negrito: PDFFont, readonly m: ModeloDocumento) {
-    this.escreve = new Set(normal.getCharacterSet());
-  }
-
-  limpo(texto: string): string {
-    let out = "";
-    for (const ch of String(texto ?? "")) {
-      if (ch === "\n") { out += ch; continue; }
-      const t = TROCAS[ch] ?? ch;
-      for (const c of t) out += this.escreve.has(c.codePointAt(0)!) ? c : "";
-    }
-    return out;
-  }
-
-  novaPagina(paisagem = false) {
-    this.paisagem = paisagem;
-    [this.largura, this.altura] = paisagem ? [A4[1], A4[0]] : A4;
-    this.pagina = this.doc.addPage([this.largura, this.altura]);
-    this.paginas.push(this.pagina);
-    // Cabeçalho corrido (a capa desenha o seu por cima do topo)
-    this.escrever(this.m.empresa.nome, MARGEM, 30, { tamanho: 8, cor: C.apoio });
-    const titulo = this.caber(nomeComPmoc(this.m.nome), this.largura / 2, 8, this.normal);
-    this.escrever(titulo, this.largura - MARGEM - this.normal.widthOfTextAtSize(titulo, 8), 30, { tamanho: 8, cor: C.apoio });
-    this.reta(MARGEM, 38, this.largura - MARGEM, 38, C.borda);
-    this.y = 58;
-  }
-
-  get util() { return this.largura - 2 * MARGEM; }
-  get fim() { return this.altura - MARGEM - RODAPE; }
-
-  /** Garante `altura` livre na folha; se não couber, abre outra (na mesma orientação) */
-  garantir(altura: number) {
-    if (this.y + altura <= this.fim) return;
-    this.novaPagina(this.paisagem);
-    this.aoQuebrar?.();
-  }
-
-  escrever(texto: string, x: number, yTopo: number, op: { tamanho?: number; fonte?: PDFFont; cor?: RGB } = {}) {
-    const tamanho = op.tamanho ?? 10;
-    const t = this.limpo(texto).replace(/\n/g, " ");
-    if (!t) return;
-    this.pagina.drawText(t, { x, y: this.altura - yTopo - tamanho * 0.78, size: tamanho, font: op.fonte ?? this.normal, color: op.cor ?? C.texto });
-  }
-  reta(x1: number, y1: number, x2: number, y2: number, c: RGB = C.borda, espessura = 0.6) {
-    this.pagina.drawLine({ start: { x: x1, y: this.altura - y1 }, end: { x: x2, y: this.altura - y2 }, thickness: espessura, color: c });
-  }
-  caixa(x: number, yTopo: number, largura: number, altura: number, fundo?: RGB, borda?: RGB) {
-    this.pagina.drawRectangle({ x, y: this.altura - yTopo - altura, width: largura, height: altura, color: fundo, borderColor: borda, borderWidth: borda ? 0.6 : 0 });
-  }
-
-  /** Quebra o texto em linhas que cabem em `largura` (respeita as quebras de linha do texto) */
-  linhas(texto: string, largura: number, tamanho: number, fonte: PDFFont = this.normal): string[] {
-    const out: string[] = [];
-    for (const paragrafo of this.limpo(texto).split("\n")) {
-      let atual = "";
-      for (const palavra of paragrafo.split(/\s+/).filter(Boolean)) {
-        let resto = palavra;
-        // palavra maior que a coluna: parte onde couber
-        while (fonte.widthOfTextAtSize(resto, tamanho) > largura && resto.length > 1) {
-          let n = resto.length - 1;
-          while (n > 1 && fonte.widthOfTextAtSize(resto.slice(0, n), tamanho) > largura) n--;
-          if (atual) { out.push(atual); atual = ""; }
-          out.push(resto.slice(0, n)); resto = resto.slice(n);
-        }
-        const tentativa = atual ? `${atual} ${resto}` : resto;
-        if (fonte.widthOfTextAtSize(tentativa, tamanho) <= largura) atual = tentativa;
-        else { out.push(atual); atual = resto; }
-      }
-      out.push(atual);
-    }
-    return out.length ? out : [""];
-  }
-
-  /** Uma linha só, cortada com reticências se não couber */
-  caber(texto: string, largura: number, tamanho: number, fonte: PDFFont = this.normal): string {
-    const t = this.limpo(texto).replace(/\n/g, " ");
-    if (fonte.widthOfTextAtSize(t, tamanho) <= largura) return t;
-    let n = t.length;
-    while (n > 1 && fonte.widthOfTextAtSize(`${t.slice(0, n)}...`, tamanho) > largura) n--;
-    return `${t.slice(0, n).trimEnd()}...`;
-  }
-
-  /** Texto corrido a partir de `this.y`, quebrando de folha quando precisa */
-  paragrafo(texto: string, op: { tamanho?: number; fonte?: PDFFont; cor?: RGB; x?: number; largura?: number; entrelinha?: number; depois?: number } = {}) {
-    const tamanho = op.tamanho ?? 10, entrelinha = op.entrelinha ?? tamanho * 1.45, x = op.x ?? MARGEM;
-    for (const linha of this.linhas(texto, op.largura ?? this.util - (x - MARGEM), tamanho, op.fonte)) {
-      this.garantir(entrelinha);
-      this.escrever(linha, x, this.y, op);
-      this.y += entrelinha;
-    }
-    this.y += op.depois ?? 0;
-  }
-
-  /** Título de seção: numeração, nome e a linha do acento embaixo */
-  secao(numero: number, titulo: string) {
-    this.garantir(60);
-    this.escrever(`${numero}. ${titulo}`, MARGEM, this.y, { tamanho: 14, fonte: this.negrito });
-    this.y += 22;
-    this.reta(MARGEM, this.y, MARGEM + 46, this.y, C.acento, 2);
-    this.reta(MARGEM + 46, this.y, this.largura - MARGEM, this.y, C.borda);
-    this.y += 14;
-  }
-
-  /**
-   * Tabela com cabeçalho que se repete a cada folha. `colunas`: largura e título; cada célula é
-   * quebrada em linhas dentro da coluna, e a linha da tabela nunca é partida entre folhas.
-   */
-  tabela(colunas: { titulo: string; largura: number; negrito?: boolean; direita?: boolean }[], linhas: string[][], op: { tamanho?: number } = {}) {
-    const tamanho = op.tamanho ?? 8.5, recuo = 5, entrelinha = tamanho * 1.35;
-    const x0 = MARGEM;
-    const cabecalho = () => {
-      this.caixa(x0, this.y, this.util, 18, C.fundo, C.borda);
-      let x = x0;
-      for (const c of colunas) { this.escrever(c.titulo.toUpperCase(), x + recuo, this.y + 5.5, { tamanho: 7, fonte: this.negrito, cor: C.apoio }); x += c.largura; }
-      this.y += 18;
-    };
-    this.garantir(18 + entrelinha * 2);
-    cabecalho();
-    const anterior = this.aoQuebrar;
-    this.aoQuebrar = cabecalho;
-    for (const linha of linhas) {
-      const celulas = linha.map((v, i) => this.linhas(v, colunas[i].largura - 2 * recuo, tamanho, colunas[i].negrito ? this.negrito : this.normal));
-      const altura = Math.max(...celulas.map((c) => c.length)) * entrelinha + 7;
-      this.garantir(altura);
-      let x = x0;
-      celulas.forEach((linhasDaCelula, i) => {
-        linhasDaCelula.forEach((t, n) => {
-          const fonte = colunas[i].negrito ? this.negrito : this.normal;
-          const dx = colunas[i].direita ? colunas[i].largura - recuo - fonte.widthOfTextAtSize(t, tamanho) : recuo;
-          this.escrever(t, x + dx, this.y + 4 + n * entrelinha, { tamanho, fonte });
-        });
-        x += colunas[i].largura;
-      });
-      this.y += altura;
-      this.reta(x0, this.y, x0 + this.util, this.y, C.linha);
-    }
-    this.aoQuebrar = anterior;
-    this.y += 10;
-  }
-
-  rodapes(total: number) {
-    this.paginas.forEach((p, i) => {
-      this.pagina = p;
-      [this.largura, this.altura] = [p.getWidth(), p.getHeight()];
-      const y = this.altura - MARGEM - 8;
-      this.reta(MARGEM, y - 8, this.largura - MARGEM, y - 8, C.borda);
-      this.escrever(`${this.m.empresa.nome} · Documento eletrônico — Frivo`, MARGEM, y, { tamanho: 7.5, cor: C.apoio });
-      const pag = `Página ${i + 1} de ${total}`;
-      this.escrever(pag, this.largura - MARGEM - this.normal.widthOfTextAtSize(pag, 7.5), y, { tamanho: 7.5, cor: C.apoio });
-      const meio = `Emitido em ${this.m.geradoEm}`;
-      this.escrever(meio, (this.largura - this.normal.widthOfTextAtSize(meio, 7.5)) / 2, y, { tamanho: 7.5, cor: C.apoio });
-    });
-  }
-}
 
 /** A logo da empresa, se for PNG ou JPG e pequena; qualquer outra coisa fica de fora (sem erro) */
 async function embutirLogo(doc: PDFDocument, logo: string | null): Promise<PDFImage | null> {
@@ -239,8 +58,7 @@ async function embutirLogo(doc: PDFDocument, logo: string | null): Promise<PDFIm
   return null;
 }
 
-function capa(d: Desenho, logo: PDFImage | null) {
-  const m = d.m;
+function capa(d: Desenho, m: ModeloDocumento, logo: PDFImage | null) {
   d.novaPagina();
   // Faixa do topo, por cima do cabeçalho corrido
   d.caixa(0, 0, d.largura, 190, C.acento);
@@ -281,8 +99,7 @@ function capa(d: Desenho, logo: PDFImage | null) {
   }
 }
 
-function cronograma(d: Desenho, numero: number) {
-  const m = d.m;
+function cronograma(d: Desenho, m: ModeloDocumento, numero: number) {
   d.novaPagina(true);
   d.secao(numero, "Cronograma de manutenção");
   if (!m.itens.length) {
@@ -357,8 +174,7 @@ function cronograma(d: Desenho, numero: number) {
   for (const o of m.observacoes) d.paragrafo(o, { tamanho: 8, cor: C.apoio, entrelinha: 11, depois: 2 });
 }
 
-function planejamento(d: Desenho, numero: number) {
-  const m = d.m;
+function planejamento(d: Desenho, m: ModeloDocumento, numero: number) {
   d.novaPagina();
   d.secao(numero, "Planejamento das atividades");
   if (!m.planejamento.length) {
@@ -391,8 +207,7 @@ function planejamento(d: Desenho, numero: number) {
 }
 
 /** O livro de ocorrências: o que foi achado na manutenção, com a gravidade e a situação de cada uma */
-function ocorrencias(d: Desenho, numero: number) {
-  const m = d.m;
+function ocorrencias(d: Desenho, m: ModeloDocumento, numero: number) {
   d.y += 14;
   d.secao(numero, "Ocorrências");
   if (!m.ocorrencias.length) {
@@ -406,8 +221,7 @@ function ocorrencias(d: Desenho, numero: number) {
   );
 }
 
-function assinaturas(d: Desenho) {
-  const m = d.m;
+function assinaturas(d: Desenho, m: ModeloDocumento) {
   d.garantir(120);
   d.y += 34;
   const largura = (d.util - 40) / 2;
@@ -422,9 +236,9 @@ function assinaturas(d: Desenho) {
 }
 
 /** A ART numa página do documento, quando o arquivo é imagem */
-function paginaDaArt(d: Desenho, imagem: PDFImage) {
+function paginaDaArt(d: Desenho, m: ModeloDocumento, imagem: PDFImage) {
   d.novaPagina();
-  d.escrever(d.m.art.numero ? `Anexo — ART nº ${d.m.art.numero}` : "Anexo — ART", MARGEM, d.y, { tamanho: 14, fonte: d.negrito });
+  d.escrever(m.art.numero ? `Anexo — ART nº ${m.art.numero}` : "Anexo — ART", MARGEM, d.y, { tamanho: 14, fonte: d.negrito });
   d.y += 28;
   const alturaLivre = d.fim - d.y;
   const escala = Math.min(d.util / imagem.width, alturaLivre / imagem.height, 1.5);
@@ -433,9 +247,9 @@ function paginaDaArt(d: Desenho, imagem: PDFImage) {
   d.y += h;
 }
 
-function avisoArtFora(d: Desenho, motivo: "GRANDE" | "ILEGIVEL") {
+function avisoArtFora(d: Desenho, m: ModeloDocumento, motivo: "GRANDE" | "ILEGIVEL") {
   d.novaPagina();
-  d.escrever(d.m.art.numero ? `Anexo — ART nº ${d.m.art.numero}` : "Anexo — ART", MARGEM, d.y, { tamanho: 14, fonte: d.negrito });
+  d.escrever(m.art.numero ? `Anexo — ART nº ${m.art.numero}` : "Anexo — ART", MARGEM, d.y, { tamanho: 14, fonte: d.negrito });
   d.y += 30;
   d.paragrafo(motivo === "GRANDE"
     ? "O arquivo da Anotação de Responsabilidade Técnica é grande demais para ser incluído neste documento. Ele acompanha o plano em arquivo separado."
@@ -447,9 +261,10 @@ async function desenhar(m: ModeloDocumento, art: ArquivoArt | null, semArt: "GRA
   const doc = await PDFDocument.create();
   doc.setTitle(nomeComPmoc(m.nome)); doc.setAuthor(m.empresa.nome); doc.setSubject("Plano de Manutenção, Operação e Controle");
   doc.setCreator("Frivo"); doc.setProducer("Frivo"); doc.setLanguage("pt-BR");
-  const d = new Desenho(doc, await doc.embedFont(StandardFonts.Helvetica), await doc.embedFont(StandardFonts.HelveticaBold), m);
+  const d = new Desenho(doc, await doc.embedFont(StandardFonts.Helvetica), await doc.embedFont(StandardFonts.HelveticaBold),
+    { empresa: m.empresa.nome, titulo: nomeComPmoc(m.nome), geradoEm: m.geradoEm });
 
-  capa(d, await embutirLogo(doc, m.empresa.logo));
+  capa(d, m, await embutirLogo(doc, m.empresa.logo));
 
   d.novaPagina();
   d.secao(1, "Apresentação e base normativa");
@@ -465,10 +280,10 @@ async function desenhar(m: ModeloDocumento, art: ArquivoArt | null, semArt: "GRA
   } else d.paragrafo("Nenhum equipamento ativo neste plano.", { cor: C.apoio });
   if (m.inativos > 0) d.paragrafo(`${m.inativos === 1 ? "1 equipamento do plano está inativo" : `${m.inativos} equipamentos do plano estão inativos`} no cadastro e não entra${m.inativos === 1 ? "" : "m"} no cronograma.`, { tamanho: 8, cor: C.apoio });
 
-  cronograma(d, 3);
-  planejamento(d, 4);
-  ocorrencias(d, 5);
-  assinaturas(d);
+  cronograma(d, m, 3);
+  planejamento(d, m, 4);
+  ocorrencias(d, m, 5);
+  assinaturas(d, m);
 
   // ART: a imagem vira uma página do documento; o PDF entra depois, com as páginas como são
   let entrou: DocumentoPdf["art"] = null, fora: DocumentoPdf["artFora"] = null;
@@ -478,12 +293,12 @@ async function desenhar(m: ModeloDocumento, art: ArquivoArt | null, semArt: "GRA
     if (semArt) fora = semArt;
     else {
       try {
-        if (tipo === "image/jpeg" || tipo === "image/png") { paginaDaArt(d, tipo === "image/png" ? await doc.embedPng(art.bytes) : await doc.embedJpg(art.bytes)); entrou = "IMAGEM"; }
+        if (tipo === "image/jpeg" || tipo === "image/png") { paginaDaArt(d, m, tipo === "image/png" ? await doc.embedPng(art.bytes) : await doc.embedJpg(art.bytes)); entrou = "IMAGEM"; }
         else if (tipo === "application/pdf") { pdfDaArt = await PDFDocument.load(art.bytes); entrou = "PDF"; }
         else fora = "ILEGIVEL";
       } catch { fora = "ILEGIVEL"; entrou = null; pdfDaArt = null; }
     }
-    if (fora) avisoArtFora(d, fora);
+    if (fora) avisoArtFora(d, m, fora);
   }
 
   d.rodapes(d.paginas.length);
