@@ -190,8 +190,9 @@ describe("formulário", () => {
     expect((corpo.get("certificado") as File).name).toBe("clima.pfx");
     expect($<HTMLInputElement>('[name="senhaCertificado"]')!.value).toBe("");
     expect($<HTMLInputElement>('[name="senhaCertificado"]')!.disabled).toBe(true);
+    // Leva 8C: o sucesso do cadastro no PlugNotas é só toast — a tela guarda aviso e erro
     expect(avisos.toasts).toEqual(["Emitente cadastrado no PlugNotas (homologação (testes))."]);
-    expect(txt($('[data-mensagem="ok"]'))).toBe("Emitente cadastrado no PlugNotas (homologação (testes)).");
+    expect($('[data-mensagem="ok"]')).toBeNull();
     expect(txt($("[data-status-emitente]"))).toBe("Emitente ativo no PlugNotas");
   });
 

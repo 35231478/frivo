@@ -1,15 +1,15 @@
 "use client";
 
-import { confirmar } from "@/components/ui/avisos";
+import { confirmar, toast } from "@/components/ui/avisos";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Camera, Check, Loader2 } from "lucide-react";
+import { Camera, Loader2 } from "lucide-react";
 
 /** Grava (ou refaz) a foto do custo de pessoal do mês: o histórico não muda com reajustes futuros. */
 export function FecharMes({ competencia, rotulo, jaFechado }: { competencia: string; rotulo: string; jaFechado: boolean }) {
   const router = useRouter();
   const [enviando, setEnviando] = useState(false);
-  const [msg, setMsg] = useState<{ ok: boolean; texto: string } | null>(null);
+  const [msg, setMsg] = useState<{ ok: boolean; texto: string } | null>(null); // só erro: o sucesso é toast
 
   async function fechar() {
     const pergunta = jaFechado
@@ -20,8 +20,15 @@ export function FecharMes({ competencia, rotulo, jaFechado }: { competencia: str
     try {
       const r = await fetch("/api/folha/fechar-mes", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ competencia }) });
       const d = await r.json().catch(() => ({}));
-      setMsg(r.ok ? { ok: true, texto: `Mês fechado (${d.colaboradores} colaboradores)` } : { ok: false, texto: d.erro ?? "Não foi possível fechar o mês." });
-      if (r.ok) router.refresh();
+      // Sucesso é toast (padrão da casa); o erro fica na tela, ao lado do botão
+      if (!r.ok) { setMsg({ ok: false, texto: d.erro ?? "Não foi possível fechar o mês." }); return; }
+      const n = Number(d.colaboradores ?? 0);
+      const comDados = Number(d.comDados ?? n);
+      const quantos = n === 1 ? "1 colaborador" : `${n} colaboradores`;
+      // quem está sem salário entra na foto com custo zero: os dois números juntos para não parecer erro
+      const detalhe = comDados === n ? "" : ` (${comDados} com dados)`;
+      toast(`${rotulo} fechado: ${quantos}${detalhe} na foto do mês.`);
+      router.refresh();
     } catch {
       setMsg({ ok: false, texto: "Erro de conexão." });
     } finally {
@@ -31,7 +38,7 @@ export function FecharMes({ competencia, rotulo, jaFechado }: { competencia: str
 
   return (
     <div className="flex items-center gap-2">
-      {msg && <span className={msg.ok ? "flex items-center gap-1 text-xs text-success-600" : "text-xs text-atrasado"}>{msg.ok && <Check className="w-3.5 h-3.5" />}{msg.texto}</span>}
+      {msg && <span className="text-xs text-atrasado" role="alert" data-erro-fechar>{msg.texto}</span>}
       <button type="button" onClick={fechar} disabled={enviando} data-acao="fechar-mes"
         className="btn-primary inline-flex items-center gap-1.5 text-sm disabled:opacity-60">
         {enviando ? <Loader2 className="w-4 h-4 animate-spin" /> : <Camera className="w-4 h-4" />}

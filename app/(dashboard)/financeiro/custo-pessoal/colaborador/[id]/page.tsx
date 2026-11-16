@@ -10,6 +10,8 @@ import { FolhaColaborador } from "@/components/folha/folha-colaborador";
 
 export const metadata: Metadata = { title: "Dados financeiros do colaborador" };
 
+const AJUDA = "Remuneração, adicionais, horas extras, benefícios e descontos deste colaborador. Os encargos saem do modelo escolhido (os percentuais ficam em Encargos) e alimentam o custo-hora usado na margem da OS. Alterar aqui não muda mês já fechado.";
+
 /**
  * Dados financeiros / Folha de um colaborador, pelo Financeiro — para quem tem "Custo de pessoal"
  * mas não acessa Equipes → Colaboradores. Mesmo cadastro e mesma API da aba do colaborador.
@@ -32,6 +34,7 @@ export default async function FolhaDoColaboradorPage({ params }: { params: Promi
       <PageHeader
         title={c.nome}
         description={`${c.cargo?.nome ?? LABELS_FUNCAO[c.tipo] ?? c.tipo} · dados financeiros / folha${c.ativo ? "" : " · inativo"}`}
+        dica={AJUDA}
         backHref="/financeiro/custo-pessoal"
         actions={podeCadastro ? <Link href={`/colaboradores/${c.id}/editar`} className="btn-secondary text-sm">Cadastro completo</Link> : undefined}
       />

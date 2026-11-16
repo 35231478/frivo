@@ -20,6 +20,9 @@ const STATUS: Record<StatusLinha, { rotulo: string; cls: string }> = {
   erro: { rotulo: "Erro", cls: "bg-atrasado-claro text-atrasado-texto border-atrasado/20" },
 };
 
+/** "1 colaborador" / "8 colaboradores": o plural escrito do manifesto. */
+const plural = (n: number, um: string, muitos: string) => `${n} ${n === 1 ? um : muitos}`;
+
 export function ImportarPlanilha() {
   const inputRef = useRef<HTMLInputElement>(null);
   const [arquivo, setArquivo] = useState<File | null>(null);
@@ -150,7 +153,7 @@ export function ImportarPlanilha() {
           <div className="px-4 sm:px-5 py-4 border-t border-surface-border flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <p className="text-sm text-ink">
               {gravaveis > 0
-                ? <>Serão gravados <strong>{analise.resumo.novos}</strong> novo(s) e <strong>{analise.resumo.atualizar}</strong> atualização(ões).{analise.resumo.erros > 0 && <> As {analise.resumo.erros} linha(s) com erro ficam de fora.</>}</>
+                ? <>Serão gravados <strong>{plural(analise.resumo.novos, "colaborador novo", "colaboradores novos")}</strong> e <strong>{plural(analise.resumo.atualizar, "atualização", "atualizações")}</strong>.{analise.resumo.erros > 0 && <> {plural(analise.resumo.erros, "linha com erro fica", "linhas com erro ficam")} de fora.</>}</>
                 : "Nada a gravar: corrija a planilha e envie de novo."}
             </p>
             <div className="flex gap-2">
@@ -167,10 +170,10 @@ export function ImportarPlanilha() {
         <section className="card-padded space-y-3" data-resultado>
           <p className="flex items-center gap-2 text-base font-semibold text-ink"><CheckCircle2 className="w-5 h-5 text-success-600" /> Importação concluída</p>
           <ul className="text-sm text-ink space-y-0.5">
-            <li>{resultado.criados} colaborador(es) criado(s)</li>
-            <li>{resultado.atualizados} atualizado(s)</li>
-            {resultado.ignorados > 0 && <li>{resultado.ignorados} já cadastrado(s), ignorado(s)</li>}
-            {resultado.comErro > 0 && <li>{resultado.comErro} linha(s) com erro, não importada(s)</li>}
+            <li>{plural(resultado.criados, "colaborador criado", "colaboradores criados")}</li>
+            <li>{plural(resultado.atualizados, "colaborador atualizado", "colaboradores atualizados")}</li>
+            {resultado.ignorados > 0 && <li>{plural(resultado.ignorados, "já cadastrado, ignorado", "já cadastrados, ignorados")}</li>}
+            {resultado.comErro > 0 && <li>{plural(resultado.comErro, "linha com erro, não importada", "linhas com erro, não importadas")}</li>}
             {resultado.cargosCriados.length > 0 && <li>Cargos criados: {resultado.cargosCriados.join(", ")}</li>}
           </ul>
           <div className="flex flex-wrap gap-2">

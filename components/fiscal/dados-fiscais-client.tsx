@@ -92,7 +92,8 @@ export function DadosFiscaisClient({ inicial }: { inicial: EmitenteTela }) {
       // chegou ao servidor e foi processado: a senha e o arquivo saem da tela; a prefeitura já está guardada
       setArquivo(null); if (arquivoRef.current) arquivoRef.current.value = "";
       setPrefLogin(""); setRemoverPref(false);
-      if (d.sincronizado) { toast(d.mensagem); setMsg({ tipo: "ok", texto: d.mensagem }); }
+      // Sucesso é só toast (padrão da casa); a tela fica com o aviso e o erro
+      if (d.sincronizado) { toast(d.mensagem); setMsg(null); }
       else setMsg({ tipo: d.erro ? "erro" : "aviso", texto: d.mensagem ?? d.erro });
     } catch { setMsg({ tipo: "erro", texto: "Sem conexão. Tente de novo." }); } finally {
       // as senhas nunca ficam na tela depois de um envio, dê certo ou não
