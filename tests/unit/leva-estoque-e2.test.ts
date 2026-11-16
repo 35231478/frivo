@@ -512,12 +512,14 @@ describe("telas", () => {
     expect(h).toMatch(/data-parcela="1"/);
     expect(h).toMatch(/name="vencimento-1"[^>]*value="2026-11-03"|value="2026-11-03"[^>]*name="vencimento-1"/);
     expect(h).toContain("Sem duplicata na NF: à vista, no valor da nota.");
-    expect(h).toContain(">PC-0312</option>");
+    // o pedido virou campo com busca (lista no cliente): o que a página mostra é o campo,
+    // com a ordem em que os pedidos chegaram do servidor
+    expect(h).toMatch(/data-pedidos="[^"]+"/);
     expect(h).toContain("Confirmar e lançar");
     logar(so({ estoque: { visualizar: true, gerenciar: true } }));
     const sem = await detalhe(id2);
     expect(sem).toContain("data-sem-lancar");
-    expect(sem).not.toContain(">PC-0312</option>");
+    expect(sem).not.toMatch(/data-pedidos="[^"]+"/);
     logar(so({ estoque: { visualizar: true } }));
     const leitura = await detalhe(id2);
     expect(leitura).not.toContain("Confirmar e lançar");

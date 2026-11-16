@@ -202,7 +202,10 @@ export function ConciliacaoNota({ notaId, itens, pedidos, podeLancar, motivoSemL
               {/* Pedidos em aberto crescem: o seletor com busca da casa (digitar filtra pelo número) */}
               <div className="mt-1">
                 <BuscaSelect
-                  rotulo="Pedido de compra" atributos={{ "data-pedido": "" }} value={pedidoId} onChange={setPedidoId}
+                  rotulo="Pedido de compra" value={pedidoId} onChange={setPedidoId}
+                  // a ordem em que os pedidos chegaram do servidor (mais novo primeiro) fica legível
+                  // na página: com a lista fechada, as opções só existem no cliente
+                  atributos={{ "data-pedido": "", "data-pedidos": pedidos.map((p) => p.id).join(",") }}
                   placeholder={automaticoId ? "Automático (o pedido idêntico)" : "Sem pedido"}
                   options={pedidos.map((p) => ({ value: p.id, label: p.numero }))}
                 />
