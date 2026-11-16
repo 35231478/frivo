@@ -27,9 +27,9 @@ import {
   VAZIO, gerarContratoPdf, gerarFichaPdf, ou, type DadosFicha, type DependenteFicha, type LinhaFicha,
 } from "@/lib/admissao/admissao-pdf";
 // A regra de quando a entrega existe mora no módulo puro: a tela lê a MESMA coisa.
-import { temEntrega } from "@/lib/admissao/admissao-entrega-regras";
+import { TIPO_CONTRATO_ASSINADO, temEntrega } from "@/lib/admissao/admissao-entrega-regras";
 
-export { SITUACOES_COM_ENTREGA, temEntrega } from "@/lib/admissao/admissao-entrega-regras";
+export { SITUACOES_COM_ENTREGA, TIPO_CONTRATO_ASSINADO, temEntrega } from "@/lib/admissao/admissao-entrega-regras";
 
 export class ErroEntrega extends Error {
   constructor(message: string, readonly status = 400) {
@@ -41,12 +41,6 @@ export class ErroEntrega extends Error {
 const MSG_NAO_ENCONTRADA = "Admissão não encontrada";
 export const MSG_AINDA_NAO = "A ficha e os documentos ficam prontos quando o colaborador assinar o contrato.";
 
-/**
- * O `tipo` do contrato assinado nos anexos do colaborador. Começa com "_" de propósito: os
- * documentos que a EMPRESA pede têm ids escolhidos por ela, e este é do sistema — assim ele nunca
- * entra, por acidente, na conta de "documentos entregues" da admissão.
- */
-export const TIPO_CONTRATO_ASSINADO = "_contrato_assinado";
 
 const rotulo = (lista: readonly (readonly [string, string])[], valor: string | null | undefined) =>
   lista.find(([v]) => v === (valor ?? ""))?.[1] ?? ou(valor);

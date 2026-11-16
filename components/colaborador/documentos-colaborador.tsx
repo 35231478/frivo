@@ -18,6 +18,7 @@ import {
   categoriaVenceNormalmente, categoriasPorGrupo, formatoEmPalavras, resumoValidade, rotuloCategoria,
   rotuloValidade, situacaoValidade, tamanhoEmPalavras,
 } from "@/lib/colaborador/documentos";
+import { TIPO_CONTRATO_ASSINADO } from "@/lib/admissao/admissao-entrega-regras";
 import type { DocumentoLinha } from "@/lib/colaborador/documentos-server";
 
 /** O contrato congelado no momento da assinatura, quando a pessoa veio pela admissão digital. */
@@ -118,7 +119,16 @@ export function DocumentosColaborador({
     }
   }
 
-  const vazio = docs.length === 0 && !contratoAssinado;
+  /**
+   * O PDF do contrato assinado é guardado nos anexos desde a Admissão PR3 — e traz o mesmo texto
+   * congelado, mais a prova e a foto. Quando ele está aqui, a linha de "ver o texto" sairia como
+   * uma segunda linha dizendo "Contrato assinado": a mesma coisa, duas vezes. Então ela fica só
+   * para quem assinou antes dessa leva, que não tem o PDF.
+   */
+  const temContratoPdf = docs.some((d) => d.tipo === TIPO_CONTRATO_ASSINADO);
+  const mostrarTextoDoContrato = !!contratoAssinado && !temContratoPdf;
+
+  const vazio = docs.length === 0 && !mostrarTextoDoContrato;
 
   return (
     <div className="space-y-4" data-secao-documentos>
@@ -167,7 +177,7 @@ export function DocumentosColaborador({
                 </tr>
               </thead>
               <tbody>
-                {contratoAssinado && <LinhaContrato contrato={contratoAssinado} onVer={() => setVerContrato(true)} />}
+                {mostrarTextoDoContrato && contratoAssinado && <LinhaContrato contrato={contratoAssinado} onVer={() => setVerContrato(true)} />}
                 {docs.map((d) => (
                   <tr key={d.id} className={cn(PLANILHA.linha, PLANILHA.linhaHover)} data-documento={d.id}>
                     <td className={PLANILHA.td}>
@@ -195,7 +205,7 @@ export function DocumentosColaborador({
 
           {/* Celular: cartões */}
           <div className="sm:hidden space-y-2" data-cartoes-documentos>
-            {contratoAssinado && (
+            {mostrarTextoDoContrato && contratoAssinado && (
               <div className="border border-surface-border rounded-lg p-3 space-y-1" data-cartao-contrato>
                 <div className="flex items-start justify-between gap-2">
                   <span className="font-medium text-ink flex items-center gap-1.5"><ScrollText className="w-4 h-4 text-acento" /> Contrato assinado</span>

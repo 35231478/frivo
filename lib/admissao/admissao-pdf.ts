@@ -112,6 +112,20 @@ function bloco(d: Desenho, numero: number, titulo: string, linhas: LinhaFicha[])
   campos(d, linhas);
 }
 
+/**
+ * As colunas da tabela de dependentes. Exportada porque cada CABEÇALHO precisa caber na sua
+ * coluna: o título sai em maiúsculas e, se não couber, vaza por cima da coluna vizinha (ou da
+ * margem, na última). Um teste mede isso com a fonte de verdade.
+ */
+export const colunasDependentes = (util: number) => [
+  { titulo: "Nome", largura: 158, negrito: true },
+  { titulo: "Parentesco", largura: 84 },
+  { titulo: "Nascimento", largura: 70 },
+  { titulo: "CPF", largura: 86 },
+  { titulo: "IRRF", largura: 34 },
+  { titulo: "Sal. família", largura: util - 432 },
+];
+
 function blocoDependentes(d: Desenho, numero: number, dependentes: DependenteFicha[]) {
   d.secao(numero, "Dependentes");
   if (!dependentes.length) {
@@ -119,14 +133,7 @@ function blocoDependentes(d: Desenho, numero: number, dependentes: DependenteFic
     return;
   }
   d.tabela(
-    [
-      { titulo: "Nome", largura: 170, negrito: true },
-      { titulo: "Parentesco", largura: 92 },
-      { titulo: "Nascimento", largura: 74 },
-      { titulo: "CPF", largura: 92 },
-      { titulo: "IRRF", largura: 38 },
-      { titulo: "Sal. família", largura: d.util - 466 },
-    ],
+    colunasDependentes(d.util),
     dependentes.map((p) => [
       p.nome, p.parentesco, ou(p.nascimento), ou(p.cpf),
       p.irrf ? "Sim" : "Não", p.salarioFamilia ? "Sim" : "Não",

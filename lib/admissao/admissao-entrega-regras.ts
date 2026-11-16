@@ -19,3 +19,14 @@ export const SITUACOES_COM_ENTREGA: readonly SituacaoAdmissao[] = ["ASSINADO", "
 
 export const temEntrega = (situacao: string): boolean =>
   SITUACOES_COM_ENTREGA.includes(situacao as SituacaoAdmissao);
+
+/**
+ * O `tipo` do contrato assinado nos anexos do colaborador. Começa com "_" de propósito: os
+ * documentos que a EMPRESA pede têm ids escolhidos por ela, e este é do sistema — assim ele nunca
+ * entra, por acidente, na conta de "documentos entregues" da admissão.
+ *
+ * Mora aqui, no módulo puro, porque a seção Documentos da ficha precisa dele para não mostrar o
+ * contrato duas vezes: o PDF guardado manda, e a linha de "ver o texto" só aparece para quem
+ * assinou antes desta leva (e por isso não tem o PDF).
+ */
+export const TIPO_CONTRATO_ASSINADO = "_contrato_assinado";
