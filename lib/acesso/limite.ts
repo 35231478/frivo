@@ -12,7 +12,8 @@ import { prisma } from "@/lib/prisma";
  */
 const MIN = 60_000;
 
-export type TipoTentativa = "LOGIN" | "ESQUECI_SENHA" | "TROCA_SENHA" | "PORTAL_LOGIN" | "CHAMADO_PUBLICO";
+export type TipoTentativa = "LOGIN" | "ESQUECI_SENHA" | "TROCA_SENHA" | "PORTAL_LOGIN" | "CHAMADO_PUBLICO"
+  | "ADMISSAO_PUBLICA" | "ADMISSAO_CODIGO";
 type Alvo = "email" | "ip" | "usuario";
 
 export const LIMITES: Record<TipoTentativa, { janelaMs: number; max: Partial<Record<Alvo, number>> }> = {
@@ -21,6 +22,12 @@ export const LIMITES: Record<TipoTentativa, { janelaMs: number; max: Partial<Rec
   TROCA_SENHA: { janelaMs: 15 * MIN, max: { usuario: 5 } },          // senha atual errada no perfil
   PORTAL_LOGIN: { janelaMs: 15 * MIN, max: { email: 5, ip: 20 } },   // senha errada no portal do cliente
   CHAMADO_PUBLICO: { janelaMs: 60 * MIN, max: { ip: 10, usuario: 15 } }, // abertura de chamado (QR público / portal)
+  // Link da admissão: conta TOKEN RECUSADO (não existe, venceu, já encerrou). Quem tem um link
+  // bom preenche à vontade — o que o limite impede é varrer tokens no escuro.
+  ADMISSAO_PUBLICA: { janelaMs: 60 * MIN, max: { ip: 20 } },
+  // Código de verificação do e-mail: um limite por IP e outro por admissão, para o link da
+  // admissão não virar máquina de mandar e-mail para o endereço de outra pessoa.
+  ADMISSAO_CODIGO: { janelaMs: 60 * MIN, max: { ip: 15, usuario: 5 } },
 };
 const RETENCAO_MS = 24 * 60 * MIN;
 
