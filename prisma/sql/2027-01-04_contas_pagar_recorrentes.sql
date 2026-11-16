@@ -21,8 +21,11 @@
 -- Nenhuma tabela existente perde ou muda coluna. Nenhum dado é reescrito.
 --
 -- IDEMPOTENTE: IF NOT EXISTS em tabela, colunas e índices; cada chave estrangeira só é criada
--- quando ainda não existe. Pode rodar mais de uma vez. Sem enum (situação e ajuste são TEXTO, como
--- no fechamento do Desempenho). Não usa `prisma migrate`.
+-- quando ainda não existe NESTA TABELA — o nome de uma constraint não é único no banco (só por
+-- tabela), então a guarda compara `conrelid` com a tabela, e não só o nome: olhando só o nome,
+-- um homônimo em outro schema faria o script PULAR a chave estrangeira em silêncio.
+-- Pode rodar mais de uma vez. Sem enum (situação e ajuste são TEXTO, como no fechamento do
+-- Desempenho). Não usa `prisma migrate`.
 --
 -- Rodar ANTES do merge, no banco da DATABASE_URL de produção (Neon):
 --   psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f prisma/sql/2027-01-04_contas_pagar_recorrentes.sql
@@ -85,43 +88,50 @@ CREATE INDEX IF NOT EXISTS "contas_pagar_tecnico_id_idx" ON "contas_pagar" ("tec
 -- 4. Chaves estrangeiras (só quando ainda não existem)
 DO $$
 BEGIN
-    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'contas_pagar_recorrencias_empresa_id_fkey') THEN
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint
+                   WHERE conrelid = to_regclass('"contas_pagar_recorrencias"') AND conname = 'contas_pagar_recorrencias_empresa_id_fkey') THEN
         ALTER TABLE "contas_pagar_recorrencias"
             ADD CONSTRAINT "contas_pagar_recorrencias_empresa_id_fkey"
             FOREIGN KEY ("empresa_id") REFERENCES "empresas" ("id") ON DELETE CASCADE ON UPDATE CASCADE;
     END IF;
 
-    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'contas_pagar_recorrencias_fornecedor_id_fkey') THEN
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint
+                   WHERE conrelid = to_regclass('"contas_pagar_recorrencias"') AND conname = 'contas_pagar_recorrencias_fornecedor_id_fkey') THEN
         ALTER TABLE "contas_pagar_recorrencias"
             ADD CONSTRAINT "contas_pagar_recorrencias_fornecedor_id_fkey"
             FOREIGN KEY ("fornecedor_id") REFERENCES "fornecedores" ("id") ON DELETE SET NULL ON UPDATE CASCADE;
     END IF;
 
-    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'contas_pagar_recorrencias_tecnico_id_fkey') THEN
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint
+                   WHERE conrelid = to_regclass('"contas_pagar_recorrencias"') AND conname = 'contas_pagar_recorrencias_tecnico_id_fkey') THEN
         ALTER TABLE "contas_pagar_recorrencias"
             ADD CONSTRAINT "contas_pagar_recorrencias_tecnico_id_fkey"
             FOREIGN KEY ("tecnico_id") REFERENCES "tecnicos" ("id") ON DELETE SET NULL ON UPDATE CASCADE;
     END IF;
 
-    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'contas_pagar_recorrencias_categoria_id_fkey') THEN
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint
+                   WHERE conrelid = to_regclass('"contas_pagar_recorrencias"') AND conname = 'contas_pagar_recorrencias_categoria_id_fkey') THEN
         ALTER TABLE "contas_pagar_recorrencias"
             ADD CONSTRAINT "contas_pagar_recorrencias_categoria_id_fkey"
             FOREIGN KEY ("categoria_id") REFERENCES "categorias_financeiras" ("id") ON DELETE SET NULL ON UPDATE CASCADE;
     END IF;
 
-    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'contas_pagar_recorrencias_centro_custo_id_fkey') THEN
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint
+                   WHERE conrelid = to_regclass('"contas_pagar_recorrencias"') AND conname = 'contas_pagar_recorrencias_centro_custo_id_fkey') THEN
         ALTER TABLE "contas_pagar_recorrencias"
             ADD CONSTRAINT "contas_pagar_recorrencias_centro_custo_id_fkey"
             FOREIGN KEY ("centro_custo_id") REFERENCES "centros_custo" ("id") ON DELETE SET NULL ON UPDATE CASCADE;
     END IF;
 
-    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'contas_pagar_recorrencia_id_fkey') THEN
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint
+                   WHERE conrelid = to_regclass('"contas_pagar"') AND conname = 'contas_pagar_recorrencia_id_fkey') THEN
         ALTER TABLE "contas_pagar"
             ADD CONSTRAINT "contas_pagar_recorrencia_id_fkey"
             FOREIGN KEY ("recorrencia_id") REFERENCES "contas_pagar_recorrencias" ("id") ON DELETE SET NULL ON UPDATE CASCADE;
     END IF;
 
-    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'contas_pagar_tecnico_id_fkey') THEN
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint
+                   WHERE conrelid = to_regclass('"contas_pagar"') AND conname = 'contas_pagar_tecnico_id_fkey') THEN
         ALTER TABLE "contas_pagar"
             ADD CONSTRAINT "contas_pagar_tecnico_id_fkey"
             FOREIGN KEY ("tecnico_id") REFERENCES "tecnicos" ("id") ON DELETE SET NULL ON UPDATE CASCADE;

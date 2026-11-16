@@ -7,6 +7,8 @@
  *    as contas avulsas (NULL não conflita com NULL no Postgres);
  *  - apagar a REGRA não apaga conta nenhuma (SET NULL): o histórico de pagamento fica;
  *  - é idempotente (roda três vezes, com dados gravados, sem erro e sem mudar nada);
+ *  - cria as chaves estrangeiras mesmo com um HOMÔNIMO em outro schema (a guarda olha a tabela,
+ *    não só o nome da constraint);
  *  - dá EXATAMENTE o que o Prisma espera (comparado com `prisma db push`).
  *   PG_TESTE_URL="postgresql://root@localhost/postgres?host=/var/run/postgresql" npx vitest run tests/unit/sql-contas-pagar-recorrentes
  */
@@ -20,6 +22,9 @@ const RAIZ = path.resolve(__dirname, "../..");
 const ARQUIVO = path.join(RAIZ, "prisma/sql/2027-01-04_contas_pagar_recorrentes.sql");
 const SCHEMA = `teste_rec_sql_${process.pid}`;
 const PRISMA = `teste_rec_prisma_${process.pid}`;
+/** Schema ISCA: já tem constraints com os MESMOS nomes. Nome de constraint não é único no banco
+ *  (só por tabela), então um script que confere só o nome pularia as chaves estrangeiras aqui. */
+const ISCA = `teste_rec_isca_${process.pid}`;
 const NOVAS = ["contas_pagar_recorrencias"];
 const T = "contas_pagar", R = "contas_pagar_recorrencias";
 
@@ -87,14 +92,21 @@ describe.skipIf(!URL)("SQL de produção: contas a pagar recorrentes (PostgreSQL
   let antes = { tabelas: [] as string[], existentes: "", contas: "" };
 
   beforeAll(() => {
-    execFileSync("psql", [URL!, "-v", "ON_ERROR_STOP=1", "-q", "-c", `DROP SCHEMA IF EXISTS ${SCHEMA} CASCADE; CREATE SCHEMA ${SCHEMA}; DROP SCHEMA IF EXISTS ${PRISMA} CASCADE;`], { stdio: "pipe" });
+    execFileSync("psql", [URL!, "-v", "ON_ERROR_STOP=1", "-q", "-c", `DROP SCHEMA IF EXISTS ${SCHEMA} CASCADE; CREATE SCHEMA ${SCHEMA}; DROP SCHEMA IF EXISTS ${PRISMA} CASCADE; DROP SCHEMA IF EXISTS ${ISCA} CASCADE; CREATE SCHEMA ${ISCA};`], { stdio: "pipe" });
+    // A isca: os mesmos NOMES de constraint, em outro schema. Um script que confere só o nome
+    // (sem a tabela) acharia que as chaves já existem e as pularia caladas.
+    sql(`CREATE TABLE "empresas" ("id" TEXT PRIMARY KEY);
+      CREATE TABLE "contas_pagar_recorrencias" ("id" TEXT PRIMARY KEY, "empresa_id" TEXT NOT NULL,
+        CONSTRAINT "contas_pagar_recorrencias_empresa_id_fkey" FOREIGN KEY ("empresa_id") REFERENCES "empresas" ("id"));
+      CREATE TABLE "contas_pagar" ("id" TEXT PRIMARY KEY, "recorrencia_id" TEXT,
+        CONSTRAINT "contas_pagar_recorrencia_id_fkey" FOREIGN KEY ("recorrencia_id") REFERENCES "contas_pagar_recorrencias" ("id"));`, ISCA);
     sql(BASE);
     antes = { tabelas: tabelas(), existentes: retrato(tabelas().filter((t) => t !== T)), contas: linhas(T) };
     psql(["-f", ARQUIVO]);
   }, 120_000);
 
   afterAll(() => {
-    if (URL) execFileSync("psql", [URL, "-q", "-c", `DROP SCHEMA IF EXISTS ${SCHEMA} CASCADE; DROP SCHEMA IF EXISTS ${PRISMA} CASCADE;`], { stdio: "pipe" });
+    if (URL) execFileSync("psql", [URL, "-q", "-c", `DROP SCHEMA IF EXISTS ${SCHEMA} CASCADE; DROP SCHEMA IF EXISTS ${PRISMA} CASCADE; DROP SCHEMA IF EXISTS ${ISCA} CASCADE;`], { stdio: "pipe" });
   });
 
   it("cria UMA tabela e mais nada; nenhuma outra tabela ganha, perde ou muda coluna, índice, chave ou linha", () => {
@@ -142,7 +154,9 @@ describe.skipIf(!URL)("SQL de produção: contas a pagar recorrentes (PostgreSQL
     expect(sql(`SELECT count(*) FROM "${T}"`)).toBe("7"); // cp1, cp2, o1, o2, o3 e as duas avulsas
   });
 
-  it("as chaves estrangeiras existem e apontam para onde devem", () => {
+  it("as chaves estrangeiras existem e apontam para onde devem — mesmo com HOMÔNIMO em outro schema", () => {
+    // a isca (mesmos nomes, outro schema) continua lá: é ela que prova que a guarda olha a tabela
+    expect(chaves(ISCA, R)).toContain("contas_pagar_recorrencias_empresa_id_fkey");
     const fks = chaves(SCHEMA, R);
     expect(fks).toContain('contas_pagar_recorrencias_empresa_id_fkey FOREIGN KEY (empresa_id) REFERENCES empresas(id) ON UPDATE CASCADE ON DELETE CASCADE');
     expect(fks).toContain('contas_pagar_recorrencias_fornecedor_id_fkey FOREIGN KEY (fornecedor_id) REFERENCES fornecedores(id) ON UPDATE CASCADE ON DELETE SET NULL');
