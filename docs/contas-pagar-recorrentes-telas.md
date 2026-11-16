@@ -12,8 +12,8 @@ a pessoa cria, vê e mexe na despesa que se repete.
 | --- | --- | --- |
 | **Nova conta a pagar** (`/financeiro/contas-pagar/nova`) | fornecedor, descrição, valor, vencimento, boleto | ganhou a seção **Repetição** com o toggle "Repetir (recorrente)". Ligado, abre a regra (frequência, dia do vencimento, fim de semana, início, término, valor a confirmar), troca "Valor total" por **"Valor de cada ocorrência"** e esconde o que é de uma conta só (vencimento avulso, banco, pedido de compra, boleto). O favorecido passa a ser **fornecedor ou colaborador** |
 | **Editar conta a pagar** (`.../[id]/editar`) | formulário igual para toda conta | numa conta que veio de uma regra, abre o bloco **"Esta conta é de uma despesa recorrente"** com o alcance: *Só esta ocorrência* (padrão) × *Esta e as próximas em aberto*, cada um com a sua explicação. Com pagamento registrado não há escolha: a tela diz que o ajuste vale só para aquele mês |
-| **Contas a pagar** (lista) | sem sinal de recorrência | selos **recorrente** (link para a regra) e **a confirmar** na coluna Situação e no cartão do celular; botão **Despesas recorrentes** no topo; filtro **Origem → Despesa recorrente** (e "Manual" passou a excluir as recorrentes) |
-| **Conta a pagar** (detalhe) | — | os mesmos dois selos ao lado do status, a linha **Despesa recorrente** (frequência, dia e competência) nos dados, e **Tornar recorrente** nas ações de uma conta avulsa |
+| **Contas a pagar** (lista) | sem sinal de recorrência | marca **recorrente** (link para a regra) ao lado da origem NF/Pedido, na coluna Descrição, e **a confirmar** embaixo do valor; as duas também no cartão do celular; botão **Despesas recorrentes** no topo; filtro **Origem → Despesa recorrente** (e "Manual" passou a excluir as recorrentes) |
+| **Conta a pagar** (detalhe) | — | os dois selos ao lado do status (onde há espaço), a linha **Despesa recorrente** (frequência, dia e competência) nos dados, e **Tornar recorrente** nas ações de uma conta avulsa |
 | **Despesas recorrentes** (nova, `/financeiro/contas-pagar/recorrentes`) | não existia | a lista das **regras** na TabelaPro (descrição, favorecido, repetição, próxima, término, categoria, contas, situação, valor), cartões no celular, faixa com "N ativas · N pausadas · Em aberto já gerado: R$ X", ⓘ do módulo, e por regra: ver ocorrências, editar, gerar o que falta, pausar/retomar, encerrar |
 
 Prints (desktop e celular) em `docs/prints/contas-pagar-recorrentes/`, `antes-*` e `depois-*`.
@@ -64,6 +64,14 @@ de que a rota não existia.
   (O boleto automático por ocorrência está na Fase 2 da parte 1.)
 - **"Manual" no filtro Origem passou a excluir as recorrentes.** Antes de existirem regras, "Manual"
   significava "sem nota e sem pedido"; agora a conta de uma regra não é manual.
+- **Os selos não viraram pílula na coluna Situação.** A primeira versão colocou "recorrente" e
+  "a confirmar" ali, e o print mostrou o estrago: a coluna é estreita e as pílulas escreviam por
+  cima do valor. "recorrente" é **origem** (foi para a Descrição, junto do NF/Pedido, no mesmo
+  formato discreto) e "a confirmar" qualifica o **valor** (foi para baixo do número, onde o
+  "falta X" já mora).
+- **A tela de regras mostra 6 colunas por padrão** (~1040px, cabem numa tela de 1440 com a barra
+  lateral aberta). Com as 10 que ela tinha no primeiro desenho, Valor e Ações saíam da tela.
+  Termina, Categoria, Centro de custo e Contas ficam no menu "Colunas".
 - **Os campos da regra são um bloco só** (`components/financeiro/campos-recorrencia.tsx`), usado nos
   três lugares que mexem nela: o toggle da conta nova, "Tornar recorrente" e a edição da regra. A
   validação é a **mesma** do servidor (`validarRegra`), então a tela nunca pede o que a rota recusa.
@@ -75,9 +83,23 @@ de que a rota não existia.
 | `tests/unit/conta-pagar-recorrentes-telas.test.ts` | 11 | as regras puras do formulário (início sugerido, término que manda só os campos dele, ida e volta de uma regra existente, a validação da rota recusando o que está errado) e as guardas: permissão em cada rota e em cada ação da tela, filtro no servidor, cron |
 | `tests/unit/conta-pagar-recorrentes-ui.test.ts` | 21 | num DOM de verdade: o toggle desligado não muda nada; ligado cria a REGRA; favorecido colaborador; o alcance na edição (e a ausência dele na conta paga); a tela de regras no desktop e no celular; quem só visualiza; a recusa do servidor que não muda a tela; a confirmação da casa; pular; tornar recorrente |
 
-**Rodada de mutação: 15 de 15 pegas** — o toggle decorativo, o alcance que não vai (ou que vai numa
+**Rodada de mutação: 18 de 18 pegas** (15 na primeira rodada + 3 nos defeitos que os prints acharam) — o toggle decorativo, o alcance que não vai (ou que vai numa
 conta paga), o término mandando os dois campos, a frequência nomeada usando o passo digitado, o
 início que ignora o dia que já passou, a ação sem permissão na tela, a recusa do servidor mudando a
 tela, encerrar sem confirmação, a conta paga voltando a oferecer pular, os números saindo do celular,
 "tornar recorrente" numa conta que já é de uma regra, o filtro "Manual" voltando a incluir as
-recorrentes, a tela sem permissão para abrir e a rota de tornar recorrente aceitando quem só vê.
+recorrentes, a tela sem permissão para abrir e a rota de tornar recorrente aceitando quem só vê —
+mais o selo voltando a ser link dentro do cartão (âncora dentro de âncora), o selo do desktop
+deixando de levar para a regra e o cartão do celular deixando de abrir as ocorrências.
+
+## O que os prints pegaram (e os testes não)
+
+Três defeitos reais só apareceram no navegador de verdade:
+
+1. **Âncora dentro de âncora**: o selo "recorrente" era um link dentro do link do cartão do celular.
+   `<a>` dentro de `<a>` é HTML inválido; o navegador reorganiza a árvore e a **hidratação do React
+   quebrava** na lista de contas a pagar. Hoje o selo do cartão é texto, e só o do desktop é link.
+2. **Selos estourando a coluna Situação**, escrevendo por cima do valor (acima).
+3. **A tela de regras passando da largura**, empurrando Valor e Ações para fora (acima).
+
+Os três viraram teste e entraram na rodada de mutação.
