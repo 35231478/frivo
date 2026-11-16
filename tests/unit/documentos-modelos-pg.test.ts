@@ -12,7 +12,12 @@
  *  - a assinatura grava a prova (nome, hora, IP, navegador, foto) e não acontece duas vezes;
  *  - a validade do modelo vira data de vencimento no anexo (o aviso que já existe passa a valer);
  *  - ADVERTÊNCIA é blindada: sem "› disciplinar" não gera, não aparece no histórico e o PDF é 404;
- *  - cancelar não apaga: guarda quem, quando e por quê, e tira o anexo da ficha com rastro.
+ *  - cancelar não apaga: guarda quem, quando e por quê, e tira o anexo da ficha com rastro;
+ *  - duas assinaturas ao mesmo tempo gravam UMA (a corrida é decidida pelo próprio UPDATE);
+ *  - o que não é imagem não vira foto de assinatura;
+ *  - guardar o anexo é idempotente, e regerar depois conta a validade da ASSINATURA, não do
+ *    dia em que o arquivo foi refeito;
+ *  - documento de outra empresa é 404 em todas as rotas que recebem o id.
  * Pula sem PG_TESTE_URL.
  */
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
@@ -229,6 +234,8 @@ describe.skipIf(!URL_PG)("Motor de documentos (PostgreSQL real)", () => {
     expect(texto).toContain("Luva de vaqueta");
     expect(texto).toContain("12345");
     expect(texto).toContain("Itens entregues");
+    // a coluna do CA tem cabeçalho próprio: é por ele que a fiscalização começa a ler
+    expect(texto).toMatch(/\bCA\b/);
   });
 
   it("assinar grava a prova, guarda o papel na ficha e some a tarja de prévia", async () => {
@@ -351,6 +358,106 @@ describe.skipIf(!URL_PG)("Motor de documentos (PostgreSQL real)", () => {
     expect(anexo.excluidoPorId).toBe("uA");
     expect(await erro(chamar("cancelar", "POST", { id: g.json.id, corpo: { motivo: "de novo" } })))
       .toBe("409 Este documento foi cancelado.");
+  });
+
+  /* ───────────────────────── a corrida, a foto e o anexo ───────────────────────── */
+
+  it("duas assinaturas ao mesmo tempo gravam UMA — e um anexo só", async () => {
+    const modeloId = await criarModelo({ nome: "Termo", tipo: "TERMO", texto: "Recebi, {{nome}}, o notebook em {{entregaEm}}." });
+    const g = await chamar("gerados", "POST", { id: "t1", corpo: { modeloId, valores: { entregaEm: "16/11/2026" } } });
+
+    // A JANELA de verdade: as duas chamadas têm de LER antes de qualquer uma ESCREVER. Em condições
+    // normais uma chega depois da outra e a leitura já barra; aqui o portão segura as duas leituras
+    // até ambas terem acontecido, que é a corrida que o filtro do próprio UPDATE existe para perder.
+    const leitura = prisma.documentoEmitido.findFirst.bind(prisma.documentoEmitido);
+    let leram = 0;
+    let abrir: () => void = () => {};
+    const portao = new Promise<void>((r) => { abrir = r; });
+    // atribuição direta (e não spyOn): o cliente do Prisma é um proxy, e o mockRestore apaga o método
+    prisma.documentoEmitido.findFirst = async (args: any) => {
+      const linha = await leitura(args);
+      if (++leram <= 2) {
+        if (leram === 2) abrir();
+        await portao;
+      }
+      return linha;
+    };
+
+    const { assinarDocumento } = await import("@/lib/documentos/documentos-server");
+    let dois: PromiseSettledResult<unknown>[] = [];
+    try {
+      dois = await Promise.allSettled([
+        assinarDocumento(g.json.id, "e1", { nome: "Marina Alves Pereira", selfie: FOTO }, { ip: "200.1.2.3" }),
+        assinarDocumento(g.json.id, "e1", { nome: "Outra Pessoa Qualquer", selfie: FOTO }, { ip: "200.1.2.9" }),
+      ]);
+    } finally {
+      prisma.documentoEmitido.findFirst = leitura;
+    }
+    expect(leram, "as duas leram antes de qualquer uma escrever").toBeGreaterThanOrEqual(2);
+    expect(dois.filter((r) => r.status === "fulfilled")).toHaveLength(1);
+
+    // qual das duas chega primeiro é do acaso; o que não pode é as DUAS gravarem
+    const linha = await prisma.documentoEmitido.findUnique({ where: { id: g.json.id } });
+    expect(["Marina Alves Pereira", "Outra Pessoa Qualquer"]).toContain(linha.assinaturaNome);
+    expect(linha.assinaturaIp).toBe(linha.assinaturaNome === "Marina Alves Pereira" ? "200.1.2.3" : "200.1.2.9");
+    expect(await prisma.colaboradorDocumento.count({ where: { excluidoEm: null } })).toBe(1);
+  });
+
+  it("o que não é imagem não vira foto de assinatura", async () => {
+    const modeloId = await criarModelo({ nome: "Termo", tipo: "TERMO", texto: "Recebi, {{nome}}, o notebook em {{entregaEm}}." });
+    const g = await chamar("gerados", "POST", { id: "t1", corpo: { modeloId, valores: { entregaEm: "16/11/2026" } } });
+    const pdfComoFoto = dataUrl(new Uint8Array([...new TextEncoder().encode("%PDF-1.4\n"), ...new Uint8Array(200).fill(0x20)]), "image/png");
+    const r = await chamar("assinar", "POST", { id: g.json.id, corpo: { nome: "Marina Alves Pereira", selfie: pdfComoFoto } });
+    expect(r.status).toBe(400);
+    const linha = await prisma.documentoEmitido.findUnique({ where: { id: g.json.id } });
+    expect(linha.assinaturaEm).toBeNull();
+    expect(await prisma.colaboradorDocumento.count()).toBe(0);
+  });
+
+  it("guardar o anexo não duplica, e regerar conta a validade da ASSINATURA", async () => {
+    const modeloId = await criarModelo({ nome: "Ficha de EPI", tipo: "EPI", texto: TEXTO_EPI, temItens: true, validadeDias: 180 });
+    const g = await chamar("gerados", "POST", {
+      id: "t1", corpo: { modeloId, valores: { entregaEm: "16/11/2026" }, itens: [{ descricao: "Luva", ca: "12345", quantidade: 1 }] },
+    });
+    const a = await chamar("assinar", "POST", { id: g.json.id, corpo: { nome: "Marina Alves Pereira", selfie: FOTO } });
+
+    const { guardarNosAnexos } = await import("@/lib/documentos/documentos-server");
+    const carregar = () => prisma.documentoEmitido.findFirst({
+      where: { id: g.json.id },
+      include: { modelo: true, colaborador: { include: { empresa: true } } },
+    });
+
+    // de novo no mesmo papel: devolve o anexo que já existe, não cria um segundo
+    const mesmo = await guardarNosAnexos((await carregar()) as any, AGORA);
+    expect(mesmo.id).toBe(a.json.documentoId);
+    expect(await prisma.colaboradorDocumento.count()).toBe(1);
+
+    // o anexo é excluído (como no cancelamento) e o papel é refeito UM MÊS depois:
+    // a validade continua contada da assinatura, não do dia em que o arquivo foi refeito
+    await prisma.colaboradorDocumento.updateMany({ where: { id: a.json.documentoId }, data: { excluidoEm: AGORA } });
+    const DEPOIS = new Date("2026-12-16T12:00:00.000Z");
+    const refeito = await guardarNosAnexos((await carregar()) as any, DEPOIS);
+    expect(refeito.id).not.toBe(a.json.documentoId);
+    const novo = await prisma.colaboradorDocumento.findUnique({ where: { id: refeito.id } });
+    expect(novo.dataVencimento.toISOString().slice(0, 10)).toBe("2027-05-15");
+  });
+
+  it("documento de OUTRA empresa é 404 em todas as rotas que recebem o id", async () => {
+    const alheio = await prisma.documentoEmitido.create({
+      data: {
+        empresaId: "e2", colaboradorId: "t2", tipo: "TERMO", titulo: "Termo de fora",
+        texto: "Papel da outra empresa.", criadoEm: AGORA,
+      },
+    });
+    const pdf = await chamar("pdf", "GET", { id: alheio.id });
+    expect(pdf.status).toBe(404);
+    expect(pdf.bytes).toBeNull();
+    expect(await erro(chamar("assinar", "POST", { id: alheio.id, corpo: { nome: "Marina Alves", selfie: FOTO } }))).toBe("404 Documento não encontrado");
+    expect(await erro(chamar("cancelar", "POST", { id: alheio.id, corpo: { motivo: "qualquer coisa" } }))).toBe("404 Documento não encontrado");
+    // e o papel de lá continua intacto
+    const depois = await prisma.documentoEmitido.findUnique({ where: { id: alheio.id } });
+    expect(depois.assinaturaEm).toBeNull();
+    expect(depois.canceladoEm).toBeNull();
   });
 
   /* ───────────────────────── o CRUD dos modelos ───────────────────────── */
