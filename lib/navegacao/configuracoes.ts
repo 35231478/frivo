@@ -1,7 +1,7 @@
 import {
   Boxes, Building2, Clock, Cog, FileBadge, FileSignature, FileSpreadsheet, Headset, IdCard, Landmark, ListChecks, Mail, Package, Printer, QrCode, ScrollText, ShieldCheck, Tags,
   Target, Thermometer, UserCog, Wallet, Wrench, type LucideIcon,
-  Hash, CaseSensitive,
+  Hash, CaseSensitive, UserPlus,
 } from "lucide-react";
 import { moduloDaRota, pode, type Acao, type Permissoes } from "@/lib/permissoes";
 
@@ -121,6 +121,7 @@ export const SECOES_CONFIGURACOES: SecaoConfig[] = [
           { id: "usuarios", href: "/configuracoes/usuarios", icone: UserCog, label: "Usuários", dica: "Pessoas com acesso ao sistema" },
           { id: "perfis", href: "/configuracoes/perfis", icone: ShieldCheck, label: "Perfis de acesso", dica: "Permissões de cada perfil" },
           { id: "cargos", href: "/configuracoes/cargos", icone: IdCard, label: "Cargos", dica: "Cargo do funcionário (usado no Custo de Pessoal)" },
+          { id: "admissao", href: "/configuracoes/admissao", icone: UserPlus, label: "Admissão digital", dica: "Modelo de contrato, documentos pedidos e orientações do link", modulo: "admissao", acao: "gerenciar" },
         ],
       },
       {
