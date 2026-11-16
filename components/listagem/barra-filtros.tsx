@@ -4,6 +4,7 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useSearchParams } from "next/navigation";
 import { Check, ChevronDown, Trash2, X } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { BuscaSelect } from "@/components/ui/busca-select";
 import { DEBOUNCE_BUSCA_MS } from "@/components/listagem/use-listagem-url";
 
 type Navegar = (m: Record<string, string | null>) => void;
@@ -169,6 +170,26 @@ export const filtroCancelados = (navegar: Navegar, rotulo = "Mostrar cancelados"
 export const INPUT_FILTRO = "w-full bg-white border border-surface-border rounded-lg px-2.5 py-1.5 text-sm text-ink focus:outline-none focus:border-primary-500";
 /** O controle ativo (com valor na URL) se destaca */
 export const inputFiltro = (ativo: unknown) => cn(INPUT_FILTRO, ativo ? "border-primary-300 text-primary-700 bg-primary-50/50" : "");
+
+/**
+ * Filtro de ESCOLHA ÚNICA com busca, para a lista que aponta para um cadastro que cresce (cliente,
+ * fornecedor, categoria, centro de custo, tipo de OS). Para lista fixa e curta (status, origem) a
+ * barra continua com o `<select>` nativo: busca ali não ajuda e o nativo é melhor no celular.
+ */
+export function FiltroBusca({ valor, onChange, opcoes, rotulo, vazio = "Todos" }: {
+  valor: string;
+  onChange: (v: string) => void;
+  opcoes: { value: string; label: string }[];
+  rotulo: string;
+  vazio?: string;
+}) {
+  return (
+    <BuscaSelect
+      value={valor} onChange={onChange} options={opcoes} rotulo={rotulo} placeholder={vazio}
+      className={cn("[&>button]:px-2.5 [&>button]:py-1.5", valor && "[&>button]:border-primary-300 [&>button]:bg-primary-50/50")}
+    />
+  );
+}
 
 /** Texto ou número livre que vai para a URL com atraso (sem Enter) — "Banco", "Valor de", "Número da OS"… */
 export function FiltroTextoUrl({ param, navegar, placeholder, tipo = "text", rotulo }: {

@@ -21,7 +21,7 @@ import {
   Plus, Download, Barcode, Loader2, Sigma, Handshake, X,
 } from "lucide-react";
 import { BarraPeriodo, CardResumo, GradeCards, type PeriodoTela } from "@/components/listagem/periodo-cards";
-import { BarraFiltros, filtroCancelados, FiltroTextoUrl, inputFiltro } from "@/components/listagem/barra-filtros";
+import { BarraFiltros, FiltroBusca, filtroCancelados, FiltroTextoUrl, inputFiltro } from "@/components/listagem/barra-filtros";
 import { CampoBusca, Paginacao } from "@/components/listagem/listagem-ui";
 import { PLANILHA, valorSemMoeda } from "@/lib/planilha";
 import { TabelaPro, type ColunaPro } from "@/components/listagem/tabela-pro";
@@ -179,17 +179,13 @@ function ContasReceberCorpo({
         paramBusca="q" navegar={navegar}
         filtros={[
           { id: "clienteId", label: "Cliente", params: ["clienteId"], render: () => (
-            <select value={filtros.clienteId} onChange={(e) => navegar({ clienteId: e.target.value || null })} className={inputFiltro(filtros.clienteId)} aria-label="Cliente" data-filtro="clienteId">
-              <option value="">Todos</option>
-              {clientes.map((c) => <option key={c.id} value={c.id}>{c.nome}</option>)}
-            </select>
+            <FiltroBusca rotulo="Cliente" valor={filtros.clienteId} onChange={(v) => navegar({ clienteId: v || null })}
+              opcoes={clientes.map((c) => ({ value: c.id, label: c.nome }))} />
           ) },
           { id: "categoria", label: "Categoria", params: ["categoria"], render: () => (
-            <select value={filtros.categoria} onChange={(e) => navegar({ categoria: e.target.value || null })} className={inputFiltro(filtros.categoria)} aria-label="Categoria" data-filtro="categoria">
-              <option value="">Todas</option>
-              {/* Filtro: inclui as inativas (contas antigas continuam filtráveis) */}
-              {categorias.map((c) => <option key={c.id} value={c.id}>{c.ativo ? c.nome : `${c.nome} (inativa)`}</option>)}
-            </select>
+            /* Filtro: inclui as inativas (contas antigas continuam filtráveis) */
+            <FiltroBusca rotulo="Categoria" vazio="Todas" valor={filtros.categoria} onChange={(v) => navegar({ categoria: v || null })}
+              opcoes={categorias.map((c) => ({ value: c.id, label: c.ativo ? c.nome : `${c.nome} (inativa)` }))} />
           ) },
           { id: "forma", label: "Forma de pagamento", params: ["forma"], render: () => (
             <select value={filtros.forma} onChange={(e) => navegar({ forma: e.target.value || null })} className={inputFiltro(filtros.forma)} aria-label="Forma de pagamento" data-filtro="forma">

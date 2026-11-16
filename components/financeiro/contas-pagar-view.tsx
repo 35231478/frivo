@@ -15,7 +15,7 @@ import {
   FileText, ShoppingCart, Receipt, X,
 } from "lucide-react";
 import { BarraPeriodo, CardResumo, GradeCards, type PeriodoTela } from "@/components/listagem/periodo-cards";
-import { BarraFiltros, filtroCancelados, inputFiltro } from "@/components/listagem/barra-filtros";
+import { BarraFiltros, FiltroBusca, filtroCancelados, inputFiltro } from "@/components/listagem/barra-filtros";
 import { CampoBusca, Paginacao } from "@/components/listagem/listagem-ui";
 import { PLANILHA, valorSemMoeda } from "@/lib/planilha";
 import { TabelaPro } from "@/components/listagem/tabela-pro";
@@ -165,23 +165,17 @@ function ContasPagarCorpo({
             </select>
           ) },
           { id: "fornecedorId", label: "Fornecedor", params: ["fornecedorId"], render: () => (
-            <select {...sel("fornecedorId")} aria-label="Fornecedor cadastrado">
-              <option value="">Todos</option>
-              {fornecedores.map((x) => <option key={x.id} value={x.id}>{x.ativo ? x.nome : `${x.nome} (inativo)`}</option>)}
-            </select>
+            <FiltroBusca rotulo="Fornecedor cadastrado" valor={filtros.fornecedorId} onChange={(v) => navegar({ fornecedorId: v || null })}
+              opcoes={fornecedores.map((x) => ({ value: x.id, label: x.ativo ? x.nome : `${x.nome} (inativo)` }))} />
           ) },
           { id: "categoria", label: "Categoria", params: ["categoria"], render: () => (
-            <select {...sel("categoria")} aria-label="Categoria">
-              <option value="">Todas</option>
-              {/* Filtro: inclui as inativas (contas antigas continuam filtráveis) */}
-              {categorias.map((x) => <option key={x.id} value={x.id}>{x.ativo ? x.nome : `${x.nome} (inativa)`}</option>)}
-            </select>
+            /* Filtro: inclui as inativas (contas antigas continuam filtráveis) */
+            <FiltroBusca rotulo="Categoria" vazio="Todas" valor={filtros.categoria} onChange={(v) => navegar({ categoria: v || null })}
+              opcoes={categorias.map((x) => ({ value: x.id, label: x.ativo ? x.nome : `${x.nome} (inativa)` }))} />
           ) },
           { id: "centro", label: "Centro de custo", params: ["centro"], render: () => (
-            <select {...sel("centro")} aria-label="Centro de custo">
-              <option value="">Todos</option>
-              {centros.map((x) => <option key={x.id} value={x.id}>{x.ativo ? x.nome : `${x.nome} (inativo)`}</option>)}
-            </select>
+            <FiltroBusca rotulo="Centro de custo" valor={filtros.centro} onChange={(v) => navegar({ centro: v || null })}
+              opcoes={centros.map((x) => ({ value: x.id, label: x.ativo ? x.nome : `${x.nome} (inativo)` }))} />
           ) },
           { id: "origem", label: "Origem", params: ["origem"], render: () => (
             <select {...sel("origem")} aria-label="Origem">
