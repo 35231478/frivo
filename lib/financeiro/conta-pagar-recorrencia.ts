@@ -141,6 +141,141 @@ export function resumoDaRegra(regra: RegraRecorrencia & { valor?: number | null;
   return partes.join(" · ");
 }
 
+/* ───────── o formulário da tela ───────── */
+
+export const TERMINOS = ["INDEFINIDO", "DATA", "OCORRENCIAS"] as const;
+export type TerminoId = (typeof TERMINOS)[number];
+export const ROTULO_TERMINO: Record<TerminoId, string> = {
+  INDEFINIDO: "Sem data para terminar",
+  DATA: "Até um mês",
+  OCORRENCIAS: "Depois de N ocorrências",
+};
+export const AJUDA_TERMINO = "Sem data para terminar, o sistema mantém sempre uns 12 meses de contas geradas à frente e vai empurrando esse horizonte sozinho.";
+
+/** O formulário guarda texto (é o que o <input> devolve); `corpoDaRecorrencia` converte. */
+export interface FormRecorrencia {
+  /** meses entre uma ocorrência e a próxima (1 = todo mês) — é ele que manda */
+  passoMeses: string;
+  diaVencimento: string;
+  ajusteDiaNaoUtil: string;
+  inicioAno: string;
+  inicioMes: string;
+  termino: TerminoId;
+  fimAno: string;
+  fimMes: string;
+  ocorrencias: string;
+  valorEstimado: boolean;
+}
+
+/** O formulário como a tela abre: mensal, dia do vencimento escolhido (ou hoje) e início sugerido. */
+export function formRecorrenciaInicial(hoje: { ano: number; mes: number; dia: number }, diaVencimento?: number | null): FormRecorrencia {
+  const dia = diaValido(diaVencimento) ? (diaVencimento as number) : hoje.dia;
+  const inicio = inicioSugerido(hoje, dia);
+  return {
+    passoMeses: "1", diaVencimento: String(dia), ajusteDiaNaoUtil: "MANTER",
+    inicioAno: String(inicio.ano), inicioMes: String(inicio.mes),
+    termino: "INDEFINIDO", fimAno: "", fimMes: "", ocorrencias: "", valorEstimado: false,
+  };
+}
+
+/** O formulário preenchido com uma regra que já existe (para editar). */
+export function formDaRegra(r: RegraRecorrencia & { valorEstimado?: boolean | null }): FormRecorrencia {
+  const passo = Math.max(1, Math.floor(r.passoMeses || 1));
+  return {
+    passoMeses: String(passo),
+    diaVencimento: String(r.diaVencimento), ajusteDiaNaoUtil: r.ajusteDiaNaoUtil || "MANTER",
+    inicioAno: String(r.inicioAno), inicioMes: String(r.inicioMes),
+    termino: r.fimAno && r.fimMes ? "DATA" : r.ocorrencias ? "OCORRENCIAS" : "INDEFINIDO",
+    fimAno: r.fimAno ? String(r.fimAno) : "", fimMes: r.fimMes ? String(r.fimMes) : "",
+    ocorrencias: r.ocorrencias ? String(r.ocorrencias) : "", valorEstimado: !!r.valorEstimado,
+  };
+}
+
+const inteiro = (v: string) => { const n = Number(v); return Number.isFinite(n) ? Math.floor(n) : NaN; };
+
+/**
+ * O que a tela manda para a API. O término escolhido manda nos campos: "até um mês" leva só a
+ * competência final, "N ocorrências" leva só o número, "sem data" não leva nenhum dos dois (é o que
+ * o servidor cobra em `validarRegra`: os dois juntos são recusados).
+ */
+export function corpoDaRecorrencia(f: FormRecorrencia) {
+  return {
+    passoMeses: inteiro(f.passoMeses),
+    diaVencimento: inteiro(f.diaVencimento),
+    ajusteDiaNaoUtil: f.ajusteDiaNaoUtil || "MANTER",
+    inicioAno: inteiro(f.inicioAno),
+    inicioMes: inteiro(f.inicioMes),
+    fimAno: f.termino === "DATA" && f.fimAno ? inteiro(f.fimAno) : null,
+    fimMes: f.termino === "DATA" && f.fimMes ? inteiro(f.fimMes) : null,
+    ocorrencias: f.termino === "OCORRENCIAS" && f.ocorrencias ? inteiro(f.ocorrencias) : null,
+    valorEstimado: !!f.valorEstimado,
+  };
+}
+
+/** Os anos que o seletor de competência oferece: do ano corrente até 5 à frente. */
+export const anosDoSeletor = (ano: number) => Array.from({ length: 6 }, (_, i) => ano + i);
+
+/* ───────── atalhos de repetição e prévia ───────── */
+
+/**
+ * Os atalhos do seletor "Configurações de repetição" — o que quase todo mundo escolhe, sem abrir
+ * o "Personalizar…". Cada um é a regra inteira (passo + término), como o rótulo diz.
+ */
+export const ATALHOS_REPETICAO = [
+  { id: "MENSAL_SEM_FIM", passoMeses: 1, ocorrencias: null, rotulo: "Mensal: todo mês, sem data para terminar" },
+  { id: "MENSAL_12", passoMeses: 1, ocorrencias: 12, rotulo: "Mensal: todo mês, 12 vezes" },
+  { id: "MENSAL_24", passoMeses: 1, ocorrencias: 24, rotulo: "Mensal: todo mês, 24 vezes" },
+  { id: "TRIMESTRAL_SEM_FIM", passoMeses: 3, ocorrencias: null, rotulo: "Trimestral: a cada 3 meses, sem data para terminar" },
+  { id: "ANUAL_SEM_FIM", passoMeses: 12, ocorrencias: null, rotulo: "Anual: todo ano, sem data para terminar" },
+] as const;
+export type AtalhoId = (typeof ATALHOS_REPETICAO)[number]["id"] | "CUSTOM";
+export const PERSONALIZAR = "CUSTOM";
+
+/** O atalho que uma regra representa, ou "CUSTOM" quando ela não é nenhum deles. */
+export function atalhoDaRegra(r: { passoMeses: number; ocorrencias?: number | null; fimAno?: number | null; fimMes?: number | null }): AtalhoId {
+  if (r.fimAno && r.fimMes) return PERSONALIZAR;
+  const a = ATALHOS_REPETICAO.find((x) => x.passoMeses === r.passoMeses && (x.ocorrencias ?? null) === (r.ocorrencias ?? null));
+  return a?.id ?? PERSONALIZAR;
+}
+
+/** Como o seletor resume a regra quando ela não é um atalho: "A cada 2 meses, 18 vezes". */
+export function textoRepeticao(r: { passoMeses: number; ocorrencias?: number | null; fimAno?: number | null; fimMes?: number | null }): string {
+  const base = textoFrequencia(r.passoMeses);
+  if (r.fimAno && r.fimMes) return `${base}, até ${rotuloCompetencia(r.fimAno, r.fimMes)}`;
+  if (r.ocorrencias) return `${base}, ${r.ocorrencias} ${r.ocorrencias === 1 ? "vez" : "vezes"}`;
+  return `${base}, sem data para terminar`;
+}
+
+/** Uma linha da prévia "Recorrências previstas" (o que a pessoa vê ANTES de salvar). */
+export interface PreviaOcorrencia { ano: number; mes: number; vencimento: Date; descricao: string; valor: number }
+
+/**
+ * A prévia das contas que a regra vai abrir. Com término (data ou número) mostra TODAS; sem
+ * término, os meses do horizonte rolante — que é exatamente o que o sistema gera de uma vez.
+ */
+export function previaDaRegra(
+  regra: RegraRecorrencia & { descricao?: string; valor?: number | null },
+  hoje: Competencia,
+  meses = 12,
+): PreviaOcorrencia[] {
+  // o teto da prévia é o término da PRÓPRIA regra quando ela tem um (data ou número de
+  // ocorrências); sem término, o horizonte rolante — que é o que o sistema abre de uma vez.
+  const passo = Math.max(1, Math.floor(regra.passoMeses || 1));
+  const porData = regra.fimAno && regra.fimMes ? { ano: regra.fimAno, mes: regra.fimMes } : null;
+  const porContagem = regra.ocorrencias && regra.ocorrencias > 0
+    ? somarMeses(regra.inicioAno, regra.inicioMes, passo * Math.floor(regra.ocorrencias))
+    : null;
+  const limite = porData ?? porContagem ?? horizonteRolante(hoje, meses);
+  return competenciasDaRegra({ ...regra, situacao: "ATIVA" }, limite)
+    .filter((c) => !competenciaAntes(c, hoje))
+    .map((c) => ({
+      ano: c.ano, mes: c.mes,
+      vencimento: vencimentoDaOcorrencia(regra, c.ano, c.mes),
+      descricao: descricaoDaOcorrencia(regra.descricao ?? "", c.ano, c.mes),
+      valor: Number(regra.valor ?? 0),
+    }));
+}
+
 /* ───────── editar com escopo ───────── */
 
 export const ESCOPOS = ["ESTA", "ESTA_E_PROXIMAS"] as const;

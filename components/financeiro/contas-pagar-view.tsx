@@ -12,7 +12,7 @@ import { CategoriaBadge } from "@/components/financeiro/categoria-badge";
 import { useListagemUrl } from "@/components/listagem/use-listagem-url";
 import {
   Upload, AlertTriangle, CalendarClock, CheckCircle2, Search, SlidersHorizontal, Plus, Barcode, Loader2, Sigma,
-  FileText, ShoppingCart, Receipt, X,
+  FileText, ShoppingCart, Receipt, Repeat, X,
 } from "lucide-react";
 import { BarraPeriodo, CardResumo, GradeCards, type PeriodoTela } from "@/components/listagem/periodo-cards";
 import { BarraFiltros, filtroCancelados, inputFiltro } from "@/components/listagem/barra-filtros";
@@ -22,6 +22,7 @@ import { TabelaPro } from "@/components/listagem/tabela-pro";
 import { CheckboxSelecao, CheckboxSelecaoPagina, SelecaoLinhasProvider, useSelecaoLinhas } from "@/components/listagem/selecao-linhas";
 import { PainelTotais, type LinhaTotal } from "@/components/listagem/painel-totais";
 import { CHAVES_PAGAR, totaisPagar } from "@/lib/listagem/totais-selecao";
+import { rotuloCompetencia } from "@/lib/financeiro/conta-pagar-recorrencia";
 
 /** Uma conta a pagar já pronta para a tela (números em vez de Decimal, datas em texto) */
 export interface ContaPagarView {
@@ -36,6 +37,11 @@ export interface ContaPagarView {
   temBoleto: boolean;
   notaCompra: { id: string; numero: string } | null;
   pedidoCompra: { numero: string } | null;
+  /** Veio de uma despesa recorrente (a regra) e a competência dela */
+  recorrenciaId: string | null;
+  refAno: number | null; refMes: number | null;
+  /** Valor "a confirmar": a regra marcou como estimado (energia, água, cartão) */
+  valorEstimado: boolean;
 }
 interface Opcao { id: string; nome: string; ativo: boolean }
 
@@ -89,7 +95,10 @@ function ContasPagarCorpo({
   });
 
   const acoes = (c: ContaPagarView) => (
-    <ContaPagarAcoes conta={{ id: c.id, numero: c.numero, fornecedor: c.fornecedor.nome, valorTotal: c.valorTotal, valorPago: c.valorPago, saldoRestante: c.saldoRestante, status: c.status }} menu />
+    <ContaPagarAcoes conta={{
+      id: c.id, numero: c.numero, fornecedor: c.fornecedor.nome, valorTotal: c.valorTotal, valorPago: c.valorPago,
+      saldoRestante: c.saldoRestante, status: c.status, recorrenciaId: c.recorrenciaId, descricao: c.descricao, dataVencimento: c.dataVencimento,
+    }} menu />
   );
 
   // Nada no período: oferece todo o período (conta antiga, link de outra tela)
@@ -121,6 +130,30 @@ function ContasPagarCorpo({
     <span className={cn("inline-flex items-center gap-1 text-[11px] text-ink-muted", className)} title={`Pedido ${c.pedidoCompra.numero}`} data-origem-conta>
       <ShoppingCart className="w-3 h-3 shrink-0" /><span className="truncate">Pedido {c.pedidoCompra.numero}</span>
     </span>
+  ) : null;
+
+  /**
+   * De onde a conta veio quando ela é de uma despesa recorrente — no MESMO lugar e no mesmo
+   * formato discreto da origem NF/Pedido (coluna Descrição), não como pílula na Situação: ali a
+   * coluna é estreita e as pílulas estouravam por cima do valor.
+   *
+   * `link` só no desktop: no cartão do celular isto fica DENTRO do link do cartão, e um <a> dentro
+   * de outro <a> é HTML inválido — o navegador reorganiza a árvore e a hidratação quebra.
+   */
+  const marcaRecorrente = (c: ContaPagarView, className?: string) => {
+    if (!c.recorrenciaId) return null;
+    const titulo = `Conta de uma despesa que se repete${c.refAno && c.refMes ? ` (${rotuloCompetencia(c.refAno, c.refMes)})` : ""}. A repetição se ajusta dentro da própria conta.`;
+    return (
+      <span title={titulo} className={cn("inline-flex items-center gap-1 text-[11px] text-ink-muted", className)} data-selo-recorrente={c.recorrenciaId}>
+        <Repeat className="w-3 h-3 shrink-0" /><span className="truncate">recorrente</span>
+      </span>
+    );
+  };
+
+  /** "a confirmar": o valor é estimado e vai mudar quando o boleto chegar — fica junto do valor */
+  const marcaEstimado = (c: ContaPagarView, className?: string) => c.valorEstimado ? (
+    <span className={cn("text-[11px] font-normal text-atencao-texto", className)}
+      title="Valor estimado: ajuste quando o boleto chegar" data-selo-estimado>a confirmar</span>
   ) : null;
 
   const marcasFornecedor = (c: ContaPagarView) => (
@@ -187,6 +220,7 @@ function ContasPagarCorpo({
             <select {...sel("origem")} aria-label="Origem">
               <option value="">Todas</option>
               <option value="MANUAL">Manual</option>
+              <option value="RECORRENTE">Despesa recorrente</option>
               <option value="PEDIDO">Pedido de compra</option>
               <option value="NF">Nota de compra (NF)</option>
             </select>
@@ -213,7 +247,10 @@ function ContasPagarCorpo({
               <Link href={`/financeiro/contas-pagar/${c.id}`} className="flex-1 min-w-0" aria-label={`Ver detalhes de ${c.numero}`}>
                 <div className="flex items-start justify-between gap-2">
                   <p className="font-medium text-ink truncate">{c.fornecedor.nome}{marcasFornecedor(c)}</p>
-                  <p className="font-bold text-ink shrink-0 tabular-nums">{formatarMoeda(c.valorTotal)}</p>
+                  <p className="font-bold text-ink shrink-0 tabular-nums text-right">
+                    {formatarMoeda(c.valorTotal)}
+                    {marcaEstimado(c, "block")}
+                  </p>
                 </div>
                 <p className="text-xs text-ink-muted truncate">{c.numero} · {c.descricao}</p>
                 <div className="flex flex-wrap items-center gap-x-2 gap-y-1 mt-1.5">
@@ -221,6 +258,7 @@ function ContasPagarCorpo({
                   <span className="text-xs text-ink-subtle">{c.dataVencimento ? `Vence ${formatarData(c.dataVencimento)}` : "Sem vencimento"}</span>
                   {c.status === "PAGO_PARCIAL" && <span className="text-xs text-ink-muted">Falta {formatarMoeda(c.saldoRestante)}</span>}
                   {c.notaCompra && <span className="text-xs text-acento">NF {c.notaCompra.numero}</span>}
+                  {marcaRecorrente(c)}
                   {c.temBoleto && <Barcode className="w-3.5 h-3.5 text-primary-600" aria-label="Boleto colado" />}
                 </div>
               </Link>
@@ -264,6 +302,7 @@ function ContasPagarCorpo({
                     <div className="flex items-baseline gap-1.5 min-w-0">
                       <span className="min-w-0 truncate text-ink" title={c.descricao}>{c.descricao}</span>
                       <Origem c={c} className="shrink-0 max-w-[45%]" />
+                      {marcaRecorrente(c, "shrink-0")}
                     </div>
                   ),
                   categoria: <CategoriaBadge conta={c} categorias={categorias} linhaUnica />,
@@ -283,6 +322,7 @@ function ContasPagarCorpo({
                       {valorSemMoeda(c.valorTotal)}
                       {/* Pago em parte: o que falta, logo abaixo (o card soma por ele) */}
                       {c.status === "PAGO_PARCIAL" && <span className="block text-[11px] font-normal text-ink-muted" data-saldo>falta {valorSemMoeda(c.saldoRestante)}</span>}
+                      {marcaEstimado(c, "block")}
                     </span>
                   ),
                   acoes: acoes(c),

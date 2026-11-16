@@ -66,8 +66,10 @@ describe("prioridade 1: o que mexe em dinheiro só aparece para quem pode", () =
     const src = ler(ACOES);
     expect(src).toContain('import { usePermissoes } from "@/components/providers/permissoes-provider";');
     expect(src).toContain('const podeMexer = usePermissoes().pode("financeiro", "fluxoCaixa");');
-    // os três itens do ⋮ e os três botões da ficha, todos atrás da permissão
-    expect(src.match(/\{podeMexer &&/g) ?? []).toHaveLength(6);
+    // os itens do ⋮ e os botões da ficha, todos atrás da permissão: pagar, editar e cancelar
+    // (3 + 3) mais "Repetir lançamento" no menu e na ficha (2). Eram 9 enquanto existia o atalho
+    // "ver a despesa recorrente": a recorrência passou a morar dentro da conta, não há tela à parte.
+    expect(src.match(/\{podeMexer &&/g) ?? []).toHaveLength(8);
     // histórico e "ver detalhes" são leitura: continuam para quem só visualiza
     expect(src).toMatch(/<ItemMenu icone=\{Eye\}/);
     expect(src).toMatch(/data-historico-pagamentos/);
@@ -124,7 +126,10 @@ describe("toda gravação confirma por toast", () => {
 
   it("cancelar, conta nova/editada e cobrança nova também confirmam por toast", () => {
     expect(ler(ACOES)).toMatch(/toast\(`Conta \$\{conta\.numero\} cancelada\.`\)/);
-    expect(ler(FORM)).toMatch(/toast\(salva\?\.numero \? `Conta \$\{salva\.numero\} \$\{fim\}\.`/);
+    // o caminho de sempre continua igual; o ramo novo é o da conta de despesa recorrente editada
+    // com alcance "esta e as próximas", que diz quantas ocorrências foram junto
+    expect(ler(FORM)).toMatch(/: salva\?\.numero \? `Conta \$\{salva\.numero\} \$\{fim\}\.`/);
+    expect(ler(FORM)).toMatch(/A regra e \$\{outras\} \$\{plural\} em aberto acompanharam\./);
     expect(ler(COBRANCA_FORM)).toMatch(/toast\(parcelado \? "Cobrança criada em parcelas\." : "Cobrança criada\."\)/);
   });
 });

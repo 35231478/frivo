@@ -177,8 +177,13 @@ describe("cara de planilha (desktop) e cartões (celular)", () => {
       await clicar($(`[data-linha-conta=${id}] [data-acao=menu]`)); // fecha
       return r;
     };
-    expect(await itens("cp1")).toEqual(["detalhes", "pagar", "historico", "editar", "cancelar"]);
-    expect(await itens("cp3")).toEqual(["detalhes", "historico", "cancelar"]);
+    // "tornar-recorrente" entrou com a despesa recorrente: a conta avulsa em aberto pode virar a
+    // primeira ocorrência de uma regra (a que já é de uma regra mostra "ver-recorrencia" no lugar)
+    expect(await itens("cp1")).toEqual(["detalhes", "pagar", "historico", "editar", "tornar-recorrente", "cancelar"]);
+    // Quitada: nem pagar nem editar. "Tornar recorrente" continua, e de propósito — "esta despesa
+    // que acabei de pagar se repete todo mês" é o caso comum, e virar regra não mexe em um centavo
+    // da conta paga (ela mantém número, pagamentos e histórico e vira a primeira ocorrência).
+    expect(await itens("cp3")).toEqual(["detalhes", "historico", "tornar-recorrente", "cancelar"]);
     await clicar($("[data-linha-conta=cp1] [data-acao=menu]"));
     expect($<HTMLAnchorElement>("[data-menu-acoes] [data-item=detalhes]")!.getAttribute("href")).toBe("/financeiro/contas-pagar/cp1");
     expect($<HTMLAnchorElement>("[data-menu-acoes] [data-item=editar]")!.getAttribute("href")).toBe("/financeiro/contas-pagar/cp1/editar");
