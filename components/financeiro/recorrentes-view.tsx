@@ -135,9 +135,7 @@ export function RecorrentesView({ regras, categorias, podeMexer, emAberto }: {
       <span className={cn("inline-flex items-center text-[11px] font-semibold px-2 py-0.5 rounded-full", CLASSE_SITUACAO[r.situacao as SituacaoRecorrencia] ?? CLASSE_SITUACAO.ENCERRADA)} data-situacao={r.situacao}>
         {ROTULO_SITUACAO[r.situacao as SituacaoRecorrencia] ?? r.situacao}
       </span>
-      {r.valorEstimado && (
-        <span className="inline-flex items-center text-[11px] font-semibold px-2 py-0.5 rounded-full bg-atencao-claro text-atencao-texto" title="O valor é estimado: ajuste cada conta quando o boleto chegar" data-selo-estimado>a confirmar</span>
-      )}
+
     </span>
   );
 
@@ -185,7 +183,10 @@ export function RecorrentesView({ regras, categorias, podeMexer, emAberto }: {
                 aria-label={`Ver as ocorrências de ${r.descricao}`}>
                 <div className="flex items-start justify-between gap-2">
                   <p className="font-medium text-ink truncate">{r.descricao}</p>
-                  <p className="font-bold text-ink shrink-0 tabular-nums">{formatarMoeda(r.valor)}</p>
+                  <p className="font-bold text-ink shrink-0 tabular-nums text-right">
+                    {formatarMoeda(r.valor)}
+                    {r.valorEstimado && <span className="block text-[11px] font-normal text-atencao-texto" data-selo-estimado>a confirmar</span>}
+                  </p>
                 </div>
                 <p className="text-xs text-ink-muted truncate">{r.favorecido.nome} · {textoFrequencia(r.passoMeses)}, dia {r.diaVencimento}</p>
                 <div className="flex flex-wrap items-center gap-x-2 gap-y-1 mt-1.5">
@@ -205,17 +206,20 @@ export function RecorrentesView({ regras, categorias, podeMexer, emAberto }: {
             <TabelaPro
               tela="contas-pagar-recorrentes"
               barra={barra}
+              // As larguras somam ~1040px: cabem numa tela de 1440 com a barra lateral aberta, sem
+              // empurrar Valor e Ações para fora. Categoria, centro, término e contagem ficam no
+              // menu "Colunas" para quem quiser.
               colunas={[
                 { id: "descricao", titulo: "Despesa", obrigatoria: true },
-                { id: "favorecido", titulo: "Favorecido", largura: 200, classe: "truncate" },
-                { id: "frequencia", titulo: "Repetição", largura: 170 },
-                { id: "proxima", titulo: "Próxima", largura: 104 },
-                { id: "termino", titulo: "Termina", largura: 150, classe: "truncate" },
-                { id: "categoria", titulo: "Categoria", largura: 144 },
+                { id: "favorecido", titulo: "Favorecido", largura: 180, classe: "truncate" },
+                { id: "frequencia", titulo: "Repetição", largura: 158 },
+                { id: "proxima", titulo: "Próxima", largura: 100 },
+                { id: "situacao", titulo: "Situação", largura: 170 },
+                { id: "valor", titulo: "Valor (R$)", alinhar: "direita", largura: 110, obrigatoria: true },
+                { id: "termino", titulo: "Termina", largura: 140, classe: "truncate", oculta: true },
+                { id: "categoria", titulo: "Categoria", largura: 144, oculta: true },
                 { id: "centro", titulo: "Centro de custo", largura: 128, classe: "truncate", oculta: true },
-                { id: "contas", titulo: "Contas", alinhar: "direita", largura: 76 },
-                { id: "situacao", titulo: "Situação", largura: 148 },
-                { id: "valor", titulo: "Valor (R$)", alinhar: "direita", largura: 120, obrigatoria: true },
+                { id: "contas", titulo: "Contas", alinhar: "direita", largura: 76, oculta: true },
                 { id: "acoes", titulo: "Ações", fixa: true, largura: 40, semTitulo: true, alinhar: "direita", classe: "py-0.5" },
               ]}
               linhas={regras.map((r) => ({
@@ -248,7 +252,12 @@ export function RecorrentesView({ regras, categorias, podeMexer, emAberto }: {
                     : <span className="text-ink-subtle">—</span>,
                   contas: <span className={cn(PLANILHA.numero, PLANILHA.apagado)} data-contas>{r.contas}</span>,
                   situacao: selos(r),
-                  valor: <span className={cn(PLANILHA.numero, "font-semibold text-ink")} data-valor>{valorSemMoeda(r.valor)}</span>,
+                  valor: (
+                    <span className={cn(PLANILHA.numero, "font-semibold text-ink")} data-valor>
+                      {valorSemMoeda(r.valor)}
+                      {r.valorEstimado && <span className="block text-[11px] font-normal text-atencao-texto" title="O valor é estimado: ajuste cada conta quando o boleto chegar" data-selo-estimado>a confirmar</span>}
+                    </span>
+                  ),
                   acoes: menu(r),
                 },
               }))}

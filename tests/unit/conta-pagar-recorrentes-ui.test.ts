@@ -306,7 +306,9 @@ describe("Tela de despesas recorrentes", () => {
     expect(texto($("[data-barra-recorrentes]")).replace(/ /g, " ")).toContain("R$ 7.820,00");
     // a repetição e o término em palavras
     expect(texto($("[data-linha-regra='r1'] [data-frequencia]"))).toBe("Todo mês, dia 10");
-    expect(texto($("[data-linha-regra='r1'] [data-termino]"))).toBe("sem data");
+    // Termina, Categoria, Centro de custo e Contas saem do padrão (o menu "Colunas" liga):
+    // com elas, as larguras passavam da tela e empurravam Valor e Ações para fora.
+    expect($("[data-linha-regra='r1'] [data-termino]")).toBeFalsy();
     expect(texto($("[data-linha-regra='r1'] [data-proxima]"))).toBe("10/12/2026");
     // o selo "a confirmar" só na regra de valor estimado
     expect($("[data-linha-regra='r2'] [data-selo-estimado]")).toBeTruthy();

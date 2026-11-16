@@ -141,6 +141,12 @@ describe("guardas das telas da despesa recorrente", () => {
       // o item só é montado dentro de uma guarda de permissão (o trecho antes dele a declara)
       expect(view.slice(Math.max(0, i - 300), i), acao).toContain("podeMexer &&");
     }
+    // as colunas do padrão cabem na tela: as secundárias nascem no menu "Colunas"
+    for (const secundaria of ["termino", "categoria", "centro", "contas"]) {
+      const i = view.indexOf(`id: "${secundaria}"`);
+      expect(i, secundaria).toBeGreaterThan(0);
+      expect(view.slice(i, i + 200), secundaria).toContain("oculta: true");
+    }
     // ver as ocorrências é leitura: não depende de poder mexer
     expect(view).toMatch(/ItemMenu icone=\{Repeat\} onClick=\{\(\) => \{ f\(\); setVendo\(r\); \}\} id="ocorrencias"/);
   });
