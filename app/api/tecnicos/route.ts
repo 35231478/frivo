@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { validarDocumentoDataUrl, validarFoto } from "@/lib/anexos-server";
+import { validarFoto } from "@/lib/anexos-server";
 import { respostaRefEmpresa, validarRefEmpresa, validarRefsEmpresa } from "@/lib/ref-empresa";
 import { tecnicoSchema } from "@/lib/validations";
 import { exigirPermissao } from "@/lib/permissoes-server";
@@ -52,7 +52,7 @@ export async function POST(req: NextRequest) {
   });
   if (existente) return NextResponse.json({ erro: "CPF já cadastrado" }, { status: 409 });
 
-  const { competenciaIds, documentos, dataNascimento, dataAdmissao, cargoId, perfilAcessoId, email, veiculoId, ...rest } = parsed.data;
+  const { competenciaIds, dataNascimento, dataAdmissao, cargoId, perfilAcessoId, email, veiculoId, ...rest } = parsed.data;
   // Veículo padrão (opcional) precisa ser da mesma empresa
   if (veiculoId && !(await prisma.veiculo.findFirst({ where: { id: veiculoId, empresaId }, select: { id: true } })))
     return NextResponse.json({ erro: "Veículo inválido." }, { status: 400 });
@@ -65,19 +65,12 @@ export async function POST(req: NextRequest) {
     ]);
   } catch (e) { const r = respostaRefEmpresa(e); if (r) return r; throw e; }
 
-  // Avatar e documentos: tipo decidido pelos BYTES; grava o data URL normalizado
+  // Avatar: tipo decidido pelos BYTES; grava o data URL normalizado
   if (rest.avatar) {
     const r = validarFoto(rest.avatar);
     if (!r.ok) return NextResponse.json({ erro: `Foto do colaborador: ${r.erro}` }, { status: 400 });
     rest.avatar = r.arquivo.conteudo;
   }
-  const docsValidados: { tipo: string; nome: string; arquivoUrl: string | null; dataVencimento?: string | null }[] = [];
-  for (const d of documentos) {
-    const r = validarDocumentoDataUrl(d.arquivoUrl, d.nome);
-    if (!r.ok) return NextResponse.json({ erro: r.erro }, { status: 400 });
-    docsValidados.push({ ...d, arquivoUrl: r.conteudo });
-  }
-
   const tecnico = await prisma.tecnico.create({
     data: {
       ...rest,
@@ -89,14 +82,8 @@ export async function POST(req: NextRequest) {
       dataNascimento: dataNascimento ? new Date(dataNascimento) : null,
       dataAdmissao: dataAdmissao ? new Date(dataAdmissao) : null,
       competencias: { connect: competenciaIds.map((id) => ({ id })) },
-      documentos: {
-        create: docsValidados.map((d) => ({
-          tipo: d.tipo,
-          nome: d.nome,
-          arquivoUrl: d.arquivoUrl,
-          dataVencimento: d.dataVencimento ? new Date(d.dataVencimento) : null,
-        })),
-      },
+      // Documentos: só depois de o colaborador existir, pela rota própria — é lá que fica o
+      // registro de quem anexou.
     },
   });
 

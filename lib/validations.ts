@@ -333,13 +333,6 @@ export const ordemServicoSchema = z.object({
   observacoes: z.string().optional(),
 });
 
-const documentoColaboradorSchema = z.object({
-  tipo: z.string().min(1),
-  nome: z.string().min(1),
-  arquivoUrl: z.string().optional().nullable(),
-  dataVencimento: z.string().optional().nullable(),
-});
-
 // Colaborador (antigo "Técnico") — cadastro completo em abas
 export const tecnicoSchema = z.object({
   // Dados pessoais
@@ -376,8 +369,9 @@ export const tecnicoSchema = z.object({
   // Competências e especialidades
   competenciaIds: z.array(z.string()).default([]),
   especialidades: z.array(z.string()).default([]),
-  // Documentos
-  documentos: z.array(documentoColaboradorSchema).default([]),
+  // Os DOCUMENTOS do colaborador NÃO entram no cadastro: cada arquivo tem a sua própria rota
+  // (/api/tecnicos/[id]/documentos), que registra quem anexou e exclui com rastro. Salvar a ficha
+  // não mexe nos papéis da pessoa.
   observacoes: z.string().optional().transform(caixaLivre),
 });
 

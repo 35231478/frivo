@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
-import { validarDocumentoDataUrl, validarFoto } from "@/lib/anexos-server";
+import { validarFoto } from "@/lib/anexos-server";
 import { respostaRefEmpresa, validarRefEmpresa, validarRefsEmpresa } from "@/lib/ref-empresa";
 import { tecnicoSchema } from "@/lib/validations";
 import { caixaNome } from "@/lib/texto/zod";
@@ -13,7 +13,9 @@ import { definirAtivoCadastro, inativarColaborador, reativarColaborador, statusH
 type Params = { params: Promise<{ id: string }> };
 
 export async function GET(_: NextRequest, { params }: Params) {
-  // Ficha completa (CPF/RG, documentos): só quem gerencia colaboradores. O salário só vai junto
+  // Ficha completa (CPF/RG): só quem gerencia colaboradores. Os DOCUMENTOS têm rota própria
+  // (/api/tecnicos/[id]/documentos) e não voltam aqui: o arquivo de cada um é grande e esta
+  // resposta serve ao cadastro rápido. O salário só vai junto
   // para quem tem "Financeiro › Custo de pessoal". Seletores de técnico usam GET /api/tecnicos.
   const guard = await exigirPermissao("equipes", "gerenciar");
   if (guard.erro) return guard.resposta;
@@ -25,7 +27,6 @@ export async function GET(_: NextRequest, { params }: Params) {
     where: { id, empresaId },
     include: {
       competencias: { select: { id: true } },
-      documentos: { orderBy: { criadoEm: "asc" } },
     },
   });
   if (!tecnico) return NextResponse.json({ erro: "Não encontrado" }, { status: 404 });
@@ -63,7 +64,7 @@ export async function PUT(req: NextRequest, { params }: Params) {
     if (dup) return NextResponse.json({ erro: "CPF já cadastrado" }, { status: 409 });
   }
 
-  const { competenciaIds, documentos, dataNascimento, dataAdmissao, cargoId, perfilAcessoId, email, veiculoId, ...rest } = parsed.data;
+  const { competenciaIds, dataNascimento, dataAdmissao, cargoId, perfilAcessoId, email, veiculoId, ...rest } = parsed.data;
   // Veículo padrão (opcional): só muda quando enviado; precisa ser da mesma empresa
   if (veiculoId && !(await prisma.veiculo.findFirst({ where: { id: veiculoId, empresaId }, select: { id: true } })))
     return NextResponse.json({ erro: "Veículo inválido." }, { status: 400 });
@@ -81,12 +82,6 @@ export async function PUT(req: NextRequest, { params }: Params) {
     const r = validarFoto(rest.avatar);
     if (!r.ok) return NextResponse.json({ erro: `Foto do colaborador: ${r.erro}` }, { status: 400 });
     rest.avatar = r.arquivo.conteudo;
-  }
-  const docsValidados: { tipo: string; nome: string; arquivoUrl: string | null; dataVencimento?: string | null }[] = [];
-  for (const d of documentos) {
-    const r = validarDocumentoDataUrl(d.arquivoUrl, d.nome);
-    if (!r.ok) return NextResponse.json({ erro: r.erro }, { status: 400 });
-    docsValidados.push({ ...d, arquivoUrl: r.conteudo });
   }
   // Status "Inativo" no formulário = inativar o colaborador pela MESMA função do botão e da ação em
   // massa (impacto/bloqueio, motivo e anotação nas observações; exige "excluir"). Sair de "Inativo"
@@ -117,15 +112,11 @@ export async function PUT(req: NextRequest, { params }: Params) {
       dataNascimento: dataNascimento ? new Date(dataNascimento) : null,
       dataAdmissao: dataAdmissao ? new Date(dataAdmissao) : null,
       competencias: { set: competenciaIds.map((cid) => ({ id: cid })) },
-      documentos: {
-        deleteMany: {},
-        create: docsValidados.map((d) => ({
-          tipo: d.tipo,
-          nome: d.nome,
-          arquivoUrl: d.arquivoUrl,
-          dataVencimento: d.dataVencimento ? new Date(d.dataVencimento) : null,
-        })),
-      },
+      // Os DOCUMENTOS não entram aqui. Até esta leva, salvar a ficha fazia `deleteMany` e recriava
+      // a lista inteira: perdia a data de envio e o id de cada arquivo, e apagava sem rastro o que
+      // o colaborador tivesse mandado pela admissão depois de a tela ter carregado. Cada documento
+      // agora tem a sua própria rota (anexar, baixar, excluir com rastro) — salvar o cadastro não
+      // mexe nos papéis da pessoa.
     },
   });
   // O login do app acompanha o e-mail do colaborador (o vínculo é por e-mail). Se o e-mail mudou e

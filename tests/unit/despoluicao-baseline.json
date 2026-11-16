@@ -1,5 +1,5 @@
 {
- "geradoEm": "2026-11-08",
+ "geradoEm": "2026-11-16",
  "totais": {
   "emoji": 0,
   "hex": 0,
@@ -13,7 +13,7 @@
   "hex": 0,
   "informal": 0,
   "exclamacao": 0,
-  "titleCase": 12,
+  "titleCase": 11,
   "textoLongo": 9
  },
  "arquivos": {
@@ -35,8 +35,8 @@
     "motivo": "Nomes de estados (Minas Gerais, Rio de Janeiro…): nomes próprios, caixa alta é a grafia correta."
    },
    "components/forms/colaborador-form.tsx": {
-    "n": 3,
-    "motivo": "Especialidades sugeridas e tipos de documento são gravados como valor (tag/texto) no cadastro; mudar a caixa mudaria o dado salvo nas próximas escolhas."
+    "n": 2,
+    "motivo": "Especialidades sugeridas são gravadas como valor (tag/texto) no cadastro; mudar a caixa mudaria o dado salvo nas próximas escolhas. Os tipos de documento saíram daqui: viraram CATEGORIAS em lib/colaborador/documentos.ts, com id e rótulo separados."
    },
    "components/forms/tecnico-form.tsx": {
     "n": 3,

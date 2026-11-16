@@ -560,18 +560,18 @@ model Empresa {
   notasFiscais NotaFiscal[]
   numeracoes   Numeracao[]
 
-  pmocs Pmoc[]
+  pmocs            Pmoc[]
   pmocConfiguracao PmocConfiguracao?
 
-  desempenhoConfig        DesempenhoConfig?
-  desempenhoTiposRetorno  DesempenhoTipoRetorno[]
-  desempenhoPerfis        DesempenhoPerfil[]
-  desempenhoRegras        DesempenhoRegra[]
-  desempenhoParticipantes DesempenhoParticipante[]
-  desempenhoPenalidades   DesempenhoPenalidade[]
-  desempenhoPremiacoes    DesempenhoPremiacao[]
-  desempenhoFechamentos       DesempenhoFechamento[]
-  desempenhoFechamentoLinhas  DesempenhoFechamentoLinha[]
+  desempenhoConfig           DesempenhoConfig?
+  desempenhoTiposRetorno     DesempenhoTipoRetorno[]
+  desempenhoPerfis           DesempenhoPerfil[]
+  desempenhoRegras           DesempenhoRegra[]
+  desempenhoParticipantes    DesempenhoParticipante[]
+  desempenhoPenalidades      DesempenhoPenalidade[]
+  desempenhoPremiacoes       DesempenhoPremiacao[]
+  desempenhoFechamentos      DesempenhoFechamento[]
+  desempenhoFechamentoLinhas DesempenhoFechamentoLinha[]
 
   admissoes      Admissao[]
   admissaoConfig AdmissaoConfig?
@@ -633,15 +633,15 @@ model Configuracao {
   // Por empresa (global), igual para todos os colaboradores. O técnico nunca edita esta tela.
   // ─────────────────────────────────────────────
   /// Privacidade: mostra nome/endereço/descrição do cliente no app (desligado = oculta no app)
-  appExibirDadosCliente    Boolean @default(true)  @map("app_exibir_dados_cliente")
+  appExibirDadosCliente    Boolean @default(true) @map("app_exibir_dados_cliente")
   /// Privacidade: mostra os contatos do cliente (botão Ligar/WhatsApp) no app
-  appExibirContatosCliente Boolean @default(true)  @map("app_exibir_contatos_cliente")
+  appExibirContatosCliente Boolean @default(true) @map("app_exibir_contatos_cliente")
   /// Comercial: esconde qualquer valor de produtos/serviços no app (ligado = técnico não vê preço)
-  appEsconderValores       Boolean @default(true)  @map("app_esconder_valores")
+  appEsconderValores       Boolean @default(true) @map("app_esconder_valores")
   /// Prova: carimba as fotos com marca d'água (data/hora sempre; e os itens abaixo que estiverem ligados)
-  appMarcaDagua            Boolean @default(true)  @map("app_marca_dagua")
+  appMarcaDagua            Boolean @default(true) @map("app_marca_dagua")
   /// Marca d'água: inclui o identificador da OS
-  appMarcaDaguaOs          Boolean @default(true)  @map("app_marca_dagua_os")
+  appMarcaDaguaOs          Boolean @default(true) @map("app_marca_dagua_os")
   /// Marca d'água: inclui o endereço da OS
   appMarcaDaguaEndereco    Boolean @default(false) @map("app_marca_dagua_endereco")
   /// Marca d'água: inclui as coordenadas (GPS do aparelho no momento da foto)
@@ -653,14 +653,14 @@ model Configuracao {
   /// Execução: exige preencher o campo de conclusão (resumo) para concluir a atividade
   appConclusaoObrigatoria  Boolean @default(false) @map("app_conclusao_obrigatoria")
   /// Dispositivo: apenas um dispositivo ativo por colaborador (entrar em outro desconecta o anterior)
-  appUmDispositivo         Boolean @default(true)  @map("app_um_dispositivo")
+  appUmDispositivo         Boolean @default(true) @map("app_um_dispositivo")
   /// Execução: o técnico pode CADASTRAR equipamento em campo, pelo app (desligado = só vincula os que já existem)
-  appCadastrarEquipamento  Boolean @default(true)  @map("app_cadastrar_equipamento")
+  appCadastrarEquipamento  Boolean @default(true) @map("app_cadastrar_equipamento")
   /// Execução: o técnico avisa o cliente pelo app ("A caminho" / "Cheguei"). Desligado = os botões não aparecem
-  appAvisarCliente         Boolean @default(true)  @map("app_avisar_cliente")
+  appAvisarCliente         Boolean @default(true) @map("app_avisar_cliente")
   /// "O que levar": o app mostra ao técnico os materiais previstos das OS (o que foi lançado na OS e a
   /// composição dos serviços), por OS e somados por dia. É só previsão: não baixa estoque nem altera a OS
-  appOQueLevar             Boolean @default(true)  @map("app_o_que_levar")
+  appOQueLevar             Boolean @default(true) @map("app_o_que_levar")
   /// Rastrear a localização dos técnicos (Operações › Mapa). DESLIGADO por padrão: é dado sensível
   /// (LGPD) — sem ligar, o app não captura nada e o servidor recusa o que chegar
   appRastrearLocalizacao   Boolean @default(false) @map("app_rastrear_localizacao")
@@ -677,9 +677,9 @@ model Configuracao {
   mostrarTecnicoProximo Boolean @default(true) @map("mostrar_tecnico_proximo")
 
   // Portal do Cliente (white-label)
-  portalCorPrimaria String? @map("portal_cor_primaria")
-  portalLogo        String? @map("portal_logo") @db.Text
-  portalBoasVindas  String? @map("portal_boas_vindas") @db.Text
+  portalCorPrimaria       String? @map("portal_cor_primaria")
+  portalLogo              String? @map("portal_logo") @db.Text
+  portalBoasVindas        String? @map("portal_boas_vindas") @db.Text
   /// Portal: com confirmações de serviço pendentes, o cliente só abre chamado novo depois de confirmar
   /// — ou pela saída de emergência, que existe sempre. false = só mostra as pendências (não bloqueia).
   portalAceiteObrigatorio Boolean @default(false) @map("portal_aceite_obrigatorio")
@@ -854,9 +854,9 @@ model Usuario {
   pushSubscriptions      PushSubscription[]
   contratoHistoricos     ContratoHistoricoStatus[]
   movimentacoesEstoque   MovimentacaoEstoque[]
-  osMateriaisSeparados   OsMaterial[]          @relation("OsMaterialSeparadoPor")
-  osMateriaisConsumidos  OsMaterial[]          @relation("OsMaterialConsumidoPor")
-  osMateriaisDevolvidos  OsMaterial[]          @relation("OsMaterialDevolvidoPor")
+  osMateriaisSeparados   OsMaterial[]              @relation("OsMaterialSeparadoPor")
+  osMateriaisConsumidos  OsMaterial[]              @relation("OsMaterialConsumidoPor")
+  osMateriaisDevolvidos  OsMaterial[]              @relation("OsMaterialDevolvidoPor")
   notasCompra            NotaCompra[]
   checklistRespostas     ChecklistResposta[]
   fotosAtendimento       FotoAtendimento[]
@@ -867,26 +867,28 @@ model Usuario {
   perfilAcessoId         String?                   @map("perfil_acesso_id")
   perfilAcesso           PerfilAcesso?             @relation(fields: [perfilAcessoId], references: [id])
 
-  notasFiscaisEmitidas NotaFiscal[]       @relation("NotaFiscalEmissor")
-  notasFiscaisEventos  NotaFiscalEvento[] @relation("NotaFiscalEventoAutor")
+  notasFiscaisEmitidas NotaFiscal[]         @relation("NotaFiscalEmissor")
+  notasFiscaisEventos  NotaFiscalEvento[]   @relation("NotaFiscalEventoAutor")
   reajustesContrato    ReajusteContrato[]
   preferencias         PreferenciaUsuario[]
 
-  pmocsCriados Pmoc[] @relation("PmocCriador")
-  pmocHistorico PmocHistorico[] @relation("PmocHistoricoUsuario")
-  pmocAvisosVistos PmocAviso[] @relation("PmocAvisoVistoPor")
-  aceitesColhidos        OsAceite[]             @relation("OsAceiteColhidoPor")
-  checklistsEditados     ChecklistPreenchido[]  @relation("ChecklistEditadoPor")
-  checklistsInativados   ChecklistPreenchido[]  @relation("ChecklistInativadoPor")
+  pmocsCriados         Pmoc[]                @relation("PmocCriador")
+  pmocHistorico        PmocHistorico[]       @relation("PmocHistoricoUsuario")
+  pmocAvisosVistos     PmocAviso[]           @relation("PmocAvisoVistoPor")
+  aceitesColhidos      OsAceite[]            @relation("OsAceiteColhidoPor")
+  checklistsEditados   ChecklistPreenchido[] @relation("ChecklistEditadoPor")
+  checklistsInativados ChecklistPreenchido[] @relation("ChecklistInativadoPor")
 
-  desempenhoRevisoes  DesempenhoPenalidade[] @relation("DesempenhoPenalidadeRevisor")
-  desempenhoRegistros DesempenhoPenalidade[] @relation("DesempenhoPenalidadeCriador")
+  desempenhoRevisoes    DesempenhoPenalidade[] @relation("DesempenhoPenalidadeRevisor")
+  desempenhoRegistros   DesempenhoPenalidade[] @relation("DesempenhoPenalidadeCriador")
   desempenhoFechamentos DesempenhoFechamento[] @relation("DesempenhoFechamentoFechou")
   desempenhoReaberturas DesempenhoFechamento[] @relation("DesempenhoFechamentoReabriu")
 
-  admissoesCriadas     Admissao[] @relation("AdmissaoCriadaPor")
-  admissoesCanceladas  Admissao[] @relation("AdmissaoCanceladaPor")
-  admissoesAoContador  Admissao[] @relation("AdmissaoContadorPor")
+  admissoesCriadas    Admissao[]             @relation("AdmissaoCriadaPor")
+  admissoesCanceladas Admissao[]             @relation("AdmissaoCanceladaPor")
+  admissoesAoContador Admissao[]             @relation("AdmissaoContadorPor")
+  documentosAnexados  ColaboradorDocumento[] @relation("DocumentoColaboradorCriadoPor")
+  documentosExcluidos ColaboradorDocumento[] @relation("DocumentoColaboradorExcluidoPor")
 
   @@unique([email, empresaId])
   @@index([empresaId, ativo])
@@ -954,29 +956,29 @@ model Tecnico {
   cep            String?
 
   // Admissão digital — o que o eSocial pede e o cadastro não guardava (tudo opcional)
-  pis            String?
-  ctpsNumero     String? @map("ctps_numero")
-  ctpsSerie      String? @map("ctps_serie")
-  ctpsUf         String? @map("ctps_uf")
-  nomeMae        String? @map("nome_mae")
-  nomePai        String? @map("nome_pai")
+  pis           String?
+  ctpsNumero    String? @map("ctps_numero")
+  ctpsSerie     String? @map("ctps_serie")
+  ctpsUf        String? @map("ctps_uf")
+  nomeMae       String? @map("nome_mae")
+  nomePai       String? @map("nome_pai")
   /// SOLTEIRO | CASADO | DIVORCIADO | VIUVO | UNIAO_ESTAVEL
-  estadoCivil    String? @map("estado_civil")
+  estadoCivil   String? @map("estado_civil")
   /// FUNDAMENTAL_INCOMPLETO | FUNDAMENTAL | MEDIO_INCOMPLETO | MEDIO | TECNICO | SUPERIOR_INCOMPLETO | SUPERIOR | POS
-  escolaridade   String?
-  nacionalidade  String?
-  naturalidade   String?
+  escolaridade  String?
+  nacionalidade String?
+  naturalidade  String?
   /// M | F | OUTRO
-  sexo           String?
-  tituloEleitor  String? @map("titulo_eleitor")
-  reservista     String?
+  sexo          String?
+  tituloEleitor String? @map("titulo_eleitor")
+  reservista    String?
   /// Dados bancários da folha
-  banco          String?
-  agencia        String?
-  conta          String?
+  banco         String?
+  agencia       String?
+  conta         String?
   /// CORRENTE | POUPANCA | SALARIO
-  contaTipo      String? @map("conta_tipo")
-  pixChave       String? @map("pix_chave")
+  contaTipo     String? @map("conta_tipo")
+  pixChave      String? @map("pix_chave")
 
   // Dados profissionais
   cargoId           String?           @map("cargo_id")
@@ -1021,12 +1023,12 @@ model Tecnico {
   folha                 ColaboradorFolha?
   posicao               TecnicoPosicao?
 
-  pmocsResponsavel Pmoc[] @relation("PmocResponsavelTecnico")
-  contasPagar      ContaPagar[]
+  pmocsResponsavel  Pmoc[]                  @relation("PmocResponsavelTecnico")
+  contasPagar       ContaPagar[]
   recorrenciasPagar ContaPagarRecorrencia[]
 
-  desempenhoParticipante DesempenhoParticipante?
-  desempenhoPenalidades  DesempenhoPenalidade[]
+  desempenhoParticipante     DesempenhoParticipante?
+  desempenhoPenalidades      DesempenhoPenalidade[]
   desempenhoFechamentoLinhas DesempenhoFechamentoLinha[]
 
   admissoes   Admissao[]
@@ -1043,39 +1045,39 @@ model Tecnico {
 // ─────────────────────────────────────────────
 
 model Cliente {
-  id                   String           @id @default(cuid())
-  empresaId            String           @map("empresa_id")
-  tipoPessoa           TipoPessoa       @default(JURIDICA) @map("tipo_pessoa")
-  nome                 String
-  nomeFantasia         String?          @map("nome_fantasia")
-  cpfCnpj              String           @map("cpf_cnpj")
-  inscricaoEstadual    String?          @map("inscricao_estadual")
+  id                         String           @id @default(cuid())
+  empresaId                  String           @map("empresa_id")
+  tipoPessoa                 TipoPessoa       @default(JURIDICA) @map("tipo_pessoa")
+  nome                       String
+  nomeFantasia               String?          @map("nome_fantasia")
+  cpfCnpj                    String           @map("cpf_cnpj")
+  inscricaoEstadual          String?          @map("inscricao_estadual")
   // Informações fiscais (alimentam o tomador da NFS-e e, no futuro, o destinatário da NF de produto)
-  optanteSimples             Boolean? @map("optante_simples")
-  indicadorInscricaoEstadual String?  @map("indicador_inscricao_estadual") // CONTRIBUINTE | ISENTO | NAO_CONTRIBUINTE
-  inscricaoMunicipal         String?  @map("inscricao_municipal")
-  inscricaoSuframa           String?  @map("inscricao_suframa")
-  email                String?
-  telefone             String?
-  celular              String?
-  contato              String?
-  logo                 String?          @db.Text
-  segmento             Segmento?
-  origem               OrigemCliente?
-  statusFinanceiro     StatusFinanceiro @default(ADIMPLENTE) @map("status_financeiro")
-  satisfacao           Int?             @db.SmallInt
-  ultimaPesquisaEm     DateTime?        @map("ultima_pesquisa_em")
-  artNumero            String?          @map("art_numero")
-  responsavelTecnicoId String?          @map("responsavel_tecnico_id")
-  endereco             String?
-  numero               String?
-  complemento          String?
-  bairro               String?
-  cidade               String?
-  estado               String?
-  cep                  String?
-  observacoes          String?
-  ativo                Boolean          @default(true)
+  optanteSimples             Boolean?         @map("optante_simples")
+  indicadorInscricaoEstadual String?          @map("indicador_inscricao_estadual") // CONTRIBUINTE | ISENTO | NAO_CONTRIBUINTE
+  inscricaoMunicipal         String?          @map("inscricao_municipal")
+  inscricaoSuframa           String?          @map("inscricao_suframa")
+  email                      String?
+  telefone                   String?
+  celular                    String?
+  contato                    String?
+  logo                       String?          @db.Text
+  segmento                   Segmento?
+  origem                     OrigemCliente?
+  statusFinanceiro           StatusFinanceiro @default(ADIMPLENTE) @map("status_financeiro")
+  satisfacao                 Int?             @db.SmallInt
+  ultimaPesquisaEm           DateTime?        @map("ultima_pesquisa_em")
+  artNumero                  String?          @map("art_numero")
+  responsavelTecnicoId       String?          @map("responsavel_tecnico_id")
+  endereco                   String?
+  numero                     String?
+  complemento                String?
+  bairro                     String?
+  cidade                     String?
+  estado                     String?
+  cep                        String?
+  observacoes                String?
+  ativo                      Boolean          @default(true)
 
   // Perfil de faturamento
   tipoFaturamento     PerfilFaturamento? @map("tipo_faturamento")
@@ -1320,7 +1322,7 @@ model Equipamento {
   servicosAdicionais  ServicoAdicional[]
   anexosOs            OsAnexo[]
 
-  pmocs PmocEquipamento[]
+  pmocs           PmocEquipamento[]
   pmocCronogramas PmocCronograma[]
   pmocExecucoes   PmocExecucao[]
   pmocOcorrencias PmocOcorrencia[]
@@ -1662,50 +1664,50 @@ model Servico {
 // ─────────────────────────────────────────────
 
 model Produto {
-  id                String   @id @default(cuid())
-  empresaId         String   @map("empresa_id")
+  id                 String   @id @default(cuid())
+  empresaId          String   @map("empresa_id")
   /// Código numérico do produto, sequencial por empresa (1, 2, 3…), gerado ao criar; único na empresa.
   /// Chave da planilha (exportar → editar → importar atualiza em vez de duplicar).
-  codigo            Int?
-  nome              String
-  descricao         String?
-  unidade           String   @default("un")
+  codigo             Int?
+  nome               String
+  descricao          String?
+  unidade            String   @default("un")
   /// Preço de venda (o "valor padrão" que orçamentos, medições e tabelas de preço já usam)
-  valorPadrao       Decimal? @map("valor_padrao") @db.Decimal(10, 2)
+  valorPadrao        Decimal? @map("valor_padrao") @db.Decimal(10, 2)
   /// Margem alvo % SOBRE A VENDA quando o preço foi definido por margem (preço = custo ÷ (1 − margem)).
   /// Nula = preço fixo. O preço nunca muda sozinho quando o custo muda (só há aviso).
-  margemVenda       Decimal? @map("margem_venda") @db.Decimal(5, 2)
-  estoqueMinimo     Int?     @map("estoque_minimo")
+  margemVenda        Decimal? @map("margem_venda") @db.Decimal(5, 2)
+  estoqueMinimo      Int?     @map("estoque_minimo")
   /// Dados fiscais (para o faturamento): vêm do XML da NF de compra quando o produto é criado ou
   /// vinculado por ela; valor já preenchido não é sobrescrito.
-  ncm               String?
-  cest              String?
-  gtin              String?
+  ncm                String?
+  cest               String?
+  gtin               String?
   /// Origem da mercadoria (0 a 8, tabela da NF-e)
-  origemMercadoria  String?  @map("origem_mercadoria")
-  unidadeTributavel String?  @map("unidade_tributavel")
+  origemMercadoria   String?  @map("origem_mercadoria")
+  unidadeTributavel  String?  @map("unidade_tributavel")
   /// Saldo em estoque — CACHE da soma das movimentações (a fonte da verdade é movimentacoes_estoque).
   /// Só muda pela lib/estoque (lançamento + saldo na mesma transação); nunca pelo cadastro.
-  saldo             Decimal  @default(0) @db.Decimal(12, 3)
+  saldo              Decimal  @default(0) @db.Decimal(12, 3)
   /// Entra na tela Estoque e nos alertas? Falso = produto que não se controla (serviço embalado,
   /// item sob encomenda…); o razão continua aceitando lançamentos (ex.: entrada pela NF de compra).
-  controlaEstoque   Boolean  @default(true) @map("controla_estoque")
+  controlaEstoque    Boolean  @default(true) @map("controla_estoque")
   /// Categoria (E3.1): de onde vem o comportamento de faturamento. Opcional: sem ela, "incluso no serviço".
-  categoriaProdutoId String? @map("categoria_produto_id")
-  ativo             Boolean  @default(true)
-  criadoEm          DateTime @default(now()) @map("criado_em")
+  categoriaProdutoId String?  @map("categoria_produto_id")
+  ativo              Boolean  @default(true)
+  criadoEm           DateTime @default(now()) @map("criado_em")
 
-  empresa        Empresa                   @relation(fields: [empresaId], references: [id], onDelete: Cascade)
-  orcamentoItens OrcamentoProduto[]
-  medicaoItens   MedicaoItem[]
-  pedidoItens    PedidoCompraItem[]
-  tabelaItens    TabelaPrecoItem[]
-  movimentacoes  MovimentacaoEstoque[]
-  notaItens      NotaCompraItem[]
-  deParas        DeParaProdutoFornecedor[]
-  categoriaProduto CategoriaProduto? @relation(fields: [categoriaProdutoId], references: [id], onDelete: SetNull)
-  kitItens         KitMaterialItem[]
-  servicoMateriais ServicoMaterial[]
+  empresa            Empresa                   @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  orcamentoItens     OrcamentoProduto[]
+  medicaoItens       MedicaoItem[]
+  pedidoItens        PedidoCompraItem[]
+  tabelaItens        TabelaPrecoItem[]
+  movimentacoes      MovimentacaoEstoque[]
+  notaItens          NotaCompraItem[]
+  deParas            DeParaProdutoFornecedor[]
+  categoriaProduto   CategoriaProduto?         @relation(fields: [categoriaProdutoId], references: [id], onDelete: SetNull)
+  kitItens           KitMaterialItem[]
+  servicoMateriais   ServicoMaterial[]
   orcamentoMateriais OrcamentoMaterial[]
   osItens            OsItemOrcamento[]
   osMateriais        OsMaterial[]
@@ -1911,12 +1913,12 @@ model OrdemServico {
 
   notasFiscais NotaFiscal[]
 
-  pmocExecucoes PmocExecucao[]
+  pmocExecucoes             PmocExecucao[]
   /// Ocorrências do PMOC detectadas nesta OS / que geraram esta OS corretiva
   pmocOcorrencias           PmocOcorrencia[] @relation("PmocOcorrenciaOs")
   pmocOcorrenciasCorretivas PmocOcorrencia[] @relation("PmocOcorrenciaOsCorretiva")
   /// Aceite do cliente na conclusão (uma linha por OS). Ver OsAceite.
-  aceite             OsAceite?
+  aceite                    OsAceite?
 
   /// Desempenho: itens da lista "a revisar" ligados a esta OS (o serviço avaliado / a OS corretiva do retorno)
   desempenhoPenalidades DesempenhoPenalidade[] @relation("DesempenhoPenalidadeOs")
@@ -2039,37 +2041,37 @@ model OsPlanoVisitas {
 /// Dois caminhos: NO LOCAL (o responsável assina na tela do técnico) e REMOTO (link público por
 /// WhatsApp/e-mail, pendente no portal). Situação e método são TEXTO (sem enum).
 model OsAceite {
-  id             String  @id @default(cuid())
-  empresaId      String  @map("empresa_id")
-  ordemServicoId String  @unique @map("ordem_servico_id")
+  id                  String    @id @default(cuid())
+  empresaId           String    @map("empresa_id")
+  ordemServicoId      String    @unique @map("ordem_servico_id")
   /// Token do link público de confirmação (sem login)
-  token          String  @unique
+  token               String    @unique
   /// "PENDENTE" | "CONFIRMADO"
-  situacao       String  @default("PENDENTE")
+  situacao            String    @default("PENDENTE")
   /// "LOCAL" (assinado na tela do técnico) | "REMOTO" (pelo link); vazio enquanto pendente
-  metodo         String?
+  metodo              String?
   /// Quem aceitou
-  nome           String?
+  nome                String?
   /// Assinatura desenhada (data URL), só no aceite no local
-  assinatura     String? @db.Text
+  assinatura          String?   @db.Text
   /// RESSALVA do cliente ao confirmar pelo link: o serviço fica confirmado e o escritório é avisado.
   /// A coluna se chama "observacao" (era o campo "Observação" da primeira versão do aceite)
-  ressalva       String? @map("observacao") @db.Text
+  ressalva            String?   @map("observacao") @db.Text
   /// AVALIAÇÃO do cliente no aceite: nota de 1 a 5 estrelas (vazio = confirmou sem avaliar). É da OS e,
   /// por ela, dos técnicos que a executaram — a base do módulo de Desempenho
   avaliacao           Int?
   /// Comentário opcional da avaliação (não é a ressalva)
-  avaliacaoComentario String? @map("avaliacao_comentario") @db.Text
-  ip             String?
-  userAgent      String? @map("user_agent")
-  confirmadoEm   DateTime? @map("confirmado_em")
+  avaliacaoComentario String?   @map("avaliacao_comentario") @db.Text
+  ip                  String?
+  userAgent           String?   @map("user_agent")
+  confirmadoEm        DateTime? @map("confirmado_em")
   /// Quando alguém do escritório (OS › Editar) abriu a OS depois da confirmação: tira o aviso do sino
-  vistoEm        DateTime? @map("visto_em")
+  vistoEm             DateTime? @map("visto_em")
   /// No local: a atividade em que foi colhido e quem colheu
-  atividadeId    String? @map("atividade_id")
-  colhidoPorId   String? @map("colhido_por_id")
+  atividadeId         String?   @map("atividade_id")
+  colhidoPorId        String?   @map("colhido_por_id")
   /// Remoto pelo portal: o contato que estava logado
-  contatoId      String? @map("contato_id")
+  contatoId           String?   @map("contato_id")
 
   // O último pedido de confirmação enviado ao cliente
   enviadoEm    DateTime? @map("enviado_em")
@@ -2311,11 +2313,11 @@ model ChecklistResposta {
   criadoEm        DateTime           @default(now()) @map("criado_em")
   atualizadoEm    DateTime           @updatedAt @map("atualizado_em")
 
-  empresa       Empresa           @relation(fields: [empresaId], references: [id], onDelete: Cascade)
-  atividade     AtividadeOs       @relation(fields: [atividadeId], references: [id], onDelete: Cascade)
-  equipamento   Equipamento       @relation(fields: [equipamentoId], references: [id], onDelete: Cascade)
-  item          ChecklistTipoItem @relation(fields: [itemId], references: [id], onDelete: Restrict)
-  respondidoPor Usuario?          @relation(fields: [respondidoPorId], references: [id], onDelete: SetNull)
+  empresa        Empresa           @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  atividade      AtividadeOs       @relation(fields: [atividadeId], references: [id], onDelete: Cascade)
+  equipamento    Equipamento       @relation(fields: [equipamentoId], references: [id], onDelete: Cascade)
+  item           ChecklistTipoItem @relation(fields: [itemId], references: [id], onDelete: Restrict)
+  respondidoPor  Usuario?          @relation(fields: [respondidoPorId], references: [id], onDelete: SetNull)
   /// A ocorrência do PMOC criada a partir desta resposta (ligação futura: "Atenção" do técnico)
   pmocOcorrencia PmocOcorrencia?
 
@@ -2463,16 +2465,16 @@ enum TipoItemOs {
 }
 
 model OsItemOrcamento {
-  id                 String    @id @default(cuid())
-  ordemServicoId     String    @map("ordem_servico_id")
+  id                 String     @id @default(cuid())
+  ordemServicoId     String     @map("ordem_servico_id")
   /// Item do orçamento de onde a linha foi copiada ("Gerar OS"): leva o serviço (dados fiscais) até a nota
-  orcamentoServicoId String?   @map("orcamento_servico_id")
+  orcamentoServicoId String?    @map("orcamento_servico_id")
   descricao          String
-  quantidade         Decimal   @db.Decimal(10, 2)
-  valorUnitario      Decimal   @map("valor_unitario") @db.Decimal(10, 2)
-  valorTotal         Decimal   @map("valor_total") @db.Decimal(10, 2)
-  executado          Boolean   @default(false)
-  executadoEm        DateTime? @map("executado_em")
+  quantidade         Decimal    @db.Decimal(10, 2)
+  valorUnitario      Decimal    @map("valor_unitario") @db.Decimal(10, 2)
+  valorTotal         Decimal    @map("valor_total") @db.Decimal(10, 2)
+  executado          Boolean    @default(false)
+  executadoEm        DateTime?  @map("executado_em")
   /// E3.3b — serviço ou produto (peça); item antigo = SERVICO. Vínculo com o catálogo (opcional; linha livre = nenhum)
   tipo               TipoItemOs @default(SERVICO)
   servicoId          String?    @map("servico_id")
@@ -2510,34 +2512,34 @@ enum EstadoSeparacaoMaterial {
 /// E4.1: a separação fica aqui, por material — quantidade separada (= reservada no razão, movimentações RESERVA
 /// com ref_id = OS), estado, quem e quando. Regra: lib/estoque/separacao.ts.
 model OsMaterial {
-  id               String                   @id @default(cuid())
-  ordemServicoId   String                   @map("ordem_servico_id")
-  osItemId         String                   @map("os_item_id")
-  produtoId        String?                  @map("produto_id")
-  descricao        String
-  unidade          String                   @default("un")
-  comportamento    ComportamentoFaturamento
-  quantidade       Decimal                  @db.Decimal(12, 3)
-  quantidadePadrao Decimal                  @default(0) @map("quantidade_padrao") @db.Decimal(12, 3)
-  valorVendaUnit   Decimal                  @map("valor_venda_unit") @db.Decimal(12, 2)
-  custoUnit        Decimal?                 @map("custo_unit") @db.Decimal(14, 4)
-  origem           OrigemMaterialOrcamento  @default(AVULSO)
-  kitNome          String?                  @map("kit_nome")
-  ordem            Int                      @default(0)
+  id                  String                   @id @default(cuid())
+  ordemServicoId      String                   @map("ordem_servico_id")
+  osItemId            String                   @map("os_item_id")
+  produtoId           String?                  @map("produto_id")
+  descricao           String
+  unidade             String                   @default("un")
+  comportamento       ComportamentoFaturamento
+  quantidade          Decimal                  @db.Decimal(12, 3)
+  quantidadePadrao    Decimal                  @default(0) @map("quantidade_padrao") @db.Decimal(12, 3)
+  valorVendaUnit      Decimal                  @map("valor_venda_unit") @db.Decimal(12, 2)
+  custoUnit           Decimal?                 @map("custo_unit") @db.Decimal(14, 4)
+  origem              OrigemMaterialOrcamento  @default(AVULSO)
+  kitNome             String?                  @map("kit_nome")
+  ordem               Int                      @default(0)
   /// E4.1 — separação: quanto já foi separado (reservado) deste material, o estado e quem/quando separou
-  quantidadeSeparada Decimal                  @default(0) @map("quantidade_separada") @db.Decimal(12, 3)
-  estadoSeparacao    EstadoSeparacaoMaterial? @map("estado_separacao")
-  separadoEm         DateTime?                @map("separado_em")
-  separadoPorId      String?                  @map("separado_por_id")
+  quantidadeSeparada  Decimal                  @default(0) @map("quantidade_separada") @db.Decimal(12, 3)
+  estadoSeparacao     EstadoSeparacaoMaterial? @map("estado_separacao")
+  separadoEm          DateTime?                @map("separado_em")
+  separadoPorId       String?                  @map("separado_por_id")
   /// E4.2 — consumo informado (estado CONSUMIDO): quanto saiu de verdade (SAIDA no razão), quem e quando.
   /// A sobra (separada − consumida) continua reservada: "pendente de devolução" até a E4.3.
-  quantidadeConsumida Decimal   @default(0) @map("quantidade_consumida") @db.Decimal(12, 3)
-  consumidoEm         DateTime? @map("consumido_em")
-  consumidoPorId      String?   @map("consumido_por_id")
+  quantidadeConsumida Decimal                  @default(0) @map("quantidade_consumida") @db.Decimal(12, 3)
+  consumidoEm         DateTime?                @map("consumido_em")
+  consumidoPorId      String?                  @map("consumido_por_id")
   /// E4.3 — devolução da sobra (estado DEVOLVIDO): quanto voltou ao estoque (DEVOLUCAO no razão), quem e quando.
-  quantidadeDevolvida Decimal   @default(0) @map("quantidade_devolvida") @db.Decimal(12, 3)
-  devolvidoEm         DateTime? @map("devolvido_em")
-  devolvidoPorId      String?   @map("devolvido_por_id")
+  quantidadeDevolvida Decimal                  @default(0) @map("quantidade_devolvida") @db.Decimal(12, 3)
+  devolvidoEm         DateTime?                @map("devolvido_em")
+  devolvidoPorId      String?                  @map("devolvido_por_id")
 
   ordemServico OrdemServico     @relation(fields: [ordemServicoId], references: [id], onDelete: Cascade)
   item         OsItemOrcamento  @relation("OsItemMateriais", fields: [osItemId], references: [id], onDelete: Cascade)
@@ -2724,7 +2726,7 @@ model Orcamento {
   contratoGerado     Contrato?             @relation("OrcamentoContrato")
   osGerada           OrdemServico?         @relation("OrcamentoOsGerada")
   /// Ocorrências do PMOC que deram origem a este orçamento (ligação futura)
-  pmocOcorrencias PmocOcorrencia[]
+  pmocOcorrencias    PmocOcorrencia[]
 
   @@unique([codigo, empresaId])
   @@index([empresaId, status])
@@ -2786,15 +2788,15 @@ model OrcamentoEvento {
 }
 
 model OrcamentoServico {
-  id            String  @id @default(cuid())
-  orcamentoId   String  @map("orcamento_id")
-  servicoId     String? @map("servico_id")
-  descricao     String
-  quantidade    Decimal @default(1) @db.Decimal(10, 2)
-  valorUnitario Decimal @map("valor_unitario") @db.Decimal(12, 2)
-  valorTotal    Decimal @map("valor_total") @db.Decimal(12, 2)
-  observacao    String?
-  ordem         Int     @default(0)
+  id              String   @id @default(cuid())
+  orcamentoId     String   @map("orcamento_id")
+  servicoId       String?  @map("servico_id")
+  descricao       String
+  quantidade      Decimal  @default(1) @db.Decimal(10, 2)
+  valorUnitario   Decimal  @map("valor_unitario") @db.Decimal(12, 2)
+  valorTotal      Decimal  @map("valor_total") @db.Decimal(12, 2)
+  observacao      String?
+  ordem           Int      @default(0)
   /// E3.3 — valor da linha ANTES dos materiais (unitário × qtd). Nulo = linha sem composição (como sempre).
   valorBase       Decimal? @map("valor_base") @db.Decimal(12, 2)
   /// Σ (qtd − qtd padrão) × valor de venda dos materiais INCLUSOS: o que o serviço subiu/desceu por causa deles
@@ -2822,7 +2824,7 @@ model OrcamentoProduto {
   ordem         Int     @default(0)
 
   /// E3.3 — peça (venda à parte) gerada do material de um serviço: a linha é derivada dele (não se edita aqui)
-  materialId    String? @unique @map("material_id")
+  materialId String? @unique @map("material_id")
 
   orcamento Orcamento          @relation(fields: [orcamentoId], references: [id], onDelete: Cascade)
   produto   Produto?           @relation(fields: [produtoId], references: [id])
@@ -2915,7 +2917,7 @@ model Medicao {
 
   /// Fatura avulsa (botão "Faturar" do orçamento/OS): mesma engine, nasce liberada para a nota, sem
   /// a aprovação do cliente; na tela e na nota aparece como "Fatura" (o número MED-… não muda)
-  avulsa Boolean @default(false)
+  avulsa             Boolean  @default(false)
   /// P5 — faturamento parcial: esta fatura cobre só PARTE da origem (orçamento/OS). `percentualFaturado` é a
   /// fatia do total da origem que ela representa (o "resto" também é parcial). O faturado acumulado da
   /// origem é a soma do valor líquido das faturas avulsas vivas ligadas a ela (pelos itens) — sem tabela nova.
@@ -3203,7 +3205,7 @@ model CategoriaFinanceira {
   ativo     Boolean  @default(true)
   criadoEm  DateTime @default(now()) @map("criado_em")
 
-  empresa            Empresa        @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  empresa            Empresa                 @relation(fields: [empresaId], references: [id], onDelete: Cascade)
   contasReceber      ContaReceber[]
   contasPagar        ContaPagar[]
   recorrenciasPagar  ContaPagarRecorrencia[]
@@ -3308,7 +3310,7 @@ model CentroCusto {
   criadoEm     DateTime @default(now()) @map("criado_em")
   atualizadoEm DateTime @updatedAt @map("atualizado_em")
 
-  empresa            Empresa        @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  empresa            Empresa                 @relation(fields: [empresaId], references: [id], onDelete: Cascade)
   contasPagar        ContaPagar[]
   recorrenciasPagar  ContaPagarRecorrencia[]
   contasReceber      ContaReceber[]
@@ -3395,14 +3397,14 @@ model ContaPagar {
   criadoEm           DateTime         @default(now()) @map("criado_em")
   atualizadoEm       DateTime         @updatedAt @map("atualizado_em")
 
-  empresa             Empresa               @relation(fields: [empresaId], references: [id], onDelete: Cascade)
-  pedidoCompra        PedidoCompraInterno?  @relation(fields: [pedidoCompraId], references: [id])
-  categoriaFinanceira CategoriaFinanceira?  @relation(fields: [categoriaId], references: [id], onDelete: SetNull)
-  centroCusto         CentroCusto?          @relation(fields: [centroCustoId], references: [id], onDelete: SetNull)
-  fornecedorCadastro  Fornecedor?           @relation(fields: [fornecedorId], references: [id], onDelete: SetNull)
-  notaCompra          NotaCompra?           @relation(fields: [notaCompraId], references: [id], onDelete: SetNull)
+  empresa             Empresa                @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  pedidoCompra        PedidoCompraInterno?   @relation(fields: [pedidoCompraId], references: [id])
+  categoriaFinanceira CategoriaFinanceira?   @relation(fields: [categoriaId], references: [id], onDelete: SetNull)
+  centroCusto         CentroCusto?           @relation(fields: [centroCustoId], references: [id], onDelete: SetNull)
+  fornecedorCadastro  Fornecedor?            @relation(fields: [fornecedorId], references: [id], onDelete: SetNull)
+  notaCompra          NotaCompra?            @relation(fields: [notaCompraId], references: [id], onDelete: SetNull)
   recorrencia         ContaPagarRecorrencia? @relation(fields: [recorrenciaId], references: [id], onDelete: SetNull)
-  tecnico             Tecnico?              @relation(fields: [tecnicoId], references: [id], onDelete: SetNull)
+  tecnico             Tecnico?               @relation(fields: [tecnicoId], references: [id], onDelete: SetNull)
   pagamentos          PagamentoContaPagar[]
 
   @@unique([numero, empresaId])
@@ -3422,45 +3424,45 @@ model ContaPagar {
 /// salário. Cada ocorrência vira uma conta a pagar independente, ligada por `recorrenciaId` +
 /// competência. A regra guarda só o que se repete; o que a pessoa ajustar numa conta fica na conta.
 model ContaPagarRecorrencia {
-  id             String          @id @default(cuid())
-  empresaId      String          @map("empresa_id")
-  descricao      String
+  id                 String          @id @default(cuid())
+  empresaId          String          @map("empresa_id")
+  descricao          String
   /// Favorecido: fornecedor cadastrado OU colaborador (salário/pró-labore). O nome vai sempre em
   /// `favorecidoNome`, que é o que a conta gerada grava em `fornecedor`.
-  fornecedorId   String?         @map("fornecedor_id")
-  tecnicoId      String?         @map("tecnico_id")
-  favorecidoNome String          @map("favorecido_nome")
+  fornecedorId       String?         @map("fornecedor_id")
+  tecnicoId          String?         @map("tecnico_id")
+  favorecidoNome     String          @map("favorecido_nome")
   /// Herdados por cada ocorrência
-  categoriaId    String?         @map("categoria_id")
-  centroCustoId  String?         @map("centro_custo_id")
-  formaPagamento FormaPagamento? @map("forma_pagamento")
-  observacao     String?
+  categoriaId        String?         @map("categoria_id")
+  centroCustoId      String?         @map("centro_custo_id")
+  formaPagamento     FormaPagamento? @map("forma_pagamento")
+  observacao         String?
   /// A cada quantos meses repete: 1 mensal, 2 bimestral, 3 trimestral, 4 quadrimestral,
   /// 6 semestral, 12 anual — ou qualquer N (a cada N meses)
-  passoMeses     Int             @default(1) @map("passo_meses")
-  diaVencimento  Int             @map("dia_vencimento")
+  passoMeses         Int             @default(1) @map("passo_meses")
+  diaVencimento      Int             @map("dia_vencimento")
   /// Quando o vencimento cai em fim de semana: ADIANTAR | POSTERGAR | MANTER (o mesmo do contrato)
-  ajusteDiaNaoUtil String        @default("MANTER") @map("ajuste_dia_nao_util")
+  ajusteDiaNaoUtil   String          @default("MANTER") @map("ajuste_dia_nao_util")
   /// O valor de CADA ocorrência (não multiplica: trimestral de R$ 900 é R$ 900 a cada 3 meses)
-  valor          Decimal         @db.Decimal(12, 2)
+  valor              Decimal         @db.Decimal(12, 2)
   /// Valor estimado: a conta nasce "a confirmar", para ajustar quando chega o boleto
-  valorEstimado  Boolean         @default(false) @map("valor_estimado")
+  valorEstimado      Boolean         @default(false) @map("valor_estimado")
   /// Primeira competência (mês/ano) que gera conta
-  inicioAno      Int             @map("inicio_ano")
-  inicioMes      Int             @map("inicio_mes")
+  inicioAno          Int             @map("inicio_ano")
+  inicioMes          Int             @map("inicio_mes")
   /// Término: por competência final (fimAno/fimMes), por número de ocorrências, ou nenhum dos dois
   /// = indefinido (o horizonte rolante cuida)
-  fimAno         Int?            @map("fim_ano")
-  fimMes         Int?            @map("fim_mes")
-  ocorrencias    Int?
+  fimAno             Int?            @map("fim_ano")
+  fimMes             Int?            @map("fim_mes")
+  ocorrencias        Int?
   /// ATIVA | PAUSADA | ENCERRADA. Pausada não gera; encerrada não gera mais e não volta.
-  situacao       String          @default("ATIVA")
-  pausadaEm      DateTime?       @map("pausada_em")
-  encerradaEm    DateTime?       @map("encerrada_em")
-  encerramentoMotivo String?     @map("encerramento_motivo")
-  criadoPorId    String?         @map("criado_por_id")
-  criadoEm       DateTime        @default(now()) @map("criado_em")
-  atualizadoEm   DateTime        @updatedAt @map("atualizado_em")
+  situacao           String          @default("ATIVA")
+  pausadaEm          DateTime?       @map("pausada_em")
+  encerradaEm        DateTime?       @map("encerrada_em")
+  encerramentoMotivo String?         @map("encerramento_motivo")
+  criadoPorId        String?         @map("criado_por_id")
+  criadoEm           DateTime        @default(now()) @map("criado_em")
+  atualizadoEm       DateTime        @updatedAt @map("atualizado_em")
 
   empresa             Empresa              @relation(fields: [empresaId], references: [id], onDelete: Cascade)
   fornecedorCadastro  Fornecedor?          @relation(fields: [fornecedorId], references: [id], onDelete: SetNull)
@@ -3921,17 +3923,38 @@ model Cargo {
   @@map("cargos")
 }
 
+/// Os papéis de uma pessoa: o que o RH anexa na ficha e o que o colaborador manda pela admissão
+/// digital moram na MESMA tabela — a ficha é o único lugar dos documentos dela.
 model ColaboradorDocumento {
-  id             String    @id @default(cuid())
-  colaboradorId  String    @map("colaborador_id")
-  tipo           String
-  nome           String
-  arquivoUrl     String?   @map("arquivo_url") @db.Text
+  id            String  @id @default(cuid())
+  colaboradorId String  @map("colaborador_id")
+  /// O protocolo da admissão (o id do documento que a empresa pede: "rg", "ctps"…) e, nos
+  /// documentos antigos, o próprio rótulo digitado ("CNH", "Diploma"). Não é a categoria.
+  tipo          String
+  /// A gaveta do documento (CATEGORIAS em lib/colaborador/documentos.ts). NULL nos documentos
+  /// antigos: aí a tela lê o "tipo", sem reclassificar nada por adivinhação.
+  categoria     String?
+  nome          String
+  arquivoUrl    String? @map("arquivo_url") @db.Text
+  /// O que o arquivo é e quanto pesa, lidos dos BYTES no envio
+  arquivoTipo   String? @map("arquivo_tipo")
+  tamanho       Int?
+  /// MANUAL (o RH anexou) | ADMISSAO (o colaborador mandou pelo link)
+  origem        String  @default("MANUAL")
+
   dataVencimento DateTime? @map("data_vencimento")
   criadoEm       DateTime  @default(now()) @map("criado_em")
+  /// Quem anexou. NULL = o próprio colaborador, pela admissão, ou documento de antes desta coluna.
+  criadoPorId    String?   @map("criado_por_id")
+  /// Exclusão COM RASTRO: sai da ficha, fica no banco, com quem apagou e quando.
+  excluidoEm     DateTime? @map("excluido_em")
+  excluidoPorId  String?   @map("excluido_por_id")
 
-  colaborador Tecnico @relation(fields: [colaboradorId], references: [id], onDelete: Cascade)
+  colaborador Tecnico  @relation(fields: [colaboradorId], references: [id], onDelete: Cascade)
+  criadoPor   Usuario? @relation("DocumentoColaboradorCriadoPor", fields: [criadoPorId], references: [id], onDelete: SetNull)
+  excluidoPor Usuario? @relation("DocumentoColaboradorExcluidoPor", fields: [excluidoPorId], references: [id], onDelete: SetNull)
 
+  @@index([colaboradorId, excluidoEm])
   @@map("colaborador_documentos")
 }
 
@@ -4783,25 +4806,25 @@ model PmocEquipamento {
 // ─────────────────────────────────────────────
 
 model PmocCronograma {
-  id                String   @id @default(cuid())
-  pmocId            String   @map("pmoc_id")
+  id                String              @id @default(cuid())
+  pmocId            String              @map("pmoc_id")
   /// A quem se aplica: um tipo de equipamento OU um equipamento. Os dois vazios = todos os do plano.
-  tipoEquipamentoId String?  @map("tipo_equipamento_id")
-  equipamentoId     String?  @map("equipamento_id")
-  tipoOsId          String   @map("tipo_os_id")
-  dataInicio        DateTime @map("data_inicio") @db.Date
+  tipoEquipamentoId String?             @map("tipo_equipamento_id")
+  equipamentoId     String?             @map("equipamento_id")
+  tipoOsId          String              @map("tipo_os_id")
+  dataInicio        DateTime            @map("data_inicio") @db.Date
   /// "A cada N meses": 1 = mensal, 3 = trimestral, 12 = anual…
-  intervaloMeses    Int      @default(1) @map("intervalo_meses")
+  intervaloMeses    Int                 @default(1) @map("intervalo_meses")
   /// Dia do mês da execução (1 a 28, como na recorrência de contratos)
-  diaExecucao       Int      @map("dia_execucao")
+  diaExecucao       Int                 @map("dia_execucao")
   /// Quando o dia de execução cai em sábado ou domingo: manter, adiantar para a sexta ou postergar para a
   /// segunda — o mesmo tipo e a mesma regra da recorrência de OS dos contratos. O padrão do BANCO é
   /// MANTER (os itens criados antes desta opção continuam como estavam); a tela propõe POSTERGAR nos novos.
   fimSemana         TratamentoFimSemana @default(MANTER) @map("fim_semana")
   /// false = item excluído que já gerou OS (fica para o histórico; não gera mais)
-  ativo             Boolean  @default(true)
-  criadoEm          DateTime @default(now()) @map("criado_em")
-  atualizadoEm      DateTime @updatedAt @map("atualizado_em")
+  ativo             Boolean             @default(true)
+  criadoEm          DateTime            @default(now()) @map("criado_em")
+  atualizadoEm      DateTime            @updatedAt @map("atualizado_em")
 
   pmoc            Pmoc                   @relation(fields: [pmocId], references: [id], onDelete: Cascade)
   tipoEquipamento TipoEquipamentoCustom? @relation(fields: [tipoEquipamentoId], references: [id], onDelete: Restrict)
@@ -5087,13 +5110,13 @@ model DesempenhoFechamentoLinha {
 /// O CONVITE de admissão: uma linha por admissão de um colaborador já pré-cadastrado pelo RH.
 /// A SITUAÇÃO mora só aqui — o cadastro do colaborador não guarda uma segunda verdade.
 model Admissao {
-  id            String @id @default(cuid())
-  empresaId     String @map("empresa_id")
-  colaboradorId String @map("colaborador_id")
+  id            String   @id @default(cuid())
+  empresaId     String   @map("empresa_id")
+  colaboradorId String   @map("colaborador_id")
   /// Token forte do link público (randomBytes(32).base64url)
-  token         String @unique
+  token         String   @unique
   /// CONVIDADO | PREENCHENDO | AGUARDANDO_ASSINATURA | ASSINADO | ENVIADO_CONTADOR | ADMITIDO | CANCELADA | EXPIRADA
-  situacao      String @default("CONVIDADO")
+  situacao      String   @default("CONVIDADO")
   expiraEm      DateTime @map("expira_em")
   criadoPorId   String?  @map("criado_por_id")
 
@@ -5112,11 +5135,11 @@ model Admissao {
   consentimentoUserAgent String?   @map("consentimento_user_agent")
 
   /// Verificação do e-mail por código: guarda o HASH do código, nunca o código
-  emailVerificado        String?   @map("email_verificado")
-  emailVerificadoEm      DateTime? @map("email_verificado_em")
-  emailCodigoHash        String?   @map("email_codigo_hash")
-  emailCodigoExpiraEm    DateTime? @map("email_codigo_expira_em")
-  emailCodigoTentativas  Int       @default(0) @map("email_codigo_tentativas")
+  emailVerificado       String?   @map("email_verificado")
+  emailVerificadoEm     DateTime? @map("email_verificado_em")
+  emailCodigoHash       String?   @map("email_codigo_hash")
+  emailCodigoExpiraEm   DateTime? @map("email_codigo_expira_em")
+  emailCodigoTentativas Int       @default(0) @map("email_codigo_tentativas")
 
   /// Rascunho etapa a etapa (fecha e volta sem perder nada) e onde parou
   rascunho    Json?
@@ -5145,10 +5168,10 @@ model Admissao {
   criadoEm     DateTime @default(now()) @map("criado_em")
   atualizadoEm DateTime @updatedAt @map("atualizado_em")
 
-  empresa           Empresa  @relation(fields: [empresaId], references: [id], onDelete: Cascade)
-  colaborador       Tecnico  @relation(fields: [colaboradorId], references: [id], onDelete: Cascade)
-  criadoPor         Usuario? @relation("AdmissaoCriadaPor", fields: [criadoPorId], references: [id], onDelete: SetNull)
-  canceladaPor      Usuario? @relation("AdmissaoCanceladaPor", fields: [canceladaPorId], references: [id], onDelete: SetNull)
+  empresa            Empresa  @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  colaborador        Tecnico  @relation(fields: [colaboradorId], references: [id], onDelete: Cascade)
+  criadoPor          Usuario? @relation("AdmissaoCriadaPor", fields: [criadoPorId], references: [id], onDelete: SetNull)
+  canceladaPor       Usuario? @relation("AdmissaoCanceladaPor", fields: [canceladaPorId], references: [id], onDelete: SetNull)
   enviadoContadorPor Usuario? @relation("AdmissaoContadorPor", fields: [enviadoContadorPorId], references: [id], onDelete: SetNull)
 
   @@index([empresaId, situacao])
@@ -5158,19 +5181,19 @@ model Admissao {
 
 /// A configuração da admissão POR EMPRESA. Nada hardcoded: o que varia entre empresas mora aqui.
 model AdmissaoConfig {
-  id        String @id @default(cuid())
-  empresaId String @unique @map("empresa_id")
+  id                         String  @id @default(cuid())
+  empresaId                  String  @unique @map("empresa_id")
   /// Modelo do contrato com os campos entre chaves ({{nome}}, {{cargo}}…). Vazio = a empresa ainda
   /// não definiu; o sistema não inventa cláusula.
-  contratoModelo String? @map("contrato_modelo") @db.Text
+  contratoModelo             String? @map("contrato_modelo") @db.Text
   /// Orientações finais (exame admissional, o que levar no primeiro dia, contato do responsável)
-  orientacoes    String? @db.Text
+  orientacoes                String? @db.Text
   /// [{ "id": "rg", "rotulo": "RG (frente e verso)", "obrigatorio": true }, …]
-  documentos     Json?
-  validadeDias   Int     @default(7) @map("validade_dias")
+  documentos                 Json?
+  validadeDias               Int     @default(7) @map("validade_dias")
   /// Período de experiência do modelo de contrato (45 + 45 é o padrão da CLT)
-  experienciaDias            Int @default(45) @map("experiencia_dias")
-  experienciaProrrogacaoDias Int @default(45) @map("experiencia_prorrogacao_dias")
+  experienciaDias            Int     @default(45) @map("experiencia_dias")
+  experienciaProrrogacaoDias Int     @default(45) @map("experiencia_prorrogacao_dias")
 
   criadoEm     DateTime @default(now()) @map("criado_em")
   atualizadoEm DateTime @updatedAt @map("atualizado_em")
@@ -5182,16 +5205,16 @@ model AdmissaoConfig {
 
 /// Dependentes do colaborador (IRRF e salário-família) — a Ficha de Admissão pede.
 model ColaboradorDependente {
-  id            String    @id @default(cuid())
-  colaboradorId String    @map("colaborador_id")
-  nome          String
-  nascimento    DateTime?
-  cpf           String?
+  id             String    @id @default(cuid())
+  colaboradorId  String    @map("colaborador_id")
+  nome           String
+  nascimento     DateTime?
+  cpf            String?
   /// FILHO | CONJUGE | ENTEADO | OUTRO
-  parentesco    String    @default("FILHO")
-  irrf          Boolean   @default(false)
-  salarioFamilia Boolean  @default(false) @map("salario_familia")
-  criadoEm      DateTime  @default(now()) @map("criado_em")
+  parentesco     String    @default("FILHO")
+  irrf           Boolean   @default(false)
+  salarioFamilia Boolean   @default(false) @map("salario_familia")
+  criadoEm       DateTime  @default(now()) @map("criado_em")
 
   colaborador Tecnico @relation(fields: [colaboradorId], references: [id], onDelete: Cascade)
 

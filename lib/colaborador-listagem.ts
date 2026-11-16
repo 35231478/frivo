@@ -1,4 +1,5 @@
 import type { Prisma } from "@prisma/client";
+import { DIAS_AVISO_VALIDADE } from "@/lib/colaborador/documentos";
 import { hojeDiaCivil } from "@/lib/fuso";
 import { lerPaginacao, um, type ParamsUrl } from "@/lib/listagem";
 
@@ -8,7 +9,11 @@ import { lerPaginacao, um, type ParamsUrl } from "@/lib/listagem";
  * paginação rodam no banco.
  */
 
-export const DIAS_AVISO_COLABORADOR = 30;
+/**
+ * O aviso de "documento a vencer" é UM número só: o mesmo da ficha do colaborador. A lista e a
+ * ficha não podem discordar sobre o que já está em atenção.
+ */
+export const DIAS_AVISO_COLABORADOR = DIAS_AVISO_VALIDADE;
 export const LABELS_FUNCAO: Record<string, string> = {
   TECNICO_CAMPO: "Técnico de campo",
   RESPONSAVEL_TECNICO: "Responsável técnico",
@@ -74,8 +79,10 @@ export function whereAvisoColaborador(aviso: AvisoColaborador, agora = new Date(
     case "sem_equipe": return WHERE_SEM_EQUIPE;
     case "ausente": return { statusColaborador: { in: ["FERIAS", "AFASTADO"] } };
     case "tecnicos": return { tipo: { in: FUNCOES_TECNICAS as any } };
-    case "doc_vencido": return { documentos: { some: { dataVencimento: { lt: inicioHoje } } } };
-    case "doc_vencendo": return { documentos: { some: { dataVencimento: { gte: inicioHoje, lt: limite } } } };
+    // `excluidoEm: null`: documento excluído não conta como vencido. A exclusão guarda o rastro no
+    // banco, mas quem foi apagado não pode mais marcar o colaborador na lista.
+    case "doc_vencido": return { documentos: { some: { excluidoEm: null, dataVencimento: { lt: inicioHoje } } } };
+    case "doc_vencendo": return { documentos: { some: { excluidoEm: null, dataVencimento: { gte: inicioHoje, lt: limite } } } };
     default: return null;
   }
 }

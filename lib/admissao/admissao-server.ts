@@ -32,6 +32,7 @@ import { cpfValido, digitos, formatarDocumento } from "@/lib/documento";
 import { formatarData, formatarMoeda, whatsappLink } from "@/lib/utils";
 import { emailConfigAtiva, enviarEmail, enviarEmailInterno } from "@/lib/email";
 import { validarDataUrl, validarFoto } from "@/lib/anexos-server";
+import { categoriaDoPedido } from "@/lib/colaborador/documentos";
 import {
   CODIGO_MAX_TENTATIVAS, CODIGO_TAMANHO, CODIGO_VALIDADE_MIN, DOCUMENTOS_PADRAO, MSG_CANCELADA,
   MSG_CODIGO_ERRADO, MSG_CODIGO_FORMATO, MSG_CODIGO_VENCIDO, MSG_EMAIL_NAO_VERIFICADO,
@@ -195,7 +196,8 @@ async function documentosDa(colaboradorId: string, pedidos: DocumentoPedido[]) {
   const ids = pedidos.map((d) => d.id);
   if (!ids.length) return [];
   return prisma.colaboradorDocumento.findMany({
-    where: { colaboradorId, tipo: { in: ids } },
+    // `excluidoEm: null`: documento excluído na ficha não conta mais como entregue na admissão.
+    where: { colaboradorId, excluidoEm: null, tipo: { in: ids } },
     select: { id: true, tipo: true, nome: true, criadoEm: true }, orderBy: { criadoEm: "asc" },
   });
 }
@@ -495,7 +497,7 @@ export async function admissoesDaEmpresa(empresaId: string, f: FiltroAdmissoes =
   const cfg = await configDaEmpresa(empresaId);
   const obrigatorios = obrigatoriosDa(cfg.documentos);
   const docs = await prisma.colaboradorDocumento.findMany({
-    where: { colaboradorId: { in: linhas.map((l) => l.colaborador.id) }, tipo: { in: obrigatorios.length ? obrigatorios : ["__nenhum__"] } },
+    where: { colaboradorId: { in: linhas.map((l) => l.colaborador.id) }, excluidoEm: null, tipo: { in: obrigatorios.length ? obrigatorios : ["__nenhum__"] } },
     select: { colaboradorId: true, tipo: true },
   });
   return linhas.map((l) => {
@@ -831,14 +833,20 @@ export async function enviarDocumento(
   const pedido = cfg.documentos.find((d) => d.id === limpo(dados.docId));
   if (!pedido) throw new ErroAdmissao("Este documento não está na lista da empresa.", 400);
   const quantos = await prisma.colaboradorDocumento.count({
-    where: { colaboradorId: a.colaborador.id, tipo: { in: cfg.documentos.map((d) => d.id) } },
+    where: { colaboradorId: a.colaborador.id, excluidoEm: null, tipo: { in: cfg.documentos.map((d) => d.id) } },
   });
   if (quantos >= DOCUMENTOS_MAX) throw new ErroAdmissao("Muitos arquivos enviados. Apague algum antes de enviar outro.", 409);
   const nome = limpo(dados.nome) || `${pedido.rotulo}`;
   const r = validarDataUrl(dados.arquivoUrl, nome);
   if (!r.ok) throw new ErroAdmissao(r.erro, 400);
   const criado = await prisma.colaboradorDocumento.create({
-    data: { colaboradorId: a.colaborador.id, tipo: pedido.id, nome: r.arquivo.nome, arquivoUrl: r.arquivo.conteudo },
+    // Vai para a MESMA seção Documentos da ficha (não existe lista paralela): a origem diz que
+    // quem mandou foi o colaborador, e a categoria põe o arquivo na gaveta certa.
+    data: {
+      colaboradorId: a.colaborador.id, tipo: pedido.id, nome: r.arquivo.nome,
+      arquivoUrl: r.arquivo.conteudo, origem: "ADMISSAO", categoria: categoriaDoPedido(pedido.id),
+      arquivoTipo: r.arquivo.tipo, tamanho: r.arquivo.tamanho,
+    },
     select: { id: true, tipo: true, nome: true },
   });
   return { id: criado.id, docId: criado.tipo, nome: criado.nome };
@@ -849,8 +857,12 @@ export async function removerDocumento(token: string, documentoId: string, agora
   const a = await linhaViva(token, agora);
   exigirConsentimento(a);
   const cfg = await configDaEmpresa(a.empresaId);
-  const { count } = await prisma.colaboradorDocumento.deleteMany({
-    where: { id: documentoId, colaboradorId: a.colaborador.id, tipo: { in: cfg.documentos.map((d) => d.id) } },
+  // Apagar é marcar, não remover a linha: o arquivo sai da lista do link e da ficha, e fica o
+  // rastro de quando saiu. Sem `excluidoPorId` — quem apagou foi o próprio colaborador, pelo link,
+  // e ele não é um usuário do sistema.
+  const { count } = await prisma.colaboradorDocumento.updateMany({
+    where: { id: documentoId, colaboradorId: a.colaborador.id, excluidoEm: null, tipo: { in: cfg.documentos.map((d) => d.id) } },
+    data: { excluidoEm: agora },
   });
   if (count !== 1) throw new ErroAdmissao("Documento não encontrado", 404);
 }
