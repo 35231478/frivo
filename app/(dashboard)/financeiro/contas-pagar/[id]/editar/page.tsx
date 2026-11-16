@@ -9,7 +9,7 @@ import { ContaPagarForm } from "@/components/financeiro/conta-pagar-form";
 
 export const metadata: Metadata = { title: "Editar conta a pagar" };
 
-const AJUDA = "Dá para corrigir dados, classificação e boleto enquanto a conta não está paga ou cancelada. O que já foi pago não muda por aqui: pagamento é registrado na ficha da conta.";
+const AJUDA = "Dá para corrigir dados, classificação e boleto enquanto a conta não está paga ou cancelada. O que já foi pago não muda por aqui: pagamento é registrado na ficha da conta. Numa conta de despesa recorrente, você escolhe o alcance do ajuste: só este mês, ou este e os próximos que ainda estão em aberto.";
 
 export default async function EditarContaPagarPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -24,6 +24,9 @@ export default async function EditarContaPagarPage({ params }: { params: Promise
   const initialData = {
     ...conta,
     valorTotal: Number(conta.valorTotal),
+    // o formulário usa o que já foi pago para decidir o ALCANCE do ajuste numa conta recorrente
+    valorPago: Number(conta.valorPago),
+    saldoRestante: Number(conta.saldoRestante),
     dataVencimento: conta.dataVencimento ? conta.dataVencimento.toISOString() : null,
   };
 

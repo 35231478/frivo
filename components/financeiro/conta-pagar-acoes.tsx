@@ -11,15 +11,20 @@ import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { FormField, FormGrid } from "@/components/ui/form-field";
-import { DollarSign, History, Pencil, Ban, Upload, Eye } from "lucide-react";
+import { DollarSign, History, Pencil, Ban, Upload, Eye, Repeat } from "lucide-react";
 import { ItemMenu, MenuAcoes, SeparadorMenu } from "@/components/ui/menu-acoes";
 import { chaveHojeBR } from "@/lib/fuso";
 import { InputData } from "@/components/ui/input-data";
 import { usePermissoes } from "@/components/providers/permissoes-provider";
+import { RegraRecorrenteForm } from "@/components/financeiro/regra-recorrente-form";
 
 interface Conta {
   id: string; numero: string; fornecedor: string;
   valorTotal: number; valorPago: number; saldoRestante: number; status: string;
+  /** Conta de despesa recorrente: já faz parte de uma regra (não oferece "Tornar recorrente") */
+  recorrenciaId?: string | null;
+  descricao?: string;
+  dataVencimento?: string | null;
 }
 
 /**
@@ -31,7 +36,7 @@ export function ContaPagarAcoes({ conta, menu }: { conta: Conta; menu?: boolean 
   // Pagar, editar e cancelar mexem em dinheiro: só para quem tem Financeiro › fluxo de caixa
   // (a mesma permissão que o servidor exige nas rotas). Ver detalhes e histórico são leitura.
   const podeMexer = usePermissoes().pode("financeiro", "fluxoCaixa");
-  const [modal, setModal] = useState<null | "pagar" | "historico">(null);
+  const [modal, setModal] = useState<null | "pagar" | "historico" | "recorrente">(null);
   const fechar = () => setModal(null);
   const finalizada = conta.status === "PAGO_TOTAL" || conta.status === "CANCELADO";
 
@@ -64,6 +69,13 @@ export function ContaPagarAcoes({ conta, menu }: { conta: Conta; menu?: boolean 
                 {podeMexer && !finalizada && <ItemMenu icone={DollarSign} onClick={() => { f(); setModal("pagar"); }} id="pagar">Registrar pagamento</ItemMenu>}
                 <ItemMenu icone={History} onClick={() => { f(); setModal("historico"); }} id="historico">Histórico de pagamentos</ItemMenu>
                 {podeMexer && !finalizada && <ItemMenu icone={Pencil} href={`/financeiro/contas-pagar/${conta.id}/editar`} id="editar">Editar</ItemMenu>}
+                {/* Despesa que se repete: a conta avulsa vira a primeira ocorrência (sem recriar nada) */}
+                {podeMexer && !conta.recorrenciaId && conta.status !== "CANCELADO" && (
+                  <ItemMenu icone={Repeat} onClick={() => { f(); setModal("recorrente"); }} id="tornar-recorrente">Tornar recorrente</ItemMenu>
+                )}
+                {podeMexer && conta.recorrenciaId && (
+                  <ItemMenu icone={Repeat} href="/financeiro/contas-pagar/recorrentes" id="ver-recorrencia">Ver a despesa recorrente</ItemMenu>
+                )}
                 {podeMexer && conta.status !== "CANCELADO" && (
                   <>
                     <SeparadorMenu />
@@ -83,6 +95,9 @@ export function ContaPagarAcoes({ conta, menu }: { conta: Conta; menu?: boolean 
         {podeMexer && !finalizada && (
           <Link href={`/financeiro/contas-pagar/${conta.id}/editar`} title="Editar" aria-label="Editar conta" data-editar-conta className="p-1.5 rounded text-primary-600 hover:bg-surface-alt"><Pencil className="w-4 h-4" /></Link>
         )}
+        {podeMexer && !conta.recorrenciaId && conta.status !== "CANCELADO" && (
+          <button type="button" title="Tornar recorrente" aria-label="Tornar a conta recorrente" onClick={() => setModal("recorrente")} data-tornar-recorrente className="p-1.5 rounded text-ink-muted hover:bg-surface-alt"><Repeat className="w-4 h-4" /></button>
+        )}
         {podeMexer && conta.status !== "CANCELADO" && (
           <button type="button" title="Cancelar conta" aria-label="Cancelar conta" onClick={cancelar} data-cancelar-conta className="p-1.5 rounded text-atrasado hover:bg-atrasado-claro"><Ban className="w-4 h-4" /></button>
         )}
@@ -95,6 +110,12 @@ export function ContaPagarAcoes({ conta, menu }: { conta: Conta; menu?: boolean 
 
       <Modal aberto={modal === "historico"} onFechar={fechar} titulo={`Histórico — ${conta.numero}`}>
         <Historico contaId={conta.id} />
+      </Modal>
+
+      <Modal aberto={modal === "recorrente"} onFechar={fechar} titulo={`Tornar recorrente — ${conta.numero}`} tamanho="lg">
+        <RegraRecorrenteForm
+          conta={{ id: conta.id, numero: conta.numero, descricao: conta.descricao ?? "", valorTotal: conta.valorTotal, dataVencimento: conta.dataVencimento ?? null }}
+          onPronto={() => { fechar(); router.refresh(); }} onCancelar={fechar} />
       </Modal>
     </>
   );

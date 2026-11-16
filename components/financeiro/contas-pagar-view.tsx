@@ -12,7 +12,7 @@ import { CategoriaBadge } from "@/components/financeiro/categoria-badge";
 import { useListagemUrl } from "@/components/listagem/use-listagem-url";
 import {
   Upload, AlertTriangle, CalendarClock, CheckCircle2, Search, SlidersHorizontal, Plus, Barcode, Loader2, Sigma,
-  FileText, ShoppingCart, Receipt, X,
+  FileText, ShoppingCart, Receipt, Repeat, X,
 } from "lucide-react";
 import { BarraPeriodo, CardResumo, GradeCards, type PeriodoTela } from "@/components/listagem/periodo-cards";
 import { BarraFiltros, filtroCancelados, inputFiltro } from "@/components/listagem/barra-filtros";
@@ -22,6 +22,7 @@ import { TabelaPro } from "@/components/listagem/tabela-pro";
 import { CheckboxSelecao, CheckboxSelecaoPagina, SelecaoLinhasProvider, useSelecaoLinhas } from "@/components/listagem/selecao-linhas";
 import { PainelTotais, type LinhaTotal } from "@/components/listagem/painel-totais";
 import { CHAVES_PAGAR, totaisPagar } from "@/lib/listagem/totais-selecao";
+import { rotuloCompetencia } from "@/lib/financeiro/conta-pagar-recorrencia";
 
 /** Uma conta a pagar já pronta para a tela (números em vez de Decimal, datas em texto) */
 export interface ContaPagarView {
@@ -36,6 +37,11 @@ export interface ContaPagarView {
   temBoleto: boolean;
   notaCompra: { id: string; numero: string } | null;
   pedidoCompra: { numero: string } | null;
+  /** Veio de uma despesa recorrente (a regra) e a competência dela */
+  recorrenciaId: string | null;
+  refAno: number | null; refMes: number | null;
+  /** Valor "a confirmar": a regra marcou como estimado (energia, água, cartão) */
+  valorEstimado: boolean;
 }
 interface Opcao { id: string; nome: string; ativo: boolean }
 
@@ -89,7 +95,10 @@ function ContasPagarCorpo({
   });
 
   const acoes = (c: ContaPagarView) => (
-    <ContaPagarAcoes conta={{ id: c.id, numero: c.numero, fornecedor: c.fornecedor.nome, valorTotal: c.valorTotal, valorPago: c.valorPago, saldoRestante: c.saldoRestante, status: c.status }} menu />
+    <ContaPagarAcoes conta={{
+      id: c.id, numero: c.numero, fornecedor: c.fornecedor.nome, valorTotal: c.valorTotal, valorPago: c.valorPago,
+      saldoRestante: c.saldoRestante, status: c.status, recorrenciaId: c.recorrenciaId, descricao: c.descricao, dataVencimento: c.dataVencimento,
+    }} menu />
   );
 
   // Nada no período: oferece todo o período (conta antiga, link de outra tela)
@@ -123,6 +132,22 @@ function ContasPagarCorpo({
     </span>
   ) : null;
 
+  /** Selos da despesa recorrente: de onde a conta veio e se o valor ainda vai mudar */
+  const selosRecorrente = (c: ContaPagarView) => (
+    <>
+      {c.recorrenciaId && (
+        <Link href="/financeiro/contas-pagar/recorrentes" title={`Conta de uma despesa recorrente${c.refAno && c.refMes ? ` (${rotuloCompetencia(c.refAno, c.refMes)})` : ""}`}
+          className="inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-full bg-surface-alt text-ink-muted hover:text-ink" data-selo-recorrente={c.recorrenciaId}>
+          <Repeat className="w-3 h-3" /> recorrente
+        </Link>
+      )}
+      {c.valorEstimado && (
+        <span className="inline-flex items-center text-[11px] font-semibold px-2 py-0.5 rounded-full bg-atencao-claro text-atencao-texto"
+          title="Valor estimado: ajuste quando o boleto chegar" data-selo-estimado>a confirmar</span>
+      )}
+    </>
+  );
+
   const marcasFornecedor = (c: ContaPagarView) => (
     <>
       {!c.fornecedor.ativo && <span className="ml-1 text-[10px] font-semibold text-ink-muted">(inativo)</span>}
@@ -138,6 +163,9 @@ function ContasPagarCorpo({
           <h1 className="page-title">Contas a pagar</h1>
         </div>
         <div className="flex flex-wrap items-center justify-end gap-2">
+          <Link href="/financeiro/contas-pagar/recorrentes" data-ir-recorrentes className="inline-flex items-center gap-2 bg-white border border-surface-border hover:border-primary-300 hover:bg-primary-50/40 text-ink px-4 py-2 rounded-lg text-sm font-semibold transition-all shadow-sm">
+            <Repeat className="w-4 h-4 text-primary-600" /> Despesas recorrentes
+          </Link>
           {podeImportarNf && (
             <Link href="/estoque/notas?de=contas-pagar" data-lancar-nf className="inline-flex items-center gap-2 bg-white border border-surface-border hover:border-primary-300 hover:bg-primary-50/40 text-ink px-4 py-2 rounded-lg text-sm font-semibold transition-all shadow-sm">
               <FileText className="w-4 h-4 text-primary-600" /> Lançar a partir de NF
@@ -187,6 +215,7 @@ function ContasPagarCorpo({
             <select {...sel("origem")} aria-label="Origem">
               <option value="">Todas</option>
               <option value="MANUAL">Manual</option>
+              <option value="RECORRENTE">Despesa recorrente</option>
               <option value="PEDIDO">Pedido de compra</option>
               <option value="NF">Nota de compra (NF)</option>
             </select>
@@ -221,6 +250,7 @@ function ContasPagarCorpo({
                   <span className="text-xs text-ink-subtle">{c.dataVencimento ? `Vence ${formatarData(c.dataVencimento)}` : "Sem vencimento"}</span>
                   {c.status === "PAGO_PARCIAL" && <span className="text-xs text-ink-muted">Falta {formatarMoeda(c.saldoRestante)}</span>}
                   {c.notaCompra && <span className="text-xs text-acento">NF {c.notaCompra.numero}</span>}
+                  {selosRecorrente(c)}
                   {c.temBoleto && <Barcode className="w-3.5 h-3.5 text-primary-600" aria-label="Boleto colado" />}
                 </div>
               </Link>
@@ -275,6 +305,7 @@ function ContasPagarCorpo({
                       <span className={cn("inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-full", sv.classe)} data-situacao>
                         {sv.linhaVermelha && <AlertTriangle className="w-3 h-3" />}{sv.label}
                       </span>
+                      {selosRecorrente(c)}
                       {c.temBoleto && <span className="inline-flex text-primary-600" title="Boleto colado: veja no detalhe da conta" data-tem-boleto><Barcode className="w-3.5 h-3.5" /></span>}
                     </span>
                   ),

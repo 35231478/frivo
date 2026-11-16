@@ -396,7 +396,9 @@ export function whereContasPagar(empresaId: string, sp: SP) {
   if (sp.centro) where.centroCustoId = sp.centro;
   if (sp.origem === "PEDIDO") where.pedidoCompraId = { not: null };
   else if (sp.origem === "NF") where.notaCompraId = { not: null };
-  else if (sp.origem === "MANUAL") { where.pedidoCompraId = null; where.notaCompraId = null; }
+  // Despesa recorrente: a conta nasceu de uma regra (prisma/sql/..._contas_pagar_recorrentes.sql)
+  else if (sp.origem === "RECORRENTE") where.recorrenciaId = { not: null };
+  else if (sp.origem === "MANUAL") { where.pedidoCompraId = null; where.notaCompraId = null; where.recorrenciaId = null; }
   if (sp.dataInicio || sp.dataFim) {
     where.dataVencimento = {};
     Object.assign(where.dataVencimento, periodoDiaCivil(sp.dataInicio, sp.dataFim) ?? {});

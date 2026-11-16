@@ -141,6 +141,81 @@ export function resumoDaRegra(regra: RegraRecorrencia & { valor?: number | null;
   return partes.join(" · ");
 }
 
+/* ───────── o formulário da tela ───────── */
+
+export const TERMINOS = ["INDEFINIDO", "DATA", "OCORRENCIAS"] as const;
+export type TerminoId = (typeof TERMINOS)[number];
+export const ROTULO_TERMINO: Record<TerminoId, string> = {
+  INDEFINIDO: "Sem data para terminar",
+  DATA: "Até um mês",
+  OCORRENCIAS: "Depois de N ocorrências",
+};
+export const AJUDA_TERMINO = "Sem data para terminar, o sistema mantém sempre uns 12 meses de contas geradas à frente e vai empurrando esse horizonte sozinho.";
+
+/** O formulário guarda texto (é o que o <input> devolve); `corpoDaRecorrencia` converte. */
+export interface FormRecorrencia {
+  frequencia: FrequenciaId;
+  /** meses entre uma ocorrência e a próxima — só vale quando a frequência é "CUSTOM" */
+  passoMeses: string;
+  diaVencimento: string;
+  ajusteDiaNaoUtil: string;
+  inicioAno: string;
+  inicioMes: string;
+  termino: TerminoId;
+  fimAno: string;
+  fimMes: string;
+  ocorrencias: string;
+  valorEstimado: boolean;
+}
+
+/** O formulário como a tela abre: mensal, dia do vencimento escolhido (ou hoje) e início sugerido. */
+export function formRecorrenciaInicial(hoje: { ano: number; mes: number; dia: number }, diaVencimento?: number | null): FormRecorrencia {
+  const dia = diaValido(diaVencimento) ? (diaVencimento as number) : hoje.dia;
+  const inicio = inicioSugerido(hoje, dia);
+  return {
+    frequencia: "MENSAL", passoMeses: "1", diaVencimento: String(dia), ajusteDiaNaoUtil: "MANTER",
+    inicioAno: String(inicio.ano), inicioMes: String(inicio.mes),
+    termino: "INDEFINIDO", fimAno: "", fimMes: "", ocorrencias: "", valorEstimado: false,
+  };
+}
+
+/** O formulário preenchido com uma regra que já existe (para editar). */
+export function formDaRegra(r: RegraRecorrencia & { valorEstimado?: boolean | null }): FormRecorrencia {
+  const passo = Math.max(1, Math.floor(r.passoMeses || 1));
+  return {
+    frequencia: frequenciaDoPasso(passo), passoMeses: String(passo),
+    diaVencimento: String(r.diaVencimento), ajusteDiaNaoUtil: r.ajusteDiaNaoUtil || "MANTER",
+    inicioAno: String(r.inicioAno), inicioMes: String(r.inicioMes),
+    termino: r.fimAno && r.fimMes ? "DATA" : r.ocorrencias ? "OCORRENCIAS" : "INDEFINIDO",
+    fimAno: r.fimAno ? String(r.fimAno) : "", fimMes: r.fimMes ? String(r.fimMes) : "",
+    ocorrencias: r.ocorrencias ? String(r.ocorrencias) : "", valorEstimado: !!r.valorEstimado,
+  };
+}
+
+const inteiro = (v: string) => { const n = Number(v); return Number.isFinite(n) ? Math.floor(n) : NaN; };
+
+/**
+ * O que a tela manda para a API. O término escolhido manda nos campos: "até um mês" leva só a
+ * competência final, "N ocorrências" leva só o número, "sem data" não leva nenhum dos dois (é o que
+ * o servidor cobra em `validarRegra`: os dois juntos são recusados).
+ */
+export function corpoDaRecorrencia(f: FormRecorrencia) {
+  return {
+    passoMeses: f.frequencia === "CUSTOM" ? inteiro(f.passoMeses) : passoDaFrequencia(f.frequencia),
+    diaVencimento: inteiro(f.diaVencimento),
+    ajusteDiaNaoUtil: f.ajusteDiaNaoUtil || "MANTER",
+    inicioAno: inteiro(f.inicioAno),
+    inicioMes: inteiro(f.inicioMes),
+    fimAno: f.termino === "DATA" && f.fimAno ? inteiro(f.fimAno) : null,
+    fimMes: f.termino === "DATA" && f.fimMes ? inteiro(f.fimMes) : null,
+    ocorrencias: f.termino === "OCORRENCIAS" && f.ocorrencias ? inteiro(f.ocorrencias) : null,
+    valorEstimado: !!f.valorEstimado,
+  };
+}
+
+/** Os anos que o seletor de competência oferece: do ano corrente até 5 à frente. */
+export const anosDoSeletor = (ano: number) => Array.from({ length: 6 }, (_, i) => ano + i);
+
 /* ───────── editar com escopo ───────── */
 
 export const ESCOPOS = ["ESTA", "ESTA_E_PROXIMAS"] as const;
