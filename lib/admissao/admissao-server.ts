@@ -981,6 +981,15 @@ export async function assinar(
     },
   });
   if (count !== 1) throw new ErroAdmissao(MSG_JA_ASSINADO, 409);
+
+  // O contrato assinado vira anexo do colaborador: fica na seção Documentos da ficha, junto com o
+  // resto dos papéis da pessoa. Se o PDF não puder ser gerado, a assinatura NÃO cai — ela já está
+  // gravada, e a rota do contrato continua gerando o arquivo na hora.
+  try {
+    const { guardarContratoNosAnexos } = await import("@/lib/admissao/admissao-entrega-server");
+    await guardarContratoNosAnexos(a.id, a.empresaId, agora);
+  } catch { /* o contrato continua disponível pela rota */ }
+
   const depois = (await admissaoPorToken(token))!;
   return serializarPublica(depois, agora);
 }
