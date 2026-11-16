@@ -11,6 +11,7 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vite
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { permissoesTotais } from "@/lib/permissoes";
+import { abrirBusca, escolherNaBusca, opcoesDaBusca } from "../util/busca-select";
 
 const nav = vi.hoisted(() => ({ push: vi.fn(), replace: vi.fn(), qs: "" }));
 vi.mock("next/navigation", () => ({
@@ -74,8 +75,11 @@ const $ = <T extends Element = HTMLElement>(sel: string) => document.querySelect
 const $$ = (sel: string) => [...document.querySelectorAll(sel)] as HTMLElement[];
 const txt = (el: Element | null) => (el?.textContent ?? "").replace(/\s+/g, " ").trim();
 const clicar = async (el: Element | null) => { expect(el).not.toBeNull(); await act(async () => { (el as HTMLElement).click(); }); await esperar(); };
-async function escolher(el: Element | null, v: string) {
-  expect(el).not.toBeNull();
+async function escolher(el: Element | null | undefined, v: string) {
+  expect(el).toBeTruthy();
+  // O seletor de cadastro virou o campo COM BUSCA da casa: aqui o teste faz o que a pessoa
+  // faz (abre a lista e clica). O <select> nativo (enum curto) continua sendo setado direto.
+  if (!(el instanceof HTMLSelectElement)) { await escolherNaBusca(el, v); await esperar(); return; }
   await act(async () => { Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, "value")!.set!.call(el, v); el!.dispatchEvent(new Event("change", { bubbles: true })); });
   await esperar();
 }
@@ -132,12 +136,16 @@ describe("Produtos", () => {
     const { TelaProdutos } = await import("@/components/config/telas/produtos");
     await montar(createElement(TelaProdutos));
     await clicar($("[data-acao=novo-cadastro]"));
-    const sel = $<HTMLSelectElement>('select[name="categoriaProdutoId"]')!;
+    // o seletor de categoria é o campo COM BUSCA da casa: as opções só existem com a lista aberta
+    const sel = $('[name="categoriaProdutoId"]')!;
     expect(sel).not.toBeNull();
-    const opcoes = [...sel.options].map((o) => o.textContent ?? "");
-    expect(opcoes.slice(0, 3)).toEqual(["Sem categoria", "Peças de reposição", "Materiais de instalação/consumo"]);
-    expect(opcoes[3]).toMatch(/^[+＋] Nov/); // cadastro rápido inline (Princípio 1)
-    expect(opcoes).toHaveLength(4); // a inativa não é escolha nova
+    // "Sem categoria" é o estado vazio do campo, não uma linha da lista (o × limpa a escolha)
+    expect(txt(sel)).toContain("Sem categoria");
+    const raiz = await abrirBusca(sel, "categoria do produto");
+    const opcoes = opcoesDaBusca(raiz);
+    expect(opcoes).toEqual(["Peças de reposição", "Materiais de instalação/consumo"]); // a inativa não é escolha nova
+    // cadastro rápido inline (Princípio 1): é o pé da lista, com o ícone de mais
+    expect(txt(raiz.querySelector("[data-acao-busca]"))).toBe("Nova categoria de produto…");
     expect(document.body.textContent).toContain("Sem categoria, é tratado como incluso no serviço");
     await digitar($('input[id]:not([type=checkbox])'), "Válvula de expansão");
     await escolher(sel, "cMat");

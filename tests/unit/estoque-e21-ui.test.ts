@@ -13,6 +13,7 @@
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
+import { escolherNaBusca, valorDaBusca } from "../util/busca-select";
 
 const nav = vi.hoisted(() => ({ push: vi.fn(), refresh: vi.fn() }));
 // Leva 7B: o sucesso da conciliação virou toast da casa (a tela fica só com erro de validação)
@@ -74,11 +75,12 @@ async function digitar(el: Element | null, v: string) {
   });
 }
 async function sair(el: Element | null) { await act(async () => { (el as HTMLElement).dispatchEvent(new FocusEvent("focusout", { bubbles: true })); }); }
-async function escolher(el: Element | null, v: string) {
-  await act(async () => {
-    Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, "value")!.set!.call(el, v);
-    el!.dispatchEvent(new Event("change", { bubbles: true }));
-  });
+async function escolher(el: Element | null | undefined, v: string) {
+  expect(el).toBeTruthy();
+  // O seletor de cadastro virou o campo COM BUSCA da casa: aqui o teste faz o que a pessoa
+  // faz (abre a lista e clica). O <select> nativo (enum curto) continua sendo setado direto.
+  if (!(el instanceof HTMLSelectElement)) { await escolherNaBusca(el, v); return; }
+  await act(async () => { Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, "value")!.set!.call(el, v); el!.dispatchEvent(new Event("change", { bubbles: true })); });
 }
 const ultima = (prefixo: string) => chamadas.filter((c) => c.url.startsWith(prefixo)).at(-1);
 
@@ -172,12 +174,13 @@ describe("parcelas", () => {
 describe("categoria, centro de custo e forma", () => {
   it("vêm do rascunho (padrão do fornecedor marcado), mudam e vão no corpo", async () => {
     await central({ financeiro: { ...FIN, categoriaId: "catMat", centroCustoId: "ccObra", padrao: { categoriaId: "catMat", centroCustoId: "ccObra" } } });
-    expect(valor('select[name="categoriaId"]')).toBe("catMat");
-    expect(valor('select[name="centroCustoId"]')).toBe("ccObra");
+    // categoria e centro de custo são cadastros que crescem: viraram o campo COM BUSCA da casa
+    expect(valorDaBusca($('[name="categoriaId"]'))).toBe("catMat");
+    expect(valorDaBusca($('[name="centroCustoId"]'))).toBe("ccObra");
     expect($("[data-padrao-categoria]")).not.toBeNull();
     expect($("[data-padrao-centro]")).not.toBeNull();
     expect(txt("[data-pagamento-nf]")).toBe("Na NF: 15 · Boleto bancário · R$ 1.749,30 (a prazo)");
-    await escolher($('select[name="centroCustoId"]'), "ccFrota");
+    await escolher($('[name="centroCustoId"]'), "ccFrota");
     expect($("[data-padrao-centro]")).toBeNull(); // trocou: não é mais o padrão
     await escolher($('select[name="formaPagamento"]'), "PIX");
     respostas["/api/compras/notas/n1/conciliacao"] = { status: 200, corpo: { faltam: 1 } };
@@ -190,7 +193,7 @@ describe("categoria, centro de custo e forma", () => {
   it("sem Financeiro › fluxo de caixa: tudo do financeiro desabilitado e fora do corpo", async () => {
     await central({ podeLancar: false, motivoSemLancar: "Lançar gera conta a pagar." });
     expect(($('select[name="formaPagamento"]') as HTMLSelectElement).disabled).toBe(true);
-    expect(($('select[name="categoriaId"]') as HTMLSelectElement).disabled).toBe(true);
+    expect(($('[name="categoriaId"]') as HTMLButtonElement).disabled).toBe(true);
     expect(($('input[name="valor-1"]') as HTMLInputElement).disabled).toBe(true);
     expect($('input[name="boleto-1"]')).toBeNull();
     respostas["/api/compras/notas/n1/conciliacao"] = { status: 200, corpo: { faltam: 1 } };

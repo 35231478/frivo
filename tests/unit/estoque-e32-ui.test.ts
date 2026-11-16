@@ -11,6 +11,7 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vite
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { permissoesTotais } from "@/lib/permissoes";
+import { abrirBusca, escolherNaBusca, opcoesDaBusca } from "../util/busca-select";
 
 const nav = vi.hoisted(() => ({ push: vi.fn(), replace: vi.fn(), qs: "" }));
 vi.mock("next/navigation", () => ({
@@ -90,8 +91,11 @@ const $$ = (sel: string) => [...document.querySelectorAll(sel)] as HTMLElement[]
 const txt = (el: Element | null) => (el?.textContent ?? "").replace(/\s+/g, " ").trim();
 const clicar = async (el: Element | null) => { expect(el).not.toBeNull(); await act(async () => { (el as HTMLElement).click(); }); await esperar(); };
 const botao = (rotulo: string | RegExp) => [...document.querySelectorAll("button")].find((b) => (typeof rotulo === "string" ? txt(b) === rotulo : rotulo.test(txt(b)))) ?? null;
-async function escolher(el: Element | null, v: string) {
-  expect(el).not.toBeNull();
+async function escolher(el: Element | null | undefined, v: string) {
+  expect(el).toBeTruthy();
+  // O seletor de cadastro virou o campo COM BUSCA da casa: aqui o teste faz o que a pessoa
+  // faz (abre a lista e clica). O <select> nativo (enum curto) continua sendo setado direto.
+  if (!(el instanceof HTMLSelectElement)) { await escolherNaBusca(el, v); await esperar(); return; }
   await act(async () => { Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, "value")!.set!.call(el, v); el!.dispatchEvent(new Event("change", { bubbles: true })); });
   await esperar();
 }
@@ -133,9 +137,12 @@ describe("Kits de material", () => {
     await clicar($("[data-acao=add-item-kit]"));
     await clicar($("[data-acao=add-item-kit]"));
     expect($$("[data-item-kit]")).toHaveLength(2);
-    const selects = $$("[data-item-kit] select[name=produtoId]") as unknown as HTMLSelectElement[];
-    // Produtos ativos da empresa; sem "+ Novo" (semCriar)
-    expect([...selects[0].options].map((o) => o.textContent)).toEqual(["Selecione…", "1 · Gás R410A", "2 · Capacitor", "3 · Suporte"]);
+    const selects = $$("[data-item-kit] [name=produtoId]");
+    // Produtos ativos da empresa, na lista do campo com busca; sem "+ Novo" (semCriar)
+    const lista = await abrirBusca(selects[0], "produto do kit");
+    expect(opcoesDaBusca(lista)).toEqual(["1 · Gás R410A", "2 · Capacitor", "3 · Suporte"]);
+    expect(lista.querySelector("[data-acao-busca]")).toBeNull();
+    expect(txt(selects[0])).toContain("Selecione…"); // o vazio é o estado do campo
     await escolher(selects[0], "p1"); await digitar($$("[data-quantidade-item]")[0], "0,5");
     await escolher(selects[1], "p2"); await digitar($$("[data-quantidade-item]")[1], "0");
     // Pílulas pela categoria e custo × quantidade (p1 50 × 0,5 = 25)
@@ -202,12 +209,13 @@ describe("Serviço › Materiais padrão", () => {
     expect($("[data-sem-materiais]")).not.toBeNull();
     expect($("[data-resumo-custo]")).toBeNull();
     await clicar($("[data-acao=add-material]"));
-    await escolher($('[data-linha-material=produto] select[name=produtoId]'), "p1");
+    await escolher($('[data-linha-material=produto] [name=produtoId]'), "p1");
     await digitar($('[data-linha-material=produto] [data-quantidade-material]'), "1,5");
+    // comportamento é enum curto: continua <select> nativo
     await escolher($('[data-linha-material=produto] select[name=comportamento]'), "VENDA_A_PARTE");
     await clicar($("[data-acao=add-kit]"));
-    const selKit = $<HTMLSelectElement>('[data-linha-material=kit] select[name=kitId]')!;
-    expect([...selKit.options].map((o) => o.textContent)).toEqual(["Selecione…", "Kit instalação", "Kit vazio"]);
+    const selKit = $('[data-linha-material=kit] [name=kitId]')!;
+    expect(opcoesDaBusca(await abrirBusca(selKit, "kit"))).toEqual(["Kit instalação", "Kit vazio"]);
     await escolher(selKit, "k1");
     expect($$("[data-itens-do-kit] [data-kit-item]")).toHaveLength(2);
     // Resumo: o gás com override vira "à parte" (1,5 × 50 = 75); o kit × 1: gás 0,5 × 50 = 25 incluso

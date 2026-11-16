@@ -199,8 +199,14 @@ describe("conta a pagar ligada ao fornecedor", () => {
     const { SeletorCadastro } = await import("@/components/cadastros/seletor-cadastro");
     const itens = db.t.fornecedor.filter((f) => f.empresaId === "e1").map((f) => ({ id: f.id, nome: f.nome, ativo: f.ativo }));
     const html = (valor: string) => renderToStaticMarkup(createElement(SeletorCadastro, { entidade: "fornecedores", itens, valor, onChange: () => {} }));
-    expect(html("f-velho")).toMatch(/<option value="f-velho"[^>]*selected[^>]*>Refrigeração Antiga \(inativo\)/);
+    // o seletor é o campo COM BUSCA: fechado, ele mostra o escolhido; a lista é quem tem as opções
+    expect(html("f-velho")).toContain("Refrigeração Antiga (inativo)");
     expect(html("")).not.toContain("Refrigeração Antiga");
-    expect(html("")).toContain('<option value="f-frigelar">Frigelar Distribuidora</option>');
+    // e a regra em si, na fonte das opções: o inativo só existe quando é o valor atual
+    const { opcoesCadastro } = await import("@/lib/cadastros/opcoes");
+    const rotulos = (atual: string) => opcoesCadastro(itens, [atual], "id").map((o) => o.rotulo);
+    expect(rotulos("f-velho")).toContain("Refrigeração Antiga (inativo)");
+    expect(rotulos("")).not.toContain("Refrigeração Antiga (inativo)");
+    expect(rotulos("")).toContain("Frigelar Distribuidora");
   });
 });

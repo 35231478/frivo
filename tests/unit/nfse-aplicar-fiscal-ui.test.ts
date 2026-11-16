@@ -12,6 +12,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act, createElement, useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { montarPermissoes, type Permissoes } from "@/lib/permissoes";
+import { abrirBusca, escolherNaBusca, limparBusca, opcoesDaBusca } from "../util/busca-select";
 
 (globalThis as any).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -194,10 +195,14 @@ describe("o formulário do modal", () => {
   it("copiar de um serviço modelo: preenche tudo (ajustável) e avisa de onde veio", async () => {
     await montar(GESTOR_FISCAL);
     await abrirModal();
-    const modelo = modal()!.querySelector('[data-seletor-cadastro="servicos"]') as HTMLSelectElement;
-    expect([...modelo.options].map((o) => o.text)).toEqual(["Escolha um serviço…", "HIG · Higienização", "INS · Instalação", "REC · Recarga de gás"]);
-    expect([...modelo.options].some((o) => o.hasAttribute("data-criar"))).toBe(false); // sem "+ Novo serviço"
-    await digitar(modelo, "s2");
+    // o modelo é o campo COM BUSCA da casa: as opções vivem na lista aberta
+    const modelo = modal()!.querySelector('[data-seletor-cadastro="servicos"]')!;
+    expect(texto(modelo)).toContain("Escolha um serviço…"); // o vazio é o estado do campo
+    const lista = await abrirBusca(modelo, "serviço modelo");
+    expect(opcoesDaBusca(lista)).toEqual(["HIG · Higienização", "INS · Instalação", "REC · Recarga de gás"]);
+    expect(lista.querySelector("[data-acao-busca]")).toBeNull(); // sem "+ Novo serviço"
+    await escolherNaBusca(modelo, "s2");
+    await esperar();
     expect(texto(modal())).toContain("Copiado de “Instalação”: revise e ajuste antes de aplicar.");
     expect(campo("Código do serviço (LC 116)").value).toBe("14.06");
     expect(campo("Código municipal").value).toBe("140601");
@@ -217,16 +222,16 @@ describe("o formulário do modal", () => {
   it("modelo sem CNAE próprio = usar o da empresa; trocar de modelo sobrescreve; limpar mantém o que está", async () => {
     await montar(GESTOR_FISCAL);
     await abrirModal();
-    const modelo = modal()!.querySelector('[data-seletor-cadastro="servicos"]') as HTMLSelectElement;
-    await digitar(modelo, "s2");
-    await digitar(modelo, "s1");
+    const modelo = modal()!.querySelector('[data-seletor-cadastro="servicos"]')!;
+    await escolherNaBusca(modelo, "s2"); await esperar();
+    await escolherNaBusca(modelo, "s1"); await esperar();
     expect(campo("Código do serviço (LC 116)").value).toBe("14.01");
     expect(campo<HTMLSelectElement>("CNAE").value).toBe("empresa");
     expect(campo<HTMLSelectElement>("Tributação do ISS").value).toBe("TRIBUTAVEL");
     expect(campo<HTMLSelectElement>("ISS retido pelo tomador").value).toBe("false");
     expect(campo("Alíquota de ISS (%)").value).toBe("");
     expect(texto(modal())).toContain("Copiado de “Higienização”");
-    await digitar(modelo, "");
+    await limparBusca(modelo, "serviço modelo"); await esperar(); // o × do campo limpa a escolha
     expect(texto(modal())).not.toContain("Copiado de");
     expect(campo("Código do serviço (LC 116)").value).toBe("14.01");
   });

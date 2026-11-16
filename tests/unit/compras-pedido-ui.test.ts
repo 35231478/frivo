@@ -13,6 +13,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import type { PedidoTela } from "@/lib/compras/pedido";
+import { escolherNaBusca } from "../util/busca-select";
 
 (globalThis as any).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -73,10 +74,10 @@ async function digitar(el: Element | null | undefined, v: string) {
 }
 async function escolher(sel: Element | null | undefined, v: string) {
   expect(sel).toBeTruthy();
-  await act(async () => {
-    Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, "value")!.set!.call(sel, v);
-    sel!.dispatchEvent(new Event("change", { bubbles: true }));
-  });
+  // O seletor de cadastro virou o campo COM BUSCA da casa: aqui o teste faz o que a pessoa
+  // faz (abre a lista e clica). O <select> nativo (enum curto) continua sendo setado direto.
+  if (!(sel instanceof HTMLSelectElement)) { await escolherNaBusca(sel, v); await esperar(); return; }
+  await act(async () => { Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, "value")!.set!.call(sel, v); sel!.dispatchEvent(new Event("change", { bubbles: true })); });
   await esperar();
 }
 const texto = (el: Element | null) => (el?.textContent ?? "").replace(/\s+/g, " ").trim();
@@ -106,7 +107,7 @@ describe("editor do pedido", () => {
     const { EditorPedido } = await import("@/components/compras/editor-pedido");
     await renderizar(createElement(EditorPedido, { ordemServicoId: "os1", onSalvo: () => {}, onCancelar: () => {} }));
     expect($("[data-dica-ultima-compra]")).toBeNull();
-    await escolher($("[data-item-editor] select"), "pFiltro");
+    await escolher($("[data-item-editor] [data-seletor-cadastro='produtos']"), "pFiltro");
     expect(texto($('[data-dica-ultima-compra="pFiltro"]'))).toBe("Última compra: R$ 18,45 — Frigelar — 15/10/2026");
     expect(campo("valorEstimado").value).toBe("18,45");
     expect(campo("descricao").value).toBe("Filtro secador");
@@ -117,7 +118,7 @@ describe("editor do pedido", () => {
     expect(campo("valorEstimado").value).toBe("18,45");
     // Sem histórico (Capacitor): sem dica, estimado vazio
     await clicar($("[data-adicionar-item]"));
-    await escolher($$("[data-item-editor] select")[1], "pNovo");
+    await escolher($$("[data-item-editor] [data-seletor-cadastro='produtos']")[1], "pNovo");
     expect($('[data-dica-ultima-compra="pNovo"]')).toBeNull();
     expect(campo("valorEstimado", 1).value).toBe("");
     expect(campo("unidade", 1).value).toBe("pc");

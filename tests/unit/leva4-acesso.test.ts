@@ -209,8 +209,14 @@ describe("seletor de perfil: mantém o inativo já usado, não oferece em escolh
   it("componente: registro antigo mostra 'Perfil antigo (inativo)'; escolha nova não oferece", async () => {
     const { SeletorCadastro } = await import("@/components/cadastros/seletor-cadastro");
     const html = (valor: string) => renderToStaticMarkup(createElement(SeletorCadastro, { entidade: "perfis-acesso", itens: perfis(), valor, onChange: () => {} }));
-    expect(html("p-velho")).toMatch(/<option value="p-velho"[^>]*selected[^>]*>Perfil antigo \(inativo\)/);
+    // o seletor é o campo COM BUSCA: fechado, ele mostra o escolhido; a lista é quem tem as opções
+    expect(html("p-velho")).toContain("Perfil antigo (inativo)");
     expect(html("")).not.toContain("Perfil antigo");
+    // e a regra em si, na fonte das opções: o inativo só existe quando é o valor atual
+    const { opcoesCadastro } = await import("@/lib/cadastros/opcoes");
+    const rotulos = (atual: string) => opcoesCadastro(perfis(), [atual], "id").map((o) => o.rotulo);
+    expect(rotulos("p-velho")).toContain("Perfil antigo (inativo)");
+    expect(rotulos("")).not.toContain("Perfil antigo (inativo)");
   });
   it("servidor: atribuir perfil inativo a outro usuário = 400; quem já tem perfil inativo edita o nome normalmente", async () => {
     const r = await chamar(item, "PATCH", { entidade: "usuarios", id: "tec1" }, { perfilAcessoId: "p-velho" });
