@@ -94,10 +94,10 @@ export function RegraRecorrenteForm({ regra, conta, onPronto, onCancelar }: {
       {erro && <div className="bg-atrasado-claro border border-atrasado/20 text-atrasado-texto text-sm rounded-lg px-3 py-2" data-erro-regra>{erro}</div>}
 
       {!regra && (
-        <p className="text-sm text-ink-muted" data-aviso-tornar>
-          A conta <strong className="text-ink">{conta!.numero}</strong> continua como está — mesmo número, mesmos pagamentos, mesmo histórico —
-          e passa a ser a primeira ocorrência. As próximas nascem a partir dela.
-        </p>
+        <div className="text-sm text-ink-muted space-y-1" data-aviso-tornar>
+          <p>A conta <strong className="text-ink">{conta!.numero}</strong> continua como está: mesmo número, mesmos pagamentos, mesmo histórico.</p>
+          <p>Ela passa a ser a primeira ocorrência; as próximas nascem a partir dela.</p>
+        </div>
       )}
 
       <FormGrid>
@@ -132,7 +132,7 @@ export function RegraRecorrenteForm({ regra, conta, onPronto, onCancelar }: {
       </FormField>
 
       <p className="text-xs text-ink-subtle">
-        O que você mudar vale para as ocorrências futuras ainda em aberto. As já pagas não mudam.
+        O que mudar aqui vale para as ocorrências futuras ainda em aberto. As já pagas não mudam.
       </p>
 
       <div className="flex justify-end gap-2">

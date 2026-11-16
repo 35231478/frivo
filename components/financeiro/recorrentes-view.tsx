@@ -19,7 +19,7 @@ import {
   type SituacaoRecorrencia,
 } from "@/lib/financeiro/conta-pagar-recorrencia";
 
-const AJUDA = "A despesa que se repete: você descreve a regra uma vez (aluguel, internet, assinatura, salário) e o sistema abre uma conta a pagar por competência, cada uma independente — pagar, ajustar ou cancelar uma não mexe nas outras. Sem data para terminar, ele mantém uns 12 meses gerados à frente. Pausar e encerrar só tiram do caminho as ocorrências futuras em aberto: conta paga nunca muda.";
+const AJUDA = "A despesa que se repete: a regra é descrita uma vez (aluguel, internet, assinatura, salário) e o sistema abre uma conta a pagar por competência, cada uma independente — pagar, ajustar ou cancelar uma não mexe nas outras. Sem data para terminar, ele mantém uns 12 meses gerados à frente. Pausar e encerrar só tiram do caminho as ocorrências futuras em aberto: conta paga nunca muda.";
 
 export interface RegraView {
   id: string;
@@ -84,10 +84,12 @@ export function RecorrentesView({ regras, categorias, podeMexer, emAberto }: {
   }
 
   async function encerrar(r: RegraView) {
-    if (!(await confirmar({
-      mensagem: `Encerrar “${r.descricao}”? A regra para de gerar e as ocorrências futuras ainda em aberto são canceladas. O histórico fica: nada é apagado, e o que já foi pago continua registrado.`,
-      perigo: true, confirmarTexto: "Encerrar despesa", cancelarTexto: "Voltar",
-    }))) return;
+    const mensagem = [
+      `Encerrar “${r.descricao}”?`,
+      "A regra para de gerar e as ocorrências futuras ainda em aberto são canceladas.",
+      "O histórico fica: nada é apagado, e o que já foi pago continua registrado.",
+    ].join(" ");
+    if (!(await confirmar({ mensagem, perigo: true, confirmarTexto: "Encerrar despesa", cancelarTexto: "Voltar" }))) return;
     await acao(r, "ENCERRAR");
   }
 
@@ -282,10 +284,12 @@ function Ocorrencias({ regra, podeMexer, onMudou }: { regra: RegraView; podeMexe
 
   async function pular(conta: any) {
     setErro("");
-    if (!(await confirmar({
-      mensagem: `Pular a ocorrência de ${rotuloCompetencia(conta.refAno, conta.refMes)}? A conta ${conta.numero} fica no histórico como cancelada e a despesa recorrente continua valendo — o mês seguinte nasce normalmente.`,
-      perigo: true, confirmarTexto: "Pular esta ocorrência", cancelarTexto: "Voltar",
-    }))) return;
+    const mensagem = [
+      `Pular a ocorrência de ${rotuloCompetencia(conta.refAno, conta.refMes)}?`,
+      `A conta ${conta.numero} fica no histórico como cancelada.`,
+      "A despesa recorrente continua valendo: o mês seguinte nasce normalmente.",
+    ].join(" ");
+    if (!(await confirmar({ mensagem, perigo: true, confirmarTexto: "Pular esta ocorrência", cancelarTexto: "Voltar" }))) return;
     try {
       const res = await fetch(`/api/contas-pagar/${conta.id}/pular`, { method: "POST" });
       if (!res.ok) { const d = await res.json().catch(() => ({})); setErro(d.erro ?? "Não foi possível pular a ocorrência."); return; }

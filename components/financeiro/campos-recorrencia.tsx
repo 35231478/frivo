@@ -110,7 +110,7 @@ export function CamposRecorrencia({ valor: f, onChange, anoBase }: {
         <input type="checkbox" className="mt-0.5" checked={f.valorEstimado} onChange={(e) => upd("valorEstimado", e.target.checked)} />
         <span className="min-w-0">
           Valor a confirmar (estimado)
-          <span className="block text-xs text-ink-muted">Para energia, água e cartão: a conta nasce com o valor previsto e você ajusta quando o boleto chega.</span>
+          <span className="block text-xs text-ink-muted">Para energia, água e cartão: a conta nasce com o valor previsto e o ajuste vem com o boleto.</span>
         </span>
       </label>
     </div>

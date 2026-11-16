@@ -23,7 +23,7 @@ import {
   type EscopoEdicao,
 } from "@/lib/financeiro/conta-pagar-recorrencia";
 
-const AJUDA_REPETIR = "Para a despesa que volta todo mês (aluguel, internet, assinatura, contador). Você descreve a regra uma vez e o sistema abre uma conta a pagar por mês, cada uma independente: pagar, ajustar ou cancelar uma não mexe nas outras.";
+const AJUDA_REPETIR = "Para a despesa que volta todo mês (aluguel, internet, assinatura, contador). A regra é descrita uma vez e o sistema abre uma conta a pagar por mês, cada uma independente: pagar, ajustar ou cancelar uma não mexe nas outras.";
 
 /** hoje em Brasília, em partes (o início sugerido da regra sai daqui) */
 function hojeBR() {
@@ -145,8 +145,9 @@ export function ContaPagarForm({ initialData }: { initialData?: any }) {
       const salva = await res.json().catch(() => ({}));
       const fim = isEditing ? "atualizada" : "criada";
       const outras = Math.max(0, Number(salva?.alcancadas ?? 0) - 1);
+      const plural = outras === 1 ? "ocorrência" : "ocorrências";
       toast(outras > 0
-        ? `Conta ${salva.numero} atualizada. A regra e ${outras} ${outras === 1 ? "ocorrência" : "ocorrências"} em aberto acompanharam.`
+        ? `Conta ${salva.numero} atualizada. A regra e ${outras} ${plural} em aberto acompanharam.`
         : salva?.numero ? `Conta ${salva.numero} ${fim}.` : `Conta a pagar ${fim}.`);
       router.push("/financeiro/contas-pagar");
       router.refresh();
@@ -170,7 +171,7 @@ export function ContaPagarForm({ initialData }: { initialData?: any }) {
               </p>
             ) : (
               <>
-                <p className="text-sm text-ink-muted">O que você quer alcançar com este ajuste?</p>
+                <p className="text-sm text-ink-muted">Alcance deste ajuste:</p>
                 {ESCOPOS.map((e) => (
                   <label key={e} className="flex items-start gap-2 text-sm cursor-pointer" data-escopo={e}>
                     <input type="radio" name="escopo-edicao" className="mt-1" checked={escopo === e} onChange={() => setEscopo(e)} />
