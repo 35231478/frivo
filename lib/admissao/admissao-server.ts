@@ -59,6 +59,16 @@ const minutos = (m: number, de: Date) => new Date(de.getTime() + m * 60_000);
 
 export interface OrigemPublica { ip?: string | null; userAgent?: string | null }
 
+/**
+ * O formulário da admissão: o rascunho reconstruído campo a campo. Rascunho vazio (o colaborador
+ * ainda não salvou nada) começa com o nome do pré-cadastro — o resto é ele quem preenche.
+ */
+function formDaAdmissao(rascunho: unknown, nomeDoCadastro: string): FormAdmissao {
+  const f = normalizarForm(rascunho);
+  if (!rascunho) f.nome = nomeDoCadastro;
+  return f;
+}
+
 /* ───────────────────────── configuração por empresa ───────────────────────── */
 
 export interface ConfigAdmissao {
@@ -516,7 +526,7 @@ export async function progressoDaAdmissao(empresaId: string, admissaoId: string,
   const a = await prisma.admissao.findFirst({ where: { id: admissaoId, empresaId }, select: { ...SELECT_RH, rascunho: true } });
   if (!a) throw new ErroAdmissao("Admissão não encontrada", 404);
   const cfg = await configDaEmpresa(empresaId);
-  const form = normalizarForm(a.rascunho);
+  const form = formDaAdmissao(a.rascunho, a.colaborador.nome);
   const linhas = await documentosDa(a.colaborador.id, cfg.documentos);
   const enviados = linhas.map((l) => l.tipo);
   const porId = new Map(cfg.documentos.map((d) => [d.id, d]));
@@ -637,7 +647,7 @@ async function serializarPublica(a: LinhaPublica, agora: Date): Promise<Admissao
       faltando: [], etapaPendente: null, contrato: null, orientacoes: null,
     };
   }
-  const form = normalizarForm(a.rascunho);
+  const form = formDaAdmissao(a.rascunho, a.colaborador.nome);
   const linhas = await documentosDa(a.colaborador.id, cfg.documentos);
   const enviados = linhas.map((l) => l.tipo);
   const obrigatorios = obrigatoriosDa(cfg.documentos);
@@ -660,12 +670,17 @@ async function serializarPublica(a: LinhaPublica, agora: Date): Promise<Admissao
   };
 }
 
-/** O token tem de existir e o link tem de valer. Devolve a linha ou estoura com o motivo certo. */
+/**
+ * O token tem de existir e o link tem de aceitar mudança. Devolve a linha ou estoura com o motivo
+ * CERTO: cancelada e já assinada têm mensagem própria — "o link venceu" seria mentira para quem
+ * acabou de assinar.
+ */
 async function linhaViva(token: string, agora: Date): Promise<LinhaPublica> {
   const a = await admissaoPorToken(token);
   if (!a) throw new ErroAdmissao(MSG_LINK_INVALIDO, 404);
   const situacao = a.situacao as SituacaoAdmissao;
   if (situacao === "CANCELADA") throw new ErroAdmissao(MSG_CANCELADA, 409);
+  if (a.assinaturaEm) throw new ErroAdmissao(MSG_JA_ASSINADO, 409);
   if (!linkValido({ situacao, expiraEm: a.expiraEm }, agora)) throw new ErroAdmissao(MSG_LINK_INVALIDO, 410);
   return a;
 }
@@ -711,7 +726,6 @@ export async function salvarRascunho(
 ): Promise<AdmissaoPublica> {
   const a = await linhaViva(token, agora);
   exigirConsentimento(a);
-  if (a.assinaturaEm) throw new ErroAdmissao(MSG_JA_ASSINADO, 409);
   const form = normalizarForm(bruto);
   // Trocar o e-mail derruba a verificação: o código valeu para o endereço anterior
   const perdeVerificacao = !!a.emailVerificado && !emailConfere(form.email, a.emailVerificado);
@@ -786,7 +800,7 @@ export async function conferirCodigoEmail(
     await prisma.admissao.update({ where: { id: a.id }, data: { emailCodigoTentativas: { increment: 1 } } });
     throw new ErroAdmissao(MSG_CODIGO_ERRADO, 400);
   }
-  const form = normalizarForm(a.rascunho);
+  const form = formDaAdmissao(a.rascunho, a.colaborador.nome);
   await prisma.admissao.update({
     where: { id: a.id },
     data: {
@@ -813,7 +827,6 @@ export async function enviarDocumento(
 ): Promise<{ id: string; docId: string; nome: string }> {
   const a = await linhaViva(token, agora);
   exigirConsentimento(a);
-  if (a.assinaturaEm) throw new ErroAdmissao(MSG_JA_ASSINADO, 409);
   const cfg = await configDaEmpresa(a.empresaId);
   const pedido = cfg.documentos.find((d) => d.id === limpo(dados.docId));
   if (!pedido) throw new ErroAdmissao("Este documento não está na lista da empresa.", 400);
@@ -835,7 +848,6 @@ export async function enviarDocumento(
 export async function removerDocumento(token: string, documentoId: string, agora: Date = new Date()): Promise<void> {
   const a = await linhaViva(token, agora);
   exigirConsentimento(a);
-  if (a.assinaturaEm) throw new ErroAdmissao(MSG_JA_ASSINADO, 409);
   const cfg = await configDaEmpresa(a.empresaId);
   const { count } = await prisma.colaboradorDocumento.deleteMany({
     where: { id: documentoId, colaboradorId: a.colaborador.id, tipo: { in: cfg.documentos.map((d) => d.id) } },
@@ -853,9 +865,8 @@ export async function removerDocumento(token: string, documentoId: string, agora
 export async function concluirPreenchimento(token: string, agora: Date = new Date()): Promise<AdmissaoPublica> {
   const a = await linhaViva(token, agora);
   exigirConsentimento(a);
-  if (a.assinaturaEm) throw new ErroAdmissao(MSG_JA_ASSINADO, 409);
   const cfg = await configDaEmpresa(a.empresaId);
-  const form = normalizarForm(a.rascunho);
+  const form = formDaAdmissao(a.rascunho, a.colaborador.nome);
   const linhas = await documentosDa(a.colaborador.id, cfg.documentos);
   const docs = { enviados: linhas.map((l) => l.tipo), obrigatorios: obrigatoriosDa(cfg.documentos) };
   const pendente = etapaPendente(form, docs);
@@ -934,7 +945,6 @@ export async function assinar(
 ): Promise<AdmissaoPublica> {
   const a = await linhaViva(token, agora);
   exigirConsentimento(a);
-  if (a.assinaturaEm) throw new ErroAdmissao(MSG_JA_ASSINADO, 409);
   if (a.situacao !== "AGUARDANDO_ASSINATURA") {
     throw new ErroAdmissao("Conclua o preenchimento antes de assinar.", 409);
   }
@@ -947,7 +957,7 @@ export async function assinar(
 
   const cfg = await configDaEmpresa(a.empresaId);
   if (!cfg.contratoModelo.trim()) throw new ErroAdmissao(MSG_SEM_MODELO, 409);
-  const form = normalizarForm(a.rascunho);
+  const form = formDaAdmissao(a.rascunho, a.colaborador.nome);
   const contrato = montarContrato(cfg.contratoModelo, dadosDoContrato(a, form, cfg, agora));
 
   const { count } = await prisma.admissao.updateMany({

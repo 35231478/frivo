@@ -6,10 +6,12 @@
  */
 import { describe, it, expect } from "vitest";
 import {
-  ABERTAS_AO_COLABORADOR, CAMPOS_CONTRATO, DOCUMENTOS_PADRAO, ENCERRADAS, ETAPAS, ROTULO_SITUACAO,
+  ABERTAS_AO_COLABORADOR, CAMPOS_CONTRATO, CAMPO_MAX, DEPENDENTES_MAX, DOCUMENTOS_PADRAO, ENCERRADAS,
+  ETAPAS, MOTIVO_MIN, ROTULO_SITUACAO,
   SITUACOES, VALIDADE_MAX, VALIDADE_MIN, VALIDADE_PADRAO, camposDesconhecidos, caminhoPublicoAdmissao,
-  documentosDaEmpresa, etapaPendente, expiraEm, faltaNaEtapa, formVazio, linkValido, montarContrato,
-  obrigatoriosDa, pisValido, podeIr, prontoParaAssinar, validadeValida,
+  codigoValido, documentosDaEmpresa, emailConfere, enderecoEmLinha, etapaPendente, expiraEm,
+  faltaNaEtapa, formVazio, linkValido, montarContrato, motivoValido, normalizarForm,
+  obrigatoriosDa, pisValido, podeIr, prontoParaAssinar, textoJornada, validadeValida,
   type DadosContrato, type Etapa, type FormAdmissao, type SituacaoAdmissao,
 } from "@/lib/admissao/admissao";
 
@@ -229,5 +231,92 @@ describe("a validade do link", () => {
 
   it("o caminho público leva o token", () => {
     expect(caminhoPublicoAdmissao("abc123")).toBe("/admissao/abc123");
+  });
+});
+
+/* ───────── o rascunho que chega pelo link ───────── */
+
+describe("o rascunho vem de fora: só campo conhecido entra, e cortado no teto", () => {
+  it("campo que não existe no formulário é descartado; o que existe é aparado", () => {
+    const f = normalizarForm({
+      nome: "  Marina Alves  ", rg: "x".repeat(CAMPO_MAX + 50),
+      invadido: "DROP TABLE tecnicos", __proto__: { poluido: true },
+      dependentes: "não é lista",
+    });
+    expect(f.nome).toBe("Marina Alves");
+    expect(f.rg).toHaveLength(CAMPO_MAX);
+    expect(Object.keys(f).sort()).toEqual(Object.keys(formVazio()).sort());
+    expect((f as unknown as Record<string, unknown>).invadido).toBeUndefined();
+    expect(f.dependentes).toEqual([]);
+  });
+
+  it("nada entra: o formulário sai vazio, com os campos que já nascem preenchidos", () => {
+    expect(normalizarForm(null)).toEqual(formVazio());
+    expect(normalizarForm("texto solto")).toEqual(formVazio());
+    expect(normalizarForm(42).nacionalidade).toBe("Brasileira");
+    // vazio de propósito volta ao padrão em vez de gravar em branco
+    expect(normalizarForm({ nacionalidade: "", contaTipo: "" })).toMatchObject({ nacionalidade: "Brasileira", contaTipo: "CORRENTE" });
+    expect(normalizarForm({ nacionalidade: "Portuguesa" }).nacionalidade).toBe("Portuguesa");
+  });
+
+  it("dependente: tem teto, parentesco inventado cai no padrão e os marcadores só são true quando são true", () => {
+    const f = normalizarForm({
+      dependentes: Array.from({ length: DEPENDENTES_MAX + 10 }, (_, i) => ({
+        nome: `Filho ${i}`, parentesco: i === 0 ? "CONJUGE" : "INVENTADO", irrf: i === 0 ? true : "sim", salarioFamilia: 1,
+      })),
+    });
+    expect(f.dependentes).toHaveLength(DEPENDENTES_MAX);
+    expect(f.dependentes[0]).toMatchObject({ nome: "Filho 0", parentesco: "CONJUGE", irrf: true, salarioFamilia: false });
+    expect(f.dependentes[1]).toMatchObject({ parentesco: "FILHO", irrf: false, salarioFamilia: false });
+    expect(normalizarForm({ dependentes: [null, 7, { nome: "Ok" }] }).dependentes.map((d) => d.nome)).toEqual(["", "", "Ok"]);
+  });
+});
+
+/* ───────── o código do e-mail e o motivo do cancelamento ───────── */
+
+describe("código de verificação e razão do cancelamento", () => {
+  it("o código são seis números, nada mais", () => {
+    expect(codigoValido("123456")).toBe(true);
+    expect(codigoValido(" 123456 ")).toBe(true);
+    for (const x of ["12345", "1234567", "12345a", "", "  ", "abcdef"]) expect(codigoValido(x), x).toBe(false);
+  });
+
+  it("o e-mail verificado é comparado sem caixa e sem espaço; trocar o endereço não confere mais", () => {
+    expect(emailConfere(" Marina@Exemplo.com ", "marina@exemplo.com")).toBe(true);
+    expect(emailConfere("outro@exemplo.com", "marina@exemplo.com")).toBe(false);
+    expect(emailConfere("marina@exemplo.com", null)).toBe(false);
+    expect(emailConfere("", "")).toBe(false);
+  });
+
+  it("cancelar sem razão de verdade não passa (razão é razão)", () => {
+    expect(motivoValido("Candidata desistiu")).toBe(true);
+    expect(motivoValido("ops")).toBe(false);
+    expect(motivoValido("   ")).toBe(false);
+    expect(motivoValido("x".repeat(MOTIVO_MIN))).toBe(true);
+    expect(motivoValido("x".repeat(501))).toBe(false);
+  });
+});
+
+/* ───────── textos do contrato ───────── */
+
+describe("os textos que o contrato preenche", () => {
+  it("a jornada sai legível, com dias seguidos virando 'de X a Y'", () => {
+    expect(textoJornada({ entrada: "08:00", saida: "18:00", dias: ["SEG", "TER", "QUA", "QUI", "SEX"] }))
+      .toBe("08:00 às 18:00, de segunda a sexta");
+    expect(textoJornada({ entrada: "08:00", saida: "12:00", dias: ["SEG", "QUA", "SEX"] }))
+      .toBe("08:00 às 12:00, segunda, quarta, sexta");
+    expect(textoJornada({ entrada: "07:00", saida: "17:00", dias: ["SAB", "DOM"] })).toBe("07:00 às 17:00, sábado, domingo");
+    // a ordem é a da semana, não a que vier na lista
+    expect(textoJornada({ dias: ["SEX", "SEG", "QUA"] })).toBe("segunda, quarta, sexta");
+    // sem jornada no cadastro, o campo sai vazio em vez de inventar horário
+    expect(textoJornada({})).toBe("");
+    expect(textoJornada({ entrada: "08:00", saida: "", dias: [] })).toBe("");
+  });
+
+  it("o endereço sai numa linha, sem buracos quando falta parte", () => {
+    expect(enderecoEmLinha({ endereco: "Rua das Flores", numero: "120", complemento: "Apto 32", bairro: "Centro", cidade: "Campinas", estado: "SP", cep: "13010-000" }))
+      .toBe("Rua das Flores, 120 — Apto 32 — Centro — Campinas/SP — 13010-000");
+    expect(enderecoEmLinha({ endereco: "Rua A", numero: "1", cidade: "Campinas", estado: "SP" })).toBe("Rua A, 1 — Campinas/SP");
+    expect(enderecoEmLinha({})).toBe("");
   });
 });
