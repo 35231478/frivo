@@ -10,7 +10,7 @@ import { FormField } from "@/components/ui/form-field";
 import { Stepper } from "@/components/ui/stepper";
 import { cn } from "@/lib/utils";
 import {
-  ETAPAS, ROTULO_ETAPA, faltaNaEtapa, formVazio, obrigatoriosDa,
+  ETAPAS, ROTULO_ETAPA_CURTO, faltaNaEtapa, formVazio, obrigatoriosDa,
   type Etapa, type FormAdmissao,
 } from "@/lib/admissao/admissao";
 import type { AdmissaoPublica } from "@/lib/admissao/admissao-server";
@@ -19,7 +19,7 @@ import {
 } from "@/components/admissao/campos-admissao";
 
 /** As etapas que o colaborador preenche (a assinatura é a última, à parte). */
-const PASSOS = ETAPAS.map((id) => ({ id, rotulo: ROTULO_ETAPA[id] }));
+const PASSOS = ETAPAS.map((id) => ({ id, rotulo: ROTULO_ETAPA_CURTO[id] }));
 
 const TAMANHO_MAX_SELFIE = 6 * 1024 * 1024;
 
@@ -119,7 +119,9 @@ export function AdmissaoPublicaCliente({ token, inicial }: { token: string; inic
       const res = await fetch(`/api/publico/admissao/${token}`);
       if (!res.ok) return;
       const d = (await res.json()) as AdmissaoPublica;
-      setDados(d);
+      // Só troca o estado por uma resposta com a cara certa: a tela é pública e não pode quebrar
+      // na mão de quem está preenchendo por causa de uma resposta estranha
+      if (d && Array.isArray(d.documentos)) setDados(d);
     } catch { /* sem rede: a tela segue com o que tem */ }
   }
 
@@ -226,7 +228,9 @@ export function AdmissaoPublicaCliente({ token, inicial }: { token: string; inic
   const naAssinatura = etapa === "CONTRATO";
   const anterior = indice > 0 ? PASSOS[indice - 1].id : null;
   const proxima = indice >= 0 && indice < PASSOS.length - 1 ? PASSOS[indice + 1].id : null;
-  const podeAssinar = nomeAssinatura.trim().length >= 3 && !!selfie && !!dados.contrato;
+  // Sem o modelo de contrato da empresa não existe botão de assinar (nem a trava de um botão
+  // desligado sem explicação): a tela diz o que falta e o RH resolve
+  const podeAssinar = nomeAssinatura.trim().length >= 3 && !!selfie;
 
   return (
     <div className="space-y-4" data-admissao-etapa={etapa} ref={topo}>
@@ -317,10 +321,12 @@ export function AdmissaoPublicaCliente({ token, inicial }: { token: string; inic
           </Button>
         )}
         {naAssinatura ? (
-          <Button type="button" onClick={assinar} loading={assinando} disabled={!podeAssinar}
-            className="flex-1 justify-center py-3" data-assinar>
-            <FileSignature className="w-4 h-4" /> Assinar o contrato
-          </Button>
+          dados.contrato ? (
+            <Button type="button" onClick={assinar} loading={assinando} disabled={!podeAssinar}
+              className="flex-1 justify-center py-3" data-assinar>
+              <FileSignature className="w-4 h-4" /> Assinar o contrato
+            </Button>
+          ) : null
         ) : ultimoDeDados ? (
           <Button type="button" onClick={concluir} loading={salvando} className="flex-1 justify-center py-3" data-concluir>
             Concluir e ver o contrato <ArrowRight className="w-4 h-4" />

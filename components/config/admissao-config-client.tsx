@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { AlertCircle, GripVertical, Plus, Trash2 } from "lucide-react";
+import { AlertCircle, Plus, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -106,7 +106,6 @@ export function AdmissaoConfigClient() {
         <ul className="divide-y divide-surface-linha border border-surface-border rounded-lg">
           {c.documentos.map((d, i) => (
             <li key={d.id} className="flex items-center gap-3 px-3 py-2.5" data-doc-config={d.id}>
-              <GripVertical className="w-4 h-4 text-ink-subtle shrink-0" aria-hidden />
               <input
                 value={d.rotulo}
                 onChange={(e) => set("documentos", c.documentos.map((x, y) => (y === i ? { ...x, rotulo: e.target.value } : x)))}

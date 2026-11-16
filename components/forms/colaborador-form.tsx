@@ -269,7 +269,7 @@ export function ColaboradorForm({ initialData, somenteLeitura = false, podeFolha
           })}
         </nav>
 
-        <fieldset disabled={somenteLeitura} className={cn("min-w-0 p-5 sm:p-6 lg:p-8 space-y-8", (aba === "folha" || aba === "acesso") && "hidden")}>
+        <fieldset disabled={somenteLeitura} className={cn("min-w-0 p-5 sm:p-6 lg:p-8 space-y-8", (aba === "folha" || aba === "acesso" || aba === "admissao") && "hidden")}>
           {/* ABA 1 — Dados Pessoais */}
           <div className={cn("space-y-8", aba !== "pessoais" && "hidden")}>
             <FormSection title="Identificação">

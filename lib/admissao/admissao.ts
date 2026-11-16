@@ -102,6 +102,16 @@ export const ROTULO_ETAPA: Record<Etapa, string> = {
   CONTRATO: "Contrato",
 };
 
+/** O mesmo nome, curto, para caber no andamento do celular sem cortar palavra. */
+export const ROTULO_ETAPA_CURTO: Record<Etapa, string> = {
+  DADOS: "Dados",
+  ENDERECO: "Endereço",
+  DOCUMENTOS: "Documentos",
+  BANCO: "Banco",
+  DEPENDENTES: "Dependentes",
+  CONTRATO: "Contrato",
+};
+
 /* ───────── o que o colaborador preenche ───────── */
 
 export interface Dependente {

@@ -28,7 +28,7 @@
 import { createHash, randomBytes, randomInt } from "node:crypto";
 import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
-import { cpfValido, digitos } from "@/lib/documento";
+import { cpfValido, digitos, formatarDocumento } from "@/lib/documento";
 import { formatarData, formatarMoeda, whatsappLink } from "@/lib/utils";
 import { emailConfigAtiva, enviarEmail, enviarEmailInterno } from "@/lib/email";
 import { validarDataUrl, validarFoto } from "@/lib/anexos-server";
@@ -615,7 +615,7 @@ function dadosDoContrato(a: LinhaPublica, form: FormAdmissao, cfg: ConfigAdmissa
     empresa: limpo(emp.nomeFantasia) || emp.nome,
     empresaCnpj: emp.cnpj ?? "",
     nome: form.nome || col.nome,
-    cpf: form.cpf || col.cpf,
+    cpf: formatarDocumento(form.cpf || col.cpf),
     rg: form.rg,
     endereco: enderecoEmLinha(form),
     cargo: col.cargo?.nome ?? "",
