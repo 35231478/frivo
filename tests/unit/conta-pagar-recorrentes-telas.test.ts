@@ -166,6 +166,10 @@ describe("guardas das telas da despesa recorrente", () => {
     expect(previaDaRegra({ ...base, fimAno: 2027, fimMes: 2, descricao: "Aluguel", valor: 100 }, hoje)).toHaveLength(4);
     // sem término, o horizonte rolante: é o que o sistema abre de uma vez
     expect(previaDaRegra({ ...base, descricao: "Aluguel", valor: 100 }, hoje)).toHaveLength(13);
+    // com término, TODAS — mesmo as que passam do horizonte (o Zé pediu a regra inteira)
+    expect(previaDaRegra({ ...base, ocorrencias: 24, descricao: "Aluguel", valor: 100 }, hoje)).toHaveLength(24);
+    expect(previaDaRegra({ ...base, fimAno: 2029, fimMes: 4, descricao: "Aluguel", valor: 100 }, hoje)).toHaveLength(30);
+    expect(previaDaRegra({ ...base, passoMeses: 3, ocorrencias: 8, descricao: "Aluguel", valor: 100 }, hoje)).toHaveLength(8);
     const primeira = previaDaRegra({ ...base, ocorrencias: 2, descricao: "Aluguel", valor: 100 }, hoje)[0];
     expect(primeira.descricao).toBe("Aluguel — nov/2026");
     expect(primeira.valor).toBe(100);

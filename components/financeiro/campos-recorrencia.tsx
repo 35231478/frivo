@@ -22,7 +22,7 @@ const AJUDA_PREVIA = "São as contas que vão nascer com esta regra. Sem data pa
 /** Ordinais do "Cobrar sempre no": 1º dia do mês … 31º dia do mês */
 const DIAS = Array.from({ length: MAX_DIA - MIN_DIA + 1 }, (_, i) => i + MIN_DIA);
 
-/** dd/mm/aaaa ↔ as partes da competência (o "1º vencimento" manda no início da regra) */
+/** dd/mm/aaaa e as partes da competência (o "1º vencimento" manda no início da regra) */
 const partesData = (iso: string) => {
   const [a, m, d] = iso.split("-").map(Number);
   return { ano: a, mes: m, dia: d };

@@ -258,7 +258,14 @@ export function previaDaRegra(
   hoje: Competencia,
   meses = 12,
 ): PreviaOcorrencia[] {
-  const limite = regra.fimAno && regra.fimMes ? { ano: regra.fimAno, mes: regra.fimMes } : horizonteRolante(hoje, meses);
+  // o teto da prévia é o término da PRÓPRIA regra quando ela tem um (data ou número de
+  // ocorrências); sem término, o horizonte rolante — que é o que o sistema abre de uma vez.
+  const passo = Math.max(1, Math.floor(regra.passoMeses || 1));
+  const porData = regra.fimAno && regra.fimMes ? { ano: regra.fimAno, mes: regra.fimMes } : null;
+  const porContagem = regra.ocorrencias && regra.ocorrencias > 0
+    ? somarMeses(regra.inicioAno, regra.inicioMes, passo * Math.floor(regra.ocorrencias))
+    : null;
+  const limite = porData ?? porContagem ?? horizonteRolante(hoje, meses);
   return competenciasDaRegra({ ...regra, situacao: "ATIVA" }, limite)
     .filter((c) => !competenciaAntes(c, hoje))
     .map((c) => ({

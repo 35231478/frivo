@@ -67,9 +67,9 @@ describe("prioridade 1: o que mexe em dinheiro só aparece para quem pode", () =
     expect(src).toContain('import { usePermissoes } from "@/components/providers/permissoes-provider";');
     expect(src).toContain('const podeMexer = usePermissoes().pode("financeiro", "fluxoCaixa");');
     // os itens do ⋮ e os botões da ficha, todos atrás da permissão: pagar, editar e cancelar
-    // (3 + 3) mais os da despesa recorrente — "tornar recorrente" no menu e na ficha e
-    // "ver a despesa recorrente" no menu (3)
-    expect(src.match(/\{podeMexer &&/g) ?? []).toHaveLength(9);
+    // (3 + 3) mais "Repetir lançamento" no menu e na ficha (2). Eram 9 enquanto existia o atalho
+    // "ver a despesa recorrente": a recorrência passou a morar dentro da conta, não há tela à parte.
+    expect(src.match(/\{podeMexer &&/g) ?? []).toHaveLength(8);
     // histórico e "ver detalhes" são leitura: continuam para quem só visualiza
     expect(src).toMatch(/<ItemMenu icone=\{Eye\}/);
     expect(src).toMatch(/data-historico-pagamentos/);

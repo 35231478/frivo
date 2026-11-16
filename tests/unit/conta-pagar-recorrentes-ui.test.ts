@@ -164,6 +164,17 @@ describe("Nova conta a pagar: 'Repetir lançamento?'", () => {
     expect(primeira.replace(/\u00a0/g, " ")).toContain("R$ 2.500,00");
   });
 
+  it("'Cobrar sempre no' e '1º vencimento' são a mesma verdade: mexer num ajusta o outro", async () => {
+    await form();
+    await clicar("[data-toggle-recorrente] input");
+    // a data escolhida manda no dia da cobrança…
+    await digitar("input[aria-label='1\u00ba vencimento']", "15/03/2027");
+    expect(($("[data-dia-vencimento]") as HTMLSelectElement).value).toBe("15");
+    // …e o dia escolhido reescreve a data, no mesmo mês
+    await escolher("[data-dia-vencimento]", "5");
+    expect(($("input[aria-label='1\u00ba vencimento']") as HTMLInputElement).value).toBe("05/03/2027");
+  });
+
   it("'Personalizar…' abre a frequência e o término, e o que ele confirma vale", async () => {
     await form();
     await clicar("[data-toggle-recorrente] input");
