@@ -246,7 +246,8 @@ describe("Gerar documento: o diálogo", () => {
     expect(chamadas[0].corpo.itens).toEqual([{ descricao: "Luva de vaqueta", ca: "12345", quantidade: 2, entregaEm: expect.any(String) }]);
     // o diálogo virou a assinatura
     expect($("[data-assinar-documento]")).toBeTruthy();
-    expect(corpoTexto()).toContain("aguardando a assinatura");
+    // o texto do passo 2 encurtou (manifesto: instrução inline curta), a promessa é a mesma
+    expect(corpoTexto()).toContain("Sem assinatura, ele não entra nos documentos da ficha");
   });
 
   it("sem nome e foto, o botão de assinar não deixa seguir", async () => {

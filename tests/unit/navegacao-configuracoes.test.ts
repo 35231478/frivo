@@ -65,7 +65,9 @@ describe("estrutura: 3 abas com cartões; cada item tem id, tela e a rota antiga
       ["Empresa", ["Dados da empresa", "Preferências", "Numeração de documentos"]],
       // "Admissão digital" entrou aqui na leva da admissão: é configuração de pessoas (contrato,
       // documentos pedidos e orientações do link), atrás da permissão "Admissão digital › gerenciar"
-      ["Acesso e pessoas", ["Usuários", "Perfis de acesso", "Cargos", "Admissão digital"]],
+      // "Modelos de documento" entrou ao lado da Admissão digital: também é configuração de pessoas
+      // (o texto dos papéis que a empresa entrega), atrás de "Documentos do colaborador › gerenciar"
+      ["Acesso e pessoas", ["Usuários", "Perfis de acesso", "Cargos", "Admissão digital", "Modelos de documento"]],
       ["Integrações", ["E-mail transacional", "Portal do cliente", "QR Code"]],
       ["Manutenção de dados", ["Padronização de digitação"]],
     ]);

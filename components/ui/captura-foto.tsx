@@ -17,7 +17,7 @@ export const TAMANHO_MAX_FOTO = 6 * 1024 * 1024;
  */
 export function CapturaFoto({
   valor, onValor, onErro, rotulo = "Foto", ajuda = "A câmera da frente abre direto",
-  tamanhoMax = TAMANHO_MAX_FOTO, marca,
+  tamanhoMax = TAMANHO_MAX_FOTO, marca, obrigatorio = false,
 }: {
   valor: string | null;
   onValor: (dataUrl: string | null) => void;
@@ -28,6 +28,8 @@ export function CapturaFoto({
   tamanhoMax?: number;
   /** Sufixo dos data-atributos, quando há mais de uma captura na mesma tela. */
   marca?: string;
+  /** Marca o rótulo com o asterisco da casa — sem a foto, o botão de assinar fica travado. */
+  obrigatorio?: boolean;
 }) {
   const camera = useRef<HTMLInputElement>(null);
 
@@ -47,7 +49,9 @@ export function CapturaFoto({
 
   return (
     <div>
-      <p className="text-sm font-medium text-ink mb-1.5">{rotulo}</p>
+      <p className="text-sm font-medium text-ink mb-1.5">
+        {rotulo}{obrigatorio && <span className="text-atrasado ml-0.5">*</span>}
+      </p>
       <input
         ref={camera} type="file" accept="image/*" capture="user" className="hidden"
         onChange={pegar} aria-label={rotulo} data-entrada-foto={marca ?? true}

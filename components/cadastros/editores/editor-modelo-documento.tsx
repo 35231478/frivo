@@ -110,7 +110,7 @@ export function EditorModeloDocumento({ item, aberto, onFechar, onSalvo }: Edito
         )}
         {item && item.ativo === false && (
           <p className="text-sm bg-atencao-claro border border-atencao/20 text-atencao-texto rounded-lg px-3 py-2">
-            Modelo inativo: não aparece em “Gerar documento” até ser reativado. Os papéis já gerados continuam como estão.
+            Modelo inativo: não aparece em “Gerar documento”. Os papéis já gerados continuam como estão.
           </p>
         )}
 
@@ -132,7 +132,7 @@ export function EditorModeloDocumento({ item, aberto, onFechar, onSalvo }: Edito
             Campos que o sistema preenche <Dica texto="Clique para inserir no texto. Em verde, os que este modelo já usa." />
           </p>
           <div className="flex flex-wrap gap-1.5" data-campos-modelo>
-            {[...CAMPOS_AUTOMATICOS, ...doTipo.map((c) => ({ id: c.id, rotulo: `${c.rotulo} (você preenche)` }))].map((c) => (
+            {[...CAMPOS_AUTOMATICOS, ...doTipo.map((c) => ({ id: c.id, rotulo: `${c.rotulo} (perguntado ao gerar)` }))].map((c) => (
               <button
                 key={c.id} type="button" onClick={() => inserir(c.id)} title={c.rotulo}
                 data-campo-modelo={c.id} data-usado={usados.has(c.id) ? "sim" : "nao"}

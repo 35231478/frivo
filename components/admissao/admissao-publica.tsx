@@ -263,7 +263,7 @@ export function AdmissaoPublicaCliente({ token, inicial }: { token: string; inic
 
                 <CapturaFoto
                   valor={selfie} onValor={setSelfie} onErro={setErro}
-                  rotulo="Foto sua, segurando o documento"
+                  rotulo="Foto sua, segurando o documento" obrigatorio
                 />
 
                 <p className="flex items-start gap-1.5 text-xs text-ink-muted">

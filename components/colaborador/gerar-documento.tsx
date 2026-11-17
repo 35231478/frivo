@@ -188,14 +188,14 @@ export function GerarDocumento({
         {emitido ? (
           <>
             <p className="text-sm text-ink-muted">
-              <strong className="text-ink">{emitido.titulo}</strong> está gerado e aguardando a assinatura.
-              Enquanto não for assinado, ele não entra nos documentos da ficha.
+              <strong className="text-ink">{emitido.titulo}</strong> está gerado. Sem assinatura,
+              ele não entra nos documentos da ficha.
             </p>
             <FormField label="Nome completo de quem assina" required
               hint="É a assinatura. Fica registrada com data, hora, endereço de IP e navegador.">
               <Input value={nome} onChange={(e) => setNome(e.target.value)} caixa="nome" data-assinatura-nome autoComplete="name" />
             </FormField>
-            <CapturaFoto valor={selfie} onValor={setSelfie} onErro={setErro} rotulo="Foto de quem está recebendo" />
+            <CapturaFoto valor={selfie} onValor={setSelfie} onErro={setErro} rotulo="Foto de quem está recebendo" obrigatorio />
             <div className="flex flex-col sm:flex-row gap-2 sm:justify-end pt-1">
               <a href={`/api/documentos-gerados/${emitido.id}/pdf?ver=1`} target="_blank" rel="noopener noreferrer"
                 className="inline-flex items-center justify-center gap-1.5 text-sm text-ink-muted hover:text-ink px-3 py-2" data-ver-previa-pdf>
