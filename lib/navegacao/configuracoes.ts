@@ -122,6 +122,7 @@ export const SECOES_CONFIGURACOES: SecaoConfig[] = [
           { id: "perfis", href: "/configuracoes/perfis", icone: ShieldCheck, label: "Perfis de acesso", dica: "Permissões de cada perfil" },
           { id: "cargos", href: "/configuracoes/cargos", icone: IdCard, label: "Cargos", dica: "Cargo do funcionário (usado no Custo de Pessoal)" },
           { id: "admissao", href: "/configuracoes/admissao", icone: UserPlus, label: "Admissão digital", dica: "Modelo de contrato, documentos pedidos e orientações do link", modulo: "admissao", acao: "gerenciar" },
+          { id: "modelos-documento", href: "/configuracoes/modelos-documento", icone: FileSignature, label: "Modelos de documento", dica: "Ficha de EPI, termo de responsabilidade, advertência e aditivo", modulo: "documentos", acao: "gerenciar" },
         ],
       },
       {

@@ -15,7 +15,7 @@ import {
   CAMPOS_AUTOMATICOS, ID_CAMPOS_AUTOMATICOS, ITENS_MAX, TIPOS, TIPOS_DOCUMENTO, TIPOS_SENSIVEIS,
   acaoDoTipo, camposAPreencher, camposConhecidos, camposDesconhecidosDoModelo, categoriaDoModelo,
   ehSensivel, ehTipoValido, erroDoModelo, erroDosItens, limparItens, preencherModelo,
-  temItensPadrao, tipoDe, tituloDoDocumento, vencimentoDe, type ItemDocumento,
+  temItensPadrao, tipoDe, tituloDoDocumento, valorNoTexto, vencimentoDe, type ItemDocumento,
 } from "@/lib/documentos/modelos";
 import { CATEGORIAS } from "@/lib/colaborador/documentos";
 import { camposUsados } from "@/lib/texto/modelo";
@@ -94,6 +94,24 @@ describe("os tipos", () => {
     expect(categoriaDoModelo({ tipo: "EPI" })).toBe("ficha_epi");
     expect(categoriaDoModelo({ tipo: "EPI", categoria: "outros" })).toBe("outros");
     expect(categoriaDoModelo({ tipo: "ADVERTENCIA" })).toBe("disciplinar");
+  });
+});
+
+describe("a data digitada, no texto do papel", () => {
+  const campoData = { id: "entregaEm", rotulo: "Data da entrega", formato: "data" as const, obrigatorio: true };
+
+  it("o valor do seletor de data (AAAA-MM-DD) vira dd/mm/aaaa — ninguém escreve 'em 2026-11-17'", () => {
+    expect(valorNoTexto(campoData, "2026-11-17")).toBe("17/11/2026");
+  });
+
+  it("o que já veio em dd/mm/aaaa (ou qualquer outra coisa) passa como está", () => {
+    expect(valorNoTexto(campoData, "16/11/2026")).toBe("16/11/2026");
+    expect(valorNoTexto(campoData, "a combinar")).toBe("a combinar");
+  });
+
+  it("campo que não é data não é tocado — nº de série não é data", () => {
+    const texto = { id: "motivo", rotulo: "Motivo", formato: "textoLongo" as const };
+    expect(valorNoTexto(texto, "2026-11-17")).toBe("2026-11-17");
   });
 });
 

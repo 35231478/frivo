@@ -20,6 +20,7 @@ import { AcessoAppColaborador } from "@/components/forms/acesso-app-colaborador"
 import { AJUDA_DOCUMENTOS, DocumentosColaborador, type ContratoAssinado } from "@/components/colaborador/documentos-colaborador";
 import { resumoValidade } from "@/lib/colaborador/documentos";
 import type { DocumentoLinha } from "@/lib/colaborador/documentos-server";
+import type { EmitidoDaTela, ModeloDaLista } from "@/components/colaborador/gerar-documento";
 import { PainelAdmissao } from "@/components/admissao/painel-admissao";
 import type { OpcaoCargo } from "@/components/admissao/nova-admissao";
 import type { AdmissaoDoRh } from "@/lib/admissao/admissao-server";
@@ -58,7 +59,7 @@ interface EstadoAcessoInicial { email: string | null; temLogin: boolean; acessoA
  * `podeAdmissao` (permissão "Admissão digital › gerenciar") mostra a aba "Admissão": o convite, o
  * progresso do link e a prova da assinatura.
  */
-export function ColaboradorForm({ initialData, somenteLeitura = false, podeFolha = false, podeAcesso = false, acessoInicial, podeAdmissao = false, admissao = null, cargosAdmissao = [], validadeAdmissao = 7, documentosIniciais = [], podeExcluirDocumento = false, contratoAssinado = null }: ColaboradorFormProps & { somenteLeitura?: boolean; podeFolha?: boolean; podeAcesso?: boolean; acessoInicial?: EstadoAcessoInicial; podeAdmissao?: boolean; admissao?: AdmissaoDoRh | null; cargosAdmissao?: OpcaoCargo[]; validadeAdmissao?: number; documentosIniciais?: DocumentoLinha[]; podeExcluirDocumento?: boolean; contratoAssinado?: ContratoAssinado | null }) {
+export function ColaboradorForm({ initialData, somenteLeitura = false, podeFolha = false, podeAcesso = false, acessoInicial, podeAdmissao = false, admissao = null, cargosAdmissao = [], validadeAdmissao = 7, documentosIniciais = [], podeExcluirDocumento = false, contratoAssinado = null, podeGerarDocumento = false, podeDisciplinar = false, modelosDocumento = [], emitidosIniciais = [] }: ColaboradorFormProps & { somenteLeitura?: boolean; podeFolha?: boolean; podeAcesso?: boolean; acessoInicial?: EstadoAcessoInicial; podeAdmissao?: boolean; admissao?: AdmissaoDoRh | null; cargosAdmissao?: OpcaoCargo[]; validadeAdmissao?: number; documentosIniciais?: DocumentoLinha[]; podeExcluirDocumento?: boolean; contratoAssinado?: ContratoAssinado | null; podeGerarDocumento?: boolean; podeDisciplinar?: boolean; modelosDocumento?: ModeloDaLista[]; emitidosIniciais?: EmitidoDaTela[] }) {
   const router = useRouter();
   const isEditing = !!initialData;
   const [aba, setAba] = useState<Aba>("pessoais");
@@ -485,6 +486,10 @@ export function ColaboradorForm({ initialData, somenteLeitura = false, podeFolha
                   podeExcluir={podeExcluirDocumento}
                   somenteLeitura={somenteLeitura}
                   contratoAssinado={contratoAssinado}
+                  podeGerar={podeGerarDocumento}
+                  podeDisciplinar={podeDisciplinar}
+                  modelos={modelosDocumento}
+                  emitidosIniciais={emitidosIniciais}
                   onMudou={setDocumentos}
                 />
               ) : (

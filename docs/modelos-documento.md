@@ -127,7 +127,75 @@ Apagar o modelo, o usuário que gerou ou o próprio arquivo **não apaga** o reg
 documento existiu (`ON DELETE SET NULL`); apagar a empresa ou o colaborador leva tudo junto
 (`CASCADE`), que é o que já acontece com o resto da ficha.
 
-## 9. Perguntas em aberto
+## 9. As telas (PR2)
+
+O motor do PR1 só ganha valor quando alguém consegue usá-lo sem ler documentação. São três lugares,
+e nenhuma tela nova fora deles.
+
+### Configurações › Modelos de documento
+
+Mora na gaveta de Configurações, aba **Conta**, grupo "Acesso e pessoas", ao lado de Admissão
+digital — atrás de `documentos.gerenciar`. É o kit de cadastros padrão (`CadastroPadrao`), com
+Ativos/Inativos/Todos, busca, Novo modelo, o lápis de editar e o botão de inativar/reativar. Sem
+ação em massa: modelo de documento é um punhado por empresa, e selecionar vários não resolve nada
+(declarar `massa: true` sem registrar a entidade em `lib/acoes-massa/acoes.ts` derruba a lista
+inteira — tem guard puro para isso em `tests/unit/cadastros-registro.test.ts`).
+
+O editor é próprio (`editor-modelo-documento.tsx`), porque o texto com campos pede mais do que um
+formulário genérico:
+
+- **o painel de campos** mostra tudo que o sistema sabe preencher; o que o texto usa fica **verde**,
+  o que sobra fica neutro — dá para escrever o modelo olhando a lista, sem decorar nome de campo;
+- **campo que o sistema não conhece vira aviso** na hora (`{{supervisor}}` → "o sistema não preenche
+  este campo"), e o texto não é tocado: quem escreveu corrige;
+- **a lista de itens acompanha o tipo** — a ficha de EPI sempre tem (não dá para desligar), a
+  advertência nunca tem;
+- gaveta na ficha, validade em dias e "pede assinatura" ficam no mesmo editor, com a explicação ao
+  lado do campo.
+
+### Ficha do colaborador › Documentos
+
+Ao lado de **Anexar documento** nasce **Gerar documento**, atrás de `documentos.criar`. Sem a
+permissão o botão não existe — e a rota recusa de todo jeito. A advertência só aparece no seletor de
+quem tem `documentos.disciplinar`.
+
+O diálogo tem dois passos, e só mostra o segundo quando ele existe:
+
+1. **montar** — modelo, os campos que *aquele* modelo usa (campo de data já nasce com hoje), a
+   tabela de itens quando o tipo tem, e **Ver a prévia**: o texto preenchido de verdade, com a tarja
+   "PRÉVIA — AINDA NÃO ASSINADO" no PDF e **sem gravar nada**;
+2. **assinar** — nome digitado e foto tirada na hora (a mesma `CapturaFoto` da admissão), com o
+   servidor gravando IP, navegador e hora. Dá para fechar e assinar depois: o papel fica aguardando.
+
+### A linha do papel, na mesma lista
+
+O papel gerado não cria uma seção à parte: entra na tabela de Documentos que já existe. Enquanto
+não foi assinado aparece com o selo **Aguardando assinatura** e as ações Baixar (a prévia), Assinar
+e Cancelar. Depois de assinado vira anexo de verdade — com a validade do tipo e a origem **"Gerado
+por modelo"** — e no lugar de "Excluir" oferece **Cancelar**, que pede a razão, tira o anexo da
+ficha e **não apaga o registro**.
+
+### Telas × botões
+
+| Tela | Botão | Permissão |
+| --- | --- | --- |
+| Configurações › Modelos de documento | Novo modelo, Editar, Inativar/Reativar | `documentos.gerenciar` |
+| Ficha › Documentos | Gerar documento | `documentos.criar` |
+| Diálogo de gerar | Ver a prévia, Gerar | `documentos.criar` (advertência: + `disciplinar`) |
+| Diálogo de assinar | Assinar, Assinar depois, Ver o PDF | `documentos.criar` |
+| Linha do papel pendente | Baixar, Assinar, Cancelar | `documentos.criar` |
+| Linha do papel assinado | Baixar, Cancelar | `documentos.criar` |
+
+Prints de desktop e celular em `docs/prints/modelos-documento/`.
+
+### O que os prints acharam (e virou conserto)
+
+Abrir as telas no navegador de verdade achou cinco defeitos que teste de DOM não via: a lista de
+Configurações caindo inteira por causa do `massa: true`; a data digitada entrando crua no texto
+("entrega em 2026-11-17"); a data pré-preenchida em UTC (depois das 21h já mostrava amanhã); o papel
+gerado se apresentando como "Anexado pelo RH"; e a coluna Tipo cortada nos 140px fixos.
+
+## 10. Perguntas em aberto
 
 1. **Qual preset de perfil, além do Administrador, nasce com `documentos.*`?** (A mesma pergunta
    ainda aberta da Admissão digital.)

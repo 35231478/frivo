@@ -194,6 +194,17 @@ describe.skipIf(!URL_PG)("Motor de documentos (PostgreSQL real)", () => {
     expect(r.json.desconhecidos).toEqual(["supervisor"]);
   });
 
+  it("a data que a tela manda (AAAA-MM-DD) sai no texto em dd/mm/aaaa", async () => {
+    const modeloId = await criarModelo({
+      nome: "Termo", tipo: "TERMO", texto: "Entregue em {{entregaEm}}, com devolução prevista para {{devolucaoEm}}.",
+    });
+    const r = await chamar("previa", "POST", {
+      id: "t1", corpo: { modeloId, valores: { entregaEm: "2026-11-17", devolucaoEm: "2027-01-05" } },
+    });
+    expect(r.status, JSON.stringify(r.json)).toBe(200);
+    expect(r.json.texto).toBe("Entregue em 17/11/2026, com devolução prevista para 05/01/2027.");
+  });
+
   it("campo obrigatório do tipo em branco recusa, em vez de gerar papel pela metade", async () => {
     const modeloId = await criarModelo({ nome: "Advertência", tipo: "ADVERTENCIA", texto: TEXTO_ADVERTENCIA });
     expect(await erro(chamar("gerados", "POST", { id: "t1", corpo: { modeloId, valores: { motivo: "atraso" } } })))

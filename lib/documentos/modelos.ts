@@ -167,6 +167,17 @@ export function camposAPreencher(texto: string, tipo: string | null | undefined)
   return tipoDe(tipo).campos.filter((c) => usados.has(c.id));
 }
 
+/**
+ * O que o usuário digitou, do jeito que entra no TEXTO do papel. Campo de data viaja "AAAA-MM-DD"
+ * (é o valor do seletor de data), e ninguém escreve "em 2026-11-17" num documento: no texto ele
+ * vira dd/mm/aaaa, igual às datas que o próprio sistema preenche ({{data}}, {{admissao}}).
+ */
+export function valorNoTexto(campo: CampoDoTipo, valor: string): string {
+  if (campo.formato !== "data") return valor;
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(valor.trim());
+  return m ? `${m[3]}/${m[2]}/${m[1]}` : valor;
+}
+
 /* ───────────────────────── a lista de itens ───────────────────────── */
 
 /** Uma linha da tabela do documento (a ficha de EPI é a razão de ela existir). */

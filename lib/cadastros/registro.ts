@@ -699,7 +699,9 @@ export const CADASTROS: Record<EntidadeCadastro, DefCadastro> = {
    * quem tem "Documentos do colaborador › gerenciar" cria, edita e inativa.
    */
   "modelos-documento": {
-    entidade: "modelos-documento", modelo: "documentoModelo", massa: true,
+    // `massa: false`: ação em massa exige a entidade registrada em lib/acoes-massa/acoes.ts, e
+    // modelo de documento é um punhado por empresa — selecionar vários não resolve problema nenhum.
+    entidade: "modelos-documento", modelo: "documentoModelo", massa: false,
     singular: "modelo de documento", plural: "modelos de documento",
     modulo: "documentos",
     permissoes: {
@@ -719,7 +721,9 @@ export const CADASTROS: Record<EntidadeCadastro, DefCadastro> = {
     ],
     colunas: [
       { key: "nome", label: "Modelo", ordenar: "nome" },
-      { key: "tipo", label: "Tipo", ordenar: "tipo" },
+      // `larga`: os rótulos dos tipos são frases ("Advertência / suspensão"), e nos 140px fixos
+      // das colunas comuns eles saíam cortados com a gaveta inteira vazia à direita
+      { key: "tipo", label: "Tipo", ordenar: "tipo", larga: true },
     ],
     ...schemas({
       nome: nome.max(80),
