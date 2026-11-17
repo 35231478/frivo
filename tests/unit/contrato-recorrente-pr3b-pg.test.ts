@@ -10,6 +10,7 @@
  *  - boleto sozinho espera a NF feita à mão; conta com boleto/em perda fica de fora; Inter desligado =
  *    pendência; Inter fora = 3 tentativas; e-mail que não sai = pendência e "Tentar de novo" só reenvia;
  *  - concorrência: rodadas + tela ao mesmo tempo → 1 nota; aviso + rodada + rota do boleto → 1 boleto;
+ *  - a tela emite entre a leitura das notas e a prévia da rotina → a rotina espera (sem pendência falsa);
  *  - RBAC das chaves: NFS-e pede Fiscal; boleto pede Contas a receber; a tela mostra NF e boleto com links.
  *
  *   PG_TESTE_URL="postgresql://root@localhost/postgres?host=/var/run/postgresql" npx vitest run tests/unit/contrato-recorrente-pr3b-pg
@@ -47,6 +48,19 @@ vi.mock("@/lib/inter-api", () => ({
   cancelarBoletoInter: vi.fn(async () => {}),
 }));
 vi.mock("next/navigation", () => ({ redirect: (u: string) => { throw new Error(`redirect ${u}`); }, notFound: () => { throw new Error("404"); } }));
+// Gancho de teste: algo acontece logo antes da prévia da emissão, depois que a rotina já leu as notas (uma só vez)
+const previa = vi.hoisted(() => ({ antes: null as null | ((medicaoId: string) => Promise<unknown>) }));
+vi.mock("@/lib/nfse/emissao-server", async (orig) => {
+  const real = await orig<typeof import("@/lib/nfse/emissao-server")>();
+  return {
+    ...real,
+    previaEmissao: async (empresaId: string, medicaoId: string) => {
+      const f = previa.antes; previa.antes = null;
+      if (f) await f(medicaoId);
+      return real.previaEmissao(empresaId, medicaoId);
+    },
+  };
+});
 vi.mock("next/server", async (orig) => ({ ...(await orig<typeof import("next/server")>()), after: () => {} }));
 
 /* ───────── PlugNotas simulado ───────── */
@@ -556,6 +570,21 @@ describe.skipIf(!URL_PG)("Contrato recorrente PR3-B — NFS-e e boleto automáti
     expect(daTela).toBe("ok");
     const ex = await execucao(z.id);
     expect([ex.etapa, ex.situacao, ex.tentativas, ex.erro, pn.envios - antes, (await notasDo(z.id)).length]).toEqual(["NFSE", "AGUARDANDO", 0, null, 1, 1]);
+  });
+
+  it("corrida certa (2): a tela emite entre a leitura das notas e a prévia da rotina → os itens já estão na nota da tela; a rotina espera, sem pendência falsa", async () => {
+    em("2026-11-10T11:23:00.000Z");
+    const w = await criar({ emitirBoletoAuto: false });
+    let daTela: unknown = null;
+    previa.antes = async (medicaoId) => {
+      daTela = await emissao.emitirNotas({ id: "uA", empresaId: "e1" }, medicaoId, { origem: "MEDICAO" }).then(() => "ok", (e) => e.message);
+    };
+    const antes = pn.envios;
+    await rodar();
+    previa.antes = null;
+    expect(daTela).toBe("ok");
+    const ex = await execucao(w.id);
+    expect([ex.etapa, ex.situacao, ex.tentativas, ex.erro, pn.envios - antes, (await notasDo(w.id)).length]).toEqual(["NFSE", "AGUARDANDO", 0, null, 1, 1]);
   });
 
   it("RBAC das chaves: NFS-e automática pede Fiscal; boleto automático pede Contas a receber; só Medições não liga nenhuma das duas", async () => {
