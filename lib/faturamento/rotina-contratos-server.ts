@@ -153,6 +153,9 @@ async function etapaNfse(ex: Execucao): Promise<boolean> {
   const previa = await previaEmissao(ct.empresaId, m.id);
   if (previa.pendencias.length) { await pendencia(ex, textoPendenciaNfse(previa.pendencias)); return false; }
   if (!previa.grupos.length) {
+    // Outra emissão entrou entre a leitura das notas (acima) e a prévia: os itens já estão na nota dela. Espera
+    const emAndamento = await prisma.notaFiscal.count({ where: { medicaoId: m.id, status: { in: ["ENVIANDO", "PROCESSANDO"] } } });
+    if (emAndamento) { await aguardar(ex); return false; }
     await pendencia(ex, `Nada a emitir na NFS-e da medição ${m.numero}: confira os serviços (e o valor) dos itens.`);
     return false;
   }
