@@ -17,7 +17,11 @@
  *  - o que não é imagem não vira foto de assinatura;
  *  - guardar o anexo é idempotente, e regerar depois conta a validade da ASSINATURA, não do
  *    dia em que o arquivo foi refeito;
- *  - documento de outra empresa é 404 em todas as rotas que recebem o id.
+ *  - documento de outra empresa é 404 em todas as rotas que recebem o id;
+ *  - o PDF leva o QUADRO do tipo: o que a pessoa preencheu aparece no papel mesmo quando o
+ *    texto da empresa não cita o campo (a data do ocorrido, a previsão de devolução, o
+ *    "como era → como fica"), e o motivo longo sai inteiro;
+ *  - o que vai para `valores` é só o que o TIPO conhece, aparado — não o JSON cru da tela.
  * Pula sem PG_TESTE_URL.
  */
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
@@ -203,6 +207,119 @@ describe.skipIf(!URL_PG)("Motor de documentos (PostgreSQL real)", () => {
     });
     expect(r.status, JSON.stringify(r.json)).toBe(200);
     expect(r.json.texto).toBe("Entregue em 17/11/2026, com devolução prevista para 05/01/2027.");
+  });
+
+  it("o PDF da advertência leva motivo, medida e data do ocorrido — mesmo com o texto sem citá-los", async () => {
+    // o texto da empresa fala só do nome: o que foi preenchido não pode sumir do papel
+    const modeloId = await criarModelo({
+      nome: "Advertência", tipo: "ADVERTENCIA",
+      texto: "{{empresa}} aplica medida disciplinar a {{nome}}, CPF {{cpf}}.",
+    });
+    const motivo = "Ausência injustificada nos dias 10 e 11, sem aviso à chefia e sem atestado.";
+    const g = await chamar("gerados", "POST", {
+      id: "t1",
+      corpo: { modeloId, valores: { ocorridoEm: "2026-11-10", medida: "Advertência escrita", motivo, diasSuspensao: "" } },
+    });
+    expect(g.status, JSON.stringify(g.json)).toBe(201);
+
+    const pdf = await chamar("pdf", "GET", { id: g.json.id });
+    const texto = await textoDoPdf(pdf.bytes!);
+    expect(texto).toContain("Dados do documento");
+    expect(texto).toContain("DATA DO OCORRIDO");
+    expect(texto).toContain("10/11/2026");
+    expect(texto).toContain("MEDIDA APLICADA");
+    expect(texto).toContain("Advertência escrita");
+    expect(texto).toContain("MOTIVO");
+    expect(texto).toContain("Ausência injustificada nos dias 10 e 11");
+    // campo em branco não vira linha vazia no quadro
+    expect(texto).not.toContain("DIAS DE SUSPENSÃO");
+  });
+
+  it("o termo leva a previsão de devolução e chama a tabela de MATERIAL SOB GUARDA", async () => {
+    const modeloId = await criarModelo({
+      nome: "Termo", tipo: "TERMO", texto: "{{nome}} recebe o material abaixo.", temItens: true,
+    });
+    const g = await chamar("gerados", "POST", {
+      id: "t1",
+      corpo: {
+        modeloId,
+        valores: { entregaEm: "2026-11-16", devolucaoEm: "2027-03-31" },
+        itens: [{ descricao: "Notebook Dell Latitude", quantidade: 1, entregaEm: "2026-11-16" }],
+      },
+    });
+    expect(g.status, JSON.stringify(g.json)).toBe(201);
+
+    const texto = await textoDoPdf((await chamar("pdf", "GET", { id: g.json.id })).bytes!);
+    expect(texto).toContain("PREVISÃO DE DEVOLUÇÃO");
+    expect(texto).toContain("31/03/2027");
+    expect(texto).toContain("Material sob guarda");
+    expect(texto, "no termo não se fala em entrega de EPI").not.toContain("Itens entregues");
+    expect(texto).toContain("Notebook Dell Latitude");
+  });
+
+  it("o aditivo leva o que muda, como era e como fica", async () => {
+    const modeloId = await criarModelo({ nome: "Aditivo", tipo: "ADITIVO", texto: "Aditivo ao contrato de {{nome}}." });
+    const g = await chamar("gerados", "POST", {
+      id: "t1",
+      corpo: {
+        modeloId,
+        valores: {
+          vigenciaEm: "2026-12-01", alteracao: "Promoção para sênior",
+          valorAnterior: "Pleno — R$ 3.200,00", valorNovo: "Sênior — R$ 4.150,00",
+        },
+      },
+    });
+    expect(g.status, JSON.stringify(g.json)).toBe(201);
+
+    const texto = await textoDoPdf((await chamar("pdf", "GET", { id: g.json.id })).bytes!);
+    expect(texto).toContain("A PARTIR DE");
+    expect(texto).toContain("01/12/2026");
+    expect(texto).toContain("COMO ERA");
+    expect(texto.replace(/\s/g, " ")).toContain("Pleno — R$ 3.200,00");
+    expect(texto).toContain("COMO FICA");
+    expect(texto.replace(/\s/g, " ")).toContain("Sênior — R$ 4.150,00");
+  });
+
+  it("a ficha de EPI leva as quatro colunas, com o CA de cada item", async () => {
+    const modeloId = await criarModelo({ nome: "Ficha de EPI", tipo: "EPI", texto: TEXTO_EPI, temItens: true });
+    const g = await chamar("gerados", "POST", {
+      id: "t1",
+      corpo: {
+        modeloId, valores: { entregaEm: "2026-11-16" },
+        itens: [
+          { descricao: "Luva de vaqueta", ca: "12345", quantidade: 2, entregaEm: "2026-11-16" },
+          { descricao: "Óculos de proteção", ca: "9876", quantidade: 1, entregaEm: "2026-11-16" },
+        ],
+      },
+    });
+    expect(g.status, JSON.stringify(g.json)).toBe(201);
+
+    const texto = await textoDoPdf((await chamar("pdf", "GET", { id: g.json.id })).bytes!);
+    expect(texto).toContain("Itens entregues");
+    for (const cabecalho of ["ITEM", "Nº DO CA", "QTD.", "ENTREGA"]) expect(texto, cabecalho).toContain(cabecalho);
+    expect(texto).toContain("Luva de vaqueta");
+    expect(texto).toContain("12345");
+    expect(texto).toContain("Óculos de proteção");
+    expect(texto).toContain("9876");
+  });
+
+  it("o que vai para `valores` é só o que o tipo conhece, aparado", async () => {
+    const modeloId = await criarModelo({ nome: "Advertência", tipo: "ADVERTENCIA", texto: TEXTO_ADVERTENCIA });
+    const g = await chamar("gerados", "POST", {
+      id: "t1",
+      corpo: {
+        modeloId,
+        valores: {
+          ocorridoEm: "2026-11-10", medida: "Advertência escrita", motivo: "  atraso reiterado  ",
+          inventado: "nada a ver", enorme: "x".repeat(5000),
+        },
+      },
+    });
+    expect(g.status, JSON.stringify(g.json)).toBe(201);
+
+    const linha = await prisma.documentoEmitido.findFirst({ where: { id: g.json.id }, select: { valores: true } });
+    expect(Object.keys(linha.valores).sort()).toEqual(["medida", "motivo", "ocorridoEm"]);
+    expect(linha.valores.motivo, "aparado").toBe("atraso reiterado");
   });
 
   it("campo obrigatório do tipo em branco recusa, em vez de gerar papel pela metade", async () => {

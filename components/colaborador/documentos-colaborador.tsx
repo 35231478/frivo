@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Ban, CalendarClock, Download, FileSignature, FileText, Paperclip, PenLine, ScrollText, Trash2, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Modal } from "@/components/ui/modal";
@@ -77,6 +77,8 @@ interface Props {
   contratoAssinado?: ContratoAssinado | null;
   /** Avisa a ficha quando a lista muda (o contador da aba e o aviso de vencido vivem lá em cima). */
   onMudou?: (docs: DocumentoLinha[]) => void;
+  /** Quantos papéis aguardam assinatura: o contador da aba soma, porque pendência também é documento. */
+  onPendentes?: (quantos: number) => void;
   /* ── Modelos de documento (PR2) ── */
   /** "Documentos do colaborador › criar": sem ela, não existe botão de gerar. */
   podeGerar?: boolean;
@@ -90,7 +92,7 @@ interface Props {
 
 export function DocumentosColaborador({
   colaboradorId, documentosIniciais, podeExcluir = false, somenteLeitura = false,
-  contratoAssinado = null, onMudou,
+  contratoAssinado = null, onMudou, onPendentes,
   podeGerar = false, podeDisciplinar = false, modelos = [], emitidosIniciais = [],
 }: Props) {
   const [docs, setDocs] = useState<DocumentoLinha[]>(documentosIniciais);
@@ -147,6 +149,9 @@ export function DocumentosColaborador({
    * que a assinatura acontece (aí ele vira arquivo como qualquer outro).
    */
   const pendentes = emitidos.filter((e) => !e.canceladoEm && !e.documentoId && e.exigeAssinatura);
+  // O contador da aba vive na ficha, e o papel aguardando assinatura é dele: é a pendência que o
+  // RH precisa ver sem abrir a aba.
+  useEffect(() => { onPendentes?.(pendentes.length); }, [pendentes.length, onPendentes]);
   const emitidoPorDocumento = new Map(emitidos.filter((e) => e.documentoId && !e.canceladoEm).map((e) => [e.documentoId as string, e]));
 
   function guardarEmitido(e: EmitidoDaTela) {

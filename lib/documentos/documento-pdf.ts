@@ -18,7 +18,7 @@ import { PDFDocument, StandardFonts } from "pdf-lib";
 import { C, Desenho, MARGEM } from "@/lib/pdf/desenho";
 import { embutirFoto } from "@/lib/pdf/imagem";
 import type { ArquivoGerado } from "@/lib/pdf/resposta";
-import type { ItemDocumento } from "@/lib/documentos/modelos";
+import { camposPreenchidos, type CampoPreenchido, type ItemDocumento } from "@/lib/documentos/modelos";
 
 const VAZIO = "—";
 const ou = (v: string | null | undefined) => (v ?? "").trim() || VAZIO;
@@ -33,6 +33,10 @@ export interface DadosDocumentoPdf {
   /** O texto da empresa, já preenchido e congelado */
   texto: string;
   itens: ItemDocumento[];
+  /** O tipo do papel (EPI, TERMO, ADVERTENCIA, ADITIVO, OUTRO): decide o quadro de dados. */
+  tipo: string | null;
+  /** O que o usuário preencheu na hora de gerar, cru, como foi guardado. */
+  valores: Record<string, unknown> | null;
   assinatura: {
     nome: string | null;
     em: string | null;
@@ -45,18 +49,51 @@ export interface DadosDocumentoPdf {
   exigeAssinatura: boolean;
 }
 
+/**
+ * As colunas da tabela de itens. Exportadas porque o teste as MEDE com a fonte de verdade: um
+ * cabeçalho que não cabe vaza por cima da coluna vizinha (e, na última, por cima da margem) sem
+ * que nada apareça no texto extraído do PDF.
+ *
+ * As larguras: a descrição é o que mais cresce, então fica com a maior fatia; o CA é curto mas é
+ * o que a fiscalização procura, então tem coluna própria e nunca quebra; a quantidade vai à
+ * direita, como número; a entrega é uma data, de largura conhecida.
+ */
+export const colunasItens = (util: number) => [
+  { titulo: "Item", largura: util - 260, negrito: true },
+  { titulo: "Nº do CA", largura: 90 },
+  { titulo: "Qtd.", largura: 56, direita: true },
+  { titulo: "Entrega", largura: 114 },
+];
+
 /** A tabela dos itens entregues. O CA é coluna própria: é por ele que a fiscalização começa. */
-function tabelaDeItens(d: Desenho, numero: number, itens: ItemDocumento[]) {
-  d.secao(numero, "Itens entregues");
+function tabelaDeItens(d: Desenho, numero: number, titulo: string, itens: ItemDocumento[]) {
+  d.secao(numero, titulo);
   d.tabela(
-    [
-      { titulo: "Item", largura: 232, negrito: true },
-      { titulo: "CA", largura: 90 },
-      { titulo: "Quantidade", largura: 80, direita: true },
-      { titulo: "Entrega", largura: d.util - 402 },
-    ],
+    colunasItens(d.util),
     itens.map((i) => [i.descricao, ou(i.ca), String(i.quantidade), ou(formatarDia(i.entregaEm))]),
   );
+}
+
+/**
+ * O quadro do documento: os campos que a pessoa preencheu na hora de gerar, cada um com o seu
+ * rótulo. O texto da empresa é a narrativa — este quadro é o fato, no mesmo lugar em todo papel do
+ * mesmo tipo: a data do ocorrido de uma advertência, a previsão de devolução de um termo, o "como
+ * era → como fica" de um aditivo. Sem ele, o que a empresa não citou no texto se perdia.
+ *
+ * Campo de texto longo (o motivo de uma advertência) não cabe em meia coluna: vai embaixo, inteiro.
+ */
+function quadroDoTipo(d: Desenho, numero: number, campos: CampoPreenchido[]) {
+  const curtos = campos.filter((c) => c.formato !== "textoLongo");
+  const longos = campos.filter((c) => c.formato === "textoLongo");
+
+  d.secao(numero, "Dados do documento");
+  if (curtos.length) d.campos(curtos.map((c) => ({ rotulo: c.rotulo, valor: c.valor })));
+  for (const campo of longos) {
+    d.garantir(40);
+    d.escrever(campo.rotulo.toUpperCase(), MARGEM, d.y, { tamanho: 7, fonte: d.negrito, cor: C.apoio });
+    d.y += 13;
+    d.paragrafo(campo.valor, { tamanho: 9.5, entrelinha: 14, depois: 8 });
+  }
 }
 
 /** "AAAA-MM-DD" → "DD/MM/AAAA". Sem data, devolve vazio (o chamador põe o travessão). */
@@ -100,9 +137,15 @@ export async function gerarDocumentoPdf(dados: DadosDocumentoPdf): Promise<Arqui
   }
 
   let secao = 0;
+  const campos = camposPreenchidos(dados.tipo, dados.valores);
+  if (campos.length) {
+    d.y += 6;
+    quadroDoTipo(d, ++secao, campos);
+  }
   if (dados.itens.length) {
     d.y += 6;
-    tabelaDeItens(d, ++secao, dados.itens);
+    // O termo de responsabilidade também lista o que está sob guarda — mas lá não é "entrega de EPI"
+    tabelaDeItens(d, ++secao, dados.tipo === "TERMO" ? "Material sob guarda" : "Itens entregues", dados.itens);
   }
 
   if (dados.exigeAssinatura) {
@@ -118,7 +161,9 @@ export async function gerarDocumentoPdf(dados: DadosDocumentoPdf): Promise<Arqui
 
       const foto = await embutirFoto(doc, dados.selfie);
       if (foto) {
-        const largura = Math.min(190, d.util);
+        // nunca esticar: uma foto pequena (ou um ícone mandado no lugar dela) viraria um bloco
+        // gigante no papel assinado
+        const largura = Math.min(190, d.util, foto.width);
         const altura = (foto.height / foto.width) * largura;
         d.garantir(altura + 26);
         d.escrever("FOTO TIRADA NA ASSINATURA", MARGEM, d.y, { tamanho: 7, fonte: d.negrito, cor: C.apoio });

@@ -16,6 +16,8 @@
  *  - campo obrigatório do tipo em branco trava na tela, antes de ir ao servidor;
  *  - papel CANCELADO não volta a aparecer como aguardando assinatura;
  *  - a foto grande demais é recusada, e o X descarta a que foi tirada;
+ *  - o modelo-exemplo do tipo é oferecido com o texto em branco, e some quando há texto;
+ *  - o contador da aba Documentos soma o papel que aguarda assinatura;
  *  - a tela não muda quando a rota recusa.
  */
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
@@ -150,6 +152,38 @@ describe("Modelos de documento: o editor", () => {
     await escolher("[data-campo-tipo]", "EPI");
     expect(itens().checked, "a ficha de EPI sempre tem itens").toBe(true);
     expect(itens().disabled, "e não dá para desligar").toBe(true);
+  });
+
+  it("com o texto em branco, oferece o modelo-exemplo do tipo — com o aviso de quem revisa", async () => {
+    await abrirEditor();
+    const convite = txt($("[data-exemplo-modelo]"));
+    expect(convite).toContain("Ficha de entrega de EPI");
+    expect(convite, "o sistema preenche campo, não confere cláusula").toMatch(/contador|advogado/i);
+  });
+
+  it("usar o exemplo preenche texto e nome, e o convite some (ninguém perde o que escreveu)", async () => {
+    await abrirEditor();
+    await clicar($("[data-usar-exemplo]"));
+
+    const texto = $<HTMLTextAreaElement>("[data-campo-texto]")!.value;
+    expect(texto).toContain("{{empresa}}");
+    expect(texto, "o exemplo de EPI pergunta a data da entrega").toContain("{{entregaEm}}");
+    expect($<HTMLInputElement>("[data-campo-nome]")!.value).toBe("Ficha de entrega de EPI");
+    expect($("[data-exemplo-modelo]"), "com texto escrito, o convite sai da frente").toBeNull();
+    expect($("[data-campos-desconhecidos]"), "o exemplo não cita campo que o sistema não conhece").toBeNull();
+  });
+
+  it("o exemplo acompanha o tipo escolhido", async () => {
+    await abrirEditor();
+    await escolher("[data-campo-tipo]", "ADVERTENCIA");
+    expect(txt($("[data-exemplo-modelo]"))).toContain("Advertência");
+    await clicar($("[data-usar-exemplo]"));
+    expect($<HTMLTextAreaElement>("[data-campo-texto]")!.value).toContain("{{motivo}}");
+  });
+
+  it("modelo que já existe não recebe convite de exemplo", async () => {
+    await abrirEditor({ id: "m1", nome: "Termo", tipo: "TERMO", texto: "Recebi o notebook.", temItens: false, exigeAssinatura: true, validadeDias: null, ativo: true });
+    expect($("[data-exemplo-modelo]")).toBeNull();
   });
 
   it("o que as regras recusam não vai ao servidor — e a mensagem é a mesma do motor", async () => {
@@ -381,6 +415,40 @@ describe("Seção Documentos: o papel gerado", () => {
 
     expect(txt($("[data-erro-cancelar]"))).toContain("cancelado");
     expect($("[data-documento='d9']"), "a tela não muda quando a rota recusa").toBeTruthy();
+  });
+});
+
+/* ───────────────────────── o contador da aba ───────────────────────── */
+
+describe("o contador da aba Documentos", () => {
+  /** A seção avisa a ficha quantos papéis aguardam assinatura; o contador da aba soma os dois. */
+  function contar(docs: DocumentoLinha[], emitidos: EmitidoDaTela[]) {
+    const vistos: number[] = [];
+    return { vistos, elemento: createElement(DocumentosColaborador, {
+      colaboradorId: "t1", documentosIniciais: docs, podeExcluir: true,
+      podeGerar: true, podeDisciplinar: true, modelos: [MODELO_EPI],
+      emitidosIniciais: emitidos, onPendentes: (n: number) => vistos.push(n),
+    } as any) };
+  }
+
+  it("papel aguardando assinatura conta como pendência na aba", async () => {
+    const { vistos, elemento } = contar([DOC()], [EMITIDO(), EMITIDO({ id: "e2" })]);
+    await montar(elemento);
+    expect(vistos.at(-1), "dois papéis esperando assinatura").toBe(2);
+  });
+
+  it("papel já assinado (virou anexo) não conta duas vezes", async () => {
+    const assinado = EMITIDO({ id: "e2", assinadoEm: "2026-11-17T12:00:00.000Z", documentoId: "d9" });
+    const { vistos, elemento } = contar([DOC({ id: "d9" })], [assinado]);
+    await montar(elemento);
+    expect(vistos.at(-1), "o anexo já está na contagem dos documentos").toBe(0);
+  });
+
+  it("papel cancelado não conta", async () => {
+    const cancelado = EMITIDO({ id: "e3", canceladoEm: "2026-11-17T13:00:00.000Z", cancelamentoMotivo: "trocado" });
+    const { vistos, elemento } = contar([], [cancelado]);
+    await montar(elemento);
+    expect(vistos.at(-1)).toBe(0);
   });
 });
 
