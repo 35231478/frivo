@@ -30,7 +30,6 @@ export function CapturaFoto({
   marca?: string;
 }) {
   const camera = useRef<HTMLInputElement>(null);
-  const atributo = (base: string) => (marca ? `${base}-${marca}` : base);
 
   function pegar(e: ChangeEvent<HTMLInputElement>) {
     const f = e.target.files?.[0];
@@ -51,7 +50,7 @@ export function CapturaFoto({
       <p className="text-sm font-medium text-ink mb-1.5">{rotulo}</p>
       <input
         ref={camera} type="file" accept="image/*" capture="user" className="hidden"
-        onChange={pegar} aria-label={rotulo} data-entrada-foto={atributo("")  || undefined}
+        onChange={pegar} aria-label={rotulo} data-entrada-foto={marca ?? true}
       />
       {valor ? (
         <div className="relative">

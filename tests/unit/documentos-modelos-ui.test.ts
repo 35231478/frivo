@@ -335,6 +335,16 @@ describe("Seção Documentos: o papel gerado", () => {
     expect($("[data-item='baixar']")!.getAttribute("href")).toBe("/api/tecnicos/t1/documentos/d9");
   });
 
+  it("o papel gerado diz que saiu de um modelo — não \"Anexado pelo RH\"", async () => {
+    const assinado = EMITIDO({ id: "e2", assinadoEm: "2026-11-17T12:00:00.000Z", documentoId: "d9" });
+    const anexo = DOC({ id: "d9", origem: "GERADO", criadoPorNome: "Administrador" });
+    await montar(createElement(DocumentosColaborador, props({ documentosIniciais: [anexo], emitidosIniciais: [assinado] })));
+
+    const linha = txt($("[data-documento='d9']"));
+    expect(linha).toContain("Gerado por modelo");
+    expect(linha, "a origem do papel não é um anexo do RH").not.toContain("Anexado pelo RH");
+  });
+
   it("cancelar pede o motivo e só então chama a rota", async () => {
     const assinado = EMITIDO({ id: "e2", documentoId: "d9", assinadoEm: "2026-11-17T12:00:00.000Z" });
     const anexo = DOC({ id: "d9", origem: "GERADO" });

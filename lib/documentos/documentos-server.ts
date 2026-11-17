@@ -23,7 +23,7 @@ import { CATEGORIA_PADRAO } from "@/lib/colaborador/documentos";
 import { gerarDocumentoPdf } from "@/lib/documentos/documento-pdf";
 import {
   ID_CAMPOS_AUTOMATICOS, acaoDoTipo, camposAPreencher, categoriaDoModelo, ehSensivel, erroDosItens,
-  limparItens, preencherModelo, tipoDe, tituloDoDocumento, vencimentoDe, type ItemDocumento,
+  limparItens, preencherModelo, tipoDe, tituloDoDocumento, valorNoTexto, vencimentoDe, type ItemDocumento,
 } from "@/lib/documentos/modelos";
 import type { ArquivoGerado } from "@/lib/pdf/resposta";
 
@@ -167,7 +167,7 @@ export async function montarDocumento(
   const doUsuario: Record<string, string> = {};
   for (const campo of camposAPreencher(modelo.texto, modelo.tipo)) {
     const v = limpo(dados.valores?.[campo.id]);
-    if (v) doUsuario[campo.id] = v.slice(0, 2000);
+    if (v) doUsuario[campo.id] = valorNoTexto(campo, v.slice(0, 2000));
   }
   const faltando = camposAPreencher(modelo.texto, modelo.tipo)
     .filter((c) => c.obrigatorio && !doUsuario[c.id])

@@ -12,6 +12,7 @@ import { Modal } from "@/components/ui/modal";
 import { CapturaFoto } from "@/components/ui/captura-foto";
 import { toast } from "@/components/ui/avisos";
 import { PLANILHA } from "@/lib/planilha";
+import { chaveHojeBR } from "@/lib/fuso";
 import { cn } from "@/lib/utils";
 import {
   ITENS_MAX, camposAPreencher, ehSensivel, erroDosItens, limparItens, rotuloTipo, tipoDe,
@@ -48,9 +49,6 @@ export interface EmitidoDaTela {
 
 const ITEM_VAZIO: ItemDocumento = { descricao: "", ca: "", quantidade: 1, entregaEm: "" };
 
-/** "AAAA-MM-DD" do dia de hoje, que é o padrão das datas de entrega. */
-const hojeISO = () => new Date().toISOString().slice(0, 10);
-
 /**
  * GERAR DOCUMENTO na ficha do colaborador: escolher o modelo, completar o que o sistema não sabe,
  * ver a prévia e gerar. Se o modelo pede assinatura, ela acontece aqui mesmo, na hora da entrega —
@@ -73,7 +71,7 @@ export function GerarDocumento({
 }) {
   const [modeloId, setModeloId] = useState("");
   const [valores, setValores] = useState<Record<string, string>>({});
-  const [itens, setItens] = useState<ItemDocumento[]>([{ ...ITEM_VAZIO, entregaEm: hojeISO() }]);
+  const [itens, setItens] = useState<ItemDocumento[]>([{ ...ITEM_VAZIO, entregaEm: chaveHojeBR() }]);
   const [previa, setPrevia] = useState<{ texto: string; desconhecidos: string[] } | null>(null);
   const [emitido, setEmitido] = useState<EmitidoDaTela | null>(null);
   const [nome, setNome] = useState("");
@@ -92,7 +90,7 @@ export function GerarDocumento({
   useEffect(() => {
     if (aberto) { setEmitido(emitidoInicial); return; }
     // fechar limpa tudo: o próximo documento começa do zero, não do rascunho do anterior
-    setModeloId(""); setValores({}); setItens([{ ...ITEM_VAZIO, entregaEm: hojeISO() }]);
+    setModeloId(""); setValores({}); setItens([{ ...ITEM_VAZIO, entregaEm: chaveHojeBR() }]);
     setPrevia(null); setEmitido(null); setNome(""); setSelfie(null); setErro(""); setOcupado(false);
   }, [aberto]);
 
@@ -104,8 +102,8 @@ export function GerarDocumento({
     // A data de entrega já nasce hoje: é o dia da entrega em quase todo caso, e quem precisa de
     // outra troca em um toque. Deixar vazio só faria o RH digitar a data de hoje todo dia.
     const datas = m ? camposAPreencher(m.texto, m.tipo).filter((c) => c.formato === "data") : [];
-    setValores(Object.fromEntries(datas.map((c) => [c.id, hojeISO()])));
-    setItens(m?.temItens ? [{ ...ITEM_VAZIO, entregaEm: hojeISO() }] : []);
+    setValores(Object.fromEntries(datas.map((c) => [c.id, chaveHojeBR()])));
+    setItens(m?.temItens ? [{ ...ITEM_VAZIO, entregaEm: chaveHojeBR() }] : []);
   }
 
   const corpo = () => ({
@@ -216,7 +214,11 @@ export function GerarDocumento({
               <Select value={modeloId} onChange={(e) => trocarModelo(e.target.value)} data-escolher-modelo>
                 <option value="">Escolha o modelo…</option>
                 {disponiveis.map((m) => (
-                  <option key={m.id} value={m.id}>{m.nome} · {rotuloTipo(m.tipo)}</option>
+                  // o tipo só entra quando acrescenta algo: um modelo chamado "Ficha de entrega de EPI"
+                  // não precisa virar "Ficha de entrega de EPI · Ficha de entrega de EPI"
+                  <option key={m.id} value={m.id}>
+                    {m.nome === rotuloTipo(m.tipo) ? m.nome : `${m.nome} · ${rotuloTipo(m.tipo)}`}
+                  </option>
                 ))}
               </Select>
             </FormField>
@@ -308,7 +310,7 @@ export function GerarDocumento({
                 </div>
                 {itens.length < ITENS_MAX && (
                   <Button type="button" variant="secondary" className="mt-2" data-mais-um-item
-                    onClick={() => setItens((l) => [...l, { ...ITEM_VAZIO, entregaEm: hojeISO() }])}>
+                    onClick={() => setItens((l) => [...l, { ...ITEM_VAZIO, entregaEm: chaveHojeBR() }])}>
                     <Plus className="w-4 h-4" /> Mais um item
                   </Button>
                 )}

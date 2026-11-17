@@ -346,10 +346,15 @@ export function DocumentosColaborador({
   );
 }
 
-/** Quem pôs o arquivo aqui. Sem nome (documento antigo ou vindo do link), diz a origem. */
+/**
+ * Quem pôs o arquivo aqui. Sem nome (documento antigo ou vindo do link), diz a origem.
+ * O papel que saiu de um modelo diz isso: chamá-lo de "Anexado pelo RH" esconde que o PDF é da
+ * casa, assinado na hora — e é justamente essa origem que dá valor à ficha de EPI e à advertência.
+ */
 function quemEnviou(d: DocumentoLinha): string {
   if (d.origem === "ADMISSAO") return ROTULO_ORIGEM.ADMISSAO;
-  return d.criadoPorNome ? `${ROTULO_ORIGEM.MANUAL}: ${d.criadoPorNome}` : ROTULO_ORIGEM.MANUAL;
+  const rotulo = d.origem === "GERADO" ? ROTULO_ORIGEM.GERADO : ROTULO_ORIGEM.MANUAL;
+  return d.criadoPorNome ? `${rotulo}: ${d.criadoPorNome}` : rotulo;
 }
 
 function LinhaContrato({ contrato, onVer }: { contrato: ContratoAssinado; onVer: () => void }) {
