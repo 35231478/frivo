@@ -43,8 +43,18 @@ export class ErroDocumentacao extends Error {
 }
 
 export const MSG_NAO_ENCONTRADO = "Envio não encontrado.";
-/** A mesma frase para link que não existe, expirou ou foi revogado: nada aqui conta qual é o caso. */
+/** Link que não existe: frase genérica — nada aqui confirma a quem chuta um endereço que ele quase acertou. */
 export const MSG_LINK_INDISPONIVEL = "Este link não está mais disponível. Peça um novo a quem enviou.";
+/**
+ * Link que EXISTIU e não vale mais: aí o motivo é dito. Quem chega aqui tem o token de verdade (32
+ * bytes — não se adivinha), ou seja, é o cliente; e para ele "expirou em tal dia" ou "foi
+ * desativado" é o que diz o que fazer, em vez de um erro mudo.
+ */
+export type MotivoDoLink = "EXPIRADO" | "REVOGADO";
+export const mensagemDoLink = (motivo: MotivoDoLink, empresa: string, expiraEm: Date | null): string =>
+  motivo === "REVOGADO"
+    ? `Este link foi desativado por ${empresa}. Peça um novo a quem enviou.`
+    : `Este link expirou${expiraEm ? ` em ${formatarData(expiraEm)}` : ""}. Peça um novo a ${empresa}.`;
 
 /** Token do link: 32 bytes de verdade — o mesmo tamanho do link da admissão (dado de pessoa). */
 const novoToken = () => randomBytes(32).toString("base64url");
@@ -201,6 +211,13 @@ export async function sugerirColaboradores(
   });
   // Quem saiu da empresa não é sugerido: documentação de ex-colaborador não vai a cliente por padrão.
   return pessoas.filter((p) => p.ativo).map((p) => ({ ...p, motivo: motivos.get(p.id)! }));
+}
+
+/** Os contratos ativos do cliente, para a tela oferecer "só quem atende este contrato". */
+export async function contratosDoCliente(empresaId: string, clienteId: string): Promise<{ id: string; numero: string }[]> {
+  return prisma.contrato.findMany({
+    where: { empresaId, clienteId, status: "ATIVO" }, orderBy: { numero: "asc" }, select: { id: true, numero: true },
+  });
 }
 
 /** Os e-mails que a tela já traz preenchidos: os contatos operacionais do cadastro do cliente. */
@@ -576,17 +593,70 @@ const SELECT_DA_LISTA = {
   itens: { select: { colaboradorId: true, colaboradorNome: true } },
 } as const;
 
+/** O filtro da lista pela situação do link — a mesma conta de `situacaoDoLink`, em SQL. */
+function wherePorSituacao(situacao: string | null | undefined, agora: Date) {
+  switch (situacao) {
+    case "SEM_LINK": return { token: null };
+    case "REVOGADO": return { token: { not: null }, revogadoEm: { not: null } };
+    case "EXPIRADO": return { token: { not: null }, revogadoEm: null, OR: [{ expiraEm: null }, { expiraEm: { lte: agora } }] };
+    case "ATIVO": return { token: { not: null }, revogadoEm: null, expiraEm: { gt: agora } };
+    default: return {};
+  }
+}
+
+/** O envio na LISTA: o resumo, as vias usadas e a prova de recebimento (quando o cliente abriu e baixou). */
+export interface EnvioDaLista extends EnvioResumo {
+  vias: Via[];
+  clienteAbriuEm: string | null;
+  clienteBaixouEm: string | null;
+}
+
+const VIA_DO_EVENTO: Partial<Record<string, Via>> = { LINK_GERADO: "LINK", ZIP_BAIXADO: "ZIP", EMAIL_ENVIADO: "EMAIL" };
+
 export async function listarEnvios(
-  empresaId: string, filtro: { clienteId?: string | null; pagina?: number; porPagina?: number } = {}, agora: Date = new Date(),
-): Promise<{ envios: EnvioResumo[]; total: number }> {
+  empresaId: string,
+  filtro: { clienteId?: string | null; busca?: string | null; situacao?: string | null; pagina?: number; porPagina?: number } = {},
+  agora: Date = new Date(),
+): Promise<{ envios: EnvioDaLista[]; total: number }> {
   const porPagina = Math.min(Math.max(Math.trunc(filtro.porPagina ?? 50), 1), 100);
   const pagina = Math.max(Math.trunc(filtro.pagina ?? 1), 1);
-  const where = { empresaId, ...(filtro.clienteId ? { clienteId: filtro.clienteId } : {}) };
+  const busca = limpo(filtro.busca);
+  const where = {
+    empresaId,
+    ...(filtro.clienteId ? { clienteId: filtro.clienteId } : {}),
+    ...(busca ? { clienteNome: { contains: busca, mode: "insensitive" as const } } : {}),
+    ...wherePorSituacao(filtro.situacao, agora),
+  };
   const [linhas, total] = await Promise.all([
     prisma.documentacaoEnvio.findMany({ where, orderBy: [{ criadoEm: "desc" }, { id: "desc" }], skip: (pagina - 1) * porPagina, take: porPagina, select: SELECT_DA_LISTA }),
     prisma.documentacaoEnvio.count({ where }),
   ]);
-  return { envios: linhas.map((l) => resumo(l, agora)), total };
+
+  // Uma consulta só para a página inteira: o que aconteceu com cada envio, e quando foi a última vez
+  const resumoDosEventos = linhas.length
+    ? await prisma.documentacaoEnvioEvento.groupBy({
+        by: ["envioId", "tipo"], where: { envioId: { in: linhas.map((l) => l.id) } }, _max: { criadoEm: true },
+      })
+    : [];
+  const porEnvio = new Map<string, Map<string, Date | null>>();
+  for (const g of resumoDosEventos) {
+    if (!porEnvio.has(g.envioId)) porEnvio.set(g.envioId, new Map());
+    porEnvio.get(g.envioId)!.set(g.tipo, g._max.criadoEm);
+  }
+
+  return {
+    total,
+    envios: linhas.map((l) => {
+      const ev = porEnvio.get(l.id) ?? new Map<string, Date | null>();
+      const baixou = [ev.get("DOWNLOAD"), ev.get("DOWNLOAD_ZIP")].filter((d): d is Date => !!d).sort((a, b) => b.getTime() - a.getTime())[0];
+      return {
+        ...resumo(l, agora),
+        vias: (["LINK", "ZIP", "EMAIL"] as Via[]).filter((v) => [...ev.keys()].some((tipo) => VIA_DO_EVENTO[tipo] === v)),
+        clienteAbriuEm: ev.get("ACESSO")?.toISOString() ?? null,
+        clienteBaixouEm: baixou?.toISOString() ?? null,
+      };
+    }),
+  };
 }
 
 export interface EventoDaLinha {
@@ -692,7 +762,12 @@ async function porToken(token: string) {
 async function linkVivo(token: string, agora: Date): Promise<LinhaPublica> {
   const e = await porToken(token);
   if (!e) throw new ErroDocumentacao(MSG_LINK_INDISPONIVEL, 404);
-  if (situacaoDoLink(e, agora) !== "ATIVO") throw new ErroDocumentacao(MSG_LINK_INDISPONIVEL, 410);
+  const situacao = situacaoDoLink(e, agora);
+  if (situacao !== "ATIVO") {
+    const motivo: MotivoDoLink = situacao === "REVOGADO" ? "REVOGADO" : "EXPIRADO";
+    const empresa = e.empresa.nomeFantasia || e.empresa.nome;
+    throw new ErroDocumentacao(mensagemDoLink(motivo, empresa, e.expiraEm), 410, { motivo, empresa });
+  }
   return e;
 }
 

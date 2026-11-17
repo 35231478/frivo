@@ -9,6 +9,8 @@ export async function GET(req: NextRequest) {
   const q = req.nextUrl.searchParams;
   return responderEnvio(() => listarEnvios(ator.empresaId, {
     clienteId: q.get("clienteId"),
+    busca: q.get("q"),
+    situacao: q.get("situacao"),
     pagina: Number(q.get("pagina") ?? 1) || 1,
     porPagina: Number(q.get("porPagina") ?? 50) || 50,
   }));

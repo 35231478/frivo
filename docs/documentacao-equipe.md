@@ -9,8 +9,8 @@ expira e ninguém sabendo o que foi para quem. Esta funcionalidade monta o pacot
 > repositório. Este documento foi escrito a partir do pedido da leva; se o briefing trouxer algo
 > que não está aqui, vale o briefing.
 
-O corte: **PR1 é o motor e o banco** (este documento); **PR2 são as telas** (montar o pacote, o
-histórico, a página que o cliente abre).
+O corte: **PR1 é o motor e o banco** (seções 1 a 11); **PR2 são as telas** — montar o pacote, o
+histórico e a página que o cliente abre (seção 12).
 
 ## 1. Por que isto não é um módulo novo
 
@@ -99,7 +99,11 @@ lote.
 - **Registro de acesso**: cada abertura, cada arquivo baixado e cada zip, com IP e navegador.
 - **Limite por IP**: só token recusado conta. Quem tem o link bom baixa à vontade; varrer tokens no
   escuro acaba em 429.
-- Link que não existe, expirou ou foi revogado dá **a mesma mensagem**.
+- Link que **não existe** dá uma frase genérica (404): nada confirma a quem chuta que ele quase
+  acertou. Link que **existiu** e não vale mais diz o motivo (410) — "expirou em tal dia" ou "foi
+  desativado pela empresa" — e a quem pedir outro. Para cair ali é preciso ter o token de verdade:
+  é o cliente, e ele precisa saber o que fazer. (No PR1 as três situações davam a mesma frase; o
+  motivo entrou no PR2, a pedido.) O motivo nunca leva dado do pacote.
 
 ## 8. Permissão
 
@@ -111,9 +115,9 @@ dão o direito de mandar documentação para fora da empresa. **Só o Administra
 
 | Rota | O que faz |
 | --- | --- |
-| `GET /api/documentacao/sugestoes` | quem atende o cliente (ou a equipe) e os e-mails do cadastro |
+| `GET /api/documentacao/sugestoes` | quem atende o cliente (ou a equipe), os e-mails do cadastro e os contratos ativos dele |
 | `POST /api/documentacao/previa` | o que entra, o que falta, o que venceu — sem gravar |
-| `GET /api/documentacao/envios` | o histórico (filtra por cliente) |
+| `GET /api/documentacao/envios` | o histórico: busca pelo cliente (`q`), situação do link (`situacao`), as vias usadas e quando o cliente abriu e baixou |
 | `POST /api/documentacao/envios` | monta o pacote de um cliente e entrega (LINK, ZIP ou EMAIL) |
 | `POST /api/documentacao/envios/lote` | vários clientes: um envio por cliente |
 | `GET /api/documentacao/envios/[id]` | o envio, os arquivos e a linha do tempo |
@@ -126,7 +130,7 @@ dão o direito de mandar documentação para fora da empresa. **Só o Administra
 | `GET /api/publico/documentacao/[token]/zip` | **público**: o pacote em zip |
 
 Internas: sem sessão 401, sem a permissão 403, de outra empresa 404. Públicas: 404 para link que
-não existe, 410 para expirado ou revogado, 429 no limite.
+não existe, 410 (com o motivo) para expirado ou revogado, 429 no limite.
 
 ## 10. O banco
 
@@ -155,3 +159,89 @@ que aquele pacote foi enviado (`ON DELETE SET NULL`, com os dados copiados).
    é esconder — o que deixa o cliente sem saber por que o ASO sumiu.
 6. **A validade padrão é 7 dias** e o teto é 30. Serve?
 7. **WhatsApp** não é uma via nesta leva (o pedido foi link, zip e e-mail).
+
+## 12. As telas (PR2)
+
+Sem schema novo. Três telas, todas em cima das rotas da seção 9.
+
+### 12.1 Onde fica
+
+**Equipes › Documentação da equipe** (`/documentacao-equipe`). O item só aparece no menu para quem
+tem "Documentos › Enviar ao cliente". A rota não tem módulo de "visualizar" no middleware — quem só
+tem a ação de enviar entra — e por isso **cada página confere a permissão sozinha** e manda para
+`/sem-permissao`; as rotas recusam com 403 de qualquer jeito.
+
+### 12.2 Histórico (`/documentacao-equipe`)
+
+Lista no padrão da casa (busca pelo cliente, filtro pela situação do link, colunas escolhíveis,
+cartões no celular). Colunas: cliente, pacote (arquivos e colaboradores), via, link (ativo,
+expirado, revogado, sem link), **recebimento** (quando o cliente abriu e quando baixou), enviado
+em, por quem.
+
+O **⋮ de cada linha** só oferece o que a rota aceitaria:
+
+| Ação | Quando aparece |
+| --- | --- |
+| Ver o envio e a linha do tempo | sempre |
+| Copiar o link | link ativo |
+| Baixar o zip | sempre (a rota recusa se algo venceu depois do envio, e a razão aparece) |
+| Enviar por e-mail / Enviar o e-mail de novo | sempre; sem link ativo, gera um link novo junto |
+| Gerar um link novo | sem link, expirado ou revogado |
+| Revogar o link | link ativo; pede confirmação |
+
+A **linha do tempo** (gaveta lateral) separa o que a empresa fez (criou, gerou link, baixou zip,
+mandou e-mail, revogou) do que o **cliente** fez pelo link (abriu, baixou um arquivo, baixou o
+pacote) — estes com IP e navegador. É a prova de recebimento.
+
+### 12.3 Novo envio (`/documentacao-equipe/novo`)
+
+Três passos:
+
+1. **Cliente e colaboradores.** Escolhido o cliente, a tela traz quem atende a ele já marcado, com
+   o porquê em cada linha (técnico do contrato, atendeu nos últimos 12 meses). Dá para estreitar por
+   contrato, puxar uma equipe e acrescentar alguém pelo nome.
+2. **Documentos e pastas.** Segurança e medicina do trabalho marcada; contrato e documento pessoal
+   desmarcados; advertência e dado bancário nem aparecem. A organização das pastas é a do zip e a
+   da página do cliente.
+3. **Prévia e envio.** A prévia mostra o que entra, na estrutura de pastas escolhida.
+   - **Vencido segura**: o botão de enviar trava em qualquer saída e não existe "enviar assim
+     mesmo". Cada pessoa com vencido tem as duas saídas na linha: *Abrir a ficha* (renovar) e
+     *Tirar do pacote* (refaz a prévia sem ela).
+   - **Falta** (a pessoa não tem aquele tipo) não segura, mas pede a marcação "conferi e quero
+     enviar sem esses documentos".
+   - **Saída**: *Gerar link* (com prazo), *Baixar zip* ou *Enviar e-mail* (Para e Cópia vêm do
+     cadastro do cliente e são editáveis; há a cópia para quem envia).
+
+**Lote** fica em *Avançado*: vários clientes, cada um com a sua lista de colaboradores (sugerida e
+ajustável), a sua prévia e os seus destinatários. Sai por link ou e-mail (zip não entra em lote).
+Um cliente segurado fica de fora sem segurar os outros, e o resultado diz, cliente a cliente, o
+link de cada um, o que houve com o e-mail, ou por que não saiu.
+
+A tela nunca decide sozinha: a prévia e o envio são do servidor. **Quando ele recusa, a razão dele
+aparece e a tela não anda para o resultado** — e se a recusa foi por vencido (venceu entre a prévia
+e o clique), a prévia é refeita.
+
+### 12.4 A página do cliente (`/documentacao/[token]`)
+
+Sem login, feita para o celular: o cliente, a empresa, até quando o link vale, **Baixar tudo
+(zip)** e cada arquivo com *ver* e *baixar*, em cartões na organização que a empresa escolheu.
+Abrir a página registra o acesso (é o "cliente abriu" do histórico).
+
+Link que não serve não mostra erro técnico: "Link expirado" (com a data e a quem pedir), "Link
+desativado", "Link indisponível" (o genérico, para o que nunca existiu) ou "Aguarde um pouco" (o
+limite por IP).
+
+### 12.5 Onde está cada botão
+
+| Botão | Tela |
+| --- | --- |
+| **Montar** o pacote | Histórico › *Novo envio* → `/documentacao-equipe/novo`, passos 1 e 2 |
+| **Prévia** | Novo envio, passo 3 (*Ver a prévia*) — de um cliente, ou uma por cliente no lote |
+| **Gerar link** | Novo envio, passo 3 (saída *Gerar link*); Histórico › ⋮ › *Gerar um link novo* |
+| **Baixar zip** | Novo envio, passo 3 (saída *Baixar zip*) e no resultado; Histórico › ⋮ › *Baixar o zip*; página do cliente (*Baixar tudo*) |
+| **Enviar e-mail** | Novo envio, passo 3 (saída *Enviar e-mail*); Histórico › ⋮ › *Enviar por e-mail* |
+| **Lote** | Novo envio, passo 1 › *Avançado* › *Enviar para vários clientes* |
+| **Reenviar** | Histórico › ⋮ › *Enviar o e-mail de novo* |
+| **Revogar** | Histórico › ⋮ › *Revogar o link* |
+| Copiar o link | Resultado do envio; Histórico › ⋮ › *Copiar o link* |
+| Linha do tempo | Histórico › ⋮ › *Ver o envio e a linha do tempo* |

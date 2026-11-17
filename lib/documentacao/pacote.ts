@@ -158,6 +158,27 @@ export function caminhoNoPacote(
   }
 }
 
+/** Um grupo da lista do pacote: a pessoa (com os tipos dentro) ou o tipo (com as pessoas dentro). */
+export interface GrupoDoPacote<T> { titulo: string; itens: (T & { rotulo: string })[] }
+
+/**
+ * Agrupa os arquivos do jeito que a empresa organizou as pastas — a tela do cliente e a prévia
+ * mostram a mesma estrutura que o zip vai ter. Por tipo: o grupo é o tipo e cada linha diz de quem
+ * é; nos outros dois: o grupo é a pessoa e cada linha diz o que é.
+ */
+export function agruparItens<T extends { colaboradorNome: string; categoriaRotulo: string }>(
+  itens: readonly T[], organizacao: string,
+): GrupoDoPacote<T>[] {
+  const porTipo = organizacao === "POR_TIPO";
+  const grupos = new Map<string, GrupoDoPacote<T>>();
+  for (const item of itens) {
+    const titulo = porTipo ? item.categoriaRotulo : item.colaboradorNome;
+    if (!grupos.has(titulo)) grupos.set(titulo, { titulo, itens: [] });
+    grupos.get(titulo)!.itens.push({ ...item, rotulo: porTipo ? item.colaboradorNome : item.categoriaRotulo });
+  }
+  return [...grupos.values()].sort((a, b) => a.titulo.localeCompare(b.titulo, "pt-BR"));
+}
+
 /* ───────────────────────── o diagnóstico ───────────────────────── */
 
 export interface DocumentoCandidato {
@@ -268,6 +289,15 @@ export function mensagemDeVencidos(vencidos: readonly Pendencia[]): string {
   const nomes = [...new Set(vencidos.map((v) => `${v.categoriaRotulo} de ${v.colaboradorNome}`))];
   const lista = nomes.length > 3 ? `${nomes.slice(0, 3).join("; ")} e mais ${nomes.length - 3}` : nomes.join("; ");
   return `Há documento vencido no pacote: ${lista}. Renove o documento ou tire o colaborador do pacote.`;
+}
+
+/**
+ * A frase de quando o e-mail não saiu — a mesma no resultado do envio e no histórico. O motivo vem
+ * de quem tentou enviar e às vezes já termina em ponto: a frase não termina em dois.
+ */
+export function fraseEmailNaoSaiu(erro: string | null | undefined): string {
+  const motivo = String(erro ?? "").trim().replace(/[.\s]+$/, "") || "erro no envio";
+  return `O e-mail não saiu: ${motivo}.`;
 }
 
 /* ───────────────────────── os destinatários ───────────────────────── */
