@@ -865,11 +865,11 @@ describe.skipIf(!URL_PG)("Documentação da equipe para o cliente (PostgreSQL re
     const { default: Novo } = await import("@/app/(dashboard)/documentacao-equipe/novo/page");
     semEnviar();
     await expect(Historico({ searchParams: Promise.resolve({}) })).rejects.toThrow("NEXT_REDIRECT /sem-permissao");
-    await expect(Novo()).rejects.toThrow("NEXT_REDIRECT /sem-permissao");
+    await expect(Novo({})).rejects.toThrow("NEXT_REDIRECT /sem-permissao");
     // só a ação "enviar" basta — não precisa de mais nada de Documentos
     como(montarPermissoes({ documentos: ["enviar"] }));
     expect(await paginaHistorico()).toContain("data-tabela-envios");
-    expect(renderToStaticMarkup(await Novo())).toContain("data-novo-envio");
+    expect(renderToStaticMarkup(await Novo({}))).toContain("data-novo-envio");
   });
 
   it("o histórico lista o envio (cliente, pacote, via, link, quando, por quem) e a prova de recebimento", async () => {

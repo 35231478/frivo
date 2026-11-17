@@ -42,8 +42,13 @@ export default async function AdmissoesPage({ searchParams }: { searchParams: Pr
   const sp = await searchParams;
   const session = await auth();
   const user = session!.user!;
+  // A página se guarda sozinha: o módulo não tem a ação "visualizar", então o portão do middleware
+  // não se aplica aqui (lib/permissoes.ts › moduloDaRota). Quem não gerencia admissão não entra.
   if (!pode(user.permissoes, "admissao", "gerenciar", user.role)) redirect("/sem-permissao");
   const empresaId = user.empresaId;
+  // O nome só vira link para a ficha para quem pode abrir a ficha (Equipes › Visualizar e Gerenciar):
+  // o RH que só cuida da admissão trabalha pela lista, sem cair em "sem permissão" ao clicar no nome.
+  const abreFicha = pode(user.permissoes, "equipes", "visualizar", user.role) && pode(user.permissoes, "equipes", "gerenciar", user.role);
 
   const busca = (sp.q ?? "").trim();
   const situacao = SITUACOES.includes(sp.situacao as SituacaoAdmissao) ? (sp.situacao as SituacaoAdmissao) : "";
@@ -73,9 +78,13 @@ export default async function AdmissoesPage({ searchParams }: { searchParams: Pr
     atributos: { "data-admissao": a.id, "data-situacao": a.situacao },
     celulas: {
       colaborador: (
-        <Link href={`/colaboradores/${a.colaborador.id}/editar`} className={cn(PLANILHA.nome, "truncate hover:text-primary-600")} data-linha-nome>
-          {a.colaborador.nome}
-        </Link>
+        abreFicha ? (
+          <Link href={`/colaboradores/${a.colaborador.id}/editar`} className={cn(PLANILHA.nome, "truncate hover:text-primary-600")} data-linha-nome>
+            {a.colaborador.nome}
+          </Link>
+        ) : (
+          <span className={cn(PLANILHA.nome, "truncate")} data-linha-nome>{a.colaborador.nome}</span>
+        )
       ),
       cargo: <span className="truncate">{a.colaborador.cargo ?? "—"}</span>,
       situacao: <SeloSituacao situacao={a.situacao} />,
@@ -91,7 +100,7 @@ export default async function AdmissoesPage({ searchParams }: { searchParams: Pr
         </span>
       ),
       criado: <span className={cn(PLANILHA.data, PLANILHA.apagado)}>{formatarData(a.criadoEm)}</span>,
-      acoes: <AcoesAdmissao admissao={a} />,
+      acoes: <AcoesAdmissao admissao={a} abreFicha={abreFicha} />,
     },
     titulos: { colaborador: a.colaborador.nome, progresso: progressoCurto(a) },
   }));
@@ -101,9 +110,13 @@ export default async function AdmissoesPage({ searchParams }: { searchParams: Pr
       {itens.map((a) => (
         <li key={a.id} className="py-3 flex items-start justify-between gap-3" data-cartao-admissao={a.id}>
           <div className="min-w-0 space-y-1">
-            <Link href={`/colaboradores/${a.colaborador.id}/editar`} className="font-semibold text-ink hover:text-primary-600 block truncate">
-              {a.colaborador.nome}
-            </Link>
+            {abreFicha ? (
+              <Link href={`/colaboradores/${a.colaborador.id}/editar`} className="font-semibold text-ink hover:text-primary-600 block truncate">
+                {a.colaborador.nome}
+              </Link>
+            ) : (
+              <p className="font-semibold text-ink truncate">{a.colaborador.nome}</p>
+            )}
             <p className="text-xs text-ink-muted truncate">
               {[a.colaborador.cargo, a.colaborador.telefone ? formatarTelefone(a.colaborador.telefone) : null].filter(Boolean).join(" · ") || "Sem cargo"}
             </p>
@@ -117,7 +130,7 @@ export default async function AdmissoesPage({ searchParams }: { searchParams: Pr
               </p>
             )}
           </div>
-          <AcoesAdmissao admissao={a} />
+          <AcoesAdmissao admissao={a} abreFicha={abreFicha} />
         </li>
       ))}
     </ul>

@@ -51,10 +51,15 @@ interface Envio {
  * e admitir. Cada botão só aparece quando a rota aceitaria (as mesmas regras de lib/admissao), e o
  * servidor confere de novo.
  */
-export function AcoesAdmissao({ admissao, variante = "menu" }: {
+export function AcoesAdmissao({ admissao, variante = "menu", abreFicha = true }: {
   admissao: AdmissaoDoRh;
   /** "menu" = ⋮ da linha da lista; "botoes" = os botões da ficha do colaborador */
   variante?: "menu" | "botoes";
+  /**
+   * Quem está na tela pode abrir a ficha do colaborador (Equipes › Visualizar e Gerenciar)? Na lista,
+   * o RH que só tem "Admissão digital" não ganha "Editar os dados": o item levaria a "sem permissão".
+   */
+  abreFicha?: boolean;
 }) {
   const router = useRouter();
   const [ocupado, setOcupado] = useState<string | null>(null);
@@ -336,7 +341,7 @@ export function AcoesAdmissao({ admissao, variante = "menu" }: {
               </>
             )}
             <ItemMenu id="progresso" icone={Eye} onClick={() => { fechar(); verProgresso(); }}>Ver o progresso</ItemMenu>
-            <ItemMenu id="editar" icone={Pencil} href={fichaHref}>Editar os dados</ItemMenu>
+            {abreFicha && <ItemMenu id="editar" icone={Pencil} href={fichaHref}>Editar os dados</ItemMenu>}
             {temEntregaAgora && (
               <>
                 <SeparadorMenu />

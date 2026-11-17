@@ -16,9 +16,14 @@ const config: Config = {
   theme: {
     extend: {
       fontFamily: {
-        sans: ["var(--font-inter)", "Inter", "system-ui", "sans-serif"],
+        // "Inter"/"Archivo" (os subconjuntos além do latim, app/fonts/subconjuntos.css) vêm ANTES das
+        // variáveis: cada face deles só atende o intervalo de caracteres dela, então o texto em
+        // português passa direto para a face latina da variável — e um "Ω" ou "Ł" acha o arquivo
+        // certo antes de cair na fonte de reserva do sistema.
+        // "Inter Fallback"/"Archivo Fallback": a Arial ajustada que aparece enquanto a fonte carrega.
+        sans: ["Inter", "var(--font-inter)", "Inter Fallback", "system-ui", "sans-serif"],
         // Títulos, números e KPIs
-        display: ["var(--font-archivo)", "Archivo", "var(--font-inter)", "system-ui", "sans-serif"],
+        display: ["Archivo", "var(--font-archivo)", "Archivo Fallback", "Inter", "var(--font-inter)", "Inter Fallback", "system-ui", "sans-serif"],
       },
       colors: {
         // Semânticos (preferidos)

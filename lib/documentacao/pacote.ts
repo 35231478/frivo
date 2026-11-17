@@ -38,10 +38,15 @@ const ENVIAVEIS = new Set(CATEGORIAS_ENVIAVEIS.map((c) => c.id));
 export const categoriaEnviavel = (id: string | null | undefined): boolean => !!id && ENVIAVEIS.has(id);
 
 /**
- * O que já vem marcado: segurança e medicina do trabalho (ASO, NRs, ficha de EPI, integração) —
- * é o que o cliente pede para liberar a entrada. O resto a pessoa marca se o cliente pedir.
+ * O que já vem marcado: os quatro documentos que praticamente todo técnico de climatização tem e
+ * que o cliente pede para liberar a entrada — ASO, NR-10, NR-35 e ficha de EPI.
+ *
+ * NR-13 e integração são de segurança do trabalho também, mas pouca gente tem: marcados por padrão,
+ * faziam o aviso de "falta" aparecer em todo envio — e aviso que aparece sempre ninguém lê. Ficam
+ * desmarcados, como contrato e documento pessoal: quem precisa, marca.
  */
-export const CATEGORIAS_PADRAO: string[] = CATEGORIAS_ENVIAVEIS.filter((c) => c.grupo === "SMT").map((c) => c.id);
+const PADRAO = ["aso", "nr_10", "nr_35", "ficha_epi"];
+export const CATEGORIAS_PADRAO: string[] = CATEGORIAS_ENVIAVEIS.filter((c) => PADRAO.includes(c.id)).map((c) => c.id);
 
 /** As gavetas enviáveis agrupadas, para a tela montar os blocos de marcar. */
 export function categoriasEnviaveisPorGrupo(): { grupo: string; rotulo: string; itens: CategoriaDoc[] }[] {

@@ -232,3 +232,27 @@ com cabeçalho que se repete, rodapé numerado) **nasceu no documento do PMOC** 
 `lib/pdf/desenho.ts` quando a ficha precisou da mesma coisa. O que amarrava ao PMOC era só o
 cabeçalho e o rodapé: viraram um descritor. O documento do PMOC continua idêntico — os 24 testes
 dele são a prova.
+
+## Quem entra na lista de Admissões (o portão)
+
+O módulo `admissao` tem uma ação só — `gerenciar` — e **não tem** `visualizar`. O middleware exige
+`visualizar` do módulo do endereço, então, enquanto `/admissoes` estava mapeado para `admissao`, o
+portão barrava todo perfil que não fosse o administrador master: o menu mostrava *Admissões* para
+quem tinha "Admissão digital › Gerenciar" e o clique caía em `/sem-permissao`.
+
+Agora `/admissoes` fica fora do portão de `visualizar` e **a página se guarda sozinha** pela ação
+(`admissao.gerenciar`), como a Documentação da equipe. As rotas continuam recusando com 403.
+
+Para o RH que só tem "Admissão digital":
+
+- a lista abre, com *Nova admissão* e as ações de cada linha;
+- o nome do colaborador **não** é link, e o menu não tem *Editar os dados*: os dois levam à ficha
+  do colaborador, que exige "Equipes › Visualizar" e "Gerenciar";
+- em Configurações ele vê só o cartão *Admissão digital*.
+
+A mesma correção valeu para as outras telas em que "a permissão existe mas o middleware barrava":
+*App do colaborador* (`/equipes/app-colaborador`, que pede "Configurações › Gerenciar" e não
+"Equipes › Visualizar") e a página de Configurações para quem tem só a permissão de um item
+(*Dados fiscais*, *Admissão digital*, *Modelos de documento*). A regra e a varredura inteira estão
+em `tests/unit/portao-rbac.test.ts`: todo item de menu marcado "a ação basta sozinha" tem de estar
+fora do portão, e toda tela fora do portão tem de se guardar sozinha.

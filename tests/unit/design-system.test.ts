@@ -62,7 +62,8 @@ describe("tokens: definidos uma vez e com contraste acessível (4.5:1)", () => {
     expect(c.ink).toEqual({ DEFAULT: neutro.texto, muted: neutro.secundario, subtle: neutro.suave });
     expect(c.surface).toMatchObject({ page: neutro.fundo, border: neutro.borda, campo: neutro.bordaCampo, linha: neutro.linha });
     expect(c.ok).toEqual(status.ok);
-    expect((config.theme!.extend as any).fontFamily.display[0]).toBe("var(--font-archivo)");
+    // (fontes locais: "Archivo" — os subconjuntos além do latim — vem antes da variável da face latina)
+    expect((config.theme!.extend as any).fontFamily.display.slice(0, 2)).toEqual(["Archivo", "var(--font-archivo)"]);
     expect((config.theme!.extend as any).borderRadius.card).toBe("14px");
   });
 
@@ -74,7 +75,10 @@ describe("tokens: definidos uma vez e com contraste acessível (4.5:1)", () => {
     expect(css).toMatch(/\.badge-status-cancelada\s*\{\s*@apply pill-atrasado;/);
     expect(css).toMatch(/\.badge-status-em_andamento\s*\{\s*@apply pill-atencao;/);
     expect(css).toMatch(/:focus-visible\s*\{\s*outline: 2px solid theme\("colors\.acento\.DEFAULT"\)/);
-    expect(ler("app/layout.tsx")).toMatch(/Archivo\(\{[\s\S]*weight: \["600", "700"\]/);
+    // As fontes saíram do next/font/google (que baixa do Google no build) para arquivos do projeto:
+    // o Archivo continua com os pesos 600 e 700 (tests/unit/fontes-locais.test.ts cobre o resto).
+    const fontes = ler("app/fonts/index.ts");
+    expect(fontes).toMatch(/archivo = localFont\(\{[\s\S]*weight: "600"[\s\S]*weight: "700"/);
   });
 });
 

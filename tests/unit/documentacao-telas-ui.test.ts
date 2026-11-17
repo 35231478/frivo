@@ -16,6 +16,8 @@
  *  - LOTE: zip sai das opções, cada cliente vai com os SEUS colaboradores e os SEUS e-mails, e o
  *    cliente segurado fica de fora sem segurar os outros;
  *  - a PÁGINA DO CLIENTE: baixar tudo e item a item, na organização que a empresa escolheu;
+ *  - o ATALHO das fichas do cliente e do contrato só aparece com a permissão, e o novo envio abre
+ *    com aquele cliente (e contrato) já escolhido;
  *  - quem entra: o menu, o middleware e a matriz de permissões.
  */
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
@@ -30,7 +32,9 @@ import { DocumentacaoPublicaLista } from "@/components/documentacao/documentacao
 import { SeloLink } from "@/components/documentacao/selo-link";
 import { Avisos } from "@/components/ui/avisos";
 import { CATEGORIAS_PROIBIDAS, fraseEmailNaoSaiu } from "@/lib/documentacao/pacote";
-import { PRESETS, moduloDaRota, montarPermissoes, pode } from "@/lib/permissoes";
+import { PRESETS, moduloDaRota, montarPermissoes, pode, type Permissoes } from "@/lib/permissoes";
+import { AtalhoDocumentacao, hrefNovoEnvio } from "@/components/documentacao/atalho-documentacao";
+import { PermissoesProvider } from "@/components/providers/permissoes-provider";
 import type { DocumentacaoPublica, EnvioDaLista, EnvioDetalhe, Previa } from "@/lib/documentacao/pacote-server";
 
 (globalThis as any).IS_REACT_ACT_ENVIRONMENT = true;
@@ -430,8 +434,77 @@ describe("novo envio: cliente e colaboradores", () => {
   });
 });
 
+describe("o atalho \"Enviar documentação da equipe\" (ficha do cliente e do contrato)", () => {
+  const comPermissao = (permissoes: Permissoes, el: any) => createElement(PermissoesProvider, { role: "OPERADOR", permissoes, children: el });
+
+  it("só aparece para quem tem \"Documentos › Enviar ao cliente\" — gerar documento ou gerenciar colaborador não bastam", async () => {
+    await montar(comPermissao(montarPermissoes({ documentos: ["enviar"] }), createElement(AtalhoDocumentacao, { clienteId: "c1" })));
+    expect($("[data-atalho-documentacao]")!.getAttribute("href")).toBe("/documentacao-equipe/novo?clienteId=c1");
+    expect(txt($("[data-atalho-documentacao]"))).toContain("Enviar documentação da equipe");
+
+    await act(async () => { root.render(null); });
+    const quaseTudo = montarPermissoes({ documentos: ["criar", "gerenciar", "disciplinar"], equipes: ["visualizar", "gerenciar"], clientes: ["visualizar", "editar"], contratos: ["visualizar", "editar"] });
+    await montar(comPermissao(quaseTudo, createElement(AtalhoDocumentacao, { clienteId: "c1" })));
+    expect($("[data-atalho-documentacao]")).toBeNull();
+  });
+
+  it("do contrato leva o cliente e o contrato; sem cliente não há atalho", async () => {
+    const pode = montarPermissoes({ documentos: ["enviar"] });
+    await montar(comPermissao(pode, createElement(AtalhoDocumentacao, { clienteId: "c1", contratoId: "k2" })));
+    expect($("[data-atalho-documentacao]")!.getAttribute("href")).toBe("/documentacao-equipe/novo?clienteId=c1&contratoId=k2");
+    expect(hrefNovoEnvio("c 1/é", null)).toBe("/documentacao-equipe/novo?clienteId=c+1%2F%C3%A9");
+
+    await act(async () => { root.render(null); });
+    await montar(comPermissao(pode, createElement(AtalhoDocumentacao, { clienteId: null })));
+    expect($("[data-atalho-documentacao]")).toBeNull();
+  });
+
+  it("as duas fichas usam o mesmo atalho, e a do contrato só manda o contrato quando ele está ativo", () => {
+    const fonte = (arquivo: string) => readFileSync(path.resolve(__dirname, "../..", arquivo), "utf8");
+    expect(fonte("components/forms/cliente-form.tsx")).toContain("<AtalhoDocumentacao clienteId={initialData!.id} compact={compact} />");
+    expect(fonte("components/forms/contrato-form.tsx")).toContain('<AtalhoDocumentacao clienteId={initialData?.clienteId} contratoId={statusVal === "ATIVO" ? initialData?.id : null} compact={compact} />');
+  });
+});
+
+describe("novo envio vindo do atalho: o cliente já chega escolhido", () => {
+  it("abre com o cliente no campo e quem atende já marcado, sem ninguém escolher nada", async () => {
+    servidor();
+    await montar(createElement(NovoEnvio, { equipes: EQUIPES, colaboradores: TODOS, inicial: { clienteId: "c1", clienteNome: "Shopping Ibirapuera" } }));
+    expect(feitas("sugestoes", "GET").map((c) => c.url)).toEqual(["/api/documentacao/sugestoes?clienteId=c1"]);
+    expect(txt($("[data-cliente]"))).toContain("Shopping Ibirapuera");
+    expect(marcados()).toEqual(["t1", "t2"]);
+    expect($<HTMLButtonElement>("[data-avancar]")!.disabled).toBe(false);
+
+    // e segue o fluxo normal até a prévia, com esse cliente
+    await clicar($("[data-avancar]"));
+    await clicar($("[data-ver-previa]"));
+    expect(feitas("/previa")[0].corpo).toMatchObject({ clienteId: "c1", contratoId: null, colaboradorIds: ["t1", "t2"] });
+  });
+
+  it("vindo do contrato: a sugestão já sai estreitada por ele, e o contrato fica escolhido", async () => {
+    servidor();
+    await montar(createElement(NovoEnvio, { equipes: EQUIPES, colaboradores: TODOS, inicial: { clienteId: "c1", clienteNome: "Shopping Ibirapuera", contratoId: "k2" } }));
+    expect(feitas("sugestoes", "GET").map((c) => c.url)).toEqual(["/api/documentacao/sugestoes?clienteId=c1&contratoId=k2"]);
+    expect($<HTMLSelectElement>("[data-contrato]")!.value).toBe("k2");
+    expect(marcados()).toEqual(["t1"]);
+    await clicar($("[data-avancar]"));
+    await clicar($("[data-ver-previa]"));
+    expect(feitas("/previa")[0].corpo).toMatchObject({ clienteId: "c1", contratoId: "k2", colaboradorIds: ["t1"] });
+  });
+
+  it("sem atalho nada muda: a tela abre vazia e não busca ninguém", async () => {
+    servidor();
+    await novo();
+    expect(feitas("sugestoes", "GET")).toHaveLength(0);
+    expect($("[data-seletor-colaboradores]")).toBeNull();
+  });
+});
+
 describe("novo envio: os tipos de documento", () => {
-  it("segurança do trabalho vem marcada; contrato e documento pessoal não; advertência e dado bancário nem aparecem", async () => {
+  // Mudou de propósito (acabamento): antes TODO o grupo de segurança do trabalho vinha marcado, e o
+  // aviso de "falta" aparecia em todo envio (quase ninguém tem NR-13 e integração). Agora vêm
+  // marcados só os quatro que praticamente todo técnico tem.
+  it("vêm marcados ASO, NR-10, NR-35 e ficha de EPI; NR-13, integração, contrato e documento pessoal não; advertência e dado bancário nem aparecem", async () => {
     servidor();
     await novo();
     await escolherCliente("Shopping Ibirapuera");
@@ -439,8 +512,11 @@ describe("novo envio: os tipos de documento", () => {
     expect($("[data-novo-envio]")!.getAttribute("data-passo")).toBe("o-que");
 
     const doGrupo = (g: string) => $$(`[data-grupo-tipos='${g}'] [data-tipo]`) as HTMLInputElement[];
-    expect(doGrupo("SMT").length).toBeGreaterThan(3);
-    expect(doGrupo("SMT").every((c) => c.checked), "tudo de segurança do trabalho marcado").toBe(true);
+    expect(tiposMarcados().sort()).toEqual(["aso", "ficha_epi", "nr_10", "nr_35"]);
+    expect(doGrupo("SMT").map((c) => c.getAttribute("data-tipo")), "NR-13 e integração continuam na tela, para quem precisa marcar")
+      .toEqual(expect.arrayContaining(["nr_13", "integracao"]));
+    for (const fora of ["nr_13", "integracao"]) expect(($(`[data-tipo='${fora}']`) as HTMLInputElement).checked, fora).toBe(false);
+    expect(txt($("[data-tipos]"))).not.toContain("já vem marcada");
     for (const g of ["CONTRATO", "PESSOAL"]) {
       expect(doGrupo(g).length, g).toBeGreaterThan(0);
       expect(doGrupo(g).some((c) => c.checked), `${g} começa desmarcado`).toBe(false);

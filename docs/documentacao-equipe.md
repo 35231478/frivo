@@ -29,9 +29,9 @@ histórico e a página que o cliente abre (seção 12).
 2. **Colaboradores**: à mão, ou puxando a sugestão — os técnicos fixos dos contratos ativos, quem
    executou ordem de serviço do cliente nos últimos 12 meses, ou os membros de uma equipe. É
    sugestão; ex-colaborador não é sugerido.
-3. **Tipos de documento**: já vem marcado o que o cliente pede para liberar a entrada — segurança e
-   medicina do trabalho (ASO, NRs, ficha de EPI, integração). Contrato e documento pessoal, só se
-   a pessoa marcar.
+3. **Tipos de documento**: já vem marcado o que o cliente pede para liberar a entrada e que
+   praticamente todo técnico tem — ASO, NR-10, NR-35 e ficha de EPI. NR-13, integração, contrato e
+   documento pessoal, só se a pessoa marcar.
 4. **Prévia**: o que entra, o que falta e o que está vencido — antes de gravar qualquer coisa.
 5. **Entrega**: link, zip ou e-mail.
 
@@ -200,9 +200,12 @@ Três passos:
 1. **Cliente e colaboradores.** Escolhido o cliente, a tela traz quem atende a ele já marcado, com
    o porquê em cada linha (técnico do contrato, atendeu nos últimos 12 meses). Dá para estreitar por
    contrato, puxar uma equipe e acrescentar alguém pelo nome.
-2. **Documentos e pastas.** Segurança e medicina do trabalho marcada; contrato e documento pessoal
-   desmarcados; advertência e dado bancário nem aparecem. A organização das pastas é a do zip e a
-   da página do cliente.
+2. **Documentos e pastas.** Vêm marcados ASO, NR-10, NR-35 e ficha de EPI; NR-13, integração,
+   contrato e documento pessoal ficam desmarcados (quem precisa, marca); advertência e dado
+   bancário nem aparecem. A organização das pastas é a do zip e a da página do cliente.
+   *(No PR2 todo o grupo de segurança do trabalho vinha marcado — e, como quase ninguém tem NR-13 e
+   integração, o aviso de "falta" aparecia em todo envio. Com os quatro, o aviso volta a significar
+   alguma coisa.)*
 3. **Prévia e envio.** A prévia mostra o que entra, na estrutura de pastas escolhida.
    - **Vencido segura**: o botão de enviar trava em qualquer saída e não existe "enviar assim
      mesmo". Cada pessoa com vencido tem as duas saídas na linha: *Abrir a ficha* (renovar) e
@@ -231,7 +234,16 @@ Link que não serve não mostra erro técnico: "Link expirado" (com a data e a q
 desativado", "Link indisponível" (o genérico, para o que nunca existiu) ou "Aguarde um pouco" (o
 limite por IP).
 
-### 12.5 Onde está cada botão
+### 12.5 Atalho nas fichas
+
+A ficha do **cliente** e a do **contrato** têm o atalho *Enviar documentação da equipe* (só para quem
+tem "Documentos › Enviar ao cliente"). Ele abre o Novo envio em
+`/documentacao-equipe/novo?clienteId=…&contratoId=…`, com o cliente já escolhido e quem atende já
+sugerido. O contrato só vai junto quando está **ativo** (é dos contratos ativos que sai "quem
+atende"). O que vem na URL é conferido contra a empresa: cliente de outra empresa, contrato
+encerrado e contrato de outro cliente são ignorados.
+
+### 12.6 Onde está cada botão
 
 | Botão | Tela |
 | --- | --- |
@@ -243,5 +255,6 @@ limite por IP).
 | **Lote** | Novo envio, passo 1 › *Avançado* › *Enviar para vários clientes* |
 | **Reenviar** | Histórico › ⋮ › *Enviar o e-mail de novo* |
 | **Revogar** | Histórico › ⋮ › *Revogar o link* |
+| Atalho *Enviar documentação da equipe* | Ficha do cliente e ficha do contrato (cabeçalho) |
 | Copiar o link | Resultado do envio; Histórico › ⋮ › *Copiar o link* |
 | Linha do tempo | Histórico › ⋮ › *Ver o envio e a linha do tempo* |

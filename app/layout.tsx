@@ -1,21 +1,10 @@
 import type { Metadata, Viewport } from "next";
-import { Archivo, Inter } from "next/font/google";
+import { archivo, inter } from "./fonts";
+import "./fonts/subconjuntos.css";
 import "./globals.css";
 
-// Sistema de design: Inter (400/500/600) no corpo e nos dados; Archivo (600/700) em títulos e números.
-// A Inter segue variável (todos os pesos): telas ainda não restilizadas usam 700, e sem ele o
-// navegador sintetizaria o negrito.
-const inter = Inter({
-  subsets: ["latin"],
-  variable: "--font-inter",
-  display: "swap",
-});
-const archivo = Archivo({
-  subsets: ["latin"],
-  weight: ["600", "700"],
-  variable: "--font-archivo",
-  display: "swap",
-});
+// Sistema de design: Inter no corpo e nos dados; Archivo em títulos e números. As fontes são
+// arquivos do projeto (app/fonts) — o build não busca nada no Google.
 
 export const metadata: Metadata = {
   applicationName: "Frivo",
