@@ -13,7 +13,7 @@ import { prisma } from "@/lib/prisma";
 const MIN = 60_000;
 
 export type TipoTentativa = "LOGIN" | "ESQUECI_SENHA" | "TROCA_SENHA" | "PORTAL_LOGIN" | "CHAMADO_PUBLICO"
-  | "ADMISSAO_PUBLICA" | "ADMISSAO_CODIGO";
+  | "ADMISSAO_PUBLICA" | "ADMISSAO_CODIGO" | "DOCUMENTACAO_PUBLICA";
 type Alvo = "email" | "ip" | "usuario";
 
 export const LIMITES: Record<TipoTentativa, { janelaMs: number; max: Partial<Record<Alvo, number>> }> = {
@@ -28,6 +28,9 @@ export const LIMITES: Record<TipoTentativa, { janelaMs: number; max: Partial<Rec
   // Código de verificação do e-mail: um limite por IP e outro por admissão, para o link da
   // admissão não virar máquina de mandar e-mail para o endereço de outra pessoa.
   ADMISSAO_CODIGO: { janelaMs: 60 * MIN, max: { ip: 15, usuario: 5 } },
+  // Link da documentação da equipe (o que o cliente abre): a mesma regra do link da admissão —
+  // só TOKEN RECUSADO conta. Quem tem o link bom baixa à vontade; varrer tokens no escuro, não.
+  DOCUMENTACAO_PUBLICA: { janelaMs: 60 * MIN, max: { ip: 20 } },
 };
 const RETENCAO_MS = 24 * 60 * MIN;
 

@@ -29,15 +29,22 @@ export async function emailConfigAtiva(empresaId: string): Promise<boolean> {
 /** Envia um e-mail usando um template (tipo) e registra no email_log. */
 export async function enviarEmail(empresaId: string, p: {
   tipo: string;
-  para: string;
+  /** Um endereço ou vários no "Para" (o pacote de documentação vai para mais de um contato). */
+  para: string | string[];
   cc?: string[];
   variaveis: Record<string, string>;
   referenciaId?: string;
   referenciaTipo?: string;
+  /**
+   * "Responder para" quando a configuração de e-mail da empresa não tem um. Nunca passa por cima
+   * do que a empresa configurou — só evita que a resposta do cliente caia no remetente do sistema.
+   */
+  responderPara?: string | null;
 }): Promise<ResultadoEmail> {
   const cfg = await carregarConfig(empresaId);
   if (!cfg?.completo) return { ok: false, erro: "E-mail não configurado ou inativo." };
-  if (!p.para) return { ok: false, erro: "Destinatário sem e-mail." };
+  const destinos = (Array.isArray(p.para) ? p.para : [p.para]).map((e) => (e ?? "").trim()).filter(Boolean);
+  if (!destinos.length) return { ok: false, erro: "Destinatário sem e-mail." };
 
   const empresa = await prisma.empresa.findUnique({
     where: { id: empresaId },
@@ -70,12 +77,13 @@ export async function enviarEmail(empresaId: string, p: {
   try {
     const resend = new Resend(cfg.apiKeyDecrypted!);
     const from = cfg.nomeRemetente ? `${cfg.nomeRemetente} <${cfg.remetente}>` : cfg.remetente!;
-    const res = await resend.emails.send({ from, to: p.para, cc: p.cc?.length ? p.cc : undefined, replyTo: cfg.replyTo ?? undefined, subject: assunto, html } as any);
+    const replyTo = cfg.replyTo ?? (p.responderPara?.trim() || undefined);
+    const res = await resend.emails.send({ from, to: destinos.length === 1 ? destinos[0] : destinos, cc: p.cc?.length ? p.cc : undefined, replyTo, subject: assunto, html } as any);
     if ((res as any)?.error) { ok = false; erro = (res as any).error.message ?? "Erro no envio."; }
   } catch (e: any) { ok = false; erro = e?.message ?? "Erro no envio."; }
 
   await prisma.emailLog.create({
-    data: { empresaId, para: p.para, assunto, templateId: tpl?.id ?? null, referenciaId: p.referenciaId ?? null, referenciaTipo: p.referenciaTipo ?? null, status: ok ? "ENVIADO" : "ERRO", erro: erro ?? null },
+    data: { empresaId, para: destinos.join(", "), assunto, templateId: tpl?.id ?? null, referenciaId: p.referenciaId ?? null, referenciaTipo: p.referenciaTipo ?? null, status: ok ? "ENVIADO" : "ERRO", erro: erro ?? null },
   });
 
   return { ok, erro };

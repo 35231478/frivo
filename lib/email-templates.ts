@@ -23,6 +23,7 @@ export const VARIAVEIS_DISPONIVEIS = [
   "usuario_nome", "link_definir_senha", "validade_convite", "validade_link",
   "fornecedor_nome", "numero_pedido", "prazo_necessario", "link_pedido",
   "colaborador_nome", "cargo_nome", "link_admissao", "codigo",
+  "quantidade_colaboradores",
 ] as const;
 
 export const TEMPLATES_PADRAO: DefTemplate[] = [
@@ -43,6 +44,11 @@ export const TEMPLATES_PADRAO: DefTemplate[] = [
   { tipo: "PMOC_DOCUMENTO", nome: "Documento do PMOC", assunto: "PMOC {{pmoc_nome}} — {{empresa_nome}}",
     corpo: "<p>Olá <strong>{{cliente_nome}}</strong>,</p><p>Segue o documento do Plano de Manutenção, Operação e Controle <strong>{{pmoc_nome}}</strong>, com vigência de <strong>{{vigencia}}</strong>.</p><p>O documento traz os equipamentos cobertos, o cronograma de manutenção e o responsável técnico.</p>",
     botaoLabel: "Abrir o documento", botaoVar: "link_documento" },
+  // Documentação da equipe (ASO, NRs, ficha de EPI…): o e-mail leva o LINK, nunca os anexos — a
+  // documentação pesa, e o link tem prazo, pode ser revogado e registra quem abriu.
+  { tipo: "DOCUMENTACAO_EQUIPE", nome: "Documentação da equipe", assunto: "Documentação da equipe — {{empresa_nome}}",
+    corpo: "<p>Olá <strong>{{cliente_nome}}</strong>,</p><p>Segue a documentação dos <strong>{{quantidade_colaboradores}}</strong> colaborador(es) da <strong>{{empresa_nome}}</strong> que atendem a sua empresa.</p><p>Os arquivos estão organizados em pastas e podem ser baixados um a um ou todos de uma vez, pelo botão abaixo.</p><p style=\"color:#64748b;font-size:13px\">O link vale até {{validade_link}}. Depois disso, peça um novo respondendo este e-mail.</p>",
+    botaoLabel: "Abrir a documentação", botaoVar: "link_documento" },
   { tipo: "ORCAMENTO_ENVIADO", nome: "Orçamento Enviado", assunto: "Orçamento {{numero_orcamento}} — {{empresa_nome}}",
     corpo: "<p>Olá <strong>{{cliente_nome}}</strong>,</p><p>Segue o orçamento <strong>{{numero_orcamento}}</strong> no valor de <strong>{{valor}}</strong>. Você pode visualizá-lo e aprová-lo digitalmente pelo botão abaixo.</p>",
     botaoLabel: "Ver orçamento", botaoVar: "link_orcamento" },
