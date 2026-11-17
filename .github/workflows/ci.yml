@@ -69,18 +69,48 @@ jobs:
         env:
           PG_TESTE_URL: postgresql://ci:ci@localhost:5432/ci
 
-  # Portão único (nome do check preservado): só fica verde com typecheck + TODOS os shards verdes.
+  # Build de produção (o mesmo `npm run build` do deploy): pega o que typecheck e testes não pegam —
+  # assinatura de página inválida, erro na geração das páginas, import que só quebra no bundle.
+  # Não usa banco: nenhuma página consulta dados no build; a DATABASE_URL é fictícia (ninguém escuta nela).
+  build:
+    name: Build de produção
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      DATABASE_URL: postgresql://ci:ci@localhost:5432/ci
+      NEXT_TELEMETRY_DISABLED: 1
+      # A checagem de tipos do `next build` passa de 2 GB de heap neste projeto (o padrão do Node estoura).
+      NODE_OPTIONS: --max-old-space-size=4096
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      # Cache do Next (webpack + tsbuildinfo): reaproveita o que não mudou desde o último build do
+      # branch ou, na falta dele, do master. A chave leva o commit para sempre guardar o mais novo.
+      - uses: actions/cache@v4
+        with:
+          path: .next/cache
+          key: next-${{ runner.os }}-${{ hashFiles('package-lock.json') }}-${{ github.sha }}
+          restore-keys: |
+            next-${{ runner.os }}-${{ hashFiles('package-lock.json') }}-
+            next-${{ runner.os }}-
+      - run: npm run build
+
+  # Portão único (nome do check preservado): só fica verde com typecheck + TODOS os shards + build verdes.
   checks:
     name: Typecheck e testes
     runs-on: ubuntu-latest
     timeout-minutes: 5
-    needs: [typecheck, testes]
+    needs: [typecheck, testes, build]
     if: always()
     steps:
       - name: Resultado
         run: |
-          echo "typecheck=${{ needs.typecheck.result }} testes=${{ needs.testes.result }}"
-          if [ "${{ needs.typecheck.result }}" = "success" ] && [ "${{ needs.testes.result }}" = "success" ]; then
+          echo "typecheck=${{ needs.typecheck.result }} testes=${{ needs.testes.result }} build=${{ needs.build.result }}"
+          if [ "${{ needs.typecheck.result }}" = "success" ] && [ "${{ needs.testes.result }}" = "success" ] && [ "${{ needs.build.result }}" = "success" ]; then
             echo "CI verde."
           else
             echo "CI falhou (um deles não ficou verde)."
