@@ -98,10 +98,13 @@ export function GerarDocumento({
 
   function trocarModelo(id: string) {
     setModeloId(id);
-    setValores({});
     setPrevia(null);
     setErro("");
     const m = disponiveis.find((x) => x.id === id);
+    // A data de entrega já nasce hoje: é o dia da entrega em quase todo caso, e quem precisa de
+    // outra troca em um toque. Deixar vazio só faria o RH digitar a data de hoje todo dia.
+    const datas = m ? camposAPreencher(m.texto, m.tipo).filter((c) => c.formato === "data") : [];
+    setValores(Object.fromEntries(datas.map((c) => [c.id, hojeISO()])));
     setItens(m?.temItens ? [{ ...ITEM_VAZIO, entregaEm: hojeISO() }] : []);
   }
 
