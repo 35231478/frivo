@@ -47,22 +47,56 @@ Um cartão só, colado no topo, para a grade ficar com a altura da tela:
   ocupado (`aria-busy`) e não aceita outro clique.
 - A semana do fim que só tem dias do mês seguinte não ocupa uma linha.
 
-## A cor do cartão da OS
+## O status no cartão da OS
 
-O cartão inteiro leva a cor do status — fundo claro e contorno do mesmo matiz —, com a bolinha, a
-hora e a sigla do técnico. Tudo vem dos tokens (`lib/calendario/cores.ts`):
+A cor é **acento, não fundo**. O cartão é neutro (cinza levíssimo sobre o branco do dia, um tom acima
+no hover), sem contorno e sem sombra; só uma **barra fina (3 px) à esquerda** leva a cor do status.
 
-| Grupo | Status | Fundo / contorno |
-|---|---|---|
-| Aberta / agendada | Aberta, Aguardando atendimento, Agendada | acento (petróleo) |
-| Em andamento | Em andamento, Pausada, Aguardando peça | atenção (âmbar) |
-| Concluída | Concluída | OK (verde) |
-| Atrasada | qualquer status não finalizado com o prazo vencido | atrasado (vermelho) — vence o status |
+### O que cada cor significa
 
-Contraste conferido em teste (`tests/unit/calendario-melhorias-ui.test.ts`): nome do cliente, hora e
-ícones sobre o fundo do cartão ≥ 4.5:1 (WCAG AA); contorno sobre o branco do dia ≥ 3:1.
+Quatro cores, uma por grupo de status, todas dos tokens da identidade (`lib/ui/tokens.ts`). Nunca cor
+por técnico nem por tipo de OS.
 
-No celular cada dia mostra quantas OS tem e um ponto por status presente.
+| Cor | Token | Significa | Status que entram |
+|---|---|---|---|
+| Petróleo | `acento` | **Aberta / agendada** — ainda vai acontecer | Aberta, Aguardando atendimento, Agendada |
+| Âmbar | `atencao` | **Em andamento** — começou e não terminou | Em andamento, Pausada, Aguardando peça |
+| Verde | `ok` | **Concluída** | Concluída |
+| Vermelho | `atrasado` | **Atrasada** — prazo vencido e não finalizada; vence o status | qualquer um dos de cima, com o prazo vencido |
+
+OS cancelada não aparece no calendário (se aparecesse, a barra seria cinza, `previsto`).
+
+O atrasado precisa continuar óbvio: além da barra vermelha, a **hora** dele também fica vermelha. Nos
+outros a hora é o texto normal.
+
+Como era antes deste desenho: as mesmas 4 cores por status, mas pintando o cartão inteiro (fundo +
+contorno), e a sigla do técnico num círculo com um de três tons escolhido pelo nome — era isso que dava
+o efeito de mosaico.
+
+### O que vai dentro do cartão
+
+```
+▍ 09:00  Hospital Santa Clara …        ⚠ ↻  AD
+│ └hora  └cliente (o que sobra)        │ │  └ sigla do técnico: pequena, cinza
+└ barra do status                      │ └ OS recorrente
+                                       └ prioridade alta ou urgente
+```
+
+- **Hora** em destaque (semibold). **Cliente** no texto normal, com a largura que sobra.
+- **Sigla do técnico** discreta: 9 px, cinza, sem círculo e sem cor. Atividade com equipe mostra `AD+2`;
+  sem técnico, `—`. O nome completo está no `title` e no balão.
+- **Ícones** só quando valem, sempre em tom neutro: alerta na prioridade alta/urgente, recorrência na OS
+  recorrente. O cadeado da OS concluída saiu do cartão (a barra verde já diz; o aviso "não é possível
+  reagendar" continua ao passar o mouse).
+- O status vai também em texto para o leitor de tela (`sr-only`).
+
+Contraste conferido em teste (`tests/unit/calendario-melhorias-ui.test.ts`): nome, hora e sigla sobre o
+fundo do cartão ≥ 4.5:1 (WCAG AA); a barra sobre o cartão e sobre o branco do dia ≥ 3:1.
+
+No celular cada dia mostra quantas OS tem (número em tom neutro) e um ponto por status presente.
+
+A barra à esquerda é uma **exceção registrada** à regra "sem borda colorida à esquerda"
+(`docs/design-system.md`): vale só para o evento do calendário.
 
 O app interno tem só o tema claro hoje. As cores são classes dos tokens, sem hexadecimal solto: um
 tema escuro, quando existir, troca os tokens e precisa repetir a conferência de contraste.

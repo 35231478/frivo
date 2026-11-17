@@ -1,10 +1,13 @@
 /**
- * Calendário — a cor do cartão da OS. O cartão INTEIRO leva a cor do status (fundo claro + contorno do
- * mesmo matiz), para se destacar do branco do dia e ser lido de relance; a bolinha continua dizendo o
- * mesmo status. Tudo vem dos tokens (lib/ui/tokens.ts) — o teste de contraste confere estes pares:
- * texto sobre o fundo ≥ 4.5:1 (WCAG AA) e contorno sobre o branco da célula ≥ 3:1.
+ * Calendário — o status no cartão da OS. A cor é ACENTO, não fundo: o cartão é neutro (cinza
+ * levíssimo sobre o branco do dia) e só uma barra fina à esquerda leva a cor do status. Quatro cores,
+ * uma por grupo de status, todas dos tokens (lib/ui/tokens.ts) — nunca cor por técnico nem por tipo.
+ * O atrasado, que precisa ser óbvio, pinta também a hora.
+ *
+ * Exceção registrada à regra "sem borda colorida à esquerda" da identidade (docs/design-system.md):
+ * vale só para o evento do calendário, onde a barra é o status — pedido explícito de produto.
  */
-import { acento, escalaAcento, neutro, status } from "@/lib/ui/tokens";
+import { acento, neutro, status } from "@/lib/ui/tokens";
 
 export type GrupoStatus = "aberta" | "andamento" | "concluida" | "atrasada" | "neutra";
 
@@ -24,32 +27,26 @@ export function grupoDoCard(c: { status: string; atrasada?: boolean }): GrupoSta
   return c.atrasada ? "atrasada" : GRUPO_DO_STATUS[c.status] ?? "neutra";
 }
 
-/** Quanto do matiz entra no contorno do cartão (o resto é o branco da célula) */
-export const OPACIDADE_BORDA = 0.8;
+/** O cartão em si: neutro, sem contorno e sem sombra; um tom acima no hover */
+export const ESTILO_CARTAO = "bg-surface-alt hover:bg-surface-linha";
 
 /** As classes de cada grupo (literais: o Tailwind só gera o que lê por extenso) */
-export const ESTILO_GRUPO: Record<GrupoStatus, { rotulo: string; ponto: string; cartao: string; hora: string }> = {
-  aberta: { rotulo: "Aberta / agendada", ponto: "bg-acento", cartao: "bg-acento-claro border-acento/80 hover:border-acento", hora: "text-primary-700" },
-  andamento: { rotulo: "Em andamento", ponto: "bg-atencao", cartao: "bg-atencao-claro border-atencao/80 hover:border-atencao", hora: "text-atencao-texto" },
-  concluida: { rotulo: "Concluída", ponto: "bg-ok", cartao: "bg-ok-claro border-ok/80 hover:border-ok", hora: "text-ok-texto" },
-  atrasada: { rotulo: "Atrasada", ponto: "bg-atrasado", cartao: "bg-atrasado-claro border-atrasado/80 hover:border-atrasado", hora: "text-atrasado-texto" },
-  neutra: { rotulo: "Cancelada", ponto: "bg-previsto", cartao: "bg-previsto-claro border-previsto/80 hover:border-previsto", hora: "text-previsto-texto" },
+export const ESTILO_GRUPO: Record<GrupoStatus, { rotulo: string; barra: string; hora: string }> = {
+  aberta: { rotulo: "Aberta / agendada", barra: "bg-acento", hora: "text-ink" },
+  andamento: { rotulo: "Em andamento", barra: "bg-atencao", hora: "text-ink" },
+  concluida: { rotulo: "Concluída", barra: "bg-ok", hora: "text-ink" },
+  atrasada: { rotulo: "Atrasada", barra: "bg-atrasado", hora: "text-atrasado-texto" },
+  neutra: { rotulo: "Cancelada", barra: "bg-previsto", hora: "text-ink" },
 };
 
 /** As MESMAS cores, em hexadecimal, para o teste de contraste (um par por classe acima) */
-export const CORES_GRUPO: Record<GrupoStatus, { fundo: string; borda: string; hora: string }> = {
-  aberta: { fundo: acento.claro, borda: acento.DEFAULT, hora: escalaAcento[700] },
-  andamento: { fundo: status.atencao.claro, borda: status.atencao.DEFAULT, hora: status.atencao.texto },
-  concluida: { fundo: status.ok.claro, borda: status.ok.DEFAULT, hora: status.ok.texto },
-  atrasada: { fundo: status.atrasado.claro, borda: status.atrasado.DEFAULT, hora: status.atrasado.texto },
-  neutra: { fundo: status.previsto.claro, borda: status.previsto.DEFAULT, hora: status.previsto.texto },
+export const CORES_GRUPO: Record<GrupoStatus, { barra: string; hora: string }> = {
+  aberta: { barra: acento.DEFAULT, hora: neutro.texto },
+  andamento: { barra: status.atencao.DEFAULT, hora: neutro.texto },
+  concluida: { barra: status.ok.DEFAULT, hora: neutro.texto },
+  atrasada: { barra: status.atrasado.DEFAULT, hora: status.atrasado.texto },
+  neutra: { barra: status.previsto.DEFAULT, hora: neutro.texto },
 };
 
-/** Texto do cartão (nome do cliente) e ícones de apoio: os mesmos em todo grupo */
-export const TEXTO_CARTAO = { principal: neutro.texto, apoio: neutro.secundario, celula: neutro.superficie } as const;
-
-/** A cor com que o contorno aparece de verdade: o matiz misturado ao branco da célula */
-export function bordaSobreCelula(grupo: GrupoStatus): string {
-  const mis = (i: number) => Math.round(parseInt(CORES_GRUPO[grupo].borda.slice(i, i + 2), 16) * OPACIDADE_BORDA + parseInt(TEXTO_CARTAO.celula.slice(i, i + 2), 16) * (1 - OPACIDADE_BORDA));
-  return `#${[1, 3, 5].map((i) => mis(i).toString(16).padStart(2, "0")).join("")}`.toUpperCase();
-}
+/** O que é igual em todo cartão: fundo neutro, nome do cliente, apoio (sigla do técnico, ícones) */
+export const CORES_CARTAO = { fundo: neutro.fundo, hover: neutro.linha, principal: neutro.texto, apoio: neutro.secundario, celula: neutro.superficie } as const;

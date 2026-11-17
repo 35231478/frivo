@@ -162,6 +162,18 @@ describe("regras da identidade nas telas varridas", () => {
     expect(src).not.toMatch(NAVY);
     expect(src).not.toMatch(HEX);
   });
+
+  // EXCEÇÃO REGISTRADA (pedido de produto, docs/design-system.md): no evento do calendário o status é
+  // uma barra fina à esquerda. É a única faixa de status do sistema — não vira padrão de card.
+  it("a barra de status à esquerda existe SÓ no evento do calendário (exceção registrada, não padrão)", () => {
+    const comBarra = casos.map(([, f]) => f).filter((f) => /data-barra-status/.test(ler(f)));
+    expect(comBarra).toEqual(["components/calendario/calendario-grid.tsx"]);
+    const grade = ler("components/calendario/calendario-grid.tsx");
+    // uma definição só (o componente BarraStatus), fina (3px), e a cor vem do status — nunca de técnico/tipo
+    expect(grade.match(/data-barra-status/g)).toHaveLength(1);
+    expect(grade).toMatch(/<span className=\{cn\("w-\[3px\] shrink-0 self-stretch", estilo\(card\)\.barra\)\} aria-hidden="true" data-barra-status \/>/);
+    expect(ler("docs/design-system.md")).toMatch(/Exceção registrada: o evento do calendário/);
+  });
 });
 
 // ── Componentes-base (DOM) ──

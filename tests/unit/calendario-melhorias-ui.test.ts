@@ -1,8 +1,10 @@
 // @vitest-environment happy-dom
 /**
  * CALENDÁRIO — melhorias da tela (DOM real, sem servidor).
- *  - CONTRASTE: o cartão da OS leva a cor do status (fundo + contorno), com a bolinha e a sigla do
- *    técnico; atrasada vence o status. Os pares de cor passam WCAG AA (texto 4.5:1; contorno 3:1).
+ *  - STATUS: a cor é acento, não fundo — cartão neutro com uma barra fina à esquerda na cor do status
+ *    (4 cores, uma por status; nunca por técnico nem por tipo); hora em destaque, cliente legível, sigla
+ *    do técnico discreta, ícones só quando valem e em tom neutro. Atrasada vence o status e pinta a hora.
+ *    Os pares de cor passam WCAG AA (texto 4.5:1; barra 3:1).
  *  - HOJE: o círculo do dia pulsa (classe própria) e o CSS desliga o pulso para quem pediu menos animação.
  *  - ATUALIZAR: o botão recarrega os eventos do período (router.refresh) e mostra que está buscando.
  *  - CABEÇALHO: título, mês e visão numa barra só; filtros numa faixa fina, recolhida no celular —
@@ -15,7 +17,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { permissoesTotais } from "@/lib/permissoes";
 import { contraste } from "@/lib/ui/tokens";
-import { CORES_GRUPO, ESTILO_GRUPO, TEXTO_CARTAO, bordaSobreCelula, grupoDoCard, type GrupoStatus } from "@/lib/calendario/cores";
+import { CORES_CARTAO, CORES_GRUPO, ESTILO_CARTAO, ESTILO_GRUPO, grupoDoCard, type GrupoStatus } from "@/lib/calendario/cores";
 
 (globalThis as any).IS_REACT_ACT_ENVIRONMENT = true;
 vi.setConfig({ testTimeout: 30_000 });
@@ -74,8 +76,8 @@ const EVENTOS = {
 };
 const GRUPOS: GrupoStatus[] = ["aberta", "andamento", "concluida", "atrasada", "neutra"];
 
-/* ═════════ contraste dos cartões ═════════ */
-describe("Calendário — o cartão da OS leva a cor do status e é legível (WCAG AA)", () => {
+/* ═════════ o status no cartão: acento, não fundo ═════════ */
+describe("Calendário — o cartão da OS é neutro e o status é uma barra à esquerda (4 cores, legível em AA)", () => {
   it("cada status cai no seu grupo; atrasada vence o status; desconhecido fica neutro", () => {
     const g = (status: string, atrasada = false) => grupoDoCard({ status, atrasada });
     expect(["ABERTA", "AGUARDANDO_ATENDIMENTO", "AGENDADA"].map((s) => g(s))).toEqual(["aberta", "aberta", "aberta"]);
@@ -84,26 +86,31 @@ describe("Calendário — o cartão da OS leva a cor do status e é legível (WC
     expect([g("ABERTA", true), g("EM_ANDAMENTO", true)]).toEqual(["atrasada", "atrasada"]);
   });
 
-  it("os pares de cor passam o mínimo: texto e hora sobre o fundo ≥ 4.5:1; contorno sobre o branco do dia ≥ 3:1", () => {
-    for (const grupo of GRUPOS) {
-      const c = CORES_GRUPO[grupo];
-      expect(contraste(TEXTO_CARTAO.principal, c.fundo), `${grupo}: nome do cliente`).toBeGreaterThanOrEqual(4.5);
-      expect(contraste(c.hora, c.fundo), `${grupo}: hora`).toBeGreaterThanOrEqual(4.5);
-      expect(contraste(TEXTO_CARTAO.apoio, c.fundo), `${grupo}: ícones de apoio`).toBeGreaterThanOrEqual(4.5);
-      expect(contraste(bordaSobreCelula(grupo), TEXTO_CARTAO.celula), `${grupo}: contorno`).toBeGreaterThanOrEqual(3);
-      // a bolinha (cor cheia do status) sobre o fundo do cartão
-      expect(contraste(c.borda, c.fundo), `${grupo}: bolinha`).toBeGreaterThanOrEqual(3);
-    }
-    // cada grupo tem um fundo diferente (a cor diz o status de relance)
-    expect(new Set(GRUPOS.map((g) => CORES_GRUPO[g].fundo)).size).toBe(GRUPOS.length);
-    // as classes usam o MESMO matiz das cores conferidas (fundo claro + contorno a 80%)
-    expect(ESTILO_GRUPO.aberta.cartao).toBe("bg-acento-claro border-acento/80 hover:border-acento");
-    expect(ESTILO_GRUPO.andamento.cartao).toBe("bg-atencao-claro border-atencao/80 hover:border-atencao");
-    expect(ESTILO_GRUPO.concluida.cartao).toBe("bg-ok-claro border-ok/80 hover:border-ok");
-    expect(ESTILO_GRUPO.atrasada.cartao).toBe("bg-atrasado-claro border-atrasado/80 hover:border-atrasado");
+  it("paleta enxuta: uma cor por status que aparece no calendário (4), todas dos tokens — e o fundo é o MESMO para todos", () => {
+    // cancelada não entra no calendário; as 4 que aparecem têm cada uma a sua cor
+    const visiveis: GrupoStatus[] = ["aberta", "andamento", "concluida", "atrasada"];
+    expect(visiveis.map((g) => ESTILO_GRUPO[g].barra)).toEqual(["bg-acento", "bg-atencao", "bg-ok", "bg-atrasado"]);
+    expect(new Set(GRUPOS.map((g) => CORES_GRUPO[g].barra)).size).toBe(GRUPOS.length);
+    // o cartão não é pintado: fundo neutro único, sem contorno e sem sombra
+    expect(ESTILO_CARTAO).toBe("bg-surface-alt hover:bg-surface-linha");
+    expect(JSON.stringify(ESTILO_GRUPO)).not.toMatch(/-claro|border-|shadow/);
+    // só o atrasado pinta a hora (tem que continuar óbvio); os outros usam o texto normal
+    expect(GRUPOS.filter((g) => ESTILO_GRUPO[g].hora !== "text-ink")).toEqual(["atrasada"]);
   });
 
-  it("na grade, o cartão inteiro tem o fundo e o contorno do status — e mantém a bolinha, a hora e a sigla do técnico", async () => {
+  it("os pares de cor passam o mínimo: texto, hora e sigla sobre o fundo ≥ 4.5:1; a barra sobre o cartão e sobre o dia ≥ 3:1", () => {
+    for (const fundo of [CORES_CARTAO.fundo, CORES_CARTAO.hover]) {
+      expect(contraste(CORES_CARTAO.principal, fundo), "nome do cliente").toBeGreaterThanOrEqual(4.5);
+      expect(contraste(CORES_CARTAO.apoio, fundo), "sigla do técnico e ícones").toBeGreaterThanOrEqual(4.5);
+      for (const grupo of GRUPOS) {
+        expect(contraste(CORES_GRUPO[grupo].hora, fundo), `${grupo}: hora`).toBeGreaterThanOrEqual(4.5);
+        expect(contraste(CORES_GRUPO[grupo].barra, fundo), `${grupo}: barra sobre o cartão`).toBeGreaterThanOrEqual(3);
+      }
+    }
+    for (const grupo of GRUPOS) expect(contraste(CORES_GRUPO[grupo].barra, CORES_CARTAO.celula), `${grupo}: barra sobre o dia`).toBeGreaterThanOrEqual(3);
+  });
+
+  it("na grade: cartão neutro com a barra do status, hora em destaque, cliente, e a sigla do técnico discreta (sem cor por técnico)", async () => {
     const { CalendarioGrid } = await import("@/components/calendario/calendario-grid");
     await montar(createElement(CalendarioGrid, { celulas: CELULAS, eventosPorDia: EVENTOS, opcoes: OPCOES } as any));
     const doDia = (dia: string) => $$(`[data-dia="${dia}"] [data-cartao-os]`);
@@ -112,26 +119,77 @@ describe("Calendário — o cartão da OS leva a cor do status e é legível (WC
     expect(doDia("2026-11-18").map((c) => c.dataset.cartaoOs)).toEqual(["atrasada"]);
     for (const c of $$("[data-dia] [data-cartao-os]")) {
       const estilo = ESTILO_GRUPO[c.dataset.cartaoOs as GrupoStatus];
-      for (const classe of ["border", ...estilo.cartao.split(" ")]) expect(c.className.split(" "), c.dataset.cartaoOs).toContain(classe);
-      expect(c.className).not.toMatch(/bg-white/); // não é mais o cartão branco sobre o dia branco
-      // bolinha do status, hora na cor do status e sigla do técnico
-      expect($("[data-ponto-status]", c)!.className).toContain(estilo.ponto);
-      expect([...c.querySelectorAll("span")].some((s) => txt(s) === "09:00" || txt(s) === "10:00" || txt(s) === "11:00")).toBe(true);
-      expect(txt(c)).toContain("JS");
+      // o cartão é neutro: mesmo fundo para todo status, sem contorno, sem sombra, sem fundo tingido
+      expect(c.className.split(" ")).toEqual(expect.arrayContaining(["bg-surface-alt", "hover:bg-surface-linha"]));
+      expect(c.className).not.toMatch(/border|shadow|-claro|bg-white/);
+      // a cor do status está SÓ na barra fina da esquerda (primeiro filho, 3px, altura toda)
+      const barra = c.firstElementChild as HTMLElement;
+      expect(barra.hasAttribute("data-barra-status")).toBe(true);
+      expect(barra.className.split(" ")).toEqual(expect.arrayContaining(["w-[3px]", "self-stretch", estilo.barra]));
+      expect($$("[class*='bg-acento'], [class*='bg-atencao'], [class*='bg-ok'], [class*='bg-atrasado']", c)).toEqual([barra]);
+      // o status também vai em texto para o leitor de tela
+      expect(txt($(".sr-only", c))).toBe(`${estilo.rotulo}:`);
+      // hierarquia: hora forte, cliente no texto normal, sigla pequena e cinza
+      const hora = $("[data-hora-card]", c)!;
+      expect(hora.className).toContain("font-semibold");
+      expect(hora.className).toContain(estilo.hora);
+      expect($("[data-cliente-card]", c)!.className).toContain("text-ink");
+      const sigla = $("[data-sigla-tecnico]", c)!;
+      expect(txt(sigla)).toBe("JS");
+      expect(sigla.className.split(" ")).toEqual(expect.arrayContaining(["text-[9px]", "text-ink-muted"]));
+      expect(sigla.className).not.toMatch(/bg-|rounded-full/); // não é mais o círculo colorido por técnico
+      expect(sigla.getAttribute("title")).toBe("João Silva");
+      // sem cadeado e sem bolinha: a barra já diz o status
+      expect($("[data-ponto-status]", c)).toBeNull();
     }
-    const hora = [...doDia("2026-11-18")[0].querySelectorAll("span")].find((s) => txt(s) === "09:00")!;
-    expect(hora.className).toContain("text-atrasado-texto");
+    // o atrasado continua óbvio: barra vermelha E hora vermelha
+    const atrasado = doDia("2026-11-18")[0];
+    expect($("[data-barra-status]", atrasado)!.className).toContain("bg-atrasado");
+    expect($("[data-hora-card]", atrasado)!.className).toContain("text-atrasado-texto");
+    expect($("[data-hora-card]", doDia("2026-11-16")[0])!.className).not.toContain("atrasado");
   });
 
-  it("no celular o dia mostra quantas OS tem e um ponto por status presente", async () => {
+  it("ícones só quando valem e em tom neutro: recorrência na OS recorrente; alerta só na prioridade alta/urgente; equipe vira +N na sigla", async () => {
+    const { CalendarioGrid } = await import("@/components/calendario/calendario-grid");
+    await montar(createElement(CalendarioGrid, { celulas: CELULAS, opcoes: OPCOES, eventosPorDia: {
+      "2026-11-16": [card("n", "2026-11-16")],
+      "2026-11-17": [card("u", "2026-11-17", { prioridade: "URGENTE" }), card("a", "2026-11-17", { prioridade: "ALTA", hora: "10:00" })],
+      "2026-11-18": [card("r", "2026-11-18", { origem: "RECORRENTE", status: "CONCLUIDA", membros: [{ nome: "Ana Dias", avatar: null }, { nome: "Bia Reis", avatar: null }] })],
+      "2026-11-19": [card("s", "2026-11-19", { tecnicoNome: null, tecnicoId: null })],
+    } } as any));
+    const c = (dia: string, i = 0) => $$(`[data-dia="${dia}"] [data-cartao-os]`)[i];
+    const icones = (el: Element) => [...el.querySelectorAll("svg")].map((s) => `${s.getAttribute("aria-label")}|${/text-ink-muted/.test(s.getAttribute("class") ?? "")}`);
+    expect(icones(c("2026-11-16"))).toEqual([]); // OS comum: nenhum ícone
+    expect(icones(c("2026-11-17", 0))).toEqual(["Prioridade urgente|true"]);
+    expect(icones(c("2026-11-17", 1))).toEqual(["Prioridade alta|true"]);
+    expect(icones(c("2026-11-18"))).toEqual(["OS recorrente|true"]); // concluída: sem cadeado
+    for (const svg of $$("[data-dia] [data-cartao-os] svg")) expect(svg.getAttribute("class")).not.toMatch(/text-(atencao|atrasado|ok|acento|primary)/);
+    expect(txt($("[data-sigla-tecnico]", c("2026-11-18")))).toBe("JS+2");
+    expect($("[data-sigla-tecnico]", c("2026-11-18"))!.getAttribute("title")).toBe("João Silva, Ana Dias, Bia Reis");
+    expect(txt($("[data-sigla-tecnico]", c("2026-11-19")))).toBe("—");
+    expect($("[data-sigla-tecnico]", c("2026-11-19"))!.getAttribute("title")).toBe("Sem técnico definido");
+  });
+
+  it("no celular o dia mostra quantas OS tem (em tom neutro) e um ponto por status presente", async () => {
     const { CalendarioGrid } = await import("@/components/calendario/calendario-grid");
     await montar(createElement(CalendarioGrid, { celulas: CELULAS, eventosPorDia: EVENTOS, opcoes: OPCOES } as any));
     const dia = (k: string) => $(`[data-dia-mobile="${k}"]`)!;
     expect(txt(dia("2026-11-17"))).toBe("173");
+    for (const n of $$("[data-contagem-dia]")) expect(n.className).not.toMatch(/bg-(primary|atrasado|acento)/);
     const pontos = (k: string) => $$("[data-pontos-dia] span", dia(k)).map((p) => p.className.match(/bg-[a-z]+/)![0]);
     expect(pontos("2026-11-17")).toEqual(["bg-atencao", "bg-acento"]);
     expect(pontos("2026-11-18")).toEqual(["bg-atrasado"]);
     expect($("[data-pontos-dia]", dia("2026-11-15"))).toBeNull();
+  });
+
+  it("a legenda mostra as 4 barras de status e os dois ícones, sem amostra pintada", () => {
+    const f = fonte("app/(dashboard)/calendario/page.tsx");
+    expect(f).toMatch(/const LEGENDA: GrupoStatus\[\] = \["aberta", "andamento", "concluida", "atrasada"\];/);
+    const legenda = f.slice(f.indexOf("data-legenda-calendario"), f.indexOf("</SolicitacoesGaveta>"));
+    expect(legenda).toContain('cn("w-[3px] h-3.5 rounded-full", ESTILO_GRUPO[g].barra)');
+    expect(legenda).toContain("Prioridade alta ou urgente");
+    expect(legenda).toContain("OS recorrente");
+    expect(legenda).not.toMatch(/text-atencao|text-atrasado|\.cartao/);
   });
 });
 

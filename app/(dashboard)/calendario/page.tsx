@@ -26,7 +26,7 @@ function chave(d: Date) {
   return chaveDiaCivil(d);
 }
 
-/** A legenda mostra o cartão como ele aparece no dia (na ordem em que a pessoa precisa olhar) */
+/** A legenda: a barra de cada status, como aparece à esquerda do cartão (4 cores, uma por status) */
 const LEGENDA: GrupoStatus[] = ["aberta", "andamento", "concluida", "atrasada"];
 
 /** Princípio 7: como a tela funciona fica no ⓘ do título, não num parágrafo em cima da grade. */
@@ -235,16 +235,12 @@ export default async function CalendarioPage({
           <span className="font-semibold text-ink-muted uppercase tracking-wider">Status:</span>
           {LEGENDA.map((g) => (
             <span key={g} className="flex items-center gap-1.5">
-              <span className={cn("inline-flex items-center justify-center w-5 h-3.5 rounded border", ESTILO_GRUPO[g].cartao)} aria-hidden>
-                <span className={cn("w-1.5 h-1.5 rounded-full", ESTILO_GRUPO[g].ponto)} />
-              </span>
+              <span className={cn("w-[3px] h-3.5 rounded-full", ESTILO_GRUPO[g].barra)} aria-hidden />
               {ESTILO_GRUPO[g].rotulo}
             </span>
           ))}
-          <span className="font-semibold text-ink-muted uppercase tracking-wider ml-2">Prioridade:</span>
-          <span className="flex items-center gap-1.5"><AlertTriangle className="w-3 h-3 text-atencao" /> Alta</span>
-          <span className="flex items-center gap-1.5"><AlertTriangle className="w-3 h-3 text-atrasado" /> Urgente</span>
-          <span className="flex items-center gap-1.5"><Repeat className="w-3 h-3" /> OS recorrente</span>
+          <span className="flex items-center gap-1.5 sm:ml-2"><AlertTriangle className="w-3 h-3" aria-hidden /> Prioridade alta ou urgente</span>
+          <span className="flex items-center gap-1.5"><Repeat className="w-3 h-3" aria-hidden /> OS recorrente</span>
         </div>
     </div>
     </SolicitacoesGaveta>

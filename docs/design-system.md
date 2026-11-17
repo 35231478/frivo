@@ -12,6 +12,11 @@ Fase 1 entregue: fundação (tokens, fontes, componentes-base), o shell global e
 - **A cor do status tem função.** Verde = OK, âmbar = atenção, vermelho = atrasado, cinza = previsto.
   A palavra sempre aparece junto; a cor só reforça.
 - **Sem degradê, sem borda colorida à esquerda, sem emoji.** Respiro entre blocos: `gap-5`, `p-5`.
+  - **Exceção registrada: o evento do calendário.** No cartão da OS do calendário o status é uma barra
+    fina (3 px) à esquerda, sobre um cartão neutro — o desenho de calendário profissional (Google
+    Calendar, Conta Azul). É pedido de produto e vale só ali (`components/calendario/calendario-grid.tsx`,
+    `lib/calendario/cores.ts`); card, linha de lista e painel continuam sem faixa colorida. O teste
+    `design-system.test.ts` garante que a barra não aparece em outro lugar.
 - **Acessível.** Contraste de 4.5:1 no texto, foco visível no teclado e `button`/`a`/`input` reais, com
   rótulo ligado ao campo.
 - **Responsivo.** Toda tela é conferida em 390 px de largura.
@@ -99,8 +104,10 @@ emoji e hex usado para pintar.
 - Execução da OS no escritório (`components/os/*`, `app/(dashboard)/ordens`), incluindo QR e checklist.
 - App do técnico (`components/tecnico/*`, `app/tecnico`): cabeçalho branco no lugar do navy, barra de
   ações sem degradê, indicador de sincronização em pílulas claras, "Concluída" com ícone em vez de emoji.
-- Calendário (mês, semana, gaveta de solicitações): o cartão mostra o status por ponto e a prioridade
-  por ícone (antes: fundo tingido + borda colorida à esquerda); legenda refeita.
+- Calendário (mês, semana, gaveta de solicitações): cartão neutro, com o status numa barra fina à
+  esquerda (a exceção registrada acima) e a prioridade por ícone em tom neutro. Histórico: fundo tingido +
+  borda colorida → ponto de status em cartão branco → cartão inteiro pintado → o desenho atual, sóbrio.
+  Detalhes em `docs/calendario.md`.
 - Dashboard e Dashboard financeiro (`components/dashboard/*`, `app/(dashboard)/financeiro/page.tsx`),
   Nova OS, Prazos e SLA.
 
