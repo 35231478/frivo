@@ -9,6 +9,7 @@ import { ColaboradorForm } from "@/components/forms/colaborador-form";
 import { documentosDoColaborador } from "@/lib/colaborador/documentos-server";
 import { VALIDADE_PADRAO } from "@/lib/admissao/admissao";
 import { admissaoDoColaborador, configDaEmpresa } from "@/lib/admissao/admissao-server";
+import { documentosDoColaborador as documentosGeradosDoColaborador } from "@/lib/documentos/documentos-server";
 
 export const metadata: Metadata = { title: "Editar colaborador" };
 
@@ -55,6 +56,21 @@ export default async function EditarColaboradorPage({ params }: { params: Promis
         }),
       ])
     : [null, null, [], null];
+  // Documentos gerados por modelo: quem pode gerar vê o botão e o histórico; o disciplinar é
+  // filtrado no servidor, não na tela.
+  const podeGerarDocumento = pode(user.permissoes, "documentos", "criar", user.role);
+  const podeDisciplinar = pode(user.permissoes, "documentos", "disciplinar", user.role);
+  const [modelosDoc, emitidos] = podeGerarDocumento
+    ? await Promise.all([
+        prisma.documentoModelo.findMany({
+          where: { empresaId, ativo: true },
+          orderBy: { nome: "asc" },
+          select: { id: true, nome: true, tipo: true, texto: true, temItens: true, exigeAssinatura: true, validadeDias: true },
+        }),
+        documentosGeradosDoColaborador(colaborador.id, empresaId, podeDisciplinar),
+      ])
+    : [[], []];
+
   const contratoAssinado = contratoLinha?.contratoTexto && contratoLinha.assinaturaEm
     ? { texto: contratoLinha.contratoTexto, assinadoEm: contratoLinha.assinaturaEm.toISOString(), assinadoPor: contratoLinha.assinaturaNome }
     : null;
@@ -90,6 +106,10 @@ export default async function EditarColaboradorPage({ params }: { params: Promis
         cargosAdmissao={cargos.map((c) => ({ value: c.id, label: c.nome }))}
         validadeAdmissao={cfgAdmissao?.validadeDias ?? VALIDADE_PADRAO}
         documentosIniciais={documentos}
+        podeGerarDocumento={podeGerarDocumento}
+        podeDisciplinar={podeDisciplinar}
+        modelosDocumento={modelosDoc}
+        emitidosIniciais={emitidos}
         podeExcluirDocumento={podeExcluirDocumento}
         contratoAssinado={contratoAssinado}
       />

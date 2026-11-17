@@ -1,7 +1,7 @@
 "use client";
 
 import { useRef, useState } from "react";
-import { CalendarClock, Download, FileText, Paperclip, ScrollText, Trash2, Upload } from "lucide-react";
+import { Ban, CalendarClock, Download, FileSignature, FileText, Paperclip, PenLine, ScrollText, Trash2, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Modal } from "@/components/ui/modal";
 import { Input } from "@/components/ui/input";
@@ -19,6 +19,8 @@ import {
   rotuloValidade, situacaoValidade, tamanhoEmPalavras,
 } from "@/lib/colaborador/documentos";
 import { TIPO_CONTRATO_ASSINADO } from "@/lib/admissao/admissao-entrega-regras";
+import { GerarDocumento, type EmitidoDaTela, type ModeloDaLista } from "@/components/colaborador/gerar-documento";
+import { CancelarDocumento } from "@/components/colaborador/cancelar-documento";
 import type { DocumentoLinha } from "@/lib/colaborador/documentos-server";
 
 /** O contrato congelado no momento da assinatura, quando a pessoa veio pela admissão digital. */
@@ -75,17 +77,31 @@ interface Props {
   contratoAssinado?: ContratoAssinado | null;
   /** Avisa a ficha quando a lista muda (o contador da aba e o aviso de vencido vivem lá em cima). */
   onMudou?: (docs: DocumentoLinha[]) => void;
+  /* ── Modelos de documento (PR2) ── */
+  /** "Documentos do colaborador › criar": sem ela, não existe botão de gerar. */
+  podeGerar?: boolean;
+  /** "› disciplinar": sem ela, advertência não aparece na lista de modelos nem no histórico. */
+  podeDisciplinar?: boolean;
+  /** Os modelos ativos da empresa, para escolher no diálogo. */
+  modelos?: ModeloDaLista[];
+  /** O que já foi gerado para esta pessoa (inclusive o que ainda aguarda assinatura). */
+  emitidosIniciais?: EmitidoDaTela[];
 }
 
 export function DocumentosColaborador({
   colaboradorId, documentosIniciais, podeExcluir = false, somenteLeitura = false,
   contratoAssinado = null, onMudou,
+  podeGerar = false, podeDisciplinar = false, modelos = [], emitidosIniciais = [],
 }: Props) {
   const [docs, setDocs] = useState<DocumentoLinha[]>(documentosIniciais);
   const [anexando, setAnexando] = useState(false);
   const [editando, setEditando] = useState<DocumentoLinha | null>(null);
   const [verContrato, setVerContrato] = useState(false);
   const [ocupado, setOcupado] = useState<string | null>(null);
+  const [emitidos, setEmitidos] = useState<EmitidoDaTela[]>(emitidosIniciais);
+  const [gerando, setGerando] = useState(false);
+  const [assinando, setAssinando] = useState<EmitidoDaTela | null>(null);
+  const [cancelando, setCancelando] = useState<EmitidoDaTela | null>(null);
 
   function aplicar(novos: DocumentoLinha[]) {
     setDocs(novos);
@@ -125,10 +141,28 @@ export function DocumentosColaborador({
    * uma segunda linha dizendo "Contrato assinado": a mesma coisa, duas vezes. Então ela fica só
    * para quem assinou antes dessa leva, que não tem o PDF.
    */
+  /**
+   * Os papéis gerados ficam na MESMA lista dos outros documentos — sem lista paralela. O que ainda
+   * não foi assinado não é anexo ainda: aparece como linha própria, marcada, e some de lá assim
+   * que a assinatura acontece (aí ele vira arquivo como qualquer outro).
+   */
+  const pendentes = emitidos.filter((e) => !e.canceladoEm && !e.documentoId && e.exigeAssinatura);
+  const emitidoPorDocumento = new Map(emitidos.filter((e) => e.documentoId && !e.canceladoEm).map((e) => [e.documentoId as string, e]));
+
+  function guardarEmitido(e: EmitidoDaTela) {
+    setEmitidos((lista) => {
+      const outros = lista.filter((x) => x.id !== e.id);
+      return [e, ...outros];
+    });
+    // assinar e cancelar mexem nos anexos da ficha: a lista vem do servidor na próxima abertura,
+    // e aqui a tela já reflete o que aconteceu, sem recarregar a página inteira
+    if (e.canceladoEm && e.documentoId) aplicar(docs.filter((d) => d.id !== e.documentoId));
+  }
+
   const temContratoPdf = docs.some((d) => d.tipo === TIPO_CONTRATO_ASSINADO);
   const mostrarTextoDoContrato = !!contratoAssinado && !temContratoPdf;
 
-  const vazio = docs.length === 0 && !mostrarTextoDoContrato;
+  const vazio = docs.length === 0 && !mostrarTextoDoContrato && pendentes.length === 0;
 
   return (
     <div className="space-y-4" data-secao-documentos>
@@ -153,9 +187,16 @@ export function DocumentosColaborador({
       )}
 
       {!somenteLeitura && (
-        <Button type="button" variant="secondary" onClick={() => setAnexando(true)} data-anexar-documento>
-          <Paperclip className="w-4 h-4" /> Anexar documento
-        </Button>
+        <div className="flex flex-wrap gap-2">
+          <Button type="button" variant="secondary" onClick={() => setAnexando(true)} data-anexar-documento>
+            <Paperclip className="w-4 h-4" /> Anexar documento
+          </Button>
+          {podeGerar && (
+            <Button type="button" variant="secondary" onClick={() => setGerando(true)} data-gerar-documento>
+              <FileSignature className="w-4 h-4" /> Gerar documento
+            </Button>
+          )}
+        </div>
       )}
 
       {vazio ? (
@@ -178,6 +219,12 @@ export function DocumentosColaborador({
               </thead>
               <tbody>
                 {mostrarTextoDoContrato && contratoAssinado && <LinhaContrato contrato={contratoAssinado} onVer={() => setVerContrato(true)} />}
+                {pendentes.map((e) => (
+                  <LinhaPendente
+                    key={e.id} emitido={e} somenteLeitura={somenteLeitura}
+                    onAssinar={() => setAssinando(e)} onCancelar={() => setCancelando(e)}
+                  />
+                ))}
                 {docs.map((d) => (
                   <tr key={d.id} className={cn(PLANILHA.linha, PLANILHA.linhaHover)} data-documento={d.id}>
                     <td className={PLANILHA.td}>
@@ -195,6 +242,8 @@ export function DocumentosColaborador({
                         doc={d} colaboradorId={colaboradorId} podeExcluir={podeExcluir}
                         somenteLeitura={somenteLeitura} ocupado={ocupado === d.id}
                         onEditar={() => setEditando(d)} onExcluir={() => excluir(d)}
+                        emitido={emitidoPorDocumento.get(d.id) ?? null}
+                        onCancelarEmitido={() => setCancelando(emitidoPorDocumento.get(d.id) ?? null)}
                       />
                     </td>
                   </tr>
@@ -217,6 +266,17 @@ export function DocumentosColaborador({
                 </p>
               </div>
             )}
+            {pendentes.map((e) => (
+              <div key={e.id} className="border border-atencao/30 bg-atencao-claro/40 rounded-lg p-3 space-y-1.5" data-cartao-pendente={e.id}>
+                <div className="flex items-start justify-between gap-2">
+                  <span className="font-medium text-ink">{e.titulo}</span>
+                  <AcoesPendente emitido={e} somenteLeitura={somenteLeitura}
+                    onAssinar={() => setAssinando(e)} onCancelar={() => setCancelando(e)} />
+                </div>
+                <p className="text-xs text-ink-muted">{e.tipoRotulo} · {formatarData(e.criadoEm)}</p>
+                <StatusPill tom="atencao">Aguardando assinatura</StatusPill>
+              </div>
+            ))}
             {docs.map((d) => (
               <div key={d.id} className="border border-surface-border rounded-lg p-3 space-y-1.5" data-cartao-documento={d.id}>
                 <div className="flex items-start justify-between gap-2">
@@ -225,6 +285,8 @@ export function DocumentosColaborador({
                     doc={d} colaboradorId={colaboradorId} podeExcluir={podeExcluir}
                     somenteLeitura={somenteLeitura} ocupado={ocupado === d.id}
                     onEditar={() => setEditando(d)} onExcluir={() => excluir(d)}
+                    emitido={emitidoPorDocumento.get(d.id) ?? null}
+                    onCancelarEmitido={() => setCancelando(emitidoPorDocumento.get(d.id) ?? null)}
                   />
                 </div>
                 <p className="text-xs text-ink-muted">
@@ -256,6 +318,17 @@ export function DocumentosColaborador({
           onPronto={(salvo) => { aplicar(docs.map((x) => (x.id === salvo.id ? salvo : x))); setEditando(null); }}
         />
       )}
+
+      <GerarDocumento
+        colaboradorId={colaboradorId} modelos={modelos} podeDisciplinar={podeDisciplinar}
+        aberto={gerando || !!assinando} emitidoInicial={assinando}
+        onFechar={() => { setGerando(false); setAssinando(null); }}
+        onGerado={guardarEmitido}
+      />
+
+      <CancelarDocumento
+        emitido={cancelando} onFechar={() => setCancelando(null)} onCancelado={guardarEmitido}
+      />
 
       {verContrato && contratoAssinado && (
         <Modal aberto onFechar={() => setVerContrato(false)} titulo="Contrato assinado" tamanho="lg">
@@ -302,9 +375,70 @@ function LinhaContrato({ contrato, onVer }: { contrato: ContratoAssinado; onVer:
   );
 }
 
-function AcoesDocumento({ doc, colaboradorId, podeExcluir, somenteLeitura, ocupado, onEditar, onExcluir }: {
+/**
+ * O papel gerado que AINDA NÃO FOI ASSINADO: existe no histórico, não é anexo. Fica na mesma
+ * tabela, marcado, porque é exatamente isso que o RH precisa ver — falta a assinatura de alguém.
+ */
+function LinhaPendente({ emitido, somenteLeitura, onAssinar, onCancelar }: {
+  emitido: EmitidoDaTela; somenteLeitura: boolean; onAssinar: () => void; onCancelar: () => void;
+}) {
+  return (
+    <tr className={cn(PLANILHA.linha, PLANILHA.linhaHover)} data-linha-pendente={emitido.id}>
+      <td className={PLANILHA.td}>
+        <span className={cn(PLANILHA.nome, "inline-flex items-center gap-1.5")}>
+          <FileSignature className="w-3.5 h-3.5 text-acento" /> {emitido.titulo}
+        </span>
+      </td>
+      <td className={cn(PLANILHA.td, PLANILHA.apagado)}>{emitido.tipoRotulo}</td>
+      <td className={PLANILHA.td}>
+        <StatusPill tom="atencao">Aguardando assinatura</StatusPill>
+      </td>
+      <td className={cn(PLANILHA.td, PLANILHA.apagado)}>
+        <span className={PLANILHA.data}>{formatarData(emitido.criadoEm)}</span>
+        <span className="block text-[11px]">{emitido.criadoPor ? `Gerado por ${emitido.criadoPor}` : "Gerado por modelo"}</span>
+      </td>
+      <td className={cn(PLANILHA.td, "text-right")}>
+        <AcoesPendente emitido={emitido} somenteLeitura={somenteLeitura} onAssinar={onAssinar} onCancelar={onCancelar} />
+      </td>
+    </tr>
+  );
+}
+
+function AcoesPendente({ emitido, somenteLeitura, onAssinar, onCancelar }: {
+  emitido: EmitidoDaTela; somenteLeitura: boolean; onAssinar: () => void; onCancelar: () => void;
+}) {
+  return (
+    <MenuAcoes rotulo={`Ações de ${emitido.titulo}`}>
+      {(fechar) => (
+        <>
+          <ItemMenu id="baixar" icone={Download} href={`/api/documentos-gerados/${emitido.id}/pdf`} novaAba>
+            Baixar a prévia
+          </ItemMenu>
+          {!somenteLeitura && (
+            <ItemMenu id="assinar" icone={PenLine} onClick={() => { fechar(); onAssinar(); }}>
+              Assinar
+            </ItemMenu>
+          )}
+          {!somenteLeitura && (
+            <>
+              <SeparadorMenu />
+              <ItemMenu id="cancelar-documento" icone={Ban} perigo onClick={() => { fechar(); onCancelar(); }}>
+                Cancelar o documento
+              </ItemMenu>
+            </>
+          )}
+        </>
+      )}
+    </MenuAcoes>
+  );
+}
+
+function AcoesDocumento({ doc, colaboradorId, podeExcluir, somenteLeitura, ocupado, onEditar, onExcluir, emitido, onCancelarEmitido }: {
   doc: DocumentoLinha; colaboradorId: string; podeExcluir: boolean; somenteLeitura: boolean;
   ocupado: boolean; onEditar: () => void; onExcluir: () => void;
+  /** Preenchido quando este anexo nasceu de um modelo: aí dá para cancelar o papel. */
+  emitido?: EmitidoDaTela | null;
+  onCancelarEmitido?: () => void;
 }) {
   const base = `/api/tecnicos/${colaboradorId}/documentos/${doc.id}`;
   return (
@@ -322,7 +456,15 @@ function AcoesDocumento({ doc, colaboradorId, podeExcluir, somenteLeitura, ocupa
               Editar categoria e validade
             </ItemMenu>
           )}
-          {!somenteLeitura && podeExcluir && (
+          {!somenteLeitura && emitido && onCancelarEmitido && (
+            <>
+              <SeparadorMenu />
+              <ItemMenu id="cancelar-documento" icone={Ban} perigo onClick={() => { fechar(); onCancelarEmitido(); }}>
+                Cancelar o documento
+              </ItemMenu>
+            </>
+          )}
+          {!somenteLeitura && podeExcluir && !emitido && (
             <>
               <SeparadorMenu />
               <ItemMenu id="excluir" icone={Trash2} perigo onClick={() => { fechar(); onExcluir(); }}>

@@ -7,6 +7,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { FormField } from "@/components/ui/form-field";
+import { CapturaFoto } from "@/components/ui/captura-foto";
 import { Stepper } from "@/components/ui/stepper";
 import { cn } from "@/lib/utils";
 import {
@@ -21,7 +22,6 @@ import {
 /** As etapas que o colaborador preenche (a assinatura é a última, à parte). */
 const PASSOS = ETAPAS.map((id) => ({ id, rotulo: ROTULO_ETAPA_CURTO[id] }));
 
-const TAMANHO_MAX_SELFIE = 6 * 1024 * 1024;
 
 /**
  * O LINK do colaborador: consentimento LGPD, o formulário em etapas (rascunho salvo a cada passo),
@@ -46,7 +46,6 @@ export function AdmissaoPublicaCliente({ token, inicial }: { token: string; inic
   const [nomeAssinatura, setNomeAssinatura] = useState("");
   const [selfie, setSelfie] = useState<string | null>(null);
   const [verContrato, setVerContrato] = useState(false);
-  const camera = useRef<HTMLInputElement>(null);
   const topo = useRef<HTMLDivElement>(null);
 
   const set = useCallback(<K extends keyof FormAdmissao>(campo: K, valor: FormAdmissao[K]) => {
@@ -127,17 +126,6 @@ export function AdmissaoPublicaCliente({ token, inicial }: { token: string; inic
 
   /* ───────── assinatura ───────── */
 
-  function pegarSelfie(e: React.ChangeEvent<HTMLInputElement>) {
-    const f = e.target.files?.[0];
-    e.target.value = "";
-    if (!f) return;
-    setErro("");
-    if (f.size > TAMANHO_MAX_SELFIE) { setErro("A foto passou de 6 MB. Tire outra."); return; }
-    const r = new FileReader();
-    r.onload = () => setSelfie(String(r.result));
-    r.onerror = () => setErro("Não foi possível ler a foto. Tente de novo.");
-    r.readAsDataURL(f);
-  }
 
   async function assinar() {
     setErro(""); setAssinando(true);
@@ -273,30 +261,10 @@ export function AdmissaoPublicaCliente({ token, inicial }: { token: string; inic
                   <Input value={nomeAssinatura} onChange={(e) => setNomeAssinatura(e.target.value)} caixa="nome" data-assinatura-nome autoComplete="name" />
                 </FormField>
 
-                <div>
-                  <p className="text-sm font-medium text-ink mb-1.5">Foto sua, segurando o documento</p>
-                  <input ref={camera} type="file" accept="image/*" capture="user" className="hidden" onChange={pegarSelfie} aria-label="Foto da assinatura" />
-                  {selfie ? (
-                    <div className="relative">
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img src={selfie} alt="Foto da assinatura" className="w-full max-h-72 object-contain rounded-lg bg-surface-alt" data-selfie />
-                      <button type="button" onClick={() => setSelfie(null)} aria-label="Tirar a foto"
-                        className="absolute top-2 right-2 bg-ink/60 hover:bg-atrasado text-white rounded-full p-1.5" data-tirar-selfie>
-                        <X className="w-4 h-4" aria-hidden />
-                      </button>
-                      <button type="button" onClick={() => camera.current?.click()} className="mt-2 w-full inline-flex items-center justify-center gap-1.5 text-sm text-ink-muted hover:text-ink">
-                        <RotateCcw className="w-4 h-4" aria-hidden /> Tirar outra
-                      </button>
-                    </div>
-                  ) : (
-                    <button type="button" onClick={() => camera.current?.click()} data-abrir-camera
-                      className="w-full h-36 rounded-lg border border-dashed border-primary-300 bg-primary-50/30 flex flex-col items-center justify-center gap-1.5 text-primary-700">
-                      <Camera className="w-7 h-7" aria-hidden />
-                      <span className="text-sm font-semibold">Tirar a foto</span>
-                      <span className="text-xs text-ink-muted">A câmera da frente abre direto</span>
-                    </button>
-                  )}
-                </div>
+                <CapturaFoto
+                  valor={selfie} onValor={setSelfie} onErro={setErro}
+                  rotulo="Foto sua, segurando o documento"
+                />
 
                 <p className="flex items-start gap-1.5 text-xs text-ink-muted">
                   <ShieldCheck className="w-3.5 h-3.5 shrink-0 mt-0.5" aria-hidden />
