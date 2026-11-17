@@ -78,6 +78,8 @@ export function ColaboradorForm({ initialData, somenteLeitura = false, podeFolha
   // Os documentos têm vida própria (API por documento): o estado aqui em cima serve ao contador da
   // aba e ao aviso de vencido, e é a seção que o atualiza.
   const [documentos, setDocumentos] = useState<DocumentoLinha[]>(documentosIniciais);
+  // Papel gerado que ainda aguarda assinatura conta na aba: é pendência, e some quando assinam.
+  const [docsPendentes, setDocsPendentes] = useState(0);
   const validade = resumoValidade(documentos.map((d) => ({ dataVencimento: d.dataVencimento })));
 
   const [tiposOs, setTiposOs] = useState<TipoOsOpt[]>([]);
@@ -195,7 +197,7 @@ export function ColaboradorForm({ initialData, somenteLeitura = false, podeFolha
     { id: "pessoais", label: "Dados pessoais", icone: User },
     { id: "profissionais", label: "Dados profissionais", icone: Briefcase },
     { id: "competencias", label: "Competências", icone: ListChecks, badge: competenciaIds.length },
-    { id: "documentos", label: "Documentos", icone: FileText, badge: documentos.length },
+    { id: "documentos", label: "Documentos", icone: FileText, badge: documentos.length + docsPendentes },
     ...(podeAdmissao ? [{ id: "admissao" as const, label: "Admissão", icone: UserPlus }] : []),
     ...(podeAcesso ? [{ id: "acesso" as const, label: "Acesso ao app", icone: KeyRound }] : []),
     ...(podeFolha ? [{ id: "folha" as const, label: "Dados financeiros / Folha", icone: Wallet }] : []),
@@ -491,6 +493,7 @@ export function ColaboradorForm({ initialData, somenteLeitura = false, podeFolha
                   modelos={modelosDocumento}
                   emitidosIniciais={emitidosIniciais}
                   onMudou={setDocumentos}
+                  onPendentes={setDocsPendentes}
                 />
               ) : (
                 <p className="text-sm text-ink-muted">

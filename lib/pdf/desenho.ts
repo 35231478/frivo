@@ -173,7 +173,14 @@ export class Desenho {
     const cabecalho = () => {
       this.caixa(x0, this.y, this.util, 18, C.fundo, C.borda);
       let x = x0;
-      for (const c of colunas) { this.escrever(c.titulo.toUpperCase(), x + recuo, this.y + 5.5, { tamanho: 7, fonte: this.negrito, cor: C.apoio }); x += c.largura; }
+      for (const c of colunas) {
+        // coluna de número tem o cabeçalho à direita também: "QTD." à esquerda de uma coluna de
+        // números alinhados à direita fica solto, parecendo cabeçalho da coluna vizinha
+        const titulo = c.titulo.toUpperCase();
+        const dx = c.direita ? c.largura - recuo - this.negrito.widthOfTextAtSize(titulo, 7) : recuo;
+        this.escrever(titulo, x + dx, this.y + 5.5, { tamanho: 7, fonte: this.negrito, cor: C.apoio });
+        x += c.largura;
+      }
       this.y += 18;
     };
     this.garantir(18 + entrelinha * 2);
@@ -235,17 +242,41 @@ export class Desenho {
     this.y += 8;
   }
 
+  /**
+   * O rodapé de todas as folhas: empresa à esquerda, "Emitido em" no meio, paginação à direita.
+   *
+   * As três âncoras são fixas, mas o nome da empresa não: "Clima Total Refrigeração e
+   * Climatização · Documento eletrônico — Frivo" passava por cima do "Emitido em" do meio. Então a
+   * esquerda é CORTADA para caber no espaço que sobra até o meio — o que importa ali é saber de
+   * quem é o papel, e isso o começo do nome já diz.
+   */
   rodapes(total: number) {
+    const TAM = 7.5, VAO = 10;
     this.paginas.forEach((p, i) => {
       this.pagina = p;
       [this.largura, this.altura] = [p.getWidth(), p.getHeight()];
       const y = this.altura - MARGEM - 8;
       this.reta(MARGEM, y - 8, this.largura - MARGEM, y - 8, C.borda);
-      this.escrever(`${this.m.empresa} · Documento eletrônico — Frivo`, MARGEM, y, { tamanho: 7.5, cor: C.apoio });
-      const pag = `Página ${i + 1} de ${total}`;
-      this.escrever(pag, this.largura - MARGEM - this.normal.widthOfTextAtSize(pag, 7.5), y, { tamanho: 7.5, cor: C.apoio });
+
       const meio = `Emitido em ${this.m.geradoEm}`;
-      this.escrever(meio, (this.largura - this.normal.widthOfTextAtSize(meio, 7.5)) / 2, y, { tamanho: 7.5, cor: C.apoio });
+      const larguraMeio = this.normal.widthOfTextAtSize(meio, TAM);
+      const xMeio = (this.largura - larguraMeio) / 2;
+      this.escrever(meio, xMeio, y, { tamanho: TAM, cor: C.apoio });
+
+      const pag = `Página ${i + 1} de ${total}`;
+      this.escrever(pag, this.largura - MARGEM - this.normal.widthOfTextAtSize(pag, TAM), y, { tamanho: TAM, cor: C.apoio });
+
+      const esquerda = this.cortar(`${this.m.empresa} · Documento eletrônico — Frivo`, xMeio - MARGEM - VAO, TAM);
+      if (esquerda) this.escrever(esquerda, MARGEM, y, { tamanho: TAM, cor: C.apoio });
     });
+  }
+
+  /** O texto que cabe em `largura`, com reticências quando sobra. Vazio quando nem isso cabe. */
+  cortar(texto: string, largura: number, tamanho: number, fonte: PDFFont = this.normal): string {
+    if (largura <= 0) return "";
+    if (fonte.widthOfTextAtSize(texto, tamanho) <= largura) return texto;
+    let corte = texto;
+    while (corte && fonte.widthOfTextAtSize(`${corte}…`, tamanho) > largura) corte = corte.slice(0, -1);
+    return corte ? `${corte.trimEnd()}…` : "";
   }
 }

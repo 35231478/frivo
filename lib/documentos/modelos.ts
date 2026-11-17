@@ -84,7 +84,7 @@ export const TIPOS: TipoDef[] = [
       { id: "medida", rotulo: "Medida aplicada", obrigatorio: true },
       { id: "diasSuspensao", rotulo: "Dias de suspensão", formato: "numero" },
     ],
-    dica: "Papel sensível: só quem tem a permissão de advertência gera — e só quem tem enxerga na ficha.",
+    dica: "Papel sensível: só quem tem a permissão de advertência gera — e só quem tem enxerga na ficha. Para suspensão, use {{diasSuspensao}} no texto: a tela só pergunta o que o modelo usa.",
   },
   {
     id: "ADITIVO",
@@ -176,6 +176,43 @@ export function valorNoTexto(campo: CampoDoTipo, valor: string): string {
   if (campo.formato !== "data") return valor;
   const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(valor.trim());
   return m ? `${m[3]}/${m[2]}/${m[1]}` : valor;
+}
+
+/** O teto de um campo preenchido pelo usuário (o motivo de uma advertência é o maior deles). */
+export const VALOR_MAX = 2000;
+
+/**
+ * O que a tela mandou, GUARDADO: só os campos que o tipo conhece, aparados e dentro do teto.
+ * O que vai para o banco é isto — e não o JSON cru da tela, que ninguém controla.
+ * Fica CRU (data em "AAAA-MM-DD"): é dado, não texto. Quem mostra formata na hora.
+ */
+export function valoresDoTipo(
+  tipo: string | null | undefined, valores: Record<string, unknown> | null | undefined,
+): Record<string, string> {
+  const guardados: Record<string, string> = {};
+  for (const campo of tipoDe(tipo).campos) {
+    const v = String(valores?.[campo.id] ?? "").trim();
+    if (v) guardados[campo.id] = v.slice(0, VALOR_MAX);
+  }
+  return guardados;
+}
+
+/** Um campo do tipo que a pessoa preencheu, pronto para ser MOSTRADO (data em dd/mm/aaaa). */
+export interface CampoPreenchido extends CampoDoTipo { valor: string }
+
+/**
+ * Os campos do tipo que foram preenchidos, na ordem em que o tipo os declara — a lista que o PDF
+ * desenha no quadro do documento. É o que garante que nada do que foi digitado se perca: o texto
+ * da empresa é a narrativa, o quadro é o fato (a data do ocorrido de uma advertência, a previsão
+ * de devolução de um termo, o "como era → como fica" de um aditivo).
+ */
+export function camposPreenchidos(
+  tipo: string | null | undefined, valores: Record<string, unknown> | null | undefined,
+): CampoPreenchido[] {
+  const guardados = valoresDoTipo(tipo, valores);
+  return tipoDe(tipo).campos
+    .filter((c) => guardados[c.id])
+    .map((c) => ({ ...c, valor: valorNoTexto(c, guardados[c.id]) }));
 }
 
 /* ───────────────────────── a lista de itens ───────────────────────── */

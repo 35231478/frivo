@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { AlertCircle, Check } from "lucide-react";
+import { AlertCircle, Check, FileText } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
@@ -15,6 +15,7 @@ import {
   CAMPOS_AUTOMATICOS, NOME_MAX, TEXTO_MAX, VALIDADE_DIAS_MAX, TIPOS, TIPO_PADRAO,
   camposDesconhecidosDoModelo, camposUsados, erroDoModelo, temItensPadrao, tipoDe,
 } from "@/lib/documentos/modelos";
+import { AVISO_EXEMPLO, exemploDoTipo } from "@/lib/documentos/exemplos";
 import { cn } from "@/lib/utils";
 
 /**
@@ -61,6 +62,24 @@ export function EditorModeloDocumento({ item, aberto, onFechar, onSalvo }: Edito
     const d = tipoDe(novo);
     if (d.itens === "exige") setTemItens(true);
     if (d.itens === "nao") setTemItens(false);
+  }
+
+  /**
+   * O modelo-exemplo: só aparece com o texto em branco, e só entra quando a pessoa pede. Escrever
+   * do zero uma ficha de EPI ou um termo é o atrito que faz a empresa desistir e continuar no
+   * papel — o exemplo dá a forma, e ela edita. Com texto escrito o convite some: ninguém perde
+   * trabalho por um clique.
+   */
+  const exemplo = exemploDoTipo(tipo);
+  const podeUsarExemplo = !!exemplo && !texto.trim();
+
+  function usarExemplo() {
+    if (!exemplo) return;
+    setTexto(exemplo.texto);
+    if (!nome.trim()) setNome(exemplo.nome);
+    const d = tipoDe(exemplo.tipo);
+    if (d.itens === "exige") setTemItens(true);
+    requestAnimationFrame(() => areaRef.current?.focus());
   }
 
   function inserir(campo: string) {
@@ -158,6 +177,19 @@ export function EditorModeloDocumento({ item, aberto, onFechar, onSalvo }: Edito
               <strong className="font-mono">{desconhecidos.map((c) => `{{${c}}}`).join(", ")}</strong>. {}
               {desconhecidos.length === 1 ? "Ele sai" : "Eles saem"} no documento exatamente assim, sem ser preenchido.
             </span>
+          </div>
+        )}
+
+        {podeUsarExemplo && (
+          <div data-exemplo-modelo
+            className="flex flex-col sm:flex-row sm:items-center gap-2 bg-surface-alt border border-surface-border rounded-lg px-3 py-2.5">
+            <FileText className="w-4 h-4 shrink-0 text-ink-muted" aria-hidden />
+            <p className="text-sm text-ink-muted flex-1">
+              <span className="text-ink font-medium">{exemplo.nome}</span>: {AVISO_EXEMPLO}
+            </p>
+            <Button type="button" variant="secondary" onClick={usarExemplo} className="shrink-0" data-usar-exemplo>
+              Usar o exemplo
+            </Button>
           </div>
         )}
 

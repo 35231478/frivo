@@ -195,7 +195,68 @@ Configurações caindo inteira por causa do `massa: true`; a data digitada entra
 ("entrega em 2026-11-17"); a data pré-preenchida em UTC (depois das 21h já mostrava amanhã); o papel
 gerado se apresentando como "Anexado pelo RH"; e a coluna Tipo cortada nos 140px fixos.
 
-## 10. Perguntas em aberto
+## 10. O papel pronto (PR3)
+
+O PR1 fez o motor e o PR2 as telas. Esta leva fecha o que o papel mostra — é o que vai para a mão
+do colaborador, para o arquivo da empresa e, se o dia for ruim, para a fiscalização.
+
+### O quadro de dados, por tipo
+
+Todo papel ganhou uma seção **Dados do documento**: os campos que a pessoa preencheu na hora de
+gerar, cada um com o seu rótulo, na ordem em que o tipo os declara. Antes, o que a empresa não
+tivesse citado no texto **sumia do papel** — a data do ocorrido de uma advertência, a previsão de
+devolução de um termo.
+
+| Tipo | O que o quadro leva |
+| --- | --- |
+| Ficha de EPI | Data da entrega (e a tabela de itens com o CA) |
+| Termo de responsabilidade | Data da entrega, previsão de devolução (e o material sob guarda) |
+| Advertência / suspensão | Data do ocorrido, medida aplicada, dias de suspensão, e o **motivo** inteiro |
+| Aditivo | A partir de, o que muda, **como era → como fica** |
+
+O texto da empresa continua sendo a narrativa; o quadro é o fato, no mesmo lugar em todo papel do
+mesmo tipo. Campo em branco não vira linha vazia: simplesmente não entra. Campo de texto longo (o
+motivo) não cabe em meia coluna — sai embaixo, inteiro.
+
+### A tabela de itens
+
+Quatro colunas: **item**, **nº do CA**, **qtd.** e **entrega**. A largura do item é o que sobra
+(descrição é o que mais cresce); o CA tem coluna própria e nunca quebra, porque é por ele que a
+fiscalização começa. O cabeçalho se repete quando a tabela vira a folha, e no termo a mesma tabela
+se chama **Material sob guarda** — lá não se entrega EPI.
+
+Um cabeçalho que não cabe na coluna vaza por cima da vizinha sem aparecer no texto extraído do PDF.
+Por isso `colunasItens(util)` é exportada e **medida com a fonte de verdade** em
+`tests/unit/documentos-pdf-exemplos.test.ts`.
+
+### Os modelos-exemplo
+
+`lib/documentos/exemplos.ts` traz **um texto de partida por tipo**, com os campos já no lugar.
+Quando a empresa abre um modelo novo e o texto está em branco, o editor oferece o exemplo do tipo
+escolhido, com o aviso: *"Texto de partida, para editar. Revise com o seu contador ou advogado: o
+sistema preenche os campos, não confere o conteúdo."* Um clique traz o texto (e o nome sugerido,
+se ainda estiver vazio); com texto escrito o convite some, para ninguém perder trabalho.
+
+O Frivo não valida cláusula — preenche campo. Os guards garantem o que é nosso: nenhum exemplo cita
+campo que o sistema não conhece, e todo exemplo usa os campos obrigatórios do seu tipo (senão o
+papel nasceria travado na hora de gerar).
+
+### O acabamento
+
+- **O contador da aba Documentos soma o papel que aguarda assinatura.** Era pendência invisível:
+  quem olha a ficha vê "Documentos 2" e sabe que tem coisa esperando.
+- **O que é guardado em `valores`** passou a ser só o que o tipo conhece, aparado e com teto
+  (`valoresDoTipo`) — antes ia o JSON cru que a tela (ou um cliente da API) mandasse.
+- **O rodapé do PDF não escreve mais por cima de si mesmo**: com nome de empresa longo, a linha da
+  esquerda passava por cima do "Emitido em" do meio. Agora é cortada com reticências. Vale para
+  todo PDF da casa (PMOC, Ficha de Admissão, contrato).
+- **O cabeçalho de coluna numérica** fica alinhado à direita, como o número de baixo.
+- **A foto da assinatura não é esticada**: uma imagem pequena virava um bloco de 190pt e empurrava
+  o papel para uma segunda folha.
+
+Prints de desktop e celular em `docs/prints/modelos-documento-pr3/`.
+
+## 11. Perguntas em aberto
 
 1. **Qual preset de perfil, além do Administrador, nasce com `documentos.*`?** (A mesma pergunta
    ainda aberta da Admissão digital.)

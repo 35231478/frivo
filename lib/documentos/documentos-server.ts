@@ -23,7 +23,8 @@ import { CATEGORIA_PADRAO } from "@/lib/colaborador/documentos";
 import { gerarDocumentoPdf } from "@/lib/documentos/documento-pdf";
 import {
   ID_CAMPOS_AUTOMATICOS, acaoDoTipo, camposAPreencher, categoriaDoModelo, ehSensivel, erroDosItens,
-  limparItens, preencherModelo, tipoDe, tituloDoDocumento, valorNoTexto, vencimentoDe, type ItemDocumento,
+  limparItens, preencherModelo, tipoDe, tituloDoDocumento, valorNoTexto, valoresDoTipo, vencimentoDe,
+  type ItemDocumento,
 } from "@/lib/documentos/modelos";
 import type { ArquivoGerado } from "@/lib/pdf/resposta";
 
@@ -268,7 +269,9 @@ export async function gerarDocumento(
       tipo: pronto.modelo.tipo,
       titulo: pronto.titulo,
       texto: pronto.texto,
-      valores: (dados.valores ?? {}) as object,
+      // só os campos do tipo, aparados: o que vai ao banco é o que o documento usa, não o JSON
+      // cru que a tela (ou um cliente da API) mandou
+      valores: valoresDoTipo(pronto.modelo.tipo, dados.valores) as object,
       itens: pronto.itens as unknown as object,
       criadoPorId: autor.usuarioId,
       criadoEm: agora,
@@ -376,6 +379,8 @@ async function pdfDoEmitido(e: LinhaEmitido, agora: Date): Promise<ArquivoGerado
     titulo: e.titulo,
     geradoEm: formatarDataHora(agora),
     texto: e.texto,
+    tipo: e.tipo,
+    valores: (e.valores ?? null) as Record<string, unknown> | null,
     itens: (Array.isArray(e.itens) ? e.itens : []) as unknown as ItemDocumento[],
     assinatura: e.assinaturaEm
       ? {
