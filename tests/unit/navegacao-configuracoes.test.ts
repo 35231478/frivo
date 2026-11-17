@@ -139,10 +139,17 @@ describe("página /configuracoes: aba, gaveta e permissão conferida no servidor
     expect((await pagina({ aba: "xyz" })).props.abaInicial).toBeNull();
   });
 
+  // Mudou de propósito (acabamento do RBAC): o perfil que não pode abrir NENHUM item chegava a esta
+  // página só pelo portão do middleware ("Configurações › Visualizar") — agora a página se guarda
+  // sozinha, para quem tem só a permissão de um item (fiscal, admissão, modelos) chegar ao item dele.
+  // Sem nenhum cartão, vai para /sem-permissao; com algum, o item que não é dele continua recusado.
   it("item que o perfil não pode ver (ou que não existe) NÃO monta a tela e avisa", async () => {
     logar(montarPermissoes({ ordens: ["visualizar"] }));
+    await expect(pagina({ secao: "usuarios" }), "nenhum cartão é dele: sem permissão").rejects.toMatchObject({ digest: expect.stringContaining("/sem-permissao") });
+
+    logar(montarPermissoes({ admissao: ["gerenciar"] }));
     const el = await pagina({ secao: "usuarios" });
-    expect(el.props).toMatchObject({ secaoAberta: null, secaoNegada: "usuarios", visiveis: [] });
+    expect(el.props).toMatchObject({ secaoAberta: null, secaoNegada: "usuarios", visiveis: ["admissao"] });
     expect(el.props.children).toBeNull();
     logar();
     expect((await pagina({ secao: "inventado" })).props).toMatchObject({ secaoAberta: null, secaoNegada: "inventado" });

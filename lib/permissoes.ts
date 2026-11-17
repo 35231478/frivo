@@ -207,7 +207,6 @@ const ROTA_MODULO: Record<string, string> = {
   financeiro: "financeiro",
   equipes: "equipes",
   colaboradores: "equipes",
-  admissoes: "admissao",
   desempenho: "desempenho",
   veiculos: "veiculos",
   estoque: "estoque",
@@ -216,7 +215,22 @@ const ROTA_MODULO: Record<string, string> = {
   "leads-site": "orcamentos",   // leads do site são orçamentos (nome/WhatsApp/valores)
 };
 
-/** Retorna o módulo exigido para a rota, ou null se for rota sem gate de permissão. */
+/**
+ * Itens de Configurações cuja permissão NÃO é "Configurações › Visualizar": cada um tem o módulo e a
+ * ação próprios (lib/navegacao/configuracoes.ts). A rota antiga deles só redireciona para a página
+ * de Configurações, que confere item a item — por isso não passa pelo portão de "Configurações".
+ * (Um teste mantém esta lista igual à dos itens com permissão própria.)
+ */
+export const CONFIG_COM_PERMISSAO_PROPRIA = ["dados-fiscais", "admissao", "modelos-documento"];
+
+/**
+ * Retorna o módulo da rota — o de "visualizar" que o middleware exige — ou null se a rota não tem
+ * esse portão. Rota sem portão NÃO é rota aberta: é rota em que a PÁGINA confere sozinha a
+ * permissão certa (e o servidor confere de novo em cada rota de API). Entram aqui as telas cuja
+ * permissão é uma AÇÃO que não depende de "visualizar" o módulo do endereço — sem isso o menu
+ * mostra o item e o middleware barra quem tem a permissão. (A página de Configurações também sai
+ * do portão, mas por `portaoBarra`: o módulo dela continua sendo "configuracoes".)
+ */
 export function moduloDaRota(pathname: string): string | null {
   const segs = pathname.split("/").filter(Boolean);
   const seg = segs[0];
@@ -231,7 +245,40 @@ export function moduloDaRota(pathname: string): string | null {
   // Exceção (E4.1): a fila "A separar" e a tela de separação são de quem tem "Estoque › Separar material",
   // mesmo sem "Estoque › Visualizar" (o almoxarife que só separa) — a página confere a ação sozinha
   if (seg === "estoque" && (segs[1] === "separacao" || segs[1] === "devolucao")) return null;
+  // Exceção: Equipes › App do colaborador é de quem tem "Configurações › Gerenciar" — o endereço
+  // mora em /equipes, mas não pede "Equipes › Visualizar". A página confere a ação sozinha.
+  if (seg === "equipes" && segs[1] === "app-colaborador") return null;
+  // As listas de Admissões (/admissoes, "Admissão digital › Gerenciar") e da Documentação da equipe
+  // (/documentacao-equipe, "Documentos › Enviar ao cliente") não estão no mapa de propósito: esses
+  // módulos não têm a ação "visualizar", então o portão barraria todo mundo que não é o
+  // administrador master. As páginas conferem a ação sozinhas.
   return ROTA_MODULO[seg] ?? null;
+}
+
+/**
+ * A página de Configurações (e a rota antiga dos itens com permissão própria, que só redireciona
+ * para ela) se guarda sozinha: mostra só os cartões que o perfil pode abrir e manda para
+ * /sem-permissao quem não pode abrir nenhum. Quem tem só "Financeiro › Fiscal", "Admissão digital"
+ * ou os modelos de documento chega ao item dele — sem ver o resto.
+ *
+ * Fica FORA de `moduloDaRota` de propósito: o módulo de /configuracoes continua sendo
+ * "configuracoes", porque é por ele que os cartões comuns (Empresa, Preferências…) decidem quem vê.
+ */
+function configuracoesSeGuarda(pathname: string): boolean {
+  const segs = pathname.split("/").filter(Boolean);
+  return segs[0] === "configuracoes" && (segs.length === 1 || (segs.length === 2 && CONFIG_COM_PERMISSAO_PROPRIA.includes(segs[1])));
+}
+
+/**
+ * O PORTÃO do middleware: a rota pede "visualizar" de um módulo e o perfil não tem? Então barra
+ * (o middleware manda para /sem-permissao). Função pura para a regra ser a mesma no middleware e
+ * nos testes — e para ficar claro o que o portão NÃO decide: as rotas em que `moduloDaRota` devolve
+ * null passam por aqui e são conferidas pela própria página.
+ */
+export function portaoBarra(pathname: string, permissoes: Permissoes | null | undefined, role?: string): boolean {
+  if (configuracoesSeGuarda(pathname)) return false;
+  const modulo = moduloDaRota(pathname);
+  return !!modulo && pathname !== "/sem-permissao" && !pode(permissoes, modulo, "visualizar", role);
 }
 
 /** Presets por tipo de perfil (usados no seed e como template ao escolher o tipo). */

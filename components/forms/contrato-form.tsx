@@ -34,6 +34,7 @@ import { InputData } from "@/components/ui/input-data";
 import { SeletorCadastro } from "@/components/cadastros/seletor-cadastro";
 import { PreviaCobrancaContrato } from "@/components/contratos/previa-cobranca";
 import { usePermissoes } from "@/components/providers/permissoes-provider";
+import { AtalhoDocumentacao } from "@/components/documentacao/atalho-documentacao";
 import { SomenteLeitura } from "@/components/config/permissao-config";
 import { PERIODICIDADES_COBRANCA, passoCobranca, textoFrequencia } from "@/lib/financeiro/contrato-previsao";
 import { proximoAniversario, sugestaoReajuste, textoCompetencia, valorReajustado, percentualDe } from "@/lib/contratos/reajuste";
@@ -453,13 +454,21 @@ export function ContratoForm({ initialData, somenteLeitura = false }: ContratoFo
   const unidadeIdsAtuais = (watch("unidadeIds") ?? []) as string[];
   const locaisCobertos = unidades.filter((u) => unidadeIdsAtuais.includes(u.id)).map((u) => ({ id: u.id, nome: u.nome }));
 
+  // Atalho para enviar a documentação da equipe deste cliente. O contrato só vai junto quando está
+  // ativo: é dos contratos ativos que a tela de envio tira "quem atende".
+  const atalhoDocumentacao = (compact: boolean) => !isEditing ? null : (
+    <AtalhoDocumentacao clienteId={initialData?.clienteId} contratoId={statusVal === "ATIVO" ? initialData?.id : null} compact={compact} />
+  );
+
   const BotoesAcao = ({ compact = false }: { compact?: boolean }) => somenteLeitura ? (
     <div className="flex items-center gap-3 flex-wrap">
+      {atalhoDocumentacao(compact)}
       <SomenteLeitura permissao="Contratos › editar" />
       <Button type="button" variant="secondary" size={compact ? "sm" : "md"} onClick={() => router.push("/contratos")}>Voltar</Button>
     </div>
   ) : (
     <div className="flex items-center gap-2 flex-wrap">
+      {atalhoDocumentacao(compact)}
       <Button type="button" variant="secondary" size={compact ? "sm" : "md"} onClick={() => router.push("/contratos")}>Cancelar</Button>
       <Button type="button" variant="outline" size={compact ? "sm" : "md"} loading={isSubmitting} onClick={salvarEContinuar}>
         <span className={compact ? "hidden lg:inline" : ""}>Salvar e continuar</span>

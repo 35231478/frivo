@@ -20,7 +20,7 @@ import { AcoesAdmissao } from "@/components/admissao/acoes-admissao";
 import { PainelAdmissao } from "@/components/admissao/painel-admissao";
 import { AdmissaoPublicaCliente } from "@/components/admissao/admissao-publica";
 import { DOCUMENTOS_PADRAO, FLUXO, formVazio, type SituacaoAdmissao } from "@/lib/admissao/admissao";
-import { ACOES_LABEL, MODULOS, PRESETS, SECOES, moduloDaRota, montarPermissoes, pode } from "@/lib/permissoes";
+import { ACOES_LABEL, MODULOS, PRESETS, SECOES, moduloDaRota, montarPermissoes, pode, portaoBarra } from "@/lib/permissoes";
 import { SECOES_CONFIGURACOES } from "@/lib/navegacao/configuracoes";
 import { temTelaConfig } from "@/components/config/telas";
 import type { AdmissaoDoRh, AdmissaoPublica } from "@/lib/admissao/admissao-server";
@@ -130,6 +130,20 @@ describe("as ações da admissão (lista e ficha)", () => {
       expect($("[data-acao-admitir]"), s).toBeNull();
       expect($("[data-acao-progresso]"), s).toBeTruthy();
     }
+  });
+
+  it("\"Editar os dados\" leva à ficha: só aparece para quem pode abrir a ficha do colaborador", async () => {
+    await montar(createElement(AcoesAdmissao, { admissao: ADMISSAO("PREENCHENDO") }));
+    await clicar($("[data-acao='menu']"));
+    expect($("[data-item='editar']")!.getAttribute("href")).toBe("/colaboradores/t1/editar");
+
+    // o RH que só tem "Admissão digital": o item levaria a "sem permissão", então não é oferecido —
+    // e o resto do menu (o trabalho dele) continua inteiro
+    await remontar(createElement(AcoesAdmissao, { admissao: ADMISSAO("PREENCHENDO"), abreFicha: false }));
+    await clicar($("[data-acao='menu']"));
+    expect($("[data-item='editar']")).toBeNull();
+    expect($("[data-item='progresso']")).toBeTruthy();
+    expect($$("[data-menu-acoes] [data-item]").length).toBeGreaterThan(3);
   });
 
   it("cancelar: o botão só libera com a razão escrita, e manda o motivo para a rota", async () => {
@@ -337,8 +351,15 @@ describe("o link do colaborador", () => {
 /* ───────── a permissão das telas novas ───────── */
 
 describe("quem entra nas telas da admissão", () => {
-  it("/admissoes exige o módulo da admissão (não é \"ver equipes\") e nenhum preset o ganha de graça", () => {
-    expect(moduloDaRota("/admissoes")).toBe("admissao");
+  // Mudou de propósito (acabamento do RBAC): antes este teste exigia moduloDaRota("/admissoes") ===
+  // "admissao". Só que o módulo não tem a ação "visualizar" que o portão do middleware pede — então
+  // o portão barrava TODO perfil que não fosse o administrador master, inclusive quem tinha
+  // "Admissão digital › Gerenciar". A rota saiu do portão e a página se guarda sozinha pela ação
+  // (tests/unit/portao-rbac.test.ts cobre o portão inteiro). O que este teste protegia continua:
+  // admissão não é "ver equipes", e nenhum perfil pronto ganha a permissão de graça.
+  it("/admissoes é de quem gerencia admissão (não é \"ver equipes\") e nenhum preset o ganha de graça", () => {
+    expect(moduloDaRota("/admissoes"), "fora do portão de \"visualizar\": a página confere a ação").toBeNull();
+    expect(portaoBarra("/admissoes", montarPermissoes({ admissao: ["gerenciar"] }), "OPERADOR")).toBe(false);
     expect(moduloDaRota("/colaboradores")).toBe("equipes");
     // Dado sensível de pessoa: só o administrador já tem; os outros perfis recebem por escolha
     expect(pode(PRESETS.ADMINISTRADOR, "admissao", "gerenciar")).toBe(true);

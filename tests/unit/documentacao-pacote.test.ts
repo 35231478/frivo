@@ -51,7 +51,13 @@ describe("o que pode sair para o cliente", () => {
   });
 
   it("o padrão marcado é segurança e medicina do trabalho — o que libera a entrada na obra", () => {
-    expect(CATEGORIAS_PADRAO).toEqual(expect.arrayContaining(["aso", "nr_10", "nr_35", "ficha_epi"]));
+    // Só os quatro que praticamente todo técnico tem. NR-13 e integração saíram do padrão (acabamento):
+    // marcados, faziam o aviso de "falta" aparecer em todo envio.
+    expect([...CATEGORIAS_PADRAO].sort()).toEqual(["aso", "ficha_epi", "nr_10", "nr_35"]);
+    for (const fora of ["nr_13", "integracao"]) {
+      expect(CATEGORIAS_PADRAO, `${fora} entra desmarcado`).not.toContain(fora);
+      expect(categoriaEnviavel(fora), `${fora} continua enviável: quem precisa marca`).toBe(true);
+    }
     expect(CATEGORIAS_PADRAO, "contrato e documento pessoal só se o cliente pedir").not.toContain("contrato");
     expect(CATEGORIAS_PADRAO).not.toContain("documento_pessoal");
   });

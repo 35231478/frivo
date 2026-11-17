@@ -18,8 +18,10 @@ const AJUDA = "Escolha o cliente: a tela sugere quem atende a ele. Marque os tip
  *
  * Exige "Documentos › Enviar ao cliente". A tela só leva daqui as listas de apoio (equipes e
  * colaboradores ativos, pelo nome); o que entra no pacote é decidido e conferido no servidor.
+ * Aceita `?clienteId=…&contratoId=…` (o atalho das fichas): abre com o cliente já escolhido.
  */
-export default async function NovoEnvioPage() {
+export default async function NovoEnvioPage({ searchParams }: { searchParams?: Promise<Record<string, string | undefined>> } = {}) {
+  const sp = (await searchParams) ?? {};
   const session = await auth();
   const user = session!.user!;
   if (!pode(user.permissoes, "documentos", "enviar", user.role)) redirect("/sem-permissao");
@@ -29,6 +31,17 @@ export default async function NovoEnvioPage() {
     prisma.equipe.findMany({ where: { empresaId }, orderBy: { nome: "asc" }, select: { id: true, nome: true } }),
     prisma.tecnico.findMany({ where: { empresaId, ativo: true }, orderBy: { nome: "asc" }, select: { id: true, nome: true } }),
   ]);
+
+  // Vindo do atalho da ficha do cliente ou do contrato: o cliente já chega escolhido. O que vem na
+  // URL é conferido contra a empresa — cliente de outra empresa (ou que não existe) é ignorado, e o
+  // contrato só vale se for um contrato ATIVO daquele cliente (é deles que sai "quem atende").
+  const cliente = sp.clienteId
+    ? await prisma.cliente.findFirst({ where: { id: sp.clienteId, empresaId }, select: { id: true, nome: true, nomeFantasia: true } })
+    : null;
+  const contrato = cliente && sp.contratoId
+    ? await prisma.contrato.findFirst({ where: { id: sp.contratoId, empresaId, clienteId: cliente.id, status: "ATIVO" }, select: { id: true } })
+    : null;
+  const inicial = cliente ? { clienteId: cliente.id, clienteNome: cliente.nomeFantasia || cliente.nome, contratoId: contrato?.id ?? null } : null;
 
   return (
     <div className="space-y-4 max-w-3xl">
@@ -41,7 +54,7 @@ export default async function NovoEnvioPage() {
           <Dica rotulo="Novo envio" lado="direita" texto={AJUDA} />
         </h1>
       </div>
-      <NovoEnvio equipes={equipes} colaboradores={colaboradores} />
+      <NovoEnvio equipes={equipes} colaboradores={colaboradores} inicial={inicial} />
     </div>
   );
 }

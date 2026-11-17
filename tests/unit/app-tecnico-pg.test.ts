@@ -496,7 +496,14 @@ describe.skipIf(!URL_PG)("app do técnico: Meu dia, escopo e sincronização off
     expect(doApp).toMatchObject({ descricao: "Instalar suporte novo", cobrancaDecidida: true });
     expect(Object.keys(doApp)).not.toContain("statusCobranca");
     expect(Object.keys(doApp)).not.toContain("valor");
-    expect(JSON.stringify((await exec("aA")).execucao.adicionais)).not.toMatch(/COBRAR|A_AVALIAR|120/);
+    // (Os ids e a data de criação saem da conta: o id é aleatório e, quando calhava de conter "120",
+    // este teste falhava sem motivo — o que se procura é a decisão e o PREÇO, não um trecho de id.)
+    const semIds = (v: unknown): unknown => Array.isArray(v) ? v.map(semIds)
+      : v && typeof v === "object" ? Object.fromEntries(Object.entries(v).filter(([k]) => !/^(id|clientId|criadoEm)$/.test(k)).map(([k, x]) => [k, semIds(x)]))
+      : v;
+    const retrato = JSON.stringify(semIds((await exec("aA")).execucao.adicionais));
+    expect(retrato).toContain("Instalar suporte novo");
+    expect(retrato).not.toMatch(/COBRAR|A_AVALIAR|120/);
     // alterar a descrição, tirar o serviço ou tirar a foto dele: recusado, nada muda no banco
     const tentar = async (o: unknown) => (await sync([o])).json.resultados[0];
     expect(await tentar(op("adicional", "aA", { dados: { clientId: "adic-0003-cccc", descricao: "Outra coisa" } }))).toMatchObject({ ok: false, status: 409, erro: MSG });

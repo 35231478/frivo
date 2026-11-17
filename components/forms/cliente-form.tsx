@@ -29,6 +29,7 @@ import { PortalContatos } from "@/components/forms/portal-contatos";
 import { InteracoesManager } from "@/components/forms/interacoes-manager";
 import { ToggleSwitch, ToggleGroup } from "@/components/ui/toggle-switch";
 import { usePermissoes } from "@/components/providers/permissoes-provider";
+import { AtalhoDocumentacao } from "@/components/documentacao/atalho-documentacao";
 import { cn } from "@/lib/utils";
 import {
   LABELS_STATUS_FINANCEIRO_CALC, COR_STATUS_FINANCEIRO_CALC, type StatusFinanceiroCalc,
@@ -347,6 +348,8 @@ export function ClienteForm({ initialData, statusFinanceiroCalc, perdas12m }: Cl
           <Calculator className="w-4 h-4" /> <span className={compact ? "hidden lg:inline" : ""}>Novo orçamento</span><span className={compact ? "lg:hidden" : "hidden"}>Orçamento</span>
         </Link>
       )}
+      {/* Quem pode enviar documentação ao cliente parte daqui com o cliente já escolhido */}
+      <AtalhoDocumentacao clienteId={initialData!.id} compact={compact} />
     </>
   );
 

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { ArrowLeft, ArrowRight, ChevronDown, FolderDown, Link2, Mail, Trash2, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -78,7 +78,7 @@ function porQueNaoVai(d: Destino, via: Via): string {
 /**
  * NOVO ENVIO da documentação da equipe, em três passos:
  *  1. o cliente (e o contrato, se quiser estreitar) e quem atende — já sugerido e marcado;
- *  2. os tipos de documento (segurança do trabalho marcada; contrato e documento pessoal não) e as pastas;
+ *  2. os tipos de documento (ASO, NR-10, NR-35 e ficha de EPI marcados; o resto, quem precisa marca) e as pastas;
  *  3. a prévia — que segura o envio se houver vencido — e a saída: link, zip ou e-mail.
  *
  * O envio para VÁRIOS CLIENTES (lote) é o mesmo assistente com mais de um destino: cada cliente
@@ -87,13 +87,16 @@ function porQueNaoVai(d: Destino, via: Via): string {
  * A tela nunca decide sozinha: quem diz o que entra, o que segura e quem recebe é o servidor (a
  * prévia e o envio). Quando ele recusa, a razão aparece aqui e a tela NÃO anda para o resultado.
  */
-export function NovoEnvio({ equipes, colaboradores }: {
+export function NovoEnvio({ equipes, colaboradores, inicial }: {
   equipes: { id: string; nome: string }[];
   colaboradores: { id: string; nome: string }[];
+  /** Vindo do atalho da ficha do cliente ou do contrato: o cliente (e o contrato) já escolhidos. */
+  inicial?: { clienteId: string; clienteNome: string; contratoId?: string | null } | null;
 }) {
   const [passo, setPasso] = useState(0);
   const [lote, setLote] = useState(false);
-  const [destinos, setDestinos] = useState<Destino[]>([]);
+  const [destinos, setDestinos] = useState<Destino[]>(() =>
+    inicial ? [{ ...destinoNovo(inicial.clienteId, inicial.clienteNome), contratoId: inicial.contratoId ?? "" }] : []);
   const [aberto, setAberto] = useState<string | null>(null);
   const [chaveCombo, setChaveCombo] = useState(0);
   const [categorias, setCategorias] = useState<string[]>(CATEGORIAS_PADRAO);
@@ -134,6 +137,14 @@ export function NovoEnvio({ equipes, colaboradores }: {
       mudar(clienteId, (d) => ({ ...d, carregando: false, erro: "Erro de conexão. Tente de novo." }));
     }
   }, [mudar]);
+
+  // Chegou com o cliente escolhido: a sugestão de quem atende é buscada na entrada, como se a
+  // pessoa tivesse acabado de escolher o cliente (e o contrato) no campo.
+  useEffect(() => {
+    if (inicial) void sugerir(inicial.clienteId, inicial.contratoId ?? "");
+    // só na entrada: o cliente inicial não muda depois que a tela abriu
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   function escolherCliente(clienteId: string, nome: string) {
     if (!clienteId) { if (!lote) setDestinos([]); return; }
@@ -359,7 +370,7 @@ export function NovoEnvio({ equipes, colaboradores }: {
             <fieldset className="space-y-3" data-tipos>
               <legend className="text-sm font-semibold text-ink flex items-center gap-1.5">
                 Tipos de documento
-                <Dica rotulo="Tipos de documento" texto="Segurança e medicina do trabalho já vem marcada: é o que o cliente costuma exigir. Contrato e documento pessoal ficam desmarcados e só vão se alguém marcar. Advertência e dado bancário nunca saem por aqui." />
+                <Dica rotulo="Tipos de documento" texto="ASO, NR-10, NR-35 e ficha de EPI já vêm marcados: é o que quase todo técnico tem e o cliente costuma exigir. NR-13, integração, contrato e documento pessoal só vão se alguém marcar. Advertência e dado bancário nunca saem por aqui." />
               </legend>
               {categoriasEnviaveisPorGrupo().map((g) => (
                 <div key={g.grupo} data-grupo-tipos={g.grupo}>
