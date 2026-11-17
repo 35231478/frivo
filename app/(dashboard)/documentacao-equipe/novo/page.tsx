@@ -20,7 +20,7 @@ const AJUDA = "Escolha o cliente: a tela sugere quem atende a ele. Marque os tip
  * colaboradores ativos, pelo nome); o que entra no pacote é decidido e conferido no servidor.
  * Aceita `?clienteId=…&contratoId=…` (o atalho das fichas): abre com o cliente já escolhido.
  */
-export default async function NovoEnvioPage({ searchParams }: { searchParams?: Promise<Record<string, string | undefined>> } = {}) {
+export default async function NovoEnvioPage({ searchParams }: { searchParams?: Promise<Record<string, string | undefined>> }) {
   const sp = (await searchParams) ?? {};
   const session = await auth();
   const user = session!.user!;
