@@ -9,6 +9,7 @@ import {
   type DragStartEvent, type DragEndEvent,
 } from "@dnd-kit/core";
 import { cn, MESES_PT, LABELS_STATUS_OS, LABELS_PRIORIDADE } from "@/lib/utils";
+import { ESTILO_GRUPO, grupoDoCard, type GrupoStatus } from "@/lib/calendario/cores";
 import { AvatarTecnico } from "@/components/ui/avatar-tecnico";
 import { InputHora } from "@/components/ui/input-hora";
 import { MSG_HORA_INVALIDA, horaValida } from "@/components/ui/input-data-hora";
@@ -73,22 +74,14 @@ const DIAS_SEMANA = ["DOM", "SEG", "TER", "QUA", "QUI", "SEX", "SÁB"];
 const DIAS_LONGO = ["Domingo", "Segunda-feira", "Terça-feira", "Quarta-feira", "Quinta-feira", "Sexta-feira", "Sábado"];
 const FINALIZADAS = ["CONCLUIDA", "CANCELADA"];
 
-// Sistema de design: cartão neutro (sem borda colorida à esquerda, sem fundo tingido). O STATUS vira
-// um ponto com a cor da função e a PRIORIDADE alta/urgente um ícone de alerta.
-const STATUS_PONTO: Record<string, string> = {
-  ABERTA: "bg-acento",
-  AGUARDANDO_ATENDIMENTO: "bg-acento",
-  AGENDADA: "bg-acento",
-  EM_ANDAMENTO: "bg-atencao",
-  PAUSADA: "bg-atencao",
-  AGUARDANDO_PECA: "bg-atencao",
-  CONCLUIDA: "bg-ok",
-  CANCELADA: "bg-ink-subtle",
-};
+// O cartão INTEIRO leva a cor do status (fundo claro + contorno do mesmo matiz — lib/calendario/cores.ts):
+// destaca do branco do dia e se lê de relance. Sem borda colorida só à esquerda e sem degradê. A bolinha
+// repete o status e a PRIORIDADE alta/urgente vira um ícone de alerta.
 const PRIORIDADE_ICONE: Record<string, string> = { ALTA: "text-atencao", URGENTE: "text-atrasado", CRITICO: "text-atrasado" };
 
-const corPonto = (c: CardOs) => (c.atrasada ? "bg-atrasado" : STATUS_PONTO[c.status] ?? "bg-ink-subtle");
-const corFundo = (_c: CardOs) => "bg-white border border-surface-border hover:bg-surface-page";
+const estilo = (c: CardOs) => ESTILO_GRUPO[grupoDoCard(c)];
+const corPonto = (c: CardOs) => estilo(c).ponto;
+const corFundo = (c: CardOs) => cn("border", estilo(c).cartao);
 
 /** Ponto do status + alerta de prioridade (a palavra está no título/legenda; a cor só reforça). */
 function MarcasCard({ card, grande }: { card: CardOs; grande?: boolean }) {
@@ -100,6 +93,9 @@ function MarcasCard({ card, grande }: { card: CardOs; grande?: boolean }) {
     </>
   );
 }
+/** Os status presentes num dia, na ordem da legenda (para os pontos do dia no celular) */
+const ORDEM_GRUPOS: GrupoStatus[] = ["atrasada", "andamento", "aberta", "concluida", "neutra"];
+const gruposDoDia = (cards: CardOs[]) => { const tem = new Set(cards.map(grupoDoCard)); return ORDEM_GRUPOS.filter((g) => tem.has(g)); };
 const badgeStatus = (s: string) => `badge-status-${s.toLowerCase()}`;
 const badgePrioridade = (p: string) => `badge-prioridade-${p.toLowerCase()}`;
 const bloqueada = (c: CardOs) => FINALIZADAS.includes(c.status);
@@ -220,7 +216,7 @@ export function CalendarioGrid({
   }
 
   return (
-    <div className="p-2 md:p-4">
+    <div className="p-2 md:p-3">
       <DndContext sensors={sensors} collisionDetection={pointerWithin} onDragStart={aoIniciarArrasto} onDragEnd={aoTerminarArrasto}>
         {/* Sem overflow-hidden: o dia expandido cresce POR CIMA dos vizinhos sem mexer na grade */}
         <div className="grid grid-cols-7 gap-px bg-surface-border rounded-lg md:min-w-[680px]">
@@ -361,14 +357,23 @@ function Celula({
         onClick={onVerMais}
         className={cn("md:hidden bg-white min-h-[56px] p-1 flex flex-col items-center gap-1 text-left", cel.isToday && "bg-primary-50/50")}
       >
-        <span className={cn("text-[11px] font-semibold w-5 h-5 flex items-center justify-center rounded-full", cel.isToday ? "bg-primary-500 text-white" : "text-ink")}>
+        <span
+          className={cn("text-[11px] font-semibold w-5 h-5 flex items-center justify-center rounded-full", cel.isToday ? "bg-primary-500 text-white anim-hoje-pulso" : "text-ink")}
+          {...(cel.isToday ? { "data-hoje": "", "aria-current": "date" as const } : {})}
+        >
           {cel.dayNum}
         </span>
         {cards.length > 0 && (
-          <span className={cn("text-[10px] font-bold px-1.5 rounded-full tabular-nums",
-            cards.some((c) => c.atrasada) ? "bg-atrasado-claro text-atrasado-texto" : "bg-primary-100 text-primary-700")}>
-            {cards.length}
-          </span>
+          <>
+            <span className={cn("text-[10px] font-bold px-1.5 rounded-full tabular-nums text-white",
+              cards.some((c) => c.atrasada) ? "bg-atrasado" : "bg-primary-500")}>
+              {cards.length}
+            </span>
+            {/* O que tem no dia, de relance: um ponto por status presente */}
+            <span className="flex items-center gap-0.5" aria-hidden="true" data-pontos-dia>
+              {gruposDoDia(cards).map((g) => <span key={g} className={cn("w-1.5 h-1.5 rounded-full", ESTILO_GRUPO[g].ponto)} />)}
+            </span>
+          </>
         )}
       </button>
 
@@ -397,10 +402,13 @@ function Celula({
           )}
         >
           <div className="flex items-center justify-between gap-1 shrink-0">
-            <div className={cn(
-              "text-xs font-semibold w-6 h-6 flex items-center justify-center rounded-full",
-              cel.isToday ? "bg-primary-500 text-white shadow-sm" : "text-ink",
-            )}>
+            <div
+              className={cn(
+                "text-xs font-semibold w-6 h-6 flex items-center justify-center rounded-full",
+                cel.isToday ? "bg-primary-500 text-white shadow-sm anim-hoje-pulso" : "text-ink",
+              )}
+              {...(cel.isToday ? { "data-hoje": "", "aria-current": "date" as const } : {})}
+            >
               {cel.dayNum}
             </div>
             <div className="flex items-center">
@@ -512,12 +520,12 @@ function CardArrastavel({
 
 function CardVisual({ card, travada, className }: { card: CardOs; travada?: boolean; className?: string }) {
   return (
-    <div className={cn("flex items-center gap-1.5 rounded-md px-1.5 py-1 transition-colors", corFundo(card), className)}>
+    <div className={cn("flex items-center gap-1.5 rounded-md px-1.5 py-1 transition-colors", corFundo(card), className)} data-cartao-os={grupoDoCard(card)}>
       <MarcasCard card={card} />
-      <span className="text-[10px] font-semibold text-ink-muted tabular-nums shrink-0">{card.hora ?? "--:--"}</span>
-      <span className="flex items-center gap-0.5 text-[11px] font-medium text-ink truncate flex-1 min-w-0">
-        {travada && <Lock className="w-2.5 h-2.5 shrink-0 text-ink-subtle" />}
-        {card.origem === "RECORRENTE" && <Repeat className="w-2.5 h-2.5 shrink-0 text-ink-subtle" />}
+      <span className={cn("text-[10px] font-bold tabular-nums shrink-0", estilo(card).hora)}>{card.hora ?? "--:--"}</span>
+      <span className="flex items-center gap-0.5 text-[11px] font-semibold text-ink truncate flex-1 min-w-0">
+        {travada && <Lock className="w-2.5 h-2.5 shrink-0 text-ink-muted" />}
+        {card.origem === "RECORRENTE" && <Repeat className="w-2.5 h-2.5 shrink-0 text-ink-muted" />}
         <span className="truncate">{card.clienteCurto}</span>
       </span>
       <AvataresCard card={card} size={22} />

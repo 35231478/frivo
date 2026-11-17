@@ -4,7 +4,8 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { Dica } from "@/components/ui/dica";
 import { cn, nomeMes, formatarData } from "@/lib/utils";
-import { GerarOsRecorrentes } from "@/components/calendario/gerar-os-recorrentes";
+import { AtualizarCalendario } from "@/components/calendario/atualizar-calendario";
+import { ESTILO_GRUPO, type GrupoStatus } from "@/lib/calendario/cores";
 import { CalendarioPainel } from "@/components/calendario/calendario-painel";
 import type { CelulaDia, CardOs } from "@/components/calendario/calendario-grid";
 import { SOLICITACAO_PENDENTE } from "@/lib/solicitacoes";
@@ -24,6 +25,9 @@ const FINALIZADAS = ["CONCLUIDA", "CANCELADA"];
 function chave(d: Date) {
   return chaveDiaCivil(d);
 }
+
+/** A legenda mostra o cartão como ele aparece no dia (na ordem em que a pessoa precisa olhar) */
+const LEGENDA: GrupoStatus[] = ["aberta", "andamento", "concluida", "atrasada"];
 
 /** Princípio 7: como a tela funciona fica no ⓘ do título, não num parágrafo em cima da grade. */
 const AJUDA = "Cada cartão é uma OS agendada no dia. Arraste para reagendar, clique no dia para ver tudo e abrir uma OS nova ali mesmo. Uma OS dividida em visitas aparece em cada dia dela.";
@@ -166,6 +170,8 @@ export default async function CalendarioPage({
     const inMonth = view === "semanal" ? true : d.getUTCMonth() === mes - 1;
     return { dateKey: chave(d), dayNum: d.getUTCDate(), inMonth, isToday: chaveDiaBR(hoje) === chave(d), rowIndex: Math.floor(idx / 7) };
   });
+  // A semana que só tem dias do mês seguinte não ocupa uma linha da tela (novembro/2026 cabe em 5)
+  while (celulas.length > 7 && celulas.slice(-7).every((c) => !c.inMonth)) celulas.length -= 7;
 
   // Total de OS posicionadas nas células do mês (ou da semana, na visão semanal)
   const totalMes = celulas.reduce((acc, c) => acc + (c.inMonth ? (eventosPorDia[c.dateKey]?.length ?? 0) : 0), 0);
@@ -183,32 +189,31 @@ export default async function CalendarioPage({
 
   return (
     <SolicitacoesGaveta totalInicial={solicitacoesPendentes}>
-    <div className="space-y-6">
-      <div className="flex items-center justify-between flex-wrap gap-3">
-        <div className="flex items-center gap-3">
-          <div className="p-2 bg-surface-alt rounded-lg"><CalendarDays className="w-5 h-5 text-ink-muted" aria-hidden /></div>
-          <h1 className="page-title flex items-center gap-1.5">Calendário <Dica texto={AJUDA} rotulo="Calendário" lado="direita" /></h1>
-        </div>
-        <GerarOsRecorrentes mes={mes} ano={ano} />
-      </div>
+    {/* Tudo num cartão só, colado no topo: título, navegação e visão numa barra; os filtros numa faixa fina;
+        o resto da tela é da grade */}
+    <div className="card overflow-visible -mt-2 sm:-mt-3">
+        {/* Barra única: título · mês · visão (no celular o mês desce para a 2ª linha) */}
+        <div className="px-3 py-2 sm:px-4 border-b border-surface-border flex flex-wrap items-center gap-x-3 gap-y-2" data-barra-calendario>
+          <div className="order-1 flex items-center gap-2 min-w-0">
+            <CalendarDays className="w-5 h-5 text-ink-muted shrink-0" aria-hidden />
+            <h1 className="page-title text-lg sm:text-xl flex items-center gap-1.5">Calendário <Dica texto={AJUDA} rotulo="Calendário" lado="direita" /></h1>
+          </div>
 
-      <div className="card overflow-visible">
-        {/* Barra de controle */}
-        <div className="p-4 border-b border-surface-border bg-surface-alt/40 flex flex-wrap items-center justify-between gap-3">
-          <div className="flex items-center gap-2">
-            <Link href={baseParams(mesAnterior)} className="p-2 rounded-lg border border-surface-border hover:bg-surface-alt"><ChevronLeft className="w-4 h-4" /></Link>
-            <Link href={baseParams(mesSeguinte)} className="p-2 rounded-lg border border-surface-border hover:bg-surface-alt"><ChevronRight className="w-4 h-4" /></Link>
-            <div className="ml-1 text-lg font-bold text-ink leading-tight capitalize">{nomeMes(mes)} {ano}</div>
+          <div className="order-3 sm:order-2 w-full sm:w-auto flex items-center gap-2 sm:pl-3 sm:border-l sm:border-surface-border">
+            <Link href={baseParams(mesAnterior)} aria-label="Mês anterior" title="Mês anterior" className="p-1.5 rounded-lg border border-surface-border hover:bg-surface-alt"><ChevronLeft className="w-4 h-4" aria-hidden /></Link>
+            <Link href={baseParams(mesSeguinte)} aria-label="Próximo mês" title="Próximo mês" className="p-1.5 rounded-lg border border-surface-border hover:bg-surface-alt"><ChevronRight className="w-4 h-4" aria-hidden /></Link>
+            <div className="ml-1 text-base font-bold text-ink leading-tight capitalize whitespace-nowrap">{nomeMes(mes)} {ano}</div>
             <Link href={baseParams({ mes: hojeBR.mes + 1, ano: hojeBR.ano, dia: hojeBR.dia })}
-              className="ml-2 inline-flex items-center px-3 py-1.5 rounded-lg border border-primary-500 text-primary-600 text-xs font-semibold hover:bg-primary-50 transition-colors">
+              className="ml-1 inline-flex items-center px-3 py-1 rounded-lg border border-primary-500 text-primary-600 text-xs font-semibold hover:bg-primary-50 transition-colors">
               Hoje
             </Link>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="order-2 sm:order-3 ml-auto flex items-center gap-2">
+            <AtualizarCalendario />
             <div className="flex rounded-lg border border-surface-border overflow-hidden text-sm">
-              <Link href={baseParams({ view: "mensal" })} className={cn("px-3 py-1.5", view === "mensal" ? "bg-primary-500 text-white" : "bg-white text-ink-muted hover:bg-surface-alt")}>Mês</Link>
-              <Link href={baseParams({ view: "semanal" })} className={cn("px-3 py-1.5", view === "semanal" ? "bg-primary-500 text-white" : "bg-white text-ink-muted hover:bg-surface-alt")}>Semana</Link>
+              <Link href={baseParams({ view: "mensal" })} aria-current={view === "mensal" ? "page" : undefined} className={cn("px-3 py-1.5", view === "mensal" ? "bg-primary-500 text-white" : "bg-white text-ink-muted hover:bg-surface-alt")}>Mês</Link>
+              <Link href={baseParams({ view: "semanal" })} aria-current={view === "semanal" ? "page" : undefined} className={cn("px-3 py-1.5", view === "semanal" ? "bg-primary-500 text-white" : "bg-white text-ink-muted hover:bg-surface-alt")}>Semana</Link>
             </div>
           </div>
         </div>
@@ -226,18 +231,21 @@ export default async function CalendarioPage({
         />
 
         {/* Legenda */}
-        <div className="px-4 py-3 border-t border-surface-border flex flex-wrap items-center gap-4 text-xs text-ink-muted">
+        <div className="px-3 sm:px-4 py-2 border-t border-surface-border flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs text-ink-muted" data-legenda-calendario>
           <span className="font-semibold text-ink-muted uppercase tracking-wider">Status:</span>
-          <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-acento" /> Aberta / agendada</span>
-          <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-atencao" /> Em andamento</span>
-          <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-ok" /> Concluída</span>
-          <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-atrasado" /> Atrasada</span>
+          {LEGENDA.map((g) => (
+            <span key={g} className="flex items-center gap-1.5">
+              <span className={cn("inline-flex items-center justify-center w-5 h-3.5 rounded border", ESTILO_GRUPO[g].cartao)} aria-hidden>
+                <span className={cn("w-1.5 h-1.5 rounded-full", ESTILO_GRUPO[g].ponto)} />
+              </span>
+              {ESTILO_GRUPO[g].rotulo}
+            </span>
+          ))}
           <span className="font-semibold text-ink-muted uppercase tracking-wider ml-2">Prioridade:</span>
           <span className="flex items-center gap-1.5"><AlertTriangle className="w-3 h-3 text-atencao" /> Alta</span>
           <span className="flex items-center gap-1.5"><AlertTriangle className="w-3 h-3 text-atrasado" /> Urgente</span>
           <span className="flex items-center gap-1.5"><Repeat className="w-3 h-3" /> OS recorrente</span>
         </div>
-      </div>
     </div>
     </SolicitacoesGaveta>
   );

@@ -199,6 +199,19 @@
   animation: osFadeSlide 0.15s ease;
 }
 
+/* --- Calendário: o dia de hoje pulsa de leve (um anel que se abre e some) para ser achado de relance --- */
+@keyframes hojePulso {
+  0% { box-shadow: 0 0 0 0 theme("colors.acento.DEFAULT / 45%"); }
+  70%, 100% { box-shadow: 0 0 0 6px theme("colors.acento.DEFAULT / 0%"); }
+}
+.anim-hoje-pulso {
+  animation: hojePulso 2s ease-out infinite;
+}
+/* Quem pediu menos animação continua vendo o círculo de hoje, parado */
+@media (prefers-reduced-motion: reduce) {
+  .anim-hoje-pulso { animation: none; }
+}
+
 /* --- Splash screen (app instalado) --- */
 @keyframes splashOut {
   0%, 70% { opacity: 1; }

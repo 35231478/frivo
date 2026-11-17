@@ -240,11 +240,15 @@ describe("Leva 5: as telas da Operação no padrão (guardas de fonte)", () => {
     expect(f).toMatch(/\/\/ Reverte\s+setEventos\(\(prev\) => \{/);
   });
 
-  it("gerar OS recorrentes é ação sensível: botão só com permissão e resultado em toast", () => {
-    const f = fonte("components/calendario/gerar-os-recorrentes.tsx");
-    expect(f).toMatch(/if \(!pode\("ordens", "criar"\) && !pode\("contratos", "editar"\)\) return null;/);
-    expect(f).toMatch(/toast\(/);
-    expect(f).not.toMatch(/criada\(s\)|setFeedback/);
+  it("\"Gerar OS recorrentes do mês\" saiu do calendário: a geração é da rotina diária, depois do faturamento e isolada dele", () => {
+    // O botão (e a rota que só ele chamava) deixaram de existir: mudança intencional
+    expect(fs.existsSync(path.join(RAIZ, "components/calendario/gerar-os-recorrentes.tsx"))).toBe(false);
+    expect(fs.existsSync(path.join(RAIZ, "app/api/contratos/gerar-os-recorrentes/route.ts"))).toBe(false);
+    expect(fonte("app/(dashboard)/calendario/page.tsx")).not.toMatch(/GerarOsRecorrentes|Gerar OS recorrentes/);
+    const cron = fonte("app/api/cron/faturar-contratos/route.ts");
+    // primeiro o faturamento; a geração das OS vem depois e uma falha dela não derruba a resposta
+    expect(cron).toMatch(/const faturamento = await rodarFaturamentoContratos\(\);\s+const osRecorrentes = await rolarHorizonteDeOsRecorrentes\(\)\.catch\(/);
+    expect(cron).toMatch(/NextResponse\.json\(\{ ok: true, horizonte, recorrentes, osRecorrentes, \.\.\.faturamento \}\)/);
   });
 
   it("os seletores do diálogo 'Nova OS' do calendário são os do padrão (cadastro inline + editar no contexto)", () => {
