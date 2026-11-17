@@ -12,7 +12,7 @@ import type { Session } from "next-auth";
 import {
   LayoutDashboard, Users, Thermometer, ClipboardList, FileText, HardHat, Settings, ChevronDown, ChevronRight,
   Wrench, Calculator, Wallet, Receipt, TrendingUp, FileBarChart, ShoppingCart, Timer, CalendarDays, QrCode, MapPinned,
-  Truck, UsersRound, BadgeDollarSign, ClipboardCheck, Smartphone, UserCog, Upload, Landmark, Globe, Coins,
+  Truck, UsersRound, BadgeDollarSign, ClipboardCheck, Smartphone, FolderOutput, UserCog, Upload, Landmark, Globe, Coins,
   PanelLeftClose, PanelLeftOpen, MoreVertical, LogOut, Package, FileBadge,
   CalendarClock, PackageOpen, PackageMinus, Trophy, UserPlus,
 } from "lucide-react";
@@ -103,6 +103,8 @@ const OPERACIONAL: Secao[] = [
           // Admissão digital: dado sensível de pessoa, permissão própria (não é "ver equipes")
           { href: "/admissoes", icone: UserPlus, label: "Admissões", modulo: "admissao", acao: "gerenciar", somenteAcao: true },
           { href: "/equipes", icone: UsersRound, label: "Equipes" },
+          // Documentos dos colaboradores saindo para o cliente: permissão própria ("Documentos › Enviar ao cliente")
+          { href: "/documentacao-equipe", icone: FolderOutput, label: "Documentação da equipe", modulo: "documentos", acao: "enviar", somenteAcao: true },
           { href: "/desempenho", icone: Trophy, label: "Desempenho" },
           { href: "/equipes/app-colaborador", icone: Smartphone, label: "App do colaborador", modulo: "configuracoes", acao: "gerenciar", somenteAcao: true },
         ],

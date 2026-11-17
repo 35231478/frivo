@@ -1,5 +1,5 @@
 import { type NextRequest } from "next/server";
-import { emailsSugeridos, sugerirColaboradores } from "@/lib/documentacao/pacote-server";
+import { contratosDoCliente, emailsSugeridos, sugerirColaboradores } from "@/lib/documentacao/pacote-server";
 import { guardaDeEnvio, responderEnvio } from "@/lib/documentacao/pacote-rotas";
 
 /**
@@ -16,7 +16,8 @@ export async function GET(req: NextRequest) {
     colaboradores: await sugerirColaboradores(ator.empresaId, {
       clienteId, contratoId: q.get("contratoId"), equipeId: q.get("equipeId"),
     }),
-    // os e-mails só depois de o cliente ter sido conferido como da empresa (acima)
+    // os e-mails e os contratos só depois de o cliente ter sido conferido como da empresa (acima)
     email: clienteId ? await emailsSugeridos(clienteId) : { para: [], cc: [] },
+    contratos: clienteId ? await contratosDoCliente(ator.empresaId, clienteId) : [],
   }));
 }

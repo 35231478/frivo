@@ -12,12 +12,18 @@
  *    para os contatos do cadastro do cliente, com "responder para" = a empresa);
  *  - LGPD do link: só os itens do pacote — documento de outro colaborador, de outra gaveta ou
  *    anexado depois não aparece e não baixa, nem trocando id na URL; arquivo excluído some;
- *  - link expirado e revogado: 410, mesma mensagem do link que não existe (404); revogar não apaga;
+ *  - link que não existe: 404 com frase genérica; expirado e revogado: 410 dizendo o MOTIVO (quem
+ *    chega ali tem o token de verdade — é o cliente, e ele precisa saber o que fazer); revogar não apaga;
+ *  - a lista: busca pelo cliente, filtro pela situação do link, as vias usadas e a prova de
+ *    recebimento (quando o cliente abriu e quando baixou);
  *  - o acesso do cliente fica registrado (abrir, baixar arquivo, baixar zip), com IP e navegador;
  *  - link novo é token novo, e pacote com documento que venceu depois não ganha link novo;
  *  - LOTE: um envio por cliente — cada um com o seu token, os seus arquivos e os seus e-mails;
  *    um cliente com vencido não segura os outros;
- *  - quem atende o cliente é sugerido pelo contrato, pelas OS e pela equipe — e ex-colaborador não.
+ *  - quem atende o cliente é sugerido pelo contrato, pelas OS e pela equipe — e ex-colaborador não;
+ *  - as PÁGINAS: o histórico e o novo envio barram quem não tem a permissão (mesmo digitando o
+ *    endereço) e nunca mostram envio de outra empresa; a página do cliente abre sem login, registra
+ *    o acesso, e o link que não vale mais diz o motivo em vez de um erro técnico.
  * Pula sem PG_TESTE_URL.
  */
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
@@ -25,6 +31,7 @@ import { execFileSync } from "node:child_process";
 import { inflateRawSync } from "node:zlib";
 import path from "node:path";
 import { NextRequest } from "next/server";
+import { renderToStaticMarkup } from "react-dom/server";
 import { montarPermissoes, permissoesTotais, type Permissoes } from "@/lib/permissoes";
 
 const URL_PG = process.env.PG_TESTE_URL;
@@ -37,6 +44,16 @@ const dia = (iso: string) => new Date(`${iso}T00:00:00.000Z`);
 const sessao = vi.hoisted(() => ({ atual: null as any }));
 vi.mock("next/server", async (orig) => ({ ...(await orig<typeof import("next/server")>()), after: () => {} }));
 vi.mock("@/lib/auth", () => ({ auth: vi.fn(async () => sessao.atual) }));
+// As PÁGINAS (histórico, novo envio e o link do cliente) são renderizadas aqui, sobre o banco real
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ push: () => {}, refresh: () => {}, replace: () => {}, back: () => {} }),
+  usePathname: () => "/documentacao-equipe", useSearchParams: () => new URLSearchParams(),
+  notFound: () => { throw new Error("NEXT_NOT_FOUND"); }, redirect: (u: string) => { throw new Error(`NEXT_REDIRECT ${u}`); },
+}));
+const visitante = vi.hoisted(() => ({ ip: "200.1.2.3" }));
+vi.mock("next/headers", () => ({
+  headers: async () => new Headers({ "x-forwarded-for": visitante.ip, "user-agent": "Mozilla/5.0 (iPhone)" }),
+}));
 
 /** O envio de e-mail é o único "de fora": aqui ele só registra o que sairia. O resto do módulo é o real. */
 const correio = vi.hoisted(() => ({ enviados: [] as any[], falhar: false }));
@@ -551,21 +568,36 @@ describe.skipIf(!URL_PG)("Documentação da equipe para o cliente (PostgreSQL re
     expect((await eventos(r.json.envio.id)).filter((x: string) => x === "ACESSO")).toHaveLength(3);
   });
 
-  it("link que não existe é 404; expirado e revogado são 410 — com a MESMA mensagem", async () => {
+  // Mudou no PR2, de propósito: antes o expirado dava a MESMA frase do link que não existe. O pedido
+  // das telas foi "link expirado/revogado mostra o motivo". Dizer o motivo não ajuda quem varre
+  // tokens — para cair aqui é preciso ter um token de verdade (32 bytes), e aí é o cliente.
+  it("link que não existe é 404 genérico; o expirado é 410 e diz QUANDO expirou e a quem pedir", async () => {
     const r = await criar({ validadeDias: 3 });
     const token = await tokenDe(r.json.envio.id);
     deslogado();
 
     const inexistente = await chamar("pubLista", "GET", { token: "nao-existe" });
     expect(inexistente.status).toBe(404);
+    expect(inexistente.json.erro, "nada confirma a quem chuta que ele quase acertou").not.toMatch(/expirou|desativado|Clima Total/);
 
     vi.setSystemTime(new Date("2026-11-19T12:00:01.000Z")); // 3 dias e 1 segundo depois
     for (const rota of ["pubLista", "pubZip"] as const) {
       const x = await chamar(rota, "GET", { token });
       expect(x.status, rota).toBe(410);
-      expect(x.json.erro, rota).toBe(inexistente.json.erro);
+      expect(x.json.erro, rota).toBe("Este link expirou em 19/11/2026. Peça um novo a Clima Total.");
       expect(x.bytes, rota).toBeNull();
     }
+  });
+
+  it("o link revogado é 410 e diz que foi desativado pela empresa", async () => {
+    const r = await criar();
+    const token = await tokenDe(r.json.envio.id);
+    await chamar("revogar", "POST", { id: r.json.envio.id });
+    deslogado();
+    const x = await chamar("pubLista", "GET", { token });
+    expect(x.status).toBe(410);
+    expect(x.json.erro).toBe("Este link foi desativado por Clima Total. Peça um novo a quem enviou.");
+    expect(JSON.stringify(x.json), "o motivo não leva dado do pacote junto").not.toMatch(/Marina|ASO|Shopping/);
   });
 
   it("revogar mata o link na hora, sem apagar o envio nem o histórico", async () => {
@@ -666,6 +698,69 @@ describe.skipIf(!URL_PG)("Documentação da equipe para o cliente (PostgreSQL re
     expect(doHospital.json.envios[0]).toMatchObject({ clienteNome: "Hospital Santa Clara", link: "SEM_LINK", arquivos: 1 });
   });
 
+  it("a lista mostra as vias usadas e a prova de recebimento — quando o cliente abriu e quando baixou", async () => {
+    const r = await criar({ via: "EMAIL", colaboradorIds: ["t1"], categorias: ["aso"] });
+    const token = await tokenDe(r.json.envio.id);
+    await chamar("zip", "GET", { id: r.json.envio.id });
+
+    let lista = await chamar("envios", "GET");
+    expect(lista.json.envios[0].vias).toEqual(["LINK", "ZIP", "EMAIL"]);
+    expect(lista.json.envios[0]).toMatchObject({ clienteAbriuEm: null, clienteBaixouEm: null });
+
+    deslogado();
+    vi.setSystemTime(new Date("2026-11-17T10:00:00.000Z"));
+    const pub = await chamar("pubLista", "GET", { token });
+    vi.setSystemTime(new Date("2026-11-17T10:05:00.000Z"));
+    await chamar("pubArquivo", "GET", { token, itemId: pub.json.itens[0].id });
+
+    como();
+    lista = await chamar("envios", "GET");
+    expect(lista.json.envios[0].clienteAbriuEm).toBe("2026-11-17T10:00:00.000Z");
+    expect(lista.json.envios[0].clienteBaixouEm).toBe("2026-11-17T10:05:00.000Z");
+  });
+
+  it("zip baixado pela EMPRESA não conta como recebimento do cliente", async () => {
+    const r = await criar({ via: "ZIP" });
+    await chamar("zip", "GET", { id: r.json.envio.id });
+    const lista = await chamar("envios", "GET");
+    expect(lista.json.envios[0].vias).toEqual(["ZIP"]);
+    expect(lista.json.envios[0].clienteBaixouEm).toBeNull();
+  });
+
+  it("a lista busca pelo nome do cliente e filtra pela situação do link", async () => {
+    const ativo = await criar();
+    const revogado = await criar({ clienteId: "c2", colaboradorIds: ["t3"], categorias: ["aso"] });
+    await chamar("revogar", "POST", { id: revogado.json.envio.id });
+    await criar({ clienteId: "c2", colaboradorIds: ["t3"], categorias: ["aso"], via: "ZIP" });
+    const curto = await criar({ colaboradorIds: ["t1"], categorias: ["aso"], validadeDias: 3 });
+
+    const ids = async (query: string) => (await chamar("envios", "GET", { query })).json.envios.map((e: any) => e.id).sort();
+    expect(await ids("q=hospital")).toHaveLength(2);
+    expect(await ids("q=SHOPPING"), "sem diferenciar maiúscula").toHaveLength(2);
+    expect(await ids("situacao=REVOGADO")).toEqual([revogado.json.envio.id]);
+    expect(await ids("situacao=SEM_LINK")).toHaveLength(1);
+    expect(await ids("situacao=ATIVO")).toEqual([ativo.json.envio.id, curto.json.envio.id].sort());
+    expect(await ids("situacao=EXPIRADO")).toEqual([]);
+
+    vi.setSystemTime(new Date("2026-11-20T12:00:00.000Z")); // o de 3 dias expirou; o de 7 segue
+    expect(await ids("situacao=EXPIRADO")).toEqual([curto.json.envio.id]);
+    expect(await ids("situacao=ATIVO")).toEqual([ativo.json.envio.id]);
+    // o filtro e o selo da linha não discordam
+    const lista = (await chamar("envios", "GET", { query: "situacao=EXPIRADO" })).json.envios;
+    expect(lista.map((e: any) => e.link)).toEqual(["EXPIRADO"]);
+  });
+
+  it("a sugestão traz os contratos ATIVOS do cliente — só os dele", async () => {
+    await prisma.contrato.createMany({ data: [
+      { id: "ka", empresaId: "e1", clienteId: "c1", numero: "CT-010", tipo: "MANUTENCAO_PREVENTIVA", dataInicio: AGORA },
+      { id: "kb", empresaId: "e1", clienteId: "c1", numero: "CT-011", tipo: "MANUTENCAO_PREVENTIVA", dataInicio: AGORA, status: "ENCERRADO" },
+      { id: "kc", empresaId: "e1", clienteId: "c2", numero: "CT-012", tipo: "MANUTENCAO_PREVENTIVA", dataInicio: AGORA },
+    ] });
+    const r = await chamar("sugestoes", "GET", { query: "clienteId=c1" });
+    expect(r.json.contratos).toEqual([{ id: "ka", numero: "CT-010" }]);
+    expect((await chamar("sugestoes", "GET", { query: "equipeId=nao-existe" })).status).toBe(404);
+  });
+
   /* ───────────────────────── o lote ───────────────────────── */
 
   it("LOTE: um envio por cliente — cada um com o seu token e SÓ os seus arquivos", async () => {
@@ -751,5 +846,136 @@ describe.skipIf(!URL_PG)("Documentação da equipe para o cliente (PostgreSQL re
     expect(eq.json.colaboradores.map((c: any) => c.nome)).toEqual(["Carla Reis", "João Lima"]);
 
     expect((await chamar("sugestoes", "GET", { query: "clienteId=cX" })).status, "cliente de outra empresa").toBe(404);
+  });
+
+  /* ───────────────────────── as páginas ───────────────────────── */
+
+  const paginaHistorico = async (sp: Record<string, string> = {}) => {
+    const { default: Pagina } = await import("@/app/(dashboard)/documentacao-equipe/page");
+    return renderToStaticMarkup(await Pagina({ searchParams: Promise.resolve(sp) }));
+  };
+  const paginaDoCliente = async (token: string) => {
+    const { default: Pagina } = await import("@/app/(publico)/documentacao/[token]/page");
+    return renderToStaticMarkup(await Pagina({ params: Promise.resolve({ token }) }));
+  };
+
+  it("histórico e novo envio: quem não tem \"enviar ao cliente\" é barrado mesmo digitando o endereço", async () => {
+    await criar();
+    const { default: Historico } = await import("@/app/(dashboard)/documentacao-equipe/page");
+    const { default: Novo } = await import("@/app/(dashboard)/documentacao-equipe/novo/page");
+    semEnviar();
+    await expect(Historico({ searchParams: Promise.resolve({}) })).rejects.toThrow("NEXT_REDIRECT /sem-permissao");
+    await expect(Novo()).rejects.toThrow("NEXT_REDIRECT /sem-permissao");
+    // só a ação "enviar" basta — não precisa de mais nada de Documentos
+    como(montarPermissoes({ documentos: ["enviar"] }));
+    expect(await paginaHistorico()).toContain("data-tabela-envios");
+    expect(renderToStaticMarkup(await Novo())).toContain("data-novo-envio");
+  });
+
+  it("o histórico lista o envio (cliente, pacote, via, link, quando, por quem) e a prova de recebimento", async () => {
+    const r = await criar({ via: "EMAIL" });
+    const token = await tokenDe(r.json.envio.id);
+    let html = await paginaHistorico();
+    expect(html).toContain(`data-envio="${r.json.envio.id}"`);
+    expect(html).toContain('data-link="ATIVO"');
+    for (const pedaco of ["Shopping Ibirapuera", "4 arquivos · 2 colaboradores", "Link · E-mail", "Link ativo", "16/11/2026", "Ana Souza", "Ainda não abriu"]) {
+      expect(html, pedaco).toContain(pedaco);
+    }
+    expect(html, "o botão de montar um pacote novo").toContain('href="/documentacao-equipe/novo"');
+    expect(html, "o token não vai para a lista: copiar o link é ação, não coluna").not.toContain(token.slice(0, 12) + '"');
+
+    deslogado();
+    vi.setSystemTime(new Date("2026-11-17T13:00:00.000Z"));
+    await paginaDoCliente(token);
+    como();
+    html = await paginaHistorico();
+    expect(html).toContain("Abriu em 17/11/2026");
+    expect(html).not.toContain("Ainda não abriu");
+
+    deslogado();
+    await chamar("pubZip", "GET", { token });
+    como();
+    expect(await paginaHistorico()).toContain("Baixou em 17/11/2026");
+  });
+
+  it("o histórico busca pelo cliente, filtra pela situação do link e nunca mostra envio de outra empresa", async () => {
+    const a = await criar();
+    const b = await chamar("envios", "POST", { corpo: { clienteId: "c2", colaboradorIds: ["t3"], categorias: ["aso"], via: "ZIP" } });
+    expect(b.status, JSON.stringify(b.json)).toBe(201);
+    const linhas = (html: string) => [...html.matchAll(/data-envio="([^"]+)"/g)].map((m) => m[1]).filter((v, i, t) => t.indexOf(v) === i);
+
+    expect(linhas(await paginaHistorico()).sort()).toEqual([a.json.envio.id, b.json.envio.id].sort());
+    expect(linhas(await paginaHistorico({ q: "hospital" }))).toEqual([b.json.envio.id]);
+    expect(linhas(await paginaHistorico({ situacao: "ATIVO" }))).toEqual([a.json.envio.id]);
+    expect(linhas(await paginaHistorico({ situacao: "SEM_LINK" }))).toEqual([b.json.envio.id]);
+    expect(await paginaHistorico({ situacao: "REVOGADO" })).toContain("Nenhum envio com esse filtro.");
+    expect(linhas(await paginaHistorico({ situacao: "qualquer-coisa" })), "filtro desconhecido é ignorado, não erro").toHaveLength(2);
+
+    como(permissoesTotais(), "e2");
+    const outra = await paginaHistorico();
+    expect(linhas(outra)).toEqual([]);
+    expect(outra).not.toMatch(/Shopping|Hospital/);
+    expect(outra).toContain("Nenhum envio por aqui.");
+  });
+
+  it("a página do cliente abre SEM login, mostra só o pacote e registra o acesso", async () => {
+    const r = await criar();
+    const token = await tokenDe(r.json.envio.id);
+    deslogado();
+    const html = await paginaDoCliente(token);
+    expect(html).toContain('data-pagina-documentacao="ATIVO"');
+    for (const pedaco of ["Shopping Ibirapuera", "Clima Total", "Disponível até 23/11/2026", "4</strong> arquivos", "Marina Alves", "João Lima", "Baixar tudo (zip)"]) {
+      expect(html, pedaco).toContain(pedaco);
+    }
+    expect(html).toContain(`href="/api/publico/documentacao/${token}/zip"`);
+    expect((html.match(/data-item-documentacao=/g) ?? []).length).toBe(4);
+    expect(html, "nada além do pacote: nem advertência, nem contrato, nem a outra colaboradora").not.toMatch(/Advertência|Contrato de trabalho|Carla Reis/);
+    expect(html, "a página do cliente não leva ao sistema").not.toMatch(/href="\/(login|dashboard|documentacao-equipe|colaboradores)/);
+
+    como();
+    const acesso = await prisma.documentacaoEnvioEvento.findFirst({ where: { envioId: r.json.envio.id, tipo: "ACESSO" } });
+    expect(acesso, "abrir a página é a prova de recebimento").toMatchObject({ ip: "200.1.2.3", userAgent: "Mozilla/5.0 (iPhone)" });
+  });
+
+  it("link que não vale mais: a página diz o MOTIVO, sem erro técnico e sem um dado do pacote", async () => {
+    const expira = await criar({ validadeDias: 3 });
+    const tokenExpirado = await tokenDe(expira.json.envio.id);
+    const revoga = await chamar("envios", "POST", { corpo: { clienteId: "c2", colaboradorIds: ["t3"], categorias: ["aso"], via: "LINK", validadeDias: 30 } });
+    const tokenRevogado = await tokenDe(revoga.json.envio.id);
+    await chamar("revogar", "POST", { id: revoga.json.envio.id });
+    deslogado();
+    vi.setSystemTime(new Date("2026-11-19T12:00:01.000Z"));
+
+    const expirado = await paginaDoCliente(tokenExpirado);
+    expect(expirado).toContain('data-pagina-documentacao="EXPIRADO"');
+    expect(expirado).toContain("Link expirado");
+    expect(expirado).toContain("Este link expirou em 19/11/2026. Peça um novo a Clima Total.");
+
+    const revogado = await paginaDoCliente(tokenRevogado);
+    expect(revogado).toContain('data-pagina-documentacao="REVOGADO"');
+    expect(revogado).toContain("Link desativado");
+    expect(revogado).toContain("Este link foi desativado por Clima Total. Peça um novo a quem enviou.");
+
+    const inexistente = await paginaDoCliente("nao-existe");
+    expect(inexistente).toContain('data-pagina-documentacao="INDISPONIVEL"');
+    expect(inexistente).toContain("Link indisponível");
+    expect(inexistente, "quem chuta não fica sabendo de quem é o sistema").not.toMatch(/Clima Total|expirou|desativado/);
+
+    for (const html of [expirado, revogado, inexistente]) {
+      expect(html).not.toMatch(/Marina|João|Carla|ASO|Shopping|Hospital|data-baixar-tudo|data-item-documentacao/);
+      expect(html).not.toMatch(/Error|undefined|stack|410|404/);
+    }
+  });
+
+  it("varrer tokens pela página esbarra no mesmo limite por IP das rotas — e o bloqueio também vira frase", async () => {
+    deslogado();
+    visitante.ip = "201.9.9.9";
+    try {
+      let html = "";
+      for (let i = 0; i < 40 && !html.includes('data-pagina-documentacao="BLOQUEADO"'); i++) html = await paginaDoCliente(`chute-${i}`);
+      expect(html).toContain('data-pagina-documentacao="BLOQUEADO"');
+      expect(html).toContain("Aguarde um pouco");
+      expect(html).toMatch(/Muitas tentativas\. Tente de novo em \d+ min\./);
+    } finally { visitante.ip = "200.1.2.3"; }
   });
 });
