@@ -13,6 +13,9 @@
  *  - o botão "Gerar documento" só existe com a permissão, e some em somente leitura;
  *  - o papel aguardando assinatura aparece na MESMA lista, com baixar a prévia, assinar e cancelar;
  *  - a linha do papel já assinado troca "Excluir" por "Cancelar o documento";
+ *  - campo obrigatório do tipo em branco trava na tela, antes de ir ao servidor;
+ *  - papel CANCELADO não volta a aparecer como aguardando assinatura;
+ *  - a foto grande demais é recusada, e o X descarta a que foi tirada;
  *  - a tela não muda quando a rota recusa.
  */
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
@@ -21,6 +24,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { EditorModeloDocumento } from "@/components/cadastros/editores/editor-modelo-documento";
 import { GerarDocumento, type EmitidoDaTela, type ModeloDaLista } from "@/components/colaborador/gerar-documento";
 import { DocumentosColaborador } from "@/components/colaborador/documentos-colaborador";
+import { CapturaFoto, TAMANHO_MAX_FOTO } from "@/components/ui/captura-foto";
 import type { DocumentoLinha } from "@/lib/colaborador/documentos-server";
 
 (globalThis as any).IS_REACT_ACT_ENVIRONMENT = true;
@@ -203,6 +207,16 @@ describe("Gerar documento: o diálogo", () => {
     expect(chamadas, "nada foi ao servidor").toHaveLength(0);
   });
 
+  it("campo obrigatório do tipo em branco trava aqui, sem ida ao servidor", async () => {
+    await abrir();
+    await escolher("[data-escolher-modelo]", "m-adv");
+    // a data do ocorrido já nasce hoje; o motivo é escrito, e sem ele não há papel
+    await clicar($("[data-gerar]"));
+    expect(txt($("[data-erro-gerar]"))).toContain("Preencha:");
+    expect(txt($("[data-erro-gerar]"))).toContain("Motivo");
+    expect(chamadas, "nada foi ao servidor").toHaveLength(0);
+  });
+
   it("a prévia mostra o texto preenchido e marca o campo que o sistema não conhece", async () => {
     resposta = () => ({ status: 200, dados: { texto: "Clima Total entrega a Marina os itens. Visto: {{supervisor}}", desconhecidos: ["supervisor"] } });
     await abrir();
@@ -295,6 +309,13 @@ describe("Seção Documentos: o papel gerado", () => {
     expect(txt(linha)).toContain("Gerado por Ana Souza");
   });
 
+  it("papel CANCELADO não volta a aparecer como aguardando assinatura", async () => {
+    const cancelado = EMITIDO({ id: "e3", canceladoEm: "2026-11-17T13:00:00.000Z", cancelamentoMotivo: "trocado" });
+    await montar(createElement(DocumentosColaborador, props({ emitidosIniciais: [cancelado] })));
+    expect($("[data-linha-pendente='e3']"), "cancelado some da lista de pendentes").toBeNull();
+    expect(corpoTexto()).not.toContain("Aguardando assinatura");
+  });
+
   it("o pendente oferece baixar a prévia, assinar e cancelar", async () => {
     await montar(createElement(DocumentosColaborador, props({ emitidosIniciais: [EMITIDO()] })));
     await clicar($("[data-linha-pendente='e1'] [data-acao='menu']"));
@@ -349,5 +370,41 @@ describe("Seção Documentos: o papel gerado", () => {
 
     expect(txt($("[data-erro-cancelar]"))).toContain("cancelado");
     expect($("[data-documento='d9']"), "a tela não muda quando a rota recusa").toBeTruthy();
+  });
+});
+
+/* ───────────────────────── a captura de foto (compartilhada com a admissão) ───────────────────────── */
+
+describe("Captura de foto", () => {
+  /** Põe um arquivo no input escondido e dispara o change, como o seletor do aparelho faria. */
+  async function escolherArquivo(bytes: number, tipo = "image/png") {
+    const entrada = $<HTMLInputElement>("input[type=file]")!;
+    const arquivo = new File([new Uint8Array(bytes)], "foto.png", { type: tipo });
+    Object.defineProperty(entrada, "files", { value: [arquivo], configurable: true });
+    await act(async () => { entrada.dispatchEvent(new Event("change", { bubbles: true })); });
+    await esperar();
+  }
+
+  it("foto acima do teto é recusada, com a mensagem — e nada é guardado", async () => {
+    const guardadas: (string | null)[] = [];
+    const erros: string[] = [];
+    await montar(createElement(CapturaFoto, {
+      valor: null, onValor: (v: string | null) => guardadas.push(v), onErro: (m: string) => erros.push(m),
+    } as any));
+
+    await escolherArquivo(TAMANHO_MAX_FOTO + 1);
+    expect(erros[0]).toContain("MB");
+    expect(guardadas, "nenhuma foto entrou").toHaveLength(0);
+  });
+
+  it("o X descarta a foto tirada", async () => {
+    const guardadas: (string | null)[] = [];
+    await montar(createElement(CapturaFoto, {
+      valor: "data:image/png;base64,iVBORw0KGgo=", onValor: (v: string | null) => guardadas.push(v),
+    } as any));
+
+    expect($("[data-selfie]"), "a foto aparece").toBeTruthy();
+    await clicar($("[data-tirar-selfie]"));
+    expect(guardadas).toEqual([null]);
   });
 });
