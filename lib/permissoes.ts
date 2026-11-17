@@ -8,7 +8,7 @@ import { corDado } from "@/lib/ui/tokens";
 export type Acao =
   | "visualizar" | "criar" | "editar" | "excluir" | "concluir" | "aprovar"
   | "gerenciar" | "medicoes" | "contasReceber" | "fluxoCaixa" | "folha" | "fiscal" | "perdas" | "checklist" | "exportar"
-  | "separar" | "revisar" | "disciplinar";
+  | "separar" | "revisar" | "disciplinar" | "enviar";
 
 export type Permissoes = Record<string, Partial<Record<Acao, boolean>>>;
 
@@ -39,6 +39,7 @@ export const ACOES_LABEL: Record<Acao, string> = {
   separar: "Separar material",
   revisar: "Revisar penalidades",
   disciplinar: "Advertência e suspensão",
+  enviar: "Enviar ao cliente",
 };
 
 /** Matriz de permissões agrupada por seção (fonte da verdade da UI e dos defaults). */
@@ -86,8 +87,10 @@ export const SECOES: SecaoDef[] = [
       { id: "admissao", label: "Admissão digital", icone: "UserPlus", acoes: ["gerenciar"] },
       // Documentos do colaborador: "gerenciar" = os MODELOS da empresa (Configurações); "criar" =
       // gerar e assinar um documento na ficha de alguém; "disciplinar" = advertência e suspensão,
-      // que é papel sensível — quem não tem não gera E não vê na lista de documentos da pessoa.
-      { id: "documentos", label: "Documentos do colaborador", icone: "FileSignature", acoes: ["criar", "gerenciar", "disciplinar"] },
+      // que é papel sensível — quem não tem não gera E não vê na lista de documentos da pessoa;
+      // "enviar" = montar o pacote de documentação da equipe e mandá-lo ao CLIENTE (link, zip ou
+      // e-mail). É dado de pessoa saindo da empresa: ação própria, que ninguém herda de "criar".
+      { id: "documentos", label: "Documentos do colaborador", icone: "FileSignature", acoes: ["criar", "gerenciar", "disciplinar", "enviar"] },
     ],
   },
   {

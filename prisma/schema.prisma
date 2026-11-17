@@ -577,6 +577,7 @@ model Empresa {
   admissaoConfig AdmissaoConfig?
   documentoModelos  DocumentoModelo[]
   documentosEmitidos DocumentoEmitido[]
+  documentacaoEnvios DocumentacaoEnvio[]
 
   @@map("empresas")
 }
@@ -892,6 +893,9 @@ model Usuario {
   documentoModelosCriados    DocumentoModelo[]  @relation("DocumentoModeloCriadoPor")
   documentosEmitidosCriados  DocumentoEmitido[] @relation("DocumentoEmitidoCriadoPor")
   documentosEmitidosCancelados DocumentoEmitido[] @relation("DocumentoEmitidoCanceladoPor")
+  documentacaoEnviosCriados   DocumentacaoEnvio[] @relation("DocumentacaoEnvioCriadoPor")
+  documentacaoEnviosRevogados DocumentacaoEnvio[] @relation("DocumentacaoEnvioRevogadoPor")
+  documentacaoEventos         DocumentacaoEnvioEvento[]
   documentosAnexados  ColaboradorDocumento[] @relation("DocumentoColaboradorCriadoPor")
   documentosExcluidos ColaboradorDocumento[] @relation("DocumentoColaboradorExcluidoPor")
 
@@ -1038,6 +1042,7 @@ model Tecnico {
 
   admissoes   Admissao[]
   documentosEmitidos DocumentoEmitido[]
+  documentacaoItens  DocumentacaoEnvioItem[]
   dependentes ColaboradorDependente[]
 
   @@unique([cpf, empresaId])
@@ -1115,6 +1120,7 @@ model Cliente {
   responsavelTecnico      Tecnico?                 @relation(fields: [responsavelTecnicoId], references: [id])
   unidades                Unidade[]
   contratos               Contrato[]
+  documentacaoEnvios      DocumentacaoEnvio[]
   ordensServico           OrdemServico[]
   anexos                  AnexoCliente[]
   contatosCliente         ContatoCliente[]
@@ -1478,6 +1484,8 @@ model Contrato {
   @@index([empresaId, dataFim])
   @@index([clienteId])
   @@index([responsavelTecnicoId])
+  documentacaoEnvios DocumentacaoEnvio[]
+
   @@index([servicoId])
   @@map("contratos")
 }
@@ -3961,6 +3969,8 @@ model ColaboradorDocumento {
   excluidoPor Usuario? @relation("DocumentoColaboradorExcluidoPor", fields: [excluidoPorId], references: [id], onDelete: SetNull)
   /// Preenchido quando o anexo nasceu de um modelo (Gerar documento)
   emitido     DocumentoEmitido?
+  /// Os pacotes ao cliente em que este arquivo entrou (o rastro de para quem ele foi)
+  enviosAoCliente DocumentacaoEnvioItem[]
 
   @@index([colaboradorId, excluidoEm])
   @@map("colaborador_documentos")
@@ -5315,4 +5325,95 @@ model DocumentoEmitido {
   @@index([empresaId, tipo])
   @@index([colaboradorId, canceladoEm])
   @@map("documento_emitidos")
+}
+
+/// DOCUMENTAÇÃO DA EQUIPE PARA O CLIENTE: o pacote que foi montado e enviado — para qual cliente,
+/// com os documentos de quais colaboradores, por qual via (link, zip, e-mail), por quem e quando.
+/// O link público é o `token`: sem login, com prazo curto, revogável. Um envio é de UM cliente — o
+/// lote é uma lista de envios individuais (`loteId`), nunca um link compartilhado.
+model DocumentacaoEnvio {
+  id          String  @id @default(cuid())
+  empresaId   String  @map("empresa_id")
+  /// SetNull + nome copiado: o histórico de para quem foi continua legível se o cadastro sumir
+  clienteId   String? @map("cliente_id")
+  clienteNome String  @map("cliente_nome")
+  contratoId  String? @map("contrato_id")
+  /// As gavetas marcadas (ids de CATEGORIAS em lib/colaborador/documentos.ts)
+  categorias  String[]
+  /// POR_COLABORADOR | POR_TIPO | COLABORADOR_E_TIPO — como as pastas do pacote são montadas
+  organizacao String  @default("POR_COLABORADOR")
+
+  /// O segredo do link público (/documentacao/<token>). NULL enquanto o pacote só foi baixado em zip
+  token         String?   @unique
+  expiraEm      DateTime? @map("expira_em")
+  /// Revogar não apaga: o link morre, o histórico fica
+  revogadoEm    DateTime? @map("revogado_em")
+  revogadoPorId String?   @map("revogado_por_id")
+
+  /// Os envios disparados juntos (renovação anual para vários clientes) dividem este id
+  loteId      String?  @map("lote_id")
+  criadoPorId String?  @map("criado_por_id")
+  criadoEm    DateTime @default(now()) @map("criado_em")
+  atualizadoEm DateTime @updatedAt @map("atualizado_em")
+
+  empresa     Empresa   @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  cliente     Cliente?  @relation(fields: [clienteId], references: [id], onDelete: SetNull)
+  contrato    Contrato? @relation(fields: [contratoId], references: [id], onDelete: SetNull)
+  criadoPor   Usuario?  @relation("DocumentacaoEnvioCriadoPor", fields: [criadoPorId], references: [id], onDelete: SetNull)
+  revogadoPor Usuario?  @relation("DocumentacaoEnvioRevogadoPor", fields: [revogadoPorId], references: [id], onDelete: SetNull)
+  itens       DocumentacaoEnvioItem[]
+  eventos     DocumentacaoEnvioEvento[]
+
+  @@index([empresaId, criadoEm])
+  @@index([clienteId])
+  @@index([loteId])
+  @@map("documentacao_envios")
+}
+
+/// Um arquivo do pacote. É a LISTA FECHADA do que o link entrega: o cliente só baixa o que está
+/// aqui — nunca outro colaborador, nunca outra gaveta, nunca um documento anexado depois.
+model DocumentacaoEnvioItem {
+  id              String    @id @default(cuid())
+  envioId         String    @map("envio_id")
+  /// SetNull + dados copiados: se o arquivo sair do banco, fica o registro de que ele foi enviado
+  documentoId     String?   @map("documento_id")
+  colaboradorId   String?   @map("colaborador_id")
+  colaboradorNome String    @map("colaborador_nome")
+  categoria       String
+  nome            String
+  /// O caminho dentro do pacote ("Marina Alves/ASO - exame periódico.pdf")
+  caminho         String
+  dataVencimento  DateTime? @map("data_vencimento")
+  tamanho         Int?
+
+  envio       DocumentacaoEnvio     @relation(fields: [envioId], references: [id], onDelete: Cascade)
+  documento   ColaboradorDocumento? @relation(fields: [documentoId], references: [id], onDelete: SetNull)
+  colaborador Tecnico?              @relation(fields: [colaboradorId], references: [id], onDelete: SetNull)
+
+  @@index([envioId])
+  @@index([documentoId])
+  @@index([colaboradorId])
+  @@map("documentacao_envio_itens")
+}
+
+/// A linha do tempo do envio: o que a empresa fez (criou, gerou link, baixou zip, mandou e-mail,
+/// revogou) e o que o cliente fez pelo link (abriu, baixou) — com IP e navegador.
+model DocumentacaoEnvioEvento {
+  id        String   @id @default(cuid())
+  envioId   String   @map("envio_id")
+  /// CRIADO | LINK_GERADO | ZIP_BAIXADO | EMAIL_ENVIADO | EMAIL_FALHOU | REVOGADO | ACESSO | DOWNLOAD | DOWNLOAD_ZIP
+  tipo      String
+  /// Quem fez. NULL = o cliente, pelo link público
+  usuarioId String?  @map("usuario_id")
+  ip        String?
+  userAgent String?  @map("user_agent")
+  /// O detalhe do evento: os destinatários do e-mail, o arquivo baixado, a validade do link
+  detalhe   Json?
+  criadoEm  DateTime @default(now()) @map("criado_em")
+
+  envio   DocumentacaoEnvio @relation(fields: [envioId], references: [id], onDelete: Cascade)
+  usuario Usuario?          @relation(fields: [usuarioId], references: [id], onDelete: SetNull)
+
+  @@index([envioId, criadoEm])
+  @@map("documentacao_envio_eventos")
 }
