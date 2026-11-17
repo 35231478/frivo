@@ -18,7 +18,7 @@ O servidor já recusava tudo com 403; o que faltava era a tela não oferecer.
 |---|---|---|---|
 | `/calendario` | "Nova OS neste dia" (o + do dia, o clique no dia, o botão do diálogo do dia) | Ordens › criar | `POST /api/ordens` |
 | `/calendario` | arrastar o cartão para outro dia (reagendar) | Ordens › editar | `PATCH /api/ordens/[id]` |
-| `/calendario` | "Gerar OS recorrentes do mês" (cria OS em lote) | Ordens › criar **ou** Contratos › editar | `POST /api/contratos/gerar-os-recorrentes` |
+| `/calendario` | ~~"Gerar OS recorrentes do mês"~~ — o botão saiu: as OS dos contratos nascem na rotina diária (`docs/calendario.md`) | — | — |
 | `/ordens/[id]` | "Editar" no cabeçalho da OS | Ordens › editar | `PUT /api/ordens/[id]` |
 | `/pmoc` | Novo PMOC, lápis, Inativar / Reativar, configuração | PMOC › criar / editar / excluir | as rotas de `pmocs` (já era) |
 

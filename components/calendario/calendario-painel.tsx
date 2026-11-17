@@ -35,6 +35,9 @@ export function CalendarioPainel({
     prioridade: (sp.get("prioridade") ?? "").split(",").filter(Boolean),
   }));
   const [mostrarMais, setMostrarMais] = useState(filtros.status.length > 0 || filtros.prioridade.length > 0);
+  // No celular os filtros ficam recolhidos para a grade subir (no computador a faixa está sempre à vista).
+  // Quem chega com filtro na URL já vê os campos abertos.
+  const [aberto, setAberto] = useState(() => ["clienteId", "tipos", "numero", "unidade", "tecnicoId", "status", "prioridade"].some((k) => (sp.get(k) ?? "") !== ""));
   const montou = useRef(false);
 
   function set<K extends keyof Filtros>(chave: K, valor: Filtros[K]) {
@@ -100,76 +103,81 @@ export function CalendarioPainel({
   const statusOpts = Object.entries(LABELS_STATUS_OS).map(([value, label]) => ({ value, label }));
   const prioridadeOpts = Object.entries(LABELS_PRIORIDADE).map(([value, label]) => ({ value, label }));
 
+  const resumo = (
+    <span className="text-sm text-ink-muted whitespace-nowrap" data-resumo-calendario>
+      {filtrando
+        ? <><strong className="text-ink">{exibidos}</strong> de <strong className="text-ink">{totalMes}</strong> ordens de serviço</>
+        : <><strong className="text-ink">{totalMes}</strong> {totalMes === 1 ? "ordem de serviço" : "ordens de serviço"}</>}
+    </span>
+  );
+
   return (
     <>
-      <div className="p-4 border-b border-surface-border bg-surface-alt/30 space-y-3">
-        {/* Filtros principais */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
-          <div>
-            <label className="text-[11px] font-semibold text-ink-muted">Cliente</label>
-            <BuscaSelect value={filtros.clienteId} onChange={(v) => set("clienteId", v)} options={opcoes.clientes} placeholder="Todos os clientes" />
+      {/* Faixa de filtros numa linha só: o campo vazio mostra o próprio nome (vazio = todos); no celular fica recolhida */}
+      <div className="px-3 py-2 sm:px-4 border-b border-surface-border bg-surface-alt/30" data-filtros-calendario>
+        <div className="flex flex-wrap items-center gap-2">
+          {/* Resumo + abrir/fechar (o botão só existe no celular) */}
+          {/* Sem filtro, o total cabe na ponta da linha dos campos; filtrando, o resumo (com "Limpar") desce inteiro */}
+          <div className={cn("order-1 w-full flex items-center justify-between gap-2", ativos > 0 ? "md:order-3 md:justify-start" : "md:order-2 md:w-auto md:justify-end md:ml-auto")}>
+            <div className="flex items-center gap-2 min-w-0 flex-wrap">
+              {resumo}
+              {ativos > 0 && (
+                <span className="inline-flex items-center gap-1 text-xs font-semibold bg-primary-50 text-primary-700 px-2 py-0.5 rounded-full whitespace-nowrap">
+                  <Filter className="w-3 h-3" aria-hidden /> {ativos} {ativos === 1 ? "filtro ativo" : "filtros ativos"}
+                </span>
+              )}
+              {ativos > 0 && (
+                <button type="button" onClick={limpar} className="inline-flex items-center gap-1 text-xs font-medium text-atrasado hover:text-atrasado-texto whitespace-nowrap">
+                  <X className="w-3.5 h-3.5" aria-hidden /> Limpar filtros
+                </button>
+              )}
+            </div>
+            <button
+              type="button"
+              onClick={() => setAberto((v) => !v)}
+              aria-expanded={aberto} aria-controls="filtros-calendario" data-abrir-filtros
+              className={cn("md:hidden inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium border transition-colors shrink-0",
+                aberto ? "bg-primary-50 border-primary-200 text-primary-700" : "bg-white border-surface-border text-ink-muted")}
+            >
+              <Filter className="w-4 h-4" aria-hidden /> Filtros
+              <ChevronDown className={cn("w-3.5 h-3.5 transition-transform", aberto && "rotate-180")} aria-hidden />
+            </button>
           </div>
-          <div>
-            <label className="text-[11px] font-semibold text-ink-muted">Tipo de OS</label>
-            <MultiSelect options={opcoes.tiposOs} selected={filtros.tipos} onChange={(v) => set("tipos", v)} placeholder="Todos os tipos" />
-          </div>
-          <div>
-            <label className="text-[11px] font-semibold text-ink-muted">Número da OS</label>
-            <input value={filtros.numero} onChange={(e) => set("numero", e.target.value)} placeholder="Ex.: 332" className={selectCls} />
-          </div>
-          <div>
-            <label className="text-[11px] font-semibold text-ink-muted">Localização / Unidade</label>
-            <input value={filtros.unidade} onChange={(e) => set("unidade", e.target.value)} placeholder="Ex.: Matriz, Sala 201" className={selectCls} />
-          </div>
-          <div>
-            <label className="text-[11px] font-semibold text-ink-muted">Técnico</label>
-            <SelectTecnico options={opcoes.tecnicos} value={filtros.tecnicoId} onChange={(v) => set("tecnicoId", v)} placeholder="Todos os técnicos" />
+
+          {/* Os campos: uma linha no computador; no celular aparecem ao tocar em "Filtros" */}
+          <div
+            id="filtros-calendario"
+            className={cn("order-2 md:order-1 w-full md:w-auto md:flex-1 grid-cols-1 sm:grid-cols-2 gap-2 md:flex md:flex-wrap md:items-center",
+              aberto ? "grid" : "hidden")}
+          >
+            <BuscaSelect className="md:flex-1 md:min-w-[128px]" rotulo="Cliente" value={filtros.clienteId} onChange={(v) => set("clienteId", v)} options={opcoes.clientes} placeholder="Cliente" />
+            <div className="md:flex-1 md:min-w-[128px]">
+              <MultiSelect rotulo="Tipo de OS" options={opcoes.tiposOs} selected={filtros.tipos} onChange={(v) => set("tipos", v)} placeholder="Tipo de OS" />
+            </div>
+            <input aria-label="Número da OS" value={filtros.numero} onChange={(e) => set("numero", e.target.value)} placeholder="Número da OS" className={cn(selectCls, "md:flex-1 md:min-w-[112px] md:w-auto")} />
+            <input aria-label="Localização ou unidade" value={filtros.unidade} onChange={(e) => set("unidade", e.target.value)} placeholder="Localização / unidade" className={cn(selectCls, "md:flex-1 md:min-w-[128px] md:w-auto")} />
+            <div className="md:flex-1 md:min-w-[128px]">
+              <SelectTecnico options={opcoes.tecnicos} value={filtros.tecnicoId} onChange={(v) => set("tecnicoId", v)} placeholder="Técnico" />
+            </div>
+            <button
+              type="button"
+              onClick={() => setMostrarMais((v) => !v)}
+              aria-expanded={mostrarMais} data-mais-filtros
+              className={cn("inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium border transition-colors whitespace-nowrap",
+                mostrarMais ? "bg-primary-50 border-primary-200 text-primary-700" : "bg-white border-surface-border text-ink-muted hover:bg-surface-alt")}
+            >
+              <SlidersHorizontal className="w-4 h-4" aria-hidden /> Mais filtros
+              <ChevronDown className={cn("w-3.5 h-3.5 transition-transform", mostrarMais && "rotate-180")} aria-hidden />
+            </button>
           </div>
         </div>
-
-        <button
-          type="button"
-          onClick={() => setMostrarMais((v) => !v)}
-          className={cn("inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium border transition-colors",
-            mostrarMais ? "bg-primary-50 border-primary-200 text-primary-700" : "bg-white border-surface-border text-ink-muted hover:bg-surface-alt")}
-        >
-          <SlidersHorizontal className="w-4 h-4" /> Mais filtros
-          <ChevronDown className={cn("w-3.5 h-3.5 transition-transform", mostrarMais && "rotate-180")} />
-        </button>
 
         {mostrarMais && (
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-3 border-t border-surface-border anim-data">
-            <div>
-              <label className="text-[11px] font-semibold text-ink-muted">Status</label>
-              <MultiSelect options={statusOpts} selected={filtros.status} onChange={(v) => set("status", v)} placeholder="Todos os status" />
-            </div>
-            <div>
-              <label className="text-[11px] font-semibold text-ink-muted">Prioridade</label>
-              <MultiSelect options={prioridadeOpts} selected={filtros.prioridade} onChange={(v) => set("prioridade", v)} placeholder="Todas as prioridades" />
-            </div>
+          <div className={cn("grid-cols-1 sm:grid-cols-2 gap-2 mt-2 anim-data md:grid md:max-w-xl", aberto ? "grid" : "hidden")} data-filtros-extras>
+            <MultiSelect rotulo="Status" options={statusOpts} selected={filtros.status} onChange={(v) => set("status", v)} placeholder="Status" />
+            <MultiSelect rotulo="Prioridade" options={prioridadeOpts} selected={filtros.prioridade} onChange={(v) => set("prioridade", v)} placeholder="Prioridade" />
           </div>
         )}
-
-        {/* Resumo */}
-        <div className="flex items-center justify-between flex-wrap gap-2 pt-1">
-          <div className="flex items-center gap-3 text-sm text-ink-muted">
-            <span>
-              {filtrando
-                ? <><strong className="text-ink">{exibidos}</strong> de <strong className="text-ink">{totalMes}</strong> ordens de serviço</>
-                : <><strong className="text-ink">{totalMes}</strong> {totalMes === 1 ? "ordem de serviço" : "ordens de serviço"}</>}
-            </span>
-            {ativos > 0 && (
-              <span className="inline-flex items-center gap-1 text-xs font-semibold bg-primary-50 text-primary-700 px-2 py-0.5 rounded-full">
-                <Filter className="w-3 h-3" /> {ativos} {ativos === 1 ? "filtro ativo" : "filtros ativos"}
-              </span>
-            )}
-          </div>
-          {ativos > 0 && (
-            <button type="button" onClick={limpar} className="inline-flex items-center gap-1 text-xs font-medium text-atrasado hover:text-atrasado-texto">
-              <X className="w-3.5 h-3.5" /> Limpar filtros
-            </button>
-          )}
-        </div>
       </div>
 
       <CalendarioGrid celulas={celulas} eventosPorDia={eventosPorDia} opcoes={opcoes} dimmedIds={filtrando ? dimmedIds : undefined} />
@@ -188,8 +196,8 @@ function useForaDoClique(aoFechar: () => void) {
 }
 
 function MultiSelect({
-  options, selected, onChange, placeholder,
-}: { options: { value: string; label: string }[]; selected: string[]; onChange: (v: string[]) => void; placeholder: string }) {
+  options, selected, onChange, placeholder, rotulo,
+}: { options: { value: string; label: string }[]; selected: string[]; onChange: (v: string[]) => void; placeholder: string; rotulo: string }) {
   const [aberto, setAberto] = useState(false);
   const ref = useForaDoClique(() => setAberto(false));
   const toggle = (v: string) => onChange(selected.includes(v) ? selected.filter((x) => x !== v) : [...selected, v]);
@@ -199,7 +207,7 @@ function MultiSelect({
 
   return (
     <div ref={ref} className="relative">
-      <button type="button" onClick={() => setAberto((a) => !a)} className={cn(selectCls, "flex items-center justify-between gap-2 text-left")}>
+      <button type="button" onClick={() => setAberto((a) => !a)} aria-label={rotulo} aria-haspopup="listbox" aria-expanded={aberto} className={cn(selectCls, "flex items-center justify-between gap-2 text-left")}>
         <span className={cn("truncate", selected.length ? "text-ink" : "text-ink-subtle")}>{texto}</span>
         <ChevronDown className="w-4 h-4 text-ink-subtle shrink-0" />
       </button>
@@ -232,7 +240,7 @@ function SelectTecnico({
 
   return (
     <div ref={ref} className="relative">
-      <button type="button" onClick={() => setAberto((a) => !a)} className={cn(selectCls, "flex items-center justify-between gap-2 text-left")}>
+      <button type="button" onClick={() => setAberto((a) => !a)} aria-label="Técnico" aria-haspopup="listbox" aria-expanded={aberto} className={cn(selectCls, "flex items-center justify-between gap-2 text-left")}>
         <span className="flex items-center gap-2 min-w-0">
           {sel && <AvatarTecnico nome={sel.label} fotoUrl={sel.avatar} size={20} />}
           <span className={cn("truncate", sel ? "text-ink" : "text-ink-subtle")}>{sel?.label ?? placeholder}</span>

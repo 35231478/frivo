@@ -8,7 +8,8 @@ import {
   MouseSensor, TouchSensor, useSensor, useSensors, pointerWithin,
   type DragStartEvent, type DragEndEvent,
 } from "@dnd-kit/core";
-import { cn, MESES_PT, LABELS_STATUS_OS, LABELS_PRIORIDADE } from "@/lib/utils";
+import { cn, iniciais, MESES_PT, LABELS_STATUS_OS, LABELS_PRIORIDADE } from "@/lib/utils";
+import { ESTILO_CARTAO, ESTILO_GRUPO, grupoDoCard, type GrupoStatus } from "@/lib/calendario/cores";
 import { AvatarTecnico } from "@/components/ui/avatar-tecnico";
 import { InputHora } from "@/components/ui/input-hora";
 import { MSG_HORA_INVALIDA, horaValida } from "@/components/ui/input-data-hora";
@@ -18,7 +19,7 @@ import { SelectCadastroRapido } from "@/components/ui/select-cadastro-rapido";
 import { CLIENTE, TIPO_OS } from "@/components/cadastro-rapido/definicoes";
 import { MSG_SEM_EXECUTOR_TELA } from "@/lib/atividade-equipe";
 import { type OpcaoBusca } from "@/components/ui/busca-select";
-import { Repeat, MapPin, CalendarClock, Wrench, AlertTriangle, X, Plus, Check, Lock, Maximize2, Minimize2, GripHorizontal, Car, ListChecks } from "lucide-react";
+import { Repeat, MapPin, CalendarClock, Wrench, AlertTriangle, X, Plus, Check, Maximize2, Minimize2, GripHorizontal, Car, ListChecks } from "lucide-react";
 import { deLocalBR } from "@/lib/fuso";
 import { toast } from "@/components/ui/avisos";
 import { usePermissoes } from "@/components/providers/permissoes-provider";
@@ -73,33 +74,30 @@ const DIAS_SEMANA = ["DOM", "SEG", "TER", "QUA", "QUI", "SEX", "SÁB"];
 const DIAS_LONGO = ["Domingo", "Segunda-feira", "Terça-feira", "Quarta-feira", "Quinta-feira", "Sexta-feira", "Sábado"];
 const FINALIZADAS = ["CONCLUIDA", "CANCELADA"];
 
-// Sistema de design: cartão neutro (sem borda colorida à esquerda, sem fundo tingido). O STATUS vira
-// um ponto com a cor da função e a PRIORIDADE alta/urgente um ícone de alerta.
-const STATUS_PONTO: Record<string, string> = {
-  ABERTA: "bg-acento",
-  AGUARDANDO_ATENDIMENTO: "bg-acento",
-  AGENDADA: "bg-acento",
-  EM_ANDAMENTO: "bg-atencao",
-  PAUSADA: "bg-atencao",
-  AGUARDANDO_PECA: "bg-atencao",
-  CONCLUIDA: "bg-ok",
-  CANCELADA: "bg-ink-subtle",
-};
-const PRIORIDADE_ICONE: Record<string, string> = { ALTA: "text-atencao", URGENTE: "text-atrasado", CRITICO: "text-atrasado" };
+// A cor é acento, não fundo (lib/calendario/cores.ts): cartão neutro, sem contorno, e uma barra fina
+// à esquerda na cor do status. A prioridade alta/urgente é um ícone em tom neutro (o nome está no balão).
+const PRIORIDADE_ALERTA = ["ALTA", "URGENTE", "CRITICO"];
 
-const corPonto = (c: CardOs) => (c.atrasada ? "bg-atrasado" : STATUS_PONTO[c.status] ?? "bg-ink-subtle");
-const corFundo = (_c: CardOs) => "bg-white border border-surface-border hover:bg-surface-page";
+const estilo = (c: CardOs) => ESTILO_GRUPO[grupoDoCard(c)];
 
-/** Ponto do status + alerta de prioridade (a palavra está no título/legenda; a cor só reforça). */
-function MarcasCard({ card, grande }: { card: CardOs; grande?: boolean }) {
-  const alerta = PRIORIDADE_ICONE[card.prioridade];
+/** A barra do status (o texto do status vai junto, só para o leitor de tela) */
+function BarraStatus({ card }: { card: CardOs }) {
   return (
     <>
-      <span className={cn("rounded-full shrink-0", grande ? "w-2.5 h-2.5" : "w-2 h-2", corPonto(card))} aria-hidden="true" data-ponto-status />
-      {alerta && <AlertTriangle className={cn("shrink-0", grande ? "w-3.5 h-3.5" : "w-2.5 h-2.5", alerta)} aria-label={`Prioridade ${card.prioridade.toLowerCase()}`} />}
+      <span className={cn("w-[3px] shrink-0 self-stretch", estilo(card).barra)} aria-hidden="true" data-barra-status />
+      <span className="sr-only">{estilo(card).rotulo}:</span>
     </>
   );
 }
+
+/** Alerta de prioridade, só quando é alta ou urgente — em tom neutro */
+function AlertaPrioridade({ card, grande }: { card: CardOs; grande?: boolean }) {
+  if (!PRIORIDADE_ALERTA.includes(card.prioridade)) return null;
+  return <AlertTriangle className={cn("shrink-0 text-ink-muted", grande ? "w-3.5 h-3.5" : "w-3 h-3")} aria-label={`Prioridade ${card.prioridade.toLowerCase()}`} data-alerta-prioridade />;
+}
+/** Os status presentes num dia, na ordem da legenda (para os pontos do dia no celular) */
+const ORDEM_GRUPOS: GrupoStatus[] = ["atrasada", "andamento", "aberta", "concluida", "neutra"];
+const gruposDoDia = (cards: CardOs[]) => { const tem = new Set(cards.map(grupoDoCard)); return ORDEM_GRUPOS.filter((g) => tem.has(g)); };
 const badgeStatus = (s: string) => `badge-status-${s.toLowerCase()}`;
 const badgePrioridade = (p: string) => `badge-prioridade-${p.toLowerCase()}`;
 const bloqueada = (c: CardOs) => FINALIZADAS.includes(c.status);
@@ -220,7 +218,7 @@ export function CalendarioGrid({
   }
 
   return (
-    <div className="p-2 md:p-4">
+    <div className="p-2 md:p-3">
       <DndContext sensors={sensors} collisionDetection={pointerWithin} onDragStart={aoIniciarArrasto} onDragEnd={aoTerminarArrasto}>
         {/* Sem overflow-hidden: o dia expandido cresce POR CIMA dos vizinhos sem mexer na grade */}
         <div className="grid grid-cols-7 gap-px bg-surface-border rounded-lg md:min-w-[680px]">
@@ -251,7 +249,7 @@ export function CalendarioGrid({
         </div>
 
         <DragOverlay dropAnimation={{ duration: 200, easing: "cubic-bezier(0.18, 0.67, 0.6, 1.22)" }}>
-          {arrastando ? <CardVisual card={arrastando.card} className="shadow-2xl ring-2 ring-primary-400 cursor-grabbing rotate-1" /> : null}
+          {arrastando ? <CardVisual card={arrastando.card} className="shadow-lg ring-1 ring-primary-300 cursor-grabbing" /> : null}
         </DragOverlay>
       </DndContext>
 
@@ -361,14 +359,22 @@ function Celula({
         onClick={onVerMais}
         className={cn("md:hidden bg-white min-h-[56px] p-1 flex flex-col items-center gap-1 text-left", cel.isToday && "bg-primary-50/50")}
       >
-        <span className={cn("text-[11px] font-semibold w-5 h-5 flex items-center justify-center rounded-full", cel.isToday ? "bg-primary-500 text-white" : "text-ink")}>
+        <span
+          className={cn("text-[11px] font-semibold w-5 h-5 flex items-center justify-center rounded-full", cel.isToday ? "bg-primary-500 text-white anim-hoje-pulso" : "text-ink")}
+          {...(cel.isToday ? { "data-hoje": "", "aria-current": "date" as const } : {})}
+        >
           {cel.dayNum}
         </span>
         {cards.length > 0 && (
-          <span className={cn("text-[10px] font-bold px-1.5 rounded-full tabular-nums",
-            cards.some((c) => c.atrasada) ? "bg-atrasado-claro text-atrasado-texto" : "bg-primary-100 text-primary-700")}>
-            {cards.length}
-          </span>
+          <>
+            <span className="text-[10px] font-semibold px-1.5 rounded-full tabular-nums bg-surface-alt text-ink" data-contagem-dia>
+              {cards.length}
+            </span>
+            {/* O que tem no dia, de relance: um ponto por status presente */}
+            <span className="flex items-center gap-0.5" aria-hidden="true" data-pontos-dia>
+              {gruposDoDia(cards).map((g) => <span key={g} className={cn("w-1.5 h-1.5 rounded-full", ESTILO_GRUPO[g].barra)} />)}
+            </span>
+          </>
         )}
       </button>
 
@@ -397,10 +403,13 @@ function Celula({
           )}
         >
           <div className="flex items-center justify-between gap-1 shrink-0">
-            <div className={cn(
-              "text-xs font-semibold w-6 h-6 flex items-center justify-center rounded-full",
-              cel.isToday ? "bg-primary-500 text-white shadow-sm" : "text-ink",
-            )}>
+            <div
+              className={cn(
+                "text-xs font-semibold w-6 h-6 flex items-center justify-center rounded-full",
+                cel.isToday ? "bg-primary-500 text-white anim-hoje-pulso" : "text-ink",
+              )}
+              {...(cel.isToday ? { "data-hoje": "", "aria-current": "date" as const } : {})}
+            >
               {cel.dayNum}
             </div>
             <div className="flex items-center">
@@ -472,7 +481,7 @@ function CardArrastavel({
   podeArrastar: boolean;
   onNavegar: (c: CardOs) => void; onHover: (c: CardOs, r: DOMRect) => void; onSairHover: () => void;
 }) {
-  // "travada" é a OS concluída (o cadeado no cartão diz isso). Falta de permissão não é cadeado:
+  // "travada" é a OS concluída (a barra verde e o aviso ao passar o mouse dizem isso). Falta de permissão não trava:
   // o cartão fica normal, só não arrasta.
   const travada = bloqueada(card);
   const semArrasto = travada || !podeArrastar;
@@ -486,7 +495,7 @@ function CardArrastavel({
   if (dimmed) {
     return (
       <div className="opacity-30 pointer-events-none select-none">
-        <CardVisual card={card} travada={travada} />
+        <CardVisual card={card} />
       </div>
     );
   }
@@ -505,23 +514,34 @@ function CardArrastavel({
         isDragging && "opacity-40",
       )}
     >
-      <CardVisual card={card} travada={travada} />
+      <CardVisual card={card} />
     </div>
   );
 }
 
-function CardVisual({ card, travada, className }: { card: CardOs; travada?: boolean; className?: string }) {
+function CardVisual({ card, className }: { card: CardOs; className?: string }) {
   return (
-    <div className={cn("flex items-center gap-1.5 rounded-md px-1.5 py-1 transition-colors", corFundo(card), className)}>
-      <MarcasCard card={card} />
-      <span className="text-[10px] font-semibold text-ink-muted tabular-nums shrink-0">{card.hora ?? "--:--"}</span>
-      <span className="flex items-center gap-0.5 text-[11px] font-medium text-ink truncate flex-1 min-w-0">
-        {travada && <Lock className="w-2.5 h-2.5 shrink-0 text-ink-subtle" />}
-        {card.origem === "RECORRENTE" && <Repeat className="w-2.5 h-2.5 shrink-0 text-ink-subtle" />}
-        <span className="truncate">{card.clienteCurto}</span>
-      </span>
-      <AvataresCard card={card} size={22} />
+    <div className={cn("flex items-stretch rounded-md overflow-hidden transition-colors", ESTILO_CARTAO, className)} data-cartao-os={grupoDoCard(card)}>
+      <BarraStatus card={card} />
+      <div className="flex items-center gap-1.5 flex-1 min-w-0 pl-1.5 pr-1.5 py-1">
+        <span className={cn("text-[11px] font-semibold tabular-nums shrink-0", estilo(card).hora)} data-hora-card>{card.hora ?? "--:--"}</span>
+        <span className="text-[11px] text-ink truncate flex-1 min-w-0" data-cliente-card>{card.clienteCurto}</span>
+        <AlertaPrioridade card={card} />
+        {card.origem === "RECORRENTE" && <Repeat className="w-3 h-3 shrink-0 text-ink-muted" aria-label="OS recorrente" />}
+        <SiglaTecnico card={card} />
+      </div>
     </div>
+  );
+}
+
+/** A sigla do responsável, discreta (cinza, pequena) — "+N" quando a atividade tem mais técnicos. Sem cor por técnico. */
+function SiglaTecnico({ card }: { card: CardOs }) {
+  const extra = card.membros?.length ?? 0;
+  const nomes = [card.tecnicoNome, ...(card.membros ?? []).map((m) => m.nome)].filter(Boolean).join(", ");
+  return (
+    <span className="text-[9px] font-medium text-ink-muted tracking-wide shrink-0" data-sigla-tecnico title={nomes || "Sem técnico definido"}>
+      {card.tecnicoNome ? iniciais(card.tecnicoNome) : "—"}{extra > 0 ? `+${extra}` : ""}
+    </span>
   );
 }
 
@@ -640,23 +660,27 @@ function ModalDia({
               key={card.chave}
               type="button"
               onClick={() => onNavegar(card)}
-              className={cn("w-full flex items-center gap-2.5 rounded-lg px-3 py-2.5 text-left transition-colors", corFundo(card), dimmedIds?.has(card.chave) && "opacity-40")}
+              className={cn("w-full flex items-stretch rounded-lg overflow-hidden text-left transition-colors", ESTILO_CARTAO, dimmedIds?.has(card.chave) && "opacity-40")}
+              data-cartao-os={grupoDoCard(card)}
             >
-              <MarcasCard card={card} grande />
-              <span className="text-xs font-semibold text-ink-muted tabular-nums shrink-0 w-10">{card.hora ?? "--:--"}</span>
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-ink truncate flex items-center gap-1">
-                  {card.origem === "RECORRENTE" && <Repeat className="w-3 h-3 shrink-0 text-ink-subtle" />}
-                  {card.clienteCurto}
-                </p>
-                <p className="text-[11px] text-ink-muted truncate">
-                  <span className="font-mono">{card.numero}</span>
-                  {card.unidade ? ` · ${card.unidade}` : ""}
-                  {card.atrasada ? " · Atrasada" : ""}
-                  {card.equipeNome ? ` · Equipe ${card.equipeNome}` : ""}
-                </p>
-              </div>
-              <AvataresCard card={card} size={28} />
+              <BarraStatus card={card} />
+              <span className="flex items-center gap-2.5 flex-1 min-w-0 px-3 py-2.5">
+                <span className={cn("text-xs font-semibold tabular-nums shrink-0 w-10", estilo(card).hora)}>{card.hora ?? "--:--"}</span>
+                <span className="flex-1 min-w-0">
+                  <span className="text-sm font-medium text-ink truncate flex items-center gap-1.5">
+                    <span className="truncate">{card.clienteCurto}</span>
+                    <AlertaPrioridade card={card} grande />
+                    {card.origem === "RECORRENTE" && <Repeat className="w-3 h-3 shrink-0 text-ink-muted" aria-label="OS recorrente" />}
+                  </span>
+                  <span className="block text-[11px] text-ink-muted truncate">
+                    <span className="font-mono">{card.numero}</span>
+                    {card.unidade ? ` · ${card.unidade}` : ""}
+                    {card.atrasada ? " · Atrasada" : ""}
+                    {card.equipeNome ? ` · Equipe ${card.equipeNome}` : ""}
+                  </span>
+                </span>
+                <AvataresCard card={card} size={28} />
+              </span>
             </button>
           ))}
         </div>

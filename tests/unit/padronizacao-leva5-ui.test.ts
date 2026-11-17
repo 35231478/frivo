@@ -5,7 +5,8 @@
  * PRIORIDADE Nº 1 — o que grava só aparece para quem pode:
  *  - calendário: "Nova OS neste dia" só com Ordens › criar; arrastar para reagendar só com Ordens ›
  *    editar (e o cadeado do cartão continua significando só "OS concluída");
- *  - "Gerar OS recorrentes do mês" (cria OS em lote) só com Ordens › criar ou Contratos › editar;
+ *  - "Gerar OS recorrentes do mês" SAIU do calendário: as OS dos contratos nascem sozinhas na rotina
+ *    diária (tests/unit/os-recorrentes-horizonte-pg.test.ts); os testes do botão saíram com ele;
  *  - o botão Editar da OS só com Ordens › editar; se o servidor recusa, a gaveta fica aberta com o
  *    que foi digitado e a tela NÃO muda.
  *
@@ -87,7 +88,6 @@ beforeAll(async () => {
   for (const m of [
     () => import("@/components/providers/permissoes-provider"),
     () => import("@/components/calendario/calendario-grid"),
-    () => import("@/components/calendario/gerar-os-recorrentes"),
     () => import("@/components/os/central/cabecalho-os"),
     () => import("@/components/os/central/editar-os"),
     () => import("@/components/os/sugestao-abertura"),
@@ -378,48 +378,5 @@ describe("Leva 5 — calendário: permissão nos botões que gravam", () => {
     expect(txt($("[data-sugestao='tipo']"))).toContain("Preventiva");
     await clicar($("[data-usar-sugestao='tipo']"));
     expect($("[data-sugestao='tipo']")).toBeNull();
-  });
-});
-
-describe("Leva 5 — gerar OS recorrentes do mês: permissão e toast", () => {
-  const abrir = async (permissoes: Permissoes) => {
-    const { GerarOsRecorrentes } = await import("@/components/calendario/gerar-os-recorrentes");
-    await montar(createElement(GerarOsRecorrentes, { mes: 11, ano: 2026 }), permissoes);
-  };
-
-  it("só aparece para quem pode criar OS ou editar contratos", async () => {
-    await abrir(O(["visualizar"]));
-    expect($("[data-gerar-recorrentes]")).toBeNull();
-    act(() => root.unmount()); caixa.remove(); document.body.innerHTML = "";
-
-    await abrir(montarPermissoes({ contratos: ["visualizar", "editar"] }));
-    expect($("[data-gerar-recorrentes]")).toBeTruthy();
-    act(() => root.unmount()); caixa.remove(); document.body.innerHTML = "";
-
-    await abrir(O(["visualizar", "criar"]));
-    expect($("[data-gerar-recorrentes]")).toBeTruthy();
-  });
-
-  it("o resultado vem em toast, com o plural certo; nada de \"criada(s)\"", async () => {
-    respostas["POST /api/contratos/gerar-os-recorrentes"] = { status: 200, corpo: { criadas: 1, ignoradas: 2 } };
-    await abrir(permissoesTotais());
-    await clicar($("[data-gerar-recorrentes]"));
-    expect(await toasts()).toEqual([["1 OS criada. 2 já existiam.", "sucesso"]]);
-
-    respostas["POST /api/contratos/gerar-os-recorrentes"] = { status: 200, corpo: { criadas: 0, ignoradas: 3 } };
-    await clicar($("[data-gerar-recorrentes]"));
-    expect((await toasts()).at(-1)).toEqual(["Nenhuma OS nova: as do mês já estavam geradas.", "sucesso"]);
-
-    respostas["POST /api/contratos/gerar-os-recorrentes"] = { status: 200, corpo: { criadas: 4, ignoradas: 0 } };
-    await clicar($("[data-gerar-recorrentes]"));
-    expect((await toasts()).at(-1)).toEqual(["4 OS criadas.", "sucesso"]);
-  });
-
-  it("o servidor recusou: o motivo vem como toast de erro e a tela não muda", async () => {
-    respostas["POST /api/contratos/gerar-os-recorrentes"] = RECUSA;
-    await abrir(permissoesTotais());
-    await clicar($("[data-gerar-recorrentes]"));
-    expect(await toasts()).toEqual([["Sem permissão para esta ação", "erro"]]);
-    expect(nav.refresh).not.toHaveBeenCalled();
   });
 });
