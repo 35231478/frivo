@@ -2,7 +2,8 @@
  * DESEMPENHO — a MEDIÇÃO do mês, direto do que a operação já grava (nada é digitado para o escore):
  *
  *  - NO PRAZO: atividades concluídas no mês ("concluida_em"), comparando o dia da conclusão com o
- *    prazo da atividade ou, sem prazo, com o dia agendado;
+ *    prazo da atividade ou, sem prazo, com o dia agendado. A atividade atrasada de uma OS com
+ *    "atraso justificado" pela gestão fica fora da conta;
  *  - RELATÓRIO COMPLETO: por equipamento atendido, a MESMA regra que libera a conclusão no app
  *    (lib/execucao/pendencias) + foto antes e depois — só os itens do checklist que já existiam
  *    quando a atividade foi concluída (item criado depois não torna incompleto um relatório antigo);
@@ -15,7 +16,7 @@ import { prisma } from "@/lib/prisma";
 import { completo, faltasEquipamento, paraPendencia, type FormularioExecucao, type ItemExecucao, type RespostaItem, type StatusItem, type TipoResposta } from "@/lib/execucao/pendencias";
 import { avaliacoesPorTecnico, osAvaliadas } from "@/lib/os/aceite-server";
 import { ITENS_QUE_VALEM } from "./itens-validos";
-import { concluidaNoPrazo, ehRetorno, periodoDaCompetencia, temAntesEDepois, type AtividadeMedida, type OsAvaliadaMedida, type PenalidadesQueContam } from "./regras";
+import { atrasoDaAtividade, concluidaNoPrazo, ehRetorno, periodoDaCompetencia, temAntesEDepois, type AtividadeMedida, type OsAvaliadaMedida, type PenalidadesQueContam } from "./regras";
 
 export interface MedicaoDoMes {
   competencia: string;
@@ -38,6 +39,11 @@ export async function medirMes(empresaId: string, competencia: string): Promise<
       select: {
         id: true, ordemServicoId: true, equipeId: true, tecnicoId: true, tipoOsId: true, prazo: true, dataAgendada: true, concluidaEm: true,
         tecnicosEquipe: { select: { tecnicoId: true } },
+        // O número da OS e a justificativa do atraso (motivo, explicação, quem e quando)
+        ordemServico: { select: {
+          numero: true, chamadoNumero: true, atrasoJustificadoMotivo: true, atrasoJustificadoObs: true, atrasoJustificadoEm: true,
+          atrasoJustificadoPor: { select: { nome: true } },
+        } },
       },
     }),
     avaliacoesPorTecnico(empresaId, periodo),
@@ -59,6 +65,8 @@ export async function medirMes(empresaId: string, competencia: string): Promise<
       id: a.id, ordemServicoId: a.ordemServicoId, equipeId: a.equipeId,
       executores: [...new Set([a.tecnicoId, ...a.tecnicosEquipe.map((t) => t.tecnicoId)].filter((x): x is string => !!x))],
       noPrazo: concluidaNoPrazo(a),
+      // O atraso que a gestão justificou na OS sai da métrica (lib/desempenho/regras › medirAtividades)
+      atraso: atrasoDaAtividade(a, { ...a.ordemServico, numero: a.ordemServico.chamadoNumero ?? a.ordemServico.numero }),
       equipamentos: relatorios.get(a.id) ?? [],
     })),
     avaliacoes: new Map(porTecnico.map((t) => [t.tecnicoId, { media: t.media, avaliacoes: t.avaliacoes }])),

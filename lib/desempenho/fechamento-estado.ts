@@ -32,6 +32,18 @@ export async function competenciasFechadas(empresaId: string): Promise<Set<strin
   return new Set(linhas.map((l) => l.competencia));
 }
 
+/**
+ * Dos meses pedidos, quais estão FECHADOS (na ordem em que vieram). É o que a OS pergunta antes de
+ * avisar que a justificativa de um atraso não muda o desempenho de um mês que já fechou
+ * (lib/os/prazo-execucao › competenciasDosAtrasos, avisoMesFechado).
+ */
+export async function mesesFechadosEntre(empresaId: string, competencias: string[]): Promise<string[]> {
+  if (!competencias.length) return [];
+  const linhas = await prisma.desempenhoFechamento.findMany({ where: { empresaId, situacao: "FECHADO", competencia: { in: competencias } }, select: { competencia: true } });
+  const fechadas = new Set(linhas.map((l) => l.competencia));
+  return competencias.filter((c) => fechadas.has(c));
+}
+
 /** Mês fechado não muda: revisar, registrar, editar ou excluir penalidade dele pede reabrir antes. */
 export async function exigirMesAberto(empresaId: string, competencia: string) {
   if (await mesFechado(empresaId, competencia)) throw new ErroDesempenho(MSG_MES_FECHADO(competencia), 409);

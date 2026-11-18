@@ -8,7 +8,7 @@
  */
 import {
   calcularEscore, entradaDaGestao, entradaDoColaborador, mediaDaEquipe, ranquear,
-  type AtividadeMedida, type Escore, type Faixa, type LinhaComposicao, type OsAvaliadaMedida, type PenalidadesQueContam, type Regra, type TipoPerfil,
+  type AtividadeMedida, type AtrasoMedido, type Escore, type Faixa, type LinhaComposicao, type OsAvaliadaMedida, type PenalidadesQueContam, type Regra, type TipoPerfil,
 } from "./regras";
 
 export interface RegraDoMes extends Regra { vigenteDesde: string }
@@ -33,6 +33,11 @@ export interface LinhaRanking {
   bonus: number | null;
   /** Os números do desempate da premiação: média das notas, penalidades que contaram e atividades no prazo */
   desempate: Desempate;
+  /**
+   * As atividades concluídas com atraso no mês: as que contam e as justificadas (fora da conta do "no
+   * prazo"). Ausente nos meses fechados antes de a justificativa existir.
+   */
+  atrasos?: AtrasoMedido[];
 }
 export interface Desempate { mediaAvaliacao: number | null; penalidades: number; noPrazo: number }
 const SEM_DESEMPATE: Desempate = { mediaAvaliacao: null, penalidades: 0, noPrazo: 0 };
@@ -74,6 +79,7 @@ export function montarPainel(
         tecnicoId: p.tecnicoId, nome: p.nome, escore: e.escore, base: e.base, desconto: e.desconto, atingiuMeta: e.atingiuMeta,
         faixa: e.faixa?.nome ?? null, composicao: e.composicao, penalidades: e.penalidades, bonus: comValores ? e.bonus : null,
         desempate: { mediaAvaliacao: entrada.avaliacao.media, penalidades: entrada.retornos + entrada.reclamacoes, noPrazo: entrada.prazo.certos },
+        atrasos: entrada.atrasos,
       };
     });
     for (const l of linhas) escores.set(l.tecnicoId, l.escore);

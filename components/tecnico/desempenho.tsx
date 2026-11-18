@@ -6,6 +6,7 @@ import { formatarData, formatarMoeda } from "@/lib/utils";
 import { StatusPill, type TomStatus } from "@/components/ui/status-pill";
 import { BarraEscore, SeletorDeMes, SeloFaixa, posicaoTexto } from "@/components/desempenho/comum";
 import { PremioEmDisputa } from "@/components/desempenho/painel-client";
+import { ListaDeAtrasos, separarAtrasos } from "@/components/desempenho/atrasos";
 import {
   ROTULO_METRICA, ROTULO_PENALIDADE, ROTULO_SITUACAO, competenciaAtual, formatarEscore, rotuloCompetencia, type SituacaoPenalidade, type TipoPenalidade,
 } from "@/lib/desempenho/regras";
@@ -65,6 +66,7 @@ function Ficha({ ficha }: { ficha: FichaDoColaborador }) {
     );
   }
   const fechado = !!ficha.fechamento;
+  const { justificados, contam } = separarAtrasos(linha.atrasos);
   return (
     <>
       <section className="rounded-xl border border-surface-border bg-white px-4 py-4 space-y-3" data-resumo>
@@ -121,6 +123,25 @@ function Ficha({ ficha }: { ficha: FichaDoColaborador }) {
           </li>
         </ul>
       </section>
+
+      {justificados.length > 0 && (
+        <section className="rounded-xl border border-surface-border bg-white overflow-hidden" data-meus-atrasos-justificados>
+          <div className="px-4 py-3 border-b border-surface-border">
+            <h2 className="font-semibold text-ink">Atrasos justificados</h2>
+            <p className="text-xs text-ink-muted">O escritório justificou: ficam fora da conta do prazo.</p>
+          </div>
+          <ListaDeAtrasos atrasos={justificados} comLink={false} />
+        </section>
+      )}
+      {contam.length > 0 && (
+        <section className="rounded-xl border border-surface-border bg-white overflow-hidden" data-meus-atrasos-que-contam>
+          <div className="px-4 py-3 border-b border-surface-border">
+            <h2 className="font-semibold text-ink">Atrasos que contam</h2>
+            <p className="text-xs text-ink-muted">Atividades concluídas depois do prazo.</p>
+          </div>
+          <ListaDeAtrasos atrasos={contam} comLink={false} />
+        </section>
+      )}
 
       {ficha.penalidades.length > 0 && (
         <section className="rounded-xl border border-surface-border bg-white overflow-hidden" data-minhas-penalidades>

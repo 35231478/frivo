@@ -382,6 +382,7 @@ describe("individual é a base; equipe e encarregado são resumos", () => {
     expect(caio.relatorio).toEqual(bia.relatorio);
     expect(entradaDoColaborador("ana", A, undefined, undefined, true)).toEqual({
       prazo: { certos: 1, total: 1 }, relatorio: { certos: 1, total: 1 }, avaliacao: { media: null, avaliacoes: 0 }, retornos: 0, reclamacoes: 0,
+      atrasosJustificados: 0, atrasos: [], // PR 3 dos prazos: a entrada leva os atrasos por trás do "no prazo"
     });
   });
 
@@ -411,7 +412,7 @@ describe("individual é a base; equipe e encarregado são resumos", () => {
     expect(sozinha.prazo).toEqual({ certos: 1, total: 1 });
     expect(sozinha.avaliacao).toEqual({ media: 5, avaliacoes: 1 });
     const ninguem = entradaDaGestao({ equipeIds: [], membros: [] }, A, avaliadas, undefined, true);
-    expect(ninguem).toEqual({ prazo: SEM_MEDIDA, relatorio: SEM_MEDIDA, avaliacao: { media: null, avaliacoes: 0 }, retornos: 0, reclamacoes: 0 });
+    expect(ninguem).toEqual({ prazo: SEM_MEDIDA, relatorio: SEM_MEDIDA, avaliacao: { media: null, avaliacoes: 0 }, retornos: 0, reclamacoes: 0, atrasosJustificados: 0, atrasos: [] });
   });
 
   it("a média da satisfação da equipe tem 2 casas (4, 5 e 5 = 4,67)", () => {

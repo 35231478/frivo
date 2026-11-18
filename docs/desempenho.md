@@ -16,7 +16,7 @@ Nada é digitado para o escore. Tudo sai do que a operação já grava.
 
 | Métrica | Fonte | Regra |
 |---|---|---|
-| Concluídas no prazo | `atividades_os.concluida_em` (coluna nova) × `prazo` ou, sem prazo, `data_agendada` | No prazo = o **dia** da conclusão (Brasília) não passa do dia de referência. Sem data de conclusão ou sem prazo/agenda: **não se mede** |
+| Concluídas no prazo | `atividades_os.concluida_em` (coluna nova) × `prazo` ou, sem prazo, `data_agendada` | No prazo = o **dia** da conclusão (Brasília) não passa do dia de referência. Sem data de conclusão ou sem prazo/agenda: **não se mede**. A atividade atrasada de uma OS com **atraso justificado** pela gestão também fica fora da conta (ver abaixo) |
 | Relatórios completos | `atividade_equipamentos` (atendidos), `checklist_respostas`, `fotos_atendimento`, formulário obrigatório | Por equipamento atendido: a **mesma regra que libera a conclusão no app** (`lib/execucao/pendencias`) + uma foto "antes" e uma "depois" (quando o perfil exige) |
 | Avaliação do cliente | `os_aceites.avaliacao`, via `avaliacoesPorTecnico` / `osAvaliadas` (`lib/os/aceite-server`) | Média das notas (1 a 5) ÷ 5 → 5 estrelas = 100%, 4 = 80% |
 | Retorno | OS com atividade de tipo marcado como **corretiva**, aberta até N dias depois do **último** serviço feito no mesmo equipamento (`atividade_equipamentos.feito_em`) | Vai para "a revisar", para quem executou esse último serviço |
@@ -27,6 +27,12 @@ Nada é digitado para o escore. Tudo sai do que a operação já grava.
 ser gravada em cada conclusão (no app, a hora do **toque** no aparelho, mesmo que a fila chegue
 depois; reabrir limpa). As atividades concluídas antes ficam **sem data** — sem medição nessa
 métrica, nunca zero.
+
+**Atraso justificado.** Quando o atraso não foi culpa de quem executou (cliente ausente, peça
+faltando, acesso negado, clima), quem tem Desempenho › Revisar justifica o atraso **na OS**. A
+atividade atrasada dessa OS sai da métrica "no prazo" — nem acerto nem erro — e aparece na ficha, em
+"Atrasos justificados", com a OS, o prazo, o motivo, a explicação e quem justificou. Mês fechado não
+muda com justificativa lançada depois. Os detalhes estão em [docs/prazos-da-os.md](prazos-da-os.md#o-atraso-justificado-no-desempenho-pr-3).
 
 ## O escore
 
@@ -154,7 +160,7 @@ participam.
 | Rota | O que é | Permissão |
 |---|---|---|
 | `/desempenho` | Painel: ranking do mês por perfil, prêmio em disputa, resumo por equipe | Visualizar |
-| `/desempenho/colaborador/[id]` | Ficha: escore, composição com os números, faixa, bônus projetado ou fechado | Visualizar |
+| `/desempenho/colaborador/[id]` | Ficha: escore, composição com os números, atrasos justificados (e os que contam), faixa, bônus projetado ou fechado | Visualizar |
 | `/desempenho/fechamento` | Fechar e reabrir o mês, folha de bônus, exportação, histórico | Gerenciar |
 | `/desempenho/revisao` | Lista "A revisar", decisão com motivo, reclamação manual | Revisar penalidades |
 | `/desempenho/premiacoes` | Premiação do mês (texto + imagem) | Visualizar (cadastro: Gerenciar) |

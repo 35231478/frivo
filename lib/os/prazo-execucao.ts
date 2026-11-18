@@ -15,7 +15,7 @@
 import { z } from "zod";
 import { chaveDiaBR, chaveDiaCivil, chaveHojeBR, diaCivilDeChave, hojeDiaCivil, inicioHojeBR } from "@/lib/fuso";
 import { situacaoPrazo, textoPrazo } from "@/lib/os/prazos";
-import { diaDeReferencia } from "@/lib/desempenho/regras";
+import { competenciaCurta, competenciaDe, concluidaNoPrazo, diaDeReferencia } from "@/lib/desempenho/regras";
 import { pode, type Permissoes } from "@/lib/permissoes";
 
 export interface DatasDaOs {
@@ -204,16 +204,17 @@ export interface OsParaAtraso extends DatasDaOs {
 }
 
 /**
- * A atividade está (ou ficou) atrasada? O dia de referência é o MESMO do desempenho
- * (`diaDeReferencia`: o prazo próprio ou, sem ele, o dia agendado): concluída, atrasou se terminou
- * depois dele; ainda aberta, atrasou se o dia já passou em Brasília. Cancelada não atrasa.
+ * A atividade está (ou ficou) atrasada? A atividade CONCLUÍDA é julgada pela regra única do
+ * desempenho (`concluidaNoPrazo`, lib/desempenho/regras): o que aqui se pode justificar é exatamente o
+ * que lá conta como atraso. Ainda aberta, atrasou se o dia de referência (o prazo próprio ou, sem
+ * ele, o dia agendado) já passou em Brasília. Cancelada não atrasa.
  */
 export function atividadeAtrasou(a: AtividadeParaAtraso, agora: Date = new Date()): boolean {
   if (a.status === "CANCELADA") return false;
-  const referencia = diaDeReferencia({ prazo: a.prazo ?? null, dataAgendada: a.dataAgendada ?? null });
-  if (!referencia) return false;
-  if (a.status === "CONCLUIDA") return !!a.concluidaEm && chaveDiaBR(a.concluidaEm) > referencia;
-  return chaveHojeBR(0, agora) > referencia;
+  const datas = { prazo: a.prazo ?? null, dataAgendada: a.dataAgendada ?? null };
+  if (a.status === "CONCLUIDA") return concluidaNoPrazo({ ...datas, concluidaEm: a.concluidaEm ?? null }) === false;
+  const referencia = diaDeReferencia(datas);
+  return !!referencia && chaveHojeBR(0, agora) > referencia;
 }
 
 /**
@@ -233,6 +234,33 @@ export function atrasosDaOs(os: OsParaAtraso, agora: Date = new Date()): { os: b
 export function haAtrasoParaJustificar(os: OsParaAtraso, agora: Date = new Date()): boolean {
   const a = atrasosDaOs(os, agora);
   return a.os || a.atividades > 0;
+}
+
+/* ───────── a justificativa e o desempenho ───────── */
+
+/**
+ * Os meses do desempenho ("AAAA-MM", Brasília) em que a justificativa desta OS faz diferença: os das
+ * atividades CONCLUÍDAS com atraso (é o mês da conclusão que mede a atividade). Em ordem, sem repetir.
+ */
+export function competenciasDosAtrasos(os: { status?: string; atividades?: AtividadeParaAtraso[] }): string[] {
+  if (os.status === "CANCELADA") return [];
+  const meses = (os.atividades ?? [])
+    .filter((a) => a.status === "CONCLUIDA" && !!a.concluidaEm && atividadeAtrasou(a))
+    .map((a) => competenciaDe(a.concluidaEm!));
+  return [...new Set(meses)].sort();
+}
+
+/**
+ * MÊS FECHADO NÃO MUDA: justificar (ou desfazer) depois que o desempenho do mês fechou não mexe no
+ * escore nem no bônus daquele mês — só reabrindo o mês. O aviso para quem justifica ("" = nada a avisar).
+ */
+export function avisoMesFechado(competencias: string[] | null | undefined): string {
+  const meses = (competencias ?? []).map(competenciaCurta);
+  if (!meses.length) return "";
+  const lista = meses.length === 1 ? meses[0] : `${meses.slice(0, -1).join(", ")} e ${meses[meses.length - 1]}`;
+  return meses.length === 1
+    ? `O desempenho de ${lista} já está fechado: a justificativa não muda o escore desse mês. Para ela valer, reabra o mês em Desempenho › Fechamento.`
+    : `O desempenho de ${lista} já está fechado: a justificativa não muda o escore desses meses. Para ela valer, reabra cada mês em Desempenho › Fechamento.`;
 }
 
 /**
