@@ -71,7 +71,7 @@ describe("T1 — atalhos do sino filtrados por permissão", () => {
     await act(async () => { (botaoSino as HTMLButtonElement).click(); });
     await flush();
 
-    expect(caixa.textContent).toContain("Prazos vencidos");
+    expect(caixa.textContent).toContain("Etapas com prazo vencidas"); // o rótulo do sino mudou junto com o fim do menu "Prazos e SLA"
     expect(caixa.textContent).not.toContain("Compras pendentes");
     expect(caixa.textContent).not.toContain("Boletos pagos hoje");
   });

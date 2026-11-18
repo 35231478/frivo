@@ -75,7 +75,9 @@ describe("Prazo de execução — o prazo que vale", () => {
       status: { notIn: ["CONCLUIDA", "CANCELADA"] },
       OR: [
         { prazoExecucao: { lt: new Date("2026-11-18T00:00:00.000Z") } },
-        { prazoExecucao: null, previsaoConclusao: { lt: new Date("2026-11-18T00:00:00.000Z") } },
+        // a data prevista vale como DIA (antes de hoje) ou como instante (antes do começo de hoje em
+        // Brasília, 03:00 UTC) — menos o valor que é o próprio dia de hoje
+        { prazoExecucao: null, previsaoConclusao: { lt: new Date("2026-11-18T03:00:00.000Z"), not: new Date("2026-11-18T00:00:00.000Z") } },
       ],
     });
   });

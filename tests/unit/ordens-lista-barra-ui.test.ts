@@ -67,6 +67,56 @@ describe("lista de OS: barra enxuta", () => {
     expect($('tr[data-linha="os1"] td[data-celula="cliente"]')!.getAttribute("title")).toBe("Hospital Santa Clara");
   });
 
+  it("coluna Prazo: a data sempre; selo só quando pede ação (atrasada, vence hoje); atraso justificado escrito ao lado; OS sem prazo mostra traço", async () => {
+    const os = (id: string, extra: Record<string, unknown>) => ({ ...OS1, id, numero: `OS-${id}`, ...extra });
+    await montar("", [
+      os("atrasada", { prazo: "2026-10-30T00:00:00.000Z", prazoSituacao: "ATRASADO", prazoTexto: "Atrasada 4 dias", atrasoJustificado: null }),
+      os("hoje", { prazo: "2026-11-03T00:00:00.000Z", prazoSituacao: "VENCE_HOJE", prazoTexto: "Vence hoje", atrasoJustificado: null }),
+      os("folga", { prazo: "2026-11-20T00:00:00.000Z", prazoSituacao: "NO_PRAZO", prazoTexto: "Faltam 17 dias", atrasoJustificado: null }),
+      os("justificada", { prazo: "2026-10-28T00:00:00.000Z", prazoSituacao: "ATRASADO", prazoTexto: "Atrasada 6 dias", atrasoJustificado: "Cliente ausente" }),
+      os("concluida", { status: "CONCLUIDA", prazo: "2026-10-20T00:00:00.000Z", prazoSituacao: "CUMPRIDO", prazoTexto: "Encerrada", atrasoJustificado: null }),
+      os("sem", { prazo: null, prazoSituacao: "SEM_PRAZO", prazoTexto: "Sem prazo", atrasoJustificado: null }),
+    ]);
+    expect($$("table thead th").map(txt)).toEqual(expect.arrayContaining(["Prevista", "Prazo"]));
+    const celula = (id: string) => $(`tr[data-linha="${id}"] td[data-celula="prazo"]`)!;
+    expect(txt(celula("atrasada"))).toBe("30/10/2026Atrasada 4 dias");
+    expect(celula("atrasada").querySelector(".pill-atrasado")).not.toBeNull();
+    expect(txt(celula("hoje"))).toBe("03/11/2026Vence hoje");
+    expect(celula("hoje").querySelector(".pill-atencao")).not.toBeNull();
+    // com folga e concluída: só a data, sem selo (o selo é para o que pede ação)
+    expect(txt(celula("folga"))).toBe("20/11/2026");
+    expect(txt(celula("concluida"))).toBe("20/10/2026");
+    for (const id of ["folga", "concluida"]) expect(celula(id).querySelector("[class*='pill-']"), id).toBeNull();
+    // justificada: continua atrasada (o selo fica) e diz que foi justificada, com o motivo no título
+    expect(txt(celula("justificada"))).toBe("28/10/2026Atrasada 6 diasjustificado");
+    expect(celula("justificada").querySelector("[data-atraso-justificado]")!.getAttribute("title")).toBe("Atraso justificado: Cliente ausente");
+    expect(txt(celula("sem"))).toBe("—");
+    // os cartões (celular) trazem a mesma coisa
+    const cartao = $$("[data-cartoes] > div").find((c) => txt(c).includes("OS-atrasada"))!;
+    expect(txt(cartao)).toContain("Prazo 30/10/2026Atrasada 4 dias");
+  });
+
+  it("filtro Prazo em 'Mais filtros': atrasadas, vencem hoje e com atraso justificado vão para a URL (?prazo=) e contam como filtro ativo", async () => {
+    await montar();
+    await clicar($("[data-mais-filtros]")); await clicar($("[data-filtro-opcao=prazo]"));
+    const sel = $<HTMLSelectElement>("select[aria-label='Prazo']")!;
+    expect([...sel.options].map((o) => [o.value, o.textContent])).toEqual([["", "Todos"], ["atrasadas", "Atrasadas"], ["hoje", "Vencem hoje"], ["justificadas", "Com atraso justificado"]]);
+    await act(async () => { Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, "value")!.set!.call(sel, "atrasadas"); sel.dispatchEvent(new Event("change", { bubbles: true })); });
+    await esperar();
+    expect(ultimaUrl()).toBe("/ordens?prazo=atrasadas");
+    // chegando pelo sino/dashboard (?prazo=atrasadas): o filtro já aparece ligado, e "Limpar filtros" o tira
+    await montar("prazo=atrasadas");
+    expect(txt($("[data-filtros-ativos]"))).toBe("1");
+    expect($$("[data-filtro-caixa]").map((c) => c.getAttribute("data-filtro-caixa"))).toEqual(["prazo"]);
+    expect($<HTMLSelectElement>("select[aria-label='Prazo']")!.value).toBe("atrasadas");
+    await clicar($("[data-limpar-filtros]"));
+    expect(ultimaUrl()).toBe("/ordens?");
+    // lista vazia com o filtro ligado: o "Limpar filtros" do estado vazio aparece e também tira o prazo
+    nav.replace.mockClear();
+    await clicar($$("[data-lista-vazia] button").find((b) => txt(b) === "Limpar filtros")!);
+    expect(ultimaUrl()).toBe("/ordens?");
+  });
+
   it("por padrão todo o período (setas desligadas); T vai para hoje; ← › andam o dia; a barra tem a busca e 'Mais filtros' fechado", async () => {
     await montar();
     expect(txt($("[data-mes-rotulo]"))).toBe("Todo o período");

@@ -10,7 +10,8 @@ const AGORA = new Date("2026-11-04T01:30:00.000Z"); // terça 03/11/2026 22:30 e
 const iso = (d?: Date) => d?.toISOString();
 const faixaDe = (where: any) => {
   const ou = where.AND?.[0]?.OR;
-  return ou ? { agenda: ou[0].atividades.some.dataAgendada, previsaoDia: ou[1].previsaoConclusao, previsaoHora: ou[2].previsaoConclusao, abertura: ou[3].criadoEm } : null;
+  // ordem: agenda, data prevista (dia), PRAZO (dia), data prevista (com hora), abertura
+  return ou ? { agenda: ou[0].atividades.some.dataAgendada, previsaoDia: ou[1].previsaoConclusao, prazoDia: ou[2].prazoExecucao, previsaoHora: ou[3].previsaoConclusao, abertura: ou[4].criadoEm } : null;
 };
 
 describe("período da lista de OS", () => {
@@ -24,6 +25,7 @@ describe("período da lista de OS", () => {
     expect(f.abertura).toEqual(f.agenda);
     expect(f.previsaoHora).toEqual(f.agenda);
     expect([iso(f.previsaoDia.gte), iso(f.previsaoDia.lt)]).toEqual(["2026-11-03T00:00:00.000Z", "2026-11-04T00:00:00.000Z"]);
+    expect(f.prazoDia).toEqual(f.previsaoDia); // o prazo de execução é dia civil, como a data prevista gravada como dia
   });
   it("esta semana e este mês: a faixa inteira; a empresa sempre da sessão", () => {
     const w = whereOrdens("e1", { periodo: "semana" }, AGORA);

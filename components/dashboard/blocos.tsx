@@ -33,8 +33,8 @@ export function BlocoOperacional({ d }: { d: DadosBloco["operacional"] }) {
         <Kpi rotulo="OS abertas" valor={d.abertas} icone={ClipboardList} tom="info" href="/ordens"
           detalhe={d.emAndamento ? plural(d.emAndamento, "em andamento", "em andamento") : "nenhuma em andamento"} />
         <Kpi rotulo="Agendadas hoje" valor={d.agendadasHoje} icone={CalendarClock} tom="info" href="/calendario?view=semanal" detalhe="com atividade hoje" />
-        <Kpi rotulo="Atrasadas" valor={d.atrasadas} icone={AlertTriangle} tom={d.atrasadas ? "critico" : "ok"} href="/ordens"
-          detalhe={d.atrasadas ? "previsão de conclusão vencida" : "nenhuma atrasada"} />
+        <Kpi rotulo="Atrasadas" valor={d.atrasadas} icone={AlertTriangle} tom={d.atrasadas ? "critico" : "ok"} href="/ordens?prazo=atrasadas"
+          detalhe={d.atrasadas ? "prazo vencido" : "nenhuma atrasada"} />
         <Kpi rotulo="Concluídas no mês" valor={d.concluidasMes} icone={CheckCircle2} tom="ok" href="/ordens?status=CONCLUIDA" />
       </GradeKpi>
     </Bloco>
@@ -245,10 +245,10 @@ export function BlocoFrota({ d }: { d: DadosBloco["frota"] }) {
 
 export function BlocoPrazos({ d }: { d: DadosBloco["prazos"] }) {
   return (
-    <Bloco id="prazos" titulo="Prazos e SLA" icone={Timer} href="/prazos" link="Ver prazos">
+    <Bloco id="prazos" titulo="Etapas com prazo" icone={Timer} href="/ordens/etapas" link="Ver etapas">
       <GradeKpi colunas={d.pedidosPendentes === null ? 2 : 3}>
-        <Kpi rotulo="Prazos vencidos" valor={d.prazosVencidos} icone={AlertTriangle} tom={d.prazosVencidos ? "critico" : "ok"} href="/prazos?status=ATRASADO" />
-        <Kpi rotulo="Vencendo hoje" valor={d.etapasVencendoHoje} icone={Clock} tom={d.etapasVencendoHoje ? "atencao" : "ok"} href="/prazos?status=ATIVO" />
+        <Kpi rotulo="Etapas vencidas" valor={d.prazosVencidos} icone={AlertTriangle} tom={d.prazosVencidos ? "critico" : "ok"} href="/ordens/etapas?status=ATRASADO" />
+        <Kpi rotulo="Vencendo hoje" valor={d.etapasVencendoHoje} icone={Clock} tom={d.etapasVencendoHoje ? "atencao" : "ok"} href="/ordens/etapas?status=ATIVO" />
         {d.pedidosPendentes !== null && <Kpi rotulo="Compras pendentes" valor={d.pedidosPendentes} icone={ShoppingCart} tom={d.pedidosPendentes ? "atencao" : "ok"} href="/compras/pedidos" />}
       </GradeKpi>
     </Bloco>

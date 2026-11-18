@@ -28,6 +28,8 @@ export interface CartaoTela {
   visita?: { numero: number; total: number };
   /** "O que levar": materiais previstos da OS. Ausente = opção da empresa desligada (ou lista antiga) */
   materiais?: MaterialPrevisto[];
+  /** O prazo DEFINIDO ("AAAA-MM-DD") da atividade ou da OS. null/ausente = sem prazo definido (ou lista antiga) */
+  prazo?: string | null;
 }
 
 export interface EquipamentoInfo {

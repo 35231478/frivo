@@ -55,7 +55,7 @@ export function OsDetalhe({ os: initialOs, abaInicial }: { os: any; abaInicial?:
   const [abrirNfse, setAbrirNfse] = useState(false);
   const [erroAcao, setErroAcao] = useState("");
   const { pode } = usePermissoes();
-  // os.prazos = SLA por modelo de prazo (só id/status: o Resumo conta os atrasados)
+  // os.prazos = etapas com prazo, por modelo (só id/status: o Resumo conta as atrasadas)
   // E4.1/E4.2: a separação e o consumo de material (estado por material do snapshot) — o badge da aba conta o que falta
   const materiaisOs = useMemo(() => materiaisDaOs(os.itensOrcamento ?? []), [os.itensOrcamento]);
   const separacao = useMemo(() => resumoSeparacao(materiaisOs, os.status === "CANCELADA"), [materiaisOs, os.status]);
@@ -145,7 +145,7 @@ export function OsDetalhe({ os: initialOs, abaInicial }: { os: any; abaInicial?:
                   <OsVisitas osId={os.id} onMudou={() => router.refresh()} />
                   {/* A lista remonta quando as visitas mudam de dia ou de quantidade (ela guarda as atividades em estado próprio) */}
                   <OsAtividades key={chaveDasAtividades(os.atividades)} osId={os.id} atividades={os.atividades} clienteId={os.cliente.id} unidadeId={os.unidadeId} onMudou={() => router.refresh()} />
-                  {/* Antiga aba "Prazos": os prazos/SLA por modelo continuam aqui, junto das atividades */}
+                  {/* Antiga aba "Prazos": as etapas com prazo (por modelo) continuam aqui, junto das atividades */}
                   <div className="border-t border-surface-linha pt-6" data-secao-sla>
                     <OsPrazos osId={os.id} />
                   </div>

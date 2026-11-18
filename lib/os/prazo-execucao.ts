@@ -13,8 +13,10 @@
  * sistema sempre fez, então nenhuma OS antiga muda de "no prazo" para "atrasada" (nem o contrário).
  */
 import { z } from "zod";
-import { chaveDiaCivil, diaCivilDeChave, hojeDiaCivil } from "@/lib/fuso";
-import { situacaoPrazo } from "@/lib/os/prazos";
+import { chaveDiaBR, chaveDiaCivil, chaveHojeBR, diaCivilDeChave, hojeDiaCivil, inicioHojeBR } from "@/lib/fuso";
+import { situacaoPrazo, textoPrazo } from "@/lib/os/prazos";
+import { diaDeReferencia } from "@/lib/desempenho/regras";
+import { pode, type Permissoes } from "@/lib/permissoes";
 
 export interface DatasDaOs {
   prazoExecucao?: Date | string | null;
@@ -55,9 +57,53 @@ export function whereOsAtrasada(agora: Date = new Date()) {
     status: { notIn: [...STATUS_FINAIS_OS] },
     OR: [
       { prazoExecucao: { lt: hoje } },
-      { prazoExecucao: null, previsaoConclusao: { lt: hoje } },
+      { prazoExecucao: null, previsaoConclusao: previstaAntesDe(agora) },
     ],
   };
+}
+
+/**
+ * A data prevista é gravada de dois jeitos: como DIA (meia-noite UTC) ou com HORA (um instante, que
+ * vale o dia dele em Brasília). "Antes de hoje" precisa cobrir os dois: o dia gravado antes de hoje,
+ * e o instante antes do começo de hoje em Brasília — a OS marcada para ontem às 22h (que em UTC já é
+ * hoje) também passou. O valor exatamente igual a hoje é o DIA de hoje: não passou.
+ */
+function previstaAntesDe(agora: Date) {
+  return { lt: inicioHojeBR(agora), not: hojeDiaCivil(agora) };
+}
+
+/** Filtro do banco: OS aberta cujo prazo (o próprio ou, sem ele, o dia previsto) é HOJE em Brasília. */
+export function whereOsVenceHoje(agora: Date = new Date()) {
+  const hoje = hojeDiaCivil(agora);
+  // o dia previsto é hoje: gravado como o dia de hoje, ou um instante dentro do dia de Brasília
+  // (o valor igual a amanhã é o DIA de amanhã, não um instante de hoje)
+  const previstaHoje = [
+    { previsaoConclusao: hoje },
+    { previsaoConclusao: { gte: inicioHojeBR(agora), lt: inicioHojeBR(agora, 1), not: hojeDiaCivil(agora, 1) } },
+  ];
+  return {
+    status: { notIn: [...STATUS_FINAIS_OS] },
+    OR: [{ prazoExecucao: hoje }, ...previstaHoje.map((p) => ({ prazoExecucao: null, ...p }))],
+  };
+}
+
+/* ───────── o filtro "Prazo" da lista de OS ───────── */
+
+export const FILTROS_PRAZO = ["atrasadas", "hoje", "justificadas"] as const;
+export type FiltroPrazo = (typeof FILTROS_PRAZO)[number];
+export const ROTULO_FILTRO_PRAZO: Record<FiltroPrazo, string> = {
+  atrasadas: "Atrasadas",
+  hoje: "Vencem hoje",
+  justificadas: "Com atraso justificado",
+};
+export const ehFiltroPrazo = (v: unknown): v is FiltroPrazo => (FILTROS_PRAZO as readonly unknown[]).includes(v);
+
+/** O filtro "Prazo" como condição do banco (para entrar num AND). null = sem filtro (ou valor desconhecido). */
+export function wherePrazo(filtro: string | null | undefined, agora: Date = new Date()) {
+  if (filtro === "atrasadas") return whereOsAtrasada(agora);
+  if (filtro === "hoje") return whereOsVenceHoje(agora);
+  if (filtro === "justificadas") return { atrasoJustificadoMotivo: { not: null } };
+  return null;
 }
 
 /* ───────── o prazo padrão do tipo de OS ───────── */
@@ -138,3 +184,84 @@ export const atrasoJustificadoSchema = z.object({
 export const atrasoJustificado = (os: { atrasoJustificadoMotivo?: string | null }) => !!os.atrasoJustificadoMotivo;
 export const rotuloMotivoAtraso = (motivo: string | null | undefined) =>
   (motivo && (ROTULO_MOTIVO_ATRASO as Record<string, string>)[motivo]) || "";
+
+/* ───────── o que há de atraso numa OS (para justificar) ───────── */
+
+export interface AtividadeParaAtraso {
+  status: string;
+  prazo?: Date | string | null;
+  dataAgendada?: Date | string | null;
+  concluidaEm?: Date | string | null;
+}
+export interface OsParaAtraso extends DatasDaOs {
+  status: string;
+  dataConclusao?: Date | string | null;
+  atividades?: AtividadeParaAtraso[];
+}
+
+/**
+ * A atividade está (ou ficou) atrasada? O dia de referência é o MESMO do desempenho
+ * (`diaDeReferencia`: o prazo próprio ou, sem ele, o dia agendado): concluída, atrasou se terminou
+ * depois dele; ainda aberta, atrasou se o dia já passou em Brasília. Cancelada não atrasa.
+ */
+export function atividadeAtrasou(a: AtividadeParaAtraso, agora: Date = new Date()): boolean {
+  if (a.status === "CANCELADA") return false;
+  const referencia = diaDeReferencia({ prazo: a.prazo ?? null, dataAgendada: a.dataAgendada ?? null });
+  if (!referencia) return false;
+  if (a.status === "CONCLUIDA") return !!a.concluidaEm && chaveDiaBR(a.concluidaEm) > referencia;
+  return chaveHojeBR(0, agora) > referencia;
+}
+
+/**
+ * O que há de atraso nesta OS: a própria OS (aberta com o prazo vencido, ou concluída depois dele) e
+ * quantas atividades atrasaram. OS cancelada não tem atraso.
+ */
+export function atrasosDaOs(os: OsParaAtraso, agora: Date = new Date()): { os: boolean; atividades: number } {
+  if (os.status === "CANCELADA") return { os: false, atividades: 0 };
+  const prazo = prazoEfetivo(os);
+  const daOs = os.status === "CONCLUIDA"
+    ? !!prazo && !!os.dataConclusao && chaveDiaBR(os.dataConclusao) > chaveDiaCivil(prazo)
+    : osAtrasada(os, agora);
+  return { os: daOs, atividades: (os.atividades ?? []).filter((a) => atividadeAtrasou(a, agora)).length };
+}
+
+/** Há atraso para justificar? (sem atraso, justificar não faz sentido — e a rota recusa) */
+export function haAtrasoParaJustificar(os: OsParaAtraso, agora: Date = new Date()): boolean {
+  const a = atrasosDaOs(os, agora);
+  return a.os || a.atividades > 0;
+}
+
+/**
+ * QUEM justifica um atraso: quem tem "Desempenho › Revisar" — a mesma pessoa que decide o que conta
+ * e o que não conta no desempenho da equipe (a justificativa tira o atraso do escore). O técnico e
+ * quem só opera as OS não justificam: senão a válvula vira desculpa fácil. Administrador sempre pode.
+ */
+export const podeJustificarAtraso = (permissoes: Permissoes | null | undefined, role?: string) =>
+  pode(permissoes, "desempenho", "revisar", role);
+export const MSG_SEM_PERMISSAO_JUSTIFICAR = "Só quem revisa o desempenho da equipe pode justificar um atraso.";
+
+/* ───────── o prazo que o técnico vê no app ───────── */
+
+/**
+ * O prazo DEFINIDO para uma atividade ("AAAA-MM-DD"): o da própria atividade ou o da OS — o mais
+ * próximo dos dois. null quando ninguém definiu prazo: aí o "prazo" seria o próprio dia agendado, que
+ * o cartão do técnico já mostra (e um selo em todo cartão seria ruído).
+ */
+export function prazoDefinido(o: { prazoAtividade?: Date | string | null; prazoOs?: Date | string | null }): string | null {
+  const dias = [o.prazoAtividade, o.prazoOs].filter(Boolean).map((d) => chaveDiaCivil(d as Date | string)).sort();
+  return dias[0] ?? null;
+}
+
+/**
+ * O selo de prazo do cartão do técnico, calculado NA HORA de mostrar (o cartão fica guardado no
+ * aparelho para o modo offline: "vence hoje" de ontem não pode aparecer hoje). Atividade encerrada
+ * não mostra prazo.
+ */
+export function prazoParaOTecnico(
+  o: { statusAtividade: string; prazo?: string | null }, agora: Date = new Date(),
+): { dia: string; situacao: "NO_PRAZO" | "VENCE_HOJE" | "ATRASADO"; texto: string } | null {
+  if (!o.prazo || o.statusAtividade === "CONCLUIDA" || o.statusAtividade === "CANCELADA") return null;
+  const s = situacaoPrazo(diaCivilDeChave(o.prazo), false, agora);
+  if (s.situacao !== "NO_PRAZO" && s.situacao !== "VENCE_HOJE" && s.situacao !== "ATRASADO") return null;
+  return { dia: o.prazo, situacao: s.situacao, texto: textoPrazo(s, true) };
+}

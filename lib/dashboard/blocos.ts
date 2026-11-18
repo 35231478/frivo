@@ -66,7 +66,7 @@ export const BLOCOS: BlocoDef[] = [
     visivel: (p, r) => pode(p, "veiculos", "visualizar", r),
   },
   {
-    id: "prazos", titulo: "Prazos e SLA",
+    id: "prazos", titulo: "Etapas com prazo",
     descricao: "Etapas vencidas, vencendo hoje e compras pendentes",
     visivel: (p, r) => pode(p, "ordens", "visualizar", r),
   },

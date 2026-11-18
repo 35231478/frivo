@@ -121,7 +121,7 @@ export function centralDaOs(os: OsCentralEntrada, agora: Date = new Date()) {
     if (atividadesAtrasadas) falta.push({ chave: "atividade-atrasada", texto: `${atividadesAtrasadas} atividade${atividadesAtrasadas > 1 ? "s" : ""} fora do prazo`, aba: "atividades", nivel: "alerta" });
     if (prazoOs.situacao === "ATRASADO") falta.push({ chave: "os-atrasada", texto: `Prazo da OS vencido (${textoPrazo(prazoOs, false).toLowerCase()})`, aba: "resumo", nivel: "alerta" });
     const slaAtrasado = (os.prazosSla ?? []).filter((p) => p.status === "ATRASADO").length;
-    if (slaAtrasado) falta.push({ chave: "sla-atrasado", texto: `${slaAtrasado} prazo${slaAtrasado > 1 ? "s" : ""} de SLA atrasado${slaAtrasado > 1 ? "s" : ""}`, aba: "atividades", nivel: "alerta" });
+    if (slaAtrasado) falta.push({ chave: "sla-atrasado", texto: `${slaAtrasado} etapa${slaAtrasado > 1 ? "s" : ""} com prazo atrasada${slaAtrasado > 1 ? "s" : ""}`, aba: "atividades", nivel: "alerta" });
     const aAvaliar = (os.servicosAdicionais ?? []).filter((s) => s.statusCobranca === "A_AVALIAR").length;
     if (aAvaliar) falta.push({ chave: "adicional", texto: `Decidir a cobrança de ${aAvaliar} serviço${aAvaliar > 1 ? "s" : ""} adicional${aAvaliar > 1 ? "is" : ""}`, aba: "resumo", nivel: "acao" });
     const aguardando = os.orcamentos.filter((o) => o.orcamento.status === "ENVIADO").length;

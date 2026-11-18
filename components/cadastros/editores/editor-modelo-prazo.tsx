@@ -31,7 +31,7 @@ function unidadeParaHoras(valor: number, unidade: UnidadePrazo): number {
   return valor;
 }
 
-/** Editor de modelo de prazo (CadastroPadrao › modelos-prazo): nome, cor, descrição e as etapas (SLA). */
+/** Editor de modelo de etapas com prazo (CadastroPadrao › modelos-prazo): nome, cor, descrição e as etapas. */
 // Cor que um registro novo recebe (dado salvo no cadastro; o usuário troca no seletor)
 const COR_PADRAO = corDado.azul;
 
@@ -89,7 +89,7 @@ export function EditorModeloPrazo({ item, aberto, onFechar, onSalvo }: EditorCad
   return (
     <Drawer
       aberto={aberto} onFechar={onFechar}
-      titulo={item ? `Editar ${item.nome}` : "Novo modelo de prazo"}
+      titulo={item ? `Editar ${item.nome}` : "Novo modelo de etapas"}
       largura="w-full sm:w-[60vw] sm:min-w-[520px] sm:max-w-[900px]"
       rodape={<>
         <Button type="button" variant="secondary" onClick={onFechar}>Cancelar</Button>

@@ -4,6 +4,7 @@ import { lerFiltros, montarWhere } from "@/lib/equipamento-listagem";
 import { lerFiltrosVeiculos, montarWhereVeiculos } from "@/lib/veiculo-listagem";
 import { LABELS_FUNCAO, lerFiltrosColaboradores, montarWhereColaboradores } from "@/lib/colaborador-listagem";
 import { whereClientes, whereContratos, whereOrcamentos, whereOrdens } from "@/lib/listas/filtros";
+import { prazoEfetivo } from "@/lib/os/prazo-execucao";
 import { calcularStatusFinanceiroEmLote } from "@/lib/status-financeiro";
 import { MAX_SELECAO, type AcaoItem, type Entidade } from "@/lib/acoes-massa/acoes";
 import { idsCadastro, linhasCadastro, rotulosCadastro } from "@/lib/cadastros/servidor";
@@ -147,12 +148,12 @@ export async function linhasExportacao(entidade: Entidade, ids: string[], empres
     case "ordens": {
       const rs = await prisma.ordemServico.findMany({
         where, orderBy: { criadoEm: "desc" },
-        select: { numero: true, chamadoNumero: true, status: true, prioridade: true, descricao: true, criadoEm: true, previsaoConclusao: true, dataConclusao: true,
+        select: { numero: true, chamadoNumero: true, status: true, prioridade: true, descricao: true, criadoEm: true, previsaoConclusao: true, prazoExecucao: true, dataConclusao: true,
           cliente: { select: { nome: true } }, unidade: { select: { nome: true } }, responsavel: { select: { nome: true } }, contrato: { select: { numero: true } } },
       });
-      return [["Número", "Chamado", "Cliente", "Local", "Status", "Prioridade", "Responsável", "Contrato", "Descrição", "Aberta em", "Previsão", "Concluída em"],
+      return [["Número", "Chamado", "Cliente", "Local", "Status", "Prioridade", "Responsável", "Contrato", "Descrição", "Aberta em", "Data prevista", "Prazo", "Concluída em"],
         ...rs.map((r) => [r.numero, r.chamadoNumero ?? "", r.cliente.nome, r.unidade?.nome ?? "", LABELS_STATUS_OS[r.status] ?? r.status, LABELS_PRIORIDADE[r.prioridade] ?? r.prioridade,
-          r.responsavel?.nome ?? "", r.contrato?.numero ?? "", r.descricao, d(r.criadoEm), d(r.previsaoConclusao), d(r.dataConclusao)])];
+          r.responsavel?.nome ?? "", r.contrato?.numero ?? "", r.descricao, d(r.criadoEm), d(r.previsaoConclusao), d(prazoEfetivo(r)), d(r.dataConclusao)])];
     }
     case "equipamentos": {
       const rs = await prisma.equipamento.findMany({

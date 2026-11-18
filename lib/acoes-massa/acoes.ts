@@ -149,7 +149,7 @@ export const ENTIDADE: Record<Entidade, DefEntidade> = {
   "tipos-equipamento": acoesCadastro("tipo de equipamento", "tipos de equipamento"),
   "tabelas-preco": acoesCadastro("tabela de preços", "tabelas de preços", true),
   "termos-referencia": acoesCadastro("termo de referência", "termos de referência"),
-  "modelos-prazo": acoesCadastro("modelo de prazo", "modelos de prazo"),
+  "modelos-prazo": acoesCadastro("modelo de etapas", "modelos de etapas"),
   fornecedores: acoesCadastro("fornecedor", "fornecedores", false, ["financeiro", "fluxoCaixa"]),
   "centros-custo": acoesCadastro("centro de custo", "centros de custo"),
   "categorias-produto": acoesCadastro("categoria de produto", "categorias de produto", true),

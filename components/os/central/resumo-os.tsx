@@ -12,6 +12,7 @@ import { usePermissoes } from "@/components/providers/permissoes-provider";
 import { EditarNoContexto } from "@/components/ui/select-cadastro-rapido";
 import { CLIENTE, UNIDADE } from "@/components/cadastro-rapido/definicoes";
 import { prazoEfetivo } from "@/lib/os/prazo-execucao";
+import { AtrasoJustificado } from "@/components/os/central/atraso-justificado";
 
 function Cartao({ titulo, icone, children, dado, className }: {
   titulo: string; icone: React.ComponentType<{ className?: string }>; children: React.ReactNode; dado?: string; className?: string;
@@ -34,8 +35,9 @@ export function ResumoOs({ os, central, onAba, onAtualizado }: {
   const historico: any[] = os.historico ?? [];
   const visiveis = historicoTodo ? historico : historico.slice(0, 8);
   const comPrazo = (os.atividades ?? []).filter((a: any) => a.prazo && a.status !== "CANCELADA");
-  const slaAtrasados = (os.prazos ?? []).filter((p: any) => p.status === "ATRASADO").length;
-  const slaAtivos = (os.prazos ?? []).filter((p: any) => p.status === "ATIVO" || p.status === "ATRASADO").length;
+  // Etapas com prazo (os antigos "prazos/SLA" por modelo): fluxos de etapas adicionados à OS
+  const etapasAtrasadas = (os.prazos ?? []).filter((p: any) => p.status === "ATRASADO").length;
+  const etapasAtivas = (os.prazos ?? []).filter((p: any) => p.status === "ATIVO" || p.status === "ATRASADO").length;
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-5" data-resumo-os>
@@ -120,9 +122,10 @@ export function ResumoOs({ os, central, onAba, onAtualizado }: {
               return p ? <LinhaPrazo key={a.id} rotulo={a.titulo} dia={a.prazo} situacao={p} feminino /> : null;
             })}
             {!comPrazo.length && <p className="text-xs text-ink-muted">Nenhuma atividade com prazo próprio.</p>}
-            <button type="button" onClick={() => onAba("atividades")} data-ver-sla className="w-full text-left text-xs font-medium text-acento hover:underline pt-1">
-              SLA: {slaAtivos ? `${slaAtivos} em andamento${slaAtrasados ? ` (${slaAtrasados} atrasado${slaAtrasados > 1 ? "s" : ""})` : ""}` : "nenhum"} — gerenciar na aba Atividades
+            <button type="button" onClick={() => onAba("atividades")} data-ver-etapas className="w-full text-left text-xs font-medium text-acento hover:underline pt-1">
+              Etapas com prazo: {etapasAtivas ? `${etapasAtivas} em andamento${etapasAtrasadas ? ` (${etapasAtrasadas} atrasada${etapasAtrasadas > 1 ? "s" : ""})` : ""}` : "nenhuma"} — gerenciar na aba Atividades
             </button>
+            <AtrasoJustificado os={os} onAtualizado={(d) => onAtualizado?.(d)} />
           </div>
         </Cartao>
 

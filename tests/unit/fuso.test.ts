@@ -121,6 +121,7 @@ describe("quem compara datas usa a regra", () => {
     expect(w.AND[0].OR).toEqual([
       { atividades: { some: { dataAgendada: { gte: H("2026-10-28T03:00:00Z"), lt: H("2026-10-29T03:00:00Z") } } } },
       { previsaoConclusao: { gte: H(VENC), lt: H("2026-10-29T00:00:00Z") } },
+      { prazoExecucao: { gte: H(VENC), lt: H("2026-10-29T00:00:00Z") } }, // o período olha também o PRAZO (dia civil)
       { previsaoConclusao: { gte: H("2026-10-28T03:00:00Z"), lt: H("2026-10-29T03:00:00Z") } },
       { criadoEm: { gte: H("2026-10-28T03:00:00Z"), lt: H("2026-10-29T03:00:00Z") } },
     ]);

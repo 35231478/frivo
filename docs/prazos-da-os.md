@@ -68,14 +68,48 @@ próprio dia. Preenche o prazo sozinho quando a OS nasce (`prazoAoCriar`):
 Quando o **cronograma do PMOC** reagenda uma OS, o prazo próprio anda junto, os mesmos dias
 (`deslocarPrazo`). No arrasto do Calendário, não: ali quem decide é a pessoa.
 
-A tela para configurar o padrão no tipo de OS entra no PR 2.
+O padrão se configura em **Configurações › Tipos de OS**, no campo "Prazo padrão (dias)" (PR 2).
 
 ### Atraso justificado
 
 Colunas `atraso_justificado_*` na OS (motivo de lista + observação + quem + quando) e as regras
 (`MOTIVOS_ATRASO`, `atrasoJustificadoSchema`): cliente ausente, peça faltando, acesso negado, clima,
-outro (exige explicação). **Só o gestor marca**; o técnico pode deixar a observação na execução.
-A tela entra no PR 2 e o efeito no desempenho, no PR 3 — neste PR há só o banco e a regra.
+outro (exige explicação).
+
+- **Onde:** no cartão "Prazos" do Resumo da OS — "Justificar atraso", e depois "Alterar" / "Desfazer".
+  Rota: `POST` e `DELETE /api/ordens/[id]/atraso-justificado`. Tudo fica no histórico da OS.
+- **Quem:** quem tem **Desempenho › Revisar** (`podeJustificarAtraso`) — a mesma pessoa que decide o
+  que conta e o que não conta no desempenho. Quem só opera as OS e o técnico não justificam: no app,
+  o técnico deixa a observação na execução, e quem justifica é o gestor. Todo mundo que vê a OS lê a
+  justificativa.
+- **Quando:** só quando há atraso (`haAtrasoParaJustificar`): a OS aberta com o prazo vencido, a OS
+  concluída depois do prazo, ou alguma atividade atrasada. O dia de referência da atividade é o MESMO
+  do desempenho (`diaDeReferencia`: o prazo próprio ou, sem ele, o dia agendado).
+- **O que muda:** a OS **continua atrasada** (no Calendário, na lista, no Dashboard). O atraso só
+  deixa de pesar no desempenho de quem executou — isso entra no PR 3.
+
+### O prazo nas telas (PR 2)
+
+| Tela | O que mostra |
+|---|---|
+| **Lista de OS** | Coluna "Prazo" (a data; selo só quando vence hoje ou atrasou; "justificado" ao lado). Filtro "Prazo": Atrasadas, Vencem hoje, Com atraso justificado (`?prazo=`). A exportação segue o mesmo filtro e traz as colunas do prazo |
+| **Sino e Dashboard** | "OS atrasadas" e "Atrasadas" abrem a lista já filtrada (`/ordens?prazo=atrasadas`) |
+| **App do técnico** | Selo no cartão e na tela da OS, só quando o escritório DEFINIU um prazo (da atividade ou da OS, o mais próximo): "Prazo 25/11", "Vence hoje", "Atrasada 2 dias". Calculado na hora de mostrar (o cartão fica guardado no aparelho) |
+| **Tipos de OS** | Campo e coluna "Prazo padrão" |
+
+### "Prazos e SLA" saiu do menu
+
+Aquela tela não era nenhum dos dois prazos: era o acompanhamento das **etapas com prazo** (fluxos de
+etapas, como compra de peça, adicionados à OS). Nada foi apagado:
+
+- o cadastro dos modelos continua em **Configurações › Etapas com prazo** (eram "Modelos de prazo");
+- dentro da OS, a seção chama-se "Etapas com prazo" (era "Prazos / SLA");
+- o acompanhamento mora em `/ordens/etapas`, sem item de menu: chega-se pelo sino e pelo Dashboard;
+- `/prazos` redireciona: com o filtro da tela antiga (`status`, `templateId`) vai para as etapas; sem
+  filtro, vai para a lista de OS filtrada nas atrasadas (`lib/os/rota-prazos.ts`).
+
+A palavra "SLA" saiu da interface (um teste varre o código). Ela só continua na proposta de
+contrato, que é assunto do PR 4.
 
 ## 2. Prazo de atendimento (do contrato)
 
@@ -103,7 +137,7 @@ entram no PR 4.
 | PR | Conteúdo | Banco |
 |---|---|---|
 | **1** (este) | Banco e motor dos dois prazos; prazo de execução separado da data prevista em todos os usos; regra única de "atrasada" | 🔵 `prisma/sql/2027-01-09_prazos_execucao_atendimento.sql` |
-| 2 | Prazo de execução nas telas: lista de OS, atraso justificado, app do técnico, prazo padrão no tipo de OS, saída do menu "Prazos e SLA" | 🟢 |
+| **2** (feito) | Prazo de execução nas telas: lista de OS, atraso justificado, app do técnico, prazo padrão no tipo de OS, saída do menu "Prazos e SLA" | 🟢 |
 | 3 | Desempenho: atraso justificado fora da métrica "no prazo" | 🟢 |
 | 4 | Contrato e OS: configurar o prazo de atendimento, gravar os limites, "Cheguei", alertas | 🟢 |
 | 5 | Relatório de cumprimento (tela e PDF) | 🟢 |
@@ -117,3 +151,6 @@ entram no PR 4.
 | `tests/unit/sql-prazos-execucao-atendimento.test.ts` | O SQL de produção: aditivo, idempotente e idêntico ao que o Prisma espera |
 | `tests/unit/pmoc-cronograma-pg.test.ts` | PMOC: a OS nasce com o padrão do tipo e o reagendamento leva o prazo |
 | `tests/unit/os-central-ui.test.ts`, `padronizacao-leva5-ui.test.ts`, `nova-os-ajustes.test.ts` | As telas: prazo × data prevista nos dois sentidos, os dois campos da gaveta, o campo da Nova OS |
+| `tests/unit/prazos-pr2.test.ts` | PR 2, regras puras: filtro de prazo, o que conta como atraso, quem justifica, o prazo do técnico, o prazo padrão do tipo, o menu e a palavra "SLA" |
+| `tests/unit/prazos-pr2-pg.test.ts` | PR 2 em PostgreSQL real: lista e exportação filtradas, a rota do atraso justificado (quem, quando, histórico, multiempresa), tipo de OS, cartão do técnico |
+| `tests/unit/prazos-pr2-ui.test.ts`, `ordens-lista-barra-ui.test.ts` | PR 2, telas: a gaveta do atraso justificado, o selo do app do técnico, a coluna e o filtro da lista |

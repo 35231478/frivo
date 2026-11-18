@@ -202,7 +202,7 @@ describe("abas consolidadas e O que falta", () => {
     expect($$("[data-pendencia-os]").map((b) => b.getAttribute("data-pendencia-os"))).toEqual(["atividade-atrasada", "os-atrasada", "sla-atrasado"]);
     // Prazos no Resumo: previsão da OS + atividade com prazo próprio
     expect($$("[data-cartao='prazos'] [data-linha-prazo]").map((l) => l.getAttribute("data-linha-prazo"))).toEqual(["ATRASADO", "ATRASADO"]);
-    expect(texto("[data-ver-sla]")).toContain("SLA: 1 em andamento (1 atrasado)");
+    expect(texto("[data-ver-etapas]")).toContain("Etapas com prazo: 1 em andamento (1 atrasada)"); // eram "SLA"
     await clicar($("[data-pendencia-os='sla-atrasado']"));
     expect(abaAtiva()).toBe("atividades");
     expect($("[data-secao-sla]")).toBeTruthy(); // a antiga aba Prazos vive aqui

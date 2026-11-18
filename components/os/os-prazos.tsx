@@ -44,8 +44,8 @@ export function OsPrazos({ osId }: { osId: string }) {
       const res = await fetch(`/api/ordens/${osId}/prazos`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ templateId }) });
       if (res.ok) { setAdicionando(false); setTemplateId(""); carregar(); return; }
       const d = await res.json().catch(() => null);
-      setErro(d?.erro ?? "Não foi possível criar o prazo.");
-    } catch { setErro("Erro de conexão: o prazo não foi criado."); } finally { setAcao(null); }
+      setErro(d?.erro ?? "Não foi possível adicionar as etapas.");
+    } catch { setErro("Erro de conexão: as etapas não foram adicionadas."); } finally { setAcao(null); }
   }
 
   async function avancar(prazoId: string) {
@@ -61,7 +61,7 @@ export function OsPrazos({ osId }: { osId: string }) {
   }
 
   async function cancelar(prazoId: string) {
-    if (!(await confirmar({ mensagem: "Cancelar este prazo?", perigo: true, confirmarTexto: "Cancelar prazo", cancelarTexto: "Voltar" }))) return;
+    if (!(await confirmar({ mensagem: "Cancelar estas etapas?", perigo: true, confirmarTexto: "Cancelar etapas", cancelarTexto: "Voltar" }))) return;
     await fetch(`/api/os-prazos/${prazoId}`, { method: "DELETE" });
     carregar();
   }
@@ -71,10 +71,10 @@ export function OsPrazos({ osId }: { osId: string }) {
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <h3 className="section-title flex items-center gap-2"><Timer className="w-4 h-4 text-primary-600" /> Prazos / SLA</h3>
+        <h3 className="section-title flex items-center gap-2"><Timer className="w-4 h-4 text-primary-600" /> Etapas com prazo</h3>
         {podeEditar && !adicionando && (
           <Button variant="outline" size="sm" onClick={() => setAdicionando(true)}>
-            <Plus className="w-4 h-4" /> Adicionar prazo
+            <Plus className="w-4 h-4" /> Adicionar etapas
           </Button>
         )}
       </div>
@@ -83,7 +83,7 @@ export function OsPrazos({ osId }: { osId: string }) {
         <div className="border border-primary-200 bg-primary-50/30 rounded-lg p-4 space-y-2">
           <div className="flex items-end gap-2">
             <div className="flex-1">
-              <label className="text-xs font-semibold text-ink">Modelo de prazo</label>
+              <label className="text-xs font-semibold text-ink">Modelo de etapas</label>
               {/* Só modelos ativos (o servidor recusa modelo inativo em prazo novo) */}
               <SeletorCadastro entidade="modelos-prazo" valor={templateId} onChange={(v) => setTemplateId(v)} placeholder="Selecione um modelo" className="mt-1" />
             </div>
@@ -95,7 +95,7 @@ export function OsPrazos({ osId }: { osId: string }) {
       )}
 
       {prazos.length === 0 ? (
-        <p className="text-sm text-ink-subtle text-center py-6">Nenhum prazo adicionado a esta OS.</p>
+        <p className="text-sm text-ink-subtle text-center py-6">Nenhuma etapa com prazo nesta OS.</p>
       ) : (
         <div className="space-y-4">
           {prazos.map((p) => {
@@ -120,7 +120,7 @@ export function OsPrazos({ osId }: { osId: string }) {
                       </Button>
                     )}
                     {podeEditar && p.status !== "CANCELADO" && p.status !== "CONCLUIDO" && (
-                      <button onClick={() => cancelar(p.id)} className="p-1.5 text-ink-muted hover:text-atrasado hover:bg-atrasado-claro rounded" title="Cancelar prazo"><Trash2 className="w-3.5 h-3.5" /></button>
+                      <button onClick={() => cancelar(p.id)} className="p-1.5 text-ink-muted hover:text-atrasado hover:bg-atrasado-claro rounded" title="Cancelar etapas"><Trash2 className="w-3.5 h-3.5" /></button>
                     )}
                   </div>
                 </div>
