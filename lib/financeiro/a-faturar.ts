@@ -14,7 +14,7 @@
  *    no mês corrente — o dinheiro continua a faturar, não some num mês que já passou.
  */
 import { prisma } from "@/lib/prisma";
-import { partesBR } from "@/lib/fuso";
+import { chaveDiaCivil, partesBR } from "@/lib/fuso";
 import { faturamentoDaOrigem } from "@/lib/faturamento-os";
 
 export interface ItemAFaturar {
@@ -37,10 +37,14 @@ export function chaveMesBR(d: Date | string) {
  * Mês da previsão de um orçamento a faturar (regra pura): a previsão de conclusão da OS gerada
  * (OS viva); sem ela — ou se já passou — o mês corrente.
  */
-export function mesDaPrevisao(os: { previsaoConclusao: Date | string | null; status: string } | null, agora = new Date()): { mes: string; origem: ItemAFaturar["origemMes"] } {
+export function mesDaPrevisao(os: { previsaoConclusao: Date | string | null; prazoExecucao?: Date | string | null; status: string } | null, agora = new Date()): { mes: string; origem: ItemAFaturar["origemMes"] } {
   const atual = chaveMesBR(agora);
-  if (os && os.status !== "CANCELADA" && os.previsaoConclusao) {
-    const m = chaveMesBR(os.previsaoConclusao);
+  // Quando o serviço deve ficar pronto: a data prevista (agenda) ou, sem ela, o prazo de execução.
+  // Gravada como DIA (meia-noite UTC), o mês se lê do próprio dia; gravada com hora, vale o dia dela
+  // em Brasília — `chaveDiaCivil` trata os dois casos (o dia 1º não cai no mês anterior).
+  const quando = os?.previsaoConclusao ?? os?.prazoExecucao;
+  if (os && os.status !== "CANCELADA" && quando) {
+    const m = chaveDiaCivil(quando).slice(0, 7);
     if (m >= atual) return { mes: m, origem: "OS" };
   }
   return { mes: atual, origem: "MES_CORRENTE" };
@@ -58,7 +62,7 @@ export async function itensAFaturar(empresaId: string, agora = new Date()): Prom
     select: {
       id: true, codigo: true, nome: true, totalGeral: true,
       cliente: { select: { nome: true, nomeFantasia: true } },
-      osGerada: { select: { numero: true, chamadoNumero: true, previsaoConclusao: true, status: true } },
+      osGerada: { select: { numero: true, chamadoNumero: true, previsaoConclusao: true, prazoExecucao: true, status: true } },
     },
     orderBy: { codigo: "asc" },
   });

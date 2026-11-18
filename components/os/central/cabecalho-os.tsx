@@ -20,6 +20,7 @@ import { EditarOs } from "@/components/os/central/editar-os";
 import { StatusPill, TOM_ESTAGIO_OS, TOM_PRAZO, TOM_PRIORIDADE } from "@/components/ui/status-pill";
 import { Stepper } from "@/components/ui/stepper";
 import { Kpi } from "@/components/ui/kpi";
+import { prazoEfetivo } from "@/lib/os/prazo-execucao";
 
 /** Situação do pagamento → cor do texto (status com função: previsto, atenção, atrasado, ok). */
 const COR_PAGAMENTO: Record<string, string> = {
@@ -94,7 +95,7 @@ export function CabecalhoOs({ os, central, acoes, onAba, onAtualizado }: {
             <p className="text-xs text-ink-muted mt-1 flex items-center gap-3 flex-wrap">
               <span className="inline-flex items-center gap-1"><User className="w-3.5 h-3.5 text-ink-subtle" aria-hidden="true" /> {os.responsavel?.nome ?? "Sem responsável"}</span>
               <span className="inline-flex items-center gap-1" data-prazo-os={prazoOs.situacao}>
-                <CalendarClock className="w-3.5 h-3.5 text-ink-subtle" aria-hidden="true" /> Previsão {formatarDiaCivil(os.previsaoConclusao)}
+                <CalendarClock className="w-3.5 h-3.5 text-ink-subtle" aria-hidden="true" /> Prazo {formatarDiaCivil(prazoEfetivo(os))}
                 {prazoOs.situacao !== "SEM_PRAZO" && (
                   <StatusPill tom={TOM_PRAZO[prazoOs.situacao] ?? "previsto"} tamanho="sm" className="ml-1">{textoPrazo(prazoOs, true)}</StatusPill>
                 )}

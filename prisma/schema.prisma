@@ -840,6 +840,7 @@ model Usuario {
   empresa                Empresa                   @relation(fields: [empresaId], references: [id], onDelete: Cascade)
   ordensEmitidas         OrdemServico[]            @relation("UsuarioCriador")
   ordensResponsavel      OrdemServico[]            @relation("OsResponsavel")
+  osAtrasoJustificado    OrdemServico[]            @relation("OsAtrasoJustificadoPor")
   osHistorico            OsHistorico[]
   interacoesCliente      InteracaoCliente[]
   orcamentosCriados      Orcamento[]               @relation("OrcamentoCriador")
@@ -1475,6 +1476,8 @@ model Contrato {
   reajustes            ReajusteContrato[]
   historicoStatus      ContratoHistoricoStatus[]
   recorrenciasLocais   ContratoRecorrenciaLocal[]
+  /// O prazo de atendimento que este contrato promete, por prioridade do chamado
+  prazosAtendimento    ContratoPrazoAtendimento[]
   contasReceber        ContaReceber[]
   execucoesFaturamento FaturamentoContratoExecucao[]
 
@@ -1509,6 +1512,30 @@ model ContratoRecorrenciaLocal {
 
   @@unique([contratoId, unidadeId])
   @@map("contrato_recorrencia_local")
+}
+
+/// PRAZO DE ATENDIMENTO do contrato (o "atender em 24h" prometido ao cliente): uma linha por
+/// prioridade do chamado, só para as prioridades que o contrato quiser prometer. Horas contadas da
+/// ABERTURA DO CHAMADO pelo cliente — corridas ou, com `soHorarioComercial`, só dentro do horário
+/// comercial (lib/atendimento/prazo.ts). Cada prazo é opcional: dá para prometer só o comparecimento.
+model ContratoPrazoAtendimento {
+  id                 String     @id @default(cuid())
+  empresaId          String     @map("empresa_id")
+  contratoId         String     @map("contrato_id")
+  prioridade         Prioridade
+  /// Em quantas horas o técnico chega ao local
+  comparecerHoras    Int?       @map("comparecer_horas")
+  /// Em quantas horas o chamado é resolvido (a OS concluída)
+  resolverHoras      Int?       @map("resolver_horas")
+  soHorarioComercial Boolean    @default(false) @map("so_horario_comercial")
+  criadoEm           DateTime   @default(now()) @map("criado_em")
+  atualizadoEm       DateTime   @updatedAt @map("atualizado_em")
+
+  contrato Contrato @relation(fields: [contratoId], references: [id], onDelete: Cascade)
+
+  @@unique([contratoId, prioridade])
+  @@index([empresaId])
+  @@map("contrato_prazos_atendimento")
 }
 
 // Histórico de mudanças de status do contrato
@@ -1796,6 +1823,9 @@ model TipoOs {
   /// equipamento atendido e completo; false = serviço sem equipamento (visita técnica, vistoria,
   /// orçamento): conclui sem equipamento — os que forem atendidos continuam exigindo o checklist.
   exigeEquipamento Boolean  @default(true) @map("exige_equipamento")
+  /// Prazo de execução padrão deste tipo, em DIAS contados do dia agendado (0 = o próprio dia).
+  /// Preenche o "Prazo para finalizar" da OS sozinho; dá para ajustar à mão. Vazio = sem padrão.
+  prazoExecucaoDias Int?    @map("prazo_execucao_dias")
   criadoEm         DateTime @default(now()) @map("criado_em")
 
   empresa                  Empresa              @relation(fields: [empresaId], references: [id], onDelete: Cascade)
@@ -1895,7 +1925,27 @@ model OrdemServico {
   /// máximo uma OS (dois cliques não duplicam). O vínculo de leitura continua em OrcamentoOs.
   orcamentoOrigemId    String?    @unique @map("orcamento_origem_id")
   descricao            String
+  /// DATA PREVISTA: o dia (às vezes com hora) em que o serviço está marcado quando a OS ainda não
+  /// tem atividade agendada — a OS recorrente, a do PMOC, a solicitação aceita, o arrasto no
+  /// calendário. É agenda, NÃO é prazo: o prazo é `prazoExecucao`.
   previsaoConclusao    DateTime?  @map("previsao_conclusao")
+  /// PRAZO DE EXECUÇÃO: até que DIA (civil, sem hora) a OS precisa estar concluída. É o "Prazo para
+  /// finalizar" da tela. Vazio = sem prazo próprio: vale o dia previsto (lib/os/prazo-execucao.ts).
+  prazoExecucao        DateTime?  @map("prazo_execucao") @db.Date
+  /// ATRASO JUSTIFICADO (só o gestor marca): o atraso desta OS não pesa no desempenho de quem
+  /// executou. O motivo é um dos de lib/os/prazo-execucao.ts; quem e quando ficam aqui.
+  atrasoJustificadoMotivo String?   @map("atraso_justificado_motivo")
+  atrasoJustificadoObs    String?   @map("atraso_justificado_obs")
+  atrasoJustificadoPorId  String?   @map("atraso_justificado_por_id")
+  atrasoJustificadoEm     DateTime? @map("atraso_justificado_em")
+  /// PRAZO DE ATENDIMENTO (o que o contrato promete ao cliente): só no chamado de cliente em
+  /// contrato. `chamadoAbertoEm` = quando o CLIENTE abriu (é de lá que conta, não da criação da OS);
+  /// os dois limites são congelados nessa hora (mudar o contrato depois não reescreve o passado);
+  /// `atendimentoComparecidoEm` = o "Cheguei" do técnico. Resolver = `dataConclusao`.
+  chamadoAbertoEm          DateTime? @map("chamado_aberto_em")
+  atendimentoComparecerAte DateTime? @map("atendimento_comparecer_ate")
+  atendimentoResolverAte   DateTime? @map("atendimento_resolver_ate")
+  atendimentoComparecidoEm DateTime? @map("atendimento_comparecido_em")
   dataInicio           DateTime?  @map("data_inicio")
   dataConclusao        DateTime?  @map("data_conclusao")
   observacoes          String?
@@ -1907,6 +1957,7 @@ model OrdemServico {
   unidade            Unidade?              @relation(fields: [unidadeId], references: [id])
   contrato           Contrato?             @relation(fields: [contratoId], references: [id])
   responsavel        Usuario?              @relation("OsResponsavel", fields: [responsavelId], references: [id])
+  atrasoJustificadoPor Usuario?            @relation("OsAtrasoJustificadoPor", fields: [atrasoJustificadoPorId], references: [id], onDelete: SetNull)
   criadoPor          Usuario               @relation("UsuarioCriador", fields: [criadoPorId], references: [id])
   contatoOrigem      ContatoCliente?       @relation("OsContatoOrigem", fields: [contatoOrigemId], references: [id])
   equipamento        Equipamento?          @relation(fields: [equipamentoId], references: [id])
@@ -1942,6 +1993,7 @@ model OrdemServico {
   @@index([empresaId, status])
   @@index([empresaId, criadoEm])
   @@index([empresaId, previsaoConclusao])
+  @@index([empresaId, prazoExecucao])
   @@index([empresaId, origem, status])
   @@index([clienteId])
   @@index([contratoId])

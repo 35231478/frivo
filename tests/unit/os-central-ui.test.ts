@@ -60,6 +60,8 @@ const esperar = () => act(async () => { for (let i = 0; i < 6; i++) await Promis
 const $ = <T extends Element = HTMLElement>(sel: string) => caixa.querySelector(sel) as T | null;
 const $$ = (sel: string) => [...caixa.querySelectorAll(sel)] as HTMLElement[];
 const texto = (sel: string) => ($(sel)?.textContent ?? "").replace(/\s+/g, " ").trim();
+/** O cartão "Datas" do Resumo: { rótulo: valor } */
+const datasDoResumo = () => Object.fromEntries($$("[data-cartao='datas'] dt").map((dt) => [dt.textContent, dt.nextElementSibling?.textContent]));
 const clicar = async (el: Element | null | undefined) => { expect(el).toBeTruthy(); await act(async () => { (el as HTMLElement).click(); }); await esperar(); };
 const abaAtiva = () => $("[data-aba][aria-current='true'], [data-aba][aria-current='page']")?.getAttribute("data-aba");
 async function escolher(el: Element | null, v: string) {
@@ -120,12 +122,34 @@ describe("cabeçalho-resumo da OS", () => {
     expect(texto("[data-cabecalho-os]")).toContain("Bloco B — Florianópolis/SC");
     expect(texto("[data-cabecalho-os]")).toContain("Ana Gestora");
     // 28/10 (e não 27/10, o erro do fuso) e atrasada 2 dias em 30/10
-    expect(texto("[data-prazo-os]")).toMatch(/^Previsão 28\/10\/2026\s*Atrasada 2 dias$/);
+    expect(texto("[data-prazo-os]")).toMatch(/^Prazo 28\/10\/2026\s*Atrasada 2 dias$/);
     expect($("[data-prazo-os]")?.getAttribute("data-prazo-os")).toBe("ATRASADO");
     expect(texto("[data-numero='atividades']")).toContain("1 de 2 concluídas"); // cancelada não conta
     expect(texto("[data-numero='equipamentos']")).toContain("3");
     expect(texto("[data-numero='valor']")).toMatch(/R\$\s?1\.200,00 · R\$\s?0,00/);
     expect($("[data-pagamento]")?.getAttribute("data-pagamento")).toBe("PREVISTO");
+  });
+
+  it("PRAZO × DATA PREVISTA (1): prevista para 28/10 (já passou), mas com prazo 05/11 — NÃO está atrasada; o Resumo mostra as duas datas", async () => {
+    await montar(fixture({ prazoExecucao: "2026-11-05T00:00:00.000Z", prazos: [], atividades: [atividade("a1", { dataAgendada: "2026-11-02T13:00:00Z" })] }));
+    expect($("[data-prazo-os]")?.getAttribute("data-prazo-os")).toBe("NO_PRAZO");
+    expect(texto("[data-prazo-os]")).toMatch(/^Prazo 05\/11\/2026/);
+    expect($$("[data-pendencia-os]").map((b) => b.getAttribute("data-pendencia-os"))).not.toContain("os-atrasada");
+    expect(datasDoResumo()).toMatchObject({ "Data prevista": "28/10/2026", Prazo: "05/11/2026" });
+    expect($$("[data-cartao='prazos'] [data-linha-prazo]").map((l) => [l.getAttribute("data-linha-prazo"), l.textContent])).toEqual([["NO_PRAZO", expect.stringMatching(/^Prazo da OS05\/11\/2026/)]]);
+  });
+
+  it("PRAZO × DATA PREVISTA (2): prevista para 05/11 (ainda vem), mas o prazo era 28/10 — ATRASADA 2 dias em 30/10", async () => {
+    await montar(fixture({ previsaoConclusao: "2026-11-05T00:00:00.000Z", prazoExecucao: "2026-10-28T00:00:00.000Z", prazos: [], atividades: [atividade("a1", { dataAgendada: "2026-11-02T13:00:00Z" })] }));
+    expect(texto("[data-prazo-os]")).toMatch(/^Prazo 28\/10\/2026\s*Atrasada 2 dias$/);
+    expect(texto("[data-pendencia-os='os-atrasada']")).toContain("Prazo da OS vencido (atrasado 2 dias)");
+    expect(datasDoResumo()).toMatchObject({ "Data prevista": "05/11/2026", Prazo: "28/10/2026" });
+  });
+
+  it("OS antiga (sem prazo próprio): o prazo é o dia previsto, como sempre", async () => {
+    await montar(fixture({ prazos: [] }));
+    expect(datasDoResumo()).toMatchObject({ "Data prevista": "28/10/2026", Prazo: "28/10/2026" });
+    expect($("[data-prazo-os]")?.getAttribute("data-prazo-os")).toBe("ATRASADO");
   });
 
   it("Faturada: concluída com medição e conta paga", async () => {

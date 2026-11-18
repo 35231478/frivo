@@ -11,6 +11,7 @@ import { StatusPill, TOM_PRAZO } from "@/components/ui/status-pill";
 import { usePermissoes } from "@/components/providers/permissoes-provider";
 import { EditarNoContexto } from "@/components/ui/select-cadastro-rapido";
 import { CLIENTE, UNIDADE } from "@/components/cadastro-rapido/definicoes";
+import { prazoEfetivo } from "@/lib/os/prazo-execucao";
 
 function Cartao({ titulo, icone, children, dado, className }: {
   titulo: string; icone: React.ComponentType<{ className?: string }>; children: React.ReactNode; dado?: string; className?: string;
@@ -89,7 +90,9 @@ export function ResumoOs({ os, central, onAba, onAtualizado }: {
           <Cartao titulo="Datas" icone={Clock} dado="datas">
             <dl className="space-y-2 text-sm">
               <Info rotulo="Abertura">{formatarDataHora(os.criadoEm)}</Info>
-              <Info rotulo="Previsão">{formatarDiaCivil(os.previsaoConclusao)}</Info>
+              <Info rotulo="Data prevista">{formatarDiaCivil(os.previsaoConclusao)}</Info>
+              {/* o prazo de execução: o próprio ou, sem ele, o dia previsto (lib/os/prazo-execucao.ts) */}
+              <Info rotulo="Prazo">{formatarDiaCivil(prazoEfetivo(os))}</Info>
               {os.dataInicio && <Info rotulo="Início">{formatarDataHora(os.dataInicio)}</Info>}
               {os.dataConclusao && <Info rotulo="Conclusão">{formatarDataHora(os.dataConclusao)}</Info>}
             </dl>
@@ -111,7 +114,7 @@ export function ResumoOs({ os, central, onAba, onAtualizado }: {
       <div className="space-y-5">
         <Cartao titulo="Prazos" icone={CalendarClock} dado="prazos">
           <div className="space-y-2.5 text-sm">
-            <LinhaPrazo rotulo="Previsão da OS" dia={os.previsaoConclusao} situacao={central.prazoOs} feminino />
+            <LinhaPrazo rotulo="Prazo da OS" dia={prazoEfetivo(os)} situacao={central.prazoOs} feminino />
             {comPrazo.map((a: any) => {
               const p = central.prazosAtividades.find((x) => x.id === a.id);
               return p ? <LinhaPrazo key={a.id} rotulo={a.titulo} dia={a.prazo} situacao={p} feminino /> : null;

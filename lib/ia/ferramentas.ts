@@ -14,6 +14,7 @@ import { prisma } from "@/lib/prisma";
 import { pode, type Acao, type Permissoes } from "@/lib/permissoes";
 import { chaveDiaBR, horaBR, inicioHojeBR, inicioMesBR } from "@/lib/fuso";
 import { dadosFinanceiro } from "@/lib/dashboard/dados";
+import { whereOsAtrasada } from "@/lib/os/prazo-execucao";
 
 export interface ContextoIA {
   empresaId: string;
@@ -200,7 +201,8 @@ export const FERRAMENTAS: Ferramenta[] = [
       const where: any = { empresaId: ctx.empresaId };
       if (i.status?.length) where.status = { in: i.status };
       if (i.apenasAbertas || i.apenasAtrasadas) where.status = { in: [...ABERTAS] };
-      if (i.apenasAtrasadas) where.previsaoConclusao = { lt: agora };
+      // atrasada = prazo de execução vencido (o próprio ou, sem ele, o dia previsto) — a regra única
+      if (i.apenasAtrasadas) where.OR = whereOsAtrasada(agora).OR;
       const atividade: any = {};
       if (i.de || i.ate) {
         const [ad, md, dd] = (i.de ?? "1970-01-01").split("-").map(Number);
@@ -243,7 +245,7 @@ export const FERRAMENTAS: Ferramenta[] = [
       const E = ctx.empresaId;
       const [abertas, atrasadas, concluidas, agendadas, porTecnico] = await Promise.all([
         prisma.ordemServico.count({ where: { empresaId: E, status: { in: [...ABERTAS] } } }),
-        prisma.ordemServico.count({ where: { empresaId: E, status: { in: [...ABERTAS] }, previsaoConclusao: { lt: agora } } }),
+        prisma.ordemServico.count({ where: { empresaId: E, status: { in: [...ABERTAS] }, OR: whereOsAtrasada(agora).OR } }),
         prisma.ordemServico.count({ where: { empresaId: E, status: "CONCLUIDA", dataConclusao: { gte: ini, lt: fim } } }),
         prisma.atividadeOs.count({ where: { empresaId: E, dataAgendada: { gte: ini, lt: fim }, status: { not: "CANCELADA" } } }),
         prisma.atividadeOs.groupBy({ by: ["tecnicoId", "status"], where: { empresaId: E, dataAgendada: { gte: ini, lt: fim }, status: { not: "CANCELADA" } }, _count: { _all: true } }),

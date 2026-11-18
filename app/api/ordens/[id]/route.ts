@@ -12,6 +12,7 @@ import { garantirAceite } from "@/lib/os/aceite-server";
 import { verificarConclusaoOs } from "@/lib/execucao/dados";
 import { sincronizarStatusOs } from "@/lib/os/sincronizar-status";
 import { estagioAutomatico, statusCorresponde } from "@/lib/os/status";
+import { lerPrazoDigitado } from "@/lib/os/prazo-execucao";
 import { diaCivilUTC, ehDiaCivil, instanteBR, partesBR } from "@/lib/fuso";
 
 type Params = { params: Promise<{ id: string }> };
@@ -130,12 +131,15 @@ export async function PUT(req: NextRequest, { params }: Params) {
   if (!existente) return NextResponse.json({ erro: "Não encontrado" }, { status: 404 });
 
   const body = await req.json();
-  const { status, prioridade, descricao, observacoes, unidadeId, contratoId, responsavelId, previsaoConclusao } = body;
+  const { status, prioridade, descricao, observacoes, unidadeId, contratoId, responsavelId, previsaoConclusao, prazoExecucao } = body;
+  // O prazo de execução é um DIA (o "Prazo para finalizar"); a data prevista é agenda — campos diferentes
+  const prazoDigitado = prazoExecucao === undefined ? undefined : lerPrazoDigitado(prazoExecucao);
+  if (prazoExecucao !== undefined && prazoDigitado === undefined) return NextResponse.json({ erro: "Prazo para finalizar inválido." }, { status: 400 });
 
   // Registro fechado (OS assinada pelo cliente, já faturada ou com nota emitida): os CAMPOS da OS
   // não mudam mais — a mesma trava das linhas, agora também para a gaveta "Editar OS". O status
   // continua livre (reabrir, concluir e o ajuste manual têm regra própria logo abaixo).
-  const CAMPOS_TRAVAVEIS = ["prioridade", "descricao", "observacoes", "unidadeId", "contratoId", "responsavelId", "previsaoConclusao"] as const;
+  const CAMPOS_TRAVAVEIS = ["prioridade", "descricao", "observacoes", "unidadeId", "contratoId", "responsavelId", "previsaoConclusao", "prazoExecucao"] as const;
   if (CAMPOS_TRAVAVEIS.some((c) => body[c] !== undefined)) {
     const trava = await travaDasLinhasDaOs(id);
     if (trava) return NextResponse.json({ erro: trava }, { status: 409 });
@@ -198,6 +202,7 @@ export async function PUT(req: NextRequest, { params }: Params) {
   if (contratoId !== undefined) data.contratoId = contratoId || null;
   if (responsavelId !== undefined) data.responsavelId = responsavelId || null;
   if (previsaoConclusao !== undefined) data.previsaoConclusao = previsaoConclusao ? new Date(previsaoConclusao) : null;
+  if (prazoDigitado !== undefined) data.prazoExecucao = prazoDigitado;
 
   if (status === "EM_ANDAMENTO" && !existente.dataInicio) data.dataInicio = new Date();
   if (status === "CONCLUIDA" && !existente.dataConclusao) data.dataConclusao = new Date();

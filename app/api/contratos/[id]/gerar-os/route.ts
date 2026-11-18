@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { dataAgendadaRecorrencia } from "@/lib/recorrencia-helpers";
 import { anoBR, mesBR } from "@/lib/fuso";
 import { comNumero } from "@/lib/numeracao-server";
+import { prazoPadrao } from "@/lib/os/prazo-execucao";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -28,7 +29,7 @@ export async function POST(req: NextRequest, { params }: Params) {
 
   const contrato = await prisma.contrato.findFirst({
     where: { id, empresaId },
-    include: { cliente: { select: { id: true } }, tipoOsRecorrencia: { select: { id: true, nome: true } } },
+    include: { cliente: { select: { id: true } }, tipoOsRecorrencia: { select: { id: true, nome: true, prazoExecucaoDias: true } } },
   });
   if (!contrato) return NextResponse.json({ erro: "Contrato não encontrado" }, { status: 404 });
 
@@ -55,6 +56,7 @@ export async function POST(req: NextRequest, { params }: Params) {
       prioridade: "NORMAL",
       descricao: `${tituloTipo} — contrato ${contrato.numero} (${String(mes).padStart(2, "0")}/${ano})`,
       previsaoConclusao: dataAgendada,
+      prazoExecucao: prazoPadrao(dataAgendada, contrato.tipoOsRecorrencia?.prazoExecucaoDias),
       atividades: (contrato.tipoOsRecorrenciaId || contrato.tecnicoRecorrenciaId)
         ? { create: { empresaId, tipoOsId: contrato.tipoOsRecorrenciaId || null, tecnicoId: contrato.tecnicoRecorrenciaId || null, titulo: tituloTipo, status: "AGENDADA", dataAgendada } }
         : undefined,

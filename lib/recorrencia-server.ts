@@ -3,6 +3,7 @@ import { contratoGeraFinanceiro } from "@/lib/financeiro-server";
 import { proximasOcorrencias } from "@/lib/recorrencia-helpers";
 import { diaDoMesCivil } from "@/lib/fuso";
 import { comNumero } from "@/lib/numeracao-server";
+import { prazoPadrao } from "@/lib/os/prazo-execucao";
 
 /** De onde veio a geração: ao salvar o contrato (a pessoa) ou a rotina diária (o horizonte rolante) */
 type Origem = "contrato" | "rotina";
@@ -43,7 +44,7 @@ export async function gerarOsRecorrentesContrato(
 ): Promise<number> {
   const ct = await prisma.contrato.findUnique({
     where: { id: contratoId },
-    include: { tipoOsRecorrencia: { select: { id: true, nome: true } } },
+    include: { tipoOsRecorrencia: { select: { id: true, nome: true, prazoExecucaoDias: true } } },
   });
   if (!ct) return 0;
   if (!ct.recorrencia || !ct.frequenciaRecorrencia) return 0;
@@ -85,7 +86,9 @@ export async function gerarOsRecorrentesContrato(
         periodoRecorrencia: oc.periodo,
         prioridade: "NORMAL",
         descricao: `${tituloTipo} — contrato ${ct.numero} (${String(oc.mes).padStart(2, "0")}/${oc.ano})`,
+        // a data prevista é a do agendamento; o prazo, só quando o tipo de OS tem um padrão
         previsaoConclusao: oc.data,
+        prazoExecucao: prazoPadrao(oc.data, ct.tipoOsRecorrencia?.prazoExecucaoDias),
         atividades: (ct.tipoOsRecorrenciaId || ct.tecnicoRecorrenciaId)
           ? {
               create: {
@@ -142,9 +145,10 @@ export async function gerarOsRecorrentesLocais(
   // Nomes dos tipos de OS para o título da atividade
   const tipoIds = [...new Set(ativos.map((r) => r.tipoOsId).filter(Boolean))] as string[];
   const tipos = tipoIds.length
-    ? await prisma.tipoOs.findMany({ where: { id: { in: tipoIds } }, select: { id: true, nome: true } })
+    ? await prisma.tipoOs.findMany({ where: { id: { in: tipoIds } }, select: { id: true, nome: true, prazoExecucaoDias: true } })
     : [];
   const tipoNome = new Map(tipos.map((t) => [t.id, t.nome]));
+  const tipoPrazo = new Map(tipos.map((t) => [t.id, t.prazoExecucaoDias]));
 
   let criadas = 0;
   for (const r of ativos) {
@@ -190,6 +194,7 @@ export async function gerarOsRecorrentesLocais(
           prioridade: "NORMAL",
           descricao: `${titulo} — contrato ${ct.numero} (${String(oc.mes).padStart(2, "0")}/${oc.ano})`,
           previsaoConclusao: oc.data,
+          prazoExecucao: prazoPadrao(oc.data, r.tipoOsId ? tipoPrazo.get(r.tipoOsId) : null),
           atividades: (r.tipoOsId || r.tecnicoId)
             ? {
                 create: {

@@ -10,6 +10,7 @@
  */
 import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
+import { deslocarPrazo, prazoPadrao } from "@/lib/os/prazo-execucao";
 import { reservarNumeros } from "@/lib/numeracao-server";
 import { motivoBloqueioInativacao } from "@/lib/os-server";
 import { chaveDiaBR } from "@/lib/fuso";
@@ -25,7 +26,7 @@ type Db = Prisma.TransactionClient | typeof prisma;
 export const SELECT_ITEM_CRONOGRAMA = {
   id: true, ativo: true, tipoEquipamentoId: true, equipamentoId: true, tipoOsId: true, dataInicio: true, intervaloMeses: true, diaExecucao: true,
   fimSemana: true, criadoEm: true,
-  tipoOs: { select: { id: true, nome: true, ativo: true } },
+  tipoOs: { select: { id: true, nome: true, ativo: true, prazoExecucaoDias: true } },
   tipoEquipamento: { select: { id: true, nome: true } },
   equipamento: { select: { id: true, nome: true, marca: true, modelo: true, patrimonio: true, ativo: true } },
 } as const;
@@ -34,6 +35,8 @@ interface PlanoCarregado {
   id: string; nome: string; empresaId: string; clienteId: string;
   estado: EstadoCronograma;
   tipoOsNome: Map<string, string>;
+  /** Prazo de execução padrão de cada tipo de OS, em dias a partir do dia agendado (null = sem padrão) */
+  tipoOsPrazo: Map<string, number | null>;
   /** Os itens como vieram do banco (com tipo de OS, tipo de equipamento e equipamento) */
   linhas: LinhaCronograma[];
 }
@@ -71,6 +74,7 @@ export async function carregarCronograma(db: Db, pmocId: string, empresaId: stri
       itens, equipamentos: pmoc.equipamentos.map((v) => v.equipamento), tipos, execucoes,
     },
     tipoOsNome: new Map(pmoc.cronograma.map((i) => [i.tipoOsId, i.tipoOs.nome])),
+    tipoOsPrazo: new Map(pmoc.cronograma.map((i) => [i.tipoOsId, i.tipoOs.prazoExecucaoDias])),
     linhas: pmoc.cronograma,
   };
 }
@@ -149,6 +153,7 @@ export async function executarCronograma(pmocId: string, ator: AtorCronograma, m
           empresaId: c.empresaId, numero: numeros[i], clienteId: c.clienteId, unidadeId: nova.unidadeId, criadoPorId: ator.usuarioId,
           status: "AGENDADA", origem: "RECORRENTE", periodoRecorrencia: periodoDaOs(nova.periodo), prioridade: "NORMAL",
           descricao: descricaoDaOs(titulo, c.nome, nova.periodo), previsaoConclusao: nova.data,
+          prazoExecucao: prazoPadrao(nova.data, c.tipoOsPrazo.get(tipoOsId)),
           atividades: { create: {
             empresaId: c.empresaId, tipoOsId, titulo, status: "AGENDADA", dataAgendada: nova.data,
             equipamentos: { create: nova.equipamentoIds.map((equipamentoId) => ({ equipamentoId })) },
@@ -176,7 +181,9 @@ export async function executarCronograma(pmocId: string, ator: AtorCronograma, m
     // 3. OS cuja data o cronograma mudou
     for (const m of plano.mover) {
       await tx.atividadeOs.update({ where: { id: m.atividadeId }, data: { dataAgendada: m.para } });
-      await tx.ordemServico.update({ where: { id: m.osId }, data: { previsaoConclusao: m.para } });
+      // a data prevista muda; o prazo próprio (se houver) anda junto, os mesmos dias
+      const antes = await tx.ordemServico.findUnique({ where: { id: m.osId }, select: { prazoExecucao: true } });
+      await tx.ordemServico.update({ where: { id: m.osId }, data: { previsaoConclusao: m.para, ...(antes?.prazoExecucao ? { prazoExecucao: deslocarPrazo(antes.prazoExecucao, m.de, m.para) } : {}) } });
       await tx.pmocExecucao.updateMany({ where: { id: { in: m.execucaoIds } }, data: { dataPrevista: m.para } });
       await historico(m.osId, "OS reagendada pelo cronograma do PMOC", `Plano ${c.nome}: de ${brDe(m.de)} para ${brDe(m.para)}.`);
       r.movidas++;

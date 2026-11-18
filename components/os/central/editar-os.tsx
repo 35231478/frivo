@@ -9,16 +9,22 @@ import { FormField, FormGrid } from "@/components/ui/form-field";
 import { InputData } from "@/components/ui/input-data";
 import { toast } from "@/components/ui/avisos";
 import { camposAlterados } from "@/lib/edicao-contexto";
+import { chaveDiaCivil } from "@/lib/fuso";
 import { LABELS_PRIORIDADE } from "@/lib/utils";
 
 /** Os campos PRÓPRIOS da OS (o resto da central edita o que é de cada aba). */
-const CAMPOS = ["responsavelId", "previsaoConclusao", "prioridade", "descricao", "observacoes"] as const;
+const CAMPOS = ["responsavelId", "previsaoConclusao", "prazoExecucao", "prioridade", "descricao", "observacoes"] as const;
 type Campo = (typeof CAMPOS)[number];
 
-const soData = (v: string | null | undefined) => (v ? String(v).slice(0, 10) : "");
+/**
+ * "AAAA-MM-DD" para o campo de data. A OS chega do servidor com as datas como Date (e, depois de um
+ * salvar, como texto ISO): `chaveDiaCivil` lê os dois — gravada como dia, o próprio dia; gravada com
+ * hora, o dia dela em Brasília. (Cortar o texto de um Date dava "Fri Nov 20" e o campo abria vazio.)
+ */
+const soData = (v: Date | string | null | undefined) => (v ? chaveDiaCivil(v) : "");
 
 /**
- * Gaveta "Editar OS": os campos da própria OS (responsável, previsão, prioridade, descrição e
+ * Gaveta "Editar OS": os campos da própria OS (responsável, data prevista, prazo, prioridade, descrição e
  * observações) — até a Leva 5 o botão Editar do cabeçalho levava a uma rota que só voltava para cá,
  * e não havia tela nenhuma para esses campos.
  *
@@ -38,6 +44,7 @@ export function EditarOs({ os, aberto, onFechar, onAtualizado }: {
   const inicial = (): Record<Campo, string> => ({
     responsavelId: os.responsavelId ?? "",
     previsaoConclusao: soData(os.previsaoConclusao),
+    prazoExecucao: soData(os.prazoExecucao),
     prioridade: os.prioridade ?? "NORMAL",
     descricao: os.descricao ?? "",
     observacoes: os.observacoes ?? "",
@@ -88,8 +95,11 @@ export function EditarOs({ os, aberto, onFechar, onAtualizado }: {
                 .map((u) => <option key={u.id} value={u.id}>{u.nome}</option>)}
             </Select>
           </FormField>
-          <FormField label="Previsão de conclusão">
-            <InputData value={form.previsaoConclusao} onChange={(v) => upd("previsaoConclusao", v)} />
+          <FormField label="Data prevista" dica="O dia em que o serviço está marcado, quando a OS ainda não tem atividade agendada. É a agenda, não o prazo.">
+            <InputData aria-label="Data prevista" value={form.previsaoConclusao} onChange={(v) => upd("previsaoConclusao", v)} />
+          </FormField>
+          <FormField label="Prazo para finalizar" dica="Até que dia a OS precisa estar concluída. Depois dele, a OS é sinalizada como atrasada. Vazio: vale a data prevista.">
+            <InputData aria-label="Prazo para finalizar" value={form.prazoExecucao} onChange={(v) => upd("prazoExecucao", v)} />
           </FormField>
         </FormGrid>
         <FormField label="Prioridade">

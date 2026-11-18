@@ -50,7 +50,7 @@ export default function NovaOrdemPage() {
   const [salvando, setSalvando] = useState(false);
   const [form, setForm] = useState({
     prioridade: "NORMAL", descricao: "", unidadeId: "", contratoId: "",
-    previsaoConclusao: "", observacoes: "",
+    prazoExecucao: "", observacoes: "",
   });
   // Modo "aceitar solicitação" (vindo da gaveta de Solicitações do calendário):
   // a MESMA OS do chamado é agendada — nada de OS nova.
@@ -387,7 +387,7 @@ export default function NovaOrdemPage() {
               </FormField>
               {/* O prazo da OS: é o que a central usa para dizer se está no prazo ou atrasada */}
               <FormField label="Prazo para finalizar" dica="Opcional. Após esta data, a OS é sinalizada como atrasada.">
-                <InputData aria-label="Prazo para finalizar" value={form.previsaoConclusao} onChange={(v) => setForm((f) => ({ ...f, previsaoConclusao: v }))} />
+                <InputData aria-label="Prazo para finalizar" value={form.prazoExecucao} onChange={(v) => setForm((f) => ({ ...f, prazoExecucao: v }))} />
               </FormField>
             </FormGrid>
           )}

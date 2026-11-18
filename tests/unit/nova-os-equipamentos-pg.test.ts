@@ -4,8 +4,8 @@
  *  - GET /api/equipamentos?clienteId=…&resumo=1: só os ativos DO cliente, de todos os locais dele,
  *    com unidade e tipo, SEM as fotos (base64 pesado); nada de outra empresa; lê com ordens › visualizar;
  *    a resposta padrão (sem resumo) não muda;
- *  - POST /api/ordens: "Prazo para finalizar" grava previsaoConclusao (o prazo que a central usa para
- *    no prazo/atrasada); "Agendar para" grava a dataAgendada da 1ª atividade; equipamentos de dois
+ *  - POST /api/ordens: "Prazo para finalizar" grava prazoExecucao (o prazo que a central usa para
+ *    no prazo/atrasada) — e não mais a data prevista; "Agendar para" grava a dataAgendada da 1ª atividade; equipamentos de dois
  *    endereços do cliente entram na 1ª atividade; de outro cliente, recusa.
  *   PG_TESTE_URL="postgresql://root@localhost/postgres?host=/var/run/postgresql" npx vitest run tests/unit/nova-os-equipamentos-pg
  */
@@ -14,7 +14,7 @@ import { execFileSync } from "node:child_process";
 import path from "node:path";
 import { NextRequest } from "next/server";
 import { permissoesTotais, permissoesVazias, type Permissoes } from "@/lib/permissoes";
-import { situacaoPrazo } from "@/lib/os/prazos";
+import { situacaoPrazoExecucao } from "@/lib/os/prazo-execucao";
 
 const URL_PG = process.env.PG_TESTE_URL;
 const SCHEMA = `teste_nova_os_equip_${process.pid}`;
@@ -134,18 +134,19 @@ describe.skipIf(!URL_PG)("Nova OS: equipamentos do cliente (resumo) e datas na c
     } finally { logar(); }
   });
 
-  it("criação: prazo → previsaoConclusao (atrasada depois do dia); agendar → dataAgendada da 1ª atividade; equipamentos de dois endereços na 1ª atividade", async () => {
+  it("criação: prazo → prazoExecucao (atrasada depois do dia), sem tocar na data prevista; agendar → dataAgendada da 1ª atividade; equipamentos de dois endereços na 1ª atividade", async () => {
     const r = await criarOs({
       clienteId: "c1", unidadeId: "un1", descricao: "Preventiva mensal", prioridade: "NORMAL",
-      previsaoConclusao: "2026-11-20", equipamentoIds: ["eqA", "eqB"],
+      prazoExecucao: "2026-11-20", equipamentoIds: ["eqA", "eqB"],
       execucao: { dataAgendada: "2026-11-18T17:30:00.000Z", tecnicoIds: ["t1"], responsavelId: "t1" },
     });
     expect(r.status).toBe(201);
     const os = await prisma.ordemServico.findUnique({ where: { id: r.json.id }, include: { atividades: { include: { equipamentos: true } } } });
-    expect(os.previsaoConclusao.toISOString()).toBe("2026-11-20T00:00:00.000Z");
+    expect(os.prazoExecucao.toISOString()).toBe("2026-11-20T00:00:00.000Z");
+    expect(os.previsaoConclusao).toBeNull(); // o prazo não é mais gravado no campo da agenda
     // O prazo da central: dia civil de Brasília
-    expect(situacaoPrazo(os.previsaoConclusao, false, new Date("2026-11-20T23:00:00-03:00")).situacao).toBe("VENCE_HOJE");
-    expect(situacaoPrazo(os.previsaoConclusao, false, new Date("2026-11-21T08:00:00-03:00"))).toMatchObject({ situacao: "ATRASADO", diasAtraso: 1 });
+    expect(situacaoPrazoExecucao(os, new Date("2026-11-20T23:00:00-03:00")).situacao).toBe("VENCE_HOJE");
+    expect(situacaoPrazoExecucao(os, new Date("2026-11-21T08:00:00-03:00"))).toMatchObject({ situacao: "ATRASADO", diasAtraso: 1 });
     expect(os.atividades).toHaveLength(1);
     const [at] = os.atividades;
     expect(at.dataAgendada.toISOString()).toBe("2026-11-18T17:30:00.000Z");
@@ -153,9 +154,10 @@ describe.skipIf(!URL_PG)("Nova OS: equipamentos do cliente (resumo) e datas na c
   });
 
   it("sem prazo e sem agendamento: a OS nasce sem prazo e a atividade sem data", async () => {
-    const r = await criarOs({ clienteId: "c1", descricao: "Visita", prioridade: "NORMAL", previsaoConclusao: "", execucao: { dataAgendada: null, tecnicoIds: ["t1"], responsavelId: "t1" } });
+    const r = await criarOs({ clienteId: "c1", descricao: "Visita", prioridade: "NORMAL", prazoExecucao: "", execucao: { dataAgendada: null, tecnicoIds: ["t1"], responsavelId: "t1" } });
     expect(r.status).toBe(201);
     const os = await prisma.ordemServico.findUnique({ where: { id: r.json.id }, include: { atividades: { include: { equipamentos: true } } } });
+    expect(os.prazoExecucao).toBeNull();
     expect(os.previsaoConclusao).toBeNull();
     expect(os.atividades[0].dataAgendada).toBeNull();
     expect(os.atividades[0].equipamentos).toEqual([]);

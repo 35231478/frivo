@@ -66,6 +66,10 @@ por técnico nem por tipo de OS.
 
 OS cancelada não aparece no calendário (se aparecesse, a barra seria cinza, `previsto`).
 
+"Prazo vencido" é o **prazo de execução** da OS — o próprio ou, sem ele, o dia previsto —, pela regra
+única de `lib/os/prazo-execucao.ts` (a mesma do Dashboard e do sino). A OS fica **posicionada** pela
+data prevista (agenda) e **atrasa** pelo prazo: são coisas diferentes. Ver `docs/prazos-da-os.md`.
+
 O atrasado precisa continuar óbvio: além da barra vermelha, a **hora** dele também fica vermelha. Nos
 outros a hora é o texto normal.
 
