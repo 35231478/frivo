@@ -107,7 +107,7 @@ Ao justificar, o gestor também marca **de quem foi a causa** — coluna `atraso
 
 | Valor | Rótulo | No relatório do cliente |
 |---|---|---|
-| `CLIENTE` | Causa do cliente | **pausa o SLA**: sai do percentual (a partir do PR B) |
+| `CLIENTE` | Causa do cliente | **pausa o SLA**: vira o 4º estado e sai do percentual (PR B) |
 | `INTERNA` | Causa interna | continua descumprido |
 | `TERCEIROS` | Força maior ou terceiros | continua descumprido |
 
@@ -281,12 +281,13 @@ não existe, e a rota responde 403).
 A hora em que o cliente abriu o chamado e, sem chamado, a criação da OS. É assim que o cliente conta
 o mês dele ("em novembro abri 12 chamados") — e é o que o papel afirma. Padrão: o mês corrente.
 
-### Os três estados (a regra inegociável)
+### Os quatro estados (as regras inegociáveis)
 
 | Estado | Quando | No percentual |
 |---|---|---|
 | **Cumprido** | o prazo foi medido e atendido | numerador e denominador |
 | **Descumprido** | o prazo foi medido e não foi atendido (inclui o cumprido fora do prazo) | só denominador |
+| **Causa do cliente** | o prazo foi descumprido **e** a gestão marcou na OS que a causa foi do cliente | **fora**, contado à parte, com o motivo à vista |
 | **Sem registro** | a OS encerrou sem o registro que mede o prazo (ninguém tocou em "Cheguei"), ou foi cancelada com o prazo em aberto | **fora**, contado à parte |
 
 O "sem registro" nunca é somado como descumprido: é injusto afirmar um atraso que ninguém mediu. Ele
@@ -301,9 +302,27 @@ explica, não apaga. A linha carrega um selo "Justificado" para a gestão; a con
 com e sem justificativa. (No desempenho do colaborador o atraso justificado sai da métrica — ali se
 mede a pessoa, aqui se mede a promessa ao cliente.)
 
+**A exceção é a causa do cliente** (Evolução B): quando o gestor marca `atraso_responsavel = CLIENTE`
+ao justificar, os prazos **descumpridos** daquela OS viram **Causa do cliente** e saem do percentual,
+como prevê o contrato. Três coisas que a conversão nunca faz, e que os testes travam:
+
+1. **só alcança o que já era descumprido** — cumprido não muda, e "sem registro" nunca vira pausa
+   (ninguém mediu aquele prazo, não há o que tirar da conta);
+2. **só encolhe o denominador** — nada entra em descumprido por causa dela;
+3. **só sai de marcação explícita** — nunca do motivo sozinho, nunca do texto livre. Justificativa
+   sem causa marcada, ou com causa interna/terceiros, continua descumprida.
+
+A conversão acontece num lugar só: `comPausa`, dentro de `linhaDoCumprimento`. Nada desaparece do
+relatório: a linha continua listada, com a pílula própria (tom neutro, nunca a cor de atraso), o
+motivo ao lado, a contagem à parte no quadro do período e a explicação em linguagem de cliente
+(`NOTA_CAUSA_CLIENTE`) na tela e no papel.
+
 ### Percentual = cumpridos ÷ medidos
 
-`medidos = cumpridos + descumpridos`. Nada medido → **"—"**, nunca 0% (0% afirmaria descumprimento).
+`medidos = cumpridos + descumpridos`. Nem o "sem registro" nem a "causa do cliente" entram no
+denominador. Nada medido → **"—"**, nunca 0% (0% afirmaria descumprimento). **Um percentual só**: a
+tela e o PDF mostram o mesmo número, já com as pausas fora. Não existe "número interno" diferente —
+o que a gestão vê a mais são as linhas, os motivos e a contagem das pausas, não outra conta.
 
 ### A regra mora num lugar só
 
@@ -312,6 +331,7 @@ mede a pessoa, aqui se mede a promessa ao cliente.)
 | "Cumpriu o prazo de execução?" | `execucaoNoPrazo` em `lib/os/prazo-execucao.ts` — o outro lado exato de `atrasosDaOs` | decide cumprido/descumprido da execução |
 | Da situação do atendimento para o estado | `estadoDoAtendimento` em `lib/prazos/cumprimento.ts` | traduz por conta própria |
 | A contagem e o percentual | `contar`, `medidos`, `percentualCumprimento` | divide nem soma por fora |
+| Descumprido → causa do cliente | `comPausa`, dentro de `linhaDoCumprimento` | decide a pausa por fora |
 | A leitura do banco | `relatorioCumprimento` em `lib/prazos/cumprimento-server.ts` | lê as colunas de prazo para relatar |
 | O papel | `gerarCumprimentoPdf` em `lib/prazos/cumprimento-pdf.ts`, sobre `lib/pdf/desenho` (pdf-lib) | desenha PDF à mão |
 
@@ -328,8 +348,8 @@ própria.
 | **3** (feito) | Desempenho: atraso justificado fora da métrica "no prazo", "Atrasos justificados" na ficha, mês fechado intocado | 🟢 |
 | **4** (feito) | Contrato e OS: configurar o prazo de atendimento, gravar os limites, "Cheguei", alertas; horário comercial por empresa | 🔵 `prisma/sql/2027-01-10_horario_comercial_empresa.sql` |
 | **5** (feito) | Relatório de cumprimento de prazos: tela em Operações, três estados com o "sem registro" fora do percentual, PDF do cliente no motor da casa | 🟢 |
-| **Evolução A** (este) | Pausa de SLA: de quem foi a causa do atraso (coluna, vocabulário, gatilho ampliado, gaveta, selo e CSV) — o relatório ainda não muda | 🔵 `prisma/sql/2027-01-11_atraso_responsavel.sql` |
-| Evolução B | O relatório lê a causa: quarto estado "Causa do cliente", fora do percentual, na tela e no PDF | 🟢 |
+| Evolução A | Pausa de SLA: de quem foi a causa do atraso (coluna, vocabulário, gatilho ampliado, gaveta, selo e CSV) — o relatório ainda não muda | 🔵 `prisma/sql/2027-01-11_atraso_responsavel.sql` |
+| **Evolução B** (este) | O relatório lê a causa: quarto estado "Causa do cliente", fora do percentual, na tela e no PDF | 🟢 |
 
 ## 5. Testes
 
@@ -350,9 +370,9 @@ própria.
 | `tests/unit/prazos-pr4-pg.test.ts` | PR 4 em PostgreSQL real: contrato (gravar, trocar, não apagar, RBAC), chamado → aceite → limites desde a abertura, OS manual e edição, horário comercial por empresa, "Cheguei" (uma vez, hora do toque), sino, lista e exportação |
 | `tests/unit/prazos-pr4-ui.test.ts`, `contrato-form-ui.test.ts`, `ordens-lista-barra-ui.test.ts` | PR 4, telas: a seção do contrato, o cartão e o selo da OS, Configurações › Horário comercial, o sino e o filtro da lista |
 | `tests/unit/sql-horario-comercial.test.ts` | O SQL do horário comercial: uma coluna opcional, nada preenchido, idempotente e idêntico ao que o Prisma espera |
-| `tests/unit/prazos-pr5.test.ts` | PR 5, regras puras: os três estados, o percentual que exclui o "sem registro", `execucaoNoPrazo` igual a `atrasosDaOs` caso a caso — e a trava "ninguém refaz a conta por fora" |
-| `tests/unit/prazos-pr5-pg.test.ts` | PR 5 em PostgreSQL real: o período pela abertura, os recortes por cliente/contrato, os números de uma base de verdade, multiempresa, e o PDF (permissão, texto, nome do arquivo) |
-| `tests/unit/prazos-pr5-ui.test.ts` | PR 5, tela: os três estados na tabela e nos cartões do celular, a legenda, os quadros do período, os filtros na URL e o botão do PDF só com permissão |
+| `tests/unit/prazos-pr5.test.ts` | PR 5 + Evolução B, regras puras: os quatro estados, o percentual que exclui o "sem registro" e a pausa, a conversão que só alcança o descumprido e só sai de marcação explícita, `execucaoNoPrazo` igual a `atrasosDaOs` caso a caso — e as travas "ninguém refaz a conta por fora" e "o desempenho continua cego à causa" |
+| `tests/unit/prazos-pr5-pg.test.ts` | PR 5 + Evolução B em PostgreSQL real: o período pela abertura, os recortes por cliente/contrato, os números de uma base de verdade, multiempresa, a pausa gravada na OS chegando ao papel (percentual, motivo à vista, sem jargão) e o PDF (permissão, texto, nome do arquivo) |
+| `tests/unit/prazos-pr5-ui.test.ts` | PR 5 + Evolução B, tela: os quatro estados na tabela e nos cartões do celular (a pausa em tom neutro, com o motivo ao lado), a legenda, os quadros do período, a nota da pausa, os filtros na URL e o botão do PDF só com permissão |
 | `tests/unit/sla-responsabilidade.test.ts` | Evolução A, regras puras: o vocabulário da causa, a sugestão por motivo, o gatilho ampliado — e a trava "ninguém deduz a causa, o desempenho continua cego e o relatório ainda não pausa" |
 | `tests/unit/sla-responsabilidade-pg.test.ts` | Evolução A em PostgreSQL real: a rota grava motivo + causa + rastro, o chamado que estourou só o comparecer já aceita justificativa, validação, desfazer limpa tudo, RBAC e multiempresa |
 | `tests/unit/sla-responsabilidade-ui.test.ts` | Evolução A, gaveta da OS: o campo obrigatório, a sugestão que fica à vista e pode ser trocada, o que vai ao servidor e o que a OS justificada mostra |

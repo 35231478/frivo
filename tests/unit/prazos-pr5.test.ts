@@ -1,7 +1,9 @@
 /**
  * Prazos da OS — PR 5 (relatório de cumprimento de prazos), as regras puras:
- *  - OS TRÊS ESTADOS: cumprido, descumprido e sem registro — e a REGRA INEGOCIÁVEL de que o "sem
- *    registro" nunca é somado como descumprido nem entra no denominador do percentual;
+ *  - OS QUATRO ESTADOS: cumprido, descumprido, causa do cliente e sem registro — e as REGRAS
+ *    INEGOCIÁVEIS de que o "sem registro" nunca é somado como descumprido nem entra no denominador,
+ *    e de que a pausa por "causa do cliente" só sai de marcação explícita da gestão e só ENCOLHE o
+ *    denominador (nada entra em descumprido por causa dela);
  *  - o percentual: cumpridos sobre os MEDIDOS, "—" quando nada foi medido;
  *  - coerência com o resto do sistema: `execucaoNoPrazo` é o outro lado exato de `atrasosDaOs` (a
  *    régua de "atrasada" da lista, do sino e do desempenho) e o estado do atendimento é a tradução
@@ -12,8 +14,8 @@ import { describe, expect, it } from "vitest";
 import { readFileSync, readdirSync } from "node:fs";
 import path from "node:path";
 import {
-  CONTAGEM_ZERO, ESTADOS, LEGENDA_ESTADO, NOTA_SEM_REGISTRO, PRAZOS, ROTULO_ESTADO, ROTULO_PRAZO,
-  contar, estadoDaExecucao, estadoDoAtendimento, linhaDoCumprimento, linhaRelata, medidos,
+  CONTAGEM_ZERO, ESTADOS, LEGENDA_ESTADO, NOTA_CAUSA_CLIENTE, NOTA_SEM_REGISTRO, PRAZOS, ROTULO_ESTADO, ROTULO_PRAZO,
+  contar, estadoDaExecucao, estadoDoAtendimento, linhaDoCumprimento, linhaPausada, linhaRelata, medidos,
   percentualCumprimento, resumoCumprimento, textoDaContagem, textoPercentual, total,
   type Contagem, type EstadoCumprimento, type LinhaCumprimento, type OsDoCumprimento,
 } from "@/lib/prazos/cumprimento";
@@ -41,9 +43,9 @@ const CHAMADO = {
 /* ═════════ os três estados ═════════ */
 
 describe("Os três estados — cumprido, descumprido e sem registro", () => {
-  it("são três, e só três, com rótulo e legenda próprios (a tela e o PDF falam a mesma língua)", () => {
-    expect(ESTADOS).toEqual(["CUMPRIDO", "DESCUMPRIDO", "SEM_REGISTRO"]);
-    expect(ESTADOS.map((e) => ROTULO_ESTADO[e])).toEqual(["Cumprido", "Descumprido", "Sem registro"]);
+  it("são quatro, e só quatro, com rótulo e legenda próprios (a tela e o PDF falam a mesma língua)", () => {
+    expect(ESTADOS).toEqual(["CUMPRIDO", "DESCUMPRIDO", "CAUSA_CLIENTE", "SEM_REGISTRO"]);
+    expect(ESTADOS.map((e) => ROTULO_ESTADO[e])).toEqual(["Cumprido", "Descumprido", "Causa do cliente", "Sem registro"]);
     for (const e of ESTADOS) expect(LEGENDA_ESTADO[e].length, e).toBeGreaterThan(20);
     // a legenda do "sem registro" diz, ela mesma, que fica fora do percentual
     expect(LEGENDA_ESTADO.SEM_REGISTRO).toContain("fora do percentual");
@@ -124,7 +126,7 @@ describe("Os três estados — cumprido, descumprido e sem registro", () => {
 /* ═════════ a regra inegociável: o "sem registro" fora da conta ═════════ */
 
 describe("A regra inegociável — o 'sem registro' nunca é descumprido e nunca entra no percentual", () => {
-  const C = (cumpridos: number, descumpridos: number, semRegistro: number): Contagem => ({ cumpridos, descumpridos, semRegistro });
+  const C = (cumpridos: number, descumpridos: number, semRegistro: number, causaCliente = 0): Contagem => ({ cumpridos, descumpridos, semRegistro, causaCliente });
 
   it("contar separa os três; o denominador do percentual são só os MEDIDOS", () => {
     const c = contar(["CUMPRIDO", "CUMPRIDO", "DESCUMPRIDO", "SEM_REGISTRO", "SEM_REGISTRO", null, null]);
@@ -182,7 +184,7 @@ describe("A regra inegociável — o 'sem registro' nunca é descumprido e nunca
 
 describe("O resumo do período — um quadro por prazo e o geral", () => {
   const linha = (comparecer: EstadoCumprimento | null, resolver: EstadoCumprimento | null, execucao: EstadoCumprimento | null, id = "x"): LinhaCumprimento => ({
-    id, numero: id, clienteNome: "C", contratoNumero: null, abertura: AGORA, status: "CONCLUIDA", comparecer, resolver, execucao, justificativa: null,
+    id, numero: id, clienteNome: "C", contratoNumero: null, abertura: AGORA, status: "CONCLUIDA", comparecer, resolver, execucao, justificativa: null, motivo: "",
   });
 
   it("cada prazo tem a sua conta, e o geral é a soma dos três — com o 'sem registro' à parte em todos", () => {
@@ -191,10 +193,10 @@ describe("O resumo do período — um quadro por prazo e o geral", () => {
       linha("SEM_REGISTRO", "CUMPRIDO", "DESCUMPRIDO", "b"),
       linha("CUMPRIDO", "DESCUMPRIDO", null, "c"),
     ]);
-    expect(r.comparecer).toEqual({ cumpridos: 2, descumpridos: 0, semRegistro: 1 });
-    expect(r.resolver).toEqual({ cumpridos: 2, descumpridos: 1, semRegistro: 0 });
-    expect(r.execucao).toEqual({ cumpridos: 1, descumpridos: 1, semRegistro: 0 });
-    expect(r.geral).toEqual({ cumpridos: 5, descumpridos: 2, semRegistro: 1 });
+    expect(r.comparecer).toEqual({ cumpridos: 2, descumpridos: 0, causaCliente: 0, semRegistro: 1 });
+    expect(r.resolver).toEqual({ cumpridos: 2, descumpridos: 1, causaCliente: 0, semRegistro: 0 });
+    expect(r.execucao).toEqual({ cumpridos: 1, descumpridos: 1, causaCliente: 0, semRegistro: 0 });
+    expect(r.geral).toEqual({ cumpridos: 5, descumpridos: 2, causaCliente: 0, semRegistro: 1 });
     expect(r.linhas).toBe(3);
     // o geral é a soma dos três prazos, parcela por parcela — nenhuma conta paralela
     for (const campo of ["cumpridos", "descumpridos", "semRegistro"] as const) {
@@ -270,15 +272,131 @@ describe("Coerência — o relatório usa a MESMA régua da lista, do sino e do 
     expect(casos.map((os) => linhaDoCumprimento(os, AGORA).resolver)).toEqual(["CUMPRIDO", "DESCUMPRIDO", "DESCUMPRIDO", null, "CUMPRIDO", null]);
   });
 
-  it("o atraso justificado continua descumprido para o cliente — a justificativa é nota na linha, não perdão na conta", () => {
+  it("o atraso justificado SEM causa do cliente continua descumprido — a justificativa é nota na linha, não perdão na conta", () => {
     const comum = { ...CHAMADO, prazoExecucao: dia("2026-11-11"), dataConclusao: br("2026-11-13", "10:00"), atendimentoComparecidoEm: br("2026-11-10", "09:00") };
     const sem = linhaDoCumprimento(OS(comum), AGORA);
-    const com = linhaDoCumprimento(OS({ ...comum, atrasoJustificadoMotivo: "CLIENTE_AUSENTE", atrasoJustificadoObs: "portão fechado" }), AGORA);
+    // justificado, mas a causa foi NOSSA: continua descumprido no papel do cliente, como sempre foi
+    const com = linhaDoCumprimento(OS({ ...comum, atrasoJustificadoMotivo: "PECA_FALTANDO", atrasoJustificadoObs: "estoque furado", atrasoResponsavel: "INTERNA" }), AGORA);
     expect(sem.execucao).toBe("DESCUMPRIDO");
     expect(com.execucao).toBe("DESCUMPRIDO");
-    expect([sem.justificativa, com.justificativa]).toEqual([null, "CLIENTE_AUSENTE"]);
+    expect([sem.justificativa, com.justificativa]).toEqual([null, "PECA_FALTANDO"]);
     // e a conta do período é a mesma com e sem justificativa
     expect(resumoCumprimento([com]).geral).toEqual(resumoCumprimento([sem]).geral);
+  });
+});
+
+/* ═════════ a pausa: causa do cliente sai do percentual do papel dele ═════════ */
+
+describe("Causa do cliente — a pausa só sai de marcação explícita, e só tira do denominador", () => {
+  /** Um chamado que estourou TUDO: comparecer, resolver e a execução */
+  const TUDO_ESTOURADO = {
+    ...CHAMADO, atendimentoComparecidoEm: br("2026-11-11", "10:00"),
+    prazoExecucao: dia("2026-11-11"), dataConclusao: br("2026-11-13", "10:00"),
+  };
+  const JUSTIFICADO = { atrasoJustificadoMotivo: "ACESSO_NEGADO", atrasoJustificadoObs: "sala trancada" };
+
+  it("o quarto estado tem rótulo, legenda e lugar próprios — e não é o de atraso", () => {
+    expect(ROTULO_ESTADO.CAUSA_CLIENTE).toBe("Causa do cliente");
+    expect(LEGENDA_ESTADO.CAUSA_CLIENTE).toMatch(/fora do percentual/);
+    expect(LEGENDA_ESTADO.CAUSA_CLIENTE).toMatch(/marcada pela gestão/);
+    // a frase que explica a pausa é uma só, e fala a língua do cliente (sem jargão)
+    expect(NOTA_CAUSA_CLIENTE).toMatch(/ficam fora do percentual, como prevê o contrato/);
+    expect(NOTA_CAUSA_CLIENTE).not.toMatch(/\bSLA\b/);
+  });
+
+  it("marcada a causa do cliente, os prazos DESCUMPRIDOS da OS viram pausa — os outros estados não se mexem", () => {
+    const semMarca = linhaDoCumprimento(OS({ ...TUDO_ESTOURADO, ...JUSTIFICADO }), AGORA);
+    const comMarca = linhaDoCumprimento(OS({ ...TUDO_ESTOURADO, ...JUSTIFICADO, atrasoResponsavel: "CLIENTE" }), AGORA);
+    expect([semMarca.comparecer, semMarca.resolver, semMarca.execucao]).toEqual(["DESCUMPRIDO", "DESCUMPRIDO", "DESCUMPRIDO"]);
+    expect([comMarca.comparecer, comMarca.resolver, comMarca.execucao]).toEqual(["CAUSA_CLIENTE", "CAUSA_CLIENTE", "CAUSA_CLIENTE"]);
+    // o motivo viaja pronto para a tela e para o papel: a pausa nunca aparece sem dizer por quê
+    expect(comMarca.motivo).toBe("Acesso ao local negado");
+    expect(linhaPausada(comMarca)).toBe(true);
+    expect(linhaPausada(semMarca)).toBe(false);
+  });
+
+  it("um prazo CUMPRIDO nunca vira pausa, mesmo na OS marcada: a marcação só alcança o que foi descumprido", () => {
+    const l = linhaDoCumprimento(OS({
+      ...CHAMADO, atendimentoComparecidoEm: br("2026-11-10", "09:00"), // comparecer dentro do prazo
+      prazoExecucao: dia("2026-11-11"), dataConclusao: br("2026-11-13", "10:00"), // execução estourada
+      ...JUSTIFICADO, atrasoResponsavel: "CLIENTE",
+    }), AGORA);
+    expect(l.comparecer).toBe("CUMPRIDO");
+    expect(l.execucao).toBe("CAUSA_CLIENTE");
+  });
+
+  it("'sem registro' NUNCA vira pausa: ninguém mediu aquele prazo, não há o que tirar da conta", () => {
+    const l = linhaDoCumprimento(OS({
+      ...CHAMADO, atendimentoComparecidoEm: null, status: "CONCLUIDA", // encerrou sem "Cheguei"
+      prazoExecucao: dia("2026-11-11"), dataConclusao: br("2026-11-13", "10:00"),
+      ...JUSTIFICADO, atrasoResponsavel: "CLIENTE",
+    }), AGORA);
+    expect(l.comparecer).toBe("SEM_REGISTRO");
+    expect(l.execucao).toBe("CAUSA_CLIENTE");
+    expect(contar([l.comparecer, l.resolver, l.execucao]).semRegistro).toBe(1);
+  });
+
+  it("causa INTERNA e TERCEIROS continuam descumpridas — não mascaramos o que foi nosso nem o que foi do mundo", () => {
+    for (const responsavel of ["INTERNA", "TERCEIROS"]) {
+      const l = linhaDoCumprimento(OS({ ...TUDO_ESTOURADO, ...JUSTIFICADO, atrasoResponsavel: responsavel }), AGORA);
+      expect([l.comparecer, l.execucao], responsavel).toEqual(["DESCUMPRIDO", "DESCUMPRIDO"]);
+    }
+  });
+
+  it("a marca sem justificativa não pausa nada: o que vale é a justificativa COM a causa marcada", () => {
+    const l = linhaDoCumprimento(OS({ ...TUDO_ESTOURADO, atrasoResponsavel: "CLIENTE" }), AGORA);
+    expect(l.execucao).toBe("DESCUMPRIDO");
+    expect(l.motivo).toBe("");
+  });
+
+  it("a pausa SAI do denominador e nunca entra nele: o percentual sobe, e o que saiu continua à vista", () => {
+    const base = [
+      linhaDoCumprimento(OS({ ...CHAMADO, atendimentoComparecidoEm: br("2026-11-10", "09:00"), prazoExecucao: dia("2026-11-14"), dataConclusao: br("2026-11-13", "10:00") }), AGORA),
+      linhaDoCumprimento(OS({ ...TUDO_ESTOURADO, ...JUSTIFICADO, id: "os2" }), AGORA),
+    ];
+    const comPausa = [base[0], linhaDoCumprimento(OS({ ...TUDO_ESTOURADO, ...JUSTIFICADO, atrasoResponsavel: "CLIENTE", id: "os2" }), AGORA)];
+
+    const antes = resumoCumprimento(base).geral;
+    const depois = resumoCumprimento(comPausa).geral;
+    expect([antes.cumpridos, antes.descumpridos, antes.causaCliente]).toEqual([2, 4, 0]);
+    expect([depois.cumpridos, depois.descumpridos, depois.causaCliente]).toEqual([2, 1, 3]);
+    // o denominador ENCOLHEU (de 6 para 3) e nada entrou em descumprido pela pausa
+    expect([medidos(antes), medidos(depois)]).toEqual([6, 3]);  // de 6 prazos medidos para 3
+    expect(depois.descumpridos).toBeLessThanOrEqual(antes.descumpridos);
+    expect([textoPercentual(antes), textoPercentual(depois)]).toEqual(["33%", "67%"]);
+    // e o que saiu da conta continua sendo contado e dito — nada desaparece do relatório
+    expect(total(depois)).toBe(total(antes));
+    expect(textoDaContagem(depois)).toBe("2 de 3 prazos cumpridos · 3 por causa do cliente, fora da conta");
+  });
+
+  it("sem nenhuma marcação no período, o relatório é exatamente o de antes (este PR não mexe em quem não marcou)", () => {
+    const linhas = [
+      linhaDoCumprimento(OS({ ...TUDO_ESTOURADO }), AGORA),
+      linhaDoCumprimento(OS({ ...CHAMADO, atendimentoComparecidoEm: br("2026-11-10", "09:00"), id: "os2" }), AGORA),
+      linhaDoCumprimento(OS({ ...TUDO_ESTOURADO, ...JUSTIFICADO, atrasoResponsavel: "INTERNA", id: "os3" }), AGORA),
+    ];
+    const g = resumoCumprimento(linhas).geral;
+    expect(g.causaCliente).toBe(0);
+    expect(textoDaContagem(g)).not.toMatch(/causa do cliente/);
+    expect(textoPercentual(g)).toBe(textoPercentual({ ...g, causaCliente: 0 }));
+  });
+
+  it("só pausas no período: nada foi medido, então o percentual é '—' (nunca 0%, que afirmaria um descumprimento)", () => {
+    const c = contar(["CAUSA_CLIENTE", "CAUSA_CLIENTE"]);
+    expect([c.causaCliente, medidos(c), total(c)]).toEqual([2, 0, 2]);
+    expect(textoPercentual(c)).toBe("—");
+  });
+
+  it("o DESEMPENHO do colaborador não enxerga a responsabilidade: lá o justificado já sai, seja qual for a causa", () => {
+    const RAIZ = path.resolve(__dirname, "../..");
+    const ler = (arq: string) => readFileSync(path.join(RAIZ, arq), "utf8");
+    const listar = (dir: string): string[] => readdirSync(path.join(RAIZ, dir), { withFileTypes: true }).flatMap((e) =>
+      e.isDirectory() ? listar(`${dir}/${e.name}`) : /\.tsx?$/.test(e.name) ? [`${dir}/${e.name}`] : []);
+    // nenhum arquivo do desempenho lê a marcação nem o estado da pausa: a régua de lá não mudou
+    for (const arq of listar("lib/desempenho")) {
+      expect(ler(arq), arq).not.toMatch(/atrasoResponsavel|CAUSA_CLIENTE|atrasoPorCausaDoCliente|causaCliente/);
+    }
+    expect(ler("lib/desempenho/regras.ts")).toMatch(/atrasoJustificado/); // continua olhando só se HÁ justificativa
   });
 });
 
@@ -308,6 +426,11 @@ describe("Uma conta só: ninguém refaz o cumprimento nem o percentual por fora"
     // dentro do relatório, quem escreve o estado "SEM_REGISTRO" é só o arquivo das regras:
     // o servidor, a tela, o papel e as rotas recebem o estado já decidido
     expect(quemTem(/"SEM_REGISTRO"/).filter((f) => DO_RELATORIO.includes(f))).toEqual([REGRAS]);
+    // e o mesmo vale para a pausa: a tela e o papel recebem "CAUSA_CLIENTE" pronto, nunca o decidem
+    expect(quemTem(/"CAUSA_CLIENTE"/).filter((f) => DO_RELATORIO.includes(f))).toEqual([REGRAS]);
+    // a porta da pausa é CHAMADA num lugar só (definida em lib/os/prazo-execucao, onde o gestor a grava)
+    expect(quemTem("atrasoPorCausaDoCliente(")).toEqual([REGRAS]);
+    expect(ler("lib/os/prazo-execucao.ts")).toMatch(/export const atrasoPorCausaDoCliente = \(os/);
   });
 
   it("o percentual sai de uma função só — a tela e o PDF não dividem nada por conta própria", () => {
@@ -327,9 +450,14 @@ describe("Uma conta só: ninguém refaz o cumprimento nem o percentual por fora"
     }
     // o denominador é escrito uma vez, e é só cumpridos + descumpridos
     expect(ler(REGRAS)).toMatch(/const medidos = \(c: Contagem\) => c\.cumpridos \+ c\.descumpridos;/);
-    // nas regras, o "sem registro" entra numa soma só: a de quantos prazos o relatório OLHOU
+    // nas regras, o "sem registro" entra numa soma só: a de quantos prazos o relatório OLHOU —
+    // e, desde a pausa de SLA, a "causa do cliente" entra nessa mesma soma e em nenhuma outra
     expect(ler(REGRAS).match(/\+\s*c\.semRegistro/g)).toEqual(["+ c.semRegistro"]);
-    expect(ler(REGRAS)).toMatch(/const total = \(c: Contagem\) => medidos\(c\) \+ c\.semRegistro;/);
+    expect(ler(REGRAS).match(/\+\s*c\.causaCliente/g)).toEqual(["+ c.causaCliente"]);
+    expect(ler(REGRAS)).toMatch(/const total = \(c: Contagem\) => medidos\(c\) \+ c\.semRegistro \+ c\.causaCliente;/);
+    for (const arq of [SERVIDOR, PDF, TELA, PAGINA, ROTA]) {
+      expect(ler(arq), arq).not.toMatch(/causaCliente\s*\+|\+\s*causaCliente/);
+    }
     // e o percentual divide pelos medidos, nunca pelo total
     expect(ler(REGRAS)).toMatch(/const base = medidos\(c\);\s*\n\s*return base === 0 \? null : Math\.round\(\(c\.cumpridos \/ base\) \* 100\);/);
   });

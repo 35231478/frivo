@@ -3,35 +3,46 @@
  *
  * O relatório não decide nada sozinho: ele LÊ a situação que as libs únicas já calcularam
  * (lib/atendimento/prazo.ts para o prazo de atendimento do contrato, lib/os/prazo-execucao.ts para o
- * prazo de execução) e a traduz nos três estados que o gestor e o cliente entendem.
+ * prazo de execução) e a traduz nos quatro estados que o gestor e o cliente entendem.
  *
- * OS TRÊS ESTADOS — e a regra inegociável:
+ * OS QUATRO ESTADOS — e as duas regras inegociáveis:
  *   • CUMPRIDO    — a promessa foi medida e atendida.
  *   • DESCUMPRIDO — a promessa foi medida e não foi atendida.
+ *   • CAUSA_CLIENTE — foi medida, não foi atendida, e a gestão marcou na OS que a causa foi do
+ *     cliente (falta de acesso, ausência do responsável, pendência dele). Fica à parte, fora do
+ *     percentual, como prevê o contrato. Só sai de MARCAÇÃO EXPLÍCITA (lib/os/prazo-execucao ›
+ *     atrasoPorCausaDoCliente): nunca do motivo sozinho, nunca do texto livre, nunca de adivinhação.
  *   • SEM_REGISTRO — a OS encerrou sem que ninguém medisse (o técnico não tocou "Cheguei", ou a OS
  *     foi cancelada com o prazo em aberto). NUNCA soma como descumprido: fica à parte, fora do
  *     percentual. É injusto afirmar um atraso que ninguém mediu — e é esse número que o gestor usa
  *     para cobrar o uso do "Cheguei".
  *
+ * As duas saídas do percentual são de naturezas opostas e por isso não se misturam: "sem registro"
+ * é prazo que ninguém mediu; "causa do cliente" é prazo medido, descumprido e explicado. Nenhuma das
+ * duas some da tela nem do papel — as duas aparecem, com o motivo à vista.
+ *
  * Prazo que ainda está correndo (ou que o contrato não promete) não tem estado: não entra no
  * relatório, porque não há o que relatar ainda.
  */
 import { atendimentoDaOs, type SituacaoAtendimento } from "@/lib/atendimento/prazo";
-import { execucaoNoPrazo, haAtrasoParaJustificar, type OsParaAtraso } from "@/lib/os/prazo-execucao";
+import {
+  atrasoPorCausaDoCliente, execucaoNoPrazo, haAtrasoParaJustificar, rotuloMotivoAtraso, type OsParaAtraso,
+} from "@/lib/os/prazo-execucao";
 
-/* ───────── os três estados ───────── */
+/* ───────── os quatro estados ───────── */
 
-export const ESTADOS = ["CUMPRIDO", "DESCUMPRIDO", "SEM_REGISTRO"] as const;
+export const ESTADOS = ["CUMPRIDO", "DESCUMPRIDO", "CAUSA_CLIENTE", "SEM_REGISTRO"] as const;
 export type EstadoCumprimento = (typeof ESTADOS)[number];
 
 export const ROTULO_ESTADO: Record<EstadoCumprimento, string> = {
-  CUMPRIDO: "Cumprido", DESCUMPRIDO: "Descumprido", SEM_REGISTRO: "Sem registro",
+  CUMPRIDO: "Cumprido", DESCUMPRIDO: "Descumprido", CAUSA_CLIENTE: "Causa do cliente", SEM_REGISTRO: "Sem registro",
 };
 
 /** O que cada estado quer dizer, na própria tela e no PDF — sem jargão e sem rodeio. */
 export const LEGENDA_ESTADO: Record<EstadoCumprimento, string> = {
   CUMPRIDO: "O prazo foi medido e atendido.",
   DESCUMPRIDO: "O prazo foi medido e não foi atendido.",
+  CAUSA_CLIENTE: "O prazo não foi atendido por uma causa do cliente — falta de acesso ao local, ausência do responsável ou pendência dele —, conferida e marcada pela gestão na ordem de serviço. Fica fora do percentual, como prevê o contrato, e aparece aqui com o motivo à vista.",
   SEM_REGISTRO: "A OS encerrou sem o registro que mede este prazo (o técnico não tocou “Cheguei”). Fica fora do percentual: não afirmamos atraso que ninguém mediu.",
 };
 
@@ -84,8 +95,10 @@ export function estadoDaExecucao(os: OsParaAtraso, agora: Date = new Date()): Es
 }
 
 /**
- * Os três estados de uma OS, sem precisar de nada de tela. É daqui que saem a linha do relatório e a
- * resposta a "há o que justificar?" — uma conta só, dois usos.
+ * O estado CRU de cada prazo da OS — sem nada de tela e ANTES da pausa. É daqui que saem a linha do
+ * relatório e a resposta a "há o que justificar?": uma conta só, dois usos. A pausa vem depois, em
+ * `linhaDoCumprimento`, de propósito: o botão "Justificar atraso" tem de continuar aparecendo na OS
+ * já marcada, para o gestor poder alterar ou desfazer o que marcou.
  */
 export function estadosDosPrazos(os: OsComPrazos, agora: Date = new Date()): Record<PrazoRelatado, EstadoCumprimento | null> {
   const { comparecer, resolver } = atendimentoDaOs(os, agora);
@@ -125,11 +138,28 @@ export interface LinhaCumprimento {
   comparecer: EstadoCumprimento | null;
   resolver: EstadoCumprimento | null;
   execucao: EstadoCumprimento | null;
-  /** O motivo que a gestão gravou para um atraso de execução (PR 2), quando há */
+  /** O motivo que a gestão gravou ao justificar o atraso (PR 2), quando há */
   justificativa: string | null;
+  /** O motivo por extenso, pronto para a tela e o papel ("Acesso ao local negado"); "" quando não há */
+  motivo: string;
 }
 
+/**
+ * A PAUSA, num lugar só: um prazo DESCUMPRIDO vira CAUSA_CLIENTE quando — e apenas quando — a gestão
+ * marcou na OS que a causa foi do cliente. Três coisas que esta linha garante, e que os testes
+ * travam:
+ *   • a pausa só mexe no que já era descumprido. "Sem registro" nunca vira pausa (ninguém mediu), e
+ *     cumprido nunca muda de estado;
+ *   • o denominador só pode encolher com a pausa, nunca crescer: nada entra em DESCUMPRIDO por aqui;
+ *   • sem marcação, nada muda — o justificado sem causa do cliente segue descumprido, como sempre foi.
+ */
+const comPausa = (e: EstadoCumprimento | null, pausa: boolean): EstadoCumprimento | null =>
+  pausa && e === "DESCUMPRIDO" ? "CAUSA_CLIENTE" : e;
+
 export function linhaDoCumprimento(os: OsDoCumprimento, agora: Date = new Date()): LinhaCumprimento {
+  const estados = estadosDosPrazos(os, agora);
+  // a marcação explícita do gestor (lib/os/prazo-execucao): nunca o motivo sozinho, nunca o texto livre
+  const pausa = atrasoPorCausaDoCliente(os);
   return {
     id: os.id,
     numero: os.chamadoNumero || os.numero,
@@ -137,28 +167,37 @@ export function linhaDoCumprimento(os: OsDoCumprimento, agora: Date = new Date()
     contratoNumero: os.contratoNumero ?? null,
     abertura: new Date(os.chamadoAbertoEm ?? os.criadoEm),
     status: os.status,
-    ...estadosDosPrazos(os, agora),
+    comparecer: comPausa(estados.comparecer, pausa),
+    resolver: comPausa(estados.resolver, pausa),
+    execucao: comPausa(estados.execucao, pausa),
     justificativa: os.atrasoJustificadoMotivo || null,
+    motivo: rotuloMotivoAtraso(os.atrasoJustificadoMotivo),
   };
 }
+
+/** Este estado é a pausa? A tela e o papel perguntam aqui em vez de escrever o nome do estado. */
+export const ehPausa = (e: EstadoCumprimento | null) => e === "CAUSA_CLIENTE";
+
+/** A linha teve algum prazo fora da conta por causa do cliente? */
+export const linhaPausada = (l: LinhaCumprimento) => PRAZOS.some((p) => ehPausa(l[p]));
 
 /** A linha tem algo a relatar? Sem nenhum dos três prazos decidido, ela não entra. */
 export const linhaRelata = (l: LinhaCumprimento) => !!(l.comparecer || l.resolver || l.execucao);
 
 /* ───────── a conta ───────── */
 
-export interface Contagem { cumpridos: number; descumpridos: number; semRegistro: number }
+export interface Contagem { cumpridos: number; descumpridos: number; causaCliente: number; semRegistro: number }
 
-export const CONTAGEM_ZERO = (): Contagem => ({ cumpridos: 0, descumpridos: 0, semRegistro: 0 });
+export const CONTAGEM_ZERO = (): Contagem => ({ cumpridos: 0, descumpridos: 0, causaCliente: 0, semRegistro: 0 });
 
 /**
- * Quantos prazos foram MEDIDOS. É o denominador do percentual — e o "sem registro" não está nele,
- * de propósito: é a regra inegociável do relatório.
+ * Quantos prazos foram MEDIDOS **e contam**. É o denominador do percentual — e nem o "sem registro"
+ * nem a "causa do cliente" estão nele, de propósito: são as duas regras inegociáveis do relatório.
  */
 export const medidos = (c: Contagem) => c.cumpridos + c.descumpridos;
 
-/** Tudo o que o relatório conta (medidos + os que ficaram sem registro). */
-export const total = (c: Contagem) => medidos(c) + c.semRegistro;
+/** Tudo o que o relatório conta: os que contam, mais os dois baldes que ficam de fora. */
+export const total = (c: Contagem) => medidos(c) + c.semRegistro + c.causaCliente;
 
 /**
  * O percentual de cumprimento: cumpridos sobre os MEDIDOS, arredondado ao inteiro. `null` quando
@@ -180,6 +219,7 @@ export function contar(estados: (EstadoCumprimento | null)[]): Contagem {
   for (const e of estados) {
     if (e === "CUMPRIDO") c.cumpridos++;
     else if (e === "DESCUMPRIDO") c.descumpridos++;
+    else if (e === "CAUSA_CLIENTE") c.causaCliente++;
     else if (e === "SEM_REGISTRO") c.semRegistro++;
   }
   return c;
@@ -224,6 +264,13 @@ export function resumoCumprimento(linhas: LinhaCumprimento[]): ResumoCumprimento
 export const NOTA_SEM_REGISTRO =
   "Os casos sem registro ficam fora do percentual: a OS encerrou sem o registro que mede o prazo, e não afirmamos um atraso que ninguém mediu.";
 
+/**
+ * A frase que explica a pausa, em linguagem de cliente — a mesma na tela, no papel e em qualquer
+ * conversa sobre o número. Sem jargão: quem lê o relatório não precisa saber o que é "SLA".
+ */
+export const NOTA_CAUSA_CLIENTE =
+  "Os prazos com causa do cliente — falta de acesso ao local, ausência do responsável ou pendência dele — ficam fora do percentual, como prevê o contrato. Eles continuam listados, com o motivo à vista: nada é escondido, apenas não é cobrado de quem não causou.";
+
 /** "12 de 13 prazos cumpridos" · "nenhum prazo medido" */
 export function textoMedidos(c: Contagem): string {
   const base = medidos(c);
@@ -233,5 +280,13 @@ export function textoMedidos(c: Contagem): string {
 /** "1 sem registro, fora da conta" · "" quando não há nenhum */
 export const textoSemRegistro = (c: Contagem) => (c.semRegistro === 0 ? "" : `${c.semRegistro} sem registro, fora da conta`);
 
-/** "12 de 13 prazos cumpridos · 1 sem registro, fora da conta" — a tela e o papel dizem o mesmo */
-export const textoDaContagem = (c: Contagem) => [textoMedidos(c), textoSemRegistro(c)].filter(Boolean).join(" · ");
+/** "2 por causa do cliente, fora da conta" · "" quando não há nenhum */
+export const textoCausaCliente = (c: Contagem) =>
+  c.causaCliente === 0 ? "" : `${c.causaCliente} por causa do cliente, fora da conta`;
+
+/**
+ * "12 de 13 prazos cumpridos · 1 sem registro, fora da conta · 2 por causa do cliente, fora da
+ * conta" — a tela e o papel dizem o mesmo, e o que saiu da conta é dito em voz alta, não omitido.
+ */
+export const textoDaContagem = (c: Contagem) =>
+  [textoMedidos(c), textoSemRegistro(c), textoCausaCliente(c)].filter(Boolean).join(" · ");

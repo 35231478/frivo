@@ -16,7 +16,7 @@ import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { montarPermissoes, permissoesTotais, type Permissoes } from "@/lib/permissoes";
 import {
-  NOTA_SEM_REGISTRO, percentualCumprimento, resumoCumprimento, textoPercentual,
+  NOTA_CAUSA_CLIENTE, NOTA_SEM_REGISTRO, percentualCumprimento, resumoCumprimento, textoPercentual,
   type EstadoCumprimento, type LinhaCumprimento,
 } from "@/lib/prazos/cumprimento";
 
@@ -59,7 +59,7 @@ const linha = (
 ): LinhaCumprimento => ({
   id: `os-${numero}`, numero, clienteNome: "Hospital Santa Luzia", contratoNumero: "CT-2026/001",
   abertura: new Date("2026-11-05T12:00:00.000Z"), status: "CONCLUIDA",
-  comparecer: estados[0], resolver: estados[1], execucao: estados[2], justificativa: null, ...extra,
+  comparecer: estados[0], resolver: estados[1], execucao: estados[2], justificativa: null, motivo: "", ...extra,
 });
 
 /** Os três estados na mesma tela: um cumprido, um descumprido e um sem registro */
@@ -111,6 +111,34 @@ describe("A tela do relatório: os três estados", () => {
     expect(classe("SEM_REGISTRO")).not.toContain("pill-atrasado");
   });
 
+  it("a pausa por causa do cliente tem pílula própria, em tom neutro — nunca a cor de atraso", async () => {
+    const linhas = [linha("CH-301", ["CAUSA_CLIENTE", "CUMPRIDO", "CAUSA_CLIENTE"], { justificativa: "ACESSO_NEGADO", motivo: "Acesso ao local negado" })];
+    await montar({ linhas });
+    const selo = $("[data-estado='CAUSA_CLIENTE']")!;
+    expect(txt(selo)).toBe("Causa do cliente");
+    expect(selo.className).toContain("pill-acento");
+    expect(selo.className).not.toContain("pill-atrasado");
+    // o motivo vem na própria linha: ninguém precisa abrir a OS para saber por quê
+    expect($$("[data-motivo-pausa]").map((m) => txt(m))).toEqual(["· Acesso ao local negado", "· Acesso ao local negado"]);
+    // e o selo genérico de "Justificado" não aparece junto: a pausa já diz o que houve
+    expect($("[data-atraso-justificado]")).toBeNull();
+  });
+
+  it("o quadro do período conta a pausa à parte, e a explicação aparece ao pé da tela", async () => {
+    const linhas = [
+      linha("CH-301", ["CUMPRIDO", "CUMPRIDO", "CUMPRIDO"]),
+      linha("CH-302", ["CAUSA_CLIENTE", "CAUSA_CLIENTE", null], { justificativa: "CLIENTE_AUSENTE", motivo: "Cliente ausente" }),
+    ];
+    await montar({ linhas });
+    expect(txt($("[data-quadro-prazo='geral'] [data-percentual]"))).toBe("100%");
+    expect(txt($("[data-quadro-prazo='geral'] [data-detalhe]")))
+      .toBe("3 de 3 prazos cumpridos · 2 por causa do cliente, fora da conta");
+    expect(txt($("[data-nota-causa-cliente]"))).toBe(NOTA_CAUSA_CLIENTE);
+    // sem nenhuma pausa no período, a nota não aparece (nada a explicar)
+    await montar({ linhas: [linhas[0]] });
+    expect($("[data-nota-causa-cliente]")).toBeNull();
+  });
+
   it("os quadros do período: o percentual geral e um por prazo — com o 'sem registro' dito à parte, fora da conta", async () => {
     await montar();
     const quadros = $$("[data-quadro-prazo]").map((q) => [
@@ -137,9 +165,10 @@ describe("A tela do relatório: os três estados", () => {
     expect(textoPercentual(resumoCumprimento(linhas).geral)).toBe("—");
   });
 
-  it("a legenda curta explica as três palavras e por que o 'sem registro' fica fora do percentual", async () => {
+  it("a legenda curta explica as quatro palavras e por que o 'sem registro' fica fora do percentual", async () => {
     await montar();
-    expect($$("[data-legenda]").map((l) => l.getAttribute("data-legenda"))).toEqual(["CUMPRIDO", "DESCUMPRIDO", "SEM_REGISTRO"]);
+    expect($$("[data-legenda]").map((l) => l.getAttribute("data-legenda"))).toEqual(["CUMPRIDO", "DESCUMPRIDO", "CAUSA_CLIENTE", "SEM_REGISTRO"]);
+    expect(txt($("[data-legenda='CAUSA_CLIENTE']"))).toContain("fora do percentual");
     expect(txt($("[data-legenda='CUMPRIDO']"))).toBe("CumpridoO prazo foi medido e atendido.");
     expect(txt($("[data-legenda='SEM_REGISTRO']"))).toContain("Fica fora do percentual");
     expect(txt($("[data-legenda='SEM_REGISTRO']"))).toContain("Cheguei");
