@@ -164,6 +164,15 @@ describe.skipIf(!URL_PG)("Prazos da OS — PR 3: o atraso justificado e o desemp
     const f = await ficha("t1");
     expect(f.linha.atrasos.map((x: any) => `${x.ordemServicoId}|${x.justificado}`)).toEqual([`${a.os}|CLIENTE_AUSENTE`, `${b.os}|OUTRO`]);
     expect(f.linha).toMatchObject({ escore: 100, faixa: "Ouro", bonus: 350 });
+    // "Atrasos justificados" na ficha: a OS, o prazo, o motivo, a explicação, quem justificou e quando
+    expect(f.linha.atrasos).toEqual([
+      { atividadeId: expect.any(String), ordemServicoId: a.os, numeroOs: a.numero, prazo: "2026-11-06", concluidaEm: "2026-11-09", dias: 3, justificado: "CLIENTE_AUSENTE",
+        explicacao: null, justificadoPor: "Gabi Gestora", justificadoEm: AGORA.toISOString() },
+      { atividadeId: expect.any(String), ordemServicoId: b.os, numeroOs: "CH-77", prazo: "2026-11-10", concluidaEm: "2026-11-11", dias: 1, justificado: "OUTRO",
+        explicacao: "A portaria não liberou a entrada", justificadoPor: "Gabi Gestora", justificadoEm: AGORA.toISOString() },
+    ]);
+    // O ranking mostra o MESMO número da ficha (uma base de cálculo só)
+    expect((await linha("Ana Dias"))).toMatchObject({ escore: f.linha.escore, composicao: f.linha.composicao, atrasos: f.linha.atrasos });
 
     expect((await desfazer(a.os)).status).toBe(200);
     expect(await noPrazo("Ana Dias")).toBe("1 de 2 atividades · 1 atraso justificado fora da conta = 50 | escore 50");
@@ -274,7 +283,13 @@ describe.skipIf(!URL_PG)("Prazos da OS — PR 3: o atraso justificado e o desemp
     const meu = (await chamar("tecnico/desempenho", "GET", {}, undefined, `?mes=${MES}`)).json;
     expect(meu.ficha.linha.atrasos).toEqual([{ atividadeId: expect.any(String), ordemServicoId: tarde.os, numeroOs: tarde.numero, prazo: "2026-11-06", concluidaEm: "2026-11-09", dias: 3, justificado: "OUTRO" }]);
     const texto = JSON.stringify(meu);
-    for (const proibido of ["sigilo", deOutro.numero, "Bia Reis"]) expect(texto, proibido).not.toContain(proibido);
+    for (const proibido of ["sigilo", "Gabi Gestora", "explicacao", "justificadoPor", deOutro.numero, "Bia Reis"]) expect(texto, proibido).not.toContain(proibido);
+    // O número que ele vê é o mesmo do painel da gestão (a mesma linha, só sem a explicação e o autor)
+    entrar();
+    const doPainel = await linha("Ana Dias");
+    expect(doPainel.atrasos[0]).toMatchObject({ explicacao: "Cliente pediu sigilo sobre a obra", justificadoPor: "Gabi Gestora" });
+    expect({ escore: meu.ficha.linha.escore, composicao: meu.ficha.linha.composicao }).toEqual({ escore: doPainel.escore, composicao: doPainel.composicao });
+    entrar(PRESETS.TECNICO, { id: "uT", role: "TECNICO", tecnicoId: "t1", email: "ana@x.com" });
     // O técnico não justifica o próprio atraso (a válvula é da gestão)
     expect((await justificar(deOutro.os)).status).toBe(403);
 

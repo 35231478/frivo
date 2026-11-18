@@ -15,7 +15,7 @@
 import { z } from "zod";
 import { chaveDiaBR, chaveDiaCivil, chaveHojeBR, diaCivilDeChave, hojeDiaCivil, inicioHojeBR } from "@/lib/fuso";
 import { situacaoPrazo, textoPrazo } from "@/lib/os/prazos";
-import { competenciaCurta, competenciaDe, diaDeReferencia } from "@/lib/desempenho/regras";
+import { competenciaCurta, competenciaDe, concluidaNoPrazo, diaDeReferencia } from "@/lib/desempenho/regras";
 import { pode, type Permissoes } from "@/lib/permissoes";
 
 export interface DatasDaOs {
@@ -204,16 +204,17 @@ export interface OsParaAtraso extends DatasDaOs {
 }
 
 /**
- * A atividade está (ou ficou) atrasada? O dia de referência é o MESMO do desempenho
- * (`diaDeReferencia`: o prazo próprio ou, sem ele, o dia agendado): concluída, atrasou se terminou
- * depois dele; ainda aberta, atrasou se o dia já passou em Brasília. Cancelada não atrasa.
+ * A atividade está (ou ficou) atrasada? A atividade CONCLUÍDA é julgada pela regra única do
+ * desempenho (`concluidaNoPrazo`, lib/desempenho/regras): o que aqui se pode justificar é exatamente o
+ * que lá conta como atraso. Ainda aberta, atrasou se o dia de referência (o prazo próprio ou, sem
+ * ele, o dia agendado) já passou em Brasília. Cancelada não atrasa.
  */
 export function atividadeAtrasou(a: AtividadeParaAtraso, agora: Date = new Date()): boolean {
   if (a.status === "CANCELADA") return false;
-  const referencia = diaDeReferencia({ prazo: a.prazo ?? null, dataAgendada: a.dataAgendada ?? null });
-  if (!referencia) return false;
-  if (a.status === "CONCLUIDA") return !!a.concluidaEm && chaveDiaBR(a.concluidaEm) > referencia;
-  return chaveHojeBR(0, agora) > referencia;
+  const datas = { prazo: a.prazo ?? null, dataAgendada: a.dataAgendada ?? null };
+  if (a.status === "CONCLUIDA") return concluidaNoPrazo({ ...datas, concluidaEm: a.concluidaEm ?? null }) === false;
+  const referencia = diaDeReferencia(datas);
+  return !!referencia && chaveHojeBR(0, agora) > referencia;
 }
 
 /**

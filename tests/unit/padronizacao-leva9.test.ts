@@ -272,8 +272,9 @@ describe("a leva não tocou na lógica", () => {
       .split("\n").filter(Boolean);
     // Prazos da OS, PR 3: a regra do "no prazo" mudou DE PROPÓSITO — a atividade atrasada de uma OS com
     // atraso justificado sai da conta (regras e medição), a linha do painel leva os atrasos e a OS
-    // pergunta se o mês já fechou. Fechamento, penalidades, premiação e as rotas seguem intocados.
-    const mudouDeProposito = ["lib/desempenho/regras.ts", "lib/desempenho/painel.ts", "lib/desempenho/medicao-server.ts", "lib/desempenho/fechamento-estado.ts"];
+    // pergunta se o mês já fechou; no servidor, só o que o colaborador recebe no app (o motivo do atraso
+    // justificado, sem a explicação nem o autor). Fechamento, penalidades, premiação e as rotas seguem intocados.
+    const mudouDeProposito = ["lib/desempenho/regras.ts", "lib/desempenho/painel.ts", "lib/desempenho/medicao-server.ts", "lib/desempenho/fechamento-estado.ts", "lib/desempenho/servidor.ts"];
     expect(mudados.filter((arq) => !mudouDeProposito.includes(arq))).toEqual([]);
   });
 

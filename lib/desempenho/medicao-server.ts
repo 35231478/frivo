@@ -39,7 +39,11 @@ export async function medirMes(empresaId: string, competencia: string): Promise<
       select: {
         id: true, ordemServicoId: true, equipeId: true, tecnicoId: true, tipoOsId: true, prazo: true, dataAgendada: true, concluidaEm: true,
         tecnicosEquipe: { select: { tecnicoId: true } },
-        ordemServico: { select: { numero: true, chamadoNumero: true, atrasoJustificadoMotivo: true } },
+        // O número da OS e a justificativa do atraso (motivo, explicação, quem e quando)
+        ordemServico: { select: {
+          numero: true, chamadoNumero: true, atrasoJustificadoMotivo: true, atrasoJustificadoObs: true, atrasoJustificadoEm: true,
+          atrasoJustificadoPor: { select: { nome: true } },
+        } },
       },
     }),
     avaliacoesPorTecnico(empresaId, periodo),
@@ -62,7 +66,7 @@ export async function medirMes(empresaId: string, competencia: string): Promise<
       executores: [...new Set([a.tecnicoId, ...a.tecnicosEquipe.map((t) => t.tecnicoId)].filter((x): x is string => !!x))],
       noPrazo: concluidaNoPrazo(a),
       // O atraso que a gestão justificou na OS sai da métrica (lib/desempenho/regras › medirAtividades)
-      atraso: atrasoDaAtividade(a, { numero: a.ordemServico.chamadoNumero ?? a.ordemServico.numero, atrasoJustificadoMotivo: a.ordemServico.atrasoJustificadoMotivo }),
+      atraso: atrasoDaAtividade(a, { ...a.ordemServico, numero: a.ordemServico.chamadoNumero ?? a.ordemServico.numero }),
       equipamentos: relatorios.get(a.id) ?? [],
     })),
     avaliacoes: new Map(porTecnico.map((t) => [t.tecnicoId, { media: t.media, avaliacoes: t.avaliacoes }])),

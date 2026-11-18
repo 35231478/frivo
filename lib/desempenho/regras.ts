@@ -210,17 +210,42 @@ const diasEntre = (de: string, ate: string) => Math.round((Date.parse(`${ate}T00
  * quantos dias. `justificado` é o motivo que a gestão gravou na OS ("atraso justificado",
  * lib/os/prazo-execucao): com ele o atraso SAI da métrica "no prazo" — nem certo nem errado.
  */
-export interface AtrasoDaAtividade { numeroOs: string; prazo: string; concluidaEm: string; dias: number; justificado: string | null }
+export interface AtrasoDaAtividade {
+  numeroOs: string; prazo: string; concluidaEm: string; dias: number;
+  /** O motivo da lista (null = o atraso conta) */
+  justificado: string | null;
+  /** A justificativa como a gestão gravou: a explicação, quem justificou e quando (só quando justificado) */
+  explicacao?: string | null;
+  justificadoPor?: string | null;
+  justificadoEm?: string | null;
+}
+
+/** A OS como a medição a lê: o número e a justificativa do atraso (as colunas "atraso_justificado_*") */
+export interface OsDoAtraso {
+  numero: string;
+  atrasoJustificadoMotivo: string | null;
+  atrasoJustificadoObs?: string | null;
+  atrasoJustificadoEm?: Date | string | null;
+  atrasoJustificadoPor?: { nome: string } | null;
+}
 
 /** null = concluída no prazo, ou não dá para medir (sem data de conclusão, sem prazo nem agendamento). */
 export function atrasoDaAtividade(
   a: { concluidaEm: Date | string | null; prazo: Date | string | null; dataAgendada: Date | string | null },
-  os: { numero: string; atrasoJustificadoMotivo: string | null },
+  os: OsDoAtraso,
 ): AtrasoDaAtividade | null {
   if (concluidaNoPrazo(a) !== false) return null;
   const prazo = diaDeReferencia(a)!;
   const concluidaEm = chaveDiaBR(a.concluidaEm!);
-  return { numeroOs: os.numero, prazo, concluidaEm, dias: diasEntre(prazo, concluidaEm), justificado: os.atrasoJustificadoMotivo || null };
+  const atraso = { numeroOs: os.numero, prazo, concluidaEm, dias: diasEntre(prazo, concluidaEm) };
+  const justificado = os.atrasoJustificadoMotivo || null;
+  if (!justificado) return { ...atraso, justificado: null };
+  return {
+    ...atraso, justificado,
+    explicacao: os.atrasoJustificadoObs?.trim() || null,
+    justificadoPor: os.atrasoJustificadoPor?.nome ?? null,
+    justificadoEm: os.atrasoJustificadoEm ? new Date(os.atrasoJustificadoEm).toISOString() : null,
+  };
 }
 
 /** O equipamento tem ao menos uma foto "antes" e uma "depois"? */

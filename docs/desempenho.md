@@ -31,8 +31,8 @@ métrica, nunca zero.
 **Atraso justificado.** Quando o atraso não foi culpa de quem executou (cliente ausente, peça
 faltando, acesso negado, clima), quem tem Desempenho › Revisar justifica o atraso **na OS**. A
 atividade atrasada dessa OS sai da métrica "no prazo" — nem acerto nem erro — e aparece na ficha, em
-"Atrasos do mês", como "Justificado" com o motivo. Mês fechado não muda com justificativa lançada
-depois. Os detalhes estão em [docs/prazos-da-os.md](prazos-da-os.md#o-atraso-justificado-no-desempenho-pr-3).
+"Atrasos justificados", com a OS, o prazo, o motivo, a explicação e quem justificou. Mês fechado não
+muda com justificativa lançada depois. Os detalhes estão em [docs/prazos-da-os.md](prazos-da-os.md#o-atraso-justificado-no-desempenho-pr-3).
 
 ## O escore
 
@@ -160,7 +160,7 @@ participam.
 | Rota | O que é | Permissão |
 |---|---|---|
 | `/desempenho` | Painel: ranking do mês por perfil, prêmio em disputa, resumo por equipe | Visualizar |
-| `/desempenho/colaborador/[id]` | Ficha: escore, composição com os números, atrasos do mês (os que contam e os justificados), faixa, bônus projetado ou fechado | Visualizar |
+| `/desempenho/colaborador/[id]` | Ficha: escore, composição com os números, atrasos justificados (e os que contam), faixa, bônus projetado ou fechado | Visualizar |
 | `/desempenho/fechamento` | Fechar e reabrir o mês, folha de bônus, exportação, histórico | Gerenciar |
 | `/desempenho/revisao` | Lista "A revisar", decisão com motivo, reclamação manual | Revisar penalidades |
 | `/desempenho/premiacoes` | Premiação do mês (texto + imagem) | Visualizar (cadastro: Gerenciar) |

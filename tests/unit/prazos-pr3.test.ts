@@ -8,12 +8,14 @@
  *  - em que meses do desempenho a justificativa de uma OS pesa, e o aviso de mês fechado.
  */
 import { describe, expect, it } from "vitest";
+import { readFileSync, readdirSync } from "node:fs";
+import path from "node:path";
 import {
-  atrasoDaAtividade, calcularEscore, entradaDaGestao, entradaDoColaborador, textoAtrasosJustificados,
+  atrasoDaAtividade, calcularEscore, concluidaNoPrazo, entradaDaGestao, entradaDoColaborador, textoAtrasosJustificados,
   type AtividadeMedida, type AtrasoDaAtividade, type EntradaEscore, type Regra,
 } from "@/lib/desempenho/regras";
 import { montarPainel, paraTv } from "@/lib/desempenho/painel";
-import { avisoMesFechado, competenciasDosAtrasos } from "@/lib/os/prazo-execucao";
+import { atividadeAtrasou, avisoMesFechado, competenciasDosAtrasos } from "@/lib/os/prazo-execucao";
 
 const br = (dia: string, hora = "10:00") => new Date(`${dia}T${hora}:00-03:00`);
 const REGRA: Regra = {
@@ -26,9 +28,27 @@ describe("o atraso de uma atividade", () => {
   it("concluída depois do dia de referência: prazo, dia da conclusão (Brasília) e quantos dias — com o motivo, se a OS foi justificada", () => {
     const a = { dataAgendada: br("2026-11-06", "09:00"), prazo: null, concluidaEm: br("2026-11-09", "16:00") };
     expect(atrasoDaAtividade(a, OS())).toEqual({ numeroOs: "OS-1", prazo: "2026-11-06", concluidaEm: "2026-11-09", dias: 3, justificado: null });
-    expect(atrasoDaAtividade(a, OS("CLIENTE_AUSENTE", "CH-9"))).toEqual({ numeroOs: "CH-9", prazo: "2026-11-06", concluidaEm: "2026-11-09", dias: 3, justificado: "CLIENTE_AUSENTE" });
+    expect(atrasoDaAtividade(a, OS("CLIENTE_AUSENTE", "CH-9"))).toEqual({
+      numeroOs: "CH-9", prazo: "2026-11-06", concluidaEm: "2026-11-09", dias: 3, justificado: "CLIENTE_AUSENTE", explicacao: null, justificadoPor: null, justificadoEm: null,
+    });
     // Motivo vazio não é justificativa
     expect(atrasoDaAtividade(a, OS(""))!.justificado).toBeNull();
+  });
+
+  it("a justificativa vai inteira para a ficha: o motivo, a explicação, quem justificou e quando — e nada disso sem motivo", () => {
+    const a = { dataAgendada: br("2026-11-06", "09:00"), prazo: null, concluidaEm: br("2026-11-09", "16:00") };
+    const justificativa = { atrasoJustificadoObs: "  Portaria fechada; o responsável não atendeu.  ", atrasoJustificadoEm: new Date("2026-11-10T14:00:00Z"), atrasoJustificadoPor: { nome: "Gabi Gestora" } };
+    expect(atrasoDaAtividade(a, { ...OS("CLIENTE_AUSENTE"), ...justificativa })).toEqual({
+      numeroOs: "OS-1", prazo: "2026-11-06", concluidaEm: "2026-11-09", dias: 3, justificado: "CLIENTE_AUSENTE",
+      explicacao: "Portaria fechada; o responsável não atendeu.", justificadoPor: "Gabi Gestora", justificadoEm: "2026-11-10T14:00:00.000Z",
+    });
+    // Explicação em branco é "sem explicação"; quem justificou pode ter sido apagado do sistema
+    expect(atrasoDaAtividade(a, { ...OS("CLIMA"), atrasoJustificadoObs: "   ", atrasoJustificadoPor: null, atrasoJustificadoEm: "2026-11-10T14:00:00.000Z" }))
+      .toMatchObject({ justificado: "CLIMA", explicacao: null, justificadoPor: null, justificadoEm: "2026-11-10T14:00:00.000Z" });
+    // Sobra de uma justificativa desfeita (sem motivo): o atraso conta e nada da justificativa vai junto
+    const semMotivo = atrasoDaAtividade(a, { ...OS(null), ...justificativa })!;
+    expect(semMotivo).toEqual({ numeroOs: "OS-1", prazo: "2026-11-06", concluidaEm: "2026-11-09", dias: 3, justificado: null });
+    expect(Object.keys(semMotivo).sort()).toEqual(["concluidaEm", "dias", "justificado", "numeroOs", "prazo"]);
   });
 
   it("o prazo próprio da atividade vence o dia agendado; o dia é o de Brasília (23h50 ainda é o mesmo dia; 0h10 já é o seguinte)", () => {
@@ -201,5 +221,62 @@ describe("a justificativa da OS e o mês do desempenho", () => {
     expect(avisoMesFechado(["2026-10"])).toBe("O desempenho de 10/2026 já está fechado: a justificativa não muda o escore desse mês. Para ela valer, reabra o mês em Desempenho › Fechamento.");
     expect(avisoMesFechado(["2026-10", "2026-11"])).toBe("O desempenho de 10/2026 e 11/2026 já está fechado: a justificativa não muda o escore desses meses. Para ela valer, reabra cada mês em Desempenho › Fechamento.");
     expect(avisoMesFechado(["2026-09", "2026-10", "2026-11"])).toContain("O desempenho de 09/2026, 10/2026 e 11/2026 já está fechado");
+  });
+});
+
+/* ───────── a trava: uma regra só, um caminho só ───────── */
+describe("uma regra só: ninguém recalcula o 'no prazo' por fora", () => {
+  const RAIZ = path.resolve(__dirname, "../..");
+  const listar = (dir: string): string[] => readdirSync(path.join(RAIZ, dir), { withFileTypes: true }).flatMap((e) =>
+    e.isDirectory() ? listar(`${dir}/${e.name}`) : /\.tsx?$/.test(e.name) ? [`${dir}/${e.name}`] : []);
+  const fontes = ["lib", "app", "components"].flatMap((dir) => listar(dir));
+  const ler = (arq: string) => readFileSync(path.join(RAIZ, arq), "utf8");
+  const quemTem = (trecho: string | RegExp) => fontes.filter((f) => (typeof trecho === "string" ? ler(f).includes(trecho) : trecho.test(ler(f)))).sort();
+  const R = "lib/desempenho/regras.ts", M = "lib/desempenho/medicao-server.ts", P = "lib/desempenho/painel.ts", S = "lib/desempenho/servidor.ts";
+
+  it("o que a OS deixa justificar é exatamente o que o desempenho conta como atraso — a MESMA função decide os dois", () => {
+    const casos: Array<{ dataAgendada: Date | null; prazo: Date | null; concluidaEm: Date | null }> = [
+      { dataAgendada: br("2026-11-10"), prazo: null, concluidaEm: br("2026-11-10", "23:50") },                        // no dia
+      { dataAgendada: br("2026-11-10"), prazo: null, concluidaEm: br("2026-11-11", "00:10") },                        // virou o dia
+      { dataAgendada: br("2026-11-10"), prazo: null, concluidaEm: br("2026-11-08") },                                 // adiantada
+      { dataAgendada: br("2026-11-01"), prazo: new Date("2026-11-10T00:00:00Z"), concluidaEm: br("2026-11-09") },     // prazo próprio: no prazo
+      { dataAgendada: br("2026-11-20"), prazo: new Date("2026-11-10T00:00:00Z"), concluidaEm: br("2026-11-12") },     // prazo próprio: atrasou
+      { dataAgendada: null, prazo: null, concluidaEm: br("2026-11-12") },                                             // sem referência
+      { dataAgendada: br("2026-11-10"), prazo: null, concluidaEm: null },                                             // sem data de conclusão
+    ];
+    for (const a of casos) {
+      const contaNoDesempenho = concluidaNoPrazo(a) === false;
+      expect(atividadeAtrasou({ status: "CONCLUIDA", ...a }), JSON.stringify(a)).toBe(contaNoDesempenho);
+      expect(atrasoDaAtividade(a, OS()) !== null, JSON.stringify(a)).toBe(contaNoDesempenho);
+    }
+    expect(casos.map((a) => atividadeAtrasou({ status: "CONCLUIDA", ...a }))).toEqual([false, true, false, false, true, false, false]);
+    // A comparação "concluída × prazo" está escrita num lugar só
+    expect(quemTem(/chaveDiaBR\([^)]*concluidaEm[^)]*\)\s*(>=|<=|>|<)/)).toEqual([R]);
+    expect(quemTem("concluidaNoPrazo(")).toEqual([M, R, "lib/os/prazo-execucao.ts"]);
+  });
+
+  it("o escore sai de um caminho só — medição → painel → todas as telas (ficha, ranking, app, TV e fechamento)", () => {
+    expect(quemTem("calcularEscore(")).toEqual([P, R]);
+    expect(quemTem("entradaDoColaborador(")).toEqual([P, R]);
+    expect(quemTem("entradaDaGestao(")).toEqual([P, R]);
+    expect(quemTem("atrasoDaAtividade(")).toEqual([M, R]);
+    expect(quemTem("medirMes(")).toEqual([M, S]);
+    expect(quemTem("montarPainel(")).toEqual([P, S]);
+    // O painel ao vivo é o mesmo para quem mostra e para quem fecha o mês
+    expect(quemTem("painelAoVivo(")).toEqual(["lib/desempenho/fechamento-server.ts", S]);
+    // A ficha (painel e app) é uma LINHA desse painel: não tem conta própria
+    expect(ler(S)).toMatch(/const achado = linhaDoColaborador\(painel, tecnicoId\);/);
+    for (const rota of ["app/api/desempenho/route.ts", "app/api/desempenho/colaboradores/[id]/route.ts", "app/api/tecnico/desempenho/route.ts", "app/api/publico/desempenho/[token]/route.ts"]) {
+      expect(ler(rota), rota).not.toMatch(/prisma\.|concluidaEm|atrasoJustificado/);
+    }
+  });
+
+  it("a justificativa só entra na conta pela medição: no desempenho e nas telas dele, mais ninguém lê as colunas", () => {
+    const doDesempenho = (f: string) => /^(lib\/desempenho\/|app\/api\/(desempenho|tecnico\/desempenho|publico\/desempenho)\/|app\/\(dashboard\)\/desempenho\/|components\/desempenho\/|components\/tecnico\/desempenho\.tsx)/.test(f);
+    expect(quemTem(/atrasoJustificado(Motivo|Obs|Em|Por)/).filter(doDesempenho)).toEqual([M, R]);
+    // …e as telas mostram o que veio pronto na linha (não contam atividades nem refazem percentual)
+    for (const tela of ["components/desempenho/ficha-client.tsx", "components/desempenho/atrasos.tsx", "components/desempenho/painel-client.tsx", "components/tecnico/desempenho.tsx"]) {
+      expect(ler(tela), tela).not.toMatch(/percentual\(|calcularEscore|noPrazo\s*[=!]==|\.certos|\.total\b/);
+    }
   });
 });

@@ -107,16 +107,25 @@ justificado" no cabeçalho e "Justificado" na lista.
   zero nem 100): o peso vai para as outras métricas.
 - A justificativa é **da OS**: vale para todas as atividades atrasadas dela, para cada executor (uma
   vez cada) e para o encarregado da equipe.
-- **Na ficha** (painel e app do técnico), a composição diz quantos ficaram fora — "1 de 2 atividades ·
-  1 atraso justificado fora da conta" — e a seção **Atrasos do mês** lista as atividades concluídas
-  depois do prazo: a OS, "Prazo dd/mm/aaaa · concluída em dd/mm/aaaa (N dias depois)" e **Conta** ou **Justificado**
-  com o motivo. No painel, o número abre a OS (é onde se justifica); no app não há link, e o
-  colaborador vê só o motivo da lista — a explicação escrita pela gestão não vai.
+- **Na ficha**, a composição diz quantos ficaram fora — "1 de 2 atividades · 1 atraso justificado
+  fora da conta" — e a seção **Atrasos justificados** mostra cada um: a OS, "Prazo dd/mm/aaaa ·
+  concluída em dd/mm/aaaa (N dias depois)", o motivo, a explicação e quem justificou e quando. O
+  atraso não some: fica visível e rotulado. Os atrasos que **contam** ficam numa segunda seção
+  ("Atrasos que contam", só quando há algum) — é por ela que a gestão chega à OS para justificar.
+  No painel, o número abre a OS; no app do técnico não há link, e o colaborador vê só o **motivo**
+  da lista — a explicação escrita e quem justificou não saem do servidor para o app
+  (`fichaParaOColaborador`).
+- **Uma regra só, um caminho só.** O que conta como atraso da atividade está escrito num lugar
+  (`concluidaNoPrazo`, em `lib/desempenho/regras.ts`): a medição do desempenho e o botão "Justificar
+  atraso" da OS (`atividadeAtrasou`) chamam a mesma função. Ficha, ranking, app do técnico, modo TV
+  e fechamento leem o mesmo painel (`medirMes` → `montarPainel`); nenhuma tela refaz a conta. Um
+  teste de fonte trava as duas coisas. A regra `osAtrasada` é a da OS **aberta** (calendário, lista,
+  sino); o desempenho sempre mediu a atividade **concluída** contra o dia de referência dela.
 - **Mês fechado não muda.** O painel do mês fechado é o que foi gravado no fechamento (inclusive a
   lista de atrasos): justificar ou desfazer depois não mexe em escore, faixa, bônus nem na lista.
   Quem justifica é avisado na OS — "O desempenho de 10/2026 já está fechado…" — e, para valer,
   reabre o mês em Desempenho › Fechamento (`competenciasDosAtrasos`, `avisoMesFechado`). Mês fechado
-  antes de a lista existir simplesmente não mostra a seção.
+  antes de a lista existir simplesmente não mostra as seções.
 - A TV e a folha de bônus não recebem nada disso; o desempate da premiação conta os **acertos** (o
   atraso justificado não é acerto).
 
@@ -170,7 +179,7 @@ entram no PR 4.
 |---|---|---|
 | **1** (este) | Banco e motor dos dois prazos; prazo de execução separado da data prevista em todos os usos; regra única de "atrasada" | 🔵 `prisma/sql/2027-01-09_prazos_execucao_atendimento.sql` |
 | **2** (feito) | Prazo de execução nas telas: lista de OS, atraso justificado, app do técnico, prazo padrão no tipo de OS, saída do menu "Prazos e SLA" | 🟢 |
-| **3** (feito) | Desempenho: atraso justificado fora da métrica "no prazo", atrasos do mês na ficha, mês fechado intocado | 🟢 |
+| **3** (feito) | Desempenho: atraso justificado fora da métrica "no prazo", "Atrasos justificados" na ficha, mês fechado intocado | 🟢 |
 | 4 | Contrato e OS: configurar o prazo de atendimento, gravar os limites, "Cheguei", alertas | 🟢 |
 | 5 | Relatório de cumprimento (tela e PDF) | 🟢 |
 

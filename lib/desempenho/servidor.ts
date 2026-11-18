@@ -374,9 +374,14 @@ export async function fichaDoColaborador(empresaId: string, tecnicoId: string, c
  * A ficha como o PRÓPRIO colaborador vê no app: os números dele, sem o que o cliente escreveu. A
  * avaliação aparece como MÉDIA (na composição); o texto da ressalva e da reclamação não vai — só o
  * tipo, a data e a situação. O retorno mantém a descrição (são as OS, não palavras do cliente).
+ * Do atraso justificado vai o MOTIVO da lista; a explicação escrita e quem justificou ficam com a gestão.
  */
 export function fichaParaOColaborador(f: FichaDoColaborador): FichaDoColaborador {
-  return { ...f, penalidades: f.penalidades.map((p) => (p.tipo === "RETORNO" ? p : { ...p, descricao: null })) };
+  const atrasos = f.linha.atrasos?.map(({ explicacao: _explicacao, justificadoPor: _por, justificadoEm: _em, ...a }) => a);
+  return {
+    ...f, linha: { ...f.linha, ...(atrasos && { atrasos }) },
+    penalidades: f.penalidades.map((p) => (p.tipo === "RETORNO" ? p : { ...p, descricao: null })),
+  };
 }
 
 /* ───────── modo TV (sem login: o token é a chave) ───────── */
