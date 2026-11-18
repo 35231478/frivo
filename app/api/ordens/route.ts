@@ -18,6 +18,11 @@ const osCreateSchema = z.object({
   previsaoConclusao: z.string().optional(),
   /** PRAZO DE EXECUÇÃO — o "Prazo para finalizar" (um dia). Vazio = o padrão do tipo de OS, se houver. */
   prazoExecucao: z.string().optional().nullable(),
+  /**
+   * false = a pessoa viu a sugestão do tipo de OS na tela e a apagou: a OS nasce SEM prazo próprio.
+   * Ausente = quem chama não mostrou sugestão (integrações): o padrão do tipo preenche o campo vazio.
+   */
+  usarPrazoPadrao: z.boolean().optional(),
   observacoes: z.string().optional(),
   /** Equipamentos atendidos já na abertura (opcional; dá para vincular depois, na execução) */
   equipamentoIds: z.array(z.string().min(1)).max(200).optional(),
@@ -110,7 +115,7 @@ export async function POST(req: NextRequest) {
       descricao: parsed.data.descricao,
       previsaoConclusao: parsed.data.previsaoConclusao ? new Date(parsed.data.previsaoConclusao) : null,
       // O que a pessoa digitou vence; sem nada digitado, o padrão do tipo contado do dia agendado
-      prazoExecucao: prazoAoCriar({ digitado: prazoDigitado, dataAgendada: prep.execucao.dataAgendada, diasDoTipo: prep.execucao.prazoExecucaoDias }),
+      prazoExecucao: prazoAoCriar({ digitado: prazoDigitado, dataAgendada: prep.execucao.dataAgendada, diasDoTipo: parsed.data.usarPrazoPadrao === false ? null : prep.execucao.prazoExecucaoDias }),
       observacoes: parsed.data.observacoes || null,
     },
    });

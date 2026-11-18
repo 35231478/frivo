@@ -88,8 +88,11 @@ describe("lista de OS: barra enxuta", () => {
     expect(txt(celula("concluida"))).toBe("20/10/2026");
     for (const id of ["folga", "concluida"]) expect(celula(id).querySelector("[class*='pill-']"), id).toBeNull();
     // justificada: continua atrasada (o selo fica) e diz que foi justificada, com o motivo no título
-    expect(txt(celula("justificada"))).toBe("28/10/2026Atrasada 6 diasjustificado");
-    expect(celula("justificada").querySelector("[data-atraso-justificado]")!.getAttribute("title")).toBe("Atraso justificado: Cliente ausente");
+    expect(txt(celula("justificada"))).toBe("28/10/2026Atrasada 6 diasJustificado");
+    const selo = celula("justificada").querySelector("[data-atraso-justificado]")!;
+    expect(selo.getAttribute("title")).toBe("Atraso justificado: Cliente ausente");
+    expect(selo.className).toContain("pill-previsto"); // selo neutro: quem pede ação é o vermelho do atraso
+    for (const id of ["atrasada", "hoje", "folga", "sem"]) expect(celula(id).querySelector("[data-atraso-justificado]"), id).toBeNull();
     expect(txt(celula("sem"))).toBe("—");
     // os cartões (celular) trazem a mesma coisa
     const cartao = $$("[data-cartoes] > div").find((c) => txt(c).includes("OS-atrasada"))!;

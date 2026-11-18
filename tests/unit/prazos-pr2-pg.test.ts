@@ -200,6 +200,7 @@ describe.skipIf(!URL_PG)("Prazos da OS — PR 2: prazo de execução nas telas (
       for (const [corpo, mensagem] of [
         [{ motivo: "PREGUICA" }, "Escolha o motivo do atraso."], [{}, "Escolha o motivo do atraso."],
         [{ motivo: "OUTRO" }, MSG_ATRASO_OUTRO], [{ motivo: "OUTRO", observacao: "   " }, MSG_ATRASO_OUTRO],
+        [{ motivo: "OUTRO", observacao: " ok " }, MSG_ATRASO_OUTRO], // "razão é razão": menos de 5 caracteres não explica nada
         [{ motivo: "CLIMA", observacao: "x".repeat(501) }, "Explicação com no máximo 500 caracteres."],
       ] as const) {
         const r = await justificar(os.id, corpo);
@@ -336,6 +337,20 @@ describe.skipIf(!URL_PG)("Prazos da OS — PR 2: prazo de execução nas telas (
     });
     expect(os.status, JSON.stringify(os.json)).toBe(201);
     expect((await prisma.ordemServico.findUnique({ where: { id: os.json.id } })).prazoExecucao.toISOString()).toBe("2026-11-23T00:00:00.000Z");
+
+    // a pessoa viu a sugestão na Nova OS e apagou: a OS nasce SEM prazo (o servidor não reaplica o padrão)
+    const semPrazo = await chamar("ordens", "POST", {}, {
+      clienteId: "c1", unidadeId: "un1", descricao: "Corretiva sem prazo", prioridade: "NORMAL", prazoExecucao: "", usarPrazoPadrao: false,
+      execucao: { tipoOsId: id, dataAgendada: "2026-11-20T12:00:00.000Z", tecnicoIds: ["t1"], responsavelId: "t1" },
+    });
+    expect(semPrazo.status, JSON.stringify(semPrazo.json)).toBe(201);
+    expect((await prisma.ordemServico.findUnique({ where: { id: semPrazo.json.id } })).prazoExecucao).toBeNull();
+    // e o prazo que ela ajustou à mão vale, com ou sem o aviso
+    const ajustado = await chamar("ordens", "POST", {}, {
+      clienteId: "c1", unidadeId: "un1", descricao: "Corretiva com prazo ajustado", prioridade: "NORMAL", prazoExecucao: "2026-11-28", usarPrazoPadrao: false,
+      execucao: { tipoOsId: id, dataAgendada: "2026-11-20T12:00:00.000Z", tecnicoIds: ["t1"], responsavelId: "t1" },
+    });
+    expect((await prisma.ordemServico.findUnique({ where: { id: ajustado.json.id } })).prazoExecucao.toISOString()).toBe("2026-11-28T00:00:00.000Z");
 
     const limpo = await chamar("cadastros/[entidade]/[id]", "PUT", { entidade: "tipos-os", id }, { prazoExecucaoDias: "" });
     expect(limpo.status, JSON.stringify(limpo.json)).toBe(200);

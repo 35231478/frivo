@@ -70,11 +70,20 @@ Quando o **cronograma do PMOC** reagenda uma OS, o prazo próprio anda junto, os
 
 O padrão se configura em **Configurações › Tipos de OS**, no campo "Prazo padrão (dias)" (PR 2).
 
+Na **Nova OS** o prazo aparece **sugerido no próprio campo** assim que há tipo e agendamento, com o
+aviso "Sugerido pelo tipo de OS: N dias após o agendamento", e acompanha os dois enquanto a pessoa não
+mexe. Depois que ela digita, vale o que ela pôs (há um atalho para voltar ao sugerido). Se ela
+**apaga** a sugestão, a OS nasce sem prazo próprio: a tela manda `usarPrazoPadrao: false` e o servidor
+não reaplica o padrão. Quem cria a OS sem passar pela tela (recorrência, PMOC, integrações) continua
+recebendo o padrão direto do servidor.
+
 ### Atraso justificado
 
 Colunas `atraso_justificado_*` na OS (motivo de lista + observação + quem + quando) e as regras
 (`MOTIVOS_ATRASO`, `atrasoJustificadoSchema`): cliente ausente, peça faltando, acesso negado, clima,
-outro (exige explicação).
+outro. Em "Outro" a explicação é obrigatória e precisa dizer alguma coisa — "razão é razão": pelo
+menos 5 caracteres, sem contar espaços nas pontas. A OS justificada ganha o selo "Atraso
+justificado" no cabeçalho e "Justificado" na lista.
 
 - **Onde:** no cartão "Prazos" do Resumo da OS — "Justificar atraso", e depois "Alterar" / "Desfazer".
   Rota: `POST` e `DELETE /api/ordens/[id]/atraso-justificado`. Tudo fica no histórico da OS.

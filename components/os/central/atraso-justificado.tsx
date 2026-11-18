@@ -11,7 +11,7 @@ import { confirmar, toast } from "@/components/ui/avisos";
 import { usePermissoes } from "@/components/providers/permissoes-provider";
 import { formatarData } from "@/lib/utils";
 import {
-  MOTIVOS_ATRASO, MSG_ATRASO_OUTRO, ROTULO_MOTIVO_ATRASO, atrasoJustificado, haAtrasoParaJustificar, rotuloMotivoAtraso,
+  MOTIVOS_ATRASO, MSG_ATRASO_OUTRO, ROTULO_MOTIVO_ATRASO, atrasoJustificado, explicacaoDoAtrasoValida, haAtrasoParaJustificar, rotuloMotivoAtraso,
 } from "@/lib/os/prazo-execucao";
 
 /**
@@ -47,7 +47,7 @@ export function AtrasoJustificado({ os, onAtualizado }: { os: any; onAtualizado:
 
   async function salvar() {
     if (!motivo) { setErro("Escolha o motivo do atraso."); return; }
-    if (motivo === "OUTRO" && !observacao.trim()) { setErro(MSG_ATRASO_OUTRO); return; }
+    if (!explicacaoDoAtrasoValida(motivo, observacao)) { setErro(MSG_ATRASO_OUTRO); return; }
     setErro(""); setSalvando(true);
     try {
       const r = await chamar("POST", { motivo, observacao });

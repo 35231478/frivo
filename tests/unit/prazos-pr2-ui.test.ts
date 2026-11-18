@@ -101,7 +101,11 @@ describe("Atraso justificado no cartão Prazos da OS", () => {
     expect(txt($("[data-erro-atraso]"))).toBe("Escolha o motivo do atraso.");
     await escrever($("[data-motivo]"), "OUTRO");
     await clicar($("[data-salvar-atraso]")); // "Outro" sem explicação
-    expect(txt($("[data-erro-atraso]"))).toBe("Explique o motivo do atraso.");
+    expect(txt($("[data-erro-atraso]"))).toBe("Explique o motivo do atraso (pelo menos 5 caracteres).");
+    // "razão é razão": um "x" não é explicação
+    await escrever($("[data-observacao]"), "   x    "); // 8 caracteres, mas só 1 diz alguma coisa
+    await clicar($("[data-salvar-atraso]"));
+    expect(txt($("[data-erro-atraso]"))).toBe("Explique o motivo do atraso (pelo menos 5 caracteres).");
     expect(gravacoes()).toEqual([]);
 
     await escrever($("[data-motivo]"), "CLIENTE_AUSENTE");

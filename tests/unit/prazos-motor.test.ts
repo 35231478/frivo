@@ -167,6 +167,12 @@ describe("Atraso justificado — o motivo é de uma lista", () => {
     expect(ler({ motivo: "PECA_FALTANDO", observacao: "  compressor em falta  " })).toEqual({ motivo: "PECA_FALTANDO", observacao: "compressor em falta" });
     expect(ler({ motivo: "OUTRO" })).toBe(MSG_ATRASO_OUTRO);
     expect(ler({ motivo: "OUTRO", observacao: "   " })).toBe(MSG_ATRASO_OUTRO);
+    // "razão é razão": a explicação precisa dizer alguma coisa (5 caracteres no mínimo, sem contar os espaços das pontas)
+    expect(MSG_ATRASO_OUTRO).toBe("Explique o motivo do atraso (pelo menos 5 caracteres).");
+    expect(ler({ motivo: "OUTRO", observacao: "   x    " })).toBe(MSG_ATRASO_OUTRO); // espaço não conta
+    expect(ler({ motivo: "OUTRO", observacao: "obra" })).toBe(MSG_ATRASO_OUTRO);
+    expect(ler({ motivo: "OUTRO", observacao: "greve" })).toEqual({ motivo: "OUTRO", observacao: "greve" });
+    expect(ler({ motivo: "CLIMA", observacao: "x" })).toEqual({ motivo: "CLIMA", observacao: "x" }); // nos motivos da lista a explicação é livre
     expect(ler({ motivo: "OUTRO", observacao: "Greve dos caminhoneiros" })).toEqual({ motivo: "OUTRO", observacao: "Greve dos caminhoneiros" });
     expect(ler({ motivo: "PREGUICA" })).toBe("Escolha o motivo do atraso.");
     expect(ler({})).toBe("Escolha o motivo do atraso.");

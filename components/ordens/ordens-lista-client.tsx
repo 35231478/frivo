@@ -60,7 +60,7 @@ function PrazoDaOs({ os, compacto }: { os: OrdemView; compacto?: boolean }) {
     <span className="inline-flex items-center gap-1.5 whitespace-nowrap" data-prazo-lista={os.prazoSituacao}>
       <span className={cn(PLANILHA.data, !selo && PLANILHA.apagado)}>{compacto ? `Prazo ${formatarDiaCivil(os.prazo)}` : formatarDiaCivil(os.prazo)}</span>
       {selo && <span className={cn(selo, "text-[11px] px-2")}>{os.prazoTexto}</span>}
-      {os.atrasoJustificado && <span className="text-[11px] text-ink-muted" data-atraso-justificado title={`Atraso justificado: ${os.atrasoJustificado}`}>justificado</span>}
+      {os.atrasoJustificado && <span className="pill-previsto text-[11px] px-2" data-atraso-justificado title={`Atraso justificado: ${os.atrasoJustificado}`}>Justificado</span>}
     </span>
   );
 }
@@ -275,7 +275,7 @@ export function OrdensListaClient({ ordens, total, pagina, porPagina, opcoes, pe
               { id: "tecnico", titulo: "Técnico", largura: 140, classe: "truncate" },
               { id: "abertura", titulo: "Abertura", largura: 96, ordenar: "criadoEm" },
               { id: "previsao", titulo: "Prevista", largura: 96, ordenar: "previsaoConclusao" },
-              { id: "prazo", titulo: "Prazo", largura: 208 },
+              { id: "prazo", titulo: "Prazo", largura: 284 },
               { id: "status", titulo: "Status", largura: 168, ordenar: "status" },
               { id: "prioridade", titulo: "Prioridade", largura: 104, ordenar: "prioridade" },
               { id: "equipe", titulo: "Equipe", largura: 128, alinhar: "direita" },

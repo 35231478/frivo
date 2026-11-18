@@ -146,8 +146,21 @@ describe("cabeçalho-resumo da OS", () => {
     expect(datasDoResumo()).toMatchObject({ "Data prevista": "05/11/2026", Prazo: "28/10/2026" });
   });
 
+  it("ATRASO JUSTIFICADO: o cabeçalho ganha o selo com o motivo, e a OS continua aparecendo atrasada; sem justificativa, sem selo", async () => {
+    await montar(fixture({ prazos: [], atrasoJustificadoMotivo: "CLIENTE_AUSENTE", atrasoJustificadoObs: "Portaria fechada", atrasoJustificadoEm: "2026-10-29T15:00:00.000Z", atrasoJustificadoPor: { id: "u1", nome: "Ana Gestora" } }));
+    expect(texto("[data-selo-justificado]")).toBe("Atraso justificado: cliente ausente");
+    expect($("[data-selo-justificado]")?.getAttribute("data-selo-justificado")).toBe("CLIENTE_AUSENTE");
+    expect(texto("[data-prazo-os]")).toMatch(/^Prazo 28\/10\/2026\s*Atrasada 2 dias$/); // justificar não esconde o atraso
+    expect($$("[data-pendencia-os]").map((b) => b.getAttribute("data-pendencia-os"))).toContain("os-atrasada");
+    // o cartão Prazos mostra quem justificou
+    expect(texto("[data-cartao='prazos'] [data-motivo-atraso]")).toBe("Cliente ausente");
+    expect(texto("[data-cartao='prazos'] [data-autor-atraso]")).toContain("Ana Gestora · 29/10/2026");
+  });
+
   it("OS antiga (sem prazo próprio): o prazo é o dia previsto, como sempre", async () => {
     await montar(fixture({ prazos: [] }));
+    // atrasada e NÃO justificada: nada de selo de justificativa no cabeçalho
+    expect(texto("[data-cabecalho-os]")).not.toContain("Atraso justificado");
     expect(datasDoResumo()).toMatchObject({ "Data prevista": "28/10/2026", Prazo: "28/10/2026" });
     expect($("[data-prazo-os]")?.getAttribute("data-prazo-os")).toBe("ATRASADO");
   });

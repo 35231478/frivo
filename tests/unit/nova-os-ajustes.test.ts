@@ -145,7 +145,82 @@ describe("datas da Nova OS", () => {
     expect(prazo.querySelectorAll("input[data-input-data]")).toHaveLength(1);
     expect(prazo.querySelector("[data-input-hora]")).toBeNull(); // só a data
     const dicaPrazo = prazo.querySelector("[data-dica]")!;
-    expect(document.getElementById(dicaPrazo.getAttribute("aria-describedby")!)!.textContent).toBe("Opcional. Após esta data, a OS é sinalizada como atrasada.");
+    expect(document.getElementById(dicaPrazo.getAttribute("aria-describedby")!)!.textContent).toBe(
+      "Opcional. Após esta data, a OS é sinalizada como atrasada. Se o tipo de OS tem prazo padrão, o campo já vem sugerido a partir do dia agendado — dá para ajustar.");
+  });
+
+  describe("prazo sugerido pelo tipo de OS", () => {
+    const prazo = () => $<HTMLInputElement>("input[aria-label='Prazo para finalizar']")!;
+    const dicaSugestao = () => txt([...campo("Prazo para finalizar")!.querySelectorAll("p")].find((p) => txt(p).startsWith("Sugerido")) ?? null);
+    /** Escolhe o tipo no seletor (o 1º botão do campo é o ⓘ da ajuda: o seletor é o seguinte) */
+    const escolherTipo = async (nome: string) => {
+      const c = campo("Tipo de OS")!;
+      await clicar(c.querySelector("button:not([data-dica])"));
+      await clicar([...c.querySelectorAll("button:not([data-dica])")].filter((b) => txt(b) === nome).at(-1) ?? null);
+    };
+    beforeEach(() => {
+      const todos = [{ id: "tp3" }, { id: "tp0" }, { id: "tpS" }];
+      respostas["/api/tipos-os"] = { status: 200, corpo: [
+        { id: "tp3", nome: "Corretiva", ativo: true, prazoExecucaoDias: 3 },
+        { id: "tp0", nome: "Emergência", ativo: true, prazoExecucaoDias: 0 },
+        { id: "tpS", nome: "Vistoria", ativo: true, prazoExecucaoDias: null },
+      ] };
+      respostas["/api/tecnicos"] = { status: 200, corpo: [{ id: "t1", nome: "João Silva", competencias: todos }, { id: "t2", nome: "Maria Souza", competencias: todos }] };
+    });
+
+    it("aparece com tipo + agendamento, acompanha os dois, e some com tipo sem padrão", async () => {
+      await montar("/ordens/nova?clienteId=c1&descricao=Corretiva");
+      expect(prazo().value).toBe("");
+      await digitar($("input[aria-label='Agendar para — data']"), "18112026");
+      await digitar($("input[aria-label='Agendar para — hora']"), "1430");
+      expect(prazo().value).toBe(""); // só o agendamento não sugere nada
+      await escolherTipo("Corretiva");
+      expect(prazo().value).toBe("21/11/2026"); // 18/11 + 3 dias
+      expect(dicaSugestao()).toBe("Sugerido pelo tipo de OS: 3 dias após o agendamento.");
+      await digitar($("input[aria-label='Agendar para — data']"), "20112026");
+      expect(prazo().value).toBe("23/11/2026"); // acompanhou o reagendamento
+      await escolherTipo("Emergência");
+      expect(prazo().value).toBe("20/11/2026");
+      expect(dicaSugestao()).toBe("Sugerido pelo tipo de OS: no dia agendado.");
+      await escolherTipo("Vistoria"); // tipo sem prazo padrão: o campo volta a ficar vazio
+      expect(prazo().value).toBe("");
+      expect(dicaSugestao()).toBe("");
+    });
+
+    it("é editável: depois que a pessoa digita, o prazo dela fica (não é sobrescrito) — e dá para voltar ao sugerido", async () => {
+      await montar("/ordens/nova?clienteId=c1&descricao=Corretiva");
+      await digitar($("input[aria-label='Agendar para — data']"), "18112026");
+      await digitar($("input[aria-label='Agendar para — hora']"), "1430");
+      await escolherTipo("Corretiva");
+      await digitar(prazo(), "30112026");
+      expect(dicaSugestao()).toBe("");
+      await digitar($("input[aria-label='Agendar para — data']"), "19112026"); // mudar o agendamento não mexe no que ela digitou
+      expect(prazo().value).toBe("30/11/2026");
+      const voltar = $("[data-usar-prazo-sugerido]")!;
+      expect(txt(voltar)).toBe("Usar o prazo do tipo de OS (22/11/2026)");
+      await clicar(voltar);
+      expect(prazo().value).toBe("22/11/2026");
+      expect($("[data-usar-prazo-sugerido]")).toBeNull();
+      await clicar($("[data-seletor-equipe] button"));
+      await clicar($('[data-opcao-equipe="eq2"]'));
+      await abrirOs();
+      expect(post()!.corpo).toMatchObject({ prazoExecucao: "2026-11-22", execucao: { tipoOsId: "tp3" } });
+      expect("usarPrazoPadrao" in post()!.corpo).toBe(false);
+    });
+
+    it("apagar o prazo sugerido: a OS vai SEM prazo e o servidor é avisado para não reaplicar o padrão do tipo", async () => {
+      await montar("/ordens/nova?clienteId=c1&descricao=Corretiva");
+      await digitar($("input[aria-label='Agendar para — data']"), "18112026");
+      await digitar($("input[aria-label='Agendar para — hora']"), "1430");
+      await escolherTipo("Corretiva");
+      expect(prazo().value).toBe("21/11/2026");
+      await digitar(prazo(), "");
+      expect(prazo().value).toBe("");
+      await clicar($("[data-seletor-equipe] button"));
+      await clicar($('[data-opcao-equipe="eq2"]'));
+      await abrirOs();
+      expect(post()!.corpo).toMatchObject({ prazoExecucao: "", usarPrazoPadrao: false });
+    });
   });
 
   it("o prazo vai como prazoExecucao (o prazo de execução da OS), e NÃO como data prevista; o agendamento vai como dataAgendada da 1ª atividade (hora de Brasília)", async () => {

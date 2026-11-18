@@ -169,7 +169,11 @@ export const ROTULO_MOTIVO_ATRASO: Record<MotivoAtraso, string> = {
   CLIMA: "Chuva ou clima",
   OUTRO: "Outro motivo",
 };
-export const MSG_ATRASO_OUTRO = "Explique o motivo do atraso.";
+/** "Razão é razão": em "Outro" a explicação precisa dizer alguma coisa (não vale um "x") */
+export const EXPLICACAO_MIN = 5;
+export const MSG_ATRASO_OUTRO = `Explique o motivo do atraso (pelo menos ${EXPLICACAO_MIN} caracteres).`;
+export const explicacaoDoAtrasoValida = (motivo: string, observacao: string | null | undefined) =>
+  motivo !== "OUTRO" || (observacao ?? "").trim().length >= EXPLICACAO_MIN;
 export const MSG_ATRASO_NAO_ATRASADA = "Esta OS não está atrasada: não há atraso para justificar.";
 
 /** O que o gestor informa ao justificar: um motivo da lista e, em "Outro", a explicação. */
@@ -177,7 +181,7 @@ export const atrasoJustificadoSchema = z.object({
   motivo: z.enum(MOTIVOS_ATRASO, { errorMap: () => ({ message: "Escolha o motivo do atraso." }) }),
   observacao: z.preprocess((v) => (typeof v === "string" ? v.trim() : v), z.string().max(500, "Explicação com no máximo 500 caracteres.").optional().default("")),
 }).superRefine((d, ctx) => {
-  if (d.motivo === "OUTRO" && !d.observacao) ctx.addIssue({ code: "custom", path: ["observacao"], message: MSG_ATRASO_OUTRO });
+  if (!explicacaoDoAtrasoValida(d.motivo, d.observacao)) ctx.addIssue({ code: "custom", path: ["observacao"], message: MSG_ATRASO_OUTRO });
 });
 
 /** O atraso desta OS foi justificado? (não pesa no desempenho de quem executou) */
