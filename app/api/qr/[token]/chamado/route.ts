@@ -124,6 +124,9 @@ export async function POST(req: NextRequest, { params }: Params) {
       criadoPorId: gestor.id,
       status: "AGUARDANDO_ATENDIMENTO",
       origem: "PORTAL_CLIENTE",
+      // Chamado de atendimento: é daqui que o prazo do contrato conta. Pedido de orçamento não é
+      // chamado de atendimento — não tem prazo de comparecer nem de resolver.
+      chamadoAbertoEm: d.tipo === "ORCAMENTO" ? null : new Date(),
       prioridade: "NORMAL",
       descricao,
       anexos: fotos.length > 0 ? { create: fotos } : undefined,

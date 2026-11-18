@@ -15,7 +15,7 @@ import {
   prazoAoCriar, prazoDiasSchema, prazoEfetivo, prazoPadrao, rotuloMotivoAtraso, situacaoPrazoExecucao, temPrazoProprio, whereOsAtrasada,
 } from "@/lib/os/prazo-execucao";
 import {
-  HORARIO_COMERCIAL, MSG_PRIORIDADE_REPETIDA, MSG_REGRA_VAZIA, MSG_RESOLVER_ANTES, atendimentoDaOs, duracaoCurta, limitesDoAtendimento,
+  JORNADA_PADRAO, MSG_PRIORIDADE_REPETIDA, MSG_REGRA_VAZIA, MSG_RESOLVER_ANTES, atendimentoDaOs, duracaoCurta, limitesDoAtendimento,
   regraAtendimentoSchema, regraDaPrioridade, regrasAtendimentoSchema, situacaoAtendimento, somarHoras, temPrazoDeAtendimento, textoAtendimento,
 } from "@/lib/atendimento/prazo";
 import { mesDaPrevisao } from "@/lib/financeiro/a-faturar";
@@ -193,8 +193,10 @@ describe("Prazo de atendimento — horas corridas e horas de expediente", () => 
     expect(iso(somarHoras(br("2026-11-20", "17:00"), 4, false))).toBe(iso(br("2026-11-20", "21:00")));
   });
 
-  it("o expediente é segunda a sexta, das 8h às 18h de Brasília", () => {
-    expect(HORARIO_COMERCIAL).toEqual({ inicio: 8, fim: 18, dias: [1, 2, 3, 4, 5] });
+  it("sem a empresa configurar, o expediente é segunda a sexta, das 8h às 18h de Brasília", () => {
+    // PR 4: o horário comercial deixou de ser fixo no código — é a jornada de cada empresa, e este é só o padrão
+    const das8as18 = { inicio: 8 * 60, fim: 18 * 60 };
+    expect(JORNADA_PADRAO).toEqual([null, das8as18, das8as18, das8as18, das8as18, das8as18, null]);
   });
 
   it("só em horário comercial: chamado de sexta às 17h com 4 h vence segunda às 11h", () => {

@@ -13,6 +13,7 @@
  */
 import { CanalComunicacao, TipoComunicacao } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
+import { marcarComparecimento } from "@/lib/atendimento/prazo-server";
 import { chaveDiaBR, diaCivilDeChave } from "@/lib/fuso";
 import { emailConfigAtiva, enviarEmail, getContatosComunicacao, getEmailsComunicacao, montarDestinatarios } from "@/lib/email";
 import { whatsappContatoPrincipal } from "@/lib/cliente/cobranca-destino";
@@ -124,6 +125,9 @@ export async function avisarCliente(ctx: ContextoExecucao, d: AvisoCliente, relo
     const ja = await prisma.atividadeAviso.findUnique({ where: chave, select: { registradoEm: true, avisoStatus: true } });
     return ok({ evento: d.evento, em: (ja?.registradoEm ?? registradoEm).toISOString(), status: (ja?.avisoStatus ?? "PENDENTE") as StatusAviso, jaEstava: true, aviso: null });
   }
+
+  // "Cheguei" é o comparecimento do prazo de atendimento: o primeiro da OS para o relógio
+  if (d.evento === "CHEGOU") await marcarComparecimento(prisma, atividade.ordemServico.id, registradoEm);
 
   const [config, os, chegada] = await Promise.all([
     carregarConfigApp(empresaId),

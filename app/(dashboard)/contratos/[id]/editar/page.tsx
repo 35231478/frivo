@@ -4,6 +4,8 @@ import { auth } from "@/lib/auth";
 import { pode } from "@/lib/permissoes";
 import { prisma } from "@/lib/prisma";
 import { ContratoForm } from "@/components/forms/contrato-form";
+import { rotuloDaJornada } from "@/lib/atendimento/prazo";
+import { jornadaDaEmpresa } from "@/lib/atendimento/prazo-server";
 
 export const metadata: Metadata = { title: "Editar contrato" };
 
@@ -29,9 +31,11 @@ export default async function EditarContratoPage({ params }: { params: Promise<{
       reajustes: { orderBy: { data: "desc" }, include: { usuario: { select: { nome: true } } } },
       historicoStatus: { include: { usuario: { select: { id: true, nome: true } } }, orderBy: { createdAt: "desc" } },
       recorrenciasLocais: true,
+      prazosAtendimento: { select: { prioridade: true, comparecerHoras: true, resolverHoras: true, soHorarioComercial: true } },
     },
   });
   if (!contrato) notFound();
+  const horarioComercial = rotuloDaJornada(await jornadaDaEmpresa(prisma, empresaId));
 
-  return <ContratoForm initialData={contrato} somenteLeitura={!podeEditar} />;
+  return <ContratoForm initialData={contrato} somenteLeitura={!podeEditar} horarioComercial={horarioComercial} />;
 }

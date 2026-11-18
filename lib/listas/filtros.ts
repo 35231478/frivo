@@ -32,7 +32,12 @@ export function periodoOrdens(sp: SP, agora = new Date()) {
   );
 }
 
-export function whereOrdens(empresaId: string, sp: SP, agora = new Date()) {
+/**
+ * `idsAtendimento`: as OS do filtro "Prazo de atendimento" (`?atendimento=`), já resolvidas por
+ * `whereOrdensDaLista` (lib/listas/filtros-server.ts) — "vencendo" depende de uma fração do prazo de
+ * cada OS, que o banco não calcula; a classificação é a regra única de lib/atendimento/prazo.ts.
+ */
+export function whereOrdens(empresaId: string, sp: SP, agora = new Date(), idsAtendimento: string[] | null = null) {
   const statusList = (sp.status ?? "").split(",").filter(Boolean);
   const prioridadeList = (sp.prioridade ?? "").split(",").filter(Boolean);
   const where: any = { empresaId };
@@ -66,6 +71,7 @@ export function whereOrdens(empresaId: string, sp: SP, agora = new Date()) {
   // Entra num AND: não disputa o `status` nem o `OR` da busca.
   const prazo = wherePrazo(sp.prazo, agora);
   if (prazo) e.push(prazo);
+  if (idsAtendimento) e.push({ id: { in: idsAtendimento } });
   if (e.length) where.AND = e;
   if (sp.busca) {
     where.OR = [

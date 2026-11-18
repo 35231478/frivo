@@ -13,6 +13,7 @@ import { EditarNoContexto } from "@/components/ui/select-cadastro-rapido";
 import { CLIENTE, UNIDADE } from "@/components/cadastro-rapido/definicoes";
 import { prazoEfetivo } from "@/lib/os/prazo-execucao";
 import { AtrasoJustificado } from "@/components/os/central/atraso-justificado";
+import { PrazoDeAtendimento } from "@/components/os/central/prazo-atendimento";
 
 function Cartao({ titulo, icone, children, dado, className }: {
   titulo: string; icone: React.ComponentType<{ className?: string }>; children: React.ReactNode; dado?: string; className?: string;
@@ -114,7 +115,10 @@ export function ResumoOs({ os, central, onAba, onAtualizado }: {
 
       {/* Coluna lateral: prazos + histórico */}
       <div className="space-y-5">
-        <Cartao titulo="Prazos" icone={CalendarClock} dado="prazos">
+        {/* O que o contrato prometeu ao cliente (comparecer / resolver) — só no chamado de cliente em contrato */}
+        <PrazoDeAtendimento os={os} />
+        {/* O compromisso interno com a equipe: até quando a OS e as atividades terminam */}
+        <Cartao titulo="Prazo de execução" icone={CalendarClock} dado="prazos">
           <div className="space-y-2.5 text-sm">
             <LinhaPrazo rotulo="Prazo da OS" dia={prazoEfetivo(os)} situacao={central.prazoOs} feminino />
             {comPrazo.map((a: any) => {

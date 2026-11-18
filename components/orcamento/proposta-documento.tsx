@@ -173,7 +173,7 @@ export function PropostaDocumento({ orcamento: o, empresa, cliente, responsavelT
         </div>
       </Pagina>
 
-      {/* PÁGINA 3 — ESCOPO E SLA */}
+      {/* PÁGINA 3 — ESCOPO E PRAZO DE ATENDIMENTO */}
       <Pagina>
         <div className="py-8 space-y-8">
           <div>
@@ -211,7 +211,7 @@ export function PropostaDocumento({ orcamento: o, empresa, cliente, responsavelT
           )}
 
           <div>
-            <h2 className="text-xs uppercase tracking-wider text-ink-muted pb-2 border-b-2 border-success-500/40 mb-3">SLA de atendimento</h2>
+            <h2 className="text-xs uppercase tracking-wider text-ink-muted pb-2 border-b-2 border-success-500/40 mb-3">Prazo de atendimento</h2>
             <div className="grid grid-cols-3 gap-4 text-sm">
               <Linha rotulo="Emergencial" valor={o.prazoEmergencial != null ? `${o.prazoEmergencial}h` : "—"} />
               <Linha rotulo="Normal" valor={o.prazoNormal != null ? `${o.prazoNormal}h` : "—"} />

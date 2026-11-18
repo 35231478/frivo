@@ -192,9 +192,9 @@ export function PropostaCampos({ proposta, onChange, tecnicos, termoTemplates, e
         </FormSection>
       </div>
 
-      {/* SLA */}
+      {/* Prazo de atendimento prometido (vira o padrão do contrato ao converter a proposta) */}
       <div className="card-padded">
-        <FormSection title="SLA de atendimento">
+        <FormSection title="Prazo de atendimento">
           <FormGrid cols={3}>
             <FormField label="Atendimento emergencial (horas)">
               <Input type="number" min="0" value={proposta.prazoEmergencial}
@@ -209,7 +209,7 @@ export function PropostaCampos({ proposta, onChange, tecnicos, termoTemplates, e
                 onChange={(e) => onChange({ horarioAtendimento: e.target.value })} placeholder="Ex.: Seg-Sex 8h-18h" />
             </FormField>
           </FormGrid>
-          <p className="flex items-center gap-1.5 text-xs text-ink-muted"><Clock className="w-3.5 h-3.5" /> Prazos exibidos no documento da proposta.</p>
+          <p className="flex items-center gap-1.5 text-xs text-ink-muted"><Clock className="w-3.5 h-3.5" /> Aparecem no documento da proposta e viram o prazo de atendimento do contrato quando a proposta é convertida.</p>
         </FormSection>
       </div>
     </div>

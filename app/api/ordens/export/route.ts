@@ -3,7 +3,7 @@ import { exigirPermissao } from "@/lib/permissoes-server";
 import { prisma } from "@/lib/prisma";
 import { formatarData, LABELS_STATUS_OS, LABELS_PRIORIDADE } from "@/lib/utils";
 import { chaveHojeBR } from "@/lib/fuso";
-import { whereOrdens } from "@/lib/listas/filtros";
+import { whereOrdensDaLista } from "@/lib/listas/filtros-server";
 import { atrasoJustificado, prazoEfetivo, rotuloMotivoAtraso, situacaoPrazoExecucao } from "@/lib/os/prazo-execucao";
 import { formatarDiaCivil, textoPrazo } from "@/lib/os/prazos";
 
@@ -34,7 +34,7 @@ export async function GET(req: NextRequest) {
   // O MESMO filtro da lista (lib/listas/filtros.ts): o arquivo traz o que a tela está mostrando —
   // período, busca, status, prazo (atrasadas, vencem hoje, justificadas) e os demais.
   const agora = new Date();
-  const where = whereOrdens(empresaId, Object.fromEntries(sp), agora);
+  const where = await whereOrdensDaLista(empresaId, Object.fromEntries(sp), agora);
 
   const ordens = await prisma.ordemServico.findMany({
     where,

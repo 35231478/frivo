@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { salvarRegrasDoContrato } from "@/lib/atendimento/prazo-server";
 import { prisma } from "@/lib/prisma";
 import { respostaRefEmpresa, validarRefEmpresa, validarRefsEmpresa } from "@/lib/ref-empresa";
 import { exigirPermissao } from "@/lib/permissoes-server";
@@ -56,7 +57,7 @@ export async function PUT(req: NextRequest, { params }: Params) {
   // PR3-A/B: a automação do faturamento fatura sem ninguém olhar — pede Financeiro › Medições (+ Fiscal / Contas a receber)
   const faltaAutomacao = faltaPermissaoAutomacao(parsed.data, existente, session.user!);
   if (faltaAutomacao) return NextResponse.json({ erro: faltaAutomacao }, { status: 403 });
-  const { unidadeIds, recorrenciasLocais, dataInicio, dataFim, valorMensal, valorTotal, responsavelTecnicoId, tipoOsRecorrenciaId, tecnicoRecorrenciaId, artVencimento, ...resto } = parsed.data;
+  const { unidadeIds, recorrenciasLocais, prazosAtendimento, dataInicio, dataFim, valorMensal, valorTotal, responsavelTecnicoId, tipoOsRecorrenciaId, tecnicoRecorrenciaId, artVencimento, ...resto } = parsed.data;
   // Cliente, locais, tipos de OS e técnicos (inclusive os da recorrência por local) precisam ser da mesma empresa
   try {
     await Promise.all([
@@ -72,6 +73,9 @@ export async function PUT(req: NextRequest, { params }: Params) {
   const atualizado = await prisma.$transaction(async (tx) => {
     await tx.contratoUnidade.deleteMany({ where: { contratoId: id } });
     await tx.contratoRecorrenciaLocal.deleteMany({ where: { contratoId: id } });
+    // Prazo de atendimento: troca as promessas do contrato. As OS já abertas ficam com os limites que
+    // receberam — o que foi prometido a um chamado não muda quando o contrato muda.
+    if (prazosAtendimento) await salvarRegrasDoContrato(tx, empresaId, id, prazosAtendimento);
     const c = await tx.contrato.update({
       where: { id },
       data: {

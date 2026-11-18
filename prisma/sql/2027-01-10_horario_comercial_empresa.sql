@@ -1,0 +1,28 @@
+-- HORÁRIO COMERCIAL POR EMPRESA (Prazos da OS, PR 4).
+--
+-- O prazo de atendimento do contrato pode contar "só em horário comercial". Até aqui esse horário
+-- estava escrito no código — segunda a sexta, das 8h às 18h, igual para toda empresa. Passa a ser
+-- configuração de cada empresa: a jornada semanal (quais dias têm expediente e, em cada um, de que
+-- hora a que hora).
+--
+-- O LEVANTAMENTO (o que já existia):
+--   • "configuracoes" (uma linha por empresa) guarda as regras de funcionamento em colunas próprias e
+--     dois JSON de uso específico ("qr_config" e "relatorio_os_config"). Nenhum lugar servia para a
+--     jornada sem desvirtuar um deles.
+--   • "tecnicos" tem jornada (entrada, saída, dias), mas é a do COLABORADOR, não a da empresa.
+--
+-- O QUE ENTRA (ADITIVO; nada é removido, alterado ou preenchido):
+--   1. "configuracoes"."horario_comercial" (JSONB, opcional): a jornada semanal da empresa, no formato
+--        { "dias": [ { "dia": 1, "inicio": "08:00", "fim": "18:00" }, … ] }
+--      onde "dia" é o dia da semana (0 = domingo … 6 = sábado) e só entram os dias COM expediente.
+--      NULL = a empresa não configurou: o sistema usa segunda a sexta, das 8h às 18h — exatamente o
+--      que valia antes. Por isso NÃO há preenchimento retroativo.
+--
+-- O QUE NÃO MUDA:
+--   • Os prazos de atendimento já gravados nas OS ("atendimento_comparecer_ate" e
+--     "atendimento_resolver_ate") não são recalculados: valem como foram prometidos.
+--   • Feriados não entram aqui (cadastro de feriados, frente à parte).
+--
+-- Sem tabela nova, sem chave estrangeira, sem enum. Pode rodar mais de uma vez.
+
+ALTER TABLE "configuracoes" ADD COLUMN IF NOT EXISTS "horario_comercial" JSONB;

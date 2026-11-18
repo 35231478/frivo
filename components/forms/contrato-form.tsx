@@ -1,5 +1,8 @@
 "use client";
 
+import { DICA_PRAZO_ATENDIMENTO, PrazosAtendimento } from "@/components/contratos/prazos-atendimento";
+import { JORNADA_PADRAO, regrasAtendimentoSchema, rotuloDaJornada, type RegraAtendimento } from "@/lib/atendimento/prazo";
+import { prazosDoFormulario, prazosParaOFormulario, type PrazosDoFormulario } from "@/lib/atendimento/formulario";
 import { useState, useEffect, useRef } from "react";
 import { useForm, Controller } from "react-hook-form";
 import { SelectCadastroRapido, CadastroRapidoModal, usePodeCriar, type CampoRapido, type PermissaoCriar } from "@/components/ui/select-cadastro-rapido";
@@ -26,7 +29,7 @@ import type { Contrato, Tecnico, Unidade } from "@prisma/client";
 import {
   FileText, ClipboardList, HardHat, MapPin, TrendingUp, BellRing, Settings2,
   Paperclip, Repeat, StickyNote, Building2, FileCheck, AlertCircle, Wand2, DollarSign,
-  Plus, CalendarDays, ChevronDown, CheckCircle2, PauseCircle, RefreshCw, XCircle, History, User, Trash2, SlidersHorizontal,
+  Plus, CalendarDays, ChevronDown, CheckCircle2, PauseCircle, RefreshCw, XCircle, History, User, Trash2, SlidersHorizontal, Timer,
 } from "lucide-react";
 import { chaveDiaCivil, diaCivilDeChave, diasAteDiaCivil, partesBR } from "@/lib/fuso";
 import { PLANILHA, valorSemMoeda } from "@/lib/planilha";
@@ -82,11 +85,14 @@ interface ContratoComRelacoes extends Contrato {
   reajustes?: ReajusteItem[];
   historicoStatus?: HistoricoStatusItem[];
   recorrenciasLocais?: RecorrenciaLocalItem[];
+  prazosAtendimento?: RegraAtendimento[];
 }
 
 interface ContratoFormProps {
   initialData?: ContratoComRelacoes;
   somenteLeitura?: boolean;
+  /** O horário comercial da empresa, por extenso (Configurações › Horário comercial) */
+  horarioComercial?: string;
 }
 
 function Painel({ ativo, id, children }: { ativo: boolean; id: string; children: React.ReactNode }) {
@@ -125,7 +131,7 @@ const CAMPOS_MAIS_OPCOES = ["tipo", "ajusteFinsDeSemana", "nfseReferencia"];
  * `somenteLeitura`: quem tem "Contratos › visualizar" mas não "Contratos › editar" abre a ficha,
  * lê tudo e não encontra caminho nenhum que o servidor fosse recusar (o PUT exige editar).
  */
-export function ContratoForm({ initialData, somenteLeitura = false }: ContratoFormProps) {
+export function ContratoForm({ initialData, somenteLeitura = false, horarioComercial = rotuloDaJornada(JORNADA_PADRAO) }: ContratoFormProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const isEditing = !!initialData;
@@ -172,6 +178,9 @@ export function ContratoForm({ initialData, somenteLeitura = false }: ContratoFo
   }
 
   // 1º local coberto = endereço do cadastro do cliente (sugerido ao abrir; removível; nunca duplica)
+  // Prazo de atendimento prometido ao cliente (por prioridade do chamado)
+  const [prazosAtendimento, setPrazosAtendimento] = useState<PrazosDoFormulario>(() => prazosParaOFormulario(initialData?.prazosAtendimento));
+  const [erroPrazos, setErroPrazos] = useState("");
   const [enderecoCliente, setEnderecoCliente] = useState<{ clienteId: string; end: EnderecoCliente } | null>(null);
   const [localPendente, setLocalPendente] = useState<NovoLocal | null>(null);
   const localSugeridoPara = useRef<string | null>(null);
@@ -391,7 +400,14 @@ export function ContratoForm({ initialData, somenteLeitura = false }: ContratoFo
   }
 
   async function onSubmit(data: ContratoInput, continuar = false) {
-    setErroGlobal(""); setAbasErro(new Set());
+    setErroGlobal(""); setAbasErro(new Set()); setErroPrazos("");
+    // Prazo de atendimento: confere antes de enviar (a mesma regra que o servidor aplica)
+    const prazos = regrasAtendimentoSchema.safeParse(prazosDoFormulario(prazosAtendimento));
+    if (!prazos.success) {
+      setErroPrazos(prazos.error.issues[0]?.message ?? "Prazo de atendimento inválido.");
+      setAba("escopo"); setAbasErro(new Set(["escopo"])); setErroGlobal('Verifique o prazo de atendimento na aba "Escopo e locais".');
+      return;
+    }
     // 1º local vindo do cadastro do cliente: cria o local agora (só se ainda não existir um igual)
     let unidadeIds = [...(data.unidadeIds ?? [])];
     if (localPendente && data.clienteId === clienteIdSelecionado) {
@@ -414,6 +430,8 @@ export function ContratoForm({ initialData, somenteLeitura = false }: ContratoFo
       valorTotal: valorTotalCalc ?? undefined,
       // Recorrência de OS por local coberto
       recorrenciasLocais: recPayload,
+      // Prazo de atendimento prometido, por prioridade do chamado
+      prazosAtendimento: prazos.data,
       // Fallback: vencimento da ART = fim da vigência, se não informado
       artVencimento: data.artVencimento || data.dataFim || undefined,
     };
@@ -861,6 +879,10 @@ export function ContratoForm({ initialData, somenteLeitura = false }: ContratoFo
               {descricaoVal.length}/{MAX_DESCRICAO_SERVICOS}
             </p>
           </FormField>
+        </FormSection>
+
+        <FormSection title="Prazo de atendimento" icon={<Timer className="w-3.5 h-3.5" />} dica={DICA_PRAZO_ATENDIMENTO}>
+          <PrazosAtendimento value={prazosAtendimento} onChange={(v) => { setPrazosAtendimento(v); setErroPrazos(""); }} horario={horarioComercial} erro={erroPrazos} />
         </FormSection>
 
         <FormSection title="Locais cobertos pelo contrato" icon={<MapPin className="w-3.5 h-3.5" />}>

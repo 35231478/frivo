@@ -9,7 +9,7 @@
  *    existe), e é criado ao salvar; sem permissão de criar endereço, não sugere um novo;
  *  - salvar não manda os campos que saíram; tipo e periodicidade vão com o padrão.
  */
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { permissoesTotais, permissoesVazias, type Permissoes } from "@/lib/permissoes";
@@ -29,7 +29,9 @@ const CLIENTE = { id: "c1", nome: "Hotel Mirante", endereco: "Rua A", numero: "1
 
 let root: Root;
 let caixa: HTMLDivElement;
-const flush = async () => { for (let i = 0; i < 5; i++) await act(async () => { await new Promise((r) => setTimeout(r, 0)); }); };
+// O formulário é grande: carrega uma vez antes dos testes, para o tempo de importar não contar no primeiro
+beforeAll(async () => { await import("@/components/forms/contrato-form"); }, 120_000);
+const flush =async () => { for (let i = 0; i < 5; i++) await act(async () => { await new Promise((r) => setTimeout(r, 0)); }); };
 const $ = <T extends Element = HTMLElement>(sel: string) => caixa.querySelector(sel) as T | null;
 const $$ = (sel: string) => [...caixa.querySelectorAll(sel)];
 const painel = (id: string) => $(`[data-painel-contrato="${id}"]`)!;
@@ -524,5 +526,78 @@ describe("PR3-A: cobrança a cada N meses e faturamento automático", () => {
         ["10/11/2025", "2025", "Dispensado · cliente pediu", "4,5%", "1.000,00", "1.000,00", "Bia"],
       ]);
     } finally { vi.useRealTimers(); }
+  });
+});
+
+// ═════════════════════════ Prazos da OS — PR 4: prazo de atendimento ═════════════════════════
+describe("prazo de atendimento do contrato (aba Escopo e locais)", () => {
+  const horas = (nome: string) => $<HTMLInputElement>(`input[aria-label="${nome}"]`)!;
+  const salvar = async () => {
+    await digitar($<HTMLInputElement>('input[aria-label="Início da vigência"]')!, "01/11/2026");
+    await clicar($$("button").find((b) => b.textContent?.trim() === "Salvar")!);
+  };
+  const enviado = () => chamadas.find((c) => c.metodo === "POST" && c.url === "/api/contratos")?.corpo;
+
+  it("a seção fica na aba Escopo e locais, começa em branco e diz o horário comercial padrão; salvar sem prometer manda lista vazia", async () => {
+    await montar();
+    const secao = $("[data-prazos-atendimento]")!;
+    expect(painel("escopo").contains(secao)).toBe(true);
+    expect(secao.getAttribute("data-prazos-atendimento")).toBe("unico");
+    expect([horas("Comparecer em (horas)").value, horas("Resolver em (horas)").value]).toEqual(["", ""]);
+    expect(sp($("[data-horario-comercial]")!.textContent!)).toContain("segunda a sexta, das 8h às 18h");
+    await salvar();
+    expect(enviado().prazosAtendimento).toEqual([]);
+  });
+
+  it("preencheu o prazo: vai no salvar, uma linha por prioridade, com o marcador de horário comercial", async () => {
+    await montar();
+    await aba("escopo");
+    await digitar(horas("Comparecer em (horas)"), "4");
+    await digitar(horas("Resolver em (horas)"), "24");
+    await clicar($("[data-so-horario-comercial]"));
+    await salvar();
+    expect(enviado().prazosAtendimento).toEqual(["BAIXA", "NORMAL", "ALTA", "URGENTE", "CRITICO"].map((prioridade) => ({ prioridade, comparecerHoras: 4, resolverHoras: 24, soHorarioComercial: true })));
+  });
+
+  it("resolver antes de comparecer: não envia, abre a aba e mostra o motivo no bloco; corrigiu, salva", async () => {
+    await montar();
+    await aba("escopo");
+    await digitar(horas("Comparecer em (horas)"), "8");
+    await digitar(horas("Resolver em (horas)"), "4");
+    await aba("contrato");
+    await salvar();
+    expect(enviado()).toBeUndefined();
+    expect(visivel("escopo")).toBe(true);
+    expect(sp($("[data-erro-prazos-atendimento]")!.textContent!)).toBe("O prazo para resolver não pode ser menor que o de comparecer.");
+    expect(sp(caixa.textContent!)).toContain('Verifique o prazo de atendimento na aba "Escopo e locais".');
+    await digitar(horas("Resolver em (horas)"), "48");
+    expect($("[data-erro-prazos-atendimento]")).toBeNull();
+    await clicar($$("button").find((b) => b.textContent?.trim() === "Salvar")!);
+    expect(enviado().prazosAtendimento).toHaveLength(5);
+  });
+
+  it("edição: o contrato abre com o que tem gravado (por prioridade quando difere) e o horário comercial da empresa", async () => {
+    const { ContratoForm } = await import("@/components/forms/contrato-form");
+    const { PermissoesProvider } = await import("@/components/providers/permissoes-provider");
+    const initialData = {
+      id: "ct1", clienteId: "c1", numero: "CT-1", tipo: "MANUTENCAO_PREVENTIVA", status: "ATIVO", periodicidade: "MENSAL",
+      dataInicio: new Date("2026-09-01T00:00:00"), dataFim: new Date("2027-08-31T00:00:00"), valorMensal: 900,
+      unidades: [], anexos: [], reajustes: [], historicoStatus: [], recorrenciasLocais: [],
+      prazosAtendimento: [
+        { prioridade: "NORMAL", comparecerHoras: 24, resolverHoras: 72, soHorarioComercial: true },
+        { prioridade: "URGENTE", comparecerHoras: 4, resolverHoras: null, soHorarioComercial: true },
+      ],
+    };
+    caixa = document.createElement("div"); document.body.appendChild(caixa); root = createRoot(caixa);
+    await act(async () => {
+      root.render(createElement(PermissoesProvider, { role: "OPERADOR", permissoes: permissoesTotais(), children:
+        createElement(ContratoForm, { initialData, horarioComercial: "segunda a sexta, das 8h às 18h; sábado, das 8h às 12h" } as any) }));
+    });
+    await flush();
+    expect($("[data-prazos-atendimento]")!.getAttribute("data-prazos-atendimento")).toBe("por-prioridade");
+    expect([horas("Comparecer em (horas), prioridade Normal").value, horas("Resolver em (horas), prioridade Normal").value, horas("Comparecer em (horas), prioridade Urgente").value, horas("Resolver em (horas), prioridade Urgente").value])
+      .toEqual(["24", "72", "4", ""]);
+    expect($<HTMLInputElement>("[data-so-horario-comercial]")!.checked).toBe(true);
+    expect(sp($("[data-horario-comercial]")!.textContent!)).toContain("sábado, das 8h às 12h");
   });
 });

@@ -108,8 +108,8 @@ export async function PUT(req: NextRequest) {
   const body = await req.json();
 
   // Remove campos de controle antes de validar (id/empresaId não são editáveis aqui) e os que têm
-  // tela/rota própria (QR Code e impressão da OS) — a tela manda a configuração inteira de volta
-  const { id: _id, empresaId: _empresaId, qrConfig: _qr, relatorioOsConfig: _rel, ...entrada } = semCampoMorto(body);
+  // tela/rota própria (QR Code, impressão da OS e horário comercial) — a tela manda a configuração inteira de volta
+  const { id: _id, empresaId: _empresaId, qrConfig: _qr, relatorioOsConfig: _rel, horarioComercial: _horario, ...entrada } = semCampoMorto(body);
   const parsed = configuracaoSchema.safeParse(entrada);
   if (!parsed.success) {
     const campos = parsed.error.flatten().fieldErrors;
