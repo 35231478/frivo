@@ -14,7 +14,7 @@
  *     a empresa que agenda, não há chamado para contar.
  */
 import { z } from "zod";
-import { deLocalBR, instanteBR, paraLocalBR, partesBR } from "@/lib/fuso";
+import { instanteBR, partesBR } from "@/lib/fuso";
 
 /* ───────── o que o contrato promete ───────── */
 
@@ -198,33 +198,11 @@ export function limitesDoAtendimento(abertoEm: Date, regra: RegraAtendimento | n
 
 /**
  * Só o CHAMADO DE CLIENTE em CONTRATO: a OS precisa estar ligada a um contrato e ter a abertura do
- * chamado registrada (o portal e o QR registram sozinhos; a OS lançada à mão registra quando é
- * marcada como chamado). A preventiva recorrente fica de fora — ninguém abriu chamado.
+ * chamado registrada (o portal, o QR e a OS marcada como "Chamado do cliente" registram sozinhos, na
+ * hora — ninguém digita nem edita). A preventiva recorrente fica de fora — ninguém abriu chamado.
  */
 export function temPrazoDeAtendimento(os: { contratoId?: string | null; origem?: string | null; chamadoAbertoEm?: Date | string | null }): boolean {
   return !!os.contratoId && !!os.chamadoAbertoEm && os.origem !== "RECORRENTE";
-}
-
-/* ───────── a abertura do chamado (OS lançada à mão) ───────── */
-
-export const MSG_ABERTURA_INVALIDA = "Informe a data e a hora em que o cliente abriu o chamado.";
-export const MSG_ABERTURA_FUTURA = "A abertura do chamado não pode estar no futuro.";
-/** Folga para o relógio de quem digita estar alguns minutos adiantado */
-const FOLGA_FUTURO_MIN = 5;
-
-/**
- * A hora em que o cliente abriu o chamado, como a tela manda: "AAAA-MM-DDTHH:mm" no relógio de
- * Brasília. Vazio = a OS não é um chamado (sem prazo de atendimento). É daqui que o prazo conta,
- * então não pode estar no futuro.
- */
-export function lerAberturaDoChamado(valor: unknown, agora: Date = new Date()): { ok: true; em: Date | null } | { ok: false; erro: string } {
-  if (valor === undefined || valor === null || valor === "") return { ok: true, em: null };
-  if (typeof valor !== "string" || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(valor)) return { ok: false, erro: MSG_ABERTURA_INVALIDA };
-  const em = deLocalBR(valor);
-  // dia ou hora que não existem ("2026-02-30T25:61") viram outra data: não é o que foi digitado
-  if (!em || paraLocalBR(em) !== valor) return { ok: false, erro: MSG_ABERTURA_INVALIDA };
-  if (em.getTime() > agora.getTime() + FOLGA_FUTURO_MIN * 60_000) return { ok: false, erro: MSG_ABERTURA_FUTURA };
-  return { ok: true, em };
 }
 
 /* ───────── a situação de um prazo, agora ───────── */

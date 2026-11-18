@@ -206,8 +206,9 @@ livre e não é copiado). No contrato dá para ajustar.
 |---|---|
 | Cliente abre o chamado (Portal ou QR Code) | Grava `chamado_aberto_em`. Ainda não há contrato nem limite. Pedido de orçamento pelo QR não é chamado de atendimento |
 | A equipe **aceita** o chamado (define contrato e prioridade) | `fixarLimitesDaOs` grava "comparecer até" e "resolver até", contados **da abertura** — não do aceite |
-| OS lançada à mão com contrato | "Chamado do cliente" + "Chamado aberto em" (não pode estar no futuro); nasce com os limites |
-| Mudou a prioridade, o contrato ou a hora de abertura **na OS** | Os limites são refeitos. Editar qualquer outro campo não refaz |
+| OS lançada pela equipe com contrato | Marcar "Chamado do cliente": "Chamado aberto em" aparece preenchido e **travado**; o servidor grava a hora ao salvar e a OS nasce com os limites |
+| Mudou a prioridade ou o contrato **na OS** | Os limites são refeitos. Editar qualquer outro campo não refaz |
+| Hora de abertura do chamado | **Ninguém digita nem edita**: é sempre a do servidor no momento em que o chamado nasce (Portal, QR ou Nova OS). Uma data mandada por fora é ignorada |
 | Mudou o contrato ou o horário comercial | Nada muda nas OS que já têm limites |
 | Técnico toca **"Cheguei"** no app (o mesmo botão de sempre) | Grava `atendimento_comparecido_em` com a hora do toque, uma vez só. "A caminho" não grava. Reserva: o início da atividade |
 | OS concluída | Resolver cumprido (no prazo ou com atraso) |

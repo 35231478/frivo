@@ -252,6 +252,69 @@ describe("datas da Nova OS", () => {
   });
 });
 
+describe("chamado do cliente: a hora de abertura é do sistema (Prazos da OS — PR 4)", () => {
+  const CONTRATOS = { "/api/contratos": { status: 200, corpo: [{ id: "ct1", numero: "CT-101" }] } };
+  const contrato = () => campo("Contrato vinculado")!.querySelector("select");
+  const abertura = () => ({ data: $<HTMLInputElement>("input[aria-label='Chamado aberto em — data']"), hora: $<HTMLInputElement>("input[aria-label='Chamado aberto em — hora']") });
+  const executor = async () => { await clicar($("[data-seletor-equipe] button")); await clicar($('[data-opcao-equipe="eq2"]')); };
+
+  it("sem contrato não há o que marcar; com contrato, \"Chamado do cliente\" mostra a data e a hora de agora, preenchidas e TRAVADAS", async () => {
+    Object.assign(respostas, CONTRATOS);
+    vi.useFakeTimers({ toFake: ["Date"], now: new Date("2026-11-18T12:17:00.000Z") }); // 09:17 em Brasília
+    try {
+      await montar("/ordens/nova?clienteId=c1&descricao=Chiller%20desarmando");
+      expect($("[data-e-chamado]")).toBeNull();
+      await escolher(contrato(), "ct1");
+      expect($<HTMLInputElement>("[data-e-chamado]")!.checked).toBe(false);
+      expect(abertura().data).toBeNull();
+      await clicar($("[data-e-chamado]"));
+      const { data, hora } = abertura();
+      expect([data!.value, hora!.value]).toEqual(["18/11/2026", "09:17"]);
+      expect([data!.disabled, hora!.disabled]).toEqual([true, true]);
+      // não é obrigatório nem editável: nada de asterisco, e a tela diz de onde vem a hora
+      expect(txt(campo("Chamado aberto em"))).toContain("Preenchido pelo sistema ao salvar. Não pode ser alterado.");
+      expect(txt(campo("Chamado aberto em"))).not.toContain("*");
+      // o calendário do campo também fica travado
+      expect([...campo("Chamado aberto em")!.querySelectorAll("button")].every((b) => (b as HTMLButtonElement).disabled)).toBe(true);
+    } finally { vi.useRealTimers(); }
+  });
+
+  it("ao salvar, a tela só diz que é um chamado — a hora não sai do navegador (quem grava é o servidor)", async () => {
+    Object.assign(respostas, CONTRATOS);
+    await montar("/ordens/nova?clienteId=c1&descricao=Chiller%20desarmando");
+    await escolher(contrato(), "ct1");
+    await clicar($("[data-e-chamado]"));
+    await executor();
+    await abrirOs();
+    expect(post()!.corpo).toMatchObject({ clienteId: "c1", contratoId: "ct1", chamadoDoCliente: true });
+    expect("chamadoAbertoEm" in post()!.corpo).toBe(false);
+    expect(nav.push).toHaveBeenCalledWith("/ordens/osNova");
+  });
+
+  it("sem marcar (ou desmarcando), a OS vai como OS comum; tirar o contrato some com o marcador e não manda nada", async () => {
+    Object.assign(respostas, CONTRATOS);
+    await montar("/ordens/nova?clienteId=c1&descricao=Preventiva");
+    await escolher(contrato(), "ct1");
+    await clicar($("[data-e-chamado]"));
+    await clicar($("[data-e-chamado]")); // desmarcou
+    expect(abertura().data).toBeNull();
+    await executor();
+    await abrirOs();
+    expect("chamadoDoCliente" in post()!.corpo).toBe(false);
+
+    chamadas.length = 0;
+    act(() => root.unmount()); caixa.remove();
+    await montar("/ordens/nova?clienteId=c1&descricao=Preventiva");
+    await escolher(contrato(), "ct1");
+    await clicar($("[data-e-chamado]"));
+    await escolher(contrato(), ""); // voltou para "Sem contrato"
+    expect($("[data-e-chamado]")).toBeNull();
+    await executor();
+    await abrirOs();
+    expect("chamadoDoCliente" in post()!.corpo).toBe(false);
+  });
+});
+
 describe("equipe: integrantes discretos na lista", () => {
   it("cada equipe mostra os integrantes embaixo (líder primeiro, só quem é colaborador); escolher preenche os colaboradores", async () => {
     await montar("/ordens/nova?clienteId=c1&descricao=Preventiva");

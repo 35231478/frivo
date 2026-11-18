@@ -7,7 +7,8 @@
  *  - CHAMADO: o portal e o QR gravam a hora da abertura; o aceite (que define contrato e prioridade)
  *    fixa "comparecer até" e "resolver até" contados DA ABERTURA, não do aceite; sem contrato ou sem
  *    promessa para a prioridade, a OS fica sem prazo de atendimento;
- *  - OS lançada à mão como chamado; mudar prioridade, contrato ou abertura NA OS refaz os limites;
+ *  - OS lançada como chamado: a abertura é a hora do servidor ao salvar (ninguém digita nem edita);
+ *    mudar prioridade ou contrato NA OS refaz os limites;
  *  - HORÁRIO COMERCIAL por empresa: a rota (RBAC, multiempresa, validação) e o efeito na conta — só
  *    para os chamados dali em diante;
  *  - "CHEGUEI": o toque do app grava o comparecimento na hora do toque, uma vez só; "A caminho" não;
@@ -23,7 +24,7 @@ import { randomUUID } from "node:crypto";
 import path from "node:path";
 import { NextRequest } from "next/server";
 import { PRESETS, montarPermissoes, permissoesTotais, type Permissoes } from "@/lib/permissoes";
-import { MSG_ABERTURA_FUTURA, MSG_ABERTURA_INVALIDA, MSG_JORNADA_HORAS, MSG_JORNADA_VAZIA, MSG_RESOLVER_ANTES, alertaDoAtendimento } from "@/lib/atendimento/prazo";
+import { MSG_JORNADA_HORAS, MSG_JORNADA_VAZIA, MSG_RESOLVER_ANTES, alertaDoAtendimento } from "@/lib/atendimento/prazo";
 
 const URL_PG = process.env.PG_TESTE_URL;
 const SCHEMA = `teste_prazos_pr4_${process.pid}`;
@@ -281,65 +282,78 @@ describe.skipIf(!URL_PG)("Prazos da OS — PR 4: prazo de atendimento do contrat
     });
   });
 
-  /* ───────── OS lançada à mão e a edição da OS ───────── */
+  /* ───────── OS lançada como chamado e a edição da OS ───────── */
   describe("OS lançada como chamado e a edição da OS", () => {
-    it("Nova OS com contrato e \"Chamado aberto em\": nasce com os dois limites; sem a abertura, é uma OS comum", async () => {
+    it("Nova OS com contrato marcada \"Chamado do cliente\": a abertura é a hora do SERVIDOR ao salvar e a OS nasce com os dois limites; sem marcar, é uma OS comum", async () => {
       const ct = await contrato(todas(4, 24));
-      noRelogio();
-      const r = await novaOs({ contratoId: ct, prioridade: "ALTA", chamadoAbertoEm: "2026-11-18T13:20" });
+      noRelogio(); // quarta, 15h
+      const r = await novaOs({ contratoId: ct, prioridade: "ALTA", chamadoDoCliente: true });
       expect(r.status, JSON.stringify(r.json)).toBe(201);
-      expect(iso((await lerOs(r.json.id)).chamadoAbertoEm)).toBe(iso(br("2026-11-18", "13:20")));
-      expect(await limites(r.json.id)).toEqual([iso(br("2026-11-18", "17:20")), iso(br("2026-11-19", "13:20"))]);
+      expect(iso((await lerOs(r.json.id)).chamadoAbertoEm)).toBe(iso(AGORA));
+      expect(await limites(r.json.id)).toEqual([iso(br("2026-11-18", "19:00")), iso(br("2026-11-19", "15:00"))]);
       const comum = await novaOs({ contratoId: ct, prioridade: "ALTA" });
       expect([(await lerOs(comum.json.id)).chamadoAbertoEm, ...(await limites(comum.json.id))]).toEqual([null, null, null]);
+      expect((await novaOs({ contratoId: ct, chamadoDoCliente: false })).status).toBe(201);
       // chamado sem contrato: a abertura fica registrada, mas não há promessa para contar
-      const avulso = await novaOs({ chamadoAbertoEm: "2026-11-18T13:20" });
-      expect(await limites(avulso.json.id)).toEqual([null, null]);
+      const avulso = await novaOs({ chamadoDoCliente: true });
+      expect([iso((await lerOs(avulso.json.id)).chamadoAbertoEm), ...(await limites(avulso.json.id))]).toEqual([iso(AGORA), null, null]);
     });
 
-    it("a abertura não pode estar no futuro nem ser uma data que não existe — e a OS não é criada", async () => {
+    it("ninguém escolhe a hora de abertura: uma data mandada no corpo (passada ou futura) é ignorada", async () => {
       const ct = await contrato(todas(4, 24));
       noRelogio();
+      // tentativa de antedatar o chamado (ganharia prazo) ou de jogá-lo para a frente (esconderia o atraso)
+      for (const chamadoAbertoEm of ["2026-11-10T08:00", "2026-11-25T08:00", "2026-11-18T12:00:00.000Z"]) {
+        const r = await novaOs({ contratoId: ct, prioridade: "ALTA", chamadoDoCliente: true, chamadoAbertoEm });
+        expect(r.status, JSON.stringify(r.json)).toBe(201);
+        expect(iso((await lerOs(r.json.id)).chamadoAbertoEm), chamadoAbertoEm).toBe(iso(AGORA));
+      }
+      // sem marcar "Chamado do cliente", mandar a data não transforma a OS em chamado
+      const semMarcar = await novaOs({ contratoId: ct, prioridade: "ALTA", chamadoAbertoEm: "2026-11-18T10:00" });
+      expect([(await lerOs(semMarcar.json.id)).chamadoAbertoEm, ...(await limites(semMarcar.json.id))]).toEqual([null, null, null]);
+      // o marcador é sim/não: outra coisa é recusada e a OS não é criada
       const antes = await prisma.ordemServico.count();
-      expect(await erro(novaOs({ contratoId: ct, chamadoAbertoEm: "2026-11-18T15:30" }))).toBe(`400 ${MSG_ABERTURA_FUTURA}`);
-      expect(await erro(novaOs({ contratoId: ct, chamadoAbertoEm: "2026-02-30T10:00" }))).toBe(`400 ${MSG_ABERTURA_INVALIDA}`);
-      expect(await erro(novaOs({ contratoId: ct, chamadoAbertoEm: "18/11/2026 10:00" }))).toBe(`400 ${MSG_ABERTURA_INVALIDA}`);
+      expect((await novaOs({ contratoId: ct, chamadoDoCliente: "2026-11-10T08:00" })).status).toBe(400);
       expect(await prisma.ordemServico.count()).toBe(antes);
     });
 
-    it("mudar a prioridade, o contrato ou a abertura NA OS refaz os limites; tirar a abertura tira o prazo", async () => {
+    it("mudar a prioridade ou o contrato NA OS refaz os limites; a hora de abertura não se edita nem se apaga", async () => {
       const ct = await contrato([{ prioridade: "URGENTE", comparecerHoras: 4, resolverHoras: 24 }, { prioridade: "NORMAL", comparecerHoras: 24, resolverHoras: 72 }]);
       const outroCt = await contrato([{ prioridade: "NORMAL", comparecerHoras: 8, resolverHoras: null }]);
       noRelogio();
-      const { json: os } = await novaOs({ contratoId: ct, prioridade: "URGENTE", chamadoAbertoEm: "2026-11-18T10:00" });
+      const { json: os } = await novaOs({ contratoId: ct, prioridade: "URGENTE", chamadoDoCliente: true });
       const editar = (corpo: Record<string, unknown>) => chamar("ordens/[id]", "PUT", { id: os.id }, corpo);
-      expect(await limites(os.id)).toEqual([iso(br("2026-11-18", "14:00")), iso(br("2026-11-19", "10:00"))]);
+      expect(await limites(os.id)).toEqual([iso(br("2026-11-18", "19:00")), iso(br("2026-11-19", "15:00"))]);
 
+      // as edições acontecem horas depois: os limites continuam contando da ABERTURA, não da edição
+      vi.setSystemTime(br("2026-11-18", "17:30"));
       const r = await editar({ prioridade: "NORMAL" });
       expect(r.status, JSON.stringify(r.json)).toBe(200);
-      expect(await limites(os.id)).toEqual([iso(br("2026-11-19", "10:00")), iso(br("2026-11-21", "10:00"))]);
+      expect(await limites(os.id)).toEqual([iso(br("2026-11-19", "15:00")), iso(br("2026-11-21", "15:00"))]);
       // a resposta já traz a OS com os limites novos (a tela não precisa recarregar para ver)
-      expect(iso(r.json.atendimentoComparecerAte)).toBe(iso(br("2026-11-19", "10:00")));
+      expect(iso(r.json.atendimentoComparecerAte)).toBe(iso(br("2026-11-19", "15:00")));
 
       await editar({ contratoId: outroCt });
-      expect(await limites(os.id)).toEqual([iso(br("2026-11-18", "18:00")), null]);
-      await editar({ chamadoAbertoEm: "2026-11-18T12:00" });
-      expect(await limites(os.id)).toEqual([iso(br("2026-11-18", "20:00")), null]);
-      expect(await erro(editar({ chamadoAbertoEm: "2026-11-19T12:00" }))).toBe(`400 ${MSG_ABERTURA_FUTURA}`);
-      expect(await limites(os.id)).toEqual([iso(br("2026-11-18", "20:00")), null]);
+      expect(await limites(os.id)).toEqual([iso(br("2026-11-18", "23:00")), null]);
+
+      // tentar mudar ou apagar a abertura pela edição não faz nada
+      for (const chamadoAbertoEm of ["2026-11-18T12:00", "2026-11-19T12:00", "", null]) {
+        expect((await editar({ chamadoAbertoEm, observacoes: "Cliente ligou de novo" })).status).toBe(200);
+        expect([iso((await lerOs(os.id)).chamadoAbertoEm), ...(await limites(os.id))], String(chamadoAbertoEm)).toEqual([iso(AGORA), iso(br("2026-11-18", "23:00")), null]);
+      }
+
       await editar({ prioridade: "CRITICO" }); // o contrato não promete nada para a Crítica
       expect(await limites(os.id)).toEqual([null, null]);
       await editar({ prioridade: "NORMAL" });
-      await editar({ chamadoAbertoEm: "" }); // deixou de ser um chamado
-      expect([(await lerOs(os.id)).chamadoAbertoEm, ...(await limites(os.id))]).toEqual([null, null, null]);
+      expect([iso((await lerOs(os.id)).chamadoAbertoEm), ...(await limites(os.id))]).toEqual([iso(AGORA), iso(br("2026-11-18", "23:00")), null]);
     });
 
     it("o que foi prometido a um chamado não muda quando o CONTRATO muda — nem quando a OS é editada em outro campo", async () => {
       const ct = await contrato(todas(4, 24));
       const numero = (await prisma.contrato.findUnique({ where: { id: ct } })).numero;
       noRelogio();
-      const { json: os } = await novaOs({ contratoId: ct, prioridade: "ALTA", chamadoAbertoEm: "2026-11-18T10:00" });
-      const prometido = [iso(br("2026-11-18", "14:00")), iso(br("2026-11-19", "10:00"))];
+      const { json: os } = await novaOs({ contratoId: ct, prioridade: "ALTA", chamadoDoCliente: true });
+      const prometido = [iso(br("2026-11-18", "19:00")), iso(br("2026-11-19", "15:00"))];
       expect(await limites(os.id)).toEqual(prometido);
       // o contrato passa a prometer 1 h / 2 h
       expect((await chamar("contratos/[id]", "PUT", { id: ct }, corpoContrato(numero, { prazosAtendimento: todas(1, 2) }))).status).toBe(200);
@@ -348,8 +362,8 @@ describe.skipIf(!URL_PG)("Prazos da OS — PR 4: prazo de atendimento do contrat
       expect((await chamar("ordens/[id]", "PUT", { id: os.id }, { descricao: "Chamado por telefone — recepção", observacoes: "Cliente pediu urgência" })).status).toBe(200);
       expect(await limites(os.id)).toEqual(prometido);
       // um chamado novo, esse sim, recebe a promessa nova
-      const { json: nova } = await novaOs({ contratoId: ct, prioridade: "ALTA", chamadoAbertoEm: "2026-11-18T10:00" });
-      expect(await limites(nova.id)).toEqual([iso(br("2026-11-18", "11:00")), iso(br("2026-11-18", "12:00"))]);
+      const { json: nova } = await novaOs({ contratoId: ct, prioridade: "ALTA", chamadoDoCliente: true });
+      expect(await limites(nova.id)).toEqual([iso(br("2026-11-18", "16:00")), iso(br("2026-11-18", "17:00"))]);
     });
   });
 

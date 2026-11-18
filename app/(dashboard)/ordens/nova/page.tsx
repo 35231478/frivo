@@ -21,6 +21,7 @@ import { detalheEquipamento, rotuloEquipamento, type EquipamentoResumo } from "@
 import { InputData } from "@/components/ui/input-data";
 import { InputDataHora, MSG_HORA_INVALIDA } from "@/components/ui/input-data-hora";
 import { chaveDiaCivil, paraLocalBR } from "@/lib/fuso";
+import { useAgora } from "@/lib/ui/use-agora";
 import { prazoPadrao } from "@/lib/os/prazo-execucao";
 import { AlertaPerdasCliente, type PerdasCliente } from "@/components/financeiro/alerta-perdas-cliente";
 
@@ -70,7 +71,8 @@ export default function NovaOrdemPage() {
   const [prazoMexido, setPrazoMexido] = useState(false);
   // CHAMADO DO CLIENTE (OS lançada à mão): a hora em que ele pediu — é dela que conta o prazo de atendimento do contrato
   const [chamado, setChamado] = useState(false);
-  const [chamadoEm, setChamadoEm] = useState("");
+  // A hora de abertura do chamado é a do sistema (o servidor grava ao salvar): aqui ela só é mostrada
+  const agora = useAgora();
   const diasDoTipo = tiposOs.find((t) => t.id === tipoOsId)?.prazoExecucaoDias ?? null;
   const sugerido = prazoPadrao(agendarPara || null, diasDoTipo);
   const prazoSugerido = sugerido ? chaveDiaCivil(sugerido) : "";
@@ -181,7 +183,6 @@ export default function NovaOrdemPage() {
     if (!clienteId || !form.descricao.trim()) { setErro("Cliente e descrição são obrigatórios."); return; }
     if (!temExecutor(execucao)) { setFaltaExecutor(true); setErro(MSG_SEM_EXECUTOR_TELA); return; }
     if (horaRuim) { setErro(horaRuim); return; }
-    if (chamado && form.contratoId && !chamadoEm) { setErro("Informe quando o cliente abriu o chamado."); return; }
     setErro(""); setSalvando(true);
     try {
       const res = await fetch("/api/ordens", {
@@ -190,8 +191,8 @@ export default function NovaOrdemPage() {
           ...form, clienteId,
           // a pessoa apagou o prazo sugerido: a OS nasce sem prazo próprio (o servidor não reaplica o padrão)
           ...(prazoMexido ? { usarPrazoPadrao: false } : {}),
-          // chamado do cliente em contrato: a hora da abertura, no relógio de Brasília
-          ...(chamado && form.contratoId && chamadoEm ? { chamadoAbertoEm: paraLocalBR(chamadoEm) } : {}),
+          // chamado do cliente em contrato: o servidor grava a hora da abertura (não vai daqui)
+          ...(chamado && form.contratoId ? { chamadoDoCliente: true } : {}),
           ...(atendidos.length ? { equipamentoIds: atendidos.map((e) => e.id) } : {}),
           // dataAgendada: instante (ISO) da hora de Brasília escolhida
           execucao: { tipoOsId: tipoOsId || null, dataAgendada: agendarPara || null, ...corpoExecucao(execucao) },
@@ -300,17 +301,18 @@ export default function NovaOrdemPage() {
             <div className="space-y-3" data-chamado-do-cliente>
               <label className="flex items-start gap-2 text-sm text-ink cursor-pointer">
                 <input type="checkbox" checked={chamado} data-e-chamado
-                  onChange={(e) => { setChamado(e.target.checked); if (e.target.checked && !chamadoEm) setChamadoEm(new Date().toISOString()); }}
+                  onChange={(e) => setChamado(e.target.checked)}
                   className="mt-0.5 w-4 h-4 rounded border-surface-border text-primary-600 focus:ring-primary-500" />
                 <span>
                   Chamado do cliente
-                  <span className="block text-xs text-ink-muted">O cliente pediu este atendimento. O prazo de atendimento do contrato conta da hora do pedido.</span>
+                  <span className="block text-xs text-ink-muted">O cliente pediu este atendimento. O prazo de atendimento do contrato conta a partir de agora.</span>
                 </span>
               </label>
               {chamado && (
                 <FormGrid>
-                  <FormField label="Chamado aberto em" required>
-                    <InputDataHora aria-label="Chamado aberto em" value={chamadoEm} onChange={setChamadoEm} onProblema={aoProblemaHora} />
+                  <FormField label="Chamado aberto em" hint="Preenchido pelo sistema ao salvar. Não pode ser alterado.">
+                    {/* Travado: quem preenche é o sistema, então não há hora inválida para avisar ao formulário */}
+                    <InputDataHora aria-label="Chamado aberto em" disabled value={new Date(agora).toISOString()} onChange={() => {}} onProblema={() => {}} />
                   </FormField>
                 </FormGrid>
               )}

@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from "next/server";
-import { lerAberturaDoChamado } from "@/lib/atendimento/prazo";
 import { fixarLimitesDaOs } from "@/lib/atendimento/prazo-server";
 import { exigirPermissao } from "@/lib/permissoes-server";
 import { travaDasLinhasDaOs } from "@/lib/os/trava-edicao-server";
@@ -137,14 +136,11 @@ export async function PUT(req: NextRequest, { params }: Params) {
   // O prazo de execução é um DIA (o "Prazo para finalizar"); a data prevista é agenda — campos diferentes
   const prazoDigitado = prazoExecucao === undefined ? undefined : lerPrazoDigitado(prazoExecucao);
   if (prazoExecucao !== undefined && prazoDigitado === undefined) return NextResponse.json({ erro: "Prazo para finalizar inválido." }, { status: 400 });
-  // A abertura do chamado é de onde conta o PRAZO DE ATENDIMENTO do contrato (ausente = não mexe; vazio = tira)
-  const abertura = body.chamadoAbertoEm === undefined ? undefined : lerAberturaDoChamado(body.chamadoAbertoEm);
-  if (abertura && !abertura.ok) return NextResponse.json({ erro: abertura.erro }, { status: 400 });
 
   // Registro fechado (OS assinada pelo cliente, já faturada ou com nota emitida): os CAMPOS da OS
   // não mudam mais — a mesma trava das linhas, agora também para a gaveta "Editar OS". O status
   // continua livre (reabrir, concluir e o ajuste manual têm regra própria logo abaixo).
-  const CAMPOS_TRAVAVEIS = ["prioridade", "descricao", "observacoes", "unidadeId", "contratoId", "responsavelId", "previsaoConclusao", "prazoExecucao", "chamadoAbertoEm"] as const;
+  const CAMPOS_TRAVAVEIS = ["prioridade", "descricao", "observacoes", "unidadeId", "contratoId", "responsavelId", "previsaoConclusao", "prazoExecucao"] as const;
   if (CAMPOS_TRAVAVEIS.some((c) => body[c] !== undefined)) {
     const trava = await travaDasLinhasDaOs(id);
     if (trava) return NextResponse.json({ erro: trava }, { status: 409 });
@@ -208,15 +204,15 @@ export async function PUT(req: NextRequest, { params }: Params) {
   if (responsavelId !== undefined) data.responsavelId = responsavelId || null;
   if (previsaoConclusao !== undefined) data.previsaoConclusao = previsaoConclusao ? new Date(previsaoConclusao) : null;
   if (prazoDigitado !== undefined) data.prazoExecucao = prazoDigitado;
-  if (abertura?.ok) data.chamadoAbertoEm = abertura.em;
 
   if (status === "EM_ANDAMENTO" && !existente.dataInicio) data.dataInicio = new Date();
   if (status === "CONCLUIDA" && !existente.dataConclusao) data.dataConclusao = new Date();
 
   let atualizado = await prisma.ordemServico.update({ where: { id }, data });
   // O prazo de atendimento é o do contrato para a prioridade da OS, contado da abertura do chamado:
-  // mudou um dos três NA OS, os limites acompanham (mudar o contrato em si não mexe em OS nenhuma)
-  if (prioridade !== undefined || contratoId !== undefined || abertura?.ok) {
+  // mudou a prioridade ou o contrato NA OS, os limites acompanham (mudar o contrato em si não mexe em
+  // OS nenhuma). A hora da abertura não se edita: é a que o sistema gravou quando o chamado nasceu.
+  if (prioridade !== undefined || contratoId !== undefined) {
     await fixarLimitesDaOs(prisma, id);
     atualizado = await prisma.ordemServico.findUniqueOrThrow({ where: { id } });
   }

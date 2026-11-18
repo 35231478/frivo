@@ -13,9 +13,9 @@ import { describe, expect, it } from "vitest";
 import { readFileSync, readdirSync } from "node:fs";
 import path from "node:path";
 import {
-  ALERTAS_ATENDIMENTO, HORAS_MAX, JORNADA_PADRAO, MSG_ABERTURA_FUTURA, MSG_ABERTURA_INVALIDA, MSG_JORNADA_DIA_REPETIDO, MSG_JORNADA_HORAS,
+  ALERTAS_ATENDIMENTO, HORAS_MAX, JORNADA_PADRAO, MSG_JORNADA_DIA_REPETIDO, MSG_JORNADA_HORAS,
   MSG_JORNADA_VAZIA, PRIORIDADES, ROTULO_FILTRO_ATENDIMENTO, alertaDoAtendimento, atendimentoDaOs, horaDeMinutos, horarioComercialSchema, horarioDe, jornadaDe,
-  lerAberturaDoChamado, lerJornada, limitesDoAtendimento, regrasAtendimentoSchema, regrasDaProposta, rotuloDaJornada, somarHoras, textoAtendimento,
+  lerJornada, limitesDoAtendimento, regrasAtendimentoSchema, regrasDaProposta, rotuloDaJornada, somarHoras, textoAtendimento,
   type HorarioComercial,
 } from "@/lib/atendimento/prazo";
 import { PRAZOS_EM_BRANCO, abrirPorPrioridade, prazosDoFormulario, prazosParaOFormulario, voltarAoPrazoUnico } from "@/lib/atendimento/formulario";
@@ -135,35 +135,6 @@ describe("Horário comercial — o que a tela manda, o que fica gravado e como s
     // a semana começa na segunda: o domingo vem por último, e a semana inteira é um intervalo só
     expect(rotuloDaJornada(jornadaDe({ dias: semana("06:00", "22:00", [0, 1, 2, 3, 4, 5, 6]) }))).toBe("segunda a domingo, das 6h às 22h");
     expect(rotuloDaJornada(jornadaDe({ dias: [{ dia: 0, inicio: "08:00", fim: "12:00" }, ...semana("08:00", "18:00")] }))).toBe("segunda a sexta, das 8h às 18h; domingo, das 8h às 12h");
-  });
-});
-
-/* ═════════ a abertura do chamado digitada ═════════ */
-describe("OS lançada à mão como chamado — a hora em que o cliente abriu", () => {
-  const AGORA = br("2026-11-18", "15:00");
-  const ler = (v: unknown) => lerAberturaDoChamado(v, AGORA);
-
-  it("vazio = a OS não é um chamado (sem prazo de atendimento)", () => {
-    for (const v of [undefined, null, ""]) expect(ler(v)).toEqual({ ok: true, em: null });
-  });
-
-  it("a hora digitada é a de Brasília", () => {
-    const r = ler("2026-11-18T09:30");
-    expect(r.ok && iso(r.em)).toBe(iso(br("2026-11-18", "09:30")));
-    const ontem = ler("2026-11-17T23:50");
-    expect(ontem.ok && iso(ontem.em)).toBe("2026-11-18T02:50:00.000Z");
-  });
-
-  it("recusa o que não é data e hora, e o dia ou a hora que não existem", () => {
-    for (const v of ["18/11/2026 09:30", "2026-11-18", "2026-11-18T9:30", "2026-02-30T10:00", "2026-11-18T25:00", "2026-11-18T10:61", "ontem", 1763470800000, {}, true])
-      expect(ler(v), String(v)).toEqual({ ok: false, erro: MSG_ABERTURA_INVALIDA });
-  });
-
-  it("não pode estar no futuro (com 5 min de folga para o relógio de quem digita)", () => {
-    expect(ler("2026-11-18T15:00").ok).toBe(true);
-    expect(ler("2026-11-18T15:05").ok).toBe(true);
-    expect(ler("2026-11-18T15:06")).toEqual({ ok: false, erro: MSG_ABERTURA_FUTURA });
-    expect(ler("2026-11-19T08:00")).toEqual({ ok: false, erro: MSG_ABERTURA_FUTURA });
   });
 });
 
@@ -378,15 +349,25 @@ describe("Prazo de atendimento — ninguém calcula nem grava por fora da regra 
     expect(fonte("lib/execucao/aviso-cliente.ts")).toMatch(/d\.evento === "CHEGOU"\)\s*await marcarComparecimento\(/);
   });
 
-  it("a abertura do chamado é gravada por quem recebe o chamado (portal, QR) e pela OS lançada como chamado — mais ninguém", () => {
+  it("a hora de abertura do chamado é sempre a do SERVIDOR, no momento em que o chamado nasce — ninguém digita nem edita", () => {
     // (ler a coluna — select, ordenar, tipo — não é gravar)
     const gravam = TODOS.filter((f) => /chamadoAbertoEm\s*[:=](?!=)/.test(fonte(f).replace(/chamadoAbertoEm\??:\s*(true|Date|z\.|"asc")/g, ""))).sort();
-    expect(gravam).toEqual([
-      "app/(dashboard)/ordens/nova/page.tsx", // a tela só MANDA o que a pessoa digitou; quem grava é a rota
-      "app/api/ordens/[id]/route.ts", "app/api/ordens/route.ts", "app/api/portal/chamados/route.ts", "app/api/qr/[token]/chamado/route.ts",
-    ]);
-    // a OS lançada à mão passa pela leitura única (formato, dia que existe, não no futuro)
-    for (const f of ["app/api/ordens/[id]/route.ts", "app/api/ordens/route.ts"]) expect(fonte(f), f).toMatch(/lerAberturaDoChamado\(/);
+    // quem recebe o chamado: o portal, o QR e a Nova OS marcada como "Chamado do cliente"
+    expect(gravam).toEqual(["app/api/ordens/route.ts", "app/api/portal/chamados/route.ts", "app/api/qr/[token]/chamado/route.ts"]);
+    // em todos, o valor é o relógio do servidor (new Date()), nunca um campo do corpo da requisição
+    for (const f of gravam) {
+      const linhas = fonte(f).split("\n").filter((l) => /chamadoAbertoEm\s*[:=](?!=)/.test(l));
+      expect(linhas.length, f).toBeGreaterThan(0);
+      for (const l of linhas) expect(l, f).toMatch(/new Date\(\)/);
+    }
+    expect(comTexto(/(body|parsed\.data|d)\.chamadoAbertoEm/)).toEqual([]);
+    // editar a OS não toca na abertura; e a tela mostra o campo travado, sem mandar hora nenhuma
+    expect(fonte("app/api/ordens/[id]/route.ts")).not.toMatch(/chamadoAbertoEm/);
+    const nova = fonte("app/(dashboard)/ordens/nova/page.tsx");
+    expect(nova).not.toMatch(/chamadoAbertoEm/);
+    expect(nova).toMatch(/aria-label="Chamado aberto em"[^>]*\bdisabled\b/);
+    expect(nova).toMatch(/chamadoDoCliente: true/);
+    expect(comTexto(/lerAberturaDoChamado|MSG_ABERTURA_/)).toEqual([]);
   });
 
   it("as horas que o contrato promete só passam por lib/atendimento (e pela página que as entrega ao formulário)", () => {
