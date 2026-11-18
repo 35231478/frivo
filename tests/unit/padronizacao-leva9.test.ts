@@ -10,7 +10,8 @@
  *  - a pergunta antes de uma ação destrutiva é a confirmação da casa, não um diálogo próprio;
  *  - folha de bônus e composição do escore na tabela da casa (sem <table> à mão, sem rodapé);
  *  - ⓘ no lugar das instruções soltas;
- *  - a lógica (escore, fechamento, premiação, penalidades) continua byte a byte igual à do master.
+ *  - a lógica (escore, fechamento, premiação, penalidades) continua byte a byte igual à do master —
+ *    fora o que uma mudança de regra declarada alterou de propósito (a lista fica no próprio teste).
  */
 import { describe, expect, it } from "vitest";
 import { execFileSync } from "node:child_process";
@@ -269,7 +270,11 @@ describe("a leva não tocou na lógica", () => {
   it.skipIf(!base)("escore, fechamento, premiação e penalidades continuam como no master", () => {
     const mudados = execFileSync("git", ["diff", "--name-only", base!, "--", ...logica, "app/api/desempenho", "app/api/tecnico/desempenho"], { cwd: RAIZ, encoding: "utf8" })
       .split("\n").filter(Boolean);
-    expect(mudados).toEqual([]);
+    // Prazos da OS, PR 3: a regra do "no prazo" mudou DE PROPÓSITO — a atividade atrasada de uma OS com
+    // atraso justificado sai da conta (regras e medição), a linha do painel leva os atrasos e a OS
+    // pergunta se o mês já fechou. Fechamento, penalidades, premiação e as rotas seguem intocados.
+    const mudouDeProposito = ["lib/desempenho/regras.ts", "lib/desempenho/painel.ts", "lib/desempenho/medicao-server.ts", "lib/desempenho/fechamento-estado.ts"];
+    expect(mudados.filter((arq) => !mudouDeProposito.includes(arq))).toEqual([]);
   });
 
   it("cada arquivo de lógica que a guarda cobra existe com esse nome", () => {
