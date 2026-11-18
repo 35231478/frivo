@@ -12,21 +12,34 @@ import { usePermissoes } from "@/components/providers/permissoes-provider";
 import { PLANILHA } from "@/lib/planilha";
 import { cn, formatarData } from "@/lib/utils";
 import {
-  AJUDA_PRAZO, ESTADOS, LEGENDA_ESTADO, NOTA_SEM_REGISTRO, PRAZOS, ROTULO_ESTADO, ROTULO_PRAZO,
-  medidos, textoDaContagem, textoPercentual,
+  AJUDA_PRAZO, ESTADOS, LEGENDA_ESTADO, NOTA_CAUSA_CLIENTE, NOTA_SEM_REGISTRO, PRAZOS, ROTULO_ESTADO, ROTULO_PRAZO,
+  ehPausa, linhaPausada, medidos, textoDaContagem, textoPercentual,
   type Contagem, type EstadoCumprimento, type LinhaCumprimento, type PrazoRelatado, type ResumoCumprimento,
 } from "@/lib/prazos/cumprimento";
 
-/** A cor diz o estado; a palavra, sozinha, já basta (a cor reforça, não substitui). */
+/**
+ * A cor diz o estado; a palavra, sozinha, já basta (a cor reforça, não substitui).
+ * "Causa do cliente" NÃO usa o tom de atraso: não é a equipe que está em falta ali, e pintar de
+ * vermelho um prazo que o contrato tira da conta contaria a história errada ao cliente.
+ */
 const PILULA: Record<EstadoCumprimento, string> = {
-  CUMPRIDO: "pill-ok", DESCUMPRIDO: "pill-atrasado", SEM_REGISTRO: "pill-previsto",
+  CUMPRIDO: "pill-ok", DESCUMPRIDO: "pill-atrasado", CAUSA_CLIENTE: "pill-acento", SEM_REGISTRO: "pill-previsto",
 };
 const ICONE: Record<PrazoRelatado, typeof Headset> = { comparecer: Headset, resolver: Users, execucao: Timer };
 
-/** O estado de um prazo na célula; sem estado, um traço (o contrato não promete, ou ainda corre). */
-function Selo({ estado }: { estado: EstadoCumprimento | null }) {
+/**
+ * O estado de um prazo na célula; sem estado, um traço (o contrato não promete, ou ainda corre).
+ * Na pausa, o motivo vem junto — quem lê a linha não precisa abrir a OS para saber por quê.
+ */
+function Selo({ estado, motivo }: { estado: EstadoCumprimento | null; motivo?: string }) {
   if (!estado) return <span className={PLANILHA.apagado}>—</span>;
-  return <span className={cn(PILULA[estado], "text-[11px] px-2")} data-estado={estado}>{ROTULO_ESTADO[estado]}</span>;
+  const pausa = ehPausa(estado);
+  return (
+    <span className="inline-flex flex-wrap items-center gap-x-1 gap-y-0.5">
+      <span className={cn(PILULA[estado], "text-[11px] px-2")} data-estado={estado}>{ROTULO_ESTADO[estado]}</span>
+      {pausa && motivo && <span className="text-[11px] text-ink-muted" data-motivo-pausa>· {motivo}</span>}
+    </span>
+  );
 }
 
 /** Um prazo prometido, com o percentual grande e o que ficou de fora logo abaixo. */
@@ -55,17 +68,19 @@ const COLUNAS: ColunaPro[] = [
   { id: "cliente", titulo: "Cliente", largura: 220, classe: "truncate" },
   { id: "contrato", titulo: "Contrato", largura: 120, oculta: true },
   { id: "abertura", titulo: "Abertura", largura: 110 },
-  { id: "comparecer", titulo: "Comparecer", largura: 130 },
-  { id: "resolver", titulo: "Resolver", largura: 130 },
-  { id: "execucao", titulo: "Prazo de execução", largura: 150 },
+  { id: "comparecer", titulo: "Comparecer", largura: 150 },
+  { id: "resolver", titulo: "Resolver", largura: 150 },
+  { id: "execucao", titulo: "Prazo de execução", largura: 170 },
 ];
 
 /**
  * CUMPRIMENTO DE PRAZOS — o relatório do período. A lista e as contas vêm do servidor (as regras
  * únicas de lib/prazos/cumprimento); aqui só se escolhe o período e o recorte, e se lê.
  *
- * Os três estados estão na tabela, no resumo e na legenda — com o "sem registro" sempre FORA do
- * percentual e dito em voz alta, porque é ele que o gestor usa para cobrar o uso do "Cheguei".
+ * Os quatro estados estão na tabela, no resumo e na legenda. Os dois que ficam FORA do percentual
+ * são ditos em voz alta, nunca escondidos: o "sem registro", porque é ele que o gestor usa para
+ * cobrar o uso do "Cheguei"; a "causa do cliente", porque tirar um prazo da conta sem mostrar o
+ * motivo seria pedir confiança no escuro.
  */
 export function CumprimentoClient({ periodo, resumo, linhas, semPrazo, opcoes, podeExportar, urlPdf }: {
   periodo: PeriodoTela;
@@ -147,12 +162,13 @@ export function CumprimentoClient({ periodo, resumo, linhas, semPrazo, opcoes, p
                 cliente: <span className={PLANILHA.nome}>{l.clienteNome}</span>,
                 contrato: l.contratoNumero ? <span className={PLANILHA.apagado}>{l.contratoNumero}</span> : <span className={PLANILHA.apagado}>—</span>,
                 abertura: <span className={PLANILHA.data}>{formatarData(l.abertura)}</span>,
-                comparecer: <Selo estado={l.comparecer} />,
-                resolver: <Selo estado={l.resolver} />,
+                comparecer: <Selo estado={l.comparecer} motivo={l.motivo} />,
+                resolver: <Selo estado={l.resolver} motivo={l.motivo} />,
                 execucao: (
-                  <span className="inline-flex items-center gap-1.5">
-                    <Selo estado={l.execucao} />
-                    {l.justificativa && <span className="pill-previsto text-[11px] px-2" data-atraso-justificado>Justificado</span>}
+                  <span className="inline-flex flex-wrap items-center gap-1.5">
+                    <Selo estado={l.execucao} motivo={l.motivo} />
+                    {/* a justificativa sem causa do cliente não pausa nada: continua descumprida, e o selo diz só isso */}
+                    {l.justificativa && !linhaPausada(l) && <span className="pill-previsto text-[11px] px-2" data-atraso-justificado>Justificado</span>}
                   </span>
                 ),
               },
@@ -178,6 +194,12 @@ export function CumprimentoClient({ periodo, resumo, linhas, semPrazo, opcoes, p
                         );
                       })}
                     </div>
+                    {/* no celular o motivo da pausa vem numa linha só, embaixo: a largura não comporta repetir */}
+                    {linhaPausada(l) && l.motivo && (
+                      <p className="text-[11px] text-ink-muted mt-1.5" data-motivo-pausa-cartao>
+                        {ROTULO_ESTADO.CAUSA_CLIENTE} · {l.motivo}
+                      </p>
+                    )}
                   </div>
                 ))}
               </div>
@@ -187,6 +209,10 @@ export function CumprimentoClient({ periodo, resumo, linhas, semPrazo, opcoes, p
       )}
 
       <p className="text-xs text-ink-muted mt-3" data-nota-sem-registro>{NOTA_SEM_REGISTRO}</p>
+      {resumo.geral.causaCliente > 0 && (
+        <p className="text-xs text-ink-muted mt-1" data-nota-causa-cliente>{NOTA_CAUSA_CLIENTE}</p>
+      )}
     </>
   );
 }
+

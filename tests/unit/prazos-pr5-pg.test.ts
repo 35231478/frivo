@@ -141,7 +141,7 @@ describe.skipIf(!URL_PG)("Prazos da OS — PR 5: relatório de cumprimento de pr
       const r = await relatorio(NOVEMBRO);
       expect(r.linhas).toHaveLength(1);
       expect(r.semPrazo).toBe(1);
-      expect(r.resumo.execucao).toEqual({ cumpridos: 1, descumpridos: 0, semRegistro: 0 });
+      expect(r.resumo.execucao).toEqual({ cumpridos: 1, descumpridos: 0, causaCliente: 0, semRegistro: 0 });
     });
 
     it("recorta por cliente e por contrato", async () => {
@@ -183,11 +183,11 @@ describe.skipIf(!URL_PG)("Prazos da OS — PR 5: relatório de cumprimento de pr
     it("o percentual do período conta os medidos e deixa o 'sem registro' fora — e o relatório diz quantos são", async () => {
       await base();
       const { resumo } = await relatorio(NOVEMBRO);
-      expect(resumo.comparecer).toEqual({ cumpridos: 1, descumpridos: 1, semRegistro: 2 });
-      expect(resumo.resolver).toEqual({ cumpridos: 2, descumpridos: 1, semRegistro: 1 });
-      expect(resumo.execucao).toEqual({ cumpridos: 1, descumpridos: 0, semRegistro: 0 });
+      expect(resumo.comparecer).toEqual({ cumpridos: 1, descumpridos: 1, causaCliente: 0, semRegistro: 2 });
+      expect(resumo.resolver).toEqual({ cumpridos: 2, descumpridos: 1, causaCliente: 0, semRegistro: 1 });
+      expect(resumo.execucao).toEqual({ cumpridos: 1, descumpridos: 0, causaCliente: 0, semRegistro: 0 });
       // 4 cumpridos de 6 medidos; os 3 sem registro não estão no denominador (seriam 4/9 = 44%)
-      expect(resumo.geral).toEqual({ cumpridos: 4, descumpridos: 2, semRegistro: 3 });
+      expect(resumo.geral).toEqual({ cumpridos: 4, descumpridos: 2, causaCliente: 0, semRegistro: 3 });
       expect(percentualCumprimento(resumo.geral)).toBe(67);
     });
 
@@ -212,9 +212,9 @@ describe.skipIf(!URL_PG)("Prazos da OS — PR 5: relatório de cumprimento de pr
 
     const minha = await relatorio(NOVEMBRO);
     expect(minha.linhas).toHaveLength(1);
-    expect(minha.resumo.execucao).toEqual({ cumpridos: 1, descumpridos: 0, semRegistro: 0 });
+    expect(minha.resumo.execucao).toEqual({ cumpridos: 1, descumpridos: 0, causaCliente: 0, semRegistro: 0 });
     const outra = await relatorio(NOVEMBRO, "e2");
-    expect(outra.resumo.execucao).toEqual({ cumpridos: 0, descumpridos: 1, semRegistro: 0 });
+    expect(outra.resumo.execucao).toEqual({ cumpridos: 0, descumpridos: 1, causaCliente: 0, semRegistro: 0 });
 
     // e o cabeçalho também: o cliente da outra empresa não é "o cliente deste relatório"
     const { alvoDoRelatorio } = await import("@/lib/prazos/cumprimento-server");
@@ -235,6 +235,40 @@ describe.skipIf(!URL_PG)("Prazos da OS — PR 5: relatório de cumprimento de pr
       });
       await chamado(br("2026-11-07", "09:00"), { dataConclusao: br("2026-11-07", "19:00"), contratoId: "ct1" }); // sem "Cheguei"
     }
+
+    it("a pausa marcada na OS chega ao papel do cliente: o percentual sobe e o motivo fica à vista", async () => {
+      // dois chamados iguais, estourados nos três prazos; só um tem a causa do cliente marcada
+      const comum = {
+        contratoId: "ct1", prazoExecucao: dia("2026-11-04"),
+        atendimentoComparecidoEm: br("2026-11-05", "09:00"), dataConclusao: br("2026-11-06", "16:00"),
+      };
+      await chamado(br("2026-11-03", "09:00"), comum);
+      await chamado(br("2026-11-10", "09:00"), {
+        ...comum, prazoExecucao: dia("2026-11-11"),
+        atendimentoComparecidoEm: br("2026-11-12", "09:00"), dataConclusao: br("2026-11-13", "16:00"),
+        atrasoJustificadoMotivo: "ACESSO_NEGADO", atrasoJustificadoObs: "sala técnica trancada", atrasoResponsavel: "CLIENTE",
+      });
+
+      const r = await relatorio({ ...NOVEMBRO, clienteId: "c1", contratoId: "ct1" });
+      expect(r.resumo.geral.descumpridos).toBe(3); // os três prazos do chamado sem marcação
+      expect(r.resumo.geral.causaCliente).toBe(3); // os três do chamado marcado, fora da conta
+      expect(r.resumo.geral.cumpridos).toBe(0);
+      expect(textoPercentual(r.resumo.geral)).toBe("0%"); // 0 de 3 medidos — e não 0 de 6
+      const pausada = r.linhas.find((l: any) => l.motivo)!;
+      expect([pausada.comparecer, pausada.resolver, pausada.execucao]).toEqual(["CAUSA_CLIENTE", "CAUSA_CLIENTE", "CAUSA_CLIENTE"]);
+      expect(pausada.motivo).toBe("Acesso ao local negado");
+
+      const p = await pdf("clienteId=c1&contratoId=ct1&mes=2026-11");
+      expect(p.status).toBe(200);
+      expect(p.texto).toContain("Causa do cliente");
+      expect(p.texto).toContain("3 por causa do cliente, fora da conta");
+      // o papel diz o motivo de cada pausa e explica a regra — nada sai da conta em silêncio
+      expect(p.texto).toContain("Acesso ao local negado");
+      expect(p.texto).toMatch(/ficam fora do percentual,\s+como prevê o contrato/); // o papel quebra a linha
+      // e o jargão não vaza para o documento do cliente
+      expect(p.texto).not.toMatch(/\bSLA\b/);
+      expect(p.texto).not.toContain("ACESSO_NEGADO");
+    });
 
     it("quem não tem Relatórios › Exportar não gera o papel (403), e quem não está logado nem chega lá", async () => {
       logar({ permissoes: SO_VER });
@@ -271,7 +305,8 @@ describe.skipIf(!URL_PG)("Prazos da OS — PR 5: relatório de cumprimento de pr
       expect(r.texto).toContain("Sem registro");
       expect(r.texto).toContain("Cumprido");
       // o papel é DESTE cliente: não há coluna de cliente repetindo o nome em toda linha
-      expect(r.texto).not.toContain("CLIENTE");
+      // (o nome aparece uma vez só, na capa — a coluna "Causa do cliente" do resumo é outra coisa)
+      expect(r.texto.match(/Hospital Santa Luzia/g)).toHaveLength(1);
       // e a honestidade dita por extenso
       expect(r.texto).toContain("ficam fora do percentual");
     });

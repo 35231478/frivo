@@ -13,8 +13,8 @@ import { PDFDocument, StandardFonts } from "pdf-lib";
 import { C, Desenho, MARGEM } from "@/lib/pdf/desenho";
 import type { ArquivoGerado } from "@/lib/pdf/resposta";
 import {
-  AJUDA_PRAZO, LEGENDA_ESTADO, NOTA_SEM_REGISTRO, PRAZOS, ROTULO_ESTADO, ROTULO_PRAZO,
-  medidos, textoMedidos, textoPercentual, textoSemRegistro,
+  AJUDA_PRAZO, ESTADOS, LEGENDA_ESTADO, NOTA_CAUSA_CLIENTE, NOTA_SEM_REGISTRO, PRAZOS, ROTULO_ESTADO, ROTULO_PRAZO,
+  linhaPausada, medidos, textoCausaCliente, textoMedidos, textoPercentual, textoSemRegistro,
   type Contagem, type EstadoCumprimento, type LinhaCumprimento, type ResumoCumprimento,
 } from "./cumprimento";
 
@@ -65,8 +65,9 @@ function destaque(d: Desenho, c: Contagem) {
   const dir = MARGEM + 200;
   d.escrever(textoMedidos(c), dir, d.y + 30, { tamanho: 11, fonte: d.negrito });
   d.escrever(`${c.descumpridos} ${c.descumpridos === 1 ? "descumprido" : "descumpridos"}`, dir, d.y + 48, { tamanho: 9.5, cor: c.descumpridos ? C.atrasado : C.apoio });
-  const semRegistro = textoSemRegistro(c);
-  if (semRegistro) d.escrever(semRegistro, dir + 120, d.y + 48, { tamanho: 9.5, cor: C.apoio });
+  // o que ficou fora da conta é dito aqui, ao lado do número, não escondido no rodapé
+  const fora = [textoSemRegistro(c), textoCausaCliente(c)].filter(Boolean).join(" · ");
+  if (fora) d.escrever(fora, dir + 120, d.y + 48, { tamanho: 9.5, cor: C.apoio });
   d.y += altura + 18;
 }
 
@@ -75,22 +76,28 @@ function porPrazo(d: Desenho, resumo: ResumoCumprimento) {
   d.secao(1, "O que foi prometido e o que foi cumprido");
   d.tabela(
     [
-      { titulo: "Prazo", largura: 150, negrito: true },
-      { titulo: "Cumpridos", largura: 72, direita: true },
-      { titulo: "Descumpridos", largura: 82, direita: true },
-      { titulo: "Sem registro", largura: 80, direita: true },
-      { titulo: "Cumprimento", largura: d.util - 384, direita: true },
+      { titulo: "Prazo", largura: 134, negrito: true },
+      { titulo: "Cumpridos", largura: 66, direita: true },
+      { titulo: "Descumpridos", largura: 78, direita: true },
+      { titulo: ROTULO_ESTADO.CAUSA_CLIENTE, largura: 86, direita: true },
+      { titulo: "Sem registro", largura: 74, direita: true },
+      { titulo: "Cumprimento", largura: d.util - 438, direita: true },
     ],
     PRAZOS.map((p) => {
       const c = resumo[p];
-      return [ROTULO_PRAZO[p], String(c.cumpridos), String(c.descumpridos), c.semRegistro ? String(c.semRegistro) : VAZIO, textoPercentual(c)];
+      return [
+        ROTULO_PRAZO[p], String(c.cumpridos), String(c.descumpridos),
+        c.causaCliente ? String(c.causaCliente) : VAZIO, c.semRegistro ? String(c.semRegistro) : VAZIO,
+        textoPercentual(c),
+      ];
     }),
   );
   d.paragrafo(
     `${AJUDA_PRAZO.comparecer.replace("Prazo de atendimento do contrato: e", "“Comparecer” e")} ${AJUDA_PRAZO.resolver.replace("Prazo de atendimento do contrato: e", "“Resolver” e")} “${ROTULO_PRAZO.execucao}”: ${AJUDA_PRAZO.execucao.replace("O compromisso", "o compromisso")}`,
     { tamanho: 8.5, cor: C.apoio, depois: 6 },
   );
-  d.paragrafo(NOTA_SEM_REGISTRO, { tamanho: 8.5, cor: C.apoio, depois: 14 });
+  d.paragrafo(NOTA_SEM_REGISTRO, { tamanho: 8.5, cor: C.apoio, depois: resumo.geral.causaCliente ? 6 : 14 });
+  if (resumo.geral.causaCliente) d.paragrafo(NOTA_CAUSA_CLIENTE, { tamanho: 8.5, cor: C.apoio, depois: 14 });
 }
 
 /** Chamado a chamado: o cliente confere o que é dele. */
@@ -101,14 +108,15 @@ function detalhe(d: Desenho, dados: DadosCumprimentoPdf) {
     return;
   }
   const mostradas = dados.linhas.slice(0, LINHAS_NO_PDF);
-  const largura = (d.util - 86 - 70 * 3) / (dados.cliente ? 1 : 2);
+  // 84 por estado: "Causa do cliente" cabe numa linha só (quebrada, a tabela fica alta e feia)
+  const largura = (d.util - 86 - 84 * 3) / (dados.cliente ? 1 : 2);
   const colunas = [
     { titulo: "Nº", largura: 86, negrito: true },
     { titulo: "Abertura", largura: largura },
     ...(dados.cliente ? [] : [{ titulo: "Cliente", largura }]),
-    { titulo: "Comparecer", largura: 70 },
-    { titulo: "Resolver", largura: 70 },
-    { titulo: "Execução", largura: 70 },
+    { titulo: "Comparecer", largura: 84 },
+    { titulo: "Resolver", largura: 84 },
+    { titulo: "Execução", largura: 84 },
   ];
   d.tabela(colunas, mostradas.map((l) => [
     l.numero, dados.aberturaDe(l),
@@ -119,16 +127,21 @@ function detalhe(d: Desenho, dados: DadosCumprimentoPdf) {
     d.paragrafo(`Mostrando os ${mostradas.length} primeiros de ${dados.linhas.length} chamados do período. Os percentuais acima consideram todos.`,
       { tamanho: 8.5, cor: C.apoio, depois: 10 });
   }
+  // o motivo de cada pausa, chamado a chamado: tirar do percentual sem dizer por quê seria esconder
+  const pausados = mostradas.filter(linhaPausada);
+  if (pausados.length) {
+    d.paragrafo(`Fora do percentual por causa do cliente: ${pausados.map((l) => `${l.numero} — ${l.motivo || "motivo não informado"}`).join("; ")}.`,
+      { tamanho: 8.5, cor: C.apoio, depois: 10 });
+  }
 }
 
 /** O que cada palavra quer dizer — para o cliente ler sozinho, sem telefonar perguntando. */
 function legenda(d: Desenho, resumo: ResumoCumprimento) {
   d.secao(3, "Como ler este relatório");
   d.campos([
-    { rotulo: ROTULO_ESTADO.CUMPRIDO, valor: LEGENDA_ESTADO.CUMPRIDO },
-    { rotulo: ROTULO_ESTADO.DESCUMPRIDO, valor: LEGENDA_ESTADO.DESCUMPRIDO },
-    { rotulo: ROTULO_ESTADO.SEM_REGISTRO, valor: LEGENDA_ESTADO.SEM_REGISTRO },
-    { rotulo: "Percentual de cumprimento", valor: `Prazos cumpridos dividido pelos prazos medidos (cumpridos + descumpridos). No período: ${textoPercentual(resumo.geral)}.` },
+    // os quatro estados, na mesma ordem e com as mesmas palavras da tela
+    ...ESTADOS.map((e) => ({ rotulo: ROTULO_ESTADO[e], valor: LEGENDA_ESTADO[e] })),
+    { rotulo: "Percentual de cumprimento", valor: `Prazos cumpridos dividido pelos prazos que contam (cumpridos + descumpridos). Fora dessa conta ficam os sem registro e os de causa do cliente, ambos listados acima. No período: ${textoPercentual(resumo.geral)}.` },
   ]);
 }
 

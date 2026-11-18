@@ -166,14 +166,18 @@ describe("A trava: a causa só entra por onde deve", () => {
   const EXPORT = "app/api/ordens/export/route.ts";
 
   it("a coluna da causa só é escrita na rota do atraso justificado — e lida por quem mostra", () => {
-    expect(quemTem(/atrasoResponsavel/)).toEqual([EXPORT, ROTA, GAVETA, CABECALHO, MOTOR, "lib/prazos/cumprimento.ts"].sort());
+    // desde o PR B, o relatório também LÊ a coluna: o servidor a traz do banco e as regras a leem
+    expect(quemTem(/atrasoResponsavel/)).toEqual(
+      [EXPORT, ROTA, GAVETA, CABECALHO, MOTOR, "lib/prazos/cumprimento.ts", "lib/prazos/cumprimento-server.ts"].sort());
     // escrever, só ali: um ponto de gravação e um de limpeza
     const rota = ler(ROTA);
     expect(rota.match(/atrasoResponsavel: responsavel/g)).toHaveLength(1);
     expect(rota.match(/atrasoResponsavel: null/g)).toHaveLength(1);
-    for (const f of [EXPORT, GAVETA, CABECALHO, "lib/prazos/cumprimento.ts"]) {
+    for (const f of [EXPORT, GAVETA, CABECALHO, "lib/prazos/cumprimento.ts", "lib/prazos/cumprimento-server.ts"]) {
       expect(ler(f), f).not.toMatch(/ordemServico\.(create|update|updateMany|upsert)\(/);
     }
+    // no servidor do relatório a coluna aparece só no select: ele lê, não escreve
+    expect(ler("lib/prazos/cumprimento-server.ts")).toMatch(/atrasoResponsavel: true,/);
   });
 
   it("ninguém deduz a causa do motivo nem do texto livre: a sugestão é da tela, a decisão é gravada", () => {
@@ -191,12 +195,16 @@ describe("A trava: a causa só entra por onde deve", () => {
     expect(ler("lib/desempenho/regras.ts")).toMatch(/const justificado = os\.atrasoJustificadoMotivo \|\| null;/);
   });
 
-  it("o relatório do cliente ainda NÃO pausa nada: o percentual é o mesmo do PR 5 (a pausa é do PR B)", () => {
+  it("o relatório do cliente pausa pela MARCAÇÃO, e por nada mais (a conversão é do PR B)", () => {
     const regras = ler("lib/prazos/cumprimento.ts");
+    // o denominador continua sendo o do PR 5: a pausa só TIRA dele, nunca o aumenta
     expect(regras).toMatch(/const medidos = \(c: Contagem\) => c\.cumpridos \+ c\.descumpridos;/);
-    expect(regras).not.toMatch(/atrasoPorCausaDoCliente|CAUSA_CLIENTE/);
-    // a função existe (pronta para o PR B) e ainda não é chamada em lugar nenhum
-    expect(quemTem(/atrasoPorCausaDoCliente/)).toEqual([MOTOR]);
+    // quem decide a pausa é a porta do PR A, chamada num lugar só — nunca o motivo, nunca o texto livre
+    expect(quemTem(/atrasoPorCausaDoCliente/)).toEqual([MOTOR, "lib/prazos/cumprimento.ts"].sort());
+    expect(regras.match(/atrasoPorCausaDoCliente\(os\)/g)).toHaveLength(1);
+    expect(regras).toMatch(/pausa && e === "DESCUMPRIDO" \? "CAUSA_CLIENTE" : e;/);
+    // e o estado novo não vaza para quem só exibe (as regras do relatório travam isso em prazos-pr5)
+    expect(quemTem(/CAUSA_CLIENTE/).filter((f) => f.startsWith("components/os/"))).toEqual([]);
   });
 
   it("o gatilho ampliado é um só, e quem justifica o usa", () => {

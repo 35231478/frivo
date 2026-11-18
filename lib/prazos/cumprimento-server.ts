@@ -14,7 +14,8 @@ const SELECT_CUMPRIMENTO = {
   id: true, numero: true, chamadoNumero: true, status: true, criadoEm: true,
   prazoExecucao: true, previsaoConclusao: true, dataConclusao: true,
   chamadoAbertoEm: true, atendimentoComparecerAte: true, atendimentoResolverAte: true, atendimentoComparecidoEm: true,
-  atrasoJustificadoMotivo: true, atrasoJustificadoObs: true,
+  // a marcação que pausa o prazo no papel do cliente (PR A): aqui só se LÊ o que o gestor gravou
+  atrasoJustificadoMotivo: true, atrasoJustificadoObs: true, atrasoResponsavel: true,
   cliente: { select: { id: true, nome: true, nomeFantasia: true } },
   contrato: { select: { id: true, numero: true } },
 } as const;
