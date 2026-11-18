@@ -1,0 +1,34 @@
+-- DE QUEM FOI A CAUSA DO ATRASO (Prazos da OS — pausa de SLA por causa do cliente, PR A).
+--
+-- Hoje, quando o gestor justifica o atraso de uma OS, ele informa um MOTIVO (cliente ausente, peça
+-- faltando, acesso negado, clima, outro) e uma explicação. Isso basta para tirar o atraso do
+-- desempenho de quem executou, mas não diz DE QUEM foi a causa — e é essa informação que o
+-- relatório de cumprimento de prazos precisa para pausar o SLA no documento que vai ao cliente:
+-- atraso por causa do cliente sai do percentual; causa interna ou força maior continua contando.
+--
+-- O LEVANTAMENTO (o que já existia):
+--   • "ordens_servico"."atraso_justificado_motivo" (TEXT): um da lista fixa de lib/os/prazo-execucao.ts;
+--   • "..._obs" (TEXT, livre), "..._por_id" (quem marcou) e "..._em" (quando).
+--   • Nenhuma coluna diz a responsabilidade, e deduzi-la do motivo seria adivinhação: "peça faltando"
+--     pode ser falha nossa de estoque ou peça que o cliente ia comprar, e "outro" é texto livre.
+--
+-- O QUE ENTRA (ADITIVO; nada é removido, alterado ou preenchido):
+--   1. "ordens_servico"."atraso_responsavel" (TEXT, opcional): quem causou o atraso, marcado
+--      explicitamente pelo gestor na mesma gaveta da justificativa. Valores que o sistema grava:
+--        'CLIENTE'   — falta de acesso, ausência do responsável, recusa ou pendência do cliente;
+--        'INTERNA'   — foi a nossa equipe;
+--        'TERCEIROS' — força maior ou terceiros (clima, fornecedor, concessionária).
+--      NULL = não classificado. É o caso de TODA justificativa já gravada: elas continuam contando
+--      como descumprido, exatamente como contam hoje, até alguém classificar na tela. Por isso NÃO
+--      há preenchimento retroativo.
+--
+-- O QUE NÃO MUDA:
+--   • O desempenho do colaborador: lá o atraso justificado já sai da métrica, seja qual for a causa.
+--   • A OS continua atrasada na lista, no sino e no painel — a pausa é só do papel do cliente.
+--   • Nenhum prazo gravado é recalculado.
+--
+-- É TEXT (não enum), como o motivo ao lado: a validação mora no código (zod), e um valor novo no
+-- vocabulário não exige mexer no banco. Sem tabela nova, sem chave estrangeira, sem índice.
+-- Pode rodar mais de uma vez.
+
+ALTER TABLE "ordens_servico" ADD COLUMN IF NOT EXISTS "atraso_responsavel" TEXT;

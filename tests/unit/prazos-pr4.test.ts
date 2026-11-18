@@ -326,8 +326,13 @@ describe("Prazo de atendimento — ninguém calcula nem grava por fora da regra 
     // compara "comparecer até" com a hora de agora por conta própria, e nenhuma rota grava os campos
     // o relatório de cumprimento de prazos (PR 5) LÊ as colunas para relatar — e só lê
     const RELATORIO = ["lib/prazos/cumprimento.ts", "lib/prazos/cumprimento-server.ts"];
-    expect(comTexto(/atendimentoComparecerAte|atendimentoResolverAte|atendimentoComparecidoEm/)).toEqual([SERVIDOR, MOTOR, ...RELATORIO].sort());
+    // a rota do atraso justificado também LÊ as colunas (desde a pausa de SLA, o gatilho olha os TRÊS prazos,
+    // não só a execução) — mas só as lê: ela grava a justificativa, e nenhuma delas entra no que ela grava
+    const GATILHO = "app/api/ordens/[id]/atraso-justificado/route.ts";
+    expect(comTexto(/atendimentoComparecerAte|atendimentoResolverAte|atendimentoComparecidoEm/)).toEqual([SERVIDOR, MOTOR, GATILHO, ...RELATORIO].sort());
     for (const f of RELATORIO) expect(fonte(f), f).not.toMatch(/ordemServico\.(create|createMany|update|updateMany|upsert)\(|data:\s*\{/);
+    for (const uso of fonte(GATILHO).match(/atendimento(?:ComparecerAte|ResolverAte|ComparecidoEm):[^,\n]*/g) ?? [])
+      expect(uso, GATILHO).toMatch(/:\s*true$/); // só dentro do select
     expect(comTexto(/atendimento_comparecer_ate|atendimento_resolver_ate|atendimento_comparecido_em/)).toEqual([]); // nem por SQL cru
     const servidor = fonte(SERVIDOR);
     // um ponto de escrita para os limites e um para o comparecimento

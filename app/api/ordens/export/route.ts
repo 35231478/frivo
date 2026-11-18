@@ -4,7 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { formatarData, LABELS_STATUS_OS, LABELS_PRIORIDADE } from "@/lib/utils";
 import { chaveHojeBR } from "@/lib/fuso";
 import { whereOrdensDaLista } from "@/lib/listas/filtros-server";
-import { atrasoJustificado, prazoEfetivo, rotuloMotivoAtraso, situacaoPrazoExecucao } from "@/lib/os/prazo-execucao";
+import { atrasoJustificado, prazoEfetivo, rotuloMotivoAtraso, rotuloResponsabilidadeAtraso, situacaoPrazoExecucao } from "@/lib/os/prazo-execucao";
 import { formatarDiaCivil, textoPrazo } from "@/lib/os/prazos";
 
 const SORT_MAP: Record<string, (dir: "asc" | "desc") => any> = {
@@ -47,7 +47,7 @@ export async function GET(req: NextRequest) {
     take: 5000,
   });
 
-  const cabecalho = ["Número", "Cliente", "Tipo", "Status", "Prioridade", "Técnico", "Data abertura", "Data prevista", "Prazo", "Situação do prazo", "Atraso justificado", "Conclusão"];
+  const cabecalho = ["Número", "Cliente", "Tipo", "Status", "Prioridade", "Técnico", "Data abertura", "Data prevista", "Prazo", "Situação do prazo", "Atraso justificado", "Causa do atraso", "Conclusão"];
   const linhas = ordens.map((o) => {
     const tipos = [...new Set(o.atividades.map((a) => a.tipoOs?.nome).filter(Boolean))].join(" / ");
     return [
@@ -63,6 +63,8 @@ export async function GET(req: NextRequest) {
       formatarDiaCivil(prazoEfetivo(o)),
       prazoEfetivo(o) ? textoPrazo(situacaoPrazoExecucao(o, agora), true) : "—",
       atrasoJustificado(o) ? [rotuloMotivoAtraso(o.atrasoJustificadoMotivo), o.atrasoJustificadoObs].filter(Boolean).join(": ") : "—",
+      // de quem foi a causa (só a do cliente pausa o SLA no relatório); justificativa antiga vem sem
+      rotuloResponsabilidadeAtraso(o.atrasoResponsavel) || "—",
       o.dataConclusao ? formatarData(o.dataConclusao) : "—",
     ].map(csvCampo).join(";");
   });

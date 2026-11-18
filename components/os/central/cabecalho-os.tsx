@@ -20,7 +20,7 @@ import { EditarOs } from "@/components/os/central/editar-os";
 import { StatusPill, TOM_ESTAGIO_OS, TOM_PRAZO, TOM_PRIORIDADE } from "@/components/ui/status-pill";
 import { Stepper } from "@/components/ui/stepper";
 import { Kpi } from "@/components/ui/kpi";
-import { atrasoJustificado, prazoEfetivo, rotuloMotivoAtraso } from "@/lib/os/prazo-execucao";
+import { atrasoJustificado, prazoEfetivo, rotuloMotivoAtraso, rotuloResponsabilidadeAtraso } from "@/lib/os/prazo-execucao";
 import { SeloDeAtendimento } from "@/components/os/central/prazo-atendimento";
 
 /** Situação do pagamento → cor do texto (status com função: previsto, atenção, atrasado, ok). */
@@ -105,8 +105,9 @@ export function CabecalhoOs({ os, central, acoes, onAba, onAtualizado }: {
               <SeloDeAtendimento os={os} />
               {/* O atraso foi justificado pelo gestor: a OS continua atrasada, mas não pesa no desempenho */}
               {atrasoJustificado(os) && (
-                <StatusPill tom="previsto" tamanho="sm" data-selo-justificado={os.atrasoJustificadoMotivo}>
+                <StatusPill tom="previsto" tamanho="sm" data-selo-justificado={os.atrasoJustificadoMotivo} data-selo-responsavel={os.atrasoResponsavel || undefined}>
                   Atraso justificado{rotuloMotivoAtraso(os.atrasoJustificadoMotivo) ? `: ${rotuloMotivoAtraso(os.atrasoJustificadoMotivo).toLowerCase()}` : ""}
+                  {rotuloResponsabilidadeAtraso(os.atrasoResponsavel) ? ` · ${rotuloResponsabilidadeAtraso(os.atrasoResponsavel).toLowerCase()}` : ""}
                 </StatusPill>
               )}
             </p>

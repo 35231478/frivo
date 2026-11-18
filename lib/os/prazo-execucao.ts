@@ -169,6 +169,46 @@ export const ROTULO_MOTIVO_ATRASO: Record<MotivoAtraso, string> = {
   CLIMA: "Chuva ou clima",
   OUTRO: "Outro motivo",
 };
+/**
+ * DE QUEM FOI A CAUSA do atraso. É marcação EXPLÍCITA do gestor: o motivo acima sugere, mas quem
+ * decide é ele, e o que vale é o que fica gravado — nunca o texto livre, nunca um palpite do código.
+ *
+ * Só serve ao RELATÓRIO DE CUMPRIMENTO DE PRAZOS (o documento que vai ao cliente): atraso por causa
+ * do cliente pausa o SLA e sai do percentual; causa interna ou força maior continuam descumpridos,
+ * porque não se esconde do cliente o que foi nosso. No desempenho do colaborador nada muda: lá o
+ * atraso justificado já sai da métrica, seja qual for a causa.
+ */
+export const RESPONSABILIDADES_ATRASO = ["CLIENTE", "INTERNA", "TERCEIROS"] as const;
+export type ResponsabilidadeAtraso = (typeof RESPONSABILIDADES_ATRASO)[number];
+export const ROTULO_RESPONSABILIDADE_ATRASO: Record<ResponsabilidadeAtraso, string> = {
+  CLIENTE: "Causa do cliente",
+  INTERNA: "Causa interna",
+  TERCEIROS: "Força maior ou terceiros",
+};
+/** O que cada uma quer dizer, na gaveta — sem jargão de SLA para quem só quer registrar o que houve */
+export const AJUDA_RESPONSABILIDADE_ATRASO: Record<ResponsabilidadeAtraso, string> = {
+  CLIENTE: "Falta de acesso, ausência do responsável, recusa ou pendência do cliente.",
+  INTERNA: "Foi a nossa equipe (agenda, deslocamento, material, retrabalho).",
+  TERCEIROS: "Fora do alcance dos dois: clima, fornecedor, concessionária, acidente.",
+};
+/**
+ * A sugestão que a tela pré-seleciona a partir do motivo — um atalho, não uma decisão: o gestor
+ * confirma (e pode trocar), e é a escolha dele que é gravada. Motivo ambíguo não sugere nada:
+ * "peça faltando" tanto pode ser falha nossa de estoque quanto peça que o cliente ia comprar.
+ */
+export const RESPONSABILIDADE_SUGERIDA: Record<MotivoAtraso, ResponsabilidadeAtraso | null> = {
+  CLIENTE_AUSENTE: "CLIENTE",
+  ACESSO_NEGADO: "CLIENTE",
+  CLIMA: "TERCEIROS",
+  PECA_FALTANDO: null,
+  OUTRO: null,
+};
+export const rotuloResponsabilidadeAtraso = (r: string | null | undefined) =>
+  (r && (ROTULO_RESPONSABILIDADE_ATRASO as Record<string, string>)[r]) || "";
+/** O atraso desta OS foi classificado como causa do CLIENTE? (é o que pausa o SLA no relatório) */
+export const atrasoPorCausaDoCliente = (os: { atrasoJustificadoMotivo?: string | null; atrasoResponsavel?: string | null }) =>
+  !!os.atrasoJustificadoMotivo && os.atrasoResponsavel === "CLIENTE";
+
 /** "Razão é razão": em "Outro" a explicação precisa dizer alguma coisa (não vale um "x") */
 export const EXPLICACAO_MIN = 5;
 export const MSG_ATRASO_OUTRO = `Explique o motivo do atraso (pelo menos ${EXPLICACAO_MIN} caracteres).`;
@@ -176,9 +216,12 @@ export const explicacaoDoAtrasoValida = (motivo: string, observacao: string | nu
   motivo !== "OUTRO" || (observacao ?? "").trim().length >= EXPLICACAO_MIN;
 export const MSG_ATRASO_NAO_ATRASADA = "Esta OS não está atrasada: não há atraso para justificar.";
 
-/** O que o gestor informa ao justificar: um motivo da lista e, em "Outro", a explicação. */
+export const MSG_ATRASO_SEM_RESPONSAVEL = "Diga de quem foi a causa do atraso.";
+
+/** O que o gestor informa ao justificar: o motivo, de quem foi a causa e, em "Outro", a explicação. */
 export const atrasoJustificadoSchema = z.object({
   motivo: z.enum(MOTIVOS_ATRASO, { errorMap: () => ({ message: "Escolha o motivo do atraso." }) }),
+  responsavel: z.enum(RESPONSABILIDADES_ATRASO, { errorMap: () => ({ message: MSG_ATRASO_SEM_RESPONSAVEL }) }),
   observacao: z.preprocess((v) => (typeof v === "string" ? v.trim() : v), z.string().max(500, "Explicação com no máximo 500 caracteres.").optional().default("")),
 }).superRefine((d, ctx) => {
   if (!explicacaoDoAtrasoValida(d.motivo, d.observacao)) ctx.addIssue({ code: "custom", path: ["observacao"], message: MSG_ATRASO_OUTRO });

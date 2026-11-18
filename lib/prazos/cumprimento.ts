@@ -17,7 +17,7 @@
  * relatório, porque não há o que relatar ainda.
  */
 import { atendimentoDaOs, type SituacaoAtendimento } from "@/lib/atendimento/prazo";
-import { execucaoNoPrazo, type OsParaAtraso } from "@/lib/os/prazo-execucao";
+import { execucaoNoPrazo, haAtrasoParaJustificar, type OsParaAtraso } from "@/lib/os/prazo-execucao";
 
 /* ───────── os três estados ───────── */
 
@@ -51,19 +51,24 @@ export function estadoDoAtendimento(situacao: SituacaoAtendimento): EstadoCumpri
   }
 }
 
+/** A OS como as DUAS libs de prazo a leem: só o que decide os estados (sem nada de tela). */
+export interface OsComPrazos extends OsParaAtraso {
+  chamadoAbertoEm?: Date | string | null;
+  atendimentoComparecerAte?: Date | string | null;
+  atendimentoResolverAte?: Date | string | null;
+  atendimentoComparecidoEm?: Date | string | null;
+}
+
 /** A OS como o relatório precisa dela: o que as duas libs leem, mais o que a tela mostra. */
-export interface OsDoCumprimento extends OsParaAtraso {
+export interface OsDoCumprimento extends OsComPrazos {
   id: string;
   numero: string;
   chamadoNumero?: string | null;
   clienteNome: string;
   contratoNumero?: string | null;
-  chamadoAbertoEm?: Date | string | null;
-  atendimentoComparecerAte?: Date | string | null;
-  atendimentoResolverAte?: Date | string | null;
-  atendimentoComparecidoEm?: Date | string | null;
   atrasoJustificadoMotivo?: string | null;
   atrasoJustificadoObs?: string | null;
+  atrasoResponsavel?: string | null;
   criadoEm: Date | string;
 }
 
@@ -76,6 +81,33 @@ export interface OsDoCumprimento extends OsParaAtraso {
 export function estadoDaExecucao(os: OsParaAtraso, agora: Date = new Date()): EstadoCumprimento | null {
   const noPrazo = execucaoNoPrazo(os, agora);
   return noPrazo === null ? null : noPrazo ? "CUMPRIDO" : "DESCUMPRIDO";
+}
+
+/**
+ * Os três estados de uma OS, sem precisar de nada de tela. É daqui que saem a linha do relatório e a
+ * resposta a "há o que justificar?" — uma conta só, dois usos.
+ */
+export function estadosDosPrazos(os: OsComPrazos, agora: Date = new Date()): Record<PrazoRelatado, EstadoCumprimento | null> {
+  const { comparecer, resolver } = atendimentoDaOs(os, agora);
+  return {
+    comparecer: estadoDoAtendimento(comparecer.situacao),
+    resolver: estadoDoAtendimento(resolver.situacao),
+    execucao: estadoDaExecucao(os, agora),
+  };
+}
+
+/**
+ * Há descumprimento a justificar nesta OS? Justificar serve exatamente para explicar o que o
+ * relatório chamaria de DESCUMPRIDO — qualquer um dos três prazos (comparecer, resolver, execução) —
+ * mais o atraso de atividade, que só o desempenho enxerga.
+ *
+ * Antes isto era só `haAtrasoParaJustificar` (prazo de execução e atividades): o chamado que estourou
+ * o "comparecer" porque o cliente não deu acesso não tinha como ser justificado, logo não tinha como
+ * ser classificado — e é justamente o caso que pausa o SLA no papel do cliente.
+ */
+export function haDescumprimentoParaJustificar(os: OsComPrazos, agora: Date = new Date()): boolean {
+  const estados = estadosDosPrazos(os, agora);
+  return PRAZOS.some((p) => estados[p] === "DESCUMPRIDO") || haAtrasoParaJustificar(os, agora);
 }
 
 /* ───────── uma linha do relatório ───────── */
@@ -98,7 +130,6 @@ export interface LinhaCumprimento {
 }
 
 export function linhaDoCumprimento(os: OsDoCumprimento, agora: Date = new Date()): LinhaCumprimento {
-  const { comparecer, resolver } = atendimentoDaOs(os, agora);
   return {
     id: os.id,
     numero: os.chamadoNumero || os.numero,
@@ -106,9 +137,7 @@ export function linhaDoCumprimento(os: OsDoCumprimento, agora: Date = new Date()
     contratoNumero: os.contratoNumero ?? null,
     abertura: new Date(os.chamadoAbertoEm ?? os.criadoEm),
     status: os.status,
-    comparecer: estadoDoAtendimento(comparecer.situacao),
-    resolver: estadoDoAtendimento(resolver.situacao),
-    execucao: estadoDaExecucao(os, agora),
+    ...estadosDosPrazos(os, agora),
     justificativa: os.atrasoJustificadoMotivo || null,
   };
 }

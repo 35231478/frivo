@@ -11,16 +11,23 @@ import { confirmar, toast } from "@/components/ui/avisos";
 import { usePermissoes } from "@/components/providers/permissoes-provider";
 import { formatarData } from "@/lib/utils";
 import {
-  MOTIVOS_ATRASO, MSG_ATRASO_OUTRO, ROTULO_MOTIVO_ATRASO, atrasoJustificado, avisoMesFechado, explicacaoDoAtrasoValida, haAtrasoParaJustificar, rotuloMotivoAtraso,
+  AJUDA_RESPONSABILIDADE_ATRASO, MOTIVOS_ATRASO, MSG_ATRASO_OUTRO, MSG_ATRASO_SEM_RESPONSAVEL, RESPONSABILIDADES_ATRASO,
+  RESPONSABILIDADE_SUGERIDA, ROTULO_MOTIVO_ATRASO, ROTULO_RESPONSABILIDADE_ATRASO, atrasoJustificado, avisoMesFechado,
+  explicacaoDoAtrasoValida, rotuloMotivoAtraso, rotuloResponsabilidadeAtraso, type MotivoAtraso,
 } from "@/lib/os/prazo-execucao";
+import { haDescumprimentoParaJustificar } from "@/lib/prazos/cumprimento";
 
 /**
  * ATRASO JUSTIFICADO no cartão "Prazos" da OS. A OS continua atrasada: a justificativa só tira o
  * atraso do desempenho de quem executou (lib/desempenho/regras › medirAtividades) — e, se o mês do
  * atraso já fechou, avisa que o escore daquele mês não muda.
- *  - justificada: todo mundo que vê a OS lê o motivo, quem marcou e quando;
+ *  - justificada: todo mundo que vê a OS lê o motivo, de quem foi a causa, quem marcou e quando;
  *  - "Justificar atraso", "Alterar" e "Desfazer": só quem tem Desempenho › Revisar (o servidor
- *    recusa os demais) — e "Justificar" só aparece quando há atraso (da OS ou de uma atividade).
+ *    recusa os demais) — e "Justificar" só aparece quando há prazo descumprido (comparecer, resolver
+ *    ou execução) ou atividade atrasada.
+ *
+ * DE QUEM FOI A CAUSA: o motivo pré-seleciona uma sugestão, mas quem decide é o gestor — é a escolha
+ * dele que é gravada, e é ela (não o texto livre) que o relatório do cliente lê para pausar o SLA.
  */
 export function AtrasoJustificado({ os, onAtualizado }: { os: any; onAtualizado: (parcial: any) => void }) {
   const { pode } = usePermissoes();
@@ -29,14 +36,28 @@ export function AtrasoJustificado({ os, onAtualizado }: { os: any; onAtualizado:
   const justificada = atrasoJustificado(os);
   const [aberto, setAberto] = useState(false);
   const [motivo, setMotivo] = useState("");
+  const [responsavel, setResponsavel] = useState("");
   const [observacao, setObservacao] = useState("");
   const [erro, setErro] = useState("");
   const [salvando, setSalvando] = useState(false);
 
   // Abrir começa do que está gravado (ou em branco)
   useEffect(() => {
-    if (aberto) { setMotivo(os.atrasoJustificadoMotivo ?? ""); setObservacao(os.atrasoJustificadoObs ?? ""); setErro(""); }
-  }, [aberto, os.atrasoJustificadoMotivo, os.atrasoJustificadoObs]);
+    if (aberto) {
+      setMotivo(os.atrasoJustificadoMotivo ?? ""); setResponsavel(os.atrasoResponsavel ?? "");
+      setObservacao(os.atrasoJustificadoObs ?? ""); setErro("");
+    }
+  }, [aberto, os.atrasoJustificadoMotivo, os.atrasoResponsavel, os.atrasoJustificadoObs]);
+
+  /**
+   * Trocar o motivo sugere a causa — e só sugere: fica à vista, o gestor confirma ou troca. Motivo
+   * sem sugestão (peça faltando, outro) LIMPA o campo: deixar ali a sugestão do motivo anterior
+   * faria o gestor salvar sem olhar uma causa que ninguém escolheu para este motivo.
+   */
+  function escolherMotivo(novo: string) {
+    setMotivo(novo);
+    setResponsavel(RESPONSABILIDADE_SUGERIDA[novo as MotivoAtraso] ?? "");
+  }
 
   async function chamar(metodo: "POST" | "DELETE", corpo?: unknown) {
     const res = await fetch(`/api/ordens/${os.id}/atraso-justificado`, {
@@ -48,10 +69,11 @@ export function AtrasoJustificado({ os, onAtualizado }: { os: any; onAtualizado:
 
   async function salvar() {
     if (!motivo) { setErro("Escolha o motivo do atraso."); return; }
+    if (!responsavel) { setErro(MSG_ATRASO_SEM_RESPONSAVEL); return; }
     if (!explicacaoDoAtrasoValida(motivo, observacao)) { setErro(MSG_ATRASO_OUTRO); return; }
     setErro(""); setSalvando(true);
     try {
-      const r = await chamar("POST", { motivo, observacao });
+      const r = await chamar("POST", { motivo, responsavel, observacao });
       // Recusado (sem permissão, sem atraso): a gaveta fica aberta com o que foi escolhido
       if (!r.ok) { setErro(r.erro || "Não foi possível justificar o atraso."); return; }
       toast(justificada ? "Justificativa alterada." : "Atraso justificado.");
@@ -77,7 +99,7 @@ export function AtrasoJustificado({ os, onAtualizado }: { os: any; onAtualizado:
     } catch { toast("Sem conexão. Tente de novo.", "erro"); }
   }
 
-  const haAtraso = haAtrasoParaJustificar(os);
+  const haAtraso = haDescumprimentoParaJustificar(os);
   // Mês do desempenho já fechado: a justificativa fica gravada, mas não muda o escore daquele mês
   const mesFechado = podeJustificar ? avisoMesFechado(os.mesesFechadosDoAtraso) : "";
   if (!justificada && !(podeJustificar && haAtraso)) return null;
@@ -87,7 +109,10 @@ export function AtrasoJustificado({ os, onAtualizado }: { os: any; onAtualizado:
       {justificada ? (
         <div className="space-y-1">
           <p className="text-xs font-semibold text-ink-muted uppercase tracking-wider">Atraso justificado</p>
-          <p className="text-sm text-ink" data-motivo-atraso>{rotuloMotivoAtraso(os.atrasoJustificadoMotivo) || os.atrasoJustificadoMotivo}</p>
+          <p className="text-sm text-ink" data-motivo-atraso>
+            {rotuloMotivoAtraso(os.atrasoJustificadoMotivo) || os.atrasoJustificadoMotivo}
+            {os.atrasoResponsavel && <span className="text-ink-muted" data-responsavel-atraso={os.atrasoResponsavel}> · {rotuloResponsabilidadeAtraso(os.atrasoResponsavel)}</span>}
+          </p>
           {os.atrasoJustificadoObs && <p className="text-sm text-ink-muted whitespace-pre-line break-words" data-obs-atraso>{os.atrasoJustificadoObs}</p>}
           <p className="text-xs text-ink-muted" data-autor-atraso>
             {[os.atrasoJustificadoPor?.nome, os.atrasoJustificadoEm ? formatarData(os.atrasoJustificadoEm) : null].filter(Boolean).join(" · ")}
@@ -120,10 +145,20 @@ export function AtrasoJustificado({ os, onAtualizado }: { os: any; onAtualizado:
           {erro && <p role="alert" className="text-sm text-atrasado-texto bg-atrasado-claro border border-atrasado/20 rounded-lg px-3 py-2" data-erro-atraso>{erro}</p>}
           {mesFechado && <p className="text-sm text-atencao-texto bg-atencao-claro border border-atencao/20 rounded-lg px-3 py-2" data-aviso-mes-fechado>{mesFechado}</p>}
           <FormField label="Motivo" required dica="Use quando o atraso não foi culpa de quem executou. A OS continua atrasada; o atraso só deixa de contar no desempenho do colaborador.">
-            <Select value={motivo} onChange={(e) => setMotivo(e.target.value)} placeholder="Escolha o motivo" aria-label="Motivo do atraso" data-motivo>
+            <Select value={motivo} onChange={(e) => escolherMotivo(e.target.value)} placeholder="Escolha o motivo" aria-label="Motivo do atraso" data-motivo>
               {MOTIVOS_ATRASO.map((m) => <option key={m} value={m}>{ROTULO_MOTIVO_ATRASO[m]}</option>)}
             </Select>
           </FormField>
+          <FormField label="De quem foi a causa" required dica="É esta marcação que o relatório do cliente lê: o atraso por causa dele sai da conta do percentual que ele recebe. Causa interna e força maior continuam contando como descumprido no documento que vai a ele.">
+            <Select value={responsavel} onChange={(e) => setResponsavel(e.target.value)} placeholder="Escolha a causa" aria-label="De quem foi a causa do atraso" data-responsavel>
+              {RESPONSABILIDADES_ATRASO.map((r) => <option key={r} value={r}>{ROTULO_RESPONSABILIDADE_ATRASO[r]}</option>)}
+            </Select>
+          </FormField>
+          {responsavel && (
+            <p className="-mt-2 text-xs text-ink-muted" data-ajuda-responsavel>
+              {AJUDA_RESPONSABILIDADE_ATRASO[responsavel as keyof typeof AJUDA_RESPONSABILIDADE_ATRASO]}
+            </p>
+          )}
           <FormField label="Explicação" required={motivo === "OUTRO"}>
             <Textarea value={observacao} onChange={(e) => setObservacao(e.target.value)} rows={3} maxLength={500} aria-label="Explicação do atraso"
               placeholder={motivo === "OUTRO" ? "O que aconteceu" : "Opcional"} data-observacao />

@@ -59,7 +59,9 @@ describe.skipIf(!URL_PG)("Prazos da OS — PR 2: prazo de execução nas telas (
     empresaId: "e1", clienteId: "c1", criadoPorId: "uGestor", numero: `OS-P${String(++seq).padStart(3, "0")}`, descricao: "Serviço", status: "ABERTA", ...dados,
   } });
   const lerOs = (id: string) => prisma.ordemServico.findUnique({ where: { id }, include: { historico: { orderBy: { criadoEm: "asc" } } } });
-  const justificar = (id: string, corpo: unknown) => chamar("ordens/[id]/atraso-justificado", "POST", { id }, corpo);
+  // a causa do atraso é obrigatória desde a pausa de SLA; estes testes são do motivo, então o helper preenche uma
+  const justificar = (id: string, corpo: Record<string, unknown>) =>
+    chamar("ordens/[id]/atraso-justificado", "POST", { id }, { responsavel: "CLIENTE", ...corpo });
   const desfazer = (id: string) => chamar("ordens/[id]/atraso-justificado", "DELETE", { id });
   const noRelogio = () => { vi.useFakeTimers({ toFake: ["Date"] }); vi.setSystemTime(AGORA); };
 
@@ -165,11 +167,12 @@ describe.skipIf(!URL_PG)("Prazos da OS — PR 2: prazo de execução nas telas (
       const r = await chamar("ordens/export", "GET", {}, undefined, "prazo=atrasadas&sort=numero&dir=asc");
       expect(r.status).toBe(200);
       const linhas = r.texto.replace(/^﻿/, "").split("\r\n").map((l) => l.split(";").map((c) => c.replace(/^"|"$/g, "")));
-      expect(linhas[0]).toEqual(["Número", "Cliente", "Tipo", "Status", "Prioridade", "Técnico", "Data abertura", "Data prevista", "Prazo", "Situação do prazo", "Atraso justificado", "Conclusão"]);
+      expect(linhas[0]).toEqual(["Número", "Cliente", "Tipo", "Status", "Prioridade", "Técnico", "Data abertura", "Data prevista", "Prazo", "Situação do prazo", "Atraso justificado", "Causa do atraso", "Conclusão"]);
       const todas = await prisma.ordemServico.findMany({ where: { id: { in: dos("ATRASADO") } }, orderBy: { numero: "asc" } });
       expect(linhas.slice(1).map((l) => l[0])).toEqual(todas.map((o: any) => o.numero));
       const justificada = linhas.find((l) => l[0] === todas.find((o: any) => o.atrasoJustificadoMotivo).numero)!;
-      expect(justificada.slice(7, 11)).toEqual(["—", "12/11/2026", "Atrasada 6 dias", "Cliente ausente: Portaria fechada"]);
+      // a causa fica "—": esta justificativa foi gravada antes da marcação existir, e nada foi preenchido por trás
+      expect(justificada.slice(7, 12)).toEqual(["—", "12/11/2026", "Atrasada 6 dias", "Cliente ausente: Portaria fechada", "—"]);
       // a prevista ontem às 22h de Brasília: a data é a de Brasília (17), não a de UTC (18)
       const noite = linhas.find((l) => l[0] === todas.find((o: any) => o.id === ids.get("prevista ontem às 22h de Brasília (já é hoje em UTC)")).numero)!;
       expect(noite.slice(7, 10)).toEqual(["17/11/2026", "17/11/2026", "Atrasada 1 dia"]);
@@ -191,7 +194,7 @@ describe.skipIf(!URL_PG)("Prazos da OS — PR 2: prazo de execução nas telas (
       expect(gravada).toMatchObject({ atrasoJustificadoMotivo: "CLIENTE_AUSENTE", atrasoJustificadoObs: "Ninguém na portaria.", atrasoJustificadoPorId: "uGestor", status: "ABERTA" });
       expect(gravada.atrasoJustificadoEm.toISOString()).toBe(AGORA.toISOString());
       expect(gravada.prazoExecucao.toISOString()).toBe("2026-11-15T00:00:00.000Z"); // a OS continua atrasada: o prazo não muda
-      expect(gravada.historico.map((h: any) => [h.acao, h.detalhes, h.usuarioId])).toEqual([["Atraso justificado", "Cliente ausente: Ninguém na portaria.", "uGestor"]]);
+      expect(gravada.historico.map((h: any) => [h.acao, h.detalhes, h.usuarioId])).toEqual([["Atraso justificado", "Cliente ausente (Causa do cliente): Ninguém na portaria.", "uGestor"]]);
     });
 
     it("validação: motivo fora da lista e \"Outro\" sem explicação são recusados (400) e nada é gravado", async () => {
@@ -281,12 +284,13 @@ describe.skipIf(!URL_PG)("Prazos da OS — PR 2: prazo de execução nas telas (
       expect((await justificar(os.id, { motivo: "PECA_FALTANDO" })).status).toBe(200);
       const r = await desfazer(os.id);
       expect(r.status).toBe(200);
-      expect(r.json).toEqual({ atrasoJustificadoMotivo: null, atrasoJustificadoObs: null, atrasoJustificadoEm: null, atrasoJustificadoPor: null });
+      // desfazer limpa a causa junto (a OS não fica com uma causa sem justificativa)
+      expect(r.json).toEqual({ atrasoJustificadoMotivo: null, atrasoJustificadoObs: null, atrasoJustificadoEm: null, atrasoJustificadoPor: null, atrasoResponsavel: null });
       const gravada = await lerOs(os.id);
       expect(gravada).toMatchObject({ atrasoJustificadoMotivo: null, atrasoJustificadoObs: null, atrasoJustificadoPorId: null, atrasoJustificadoEm: null });
       expect(gravada.historico.map((h: any) => [h.acao, h.detalhes])).toEqual([
-        ["Atraso justificado", "Chuva ou clima: Chuva forte"],
-        ["Justificativa do atraso alterada", "Peça faltando"],
+        ["Atraso justificado", "Chuva ou clima (Causa do cliente): Chuva forte"],
+        ["Justificativa do atraso alterada", "Peça faltando (Causa do cliente)"],
         ["Justificativa do atraso desfeita", "Era: Peça faltando."],
       ]);
     });

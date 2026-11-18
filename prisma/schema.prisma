@@ -1943,6 +1943,11 @@ model OrdemServico {
   atrasoJustificadoObs    String?   @map("atraso_justificado_obs")
   atrasoJustificadoPorId  String?   @map("atraso_justificado_por_id")
   atrasoJustificadoEm     DateTime? @map("atraso_justificado_em")
+  /// DE QUEM FOI A CAUSA do atraso justificado: CLIENTE, INTERNA ou TERCEIROS (lib/os/prazo-execucao.ts).
+  /// É marcação EXPLÍCITA do gestor — nunca deduzida do motivo nem do texto livre. Serve ao relatório
+  /// de cumprimento de prazos: só a causa do CLIENTE pausa o SLA no documento que vai ao cliente.
+  /// Vazio = justificativa antiga, sem classificação: continua contando como descumprido.
+  atrasoResponsavel       String?   @map("atraso_responsavel")
   /// PRAZO DE ATENDIMENTO (o que o contrato promete ao cliente): só no chamado de cliente em
   /// contrato. `chamadoAbertoEm` = quando o CLIENTE abriu (é de lá que conta, não da criação da OS);
   /// os dois limites são congelados nessa hora (mudar o contrato depois não reescreve o passado);

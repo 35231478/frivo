@@ -100,6 +100,10 @@ describe("Atraso justificado no cartão Prazos da OS", () => {
     await clicar($("[data-salvar-atraso]")); // sem motivo
     expect(txt($("[data-erro-atraso]"))).toBe("Escolha o motivo do atraso.");
     await escrever($("[data-motivo]"), "OUTRO");
+    // "Outro" não sugere causa nenhuma: ela é cobrada antes da explicação, na ordem em que estão na tela
+    await clicar($("[data-salvar-atraso]"));
+    expect(txt($("[data-erro-atraso]"))).toBe("Diga de quem foi a causa do atraso.");
+    await escrever($("[data-responsavel]"), "INTERNA");
     await clicar($("[data-salvar-atraso]")); // "Outro" sem explicação
     expect(txt($("[data-erro-atraso]"))).toBe("Explique o motivo do atraso (pelo menos 5 caracteres).");
     // "razão é razão": um "x" não é explicação
@@ -111,7 +115,8 @@ describe("Atraso justificado no cartão Prazos da OS", () => {
     await escrever($("[data-motivo]"), "CLIENTE_AUSENTE");
     await escrever($("[data-observacao]"), "Ninguém na portaria.");
     await clicar($("[data-salvar-atraso]"));
-    expect(gravacoes()).toEqual([{ url: URL_JUSTIFICAR, metodo: "POST", corpo: { motivo: "CLIENTE_AUSENTE", observacao: "Ninguém na portaria." } }]);
+    // trocar o motivo trouxe a causa sugerida por ele (cliente ausente → do cliente), por cima da que estava escolhida
+    expect(gravacoes()).toEqual([{ url: URL_JUSTIFICAR, metodo: "POST", corpo: { motivo: "CLIENTE_AUSENTE", responsavel: "CLIENTE", observacao: "Ninguém na portaria." } }]);
     expect(atualizado).toHaveBeenCalledWith(JUSTIFICADA); // a tela da OS recebe o que o servidor gravou
     expect(toasts().at(-1)).toEqual(["Atraso justificado.", "sucesso"]);
   });
