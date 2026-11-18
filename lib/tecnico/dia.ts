@@ -12,13 +12,14 @@ import { avisosDeHojePorAtividade } from "@/lib/execucao/aviso-cliente";
 import type { AvisosTela } from "@/lib/tecnico/aviso-cliente";
 import { numerosDasVisitas } from "@/lib/os/visitas-server";
 import type { MaterialPrevisto } from "@/lib/tecnico/o-que-levar";
+import { prazoDefinido } from "@/lib/os/prazo-execucao";
 
 const SELECT_CARTAO = {
-  id: true, titulo: true, status: true, dataAgendada: true, duracaoMin: true, observacao: true, planoVisitasId: true,
+  id: true, titulo: true, status: true, dataAgendada: true, duracaoMin: true, observacao: true, planoVisitasId: true, prazo: true,
   tipoOs: { select: { nome: true, cor: true } },
   ordemServico: {
     select: {
-      id: true, numero: true, prioridade: true, descricao: true, origem: true, observacoes: true,
+      id: true, numero: true, prioridade: true, descricao: true, origem: true, observacoes: true, prazoExecucao: true,
       cliente: { select: { nome: true, nomeFantasia: true, telefone: true, endereco: true, numero: true, bairro: true, cidade: true, estado: true, cep: true } },
       unidade: { select: { nome: true, logradouro: true, numero: true, complemento: true, bairro: true, cidade: true, estado: true, cep: true, latitude: true, longitude: true, telefone: true } },
     },
@@ -51,6 +52,11 @@ export interface CartaoAtividade {
   chamado: boolean;
   /** O que o escritório escreveu para a visita: a observação da atividade e as observações da OS */
   orientacao: string;
+  /**
+   * O prazo DEFINIDO ("AAAA-MM-DD"): o da atividade ou o da OS, o mais próximo. null = ninguém
+   * definiu prazo (vale o dia agendado, que o cartão já mostra). O selo é calculado na tela.
+   */
+  prazo: string | null;
   equipamentos: number;
   atendidos: number;
   adicionais: number;
@@ -83,6 +89,7 @@ export function montarCartao(a: AtividadeCartao): CartaoAtividade {
     cliente: (c.nomeFantasia ?? "").trim() || c.nome, telefone: (u?.telefone ?? c.telefone ?? "").trim() || null, unidade: u?.nome ?? null,
     endereco: enderecoEmLinha(local), rota: linkRota(local), descricao: os.descricao,
     chamado: os.origem === "PORTAL_CLIENTE", orientacao: juntarTextos(a.observacao, os.observacoes),
+    prazo: prazoDefinido({ prazoAtividade: a.prazo, prazoOs: os.prazoExecucao }),
     equipamentos: a._count.equipamentos, atendidos: a.equipamentos.length, adicionais: a._count.servicosAdicionais,
   };
 }

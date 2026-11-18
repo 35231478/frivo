@@ -391,7 +391,7 @@ describe("modelos de prazo", () => {
   it("OS: prazo NOVO com modelo inativo = 400 (antes aceitava); com modelo ativo = 201", async () => {
     const r = await chamar(prazos, "POST", { id: "os1" }, { templateId: "pz-velho" });
     expect(r.status).toBe(400);
-    expect(r.json.erro).toBe("Modelo de prazo inativo(a): escolha um(a) ativo(a).");
+    expect(r.json.erro).toBe("Modelo de etapas inativo(a): escolha um(a) ativo(a).");
     expect(db.t.osPrazo).toHaveLength(1);
     expect((await chamar(prazos, "POST", { id: "os1" }, { templateId: "pzB" })).status).toBe(400); // de outra empresa
     const ok = await chamar(prazos, "POST", { id: "os1" }, { templateId: "pz1" });

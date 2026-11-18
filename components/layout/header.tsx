@@ -116,10 +116,11 @@ const ROTULOS_ROTA: Record<string, string> = {
   calendario: "Calendário",
   atividades: "Atividades",
   prazos: "Prazos",
+  etapas: "Etapas com prazo",
   templates: "Modelos",
   termos: "Termos",
   "termos-referencia": "Termos de referência",
-  "modelos-prazo": "Modelos de prazo",
+  "modelos-prazo": "Etapas com prazo",
   perfis: "Perfis de acesso",
   "perfis-acesso": "Perfis de acesso",
   usuarios: "Usuários",
@@ -292,11 +293,11 @@ export function Header({ session, avatarUrl }: HeaderProps) {
                   {podeVer("estoque", "separar") && (alertas?.separacoesPendentes ?? 0) > 0 && <AlertaItem href="/estoque/separacao" icone={PackageOpen} cor="text-acento" label="OS com material a separar" valor={alertas?.separacoesPendentes ?? 0} onClick={() => setSinoAberto(false)} />}
                   {podeVer("estoque", "separar") && (alertas?.devolucoesPendentes ?? 0) > 0 && <AlertaItem href="/estoque/devolucao" icone={PackageMinus} cor="text-atencao" label="OS com material a devolver" valor={alertas?.devolucoesPendentes ?? 0} onClick={() => setSinoAberto(false)} />}
                   {(alertas?.nfPedidos ?? 0) > 0 && <AlertaItem href={`/compras/pedidos/${alertas?.nfPedidoId ?? ""}`} icone={PackageCheck} cor="text-ok" label="NF chegou nos seus pedidos" valor={alertas?.nfPedidos ?? 0} onClick={() => setSinoAberto(false)} />}
-                  {podeVer("ordens") && <AlertaItem href="/prazos?status=ATRASADO" icone={AlertTriangle} cor="text-atrasado" label="Prazos vencidos" valor={alertas?.prazosVencidos ?? 0} onClick={() => setSinoAberto(false)} />}
-                  {podeVer("ordens") && <AlertaItem href="/prazos?status=ATIVO" icone={Clock} cor="text-atencao" label="Vencendo hoje" valor={alertas?.etapasVencendoHoje ?? 0} onClick={() => setSinoAberto(false)} />}
+                  {podeVer("ordens") && <AlertaItem href="/ordens/etapas?status=ATRASADO" icone={AlertTriangle} cor="text-atrasado" label="Etapas com prazo vencidas" valor={alertas?.prazosVencidos ?? 0} onClick={() => setSinoAberto(false)} />}
+                  {podeVer("ordens") && <AlertaItem href="/ordens/etapas?status=ATIVO" icone={Clock} cor="text-atencao" label="Etapas vencendo hoje" valor={alertas?.etapasVencendoHoje ?? 0} onClick={() => setSinoAberto(false)} />}
                   {podeVer("compras") && <AlertaItem href="/compras/pedidos" icone={ShoppingCart} cor="text-atencao" label="Compras pendentes" valor={alertas?.pedidosPendentes ?? 0} onClick={() => setSinoAberto(false)} />}
                   {podeVer("ordens") && <AlertaItem href="/ordens?origem=PORTAL_CLIENTE" icone={Headset} cor="text-acento" label="Chamados do portal" valor={alertas?.chamadosPortal ?? 0} onClick={() => setSinoAberto(false)} />}
-                  {podeVer("ordens") && <AlertaItem href="/ordens" icone={Timer} cor="text-atrasado" label="Atendimentos em atraso" valor={alertas?.atendimentosAtraso ?? 0} onClick={() => setSinoAberto(false)} />}
+                  {podeVer("ordens") && <AlertaItem href="/ordens?prazo=atrasadas" icone={Timer} cor="text-atrasado" label="OS atrasadas" valor={alertas?.atendimentosAtraso ?? 0} onClick={() => setSinoAberto(false)} />}
                   {podeVer("veiculos") && <AlertaItem href="/veiculos/checklist" icone={ClipboardCheck} cor="text-acento" label="Checklists pendentes" valor={alertas?.checklistPendente ?? 0} onClick={() => setSinoAberto(false)} />}
                   {podeVer("veiculos") && <AlertaItem href="/veiculos" icone={AlertTriangle} cor="text-atencao" label="Checklists com alertas" valor={alertas?.checklistsComAlertas ?? 0} onClick={() => setSinoAberto(false)} />}
                   {podeVer("veiculos") && <AlertaItem href="/veiculos" icone={FileWarning} cor="text-atencao" label="Documentos de veículo vencendo" valor={alertas?.documentosVencendo ?? 0} onClick={() => setSinoAberto(false)} />}

@@ -32,6 +32,8 @@ export default async function OsDetalhePage({ params, searchParams }: { params: 
       orcamentoOrigem: { select: { id: true, codigo: true } },
       responsavel: { select: { id: true, nome: true } },
       criadoPor: { select: { id: true, nome: true } },
+      // Atraso justificado: quem marcou (o motivo e a data são colunas da própria OS)
+      atrasoJustificadoPor: { select: { id: true, nome: true } },
       // Aceite do cliente: "concluída, aguardando confirmação" no cabeçalho e no que falta
       aceite: { select: { situacao: true, metodo: true, nome: true, confirmadoEm: true, ressalva: true } },
       atividades: {
@@ -72,7 +74,7 @@ export default async function OsDetalhePage({ params, searchParams }: { params: 
         },
       },
       historico: { include: { usuario: { select: { nome: true } } }, orderBy: { criadoEm: "desc" } },
-      // SLA (modelos de prazo): o Resumo conta os atrasados; a gestão fica na aba Atividades
+      // Etapas com prazo (modelos de etapas): o Resumo conta as atrasadas; a gestão fica na aba Atividades
       prazos: { select: { id: true, status: true } },
       orcamentos: {
         include: {

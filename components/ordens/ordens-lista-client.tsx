@@ -17,6 +17,7 @@ import { BuscaSelect, type OpcaoBusca } from "@/components/ui/busca-select";
 import { AvatarCliente } from "@/components/ui/avatar-cliente";
 import { AvatarStack } from "@/components/ui/avatar-stack";
 import { formatarDiaCivil } from "@/lib/os/prazos";
+import { FILTROS_PRAZO, ROTULO_FILTRO_PRAZO } from "@/lib/os/prazo-execucao";
 import { ClipboardList, Plus, LayoutGrid, List, Download, Headset } from "lucide-react";
 import { TabelaPro } from "@/components/listagem/tabela-pro";
 import { PLANILHA } from "@/lib/planilha";
@@ -27,6 +28,8 @@ interface OrdemView {
   cliente: string; clienteLogo: string | null; unidade: string | null; responsavel: string | null; atividades: number;
   tecnicos: TecnicoView[];
   status: string; prioridade: string; criadoEm: string; previsaoConclusao: string | null;
+  /** Prazo de execução que vale (o próprio ou, sem ele, o dia previsto), a situação dele e, se houver, o motivo do atraso justificado */
+  prazo: string | null; prazoSituacao: string; prazoTexto: string; atrasoJustificado: string | null;
 }
 interface Opcoes { clientes: OpcaoBusca[]; usuarios: OpcaoBusca[]; tiposOs: OpcaoBusca[]; contratos: OpcaoBusca[] }
 
@@ -41,10 +44,26 @@ const CLASSE_PRIORIDADE: Record<string, string> = {
 };
 
 /** Os filtros do painel "Mais filtros" (o período e a busca ficam fora) */
-const PARAMS_FILTROS_OS = ["status", "prioridade", "origem", "clienteId", "responsavelId", "tipoOsId", "contratoId", "numero"];
+const PARAMS_FILTROS_OS = ["status", "prioridade", "prazo", "origem", "clienteId", "responsavelId", "tipoOsId", "contratoId", "numero"];
 
 /** Princípio 7: o que a lista mostra fica no ⓘ do título, não num parágrafo acima da tabela. */
-const AJUDA = "Todas as OS do período escolhido: o período olha o dia agendado, a previsão de conclusão ou a abertura. OS canceladas ficam fora até o filtro de status pedir.";
+const AJUDA = "Todas as OS do período escolhido: o período olha o dia agendado, a data prevista, o prazo ou a abertura. A coluna Prazo mostra até quando a OS precisa estar concluída e avisa quando vence hoje ou atrasou. OS canceladas ficam fora até o filtro de status pedir.";
+
+/** A situação do prazo que merece destaque na lista: só o que pede ação (o resto é a data, sem selo) */
+const SELO_PRAZO: Record<string, string> = { ATRASADO: "pill-atrasado", VENCE_HOJE: "pill-atencao" };
+
+/** O prazo de uma OS: a data e, quando vence hoje ou atrasou, o selo; atraso justificado vai escrito ao lado */
+function PrazoDaOs({ os, compacto }: { os: OrdemView; compacto?: boolean }) {
+  if (!os.prazo) return <span className={PLANILHA.apagado}>—</span>;
+  const selo = SELO_PRAZO[os.prazoSituacao];
+  return (
+    <span className="inline-flex items-center gap-1.5 whitespace-nowrap" data-prazo-lista={os.prazoSituacao}>
+      <span className={cn(PLANILHA.data, !selo && PLANILHA.apagado)}>{compacto ? `Prazo ${formatarDiaCivil(os.prazo)}` : formatarDiaCivil(os.prazo)}</span>
+      {selo && <span className={cn(selo, "text-[11px] px-2")}>{os.prazoTexto}</span>}
+      {os.atrasoJustificado && <span className="pill-previsto text-[11px] px-2" data-atraso-justificado title={`Atraso justificado: ${os.atrasoJustificado}`}>Justificado</span>}
+    </span>
+  );
+}
 
 export function OrdensListaClient({ ordens, total, pagina, porPagina, opcoes, periodo }: { ordens: OrdemView[]; total: number; pagina: number; porPagina: number; opcoes: Opcoes; periodo: PeriodoTela }) {
   const router = useRouter();
@@ -136,7 +155,7 @@ export function OrdensListaClient({ ordens, total, pagina, porPagina, opcoes, pe
 
       {/* Barra enxuta: período + busca + "Mais filtros" (painel recolhido) — padrão da casa */}
       <BarraFiltros
-        periodo={<BarraPeriodo periodo={periodo} navegar={(m) => setParams(m)} permitirTodos dica="Pelo dia agendado, pela previsão de conclusão ou pela abertura da OS. Atalhos: ← → mudam o período, T volta para hoje." />}
+        periodo={<BarraPeriodo periodo={periodo} navegar={(m) => setParams(m)} permitirTodos dica="Pelo dia agendado, pela data prevista, pelo prazo ou pela abertura da OS. Atalhos: ← → mudam o período, T volta para hoje." />}
         busca={
           <CampoBusca
             valor={buscaLocal} onChange={setBuscaLocal} placeholder="Pesquisar" rotulo="Pesquisar ordens de serviço"
@@ -176,6 +195,12 @@ export function OrdensListaClient({ ordens, total, pagina, porPagina, opcoes, pe
                   className={chip(naLista("prioridade", v))}>{l}</button>
               ))}
             </div>
+          ) },
+          { id: "prazo", label: "Prazo", params: ["prazo"], render: () => (
+            <select value={get("prazo")} onChange={(e) => setParams({ prazo: e.target.value || null })} className={inputFiltro(get("prazo"))} aria-label="Prazo">
+              <option value="">Todos</option>
+              {FILTROS_PRAZO.map((f) => <option key={f} value={f}>{ROTULO_FILTRO_PRAZO[f]}</option>)}
+            </select>
           ) },
           { id: "clienteId", label: "Cliente", params: ["clienteId"], render: () => <BuscaSelect value={get("clienteId")} onChange={(v) => setParams({ clienteId: v || null })} options={opcoes.clientes} placeholder="Todos" /> },
           { id: "responsavelId", label: "Técnico responsável", params: ["responsavelId"], render: () => <BuscaSelect value={get("responsavelId")} onChange={(v) => setParams({ responsavelId: v || null })} options={opcoes.usuarios} placeholder="Todos" /> },
@@ -232,7 +257,8 @@ export function OrdensListaClient({ ordens, total, pagina, porPagina, opcoes, pe
                   <span className="text-[11px] font-semibold text-ink-muted uppercase tracking-wider">Equipe:</span>
                   <AvatarStack tecnicos={os.tecnicos} size={28} />
                 </div>
-                <p className="text-[11px] text-ink-muted mt-2 tabular-nums">Aberta {formatarData(os.criadoEm)}{os.previsaoConclusao ? ` · Prev. ${formatarDiaCivil(os.previsaoConclusao)}` : ""}</p>
+                <p className="text-[11px] text-ink-muted mt-2 tabular-nums">Aberta {formatarData(os.criadoEm)}{os.previsaoConclusao ? ` · Prevista ${formatarDiaCivil(os.previsaoConclusao)}` : ""}</p>
+                {os.prazo && <p className="text-[11px] mt-1"><PrazoDaOs os={os} compacto /></p>}
               </Link>
               <div className="absolute bottom-2 right-2"><OsInativarBotao osId={os.id} numero={os.chamadoNumero ?? os.numero} status={os.status} variante="icone" /></div>
               </div>
@@ -248,7 +274,8 @@ export function OrdensListaClient({ ordens, total, pagina, porPagina, opcoes, pe
               { id: "cliente", titulo: "Cliente", ordenar: "cliente", obrigatoria: true },
               { id: "tecnico", titulo: "Técnico", largura: 140, classe: "truncate" },
               { id: "abertura", titulo: "Abertura", largura: 96, ordenar: "criadoEm" },
-              { id: "previsao", titulo: "Previsão", largura: 96, ordenar: "previsaoConclusao" },
+              { id: "previsao", titulo: "Prevista", largura: 96, ordenar: "previsaoConclusao" },
+              { id: "prazo", titulo: "Prazo", largura: 284 },
               { id: "status", titulo: "Status", largura: 168, ordenar: "status" },
               { id: "prioridade", titulo: "Prioridade", largura: 104, ordenar: "prioridade" },
               { id: "equipe", titulo: "Equipe", largura: 128, alinhar: "direita" },
@@ -274,6 +301,7 @@ export function OrdensListaClient({ ordens, total, pagina, porPagina, opcoes, pe
                 tecnico: <span className={PLANILHA.apagado}>{os.responsavel ?? "—"}</span>,
                 abertura: <span className={cn(PLANILHA.data, PLANILHA.apagado)}>{formatarData(os.criadoEm)}</span>,
                 previsao: <span className={cn(PLANILHA.data, PLANILHA.apagado)}>{formatarDiaCivil(os.previsaoConclusao)}</span>,
+                prazo: <PrazoDaOs os={os} />,
                 status: <span className={CLASSE_STATUS[os.status]}>{LABELS_STATUS_OS[os.status]}</span>,
                 prioridade: <span className={CLASSE_PRIORIDADE[os.prioridade]}>{LABELS_PRIORIDADE[os.prioridade]}</span>,
                 equipe: <div className="flex justify-end"><AvatarStack tecnicos={os.tecnicos} size={24} /></div>,

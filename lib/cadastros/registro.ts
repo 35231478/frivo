@@ -12,6 +12,7 @@ import { erroAliquota, formatarCnae, normalizarCnae, normalizarLc116, TRIBUTACOE
 import { padronizarNome, type TipoTexto } from "@/lib/texto/normalizar";
 import { CATEGORIAS } from "@/lib/colaborador/documentos";
 import { TIPOS, TIPOS_DOCUMENTO } from "@/lib/documentos/modelos";
+import { prazoDiasSchema } from "@/lib/os/prazo-execucao";
 
 /**
  * Cadastros padronizados — registro DECLARATIVO (mesmo espírito do ENTIDADE das ações em massa).
@@ -549,7 +550,8 @@ export const CADASTROS: Record<EntidadeCadastro, DefCadastro> = {
     }, { descricao: null, conteudo: "" }),
   },
   "modelos-prazo": {
-    entidade: "modelos-prazo", modelo: "prazoTemplate", massa: true, singular: "modelo de prazo", plural: "modelos de prazo",
+    // "Etapas com prazo" na interface (eram "modelos de prazo / SLA"): fluxos de etapas com responsável e horas
+    entidade: "modelos-prazo", modelo: "prazoTemplate", massa: true, singular: "modelo de etapas", plural: "modelos de etapas",
     // Ler: qualquer usuário logado (a OS escolhe o modelo); gravar: Configurações › gerenciar
     modulo: "configuracoes", permissoes: PERMISSOES_CONFIG, chave: "id", editorProprio: true,
     busca: ["nome", "descricao"],
@@ -685,13 +687,22 @@ export const CADASTROS: Record<EntidadeCadastro, DefCadastro> = {
         key: "exigeEquipamento", label: "Exige equipamento para concluir", tipo: "booleano",
         ajuda: "Sim: a OS só é concluída com ao menos um equipamento atendido e o checklist completo (manutenção, instalação). Não: serviço sem equipamento, como visita técnica, vistoria e orçamento.",
       },
+      {
+        key: "prazoExecucaoDias", label: "Prazo padrão (dias)", tipo: "inteiro", placeholder: "Sem prazo padrão",
+        ajuda: "Quantos dias, a partir do dia agendado, a OS deste tipo tem para ser concluída. Preenche o “Prazo para finalizar” sozinho ao criar a OS — dá para ajustar à mão em cada uma. 0 = no próprio dia agendado. Vazio = sem prazo padrão.",
+      },
     ],
     colunas: [
       { key: "nome", label: "Tipo", formato: "cor-nome", ordenar: "nome" }, { key: "descricao", label: "Descrição", ordenar: "descricao", larga: true },
-      { key: "exigeEquipamento", label: "Equipamento", ordenar: "exigeEquipamento" }, { key: "uso", label: "Em uso", ordenar: (dir) => ({ atividades: { _count: dir } }) },
+      { key: "exigeEquipamento", label: "Equipamento", ordenar: "exigeEquipamento" },
+      { key: "prazoExecucaoDias", label: "Prazo padrão", ordenar: "prazoExecucaoDias" },
+      { key: "uso", label: "Em uso", ordenar: (dir) => ({ atividades: { _count: dir } }) },
     ],
-    ...schemas({ nome: nome.max(120), descricao: textoOpcional(1000), cor, exigeEquipamento: booleanoPadraoVerdadeiro },
-      { descricao: null, cor: corDado.azulForte, exigeEquipamento: true }),
+    ...schemas({
+      nome: nome.max(120), descricao: textoOpcional(1000), cor, exigeEquipamento: booleanoPadraoVerdadeiro,
+      // o formulário manda texto ("3"); a regra (inteiro de 0 a 365, vazio = sem padrão) é a do motor de prazos
+      prazoExecucaoDias: z.preprocess((v) => (vazio(v) ? null : typeof v === "string" ? Number(v.trim()) : v), prazoDiasSchema),
+    }, { descricao: null, cor: corDado.azulForte, exigeEquipamento: true, prazoExecucaoDias: null }),
   },
   /**
    * MODELOS DE DOCUMENTO: o texto da empresa que vira ficha de EPI, termo de responsabilidade,

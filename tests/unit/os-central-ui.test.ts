@@ -146,8 +146,21 @@ describe("cabeçalho-resumo da OS", () => {
     expect(datasDoResumo()).toMatchObject({ "Data prevista": "05/11/2026", Prazo: "28/10/2026" });
   });
 
+  it("ATRASO JUSTIFICADO: o cabeçalho ganha o selo com o motivo, e a OS continua aparecendo atrasada; sem justificativa, sem selo", async () => {
+    await montar(fixture({ prazos: [], atrasoJustificadoMotivo: "CLIENTE_AUSENTE", atrasoJustificadoObs: "Portaria fechada", atrasoJustificadoEm: "2026-10-29T15:00:00.000Z", atrasoJustificadoPor: { id: "u1", nome: "Ana Gestora" } }));
+    expect(texto("[data-selo-justificado]")).toBe("Atraso justificado: cliente ausente");
+    expect($("[data-selo-justificado]")?.getAttribute("data-selo-justificado")).toBe("CLIENTE_AUSENTE");
+    expect(texto("[data-prazo-os]")).toMatch(/^Prazo 28\/10\/2026\s*Atrasada 2 dias$/); // justificar não esconde o atraso
+    expect($$("[data-pendencia-os]").map((b) => b.getAttribute("data-pendencia-os"))).toContain("os-atrasada");
+    // o cartão Prazos mostra quem justificou
+    expect(texto("[data-cartao='prazos'] [data-motivo-atraso]")).toBe("Cliente ausente");
+    expect(texto("[data-cartao='prazos'] [data-autor-atraso]")).toContain("Ana Gestora · 29/10/2026");
+  });
+
   it("OS antiga (sem prazo próprio): o prazo é o dia previsto, como sempre", async () => {
     await montar(fixture({ prazos: [] }));
+    // atrasada e NÃO justificada: nada de selo de justificativa no cabeçalho
+    expect(texto("[data-cabecalho-os]")).not.toContain("Atraso justificado");
     expect(datasDoResumo()).toMatchObject({ "Data prevista": "28/10/2026", Prazo: "28/10/2026" });
     expect($("[data-prazo-os]")?.getAttribute("data-prazo-os")).toBe("ATRASADO");
   });
@@ -202,7 +215,7 @@ describe("abas consolidadas e O que falta", () => {
     expect($$("[data-pendencia-os]").map((b) => b.getAttribute("data-pendencia-os"))).toEqual(["atividade-atrasada", "os-atrasada", "sla-atrasado"]);
     // Prazos no Resumo: previsão da OS + atividade com prazo próprio
     expect($$("[data-cartao='prazos'] [data-linha-prazo]").map((l) => l.getAttribute("data-linha-prazo"))).toEqual(["ATRASADO", "ATRASADO"]);
-    expect(texto("[data-ver-sla]")).toContain("SLA: 1 em andamento (1 atrasado)");
+    expect(texto("[data-ver-etapas]")).toContain("Etapas com prazo: 1 em andamento (1 atrasada)"); // eram "SLA"
     await clicar($("[data-pendencia-os='sla-atrasado']"));
     expect(abaAtiva()).toBe("atividades");
     expect($("[data-secao-sla]")).toBeTruthy(); // a antiga aba Prazos vive aqui

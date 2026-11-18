@@ -20,7 +20,7 @@ import { EditarOs } from "@/components/os/central/editar-os";
 import { StatusPill, TOM_ESTAGIO_OS, TOM_PRAZO, TOM_PRIORIDADE } from "@/components/ui/status-pill";
 import { Stepper } from "@/components/ui/stepper";
 import { Kpi } from "@/components/ui/kpi";
-import { prazoEfetivo } from "@/lib/os/prazo-execucao";
+import { atrasoJustificado, prazoEfetivo, rotuloMotivoAtraso } from "@/lib/os/prazo-execucao";
 
 /** Situação do pagamento → cor do texto (status com função: previsto, atenção, atrasado, ok). */
 const COR_PAGAMENTO: Record<string, string> = {
@@ -100,6 +100,12 @@ export function CabecalhoOs({ os, central, acoes, onAba, onAtualizado }: {
                   <StatusPill tom={TOM_PRAZO[prazoOs.situacao] ?? "previsto"} tamanho="sm" className="ml-1">{textoPrazo(prazoOs, true)}</StatusPill>
                 )}
               </span>
+              {/* O atraso foi justificado pelo gestor: a OS continua atrasada, mas não pesa no desempenho */}
+              {atrasoJustificado(os) && (
+                <StatusPill tom="previsto" tamanho="sm" data-selo-justificado={os.atrasoJustificadoMotivo}>
+                  Atraso justificado{rotuloMotivoAtraso(os.atrasoJustificadoMotivo) ? `: ${rotuloMotivoAtraso(os.atrasoJustificadoMotivo).toLowerCase()}` : ""}
+                </StatusPill>
+              )}
             </p>
           </div>
         </div>

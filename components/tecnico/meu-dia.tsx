@@ -13,6 +13,7 @@ import { descricaoParaApp } from "@/lib/tecnico/cartao";
 import { guardadoDoRetrato, situacaoDoCartao, type EstadoCartao, type Guardado } from "@/lib/tecnico/chegada";
 import { toqueLeve } from "@/lib/haptico";
 import { chaveDiaBR, diaCivilDeChave, diasAteDiaCivil, horaBR, partesBR } from "@/lib/fuso";
+import { prazoParaOTecnico } from "@/lib/os/prazo-execucao";
 
 export const ROTULO_STATUS_ATIVIDADE: Record<string, { rotulo: string; classe: string }> = {
   AGENDADA: { rotulo: "Agendada", classe: "bg-acento-claro text-acento-hover" },
@@ -25,6 +26,27 @@ export const ROTULO_STATUS_ATIVIDADE: Record<string, { rotulo: string; classe: s
 const PRIORIDADE: Record<string, string> = { ALTA: "Prioridade alta", URGENTE: "Urgente", CRITICO: "Crítica" };
 
 const horaBaixada = (ms: number | null) => (ms ? horaBR(ms) : null);
+
+/** O selo de prazo: discreto enquanto há tempo, âmbar no dia e vermelho depois dele */
+const CLASSE_PRAZO: Record<string, string> = {
+  NO_PRAZO: "bg-surface-linha text-ink", VENCE_HOJE: "bg-atencao-claro text-atencao-texto", ATRASADO: "bg-atrasado-claro text-atrasado-texto",
+};
+
+/**
+ * Até quando a OS precisa estar pronta — só aparece quando o escritório DEFINIU um prazo (da atividade
+ * ou da OS). Calculado na hora (o cartão fica guardado no aparelho): "Prazo 25/11", "Vence hoje",
+ * "Atrasada 2 dias". Atividade concluída não mostra.
+ */
+export function SeloPrazo({ prazo, status, agora }: { prazo?: string | null; status: string; agora: number }) {
+  const p = prazoParaOTecnico({ statusAtividade: status, prazo }, new Date(agora));
+  if (!p) return null;
+  const [, mes, dia] = p.dia.split("-");
+  return (
+    <span className={cn("text-xs font-semibold rounded-full px-2 py-0.5 inline-flex items-center gap-1", CLASSE_PRAZO[p.situacao])} data-prazo={p.situacao}>
+      <Clock className="w-3 h-3" aria-hidden /> {p.situacao === "NO_PRAZO" ? `Prazo ${dia}/${mes}` : `${p.texto} · ${dia}/${mes}`}
+    </span>
+  );
+}
 
 /** Situação que o técnico vê: a do servidor, ou a que ele já gravou no aparelho (iniciar/concluir ainda a enviar). */
 export function situacaoLocal(c: CartaoTela, fila: OperacaoFila[]) {
@@ -148,6 +170,7 @@ export function CartaoAtividade({ c, fila, mostrarDia, proxima, guardado, listaE
               <HardDrive className="w-3 h-3" /> {c.equipamentos === 1 ? "1 equipamento" : `${c.equipamentos} equipamentos`}
             </span>
             {c.visita && <span className="text-xs font-medium rounded-full px-2 py-0.5 bg-acento-claro text-acento" data-visita={c.visita.numero}>Visita {c.visita.numero} de {c.visita.total}</span>}
+            <SeloPrazo prazo={c.prazo} status={status} agora={agora} />
             {!encerrada && <MarcaDeMateriais c={c} />}
             {PRIORIDADE[c.prioridade] && <span className="text-xs font-semibold rounded-full px-2 py-0.5 bg-atrasado-claro text-atrasado-texto" data-prioridade={c.prioridade}>{PRIORIDADE[c.prioridade]}</span>}
             {aEnviar > 0 && <span className="text-xs font-semibold rounded-full px-2 py-0.5 bg-atencao-claro text-atencao-texto">{aEnviar} a enviar</span>}

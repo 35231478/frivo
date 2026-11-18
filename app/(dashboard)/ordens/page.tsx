@@ -8,13 +8,15 @@ import { OrdensListaClient } from "@/components/ordens/ordens-lista-client";
 import { SelecaoMassaProvider } from "@/components/acoes-massa/selecao";
 import { BarraAcoesMassa } from "@/components/acoes-massa/barra";
 import { comparaNatural } from "@/lib/utils";
+import { atrasoJustificado, prazoEfetivo, rotuloMotivoAtraso, situacaoPrazoExecucao } from "@/lib/os/prazo-execucao";
+import { textoPrazo } from "@/lib/os/prazos";
 
 export const metadata: Metadata = { title: "Ordens de serviço" };
 
 type SP = {
   busca?: string; status?: string; prioridade?: string; origem?: string;
   clienteId?: string; responsavelId?: string; tipoOsId?: string; contratoId?: string;
-  numero?: string; dataInicio?: string; dataFim?: string; data?: string; periodo?: string; ref?: string; mes?: string; de?: string; ate?: string;
+  numero?: string; prazo?: string; dataInicio?: string; dataFim?: string; data?: string; periodo?: string; ref?: string; mes?: string; de?: string; ate?: string;
   sort?: string; dir?: string; view?: string; pagina?: string; por?: string;
 };
 
@@ -70,6 +72,7 @@ export default async function OrdensPage({ searchParams }: { searchParams: Promi
       // responsáveis + membros das equipes das atividades
       new Map(o.atividades.flatMap((a) => [a.tecnico, ...a.tecnicosEquipe.map((t) => t.tecnico)]).filter(Boolean).map((t) => [t!.id, t!])).values(),
     ).sort((a, b) => comparaNatural(a.nome, b.nome));
+    const situacao = situacaoPrazoExecucao(o, agora);
 
     return {
       id: o.id,
@@ -86,6 +89,11 @@ export default async function OrdensPage({ searchParams }: { searchParams: Promi
       prioridade: o.prioridade,
       criadoEm: o.criadoEm.toISOString(),
       previsaoConclusao: o.previsaoConclusao ? o.previsaoConclusao.toISOString() : null,
+      // O PRAZO de execução (o próprio ou, sem ele, o dia previsto) e a situação dele hoje — a regra única
+      prazo: prazoEfetivo(o)?.toISOString() ?? null,
+      prazoSituacao: situacao.situacao,
+      prazoTexto: textoPrazo(situacao, true),
+      atrasoJustificado: atrasoJustificado(o) ? rotuloMotivoAtraso(o.atrasoJustificadoMotivo) || "Justificado" : null,
     };
   });
 

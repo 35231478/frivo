@@ -13,14 +13,14 @@ import { irPara, useAtividade, useTecnico } from "@/components/tecnico/contexto"
 import { BotaoRota, RotaSemEndereco } from "@/components/tecnico/rota";
 import { OQueLevarDaOs } from "@/components/tecnico/o-que-levar";
 import { ModalCadastroEquipamento } from "@/components/tecnico/cadastro-equipamento";
-import { ChegadaNaOs } from "@/components/tecnico/aviso-cliente";
+import { ChegadaNaOs, useAgora } from "@/components/tecnico/aviso-cliente";
 import { AceiteNaOs } from "@/components/tecnico/aceite-cliente";
 import { CameraRapida, useRapida } from "@/components/tecnico/camera-rapida";
 import { ConferenciaRapida } from "@/components/tecnico/conferencia-rapida";
 import { MSG_SEM_UNIDADE } from "@/lib/tecnico/cadastro-equipamento";
 import { ConcluirSemEquipamento } from "@/components/os/concluir-sem-equipamento";
 import { srcFoto, TelaEquipamento } from "@/components/tecnico/equipamento";
-import { CartaoAtividade, DetalhesServico, ROTULO_STATUS_ATIVIDADE } from "@/components/tecnico/meu-dia";
+import { CartaoAtividade, DetalhesServico, ROTULO_STATUS_ATIVIDADE, SeloPrazo } from "@/components/tecnico/meu-dia";
 import { guardadoDoRetrato, podeEntrar } from "@/lib/tecnico/chegada";
 import { adicionalAvaliado, equipamentoDoQr } from "@/lib/tecnico/offline/estado";
 import { novoClientId } from "@/lib/tecnico/offline/motor";
@@ -86,6 +86,7 @@ function ResumoOs({ r, x, aEnviar, registrar, camera }: { r: RetratoAtividade; x
   const c = r.cartao;
   const atividadeId = x.atividade.id;
   const { motor, config } = useTecnico();
+  const agora = useAgora(); // o selo de prazo é calculado na hora (o retrato fica guardado no aparelho)
   const so = x.bloqueada;
   const [scan, setScan] = useState(false);
   const [lista, setLista] = useState(false);
@@ -143,6 +144,8 @@ function ResumoOs({ r, x, aEnviar, registrar, camera }: { r: RetratoAtividade; x
           <h1 className="text-xl font-bold text-ink leading-tight">{(config.exibirDadosCliente && c.cliente) || x.atividade.titulo || c.osNumero}</h1>
           <p className="text-sm text-ink-muted">{[config.exibirDadosCliente && c.cliente && x.atividade.titulo !== x.atividade.tipoOs?.nome && x.atividade.titulo, config.exibirDadosCliente && c.unidade, c.hora].filter(Boolean).join(" · ")}</p>
           {config.exibirDadosCliente && c.endereco && <p className="text-sm text-ink flex gap-1 pt-1"><MapPin className="w-4 h-4 text-ink-subtle shrink-0 mt-0.5" /> {c.endereco}</p>}
+          {/* Prazo definido pelo escritório (da atividade ou da OS): some quando a atividade conclui */}
+          <SeloPrazo prazo={c.prazo} status={x.atividade.status} agora={agora} />
           {/* O que fazer (descrição e orientação do escritório) fica sempre; sem dados do cliente, sai só a identidade de quem pediu */}
           <div className="bg-surface-alt rounded-lg p-2.5 mt-2 empty:hidden"><DetalhesServico c={c} /></div>
           {/* Materiais previstos desta OS (recolhido: na OS, o que importa é a execução) */}

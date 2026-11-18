@@ -11,7 +11,7 @@ import { secoesVisiveis as secoesVisiveisConfig } from "@/lib/navegacao/configur
 import type { Session } from "next-auth";
 import {
   LayoutDashboard, Users, Thermometer, ClipboardList, FileText, HardHat, Settings, ChevronDown, ChevronRight,
-  Wrench, Calculator, Wallet, Receipt, TrendingUp, FileBarChart, ShoppingCart, Timer, CalendarDays, QrCode, MapPinned,
+  Wrench, Calculator, Wallet, Receipt, TrendingUp, FileBarChart, ShoppingCart, CalendarDays, QrCode, MapPinned,
   Truck, UsersRound, BadgeDollarSign, ClipboardCheck, Smartphone, FolderOutput, UserCog, Upload, Landmark, Globe, Coins,
   PanelLeftClose, PanelLeftOpen, MoreVertical, LogOut, Package, FileBadge,
   CalendarClock, PackageOpen, PackageMinus, Trophy, UserPlus,
@@ -68,7 +68,6 @@ const OPERACIONAL: Secao[] = [
         tipo: "grupo", label: "Operações", icone: ClipboardList, itens: [
           { href: "/ordens", icone: ClipboardList, label: "Ordens de serviço" },
           { href: "/calendario", icone: CalendarDays, label: "Calendário" },
-          { href: "/prazos", icone: Timer, label: "Prazos e SLA" },
           // Última posição dos técnicos: só a gestão (Equipes › Gerenciar)
           { href: "/mapa", icone: MapPinned, label: "Mapa", modulo: "equipes", acao: "gerenciar" },
         ],

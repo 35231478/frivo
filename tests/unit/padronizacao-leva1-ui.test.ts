@@ -551,10 +551,11 @@ describe("Tipos de OS no padrão", () => {
 
   it("lista: tipo com a cor, descrição, regra do equipamento e uso — em tabela e em cartões (celular)", async () => {
     await abrir();
-    expect($$("table thead th").map(txt).filter(Boolean)).toEqual(expect.arrayContaining(["Tipo", "Descrição", "Equipamento", "Em uso"]));
-    expect(linhas().map((l) => [...l.querySelectorAll("td")].slice(0, 4).map(txt))).toEqual([
-      ["Manutenção preventiva", "Visita mensal do contrato", "Exige para concluir", "3 atividades"],
-      ["Visita técnica", "—", "Não exige", "1 atividade"],
+    expect($$("table thead th").map(txt).filter(Boolean)).toEqual(expect.arrayContaining(["Tipo", "Descrição", "Equipamento", "Prazo padrão", "Em uso"]));
+    // a coluna "Prazo padrão" entrou antes de "Em uso" (os tipos da fixture não têm padrão: "—")
+    expect(linhas().map((l) => [...l.querySelectorAll("td")].slice(0, 5).map(txt))).toEqual([
+      ["Manutenção preventiva", "Visita mensal do contrato", "Exige para concluir", "—", "3 atividades"],
+      ["Visita técnica", "—", "Não exige", "—", "1 atividade"],
     ]);
     const cartoes = $$("[data-cartoes] [data-cartao]");
     expect(cartoes.map((c) => c.getAttribute("data-cartao"))).toEqual(["t1", "t2"]);
@@ -565,6 +566,26 @@ describe("Tipos de OS no padrão", () => {
     // as ações existem nos dois
     expect(cartoes[0].querySelector("button[aria-label='Editar Manutenção preventiva']")).not.toBeNull();
     expect(cartoes[0].querySelector("button[aria-label='Inativar tipo de OS']")).not.toBeNull();
+  });
+
+  it("prazo padrão: a lista diz \"3 dias\" / \"No dia agendado\" / \"—\"; o formulário tem o campo com a explicação e manda o valor digitado", async () => {
+    await abrir(undefined, [{ ...T1, prazoExecucaoDias: 3 }, { ...T2, prazoExecucaoDias: 0 }, { ...T2, id: "t3", nome: "Vistoria", prazoExecucaoDias: null }]);
+    const colPrazo = $$("table thead th").map(txt).filter(Boolean).indexOf("Prazo padrão");
+    expect(colPrazo).toBeGreaterThan(-1);
+    expect(linhas().map((l) => txt(l.querySelector("[data-prazo-padrao]")) || "—")).toEqual(["3 dias", "No dia agendado", "—"]);
+    expect(linhas()[0].querySelector("[data-prazo-padrao]")!.getAttribute("data-prazo-padrao")).toBe("3");
+
+    await clicar($("[data-acao='novo-cadastro']"));
+    const campoPrazo = [...painel()!.querySelectorAll("input")].find((i) => i.placeholder === "Sem prazo padrão")!;
+    expect(campoPrazo).toBeTruthy();
+    expect(campoPrazo.getAttribute("inputmode")).toBe("numeric");
+    expect(txt(painel())).toContain("Prazo padrão (dias)");
+    expect(dica("Prazo padrão (dias)")).toMatch(/a partir do dia agendado.*0 = no próprio dia agendado.*Vazio = sem prazo padrão/);
+    await digitar([...painel()!.querySelectorAll("input")].find((i) => i.placeholder?.startsWith("Ex:")), "Corretiva");
+    await digitar(campoPrazo, "5");
+    respostas["POST /api/cadastros/tipos-os"] = { status: 201, corpo: { id: "t9", nome: "Corretiva", ativo: true, prazoExecucaoDias: 5 } };
+    await clicar(botao("Salvar"));
+    expect(chamadas.find((c) => c.metodo === "POST")!.corpo).toMatchObject({ nome: "Corretiva", prazoExecucaoDias: "5" });
   });
 
   it("com permissão: Novo, Editar e Inativar à vista; sem Configurações › gerenciar, a lista aparece sem nenhum deles", async () => {

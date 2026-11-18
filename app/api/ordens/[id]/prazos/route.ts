@@ -42,7 +42,7 @@ export async function POST(req: NextRequest, { params }: Params) {
 
   // Cada prazo novo é uma escolha NOVA: o modelo precisa ser da empresa e estar ativo. Prazos já
   // abertos com um modelo que depois foi inativado continuam (têm cópia das etapas).
-  try { await validarRefEmpresa("prazoTemplate", parsed.data.templateId, empresaId, "Modelo de prazo", { novoAtivo: true }); }
+  try { await validarRefEmpresa("prazoTemplate", parsed.data.templateId, empresaId, "Modelo de etapas", { novoAtivo: true }); }
   catch (e) { const r = respostaRefEmpresa(e); if (r) return r; throw e; }
 
   const template = await prisma.prazoTemplate.findFirst({

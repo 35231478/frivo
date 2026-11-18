@@ -268,7 +268,7 @@ describe("só a gestão acessa o Mapa", () => {
   };
 
   it("o item 'Mapa' (Operações) aparece para quem tem Equipes › Gerenciar; técnico, auxiliar, financeiro e quem só visualiza equipes não veem", async () => {
-    expect(await operacoes(permissoesTotais())).toEqual(expect.arrayContaining(["/ordens", "/calendario", "/prazos", "/mapa"]));
+    expect(await operacoes(permissoesTotais())).toEqual(expect.arrayContaining(["/ordens", "/calendario", "/mapa"]));
     expect(await operacoes(PRESETS.SUPERVISOR)).toContain("/mapa");
     expect(await operacoes(montarPermissoes({}), "ADMIN")).toContain("/mapa");
     for (const sem of [PRESETS.TECNICO, PRESETS.AUXILIAR, PRESETS.FINANCEIRO, montarPermissoes({ equipes: ["visualizar"], ordens: ["visualizar"] })]) {

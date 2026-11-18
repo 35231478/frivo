@@ -20,7 +20,8 @@ import { GavetaEquipamentos } from "@/components/os/gaveta-equipamentos";
 import { detalheEquipamento, rotuloEquipamento, type EquipamentoResumo } from "@/lib/os/vincular-equipamentos";
 import { InputData } from "@/components/ui/input-data";
 import { InputDataHora, MSG_HORA_INVALIDA } from "@/components/ui/input-data-hora";
-import { paraLocalBR } from "@/lib/fuso";
+import { chaveDiaCivil, paraLocalBR } from "@/lib/fuso";
+import { prazoPadrao } from "@/lib/os/prazo-execucao";
 import { AlertaPerdasCliente, type PerdasCliente } from "@/components/financeiro/alerta-perdas-cliente";
 
 type Item = { id: string; nome: string; nomeFantasia?: string | null };
@@ -61,9 +62,18 @@ export default function NovaOrdemPage() {
   const opcoesExecucao = useOpcoesExecucao();
   const [execucao, setExecucao] = useState<ValorExecucao>(VALOR_EXECUCAO_VAZIO);
   const [faltaExecutor, setFaltaExecutor] = useState(false);
-  const [tiposOs, setTiposOs] = useState<{ id: string; nome: string; ativo: boolean }[]>([]);
+  const [tiposOs, setTiposOs] = useState<{ id: string; nome: string; ativo: boolean; prazoExecucaoDias?: number | null }[]>([]);
   const [tipoOsId, setTipoOsId] = useState("");
   const [agendarPara, setAgendarPara] = useState("");
+  // PRAZO SUGERIDO pelo tipo de OS: o dia agendado + os dias do tipo. Enquanto a pessoa não mexe no
+  // campo, ele acompanha o tipo e o agendamento; depois que ela digita (ou apaga), vale o que ela pôs.
+  const [prazoMexido, setPrazoMexido] = useState(false);
+  const diasDoTipo = tiposOs.find((t) => t.id === tipoOsId)?.prazoExecucaoDias ?? null;
+  const sugerido = prazoPadrao(agendarPara || null, diasDoTipo);
+  const prazoSugerido = sugerido ? chaveDiaCivil(sugerido) : "";
+  useEffect(() => {
+    if (!prazoMexido) setForm((f) => (f.prazoExecucao === prazoSugerido ? f : { ...f, prazoExecucao: prazoSugerido }));
+  }, [prazoSugerido, prazoMexido]);
   // Data escolhida sem hora válida: não salva (nada de 08:00 escondido nem de hora anterior valendo)
   const [horaRuim, setHoraRuim] = useState<string | null>(null);
   const aoProblemaHora = (p: string | null) => { setHoraRuim(p); if (!p) setErro((e) => (e === MSG_HORA_INVALIDA ? "" : e)); };
@@ -174,6 +184,8 @@ export default function NovaOrdemPage() {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           ...form, clienteId,
+          // a pessoa apagou o prazo sugerido: a OS nasce sem prazo próprio (o servidor não reaplica o padrão)
+          ...(prazoMexido ? { usarPrazoPadrao: false } : {}),
           ...(atendidos.length ? { equipamentoIds: atendidos.map((e) => e.id) } : {}),
           // dataAgendada: instante (ISO) da hora de Brasília escolhida
           execucao: { tipoOsId: tipoOsId || null, dataAgendada: agendarPara || null, ...corpoExecucao(execucao) },
@@ -386,8 +398,14 @@ export default function NovaOrdemPage() {
                 )}
               </FormField>
               {/* O prazo da OS: é o que a central usa para dizer se está no prazo ou atrasada */}
-              <FormField label="Prazo para finalizar" dica="Opcional. Após esta data, a OS é sinalizada como atrasada.">
-                <InputData aria-label="Prazo para finalizar" value={form.prazoExecucao} onChange={(v) => setForm((f) => ({ ...f, prazoExecucao: v }))} />
+              <FormField label="Prazo para finalizar" dica="Opcional. Após esta data, a OS é sinalizada como atrasada. Se o tipo de OS tem prazo padrão, o campo já vem sugerido a partir do dia agendado — dá para ajustar."
+                hint={prazoSugerido && !prazoMexido ? `Sugerido pelo tipo de OS: ${diasDoTipo === 0 ? "no dia agendado" : `${diasDoTipo} dia${diasDoTipo === 1 ? "" : "s"} após o agendamento`}.` : undefined}>
+                <InputData aria-label="Prazo para finalizar" value={form.prazoExecucao} onChange={(v) => { setPrazoMexido(true); setForm((f) => ({ ...f, prazoExecucao: v })); }} />
+                {prazoMexido && prazoSugerido && form.prazoExecucao !== prazoSugerido && (
+                  <button type="button" onClick={() => setPrazoMexido(false)} className="text-xs font-medium text-acento hover:underline text-left" data-usar-prazo-sugerido>
+                    Usar o prazo do tipo de OS ({prazoSugerido.split("-").reverse().join("/")})
+                  </button>
+                )}
               </FormField>
             </FormGrid>
           )}

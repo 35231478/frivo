@@ -260,7 +260,8 @@ describe("Leva 5: as telas da Operação no padrão (guardas de fonte)", () => {
   });
 
   it("prazos e PMOC usam os filtros da casa: sem <form method=\"get\"> nem botão \"Filtrar\"", () => {
-    for (const p of ["app/(dashboard)/prazos/page.tsx", "app/(dashboard)/pmoc/page.tsx"]) {
+    // a tela de prazos virou "Etapas com prazo" e mora em /ordens/etapas (/prazos só redireciona)
+    for (const p of ["app/(dashboard)/ordens/etapas/page.tsx", "app/(dashboard)/pmoc/page.tsx"]) {
       const f = fonte(p);
       expect(f, p).not.toMatch(/method="get"/);
       expect(f, p).not.toMatch(/>Filtrar</);
@@ -303,7 +304,7 @@ describe("Leva 5: as telas da Operação no padrão (guardas de fonte)", () => {
 
   it("a instrução das telas desta leva está no ⓘ, não num parágrafo na tela", () => {
     for (const p of [
-      "app/(dashboard)/prazos/page.tsx", "app/(dashboard)/pmoc/page.tsx",
+      "app/(dashboard)/ordens/etapas/page.tsx", "app/(dashboard)/pmoc/page.tsx",
       "app/(dashboard)/calendario/page.tsx", "components/ordens/ordens-lista-client.tsx",
     ]) {
       const f = fonte(p);

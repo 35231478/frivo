@@ -8,6 +8,7 @@ import { variantesDocumento } from "@/lib/listagem";
 import { hojeDiaCivil, inicioMesDiaCivil, periodoDiaCivil, periodoInstanteBR } from "@/lib/fuso";
 import { whereEtapa } from "@/lib/orcamentos/ciclo";
 import { faixaDiaCivil, lerPeriodo, type Periodo } from "@/lib/periodo";
+import { wherePrazo } from "@/lib/os/prazo-execucao";
 
 type SP = Record<string, string | undefined>;
 
@@ -45,23 +46,27 @@ export function whereOrdens(empresaId: string, sp: SP, agora = new Date()) {
   if (sp.contratoId) where.contratoId = sp.contratoId;
   if (sp.tipoOsId) where.atividades = { some: { tipoOsId: sp.tipoOsId } };
   if (sp.numero) where.numero = { contains: sp.numero, mode: "insensitive" };
-  // Período: OS com atividade agendada, previsão de conclusão ou abertura dentro dele
-  // (instantes no fuso de Brasília; a previsão gravada como DIA CIVIL pela faixa de dia)
+  const e: any[] = [];
+  // Período: OS com atividade agendada, data prevista, prazo ou abertura dentro dele
+  // (instantes no fuso de Brasília; a data prevista e o prazo gravados como DIA CIVIL pela faixa de dia)
   const periodo = periodoOrdens(sp, agora);
   if (periodo.gte || periodo.lt) {
     const instante = { ...(periodo.gte && { gte: periodo.gte }), ...(periodo.lt && { lt: periodo.lt }) };
     const dia = faixaDiaCivil(periodo);
-    where.AND = [
-      {
-        OR: [
-          { atividades: { some: { dataAgendada: instante } } },
-          ...(dia ? [{ previsaoConclusao: dia }] : []),
-          { previsaoConclusao: instante }, // previsão gravada com hora (OS do calendário)
-          { criadoEm: instante },
-        ],
-      },
-    ];
+    e.push({
+      OR: [
+        { atividades: { some: { dataAgendada: instante } } },
+        ...(dia ? [{ previsaoConclusao: dia }, { prazoExecucao: dia }] : []),
+        { previsaoConclusao: instante }, // previsão gravada com hora (OS do calendário)
+        { criadoEm: instante },
+      ],
+    });
   }
+  // Prazo: atrasadas, vencem hoje ou com atraso justificado — a regra única (lib/os/prazo-execucao.ts).
+  // Entra num AND: não disputa o `status` nem o `OR` da busca.
+  const prazo = wherePrazo(sp.prazo, agora);
+  if (prazo) e.push(prazo);
+  if (e.length) where.AND = e;
   if (sp.busca) {
     where.OR = [
       { numero: { contains: sp.busca, mode: "insensitive" } },

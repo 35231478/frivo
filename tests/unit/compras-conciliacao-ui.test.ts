@@ -248,7 +248,7 @@ describe("sino: NF chegou nos pedidos de quem pediu", () => {
 
   it("zero: não aparece", async () => {
     await sino({ nfPedidos: 0, nfPedidoId: null, prazosVencidos: 1, total: 1 });
-    expect(txt(caixa)).toContain("Prazos vencidos");
+    expect(txt(caixa)).toContain("Etapas com prazo vencidas"); // o rótulo do sino mudou junto com o fim do menu "Prazos e SLA"
     expect(txt(caixa)).not.toContain("NF chegou nos seus pedidos");
   });
 });
