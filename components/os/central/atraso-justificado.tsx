@@ -11,12 +11,13 @@ import { confirmar, toast } from "@/components/ui/avisos";
 import { usePermissoes } from "@/components/providers/permissoes-provider";
 import { formatarData } from "@/lib/utils";
 import {
-  MOTIVOS_ATRASO, MSG_ATRASO_OUTRO, ROTULO_MOTIVO_ATRASO, atrasoJustificado, explicacaoDoAtrasoValida, haAtrasoParaJustificar, rotuloMotivoAtraso,
+  MOTIVOS_ATRASO, MSG_ATRASO_OUTRO, ROTULO_MOTIVO_ATRASO, atrasoJustificado, avisoMesFechado, explicacaoDoAtrasoValida, haAtrasoParaJustificar, rotuloMotivoAtraso,
 } from "@/lib/os/prazo-execucao";
 
 /**
  * ATRASO JUSTIFICADO no cartão "Prazos" da OS. A OS continua atrasada: a justificativa só tira o
- * atraso do desempenho de quem executou.
+ * atraso do desempenho de quem executou (lib/desempenho/regras › medirAtividades) — e, se o mês do
+ * atraso já fechou, avisa que o escore daquele mês não muda.
  *  - justificada: todo mundo que vê a OS lê o motivo, quem marcou e quando;
  *  - "Justificar atraso", "Alterar" e "Desfazer": só quem tem Desempenho › Revisar (o servidor
  *    recusa os demais) — e "Justificar" só aparece quando há atraso (da OS ou de uma atividade).
@@ -77,6 +78,8 @@ export function AtrasoJustificado({ os, onAtualizado }: { os: any; onAtualizado:
   }
 
   const haAtraso = haAtrasoParaJustificar(os);
+  // Mês do desempenho já fechado: a justificativa fica gravada, mas não muda o escore daquele mês
+  const mesFechado = podeJustificar ? avisoMesFechado(os.mesesFechadosDoAtraso) : "";
   if (!justificada && !(podeJustificar && haAtraso)) return null;
 
   return (
@@ -90,6 +93,7 @@ export function AtrasoJustificado({ os, onAtualizado }: { os: any; onAtualizado:
             {[os.atrasoJustificadoPor?.nome, os.atrasoJustificadoEm ? formatarData(os.atrasoJustificadoEm) : null].filter(Boolean).join(" · ")}
             {" — não conta no desempenho."}
           </p>
+          {mesFechado && <p className="text-xs text-atencao-texto" data-aviso-mes-fechado>{mesFechado}</p>}
           {podeJustificar && (
             <div className="flex gap-3 pt-1">
               <button type="button" onClick={() => setAberto(true)} className="text-xs font-medium text-acento hover:underline" data-alterar-atraso>Alterar</button>
@@ -104,7 +108,7 @@ export function AtrasoJustificado({ os, onAtualizado }: { os: any; onAtualizado:
       )}
 
       <Drawer
-        aberto={aberto} onFechar={() => setAberto(false)} titulo={`Justificar o atraso da OS ${os.chamadoNumero ?? os.numero}`}
+        aberto={aberto} onFechar={() => setAberto(false)} titulo={`Justificar atraso · ${os.chamadoNumero ?? os.numero}`}
         rodape={
           <div className="flex justify-end gap-2">
             <Button variant="secondary" onClick={() => setAberto(false)}>Cancelar</Button>
@@ -114,6 +118,7 @@ export function AtrasoJustificado({ os, onAtualizado }: { os: any; onAtualizado:
       >
         <div className="space-y-4" data-gaveta-atraso>
           {erro && <p role="alert" className="text-sm text-atrasado-texto bg-atrasado-claro border border-atrasado/20 rounded-lg px-3 py-2" data-erro-atraso>{erro}</p>}
+          {mesFechado && <p className="text-sm text-atencao-texto bg-atencao-claro border border-atencao/20 rounded-lg px-3 py-2" data-aviso-mes-fechado>{mesFechado}</p>}
           <FormField label="Motivo" required dica="Use quando o atraso não foi culpa de quem executou. A OS continua atrasada; o atraso só deixa de contar no desempenho do colaborador.">
             <Select value={motivo} onChange={(e) => setMotivo(e.target.value)} placeholder="Escolha o motivo" aria-label="Motivo do atraso" data-motivo>
               {MOTIVOS_ATRASO.map((m) => <option key={m} value={m}>{ROTULO_MOTIVO_ATRASO[m]}</option>)}

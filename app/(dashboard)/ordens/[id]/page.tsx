@@ -10,6 +10,8 @@ import { pode } from "@/lib/permissoes";
 import { osJaFaturada } from "@/lib/faturamento-os";
 import { osTemNotaEmitida } from "@/lib/os/trava-edicao-server";
 import { faturamentoDaOs } from "@/lib/faturamento/faturar-server";
+import { competenciasDosAtrasos } from "@/lib/os/prazo-execucao";
+import { mesesFechadosEntre } from "@/lib/desempenho/fechamento-estado";
 
 export const metadata: Metadata = { title: "Ordem de serviço" };
 
@@ -116,5 +118,9 @@ export default async function OsDetalhePage({ params, searchParams }: { params: 
   // tabelas do cronograma ainda não existirem no banco, a OS abre normalmente, só sem o atalho.
   const pmoc = await prisma.pmocExecucao.findFirst({ where: { ordemServicoId: os.id }, select: { pmoc: { select: { id: true, nome: true } } } }).then((x) => x?.pmoc ?? null).catch(() => null);
 
-  return <OsDetalhe os={{ ...os, medicoes: medicoesDaOs, galeria, contasReceber, fatura, faturamento, notaEmitida, pmoc, exigirPrestacaoMaterial: cfg?.osExigirPrestacaoMaterial ?? false }} abaInicial={aba} />;
+  // Atraso justificado × desempenho: mês fechado não muda. Quem justifica é avisado quando o atraso
+  // é de um mês que já fechou (tolerante: sem o Desempenho no banco, só não há aviso).
+  const mesesFechadosDoAtraso = await mesesFechadosEntre(empresaId, competenciasDosAtrasos(os)).catch(() => [] as string[]);
+
+  return <OsDetalhe os={{ ...os, medicoes: medicoesDaOs, galeria, contasReceber, fatura, faturamento, notaEmitida, pmoc, mesesFechadosDoAtraso, exigirPrestacaoMaterial: cfg?.osExigirPrestacaoMaterial ?? false }} abaInicial={aba} />;
 }

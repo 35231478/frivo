@@ -15,7 +15,7 @@
 import { z } from "zod";
 import { chaveDiaBR, chaveDiaCivil, chaveHojeBR, diaCivilDeChave, hojeDiaCivil, inicioHojeBR } from "@/lib/fuso";
 import { situacaoPrazo, textoPrazo } from "@/lib/os/prazos";
-import { diaDeReferencia } from "@/lib/desempenho/regras";
+import { competenciaCurta, competenciaDe, diaDeReferencia } from "@/lib/desempenho/regras";
 import { pode, type Permissoes } from "@/lib/permissoes";
 
 export interface DatasDaOs {
@@ -233,6 +233,33 @@ export function atrasosDaOs(os: OsParaAtraso, agora: Date = new Date()): { os: b
 export function haAtrasoParaJustificar(os: OsParaAtraso, agora: Date = new Date()): boolean {
   const a = atrasosDaOs(os, agora);
   return a.os || a.atividades > 0;
+}
+
+/* ───────── a justificativa e o desempenho ───────── */
+
+/**
+ * Os meses do desempenho ("AAAA-MM", Brasília) em que a justificativa desta OS faz diferença: os das
+ * atividades CONCLUÍDAS com atraso (é o mês da conclusão que mede a atividade). Em ordem, sem repetir.
+ */
+export function competenciasDosAtrasos(os: { status?: string; atividades?: AtividadeParaAtraso[] }): string[] {
+  if (os.status === "CANCELADA") return [];
+  const meses = (os.atividades ?? [])
+    .filter((a) => a.status === "CONCLUIDA" && !!a.concluidaEm && atividadeAtrasou(a))
+    .map((a) => competenciaDe(a.concluidaEm!));
+  return [...new Set(meses)].sort();
+}
+
+/**
+ * MÊS FECHADO NÃO MUDA: justificar (ou desfazer) depois que o desempenho do mês fechou não mexe no
+ * escore nem no bônus daquele mês — só reabrindo o mês. O aviso para quem justifica ("" = nada a avisar).
+ */
+export function avisoMesFechado(competencias: string[] | null | undefined): string {
+  const meses = (competencias ?? []).map(competenciaCurta);
+  if (!meses.length) return "";
+  const lista = meses.length === 1 ? meses[0] : `${meses.slice(0, -1).join(", ")} e ${meses[meses.length - 1]}`;
+  return meses.length === 1
+    ? `O desempenho de ${lista} já está fechado: a justificativa não muda o escore desse mês. Para ela valer, reabra o mês em Desempenho › Fechamento.`
+    : `O desempenho de ${lista} já está fechado: a justificativa não muda o escore desses meses. Para ela valer, reabra cada mês em Desempenho › Fechamento.`;
 }
 
 /**

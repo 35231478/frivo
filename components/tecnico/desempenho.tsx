@@ -6,6 +6,7 @@ import { formatarData, formatarMoeda } from "@/lib/utils";
 import { StatusPill, type TomStatus } from "@/components/ui/status-pill";
 import { BarraEscore, SeletorDeMes, SeloFaixa, posicaoTexto } from "@/components/desempenho/comum";
 import { PremioEmDisputa } from "@/components/desempenho/painel-client";
+import { ListaDeAtrasos } from "@/components/desempenho/atrasos";
 import {
   ROTULO_METRICA, ROTULO_PENALIDADE, ROTULO_SITUACAO, competenciaAtual, formatarEscore, rotuloCompetencia, type SituacaoPenalidade, type TipoPenalidade,
 } from "@/lib/desempenho/regras";
@@ -121,6 +122,16 @@ function Ficha({ ficha }: { ficha: FichaDoColaborador }) {
           </li>
         </ul>
       </section>
+
+      {!!linha.atrasos?.length && (
+        <section className="rounded-xl border border-surface-border bg-white overflow-hidden" data-meus-atrasos>
+          <div className="px-4 py-3 border-b border-surface-border">
+            <h2 className="font-semibold text-ink">Atrasos do mês</h2>
+            <p className="text-xs text-ink-muted">O atraso que o escritório justificou fica fora da conta.</p>
+          </div>
+          <ListaDeAtrasos atrasos={linha.atrasos} comLink={false} />
+        </section>
+      )}
 
       {ficha.penalidades.length > 0 && (
         <section className="rounded-xl border border-surface-border bg-white overflow-hidden" data-minhas-penalidades>

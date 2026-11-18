@@ -202,6 +202,27 @@ export function concluidaNoPrazo(a: { concluidaEm: Date | string | null; prazo: 
   return chaveDiaBR(a.concluidaEm) <= referencia;
 }
 
+/** Quantos dias civis vão de um dia ("AAAA-MM-DD") a outro. */
+const diasEntre = (de: string, ate: string) => Math.round((Date.parse(`${ate}T00:00:00Z`) - Date.parse(`${de}T00:00:00Z`)) / 86_400_000);
+
+/**
+ * O ATRASO de uma atividade concluída depois do dia de referência: de quando era, quando saiu e por
+ * quantos dias. `justificado` é o motivo que a gestão gravou na OS ("atraso justificado",
+ * lib/os/prazo-execucao): com ele o atraso SAI da métrica "no prazo" — nem certo nem errado.
+ */
+export interface AtrasoDaAtividade { numeroOs: string; prazo: string; concluidaEm: string; dias: number; justificado: string | null }
+
+/** null = concluída no prazo, ou não dá para medir (sem data de conclusão, sem prazo nem agendamento). */
+export function atrasoDaAtividade(
+  a: { concluidaEm: Date | string | null; prazo: Date | string | null; dataAgendada: Date | string | null },
+  os: { numero: string; atrasoJustificadoMotivo: string | null },
+): AtrasoDaAtividade | null {
+  if (concluidaNoPrazo(a) !== false) return null;
+  const prazo = diaDeReferencia(a)!;
+  const concluidaEm = chaveDiaBR(a.concluidaEm!);
+  return { numeroOs: os.numero, prazo, concluidaEm, dias: diasEntre(prazo, concluidaEm), justificado: os.atrasoJustificadoMotivo || null };
+}
+
 /** O equipamento tem ao menos uma foto "antes" e uma "depois"? */
 export function temAntesEDepois(fotos: { momento: string | null }[]): boolean {
   return fotos.some((f) => f.momento === "ANTES") && fotos.some((f) => f.momento === "DEPOIS");
@@ -228,6 +249,8 @@ export interface EntradaEscore {
   /** Penalidades que a revisão marcou "conta" no mês */
   retornos: number;
   reclamacoes: number;
+  /** Atividades atrasadas que a gestão justificou: ficaram FORA de `prazo` (só para a tela explicar) */
+  atrasosJustificados?: number;
 }
 
 export interface LinhaComposicao {
@@ -270,9 +293,16 @@ export function faixaDoEscore(faixas: Faixa[], escore: number | null, metaMinima
   return melhor;
 }
 
+/** "2 atrasos justificados fora da conta" — o que a gestão tirou da métrica "no prazo" ("" = nenhum). */
+export const textoAtrasosJustificados = (n: number) => (n > 0 ? `${plural(n, "atraso justificado", "atrasos justificados")} fora da conta` : "");
+
 export function calcularEscore(regra: Regra, e: EntradaEscore): Escore {
+  const foraDaConta = textoAtrasosJustificados(e.atrasosJustificados ?? 0);
   const medidas: { metrica: Metrica; peso: number; valor: number | null; detalhe: string }[] = [
-    { metrica: "prazo", peso: regra.pesoPrazo, valor: percentual(e.prazo), detalhe: e.prazo.total ? `${e.prazo.certos} de ${plural(e.prazo.total, "atividade", "atividades")}` : "sem medição no mês" },
+    {
+      metrica: "prazo", peso: regra.pesoPrazo, valor: percentual(e.prazo),
+      detalhe: [e.prazo.total ? `${e.prazo.certos} de ${plural(e.prazo.total, "atividade", "atividades")}` : "sem medição no mês", foraDaConta].filter(Boolean).join(" · "),
+    },
     { metrica: "relatorio", peso: regra.pesoRelatorio, valor: percentual(e.relatorio), detalhe: e.relatorio.total ? `${e.relatorio.certos} de ${plural(e.relatorio.total, "relatório", "relatórios")}` : "sem medição no mês" },
     {
       metrica: "avaliacao", peso: regra.pesoAvaliacao, valor: e.avaliacao.media === null ? null : notaEmPercentual(e.avaliacao.media),
@@ -413,23 +443,41 @@ export interface AtividadeMedida {
   /** O responsável e a equipe da atividade, sem repetir — todos levam o resultado, uma vez cada */
   executores: string[];
   noPrazo: boolean | null;
+  /** Só quando atrasou (`noPrazo` falso): os números do atraso e, se a gestão justificou, o motivo */
+  atraso?: AtrasoDaAtividade | null;
   equipamentos: { completo: boolean; antesEDepois: boolean }[];
 }
+
+/** Um atraso do mês como a ficha lista: a atividade, a OS e se foi justificado */
+export interface AtrasoMedido extends AtrasoDaAtividade { atividadeId: string; ordemServicoId: string }
+/** A entrada do escore + os atrasos por trás dela (os que contam e os justificados) */
+export interface EntradaMedida extends EntradaEscore { atrasosJustificados: number; atrasos: AtrasoMedido[] }
 
 /** Uma OS avaliada pelo cliente no mês: a nota, quem executou e as equipes das atividades concluídas. */
 export interface OsAvaliadaMedida { ordemServicoId: string; avaliacao: number; executores: string[]; equipeIds: string[] }
 
 export interface PenalidadesQueContam { retornos: number; reclamacoes: number }
 
-function medirAtividades(atividades: AtividadeMedida[], exigirFotoAntesDepois: boolean): { prazo: Medida; relatorio: Medida } {
+/**
+ * Mede as atividades. ATRASO JUSTIFICADO: a atividade atrasada de uma OS que a gestão justificou NÃO
+ * entra em "no prazo" — nem como acerto nem como erro (como o que não dá para medir). Só o atraso sai:
+ * a atividade no prazo de uma OS justificada continua contando a favor, e o relatório é medido igual.
+ */
+function medirAtividades(atividades: AtividadeMedida[], exigirFotoAntesDepois: boolean): Pick<EntradaMedida, "prazo" | "relatorio" | "atrasosJustificados" | "atrasos"> {
   const prazo = { certos: 0, total: 0 };
   const relatorio = { certos: 0, total: 0 };
+  const atrasos: AtrasoMedido[] = [];
+  let atrasosJustificados = 0;
   for (const a of atividades) {
-    if (a.noPrazo !== null) { prazo.total++; if (a.noPrazo) prazo.certos++; }
+    const justificado = a.noPrazo === false && !!a.atraso?.justificado;
+    if (justificado) atrasosJustificados++;
+    else if (a.noPrazo !== null) { prazo.total++; if (a.noPrazo) prazo.certos++; }
+    if (a.noPrazo === false && a.atraso) atrasos.push({ atividadeId: a.id, ordemServicoId: a.ordemServicoId, ...a.atraso });
     const completo = relatorioCompleto(a.equipamentos, exigirFotoAntesDepois);
     if (completo !== null) { relatorio.total++; if (completo) relatorio.certos++; }
   }
-  return { prazo, relatorio };
+  atrasos.sort((x, y) => x.concluidaEm.localeCompare(y.concluidaEm) || x.numeroOs.localeCompare(y.numeroOs, "pt-BR", { numeric: true }) || x.atividadeId.localeCompare(y.atividadeId));
+  return { prazo, relatorio, atrasosJustificados, atrasos };
 }
 
 const mediaDasNotas = (notas: number[]) => (notas.length ? Math.round((notas.reduce((s, n) => s + n, 0) / notas.length) * 100) / 100 : null);
@@ -438,7 +486,7 @@ const mediaDasNotas = (notas: number[]) => (notas.length ? Math.round((notas.red
 export function entradaDoColaborador(
   tecnicoId: string, atividades: AtividadeMedida[], avaliacao: { media: number; avaliacoes: number } | undefined,
   penalidades: PenalidadesQueContam | undefined, exigirFotoAntesDepois: boolean,
-): EntradaEscore {
+): EntradaMedida {
   return {
     ...medirAtividades(atividades.filter((a) => a.executores.includes(tecnicoId)), exigirFotoAntesDepois),
     avaliacao: avaliacao ? { media: avaliacao.media, avaliacoes: avaliacao.avaliacoes } : { media: null, avaliacoes: 0 },
@@ -454,7 +502,7 @@ export function entradaDoColaborador(
 export function entradaDaGestao(
   lideradas: { equipeIds: string[]; membros: string[] }, atividades: AtividadeMedida[], avaliadas: OsAvaliadaMedida[],
   penalidades: PenalidadesQueContam | undefined, exigirFotoAntesDepois: boolean,
-): EntradaEscore {
+): EntradaMedida {
   const equipes = new Set(lideradas.equipeIds);
   const membros = new Set(lideradas.membros);
   const daEquipe = (x: { equipeId?: string | null; equipeIds?: string[]; executores: string[] }) =>

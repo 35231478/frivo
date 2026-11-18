@@ -16,10 +16,13 @@ import {
 import type { FichaDoColaborador } from "@/lib/desempenho/servidor";
 import { BarraEscore, Erro, SeletorDeMes, SeloFaixa, posicaoTexto } from "./comum";
 import { PremioEmDisputa } from "./painel-client";
+import { AtrasosVazios, ListaDeAtrasos, resumoDosAtrasos } from "./atrasos";
 
 const TOM_SITUACAO: Record<SituacaoPenalidade, TomStatus> = { A_REVISAR: "atencao", CONTA: "atrasado", NAO_CONTA: "previsto" };
 const AJUDA_COMPOSICAO = "Cada métrica vale um peso dentro do escore. Métrica sem medição no mês não vira zero: o peso dela é repartido entre as outras. Penalidades marcadas \"Conta\" na revisão descontam pontos do total.";
 const AJUDA_PENALIDADES = "Retorno e ressalva do cliente entram sozinhos; reclamação é registrada à mão. Só pesa no escore o que a revisão marcou \"Conta\": registrar um problema nunca penaliza.";
+
+const AJUDA_ATRASOS = "Atividades concluídas depois do prazo (o prazo da atividade ou, sem ele, o dia agendado). O atraso que a gestão justificou na OS — cliente ausente, peça faltando, acesso negado, clima — fica fora da conta do \"no prazo\": não ajuda nem atrapalha o escore. Para justificar, abra a OS e use \"Justificar atraso\" no cartão Prazos.";
 
 const pontos = (n: number | null) => (n === null ? "—" : n.toLocaleString("pt-BR", { minimumFractionDigits: 1, maximumFractionDigits: 1 }));
 
@@ -147,6 +150,17 @@ function Conteudo({ ficha }: { ficha: FichaDoColaborador }) {
           }))}
         />
       </section>
+
+      {/* Mês fechado antes de a justificativa existir não guardou a lista: a seção não aparece */}
+      {linha.atrasos && (
+        <section className="bg-white border border-surface-border rounded-xl overflow-hidden" data-atrasos-ficha>
+          <div className="px-4 py-3 border-b border-surface-border flex flex-wrap items-center justify-between gap-x-4 gap-y-1">
+            <h2 className="font-semibold text-ink flex items-center gap-1.5">Atrasos do mês <Dica texto={AJUDA_ATRASOS} rotulo="Atrasos do mês" /></h2>
+            {linha.atrasos.length > 0 && <p className="text-xs text-ink-muted" data-resumo-atrasos>{resumoDosAtrasos(linha.atrasos)}</p>}
+          </div>
+          {linha.atrasos.length === 0 ? <AtrasosVazios competencia={ficha.competencia} /> : <ListaDeAtrasos atrasos={linha.atrasos} comLink />}
+        </section>
+      )}
 
       <section className="bg-white border border-surface-border rounded-xl overflow-hidden" data-penalidades-ficha>
         <div className="px-4 py-3 border-b border-surface-border">

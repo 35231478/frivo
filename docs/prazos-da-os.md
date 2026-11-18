@@ -95,7 +95,30 @@ justificado" no cabeçalho e "Justificado" na lista.
   concluída depois do prazo, ou alguma atividade atrasada. O dia de referência da atividade é o MESMO
   do desempenho (`diaDeReferencia`: o prazo próprio ou, sem ele, o dia agendado).
 - **O que muda:** a OS **continua atrasada** (no Calendário, na lista, no Dashboard). O atraso só
-  deixa de pesar no desempenho de quem executou — isso entra no PR 3.
+  deixa de pesar no desempenho de quem executou — ver abaixo.
+
+### O atraso justificado no desempenho (PR 3)
+
+- A atividade **concluída com atraso** de uma OS justificada **sai da métrica "no prazo"**: nem acerto
+  nem erro, como o que não dá para medir (`lib/desempenho/regras.ts` › `medirAtividades`). O escore
+  sobe porque o atraso deixou de contar — nunca porque virou acerto ("1 de 2", não "2 de 3").
+- **Só o atraso sai.** A atividade no prazo da mesma OS continua contando a favor; o relatório e a
+  avaliação são medidos igual. Quem só tem atraso justificado fica **sem medição** no prazo (não é
+  zero nem 100): o peso vai para as outras métricas.
+- A justificativa é **da OS**: vale para todas as atividades atrasadas dela, para cada executor (uma
+  vez cada) e para o encarregado da equipe.
+- **Na ficha** (painel e app do técnico), a composição diz quantos ficaram fora — "1 de 2 atividades ·
+  1 atraso justificado fora da conta" — e a seção **Atrasos do mês** lista as atividades concluídas
+  depois do prazo: a OS, "Prazo dd/mm/aaaa · concluída em dd/mm/aaaa (N dias depois)" e **Conta** ou **Justificado**
+  com o motivo. No painel, o número abre a OS (é onde se justifica); no app não há link, e o
+  colaborador vê só o motivo da lista — a explicação escrita pela gestão não vai.
+- **Mês fechado não muda.** O painel do mês fechado é o que foi gravado no fechamento (inclusive a
+  lista de atrasos): justificar ou desfazer depois não mexe em escore, faixa, bônus nem na lista.
+  Quem justifica é avisado na OS — "O desempenho de 10/2026 já está fechado…" — e, para valer,
+  reabre o mês em Desempenho › Fechamento (`competenciasDosAtrasos`, `avisoMesFechado`). Mês fechado
+  antes de a lista existir simplesmente não mostra a seção.
+- A TV e a folha de bônus não recebem nada disso; o desempate da premiação conta os **acertos** (o
+  atraso justificado não é acerto).
 
 ### O prazo nas telas (PR 2)
 
@@ -147,7 +170,7 @@ entram no PR 4.
 |---|---|---|
 | **1** (este) | Banco e motor dos dois prazos; prazo de execução separado da data prevista em todos os usos; regra única de "atrasada" | 🔵 `prisma/sql/2027-01-09_prazos_execucao_atendimento.sql` |
 | **2** (feito) | Prazo de execução nas telas: lista de OS, atraso justificado, app do técnico, prazo padrão no tipo de OS, saída do menu "Prazos e SLA" | 🟢 |
-| 3 | Desempenho: atraso justificado fora da métrica "no prazo" | 🟢 |
+| **3** (feito) | Desempenho: atraso justificado fora da métrica "no prazo", atrasos do mês na ficha, mês fechado intocado | 🟢 |
 | 4 | Contrato e OS: configurar o prazo de atendimento, gravar os limites, "Cheguei", alertas | 🟢 |
 | 5 | Relatório de cumprimento (tela e PDF) | 🟢 |
 
@@ -163,3 +186,6 @@ entram no PR 4.
 | `tests/unit/prazos-pr2.test.ts` | PR 2, regras puras: filtro de prazo, o que conta como atraso, quem justifica, o prazo do técnico, o prazo padrão do tipo, o menu e a palavra "SLA" |
 | `tests/unit/prazos-pr2-pg.test.ts` | PR 2 em PostgreSQL real: lista e exportação filtradas, a rota do atraso justificado (quem, quando, histórico, multiempresa), tipo de OS, cartão do técnico |
 | `tests/unit/prazos-pr2-ui.test.ts`, `ordens-lista-barra-ui.test.ts` | PR 2, telas: a gaveta do atraso justificado, o selo do app do técnico, a coluna e o filtro da lista |
+| `tests/unit/prazos-pr3.test.ts` | PR 3, regras puras: o atraso da atividade, o que sai da conta, o texto da composição, a linha do painel, a TV sem atrasos, os meses em que a justificativa pesa e o aviso de mês fechado |
+| `tests/unit/prazos-pr3-pg.test.ts` | PR 3 em PostgreSQL real: justificar tira da conta e desfazer devolve; só o atraso sai; equipe e encarregado; mês fechado não muda e reabrir faz valer; o que o colaborador vê no app; multiempresa |
+| `tests/unit/prazos-pr3-ui.test.ts` | PR 3, telas: "Atrasos do mês" na ficha e no app, e o aviso de mês fechado na OS |
