@@ -10,7 +10,7 @@ import { CalendarioPainel } from "@/components/calendario/calendario-painel";
 import type { CelulaDia, CardOs } from "@/components/calendario/calendario-grid";
 import { SOLICITACAO_PENDENTE } from "@/lib/solicitacoes";
 import { pode } from "@/lib/permissoes";
-import { prazoVencido } from "@/lib/os/prazos";
+import { osAtrasada } from "@/lib/os/prazo-execucao";
 import { chaveDiaBR, chaveDiaCivil, partesBR } from "@/lib/fuso";
 import { gridCalendario, posicaoNoCalendario } from "@/lib/calendario/grid";
 import { SolicitacoesGaveta } from "@/components/calendario/solicitacoes-gaveta";
@@ -18,8 +18,6 @@ import { numerosDasVisitas } from "@/lib/os/visitas-server";
 import { AlertTriangle, CalendarDays, ChevronLeft, ChevronRight, Repeat } from "lucide-react";
 
 export const metadata: Metadata = { title: "Calendário" };
-
-const FINALIZADAS = ["CONCLUIDA", "CANCELADA"];
 
 /** Chave "AAAA-MM-DD" de um dia do grid (dia civil, meia-noite UTC). */
 function chave(d: Date) {
@@ -65,6 +63,8 @@ export default async function CalendarioPage({
     OR: [
       { previsaoConclusao: periodo },
       { previsaoConclusao: periodoDia },
+      // OS sem data prevista nem atividade no período: aparece no dia do prazo dela
+      { previsaoConclusao: null, prazoExecucao: periodoDia },
       { atividades: { some: { dataAgendada: periodo } } },
     ],
   };
@@ -76,7 +76,7 @@ export default async function CalendarioPage({
     prisma.ordemServico.findMany({
       where,
       select: {
-        id: true, numero: true, status: true, prioridade: true, origem: true, previsaoConclusao: true,
+        id: true, numero: true, status: true, prioridade: true, origem: true, previsaoConclusao: true, prazoExecucao: true,
         cliente: { select: { id: true, nome: true, nomeFantasia: true } },
         unidade: { select: { nome: true } },
         atividades: {
@@ -119,13 +119,16 @@ export default async function CalendarioPage({
       if (!chavesGrid.has(k)) continue;
       if (!porDia.has(k)) porDia.set(k, { data: d, ativ: at });
     }
-    if (porDia.size === 0 && os.previsaoConclusao) {
-      const d = new Date(os.previsaoConclusao);
+    // Sem atividade no período: a OS fica na DATA PREVISTA (agenda) ou, sem ela, no dia do prazo
+    const semAtividade = os.previsaoConclusao ?? os.prazoExecucao;
+    if (porDia.size === 0 && semAtividade) {
+      const d = new Date(semAtividade);
       const k = posicaoNoCalendario(d, false).chave;
       if (chavesGrid.has(k)) porDia.set(k, { data: d, ativ: null });
     }
 
-    const atrasada = prazoVencido(os.previsaoConclusao, hoje) && !FINALIZADAS.includes(os.status);
+    // Atrasada é o PRAZO de execução (o próprio ou, sem ele, o dia previsto) — a regra única
+    const atrasada = osAtrasada(os, hoje);
     for (const [k, { data: posData, ativ }] of porDia) {
       const card: CardOs = {
         chave: `${os.id}:${k}`,

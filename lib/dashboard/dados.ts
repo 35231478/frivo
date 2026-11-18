@@ -9,6 +9,7 @@ import { configPmoc } from "@/lib/pmoc-documento-server";
 import { NAO_E_RENEGOCIACAO } from "@/lib/listas/filtros";
 import { recebidoNoPeriodo, saldoDoAgregado } from "@/lib/financeiro/parcelas-server";
 import { prisma } from "@/lib/prisma";
+import { whereOsAtrasada } from "@/lib/os/prazo-execucao";
 import { contarAlertasPrazos } from "@/lib/prazo-server";
 import { contarAlertasVeiculos } from "@/lib/veiculo-server";
 import { SOLICITACAO_PENDENTE } from "@/lib/solicitacoes";
@@ -32,7 +33,8 @@ export async function dadosOperacional(empresaId: string, agora = new Date()) {
         atividades: { some: { dataAgendada: { gte: hoje, lt: amanha }, status: { not: "CANCELADA" } } },
       },
     }),
-    prisma.ordemServico.count({ where: { empresaId, status: { notIn: [...OS_FINAIS] }, previsaoConclusao: { lt: agora } } }),
+    // a regra única de "atrasada" (lib/os/prazo-execucao.ts): por DIA de Brasília, igual ao calendário e ao sino
+    prisma.ordemServico.count({ where: { empresaId, ...whereOsAtrasada(agora) } }),
     prisma.ordemServico.count({ where: { empresaId, status: "CONCLUIDA", dataConclusao: { gte: inicioMesBR(agora) } } }),
     prisma.ordemServico.count({ where: { empresaId, status: "EM_ANDAMENTO" } }),
   ]);

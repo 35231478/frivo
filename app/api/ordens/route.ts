@@ -6,6 +6,7 @@ import { z } from "zod";
 import { equipamentosDoCliente } from "@/lib/execucao/vinculos";
 import { sincronizarStatusOs } from "@/lib/os/sincronizar-status";
 import { criarPrimeiraAtividade, prepararExecucao, proximoNumeroOs } from "@/lib/os/abertura";
+import { lerPrazoDigitado, prazoAoCriar } from "@/lib/os/prazo-execucao";
 
 const osCreateSchema = z.object({
   clienteId: z.string().min(1),
@@ -13,7 +14,10 @@ const osCreateSchema = z.object({
   contratoId: z.string().optional(),
   prioridade: z.string().default("NORMAL"),
   descricao: z.string().min(5),
+  /** DATA PREVISTA (agenda). A tela "Nova OS" não manda mais: quem marca o dia é a 1ª atividade. */
   previsaoConclusao: z.string().optional(),
+  /** PRAZO DE EXECUÇÃO — o "Prazo para finalizar" (um dia). Vazio = o padrão do tipo de OS, se houver. */
+  prazoExecucao: z.string().optional().nullable(),
   observacoes: z.string().optional(),
   /** Equipamentos atendidos já na abertura (opcional; dá para vincular depois, na execução) */
   equipamentoIds: z.array(z.string().min(1)).max(200).optional(),
@@ -72,6 +76,8 @@ export async function POST(req: NextRequest) {
   const body = await req.json();
   const parsed = osCreateSchema.safeParse(body);
   if (!parsed.success) return NextResponse.json({ erro: "Dados inválidos", detalhes: parsed.error.flatten() }, { status: 400 });
+  const prazoDigitado = lerPrazoDigitado(parsed.data.prazoExecucao);
+  if (prazoDigitado === undefined) return NextResponse.json({ erro: "Prazo para finalizar inválido." }, { status: 400 });
 
   // Quem executa é obrigatório ao abrir a OS: equipe OU colaboradores (+ veículo puxado/escolhido)
   const prep = await prepararExecucao(empresaId, body?.execucao);
@@ -103,6 +109,8 @@ export async function POST(req: NextRequest) {
       status: "ABERTA",
       descricao: parsed.data.descricao,
       previsaoConclusao: parsed.data.previsaoConclusao ? new Date(parsed.data.previsaoConclusao) : null,
+      // O que a pessoa digitou vence; sem nada digitado, o padrão do tipo contado do dia agendado
+      prazoExecucao: prazoAoCriar({ digitado: prazoDigitado, dataAgendada: prep.execucao.dataAgendada, diasDoTipo: prep.execucao.prazoExecucaoDias }),
       observacoes: parsed.data.observacoes || null,
     },
    });

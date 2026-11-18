@@ -1,5 +1,6 @@
 import { statusVisualReceber } from "@/lib/financeiro-status";
 import { atividadeEncerrada, situacaoPrazo, textoPrazo } from "@/lib/os/prazos";
+import { prazoEfetivo } from "@/lib/os/prazo-execucao";
 import { medicaoValida, resumoStatus, type EstagioOs } from "@/lib/os/status";
 import { aDevolver, semConsumoInformado, type MaterialSeparavel } from "@/lib/estoque/separacao";
 import { contarEquipamentosAtendidos } from "@/lib/os/equipamentos-atendidos";
@@ -21,7 +22,11 @@ export interface AtividadeCentral {
   planoVisitasId?: string | null;
 }
 export interface OsCentralEntrada {
-  status: string; statusManual: boolean; previsaoConclusao: Date | string | null;
+  status: string; statusManual: boolean;
+  /** DATA PREVISTA (agenda): decide o status automático da OS sem atividade */
+  previsaoConclusao: Date | string | null;
+  /** PRAZO DE EXECUÇÃO: é por ele que a OS atrasa (sem ele, vale o dia previsto) */
+  prazoExecucao?: Date | string | null;
   /** Equipamento principal da OS (OS antiga, concluída sem equipamento vinculado: era ele o atendido) */
   equipamentoId?: string | null;
   atividades: AtividadeCentral[];
@@ -101,7 +106,7 @@ export function centralDaOs(os: OsCentralEntrada, agora: Date = new Date()) {
   const medido = os.medicoes.filter(medicaoValida).reduce((s, m) => s + num(m.valorTotal), 0);
   const pagamento = situacaoPagamento(os, orcado);
 
-  const prazoOs = situacaoPrazo(os.previsaoConclusao, encerrada, agora);
+  const prazoOs = situacaoPrazo(prazoEfetivo(os), encerrada, agora);
   const prazosAtividades = ativas.map((a) => ({ id: a.id, ...situacaoPrazo(a.prazo, atividadeEncerrada(a.status), agora) }));
   const atividadesAtrasadas = prazosAtividades.filter((p) => p.situacao === "ATRASADO").length;
 
@@ -114,7 +119,7 @@ export function centralDaOs(os: OsCentralEntrada, agora: Date = new Date()) {
     const semData = ativas.filter((a) => a.status === "AGENDADA" && !a.dataAgendada).length;
     if (semData) falta.push({ chave: "sem-data", texto: `Agendar ${semData} atividade${semData > 1 ? "s" : ""} sem data`, aba: "atividades", nivel: "acao" });
     if (atividadesAtrasadas) falta.push({ chave: "atividade-atrasada", texto: `${atividadesAtrasadas} atividade${atividadesAtrasadas > 1 ? "s" : ""} fora do prazo`, aba: "atividades", nivel: "alerta" });
-    if (prazoOs.situacao === "ATRASADO") falta.push({ chave: "os-atrasada", texto: `Previsão da OS vencida (${textoPrazo(prazoOs, false).toLowerCase()})`, aba: "resumo", nivel: "alerta" });
+    if (prazoOs.situacao === "ATRASADO") falta.push({ chave: "os-atrasada", texto: `Prazo da OS vencido (${textoPrazo(prazoOs, false).toLowerCase()})`, aba: "resumo", nivel: "alerta" });
     const slaAtrasado = (os.prazosSla ?? []).filter((p) => p.status === "ATRASADO").length;
     if (slaAtrasado) falta.push({ chave: "sla-atrasado", texto: `${slaAtrasado} prazo${slaAtrasado > 1 ? "s" : ""} de SLA atrasado${slaAtrasado > 1 ? "s" : ""}`, aba: "atividades", nivel: "alerta" });
     const aAvaliar = (os.servicosAdicionais ?? []).filter((s) => s.statusCobranca === "A_AVALIAR").length;

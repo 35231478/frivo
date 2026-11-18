@@ -367,6 +367,34 @@ describe.skipIf(!URL_PG)("PMOC — Etapa 2: cronograma que gera as OS (PostgreSQ
     expect(await prisma.ordemServico.count()).toBe(2); // mudou a data das mesmas OS: nenhuma nova
   });
 
+  it("PRAZO DE EXECUÇÃO: a OS do cronograma nasce com o padrão do tipo de OS (dia agendado + N dias) e, no 'Reagendar', o prazo anda junto com a data; tipo sem padrão não ganha prazo", async () => {
+    await prisma.tipoOs.update({ where: { id: "toMensal" }, data: { prazoExecucaoDias: 2 } });
+    try {
+      const { id, itemId } = await publicado(["q1"], { intervaloMeses: 6 });
+      let os = await ordens(id);
+      expect(os.map((o: any) => o.dia)).toEqual(["2026-11-25", "2027-05-25"]);
+      expect(os.map((o: any) => o.bruto.prazoExecucao.toISOString().slice(0, 10))).toEqual(["2026-11-27", "2027-05-27"]); // +2 dias
+      expect(os[0].bruto.previsaoConclusao).toEqual(meioDia("2026-11-25")); // a data prevista continua sendo a do agendamento
+
+      // alguém ajustou à mão o prazo da 2ª OS (agendada 25/05, prazo 30/05 = +5): o reagendamento preserva a folga
+      await prisma.ordemServico.update({ where: { id: os[1].id }, data: { prazoExecucao: new Date("2027-05-30T00:00:00.000Z") } });
+      await chamar("item", "PUT", { id, itemId, corpo: item({ intervaloMeses: 6, diaExecucao: 28 }) });
+      expect((await reagendar(id)).json.resultado).toMatchObject({ movidas: 2 });
+      os = await ordens(id);
+      expect(os.map((o: any) => o.dia)).toEqual(["2026-11-28", "2027-05-28"]);
+      expect(os.map((o: any) => o.bruto.prazoExecucao.toISOString().slice(0, 10))).toEqual(["2026-11-30", "2027-06-02"]); // andaram os mesmos 3 dias
+    } finally {
+      await prisma.tipoOs.update({ where: { id: "toMensal" }, data: { prazoExecucaoDias: null } });
+    }
+
+    // tipo sem padrão: sem prazo próprio, antes e depois de reagendar (vale o dia previsto)
+    const outro = await publicado(["q2"], { intervaloMeses: 6 });
+    expect((await ordens(outro.id)).map((o: any) => o.bruto.prazoExecucao)).toEqual([null, null]);
+    await chamar("item", "PUT", { id: outro.id, itemId: outro.itemId, corpo: item({ intervaloMeses: 6, diaExecucao: 27 }) });
+    await reagendar(outro.id);
+    expect((await ordens(outro.id)).map((o: any) => [o.dia, o.bruto.prazoExecucao])).toEqual([["2026-11-27", null], ["2027-05-27", null]]);
+  });
+
   it("não desfaz o que alguém ajustou à mão, não mexe em OS já iniciada, e não reagenda para o passado", async () => {
     const { id, itemId } = await publicado(["q1"], { intervaloMeses: 3 }); // 25/11, 25/02, 25/05, 25/08
     const [nov, fev, mai] = await ordens(id);

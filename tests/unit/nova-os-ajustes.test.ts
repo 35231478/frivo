@@ -2,7 +2,8 @@
 /**
  * Nova OS — ajustes da tela, num DOM de verdade (happy-dom), API simulada:
  *  - datas: "Agendar para" (data+hora, vai para a 1ª atividade/calendário) no lugar da antiga
- *    "Previsão de conclusão"; "Prazo para finalizar" (data) alimenta o prazo da OS (previsaoConclusao);
+ *    "Previsão de conclusão"; "Prazo para finalizar" (data) é o PRAZO DE EXECUÇÃO da OS (prazoExecucao),
+ *    campo próprio — a tela não manda mais a data prevista (previsaoConclusao), que é agenda;
  *  - equipe: lista com os integrantes discretos embaixo de cada equipe (líder primeiro), por teclado;
  *    equipe e colaboradores com o mesmo botão (ícone dentro, sem deslocar o alinhamento);
  *  - "Vincular equipamento" pela gaveta: exige cliente; equipamentos de todos os locais do cliente,
@@ -147,7 +148,7 @@ describe("datas da Nova OS", () => {
     expect(document.getElementById(dicaPrazo.getAttribute("aria-describedby")!)!.textContent).toBe("Opcional. Após esta data, a OS é sinalizada como atrasada.");
   });
 
-  it("o prazo vai como previsaoConclusao (o prazo da OS na central); o agendamento vai como dataAgendada da 1ª atividade (hora de Brasília)", async () => {
+  it("o prazo vai como prazoExecucao (o prazo de execução da OS), e NÃO como data prevista; o agendamento vai como dataAgendada da 1ª atividade (hora de Brasília)", async () => {
     await montar("/ordens/nova?clienteId=c1&descricao=Preventiva");
     await digitar($("input[aria-label='Agendar para — data']"), "18112026");
     await digitar($("input[aria-label='Agendar para — hora']"), "1430");
@@ -157,9 +158,11 @@ describe("datas da Nova OS", () => {
     await clicar($('[data-opcao-equipe="eq2"]'));
     await abrirOs();
     expect(post()!.corpo).toMatchObject({
-      clienteId: "c1", previsaoConclusao: "2026-11-20",
+      clienteId: "c1", prazoExecucao: "2026-11-20",
       execucao: { dataAgendada: "2026-11-18T17:30:00.000Z", equipeId: "eq2", tecnicoIds: ["t1"] },
     });
+    // prazo e agenda não se misturam mais: a tela não escreve a data prevista
+    expect("previsaoConclusao" in post()!.corpo).toBe(false);
     expect(nav.push).toHaveBeenCalledWith("/ordens/osNova");
   });
 
@@ -168,7 +171,8 @@ describe("datas da Nova OS", () => {
     await clicar($("[data-seletor-equipe] button"));
     await clicar($('[data-opcao-equipe="eq2"]'));
     await abrirOs();
-    expect(post()!.corpo.previsaoConclusao).toBe("");
+    expect(post()!.corpo.prazoExecucao).toBe("");
+    expect("previsaoConclusao" in post()!.corpo).toBe(false);
     expect(post()!.corpo.execucao.dataAgendada).toBeNull();
   });
 });

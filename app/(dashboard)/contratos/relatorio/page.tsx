@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { intervaloMeses, ehOcorrencia, dataAgendadaRecorrencia } from "@/lib/recorrencia-helpers";
 import { RelatorioContratosClient } from "@/components/contratos/relatorio-contratos-client";
 import { anoBR, diaCivilPassou, mesBR } from "@/lib/fuso";
+import { prazoEfetivo } from "@/lib/os/prazo-execucao";
 
 export const metadata: Metadata = { title: "Relatório de contratos" };
 
@@ -63,7 +64,8 @@ export default async function RelatorioContratosPage({ searchParams }: { searchP
     let progresso: number;
     if (os) {
       if (os.status === "CONCLUIDA") { statusMes = "CONCLUIDO"; progresso = 100; }
-      else if (diaCivilPassou(os.previsaoConclusao, agora)) { statusMes = "ATRASADO"; progresso = 50; }
+      // atrasada pelo PRAZO de execução (o próprio ou, sem ele, o dia previsto)
+      else if (diaCivilPassou(prazoEfetivo(os), agora)) { statusMes = "ATRASADO"; progresso = 50; }
       else { statusMes = "EM_ANDAMENTO"; progresso = 50; }
     } else {
       if (agendada < agora) { statusMes = "ATRASADO"; progresso = 0; }

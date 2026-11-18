@@ -157,6 +157,32 @@ describe("Leva 5 — o botão Editar da OS: era morto, agora abre a gaveta", () 
     expect(gravacoes()).toEqual([]);
   });
 
+  it("Data prevista e Prazo para finalizar são DOIS campos: cada um com a sua dica, e mudar o prazo manda só o prazo", async () => {
+    respostas["PUT /api/ordens/os1"] = { status: 200, corpo: { ...osBase(), prazoExecucao: "2026-12-20T00:00:00.000Z" } };
+    await abrirOs(osBase({ previsaoConclusao: "2026-12-10T00:00:00.000Z", prazoExecucao: "2026-12-15T00:00:00.000Z" }));
+    await clicar($("[data-editar-os-abrir]"));
+    const prevista = $<HTMLInputElement>("[data-editar-os] input[aria-label='Data prevista']")!;
+    const prazo = $<HTMLInputElement>("[data-editar-os] input[aria-label='Prazo para finalizar']")!;
+    expect([prevista.value, prazo.value]).toEqual(["10/12/2026", "15/12/2026"]);
+    expect($("[data-editar-os]")!.textContent).not.toContain("Previsão de conclusão"); // o rótulo que misturava os dois saiu
+    expect($('[data-editar-os] [data-dica][aria-label="Ajuda: Data prevista"]')).toBeTruthy();
+    expect($('[data-editar-os] [data-dica][aria-label="Ajuda: Prazo para finalizar"]')).toBeTruthy();
+
+    await digitar(prazo, "20122026");
+    await clicar($("[data-salvar-os]"));
+    expect(gravacoes()).toEqual([{ url: "/api/ordens/os1", metodo: "PUT", corpo: { prazoExecucao: "2026-12-20" } }]);
+  });
+
+  it("as datas chegam do servidor como Date: os dois campos abrem PREENCHIDOS (abriam vazios) — com hora, vale o dia de Brasília; e salvar sem mexer não manda nada", async () => {
+    // 20/11 às 22h de Brasília já é dia 21 em UTC: o campo mostra 20/11
+    await abrirOs(osBase({ previsaoConclusao: new Date("2026-11-21T01:00:00.000Z"), prazoExecucao: new Date("2026-11-25T00:00:00.000Z") }));
+    await clicar($("[data-editar-os-abrir]"));
+    expect($<HTMLInputElement>("[data-editar-os] input[aria-label='Data prevista']")!.value).toBe("20/11/2026");
+    expect($<HTMLInputElement>("[data-editar-os] input[aria-label='Prazo para finalizar']")!.value).toBe("25/11/2026");
+    await clicar($("[data-salvar-os]"));
+    expect(gravacoes()).toEqual([]);
+  });
+
   it("o servidor recusou (403): a gaveta FICA aberta com o que foi digitado, o motivo aparece e não há toast", async () => {
     respostas["PUT /api/ordens/os1"] = RECUSA;
     await abrirOs(osBase());

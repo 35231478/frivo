@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
-import { hojeDiaCivil, inicioHojeBR } from "@/lib/fuso";
+import { inicioHojeBR } from "@/lib/fuso";
+import { whereOsAtrasada } from "@/lib/os/prazo-execucao";
 
 /**
  * Marca de forma preguiçosa as etapas e prazos vencidos como ATRASADA/ATRASADO.
@@ -46,13 +47,8 @@ export async function contarAlertasPrazos(empresaId: string) {
     prisma.pedidoCompraInterno.count({
       where: { empresaId, status: { in: ["SOLICITADO", "COTANDO", "COMPRADO", "PARCIAL"] } },
     }),
-    prisma.ordemServico.count({
-      where: {
-        empresaId,
-        status: { notIn: ["CONCLUIDA", "CANCELADA"] },
-        previsaoConclusao: { lt: hojeDiaCivil(agora) }, // previsão é dia: atrasa depois dele
-      },
-    }),
+    // OS com o prazo de execução vencido — a regra única (lib/os/prazo-execucao.ts)
+    prisma.ordemServico.count({ where: { empresaId, ...whereOsAtrasada(agora) } }),
     prisma.ordemServico.count({
       where: { empresaId, origem: "PORTAL_CLIENTE", status: "AGUARDANDO_ATENDIMENTO" },
     }),

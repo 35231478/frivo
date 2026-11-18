@@ -158,7 +158,7 @@ describe("central da OS (números-chave, pagamento, o que falta)", () => {
     }), AGORA);
     expect(c.falta.map((p) => p.chave)).toEqual(["sem-executor", "sem-data", "atividade-atrasada", "os-atrasada", "sla-atrasado", "adicional", "orcamento-enviado"]);
     expect(c.falta.find((p) => p.chave === "atividade-atrasada")!.texto).toBe("1 atividade fora do prazo");
-    expect(c.falta.find((p) => p.chave === "os-atrasada")!.texto).toBe("Previsão da OS vencida (atrasado 2 dias)");
+    expect(c.falta.find((p) => p.chave === "os-atrasada")!.texto).toBe("Prazo da OS vencido (atrasado 2 dias)");
     expect(c.falta.find((p) => p.chave === "orcamento-enviado")!.aba).toBe("comercial");
     expect(c.prazoOs.situacao).toBe("ATRASADO");
   });

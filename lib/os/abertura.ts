@@ -20,6 +20,8 @@ export const execucaoSchema = z.object({
 export interface ExecucaoPreparada {
   titulo: string;
   tipoOsId: string | null;
+  /** Prazo de execução padrão do tipo de OS, em dias a partir do dia agendado (null = sem padrão) */
+  prazoExecucaoDias: number | null;
   dataAgendada: Date | null;
   duracaoMin: number | null;
   tecnicos: Awaited<ReturnType<typeof resolverTecnicos>>;
@@ -32,7 +34,7 @@ export async function prepararExecucao(empresaId: string, exec: unknown): Promis
   const def = lerDefinicao(exec);
   if (!exec || !parsed.success || !def) return { erro: MSG_SEM_EXECUTOR };
   const tipoOsId = parsed.data.tipoOsId || null;
-  const tipoOs = tipoOsId ? await prisma.tipoOs.findFirst({ where: { id: tipoOsId, empresaId }, select: { id: true, nome: true } }) : null;
+  const tipoOs = tipoOsId ? await prisma.tipoOs.findFirst({ where: { id: tipoOsId, empresaId }, select: { id: true, nome: true, prazoExecucaoDias: true } }) : null;
   if (tipoOsId && !tipoOs) return { erro: "Tipo de OS inválido." };
   const dataAgendada = parsed.data.dataAgendada ? new Date(parsed.data.dataAgendada) : null;
   if (dataAgendada && Number.isNaN(dataAgendada.getTime())) return { erro: "Data agendada inválida." };
@@ -42,7 +44,7 @@ export async function prepararExecucao(empresaId: string, exec: unknown): Promis
     return {
       execucao: {
         titulo: parsed.data.titulo?.trim() || tipoOs?.nome || "Atendimento",
-        tipoOsId, dataAgendada, duracaoMin: parsed.data.duracaoMin ?? null, tecnicos, veiculoId,
+        tipoOsId, prazoExecucaoDias: tipoOs?.prazoExecucaoDias ?? null, dataAgendada, duracaoMin: parsed.data.duracaoMin ?? null, tecnicos, veiculoId,
       },
     };
   } catch (e) {
