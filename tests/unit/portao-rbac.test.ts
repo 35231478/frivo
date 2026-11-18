@@ -61,6 +61,7 @@ describe("o portão do middleware: a regra estrutural", () => {
     const soAcao = itensDoMenu.filter((i) => i.somenteAcao);
     expect(soAcao.map((i) => i.href).sort()).toEqual([
       "/admissoes", "/documentacao-equipe", "/equipes/app-colaborador", "/estoque/devolucao", "/estoque/separacao",
+      "/ordens/cumprimento",
     ]);
     for (const i of soAcao) {
       expect(moduloDaRota(i.href), `${i.href}: o portão não pode exigir "visualizar"`).toBeNull();

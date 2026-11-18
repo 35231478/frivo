@@ -90,10 +90,13 @@ export function BarraFiltros({ periodo, busca, filtros = [], paramBusca = "q", n
       {/* Linha 1: período · busca · Mais filtros · extras (cada um com o rótulo em cima) */}
       <div className="flex flex-col sm:flex-row sm:flex-wrap sm:items-end gap-2.5">
         {periodo}
-        <label className="flex-1 min-w-0 sm:min-w-[240px] flex flex-col gap-1">
-          <span className="text-xs font-medium text-ink-muted">{periodo ? "Pesquisar no período selecionado" : "Pesquisar"}</span>
-          {busca}
-        </label>
+        {/* sem campo de busca (a tela não tem o que pesquisar), nem o rótulo aparece: rótulo sozinho é poluição */}
+        {busca ? (
+          <label className="flex-1 min-w-0 sm:min-w-[240px] flex flex-col gap-1" data-busca-caixa>
+            <span className="text-xs font-medium text-ink-muted">{periodo ? "Pesquisar no período selecionado" : "Pesquisar"}</span>
+            {busca}
+          </label>
+        ) : <div className="flex-1 min-w-0" />}
         <div className="flex items-center gap-2 flex-wrap">
           {filtros.length > 0 && (
             <div ref={ref} className="relative">

@@ -211,7 +211,8 @@ export function temPrazoDeAtendimento(os: { contratoId?: string | null; origem?:
  * SEM_REGISTRO: a OS foi encerrada sem que o cumprimento deste prazo ficasse registrado (concluída
  * sem "Cheguei", ou cancelada). O relógio não corre mais — e não se afirma atraso que ninguém mediu.
  */
-export type SituacaoAtendimento = "SEM_PRAZO" | "NO_PRAZO" | "VENCENDO" | "ESTOURADO" | "CUMPRIDO" | "CUMPRIDO_FORA" | "SEM_REGISTRO";
+export const SITUACOES_ATENDIMENTO = ["SEM_PRAZO", "NO_PRAZO", "VENCENDO", "ESTOURADO", "CUMPRIDO", "CUMPRIDO_FORA", "SEM_REGISTRO"] as const;
+export type SituacaoAtendimento = (typeof SITUACOES_ATENDIMENTO)[number];
 
 /** Avisa antes de estourar: quando falta 20% do prazo ou menos — e nunca menos que 1 hora de aviso */
 export const ALERTA_FRACAO = 0.2;

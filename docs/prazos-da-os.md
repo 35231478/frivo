@@ -241,7 +241,61 @@ execução**. Quem recebe: quem vê as OS (Ordens de serviço › visualizar), s
 
 `tests/unit/prazos-pr4.test.ts` varre o código e falha se alguém fizer a conta por fora.
 
-## 3. O corte em PRs
+## 3. Relatório de cumprimento de prazos (PR 5)
+
+**Operações › Cumprimento de prazos** (`/ordens/cumprimento`). O gestor escolhe o período e,
+opcionalmente, o cliente e o contrato, e vê como andou o que foi prometido — os dois prazos de
+atendimento do contrato (**Comparecer** e **Resolver**) e o **Prazo de execução** da OS. O botão
+**PDF do cliente** gera o documento que a empresa manda ao cliente.
+
+Permissão: **Relatórios › Visualizar** abre a tela (sem ela, quem digitar o endereço volta para a
+lista de OS, e o item não aparece no menu); **Relatórios › Exportar** libera o PDF (sem ela o botão
+não existe, e a rota responde 403).
+
+### O período olha a ABERTURA
+
+A hora em que o cliente abriu o chamado e, sem chamado, a criação da OS. É assim que o cliente conta
+o mês dele ("em novembro abri 12 chamados") — e é o que o papel afirma. Padrão: o mês corrente.
+
+### Os três estados (a regra inegociável)
+
+| Estado | Quando | No percentual |
+|---|---|---|
+| **Cumprido** | o prazo foi medido e atendido | numerador e denominador |
+| **Descumprido** | o prazo foi medido e não foi atendido (inclui o cumprido fora do prazo) | só denominador |
+| **Sem registro** | a OS encerrou sem o registro que mede o prazo (ninguém tocou em "Cheguei"), ou foi cancelada com o prazo em aberto | **fora**, contado à parte |
+
+O "sem registro" nunca é somado como descumprido: é injusto afirmar um atraso que ninguém mediu. Ele
+aparece em coluna e estado próprios, com o número dito em voz alta na tela e no PDF, justamente para
+o gestor cobrar o uso do "Cheguei". Prazo que ainda está correndo, ou que o contrato não promete, não
+tem estado — não entra no relatório porque não há o que relatar.
+
+O prazo de execução não tem "sem registro": a conclusão da OS é o registro.
+
+**Atraso justificado** (PR 2/PR 3) continua **descumprido** no relatório do cliente — a justificativa
+explica, não apaga. A linha carrega um selo "Justificado" para a gestão; a conta do período é a mesma
+com e sem justificativa. (No desempenho do colaborador o atraso justificado sai da métrica — ali se
+mede a pessoa, aqui se mede a promessa ao cliente.)
+
+### Percentual = cumpridos ÷ medidos
+
+`medidos = cumpridos + descumpridos`. Nada medido → **"—"**, nunca 0% (0% afirmaria descumprimento).
+
+### A regra mora num lugar só
+
+| O quê | Onde | Ninguém mais |
+|---|---|---|
+| "Cumpriu o prazo de execução?" | `execucaoNoPrazo` em `lib/os/prazo-execucao.ts` — o outro lado exato de `atrasosDaOs` | decide cumprido/descumprido da execução |
+| Da situação do atendimento para o estado | `estadoDoAtendimento` em `lib/prazos/cumprimento.ts` | traduz por conta própria |
+| A contagem e o percentual | `contar`, `medidos`, `percentualCumprimento` | divide nem soma por fora |
+| A leitura do banco | `relatorioCumprimento` em `lib/prazos/cumprimento-server.ts` | lê as colunas de prazo para relatar |
+| O papel | `gerarCumprimentoPdf` em `lib/prazos/cumprimento-pdf.ts`, sobre `lib/pdf/desenho` (pdf-lib) | desenha PDF à mão |
+
+`tests/unit/prazos-pr5.test.ts` varre o código: falha se alguém recalcular o cumprimento fora dessas
+libs, se o "sem registro" entrar no denominador, ou se a tela/o papel compararem datas por conta
+própria.
+
+## 4. O corte em PRs
 
 | PR | Conteúdo | Banco |
 |---|---|---|
@@ -249,9 +303,9 @@ execução**. Quem recebe: quem vê as OS (Ordens de serviço › visualizar), s
 | **2** (feito) | Prazo de execução nas telas: lista de OS, atraso justificado, app do técnico, prazo padrão no tipo de OS, saída do menu "Prazos e SLA" | 🟢 |
 | **3** (feito) | Desempenho: atraso justificado fora da métrica "no prazo", "Atrasos justificados" na ficha, mês fechado intocado | 🟢 |
 | **4** (feito) | Contrato e OS: configurar o prazo de atendimento, gravar os limites, "Cheguei", alertas; horário comercial por empresa | 🔵 `prisma/sql/2027-01-10_horario_comercial_empresa.sql` |
-| 5 | Relatório de cumprimento (tela e PDF) | 🟢 |
+| **5** (feito) | Relatório de cumprimento de prazos: tela em Operações, três estados com o "sem registro" fora do percentual, PDF do cliente no motor da casa | 🟢 |
 
-## 4. Testes
+## 5. Testes
 
 | Arquivo | O que prova |
 |---|---|
@@ -270,3 +324,6 @@ execução**. Quem recebe: quem vê as OS (Ordens de serviço › visualizar), s
 | `tests/unit/prazos-pr4-pg.test.ts` | PR 4 em PostgreSQL real: contrato (gravar, trocar, não apagar, RBAC), chamado → aceite → limites desde a abertura, OS manual e edição, horário comercial por empresa, "Cheguei" (uma vez, hora do toque), sino, lista e exportação |
 | `tests/unit/prazos-pr4-ui.test.ts`, `contrato-form-ui.test.ts`, `ordens-lista-barra-ui.test.ts` | PR 4, telas: a seção do contrato, o cartão e o selo da OS, Configurações › Horário comercial, o sino e o filtro da lista |
 | `tests/unit/sql-horario-comercial.test.ts` | O SQL do horário comercial: uma coluna opcional, nada preenchido, idempotente e idêntico ao que o Prisma espera |
+| `tests/unit/prazos-pr5.test.ts` | PR 5, regras puras: os três estados, o percentual que exclui o "sem registro", `execucaoNoPrazo` igual a `atrasosDaOs` caso a caso — e a trava "ninguém refaz a conta por fora" |
+| `tests/unit/prazos-pr5-pg.test.ts` | PR 5 em PostgreSQL real: o período pela abertura, os recortes por cliente/contrato, os números de uma base de verdade, multiempresa, e o PDF (permissão, texto, nome do arquivo) |
+| `tests/unit/prazos-pr5-ui.test.ts` | PR 5, tela: os três estados na tabela e nos cartões do celular, a legenda, os quadros do período, os filtros na URL e o botão do PDF só com permissão |

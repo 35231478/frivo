@@ -248,6 +248,10 @@ export function moduloDaRota(pathname: string): string | null {
   // Exceção: Equipes › App do colaborador é de quem tem "Configurações › Gerenciar" — o endereço
   // mora em /equipes, mas não pede "Equipes › Visualizar". A página confere a ação sozinha.
   if (seg === "equipes" && segs[1] === "app-colaborador") return null;
+  // Exceção: Operações › Cumprimento de prazos é do módulo Relatórios ("Relatórios › Visualizar") —
+  // o endereço mora em /ordens, mas quem lê o relatório do SLA não precisa ver a lista de OS.
+  // A página confere a permissão sozinha (e manda para /ordens quem não a tem).
+  if (seg === "ordens" && segs[1] === "cumprimento") return null;
   // As listas de Admissões (/admissoes, "Admissão digital › Gerenciar") e da Documentação da equipe
   // (/documentacao-equipe, "Documentos › Enviar ao cliente") não estão no mapa de propósito: esses
   // módulos não têm a ação "visualizar", então o portão barraria todo mundo que não é o

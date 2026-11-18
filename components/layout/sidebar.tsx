@@ -14,7 +14,7 @@ import {
   Wrench, Calculator, Wallet, Receipt, TrendingUp, FileBarChart, ShoppingCart, CalendarDays, QrCode, MapPinned,
   Truck, UsersRound, BadgeDollarSign, ClipboardCheck, Smartphone, FolderOutput, UserCog, Upload, Landmark, Globe, Coins,
   PanelLeftClose, PanelLeftOpen, MoreVertical, LogOut, Package, FileBadge,
-  CalendarClock, PackageOpen, PackageMinus, Trophy, UserPlus,
+  CalendarClock, PackageOpen, PackageMinus, Trophy, UserPlus, Timer,
 } from "lucide-react";
 
 type Icone = React.ComponentType<{ className?: string }>;
@@ -68,6 +68,8 @@ const OPERACIONAL: Secao[] = [
         tipo: "grupo", label: "Operações", icone: ClipboardList, itens: [
           { href: "/ordens", icone: ClipboardList, label: "Ordens de serviço" },
           { href: "/calendario", icone: CalendarDays, label: "Calendário" },
+          // O relatório do SLA (prazo de atendimento e de execução): Relatórios › Visualizar
+          { href: "/ordens/cumprimento", icone: Timer, label: "Cumprimento de prazos", modulo: "relatorios", acao: "visualizar", somenteAcao: true },
           // Última posição dos técnicos: só a gestão (Equipes › Gerenciar)
           { href: "/mapa", icone: MapPinned, label: "Mapa", modulo: "equipes", acao: "gerenciar" },
         ],
