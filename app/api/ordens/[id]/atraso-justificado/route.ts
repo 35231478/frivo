@@ -4,14 +4,19 @@ import { bloqueioPainelTecnico } from "@/lib/tecnico/painel";
 import { prisma } from "@/lib/prisma";
 import type { Permissoes } from "@/lib/permissoes";
 import {
-  MSG_ATRASO_NAO_ATRASADA, MSG_SEM_PERMISSAO_JUSTIFICAR, atrasoJustificado, atrasoJustificadoSchema, haAtrasoParaJustificar,
-  podeJustificarAtraso, rotuloMotivoAtraso,
+  MSG_ATRASO_NAO_ATRASADA, MSG_SEM_PERMISSAO_JUSTIFICAR, atrasoJustificado, atrasoJustificadoSchema,
+  podeJustificarAtraso, rotuloMotivoAtraso, rotuloResponsabilidadeAtraso,
 } from "@/lib/os/prazo-execucao";
+import { haDescumprimentoParaJustificar } from "@/lib/prazos/cumprimento";
 
 /**
  * ATRASO JUSTIFICADO da OS: o gestor diz por que atrasou (cliente ausente, peça faltando, acesso
- * negado, clima, outro). A OS continua atrasada — o que muda é que o atraso deixa de pesar no
- * desempenho de quem executou.
+ * negado, clima, outro) e DE QUEM foi a causa (cliente, interna, força maior/terceiros). A OS
+ * continua atrasada — o que muda é que o atraso deixa de pesar no desempenho de quem executou, e
+ * que a causa do CLIENTE pausa o SLA no relatório que vai ao cliente.
+ *
+ * Há o que justificar sempre que algum dos três prazos do relatório está descumprido (comparecer,
+ * resolver ou execução) ou há atividade atrasada — a mesma régua do relatório, nunca outra.
  *
  * Quem pode: quem vê a OS E tem "Desempenho › Revisar" (lib/os/prazo-execucao.ts › podeJustificarAtraso).
  * O técnico não: no app ele deixa a observação na execução, e quem justifica é o gestor.
@@ -28,6 +33,8 @@ async function entrar(id: string) {
     where: { id, empresaId: session.user!.empresaId },
     select: {
       id: true, status: true, prazoExecucao: true, previsaoConclusao: true, dataConclusao: true, atrasoJustificadoMotivo: true,
+      // os limites do contrato: o gatilho olha os TRÊS prazos (a rota só LÊ, quem grava é lib/atendimento)
+      chamadoAbertoEm: true, atendimentoComparecerAte: true, atendimentoResolverAte: true, atendimentoComparecidoEm: true,
       atividades: { select: { status: true, prazo: true, dataAgendada: true, concluidaEm: true } },
     },
   });
@@ -36,7 +43,8 @@ async function entrar(id: string) {
 }
 
 const SELECT_RESPOSTA = {
-  atrasoJustificadoMotivo: true, atrasoJustificadoObs: true, atrasoJustificadoEm: true, atrasoJustificadoPor: { select: { id: true, nome: true } },
+  atrasoJustificadoMotivo: true, atrasoJustificadoObs: true, atrasoJustificadoEm: true, atrasoResponsavel: true,
+  atrasoJustificadoPor: { select: { id: true, nome: true } },
 } as const;
 
 /** Justifica (ou corrige a justificativa de) o atraso desta OS. */
@@ -47,21 +55,24 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
   const parsed = atrasoJustificadoSchema.safeParse(await req.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ erro: parsed.error.issues[0]?.message ?? "Dados inválidos." }, { status: 400 });
-  // Sem atraso (da OS ou de alguma atividade) não há o que justificar
-  if (!haAtrasoParaJustificar(e.os)) return NextResponse.json({ erro: MSG_ATRASO_NAO_ATRASADA }, { status: 409 });
+  // Nenhum prazo descumprido (nem atividade atrasada): não há o que justificar
+  if (!haDescumprimentoParaJustificar(e.os)) return NextResponse.json({ erro: MSG_ATRASO_NAO_ATRASADA }, { status: 409 });
 
-  const { motivo, observacao } = parsed.data;
+  const { motivo, responsavel, observacao } = parsed.data;
   const [atualizada] = await prisma.$transaction([
     prisma.ordemServico.update({
       where: { id },
-      data: { atrasoJustificadoMotivo: motivo, atrasoJustificadoObs: observacao || null, atrasoJustificadoPorId: e.usuarioId, atrasoJustificadoEm: new Date() },
+      data: {
+        atrasoJustificadoMotivo: motivo, atrasoJustificadoObs: observacao || null, atrasoResponsavel: responsavel,
+        atrasoJustificadoPorId: e.usuarioId, atrasoJustificadoEm: new Date(),
+      },
       select: SELECT_RESPOSTA,
     }),
     prisma.osHistorico.create({
       data: {
         ordemServicoId: id, usuarioId: e.usuarioId,
         acao: atrasoJustificado(e.os) ? "Justificativa do atraso alterada" : "Atraso justificado",
-        detalhes: [rotuloMotivoAtraso(motivo), observacao].filter(Boolean).join(": "),
+        detalhes: [`${rotuloMotivoAtraso(motivo)} (${rotuloResponsabilidadeAtraso(responsavel)})`, observacao].filter(Boolean).join(": "),
       },
     }),
   ]);
@@ -78,7 +89,10 @@ export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ 
   const [atualizada] = await prisma.$transaction([
     prisma.ordemServico.update({
       where: { id },
-      data: { atrasoJustificadoMotivo: null, atrasoJustificadoObs: null, atrasoJustificadoPorId: null, atrasoJustificadoEm: null },
+      data: {
+        atrasoJustificadoMotivo: null, atrasoJustificadoObs: null, atrasoResponsavel: null,
+        atrasoJustificadoPorId: null, atrasoJustificadoEm: null,
+      },
       select: SELECT_RESPOSTA,
     }),
     prisma.osHistorico.create({

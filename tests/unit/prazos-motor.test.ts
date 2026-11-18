@@ -163,20 +163,24 @@ describe("Atraso justificado — o motivo é de uma lista", () => {
     expect([...MOTIVOS_ATRASO]).toEqual(["CLIENTE_AUSENTE", "PECA_FALTANDO", "ACESSO_NEGADO", "CLIMA", "OUTRO"]);
     expect(MOTIVOS_ATRASO.map((m) => ROTULO_MOTIVO_ATRASO[m])).toEqual(["Cliente ausente", "Peça faltando", "Acesso ao local negado", "Chuva ou clima", "Outro motivo"]);
     const ler = (v: unknown) => { const r = atrasoJustificadoSchema.safeParse(v); return r.success ? r.data : r.error.issues[0].message; };
-    expect(ler({ motivo: "CLIENTE_AUSENTE" })).toEqual({ motivo: "CLIENTE_AUSENTE", observacao: "" });
-    expect(ler({ motivo: "PECA_FALTANDO", observacao: "  compressor em falta  " })).toEqual({ motivo: "PECA_FALTANDO", observacao: "compressor em falta" });
-    expect(ler({ motivo: "OUTRO" })).toBe(MSG_ATRASO_OUTRO);
-    expect(ler({ motivo: "OUTRO", observacao: "   " })).toBe(MSG_ATRASO_OUTRO);
+    // a causa do atraso (pausa de SLA) é obrigatória e tem os testes dela em sla-responsabilidade.test.ts;
+    // aqui o assunto é o MOTIVO, então as leituras válidas já vêm com uma causa escolhida
+    const comCausa = (v: object) => ler({ responsavel: "CLIENTE", ...v });
+    expect(ler({ motivo: "CLIENTE_AUSENTE" })).toBe("Diga de quem foi a causa do atraso.");
+    expect(comCausa({ motivo: "CLIENTE_AUSENTE" })).toEqual({ motivo: "CLIENTE_AUSENTE", responsavel: "CLIENTE", observacao: "" });
+    expect(comCausa({ motivo: "PECA_FALTANDO", observacao: "  compressor em falta  " })).toEqual({ motivo: "PECA_FALTANDO", responsavel: "CLIENTE", observacao: "compressor em falta" });
+    expect(comCausa({ motivo: "OUTRO" })).toBe(MSG_ATRASO_OUTRO);
+    expect(comCausa({ motivo: "OUTRO", observacao: "   " })).toBe(MSG_ATRASO_OUTRO);
     // "razão é razão": a explicação precisa dizer alguma coisa (5 caracteres no mínimo, sem contar os espaços das pontas)
     expect(MSG_ATRASO_OUTRO).toBe("Explique o motivo do atraso (pelo menos 5 caracteres).");
-    expect(ler({ motivo: "OUTRO", observacao: "   x    " })).toBe(MSG_ATRASO_OUTRO); // espaço não conta
-    expect(ler({ motivo: "OUTRO", observacao: "obra" })).toBe(MSG_ATRASO_OUTRO);
-    expect(ler({ motivo: "OUTRO", observacao: "greve" })).toEqual({ motivo: "OUTRO", observacao: "greve" });
-    expect(ler({ motivo: "CLIMA", observacao: "x" })).toEqual({ motivo: "CLIMA", observacao: "x" }); // nos motivos da lista a explicação é livre
-    expect(ler({ motivo: "OUTRO", observacao: "Greve dos caminhoneiros" })).toEqual({ motivo: "OUTRO", observacao: "Greve dos caminhoneiros" });
-    expect(ler({ motivo: "PREGUICA" })).toBe("Escolha o motivo do atraso.");
-    expect(ler({})).toBe("Escolha o motivo do atraso.");
-    expect(ler({ motivo: "CLIMA", observacao: "x".repeat(501) })).toBe("Explicação com no máximo 500 caracteres.");
+    expect(comCausa({ motivo: "OUTRO", observacao: "   x    " })).toBe(MSG_ATRASO_OUTRO); // espaço não conta
+    expect(comCausa({ motivo: "OUTRO", observacao: "obra" })).toBe(MSG_ATRASO_OUTRO);
+    expect(comCausa({ motivo: "OUTRO", observacao: "greve" })).toEqual({ motivo: "OUTRO", responsavel: "CLIENTE", observacao: "greve" });
+    expect(comCausa({ motivo: "CLIMA", observacao: "x" })).toEqual({ motivo: "CLIMA", responsavel: "CLIENTE", observacao: "x" }); // nos motivos da lista a explicação é livre
+    expect(comCausa({ motivo: "OUTRO", observacao: "Greve dos caminhoneiros" })).toEqual({ motivo: "OUTRO", responsavel: "CLIENTE", observacao: "Greve dos caminhoneiros" });
+    expect(comCausa({ motivo: "PREGUICA" })).toBe("Escolha o motivo do atraso.");
+    expect(ler({})).toBe("Escolha o motivo do atraso."); // o motivo é cobrado antes da causa, como estão na tela
+    expect(comCausa({ motivo: "CLIMA", observacao: "x".repeat(501) })).toBe("Explicação com no máximo 500 caracteres.");
   });
 
   it("a OS está justificada quando tem motivo gravado", () => {

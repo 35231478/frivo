@@ -91,11 +91,35 @@ justificado" no cabeçalho e "Justificado" na lista.
   que conta e o que não conta no desempenho. Quem só opera as OS e o técnico não justificam: no app,
   o técnico deixa a observação na execução, e quem justifica é o gestor. Todo mundo que vê a OS lê a
   justificativa.
-- **Quando:** só quando há atraso (`haAtrasoParaJustificar`): a OS aberta com o prazo vencido, a OS
-  concluída depois do prazo, ou alguma atividade atrasada. O dia de referência da atividade é o MESMO
+- **Quando:** sempre que há **descumprimento a explicar** (`haDescumprimentoParaJustificar`, em
+  `lib/prazos/cumprimento.ts`): algum dos três prazos do relatório descumprido — **comparecer**,
+  **resolver** ou **execução** — ou alguma atividade atrasada. É a mesma régua do relatório do
+  cliente: justificar serve para explicar o que ele chamaria de descumprido. (Até a pausa de SLA,
+  só o prazo de execução e as atividades contavam: o chamado que estourou o "comparecer" porque o
+  cliente não deu acesso não tinha como ser justificado.) O dia de referência da atividade é o MESMO
   do desempenho (`diaDeReferencia`: o prazo próprio ou, sem ele, o dia agendado).
 - **O que muda:** a OS **continua atrasada** (no Calendário, na lista, no Dashboard). O atraso só
   deixa de pesar no desempenho de quem executou — ver abaixo.
+
+#### De quem foi a causa (pausa de SLA)
+
+Ao justificar, o gestor também marca **de quem foi a causa** — coluna `atraso_responsavel`:
+
+| Valor | Rótulo | No relatório do cliente |
+|---|---|---|
+| `CLIENTE` | Causa do cliente | **pausa o SLA**: sai do percentual (a partir do PR B) |
+| `INTERNA` | Causa interna | continua descumprido |
+| `TERCEIROS` | Força maior ou terceiros | continua descumprido |
+
+- É marcação **explícita**: o motivo *sugere* (cliente ausente e acesso negado → cliente; clima →
+  terceiros; peça faltando e "outro" não sugerem nada, porque são ambíguos), mas quem decide é o
+  gestor, e o que vale é o valor **gravado** — nunca o motivo, nunca o texto livre.
+- **Uma causa por OS.** Se o atraso tem mais de um dono, marca-se a mais honesta.
+- **Sem retroativo:** justificativa de antes da coluna fica sem causa e **continua contando**.
+- Quem marca é quem já justificava: **Desempenho › Revisar**. Desfazer a justificativa limpa a causa
+  junto. Tudo vai para o histórico da OS, e a causa aparece no selo da OS e na exportação da lista.
+- **O desempenho do colaborador continua cego a ela**: lá o atraso justificado já sai da métrica,
+  seja qual for a causa.
 
 ### O atraso justificado no desempenho (PR 3)
 
@@ -304,6 +328,8 @@ própria.
 | **3** (feito) | Desempenho: atraso justificado fora da métrica "no prazo", "Atrasos justificados" na ficha, mês fechado intocado | 🟢 |
 | **4** (feito) | Contrato e OS: configurar o prazo de atendimento, gravar os limites, "Cheguei", alertas; horário comercial por empresa | 🔵 `prisma/sql/2027-01-10_horario_comercial_empresa.sql` |
 | **5** (feito) | Relatório de cumprimento de prazos: tela em Operações, três estados com o "sem registro" fora do percentual, PDF do cliente no motor da casa | 🟢 |
+| **Evolução A** (este) | Pausa de SLA: de quem foi a causa do atraso (coluna, vocabulário, gatilho ampliado, gaveta, selo e CSV) — o relatório ainda não muda | 🔵 `prisma/sql/2027-01-11_atraso_responsavel.sql` |
+| Evolução B | O relatório lê a causa: quarto estado "Causa do cliente", fora do percentual, na tela e no PDF | 🟢 |
 
 ## 5. Testes
 
@@ -327,3 +353,7 @@ própria.
 | `tests/unit/prazos-pr5.test.ts` | PR 5, regras puras: os três estados, o percentual que exclui o "sem registro", `execucaoNoPrazo` igual a `atrasosDaOs` caso a caso — e a trava "ninguém refaz a conta por fora" |
 | `tests/unit/prazos-pr5-pg.test.ts` | PR 5 em PostgreSQL real: o período pela abertura, os recortes por cliente/contrato, os números de uma base de verdade, multiempresa, e o PDF (permissão, texto, nome do arquivo) |
 | `tests/unit/prazos-pr5-ui.test.ts` | PR 5, tela: os três estados na tabela e nos cartões do celular, a legenda, os quadros do período, os filtros na URL e o botão do PDF só com permissão |
+| `tests/unit/sla-responsabilidade.test.ts` | Evolução A, regras puras: o vocabulário da causa, a sugestão por motivo, o gatilho ampliado — e a trava "ninguém deduz a causa, o desempenho continua cego e o relatório ainda não pausa" |
+| `tests/unit/sla-responsabilidade-pg.test.ts` | Evolução A em PostgreSQL real: a rota grava motivo + causa + rastro, o chamado que estourou só o comparecer já aceita justificativa, validação, desfazer limpa tudo, RBAC e multiempresa |
+| `tests/unit/sla-responsabilidade-ui.test.ts` | Evolução A, gaveta da OS: o campo obrigatório, a sugestão que fica à vista e pode ser trocada, o que vai ao servidor e o que a OS justificada mostra |
+| `tests/unit/sql-atraso-responsavel.test.ts` | O SQL da causa: uma coluna opcional, nada preenchido, idempotente e idêntico ao que o Prisma espera |

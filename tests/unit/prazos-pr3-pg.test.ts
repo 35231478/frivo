@@ -84,7 +84,9 @@ describe.skipIf(!URL_PG)("Prazos da OS — PR 3: o atraso justificado e o desemp
     }
     return { os: `os-${id}`, numero: o.chamado ?? numero };
   }
-  const justificar = (id: string, corpo: unknown = { motivo: "CLIENTE_AUSENTE" }) => chamar("ordens/[id]/atraso-justificado", "POST", { id }, corpo);
+  // a causa do atraso é obrigatória desde a pausa de SLA; aqui o assunto é o desempenho, então o helper preenche uma
+  const justificar = (id: string, corpo: Record<string, unknown> = { motivo: "CLIENTE_AUSENTE" }) =>
+    chamar("ordens/[id]/atraso-justificado", "POST", { id }, { responsavel: "CLIENTE", ...corpo });
   const desfazer = (id: string) => chamar("ordens/[id]/atraso-justificado", "DELETE", { id });
   const painel = async (mes = MES) => (await chamar("desempenho", "GET", {}, undefined, `?mes=${mes}`)).json;
   const linha = async (nome: string, mes = MES) => (await painel(mes)).grupos.flatMap((g: any) => g.linhas).find((l: any) => l.nome === nome);
