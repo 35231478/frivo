@@ -230,6 +230,22 @@ export function atrasosDaOs(os: OsParaAtraso, agora: Date = new Date()): { os: b
   return { os: daOs, atividades: (os.atividades ?? []).filter((a) => atividadeAtrasou(a, agora)).length };
 }
 
+/**
+ * O prazo de execução desta OS foi cumprido? A MESMA regra de `atrasosDaOs` vista pelo outro lado,
+ * para quem precisa dizer "cumprido" e não só "atrasada" (o relatório de cumprimento de prazos):
+ *
+ *   false = descumprido — é exatamente o que `atrasosDaOs(os).os` chama de atraso da OS;
+ *   true  = cumprido — concluída até o dia do prazo;
+ *   null  = não há o que medir — sem prazo, cancelada, ainda dentro do prazo, ou concluída sem a
+ *           data da conclusão (OS antiga, de antes de o sistema guardar a data).
+ */
+export function execucaoNoPrazo(os: OsParaAtraso, agora: Date = new Date()): boolean | null {
+  if (!prazoEfetivo(os)) return null; // não houve promessa: nada a medir
+  if (atrasosDaOs(os, agora).os) return false; // a MESMA conta da lista (cancelada nunca atrasa)
+  if (os.status !== "CONCLUIDA") return null; // ainda correndo, reaberta ou cancelada: a conta não fechou
+  return os.dataConclusao ? true : null; // concluída sem a data (OS antiga): não há o que medir
+}
+
 /** Há atraso para justificar? (sem atraso, justificar não faz sentido — e a rota recusa) */
 export function haAtrasoParaJustificar(os: OsParaAtraso, agora: Date = new Date()): boolean {
   const a = atrasosDaOs(os, agora);

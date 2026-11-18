@@ -324,7 +324,10 @@ describe("Prazo de atendimento — ninguém calcula nem grava por fora da regra 
   it("os limites e o comparecimento gravados na OS só são lidos e escritos dentro de lib/atendimento", () => {
     // Telas, rotas, sino e lista passam a OS inteira para atendimentoDaOs / alertaDoAtendimento; nenhuma
     // compara "comparecer até" com a hora de agora por conta própria, e nenhuma rota grava os campos
-    expect(comTexto(/atendimentoComparecerAte|atendimentoResolverAte|atendimentoComparecidoEm/)).toEqual([SERVIDOR, MOTOR]);
+    // o relatório de cumprimento de prazos (PR 5) LÊ as colunas para relatar — e só lê
+    const RELATORIO = ["lib/prazos/cumprimento.ts", "lib/prazos/cumprimento-server.ts"];
+    expect(comTexto(/atendimentoComparecerAte|atendimentoResolverAte|atendimentoComparecidoEm/)).toEqual([SERVIDOR, MOTOR, ...RELATORIO].sort());
+    for (const f of RELATORIO) expect(fonte(f), f).not.toMatch(/ordemServico\.(create|createMany|update|updateMany|upsert)\(|data:\s*\{/);
     expect(comTexto(/atendimento_comparecer_ate|atendimento_resolver_ate|atendimento_comparecido_em/)).toEqual([]); // nem por SQL cru
     const servidor = fonte(SERVIDOR);
     // um ponto de escrita para os limites e um para o comparecimento
@@ -350,8 +353,9 @@ describe("Prazo de atendimento — ninguém calcula nem grava por fora da regra 
   });
 
   it("a hora de abertura do chamado é sempre a do SERVIDOR, no momento em que o chamado nasce — ninguém digita nem edita", () => {
-    // (ler a coluna — select, ordenar, tipo — não é gravar)
-    const gravam = TODOS.filter((f) => /chamadoAbertoEm\s*[:=](?!=)/.test(fonte(f).replace(/chamadoAbertoEm\??:\s*(true|Date|z\.|"asc")/g, ""))).sort();
+    // (ler a coluna — select, ordenar, filtrar, tipo — não é gravar: só conta quem escreve OS)
+    const escreveOs = (f: string) => /ordemServico\.(create|createMany|update|updateMany|upsert)\(/.test(fonte(f));
+    const gravam = TODOS.filter((f) => escreveOs(f) && /chamadoAbertoEm\s*[:=](?!=)/.test(fonte(f).replace(/chamadoAbertoEm\??:\s*(true|Date|z\.|"asc")/g, ""))).sort();
     // quem recebe o chamado: o portal, o QR e a Nova OS marcada como "Chamado do cliente"
     expect(gravam).toEqual(["app/api/ordens/route.ts", "app/api/portal/chamados/route.ts", "app/api/qr/[token]/chamado/route.ts"]);
     // em todos, o valor é o relógio do servidor (new Date()), nunca um campo do corpo da requisição
