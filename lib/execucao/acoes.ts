@@ -9,6 +9,8 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { momentoDaConclusao, type RelogioDaConclusao } from "@/lib/os/conclusao-atividade";
 import { prisma } from "@/lib/prisma";
+import { marcarComparecimento } from "@/lib/atendimento/prazo-server";
+import { horarioDoToque } from "@/lib/tecnico/aviso-cliente";
 import { TIPOS_IMAGEM } from "@/lib/anexos";
 import { validarDataUrl } from "@/lib/anexos-server";
 import { carregarExecucao } from "@/lib/execucao/dados";
@@ -535,14 +537,19 @@ export async function removerFotoAdicional(ctx: ContextoExecucao, ref: { fotoId?
 
 /* ───────────────────────── Andamento da atividade ───────────────────────── */
 
-/** O técnico começou: Agendada → Em andamento (as outras situações ficam como estão). */
-export async function iniciarAtividade(ctx: ContextoExecucao) {
+/**
+ * O técnico começou: Agendada → Em andamento (as outras situações ficam como estão). `relogio`: a
+ * hora do toque no aparelho — sem sinal, a fila chega depois, e o comparecimento é o da hora do toque.
+ */
+export async function iniciarAtividade(ctx: ContextoExecucao, relogio: { em?: string | null; agoraAparelho?: string | null } = {}) {
   if (ctx.atividade.status !== "AGENDADA") return ok({ status: ctx.atividade.status });
   const { count } = await prisma.atividadeOs.updateMany({ where: { id: ctx.atividade.id, status: "AGENDADA" }, data: { status: "EM_ANDAMENTO" } });
   if (count) {
     await prisma.osHistorico.create({
       data: { ordemServicoId: ctx.atividade.ordemServico.id, usuarioId: ctx.usuarioId, acao: "Status da atividade alterado", detalhes: `"${ctx.atividade.titulo}": AGENDADA → EM_ANDAMENTO (app do técnico)` },
     });
+    // Reserva do "Cheguei": quem começou a atividade sem tocar em "Cheguei" compareceu agora
+    await marcarComparecimento(prisma, ctx.atividade.ordemServico.id, horarioDoToque(relogio.em, Date.now(), relogio.agoraAparelho).registradoEm);
   }
   ctx.atividade.status = "EM_ANDAMENTO";
   if (count) await sincronizarStatusOs(ctx.atividade.ordemServico.id, ctx.empresaId, ctx.usuarioId);

@@ -15,6 +15,8 @@ interface Alertas {
   pedidosPendentes: number;
   atendimentosAtraso: number;
   chamadosPortal: number;
+  atendimentoVencendo: number;
+  atendimentoEstourado: number;
   checklistPendente: number;
   checklistsComAlertas: number;
   documentosVencendo: number;
@@ -298,6 +300,9 @@ export function Header({ session, avatarUrl }: HeaderProps) {
                   {podeVer("compras") && <AlertaItem href="/compras/pedidos" icone={ShoppingCart} cor="text-atencao" label="Compras pendentes" valor={alertas?.pedidosPendentes ?? 0} onClick={() => setSinoAberto(false)} />}
                   {podeVer("ordens") && <AlertaItem href="/ordens?origem=PORTAL_CLIENTE" icone={Headset} cor="text-acento" label="Chamados do portal" valor={alertas?.chamadosPortal ?? 0} onClick={() => setSinoAberto(false)} />}
                   {podeVer("ordens") && <AlertaItem href="/ordens?prazo=atrasadas" icone={Timer} cor="text-atrasado" label="OS atrasadas" valor={alertas?.atendimentosAtraso ?? 0} onClick={() => setSinoAberto(false)} />}
+                  {/* Prazo de ATENDIMENTO do contrato (comparecer / resolver) — não é o prazo de execução da OS. Só aparece quando há o que ver */}
+                  {podeVer("ordens") && (alertas?.atendimentoEstourado ?? 0) > 0 && <AlertaItem href="/ordens?atendimento=estourado" icone={Headset} cor="text-atrasado" label="Prazo de atendimento estourado" valor={alertas?.atendimentoEstourado ?? 0} onClick={() => setSinoAberto(false)} />}
+                  {podeVer("ordens") && (alertas?.atendimentoVencendo ?? 0) > 0 && <AlertaItem href="/ordens?atendimento=vencendo" icone={Headset} cor="text-atencao" label="Prazo de atendimento vencendo" valor={alertas?.atendimentoVencendo ?? 0} onClick={() => setSinoAberto(false)} />}
                   {podeVer("veiculos") && <AlertaItem href="/veiculos/checklist" icone={ClipboardCheck} cor="text-acento" label="Checklists pendentes" valor={alertas?.checklistPendente ?? 0} onClick={() => setSinoAberto(false)} />}
                   {podeVer("veiculos") && <AlertaItem href="/veiculos" icone={AlertTriangle} cor="text-atencao" label="Checklists com alertas" valor={alertas?.checklistsComAlertas ?? 0} onClick={() => setSinoAberto(false)} />}
                   {podeVer("veiculos") && <AlertaItem href="/veiculos" icone={FileWarning} cor="text-atencao" label="Documentos de veículo vencendo" valor={alertas?.documentosVencendo ?? 0} onClick={() => setSinoAberto(false)} />}

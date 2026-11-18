@@ -99,10 +99,39 @@ describe("lista de OS: barra enxuta", () => {
     expect(txt(cartao)).toContain("Prazo 30/10/2026Atrasada 4 dias");
   });
 
+  it("filtro Prazo de atendimento em 'Mais filtros': vencendo e estourado vão para a URL (?atendimento=) — separado do Prazo de execução", async () => {
+    await montar();
+    await clicar($("[data-mais-filtros]"));
+    // os dois filtros de prazo têm cada um o seu nome
+    expect([txt($("[data-filtro-opcao=prazo]")), txt($("[data-filtro-opcao=atendimento]"))]).toEqual(["Prazo de execução", "Prazo de atendimento"]);
+    await clicar($("[data-filtro-opcao=atendimento]"));
+    const sel = $<HTMLSelectElement>("select[aria-label='Prazo de atendimento']")!;
+    expect([...sel.options].map((o) => [o.value, o.textContent])).toEqual([["", "Todos"], ["vencendo", "Vencendo"], ["estourado", "Estourado"]]);
+    await act(async () => { Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, "value")!.set!.call(sel, "estourado"); sel.dispatchEvent(new Event("change", { bubbles: true })); });
+    await esperar();
+    expect(ultimaUrl()).toBe("/ordens?atendimento=estourado");
+    // chegando pelo sino (?atendimento=vencendo): o filtro já aparece ligado, conta como ativo e "Limpar filtros" o tira
+    await montar("atendimento=vencendo");
+    expect(txt($("[data-filtros-ativos]"))).toBe("1");
+    expect($$("[data-filtro-caixa]").map((c) => c.getAttribute("data-filtro-caixa"))).toEqual(["atendimento"]);
+    expect($<HTMLSelectElement>("select[aria-label='Prazo de atendimento']")!.value).toBe("vencendo");
+    await clicar($("[data-limpar-filtros]"));
+    expect(ultimaUrl()).toBe("/ordens?");
+    // lista vazia só com este filtro ligado (o sino trouxe, mas alguém já resolveu): o "Limpar filtros" do estado vazio aparece e tira o filtro
+    nav.replace.mockClear();
+    await clicar($$("[data-lista-vazia] button").find((b) => txt(b) === "Limpar filtros") ?? null);
+    expect(new URLSearchParams(ultimaUrl().split("?")[1] ?? "").get("atendimento")).toBeNull();
+    expect(nav.replace).toHaveBeenCalled();
+    // os dois juntos convivem na URL
+    await montar("prazo=atrasadas&atendimento=estourado");
+    expect(txt($("[data-filtros-ativos]"))).toBe("2");
+    expect($$("[data-filtro-caixa]").map((c) => c.getAttribute("data-filtro-caixa")).sort()).toEqual(["atendimento", "prazo"]);
+  });
+
   it("filtro Prazo em 'Mais filtros': atrasadas, vencem hoje e com atraso justificado vão para a URL (?prazo=) e contam como filtro ativo", async () => {
     await montar();
     await clicar($("[data-mais-filtros]")); await clicar($("[data-filtro-opcao=prazo]"));
-    const sel = $<HTMLSelectElement>("select[aria-label='Prazo']")!;
+    const sel = $<HTMLSelectElement>("select[aria-label='Prazo de execução']")!;
     expect([...sel.options].map((o) => [o.value, o.textContent])).toEqual([["", "Todos"], ["atrasadas", "Atrasadas"], ["hoje", "Vencem hoje"], ["justificadas", "Com atraso justificado"]]);
     await act(async () => { Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, "value")!.set!.call(sel, "atrasadas"); sel.dispatchEvent(new Event("change", { bubbles: true })); });
     await esperar();
@@ -111,7 +140,7 @@ describe("lista de OS: barra enxuta", () => {
     await montar("prazo=atrasadas");
     expect(txt($("[data-filtros-ativos]"))).toBe("1");
     expect($$("[data-filtro-caixa]").map((c) => c.getAttribute("data-filtro-caixa"))).toEqual(["prazo"]);
-    expect($<HTMLSelectElement>("select[aria-label='Prazo']")!.value).toBe("atrasadas");
+    expect($<HTMLSelectElement>("select[aria-label='Prazo de execução']")!.value).toBe("atrasadas");
     await clicar($("[data-limpar-filtros]"));
     expect(ultimaUrl()).toBe("/ordens?");
     // lista vazia com o filtro ligado: o "Limpar filtros" do estado vazio aparece e também tira o prazo

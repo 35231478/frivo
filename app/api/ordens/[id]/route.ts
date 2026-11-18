@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { fixarLimitesDaOs } from "@/lib/atendimento/prazo-server";
 import { exigirPermissao } from "@/lib/permissoes-server";
 import { travaDasLinhasDaOs } from "@/lib/os/trava-edicao-server";
 import { bloqueioPainelTecnico } from "@/lib/tecnico/painel";
@@ -207,7 +208,14 @@ export async function PUT(req: NextRequest, { params }: Params) {
   if (status === "EM_ANDAMENTO" && !existente.dataInicio) data.dataInicio = new Date();
   if (status === "CONCLUIDA" && !existente.dataConclusao) data.dataConclusao = new Date();
 
-  const atualizado = await prisma.ordemServico.update({ where: { id }, data });
+  let atualizado = await prisma.ordemServico.update({ where: { id }, data });
+  // O prazo de atendimento é o do contrato para a prioridade da OS, contado da abertura do chamado:
+  // mudou a prioridade ou o contrato NA OS, os limites acompanham (mudar o contrato em si não mexe em
+  // OS nenhuma). A hora da abertura não se edita: é a que o sistema gravou quando o chamado nasceu.
+  if (prioridade !== undefined || contratoId !== undefined) {
+    await fixarLimitesDaOs(prisma, id);
+    atualizado = await prisma.ordemServico.findUniqueOrThrow({ where: { id } });
+  }
 
   if (status && status !== existente.status) {
     await prisma.osHistorico.create({

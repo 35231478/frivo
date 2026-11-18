@@ -3,7 +3,8 @@ import { formatarData, LABELS_PRIORIDADE, LABELS_SEGMENTO, LABELS_STATUS_ORCAMEN
 import { lerFiltros, montarWhere } from "@/lib/equipamento-listagem";
 import { lerFiltrosVeiculos, montarWhereVeiculos } from "@/lib/veiculo-listagem";
 import { LABELS_FUNCAO, lerFiltrosColaboradores, montarWhereColaboradores } from "@/lib/colaborador-listagem";
-import { whereClientes, whereContratos, whereOrcamentos, whereOrdens } from "@/lib/listas/filtros";
+import { whereClientes, whereContratos, whereOrcamentos } from "@/lib/listas/filtros";
+import { whereOrdensDaLista } from "@/lib/listas/filtros-server";
 import { prazoEfetivo } from "@/lib/os/prazo-execucao";
 import { calcularStatusFinanceiroEmLote } from "@/lib/status-financeiro";
 import { MAX_SELECAO, type AcaoItem, type Entidade } from "@/lib/acoes-massa/acoes";
@@ -100,7 +101,7 @@ export async function idsDoFiltro(entidade: Entidade, filtro: string, empresaId:
   };
   switch (entidade) {
     case "ordens": {
-      const where = whereOrdens(empresaId, sp);
+      const where = await whereOrdensDaLista(empresaId, sp);
       return pegar(prisma.ordemServico.findMany({ where, select: { id: true }, orderBy: { criadoEm: "desc" }, take }), prisma.ordemServico.count({ where }));
     }
     case "equipamentos": {

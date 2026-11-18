@@ -21,6 +21,7 @@ import { StatusPill, TOM_ESTAGIO_OS, TOM_PRAZO, TOM_PRIORIDADE } from "@/compone
 import { Stepper } from "@/components/ui/stepper";
 import { Kpi } from "@/components/ui/kpi";
 import { atrasoJustificado, prazoEfetivo, rotuloMotivoAtraso } from "@/lib/os/prazo-execucao";
+import { SeloDeAtendimento } from "@/components/os/central/prazo-atendimento";
 
 /** Situação do pagamento → cor do texto (status com função: previsto, atenção, atrasado, ok). */
 const COR_PAGAMENTO: Record<string, string> = {
@@ -100,6 +101,8 @@ export function CabecalhoOs({ os, central, acoes, onAba, onAtualizado }: {
                   <StatusPill tom={TOM_PRAZO[prazoOs.situacao] ?? "previsto"} tamanho="sm" className="ml-1">{textoPrazo(prazoOs, true)}</StatusPill>
                 )}
               </span>
+              {/* Prazo de ATENDIMENTO do contrato (comparecer / resolver): só quando pede atenção */}
+              <SeloDeAtendimento os={os} />
               {/* O atraso foi justificado pelo gestor: a OS continua atrasada, mas não pesa no desempenho */}
               {atrasoJustificado(os) && (
                 <StatusPill tom="previsto" tamanho="sm" data-selo-justificado={os.atrasoJustificadoMotivo}>

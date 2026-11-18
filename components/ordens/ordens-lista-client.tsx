@@ -1,5 +1,6 @@
 "use client";
 
+import { ALERTAS_ATENDIMENTO, ROTULO_FILTRO_ATENDIMENTO } from "@/lib/atendimento/prazo";
 import { useEffect, useMemo, useState, useTransition } from "react";
 import { CampoBusca, Paginacao, sugerirPorUrl } from "@/components/listagem/listagem-ui";
 import { DEBOUNCE_BUSCA_MS, useTamanhoPreferido } from "@/components/listagem/use-listagem-url";
@@ -44,7 +45,7 @@ const CLASSE_PRIORIDADE: Record<string, string> = {
 };
 
 /** Os filtros do painel "Mais filtros" (o período e a busca ficam fora) */
-const PARAMS_FILTROS_OS = ["status", "prioridade", "prazo", "origem", "clienteId", "responsavelId", "tipoOsId", "contratoId", "numero"];
+const PARAMS_FILTROS_OS = ["status", "prioridade", "prazo", "atendimento", "origem", "clienteId", "responsavelId", "tipoOsId", "contratoId", "numero"];
 
 /** Princípio 7: o que a lista mostra fica no ⓘ do título, não num parágrafo acima da tabela. */
 const AJUDA = "Todas as OS do período escolhido: o período olha o dia agendado, a data prevista, o prazo ou a abertura. A coluna Prazo mostra até quando a OS precisa estar concluída e avisa quando vence hoje ou atrasou. OS canceladas ficam fora até o filtro de status pedir.";
@@ -196,10 +197,17 @@ export function OrdensListaClient({ ordens, total, pagina, porPagina, opcoes, pe
               ))}
             </div>
           ) },
-          { id: "prazo", label: "Prazo", params: ["prazo"], render: () => (
-            <select value={get("prazo")} onChange={(e) => setParams({ prazo: e.target.value || null })} className={inputFiltro(get("prazo"))} aria-label="Prazo">
+          { id: "prazo", label: "Prazo de execução", params: ["prazo"], render: () => (
+            <select value={get("prazo")} onChange={(e) => setParams({ prazo: e.target.value || null })} className={inputFiltro(get("prazo"))} aria-label="Prazo de execução">
               <option value="">Todos</option>
               {FILTROS_PRAZO.map((f) => <option key={f} value={f}>{ROTULO_FILTRO_PRAZO[f]}</option>)}
+            </select>
+          ) },
+          // O que o contrato prometeu ao cliente (comparecer / resolver) — outro prazo, outro filtro
+          { id: "atendimento", label: "Prazo de atendimento", params: ["atendimento"], render: () => (
+            <select value={get("atendimento")} onChange={(e) => setParams({ atendimento: e.target.value || null })} className={inputFiltro(get("atendimento"))} aria-label="Prazo de atendimento">
+              <option value="">Todos</option>
+              {ALERTAS_ATENDIMENTO.map((f) => <option key={f} value={f}>{ROTULO_FILTRO_ATENDIMENTO[f]}</option>)}
             </select>
           ) },
           { id: "clienteId", label: "Cliente", params: ["clienteId"], render: () => <BuscaSelect value={get("clienteId")} onChange={(v) => setParams({ clienteId: v || null })} options={opcoes.clientes} placeholder="Todos" /> },

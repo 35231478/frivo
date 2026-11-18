@@ -18,6 +18,7 @@ import {
   TipoComunicacao, CanalComunicacao,
 } from "@prisma/client";
 import { anoBR, mesBR } from "@/lib/fuso";
+import { regrasAtendimentoSchema } from "@/lib/atendimento/prazo";
 import { caixaNome, caixaEmail, caixaLivre } from "@/lib/texto/zod";
 
 const valorOpcional = z.preprocess(
@@ -272,6 +273,10 @@ export const contratoSchema = z.object({
     tecnicoId: z.string().optional().nullable(),
     dataPrimeiraOs: z.string().optional().nullable(),
   })).default([]),
+
+  // Prazo de atendimento prometido ao cliente, por prioridade do chamado (lib/atendimento/prazo.ts).
+  // Ausente = não mexe no que está gravado; lista vazia = o contrato não promete prazo.
+  prazosAtendimento: regrasAtendimentoSchema.optional(),
 
   // Faturamento (a NFS-e saiu do contrato: serviços da nota, período de referência, nº do contrato
   // e vencimento na descrição não são mais gravados — o que já existia no banco fica como está)

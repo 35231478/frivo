@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { exigirPermissao } from "@/lib/permissoes-server";
 import { proximoNumero } from "@/lib/numeracao-server";
+import { regrasDaProposta } from "@/lib/atendimento/prazo";
+import { salvarRegrasDoContrato } from "@/lib/atendimento/prazo-server";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -71,6 +73,9 @@ export async function POST(_req: NextRequest, { params }: Params) {
         unidades: unidadeIds.length ? { create: unidadeIds.map((unidadeId) => ({ unidadeId })) } : undefined,
       },
     });
+
+    // O prazo de atendimento que a proposta prometeu vira o padrão do contrato (editável lá)
+    await salvarRegrasDoContrato(tx, empresaId, novo.id, regrasDaProposta(orcamento));
 
     // Marca a proposta como convertida
     await tx.orcamento.update({ where: { id: orcamento.id }, data: { status: "CONVERTIDA" } });

@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { fixarLimitesDaOs } from "@/lib/atendimento/prazo-server";
 import { z } from "zod";
 import { exigirPermissao } from "@/lib/permissoes-server";
 import { prisma } from "@/lib/prisma";
@@ -99,6 +100,9 @@ export async function POST(req: NextRequest, { params }: Params) {
       },
     });
     await gravarTecnicos(tx, atividade.id, tecnicos);
+    // Contrato e prioridade ficaram definidos: fixa os limites do prazo de atendimento, contados
+    // desde a hora em que o cliente abriu o chamado
+    await fixarLimitesDaOs(tx, id);
     const equip = equipamentoId ?? os.equipamentoId;
     if (equip) await tx.atividadeEquipamento.create({ data: { atividadeId: atividade.id, equipamentoId: equip } });
     await tx.osHistorico.create({

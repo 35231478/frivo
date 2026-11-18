@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { salvarRegrasDoContrato } from "@/lib/atendimento/prazo-server";
 import { prisma } from "@/lib/prisma";
 import { respostaRefEmpresa, validarRefEmpresa, validarRefsEmpresa } from "@/lib/ref-empresa";
 import { exigirAlgumaPermissao, exigirPermissao } from "@/lib/permissoes-server";
@@ -46,7 +47,7 @@ export async function POST(req: NextRequest) {
   // PR3-A/B: a automação do faturamento fatura sem ninguém olhar — pede Financeiro › Medições (+ Fiscal / Contas a receber)
   const faltaAutomacao = faltaPermissaoAutomacao(parsed.data, {}, session.user!);
   if (faltaAutomacao) return NextResponse.json({ erro: faltaAutomacao }, { status: 403 });
-  const { unidadeIds, recorrenciasLocais, dataInicio, dataFim, valorMensal, valorTotal, responsavelTecnicoId, tipoOsRecorrenciaId, tecnicoRecorrenciaId, artVencimento, ...resto } = parsed.data;
+  const { unidadeIds, recorrenciasLocais, prazosAtendimento, dataInicio, dataFim, valorMensal, valorTotal, responsavelTecnicoId, tipoOsRecorrenciaId, tecnicoRecorrenciaId, artVencimento, ...resto } = parsed.data;
   // Cliente, locais, tipos de OS e técnicos (inclusive os da recorrência por local) precisam ser da mesma empresa
   try {
     await Promise.all([
@@ -77,6 +78,9 @@ export async function POST(req: NextRequest) {
     },
     include: { unidades: true },
   });
+
+  // Prazo de atendimento prometido, por prioridade do chamado
+  if (prazosAtendimento?.length) await salvarRegrasDoContrato(prisma, empresaId, contrato.id, prazosAtendimento);
 
   // Configurações de recorrência por local
   if (recorrenciasLocais.length) {

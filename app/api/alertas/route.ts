@@ -93,11 +93,14 @@ export async function GET() {
     etapasVencendoHoje: verOrdens ? prazosBrutos?.etapasVencendoHoje ?? 0 : 0,
     atendimentosAtraso: verOrdens ? prazosBrutos?.atendimentosAtraso ?? 0 : 0,
     chamadosPortal: verOrdens ? prazosBrutos?.chamadosPortal ?? 0 : 0,
+    atendimentoVencendo: verOrdens ? prazosBrutos?.atendimentoVencendo ?? 0 : 0,
+    atendimentoEstourado: verOrdens ? prazosBrutos?.atendimentoEstourado ?? 0 : 0,
     pedidosPendentes: verCompras ? prazosBrutos?.pedidosPendentes ?? 0 : 0,
   };
   const veiculos = veiculosBrutos ?? zeroVeiculos;
 
-  const totalPrazos = prazos.prazosVencidos + prazos.etapasVencendoHoje + prazos.atendimentosAtraso + prazos.chamadosPortal + prazos.pedidosPendentes;
+  const totalPrazos = prazos.prazosVencidos + prazos.etapasVencendoHoje + prazos.atendimentosAtraso + prazos.chamadosPortal + prazos.pedidosPendentes
+    + prazos.atendimentoVencendo + prazos.atendimentoEstourado;
   const totalVeiculos = veiculos.checklistPendente + veiculos.checklistsComAlertas + veiculos.documentosVencendo + veiculos.veiculosManutencao;
 
   return NextResponse.json({

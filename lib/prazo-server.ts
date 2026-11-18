@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { inicioHojeBR } from "@/lib/fuso";
 import { whereOsAtrasada } from "@/lib/os/prazo-execucao";
+import { contarAtendimento } from "@/lib/atendimento/prazo-server";
 
 /**
  * Marca de forma preguiçosa as etapas e prazos vencidos como ATRASADA/ATRASADO.
@@ -35,7 +36,7 @@ export async function contarAlertasPrazos(empresaId: string) {
   const agora = new Date();
   const fimHoje = new Date(inicioHojeBR(agora, 1).getTime() - 1); // fim do dia em Brasília
 
-  const [prazosVencidos, etapasVencendoHoje, pedidosPendentes, atendimentosAtraso, chamadosPortal] = await Promise.all([
+  const [prazosVencidos, etapasVencendoHoje, pedidosPendentes, atendimentosAtraso, chamadosPortal, atendimento] = await Promise.all([
     prisma.osPrazo.count({ where: { ordemServico: { empresaId }, status: "ATRASADO" } }),
     prisma.osPrazoEtapa.count({
       where: {
@@ -52,6 +53,8 @@ export async function contarAlertasPrazos(empresaId: string) {
     prisma.ordemServico.count({
       where: { empresaId, origem: "PORTAL_CLIENTE", status: "AGUARDANDO_ATENDIMENTO" },
     }),
+    // PRAZO DE ATENDIMENTO do contrato (comparecer / resolver): vencendo e estourado — a regra única (lib/atendimento/prazo.ts)
+    contarAtendimento(empresaId, agora),
   ]);
 
   return {
@@ -60,6 +63,8 @@ export async function contarAlertasPrazos(empresaId: string) {
     pedidosPendentes,
     atendimentosAtraso,
     chamadosPortal,
-    total: prazosVencidos + etapasVencendoHoje + pedidosPendentes + atendimentosAtraso + chamadosPortal,
+    atendimentoVencendo: atendimento.vencendo,
+    atendimentoEstourado: atendimento.estourado,
+    total: prazosVencidos + etapasVencendoHoje + pedidosPendentes + atendimentosAtraso + chamadosPortal + atendimento.vencendo + atendimento.estourado,
   };
 }

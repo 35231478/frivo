@@ -95,7 +95,7 @@ async function executar(ator: Ator, op: Operacao, lote: OpcoesLote): Promise<Res
   const ctx = await carregarContexto(ator, op.atividadeId, { equipamentoId, permitirBloqueada: op.tipo === "concluir" || op.tipo === "aceite" });
   if (!ctx.ok) return { ok: false, status: ctx.status, erro: ctx.erro };
   switch (op.tipo) {
-    case "iniciar": return iniciarAtividade(ctx);
+    case "iniciar": return iniciarAtividade(ctx, { em: op.em, agoraAparelho: lote.agoraAparelho });
     case "avisoCliente": return avisarCliente(ctx, op.dados, { em: op.em, agoraAparelho: lote.agoraAparelho });
     case "resposta": return responderItem(ctx, op.itemId, op.dados);
     case "audio": return gravarAudio(ctx, op.itemId, op.dataUrl);

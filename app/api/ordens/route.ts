@@ -7,6 +7,7 @@ import { equipamentosDoCliente } from "@/lib/execucao/vinculos";
 import { sincronizarStatusOs } from "@/lib/os/sincronizar-status";
 import { criarPrimeiraAtividade, prepararExecucao, proximoNumeroOs } from "@/lib/os/abertura";
 import { lerPrazoDigitado, prazoAoCriar } from "@/lib/os/prazo-execucao";
+import { fixarLimitesDaOs } from "@/lib/atendimento/prazo-server";
 
 const osCreateSchema = z.object({
   clienteId: z.string().min(1),
@@ -23,6 +24,12 @@ const osCreateSchema = z.object({
    * Ausente = quem chama não mostrou sugestão (integrações): o padrão do tipo preenche o campo vazio.
    */
   usarPrazoPadrao: z.boolean().optional(),
+  /**
+   * CHAMADO DO CLIENTE: o cliente pediu este atendimento. A hora da abertura NÃO vem de quem lança —
+   * é a do servidor, no momento em que a OS é criada, e não muda depois. Com contrato, é dela que
+   * conta o PRAZO DE ATENDIMENTO prometido.
+   */
+  chamadoDoCliente: z.boolean().optional(),
   observacoes: z.string().optional(),
   /** Equipamentos atendidos já na abertura (opcional; dá para vincular depois, na execução) */
   equipamentoIds: z.array(z.string().min(1)).max(200).optional(),
@@ -82,6 +89,8 @@ export async function POST(req: NextRequest) {
   const parsed = osCreateSchema.safeParse(body);
   if (!parsed.success) return NextResponse.json({ erro: "Dados inválidos", detalhes: parsed.error.flatten() }, { status: 400 });
   const prazoDigitado = lerPrazoDigitado(parsed.data.prazoExecucao);
+  // Chamado do cliente: a abertura é AGORA, pelo relógio do servidor (não se digita nem se edita)
+  const chamadoAbertoEm = parsed.data.chamadoDoCliente ? new Date() : null;
   if (prazoDigitado === undefined) return NextResponse.json({ erro: "Prazo para finalizar inválido." }, { status: 400 });
 
   // Quem executa é obrigatório ao abrir a OS: equipe OU colaboradores (+ veículo puxado/escolhido)
@@ -116,9 +125,12 @@ export async function POST(req: NextRequest) {
       previsaoConclusao: parsed.data.previsaoConclusao ? new Date(parsed.data.previsaoConclusao) : null,
       // O que a pessoa digitou vence; sem nada digitado, o padrão do tipo contado do dia agendado
       prazoExecucao: prazoAoCriar({ digitado: prazoDigitado, dataAgendada: prep.execucao.dataAgendada, diasDoTipo: parsed.data.usarPrazoPadrao === false ? null : prep.execucao.prazoExecucaoDias }),
+      chamadoAbertoEm,
       observacoes: parsed.data.observacoes || null,
     },
    });
+   // Chamado de cliente em contrato: fixa os limites do prazo de atendimento (comparecer e resolver)
+   if (chamadoAbertoEm) await fixarLimitesDaOs(tx, criada.id);
    const atividadeId = await criarPrimeiraAtividade(tx, empresaId, criada.id, prep.execucao);
    if (equipamentoIds.length) await tx.atividadeEquipamento.createMany({ data: equipamentoIds.map((equipamentoId) => ({ atividadeId, equipamentoId })) });
    await tx.osHistorico.create({

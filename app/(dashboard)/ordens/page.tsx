@@ -1,7 +1,8 @@
 import type { Metadata } from "next";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { periodoOrdens, whereOrdens } from "@/lib/listas/filtros";
+import { periodoOrdens } from "@/lib/listas/filtros";
+import { whereOrdensDaLista } from "@/lib/listas/filtros-server";
 import { periodoTela } from "@/lib/periodo";
 import { janela, lerPaginacao, paginaValida } from "@/lib/listagem";
 import { OrdensListaClient } from "@/components/ordens/ordens-lista-client";
@@ -38,7 +39,7 @@ export default async function OrdensPage({ searchParams }: { searchParams: Promi
   const dir: "asc" | "desc" = sp.dir === "asc" ? "asc" : "desc";
 
   const agora = new Date();
-  const where = whereOrdens(empresaId, sp, agora);
+  const where = await whereOrdensDaLista(empresaId, sp, agora);
   const periodo = periodoTela(periodoOrdens(sp, agora));
   const { pagina: paginaPedida, porPagina } = lerPaginacao(sp);
   const total = await prisma.ordemServico.count({ where });

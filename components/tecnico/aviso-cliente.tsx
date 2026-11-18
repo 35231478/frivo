@@ -1,5 +1,6 @@
 "use client";
 
+import { useAgora } from "@/lib/ui/use-agora";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { CheckCircle2, Clock, MessageCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -17,12 +18,8 @@ const TOM: Record<TomAviso, string> = {
 };
 const NO_WHATSAPP: Record<EventoAviso, string> = { A_CAMINHO: "a caminho", CHEGOU: "chegada" };
 
-/** O relógio da tela: os textos mudam com o tempo ("aviso a enviar" deixa de valer; o dia vira). */
-export function useAgora(): number {
-  const [agora, setAgora] = useState(() => Date.now());
-  useEffect(() => { const t = setInterval(() => setAgora(Date.now()), 30_000); return () => clearInterval(t); }, []);
-  return agora;
-}
+// O relógio da tela é um só para o sistema inteiro (lib/ui/use-agora.ts); quem já importava daqui continua funcionando
+export { useAgora };
 
 /**
  * O TOQUE de "A caminho" / "Cheguei" — o gatilho fica no card da OS (Meu dia / Agenda); a regra é a de

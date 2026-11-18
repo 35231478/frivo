@@ -92,6 +92,9 @@ export async function POST(req: NextRequest) {
       criadoPorId: gestor.id,
       status: "AGUARDANDO_ATENDIMENTO",
       origem: "PORTAL_CLIENTE",
+      // É daqui que o prazo de atendimento do contrato conta (os limites são fixados no aceite,
+      // quando a equipe define o contrato e a prioridade — lib/atendimento/prazo-server.ts)
+      chamadoAbertoEm: new Date(),
       prioridade: MAP_URGENCIA[d.urgencia] ?? "NORMAL",
       descricao,
       anexos: fotos.length > 0 ? { create: fotos } : undefined,

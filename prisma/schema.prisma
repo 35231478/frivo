@@ -700,6 +700,11 @@ model Configuracao {
   /// JSON { [secao]: { ativo, cliente } }; ausente = padrões de lib/relatorio-os/config.ts
   relatorioOsConfig Json? @map("relatorio_os_config")
 
+  /// Horário comercial da empresa: a jornada semanal que "só em horário comercial" usa no prazo de
+  /// atendimento dos contratos. JSON { dias: [{ dia (0 = domingo … 6 = sábado), inicio "08:00", fim "18:00" }] };
+  /// ausente = segunda a sexta, das 8h às 18h (lib/atendimento/prazo.ts). Feriados ficam à parte.
+  horarioComercial Json? @map("horario_comercial")
+
   /// Padrões do orçamento novo (cada orçamento grava os seus e pode editar)
   orcamentoValidadeDias    Int      @default(10) @map("orcamento_validade_dias")
   orcamentoGarantiaServico String?  @default("90 dias") @map("orcamento_garantia_servico")

@@ -149,8 +149,8 @@ etapas, como compra de peça, adicionados à OS). Nada foi apagado:
 - `/prazos` redireciona: com o filtro da tela antiga (`status`, `templateId`) vai para as etapas; sem
   filtro, vai para a lista de OS filtrada nas atrasadas (`lib/os/rota-prazos.ts`).
 
-A palavra "SLA" saiu da interface (um teste varre o código). Ela só continua na proposta de
-contrato, que é assunto do PR 4.
+A palavra "SLA" saiu da interface (um teste varre o código) — inclusive da proposta de contrato, que
+desde o PR 4 fala em "Prazo de atendimento".
 
 ## 2. Prazo de atendimento (do contrato)
 
@@ -158,20 +158,88 @@ contrato, que é assunto do PR 4.
   configura só as que quiser prometer; cada linha pode ter só "comparecer", só "resolver" ou os dois.
   Prioridade sem linha **não tem prazo** (não se herda de outra).
 - Conta da **abertura do chamado** (`chamado_aberto_em`), não da criação da OS.
-- **Horas corridas** ou, com "só em horário comercial", só as horas de expediente: **segunda a sexta,
-  das 8h às 18h de Brasília** (fixo por enquanto; horário por empresa e feriados ficam para depois).
-  Ex.: chamado de sexta às 17h com 4 h vence segunda às 11h.
-- Os dois limites são calculados **uma vez**, na abertura, e ficam gravados na OS
-  (`atendimento_comparecer_ate`, `atendimento_resolver_ate`): mudar o contrato depois não reescreve o
-  que já foi prometido.
+- **Horas corridas** ou, com "só em horário comercial", só as horas de expediente **da empresa**.
+  Ex. na jornada padrão: chamado de sexta às 17h com 4 h vence segunda às 11h; na empresa que abre
+  sábado de manhã, vence sábado às 11h.
+- Os dois limites são calculados **uma vez** e ficam gravados na OS (`atendimento_comparecer_ate`,
+  `atendimento_resolver_ate`): mudar o contrato depois não reescreve o que já foi prometido.
 - **Comparecer** se cumpre com o "Cheguei" do app (`atendimento_comparecido_em`; reserva: o início da
   primeira atividade). **Resolver**, com a OS concluída — reabrir a OS reabre o prazo.
 - Só o **chamado de cliente em contrato** tem prazo de atendimento. A preventiva recorrente não: é a
   empresa que agenda, não há chamado para contar.
 - Avisa antes de estourar: nos últimos 20% do prazo, e nunca com menos de 1 hora de antecedência.
 
-Neste PR há o banco e o motor; a configuração no contrato, a gravação dos limites e os alertas
-entram no PR 4.
+O banco e o motor vieram no PR 1. O PR 4 ligou tudo:
+
+### O horário comercial é de cada empresa (PR 4)
+
+Até o PR 4 o expediente estava escrito no código (segunda a sexta, 8h–18h, igual para todos). Agora
+é a **jornada semanal da empresa**: em cada dia da semana, se há expediente e de que hora a que hora.
+
+- **Onde configura:** Configurações › Operacionais › **Horário comercial** (ver: Configurações ›
+  visualizar; mudar: Configurações › gerenciar).
+- **Onde fica:** `configuracoes.horario_comercial` (JSON, opcional) —
+  `{ "dias": [ { "dia": 1, "inicio": "08:00", "fim": "18:00" }, … ] }`, `dia` de 0 (domingo) a 6
+  (sábado), só os dias com expediente. **Vazio = segunda a sexta, 8h–18h** (o que valia antes), por
+  isso o SQL não preenche nada (`prisma/sql/2027-01-10_horario_comercial_empresa.sql`).
+- **Quem lê:** só `jornadaDaEmpresa` (`lib/atendimento/prazo-server.ts`), na hora de fixar os limites
+  de um chamado cuja promessa conta "só em horário comercial". Mudar a jornada vale **dali em
+  diante**: os limites já gravados nas OS não mudam.
+- **Feriados** não entram aqui (cadastro de feriados, frente à parte).
+
+### No contrato
+
+Aba **Escopo e locais** › seção **Prazo de atendimento**. Começa simples — "Comparecer em ___ horas"
+e "Resolver em ___ horas" para todo chamado — e "Definir por prioridade do chamado" abre as cinco
+prioridades (já com o prazo que estava). O marcador "Contar só em horário comercial" vale para o
+contrato inteiro e mostra, por extenso, o horário da empresa. Campo em branco = o contrato não
+promete aquilo. Salvar o contrato **nunca mexe em OS**.
+
+A **proposta de contrato** aprovada vira contrato já com o que prometeu: o "atendimento emergencial
+em X horas" vira o comparecimento das prioridades Alta, Urgente e Crítico; o "atendimento normal em
+Y horas", o de Baixa e Normal — em horas corridas (o "horário de atendimento" da proposta é texto
+livre e não é copiado). No contrato dá para ajustar.
+
+### Na OS
+
+| Momento | O que acontece |
+|---|---|
+| Cliente abre o chamado (Portal ou QR Code) | Grava `chamado_aberto_em`. Ainda não há contrato nem limite. Pedido de orçamento pelo QR não é chamado de atendimento |
+| A equipe **aceita** o chamado (define contrato e prioridade) | `fixarLimitesDaOs` grava "comparecer até" e "resolver até", contados **da abertura** — não do aceite |
+| OS lançada pela equipe com contrato | Marcar "Chamado do cliente": "Chamado aberto em" aparece preenchido e **travado**; o servidor grava a hora ao salvar e a OS nasce com os limites |
+| Mudou a prioridade ou o contrato **na OS** | Os limites são refeitos. Editar qualquer outro campo não refaz |
+| Hora de abertura do chamado | **Ninguém digita nem edita**: é sempre a do servidor no momento em que o chamado nasce (Portal, QR ou Nova OS). Uma data mandada por fora é ignorada |
+| Mudou o contrato ou o horário comercial | Nada muda nas OS que já têm limites |
+| Técnico toca **"Cheguei"** no app (o mesmo botão de sempre) | Grava `atendimento_comparecido_em` com a hora do toque, uma vez só. "A caminho" não grava. Reserva: o início da atividade |
+| OS concluída | Resolver cumprido (no prazo ou com atraso) |
+
+A central da OS mostra o cartão **Prazo de atendimento** ("Comparecer até …", "Resolver até …", cada
+um com o estado em palavra e cor) separado do cartão **Prazo de execução**, e um selo no cabeçalho
+só quando o prazo está vencendo ou estourado. A cor diz o estado: neutro com folga, âmbar perto do
+limite, vermelho estourado, verde cumprido no prazo.
+
+**OS encerrada não tem relógio correndo.** Concluída sem chegada registrada: se terminou até o limite
+de comparecer, o técnico chegou antes dele (cumprido); se terminou depois, não há como saber quando
+chegou — aparece "sem registro", sem afirmar atraso que ninguém mediu. Cancelada: o que estava em
+aberto fica "sem registro".
+
+### Alertas
+
+Pelo **sino** que já existia: "Prazo de atendimento estourado" e "Prazo de atendimento vencendo" (só
+aparecem quando há algum), cada um abrindo a lista de OS já filtrada (`/ordens?atendimento=…`). A
+lista ganhou o filtro **Prazo de atendimento**; o que já existia passou a se chamar **Prazo de
+execução**. Quem recebe: quem vê as OS (Ordens de serviço › visualizar), só da própria empresa.
+
+### A regra mora num lugar só
+
+| O quê | Onde | Ninguém mais |
+|---|---|---|
+| Somar horas (corridas ou de expediente) e calcular os limites | `somarHoras`, `limitesDoAtendimento` em `lib/atendimento/prazo.ts` | chama fora de `lib/atendimento` |
+| Gravar os limites e o comparecimento na OS | `fixarLimitesDaOs`, `marcarComparecimento` em `lib/atendimento/prazo-server.ts` | lê nem escreve esses campos |
+| Situação e alerta de uma OS | `atendimentoDaOs`, `alertaDoAtendimento` | compara limite com a hora de agora |
+| Sino e filtro da lista | `contarAtendimento`, `idsPorAtendimento` | conta por conta própria |
+
+`tests/unit/prazos-pr4.test.ts` varre o código e falha se alguém fizer a conta por fora.
 
 ## 3. O corte em PRs
 
@@ -180,7 +248,7 @@ entram no PR 4.
 | **1** (este) | Banco e motor dos dois prazos; prazo de execução separado da data prevista em todos os usos; regra única de "atrasada" | 🔵 `prisma/sql/2027-01-09_prazos_execucao_atendimento.sql` |
 | **2** (feito) | Prazo de execução nas telas: lista de OS, atraso justificado, app do técnico, prazo padrão no tipo de OS, saída do menu "Prazos e SLA" | 🟢 |
 | **3** (feito) | Desempenho: atraso justificado fora da métrica "no prazo", "Atrasos justificados" na ficha, mês fechado intocado | 🟢 |
-| 4 | Contrato e OS: configurar o prazo de atendimento, gravar os limites, "Cheguei", alertas | 🟢 |
+| **4** (feito) | Contrato e OS: configurar o prazo de atendimento, gravar os limites, "Cheguei", alertas; horário comercial por empresa | 🔵 `prisma/sql/2027-01-10_horario_comercial_empresa.sql` |
 | 5 | Relatório de cumprimento (tela e PDF) | 🟢 |
 
 ## 4. Testes
@@ -198,3 +266,7 @@ entram no PR 4.
 | `tests/unit/prazos-pr3.test.ts` | PR 3, regras puras: o atraso da atividade, o que sai da conta, o texto da composição, a linha do painel, a TV sem atrasos, os meses em que a justificativa pesa e o aviso de mês fechado |
 | `tests/unit/prazos-pr3-pg.test.ts` | PR 3 em PostgreSQL real: justificar tira da conta e desfazer devolve; só o atraso sai; equipe e encarregado; mês fechado não muda e reabrir faz valer; o que o colaborador vê no app; multiempresa |
 | `tests/unit/prazos-pr3-ui.test.ts` | PR 3, telas: "Atrasos do mês" na ficha e no app, e o aviso de mês fechado na OS |
+| `tests/unit/prazos-pr4.test.ts` | PR 4, regras puras: a jornada por empresa, a abertura digitada, o alerta, a OS encerrada, proposta → contrato, o formulário — e a trava "ninguém calcula nem grava por fora" |
+| `tests/unit/prazos-pr4-pg.test.ts` | PR 4 em PostgreSQL real: contrato (gravar, trocar, não apagar, RBAC), chamado → aceite → limites desde a abertura, OS manual e edição, horário comercial por empresa, "Cheguei" (uma vez, hora do toque), sino, lista e exportação |
+| `tests/unit/prazos-pr4-ui.test.ts`, `contrato-form-ui.test.ts`, `ordens-lista-barra-ui.test.ts` | PR 4, telas: a seção do contrato, o cartão e o selo da OS, Configurações › Horário comercial, o sino e o filtro da lista |
+| `tests/unit/sql-horario-comercial.test.ts` | O SQL do horário comercial: uma coluna opcional, nada preenchido, idempotente e idêntico ao que o Prisma espera |
