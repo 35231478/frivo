@@ -384,10 +384,10 @@ describe.skipIf(!URL_PG)("Loja de Módulos — entitlement por empresa (PostgreS
     const definir = (modulo: string, ativo: boolean) => chamar("configuracoes/modulos", "PUT", { modulo, ativo });
     const previa = (modulo: string, ativo: boolean) => chamar("configuracoes/modulos", "POST", { modulo, ativo });
 
-    it("quem administra vê os dois pilotos ligados, desliga um e a auditoria fica gravada", async () => {
+    it("quem administra vê os módulos com gate ligados, desliga um e a auditoria fica gravada", async () => {
       const antes = await ver();
       expect(antes.status).toBe(200);
-      expect(antes.json.modulos.map((m: any) => [m.id, m.ativo])).toEqual([["veiculos", true], ["compras", true]]);
+      expect(antes.json.modulos.map((m: any) => [m.id, m.ativo])).toEqual([["veiculos", true], ["compras", true], ["estoque", true]]);
 
       const r = await definir("veiculos", false);
       expect(r.status).toBe(200);
@@ -404,7 +404,7 @@ describe.skipIf(!URL_PG)("Loja de Módulos — entitlement por empresa (PostgreS
     });
 
     it("módulo fora do piloto não se desliga por aqui (a migração é módulo a módulo)", async () => {
-      const r = await definir("estoque", false);
+      const r = await definir("financeiro", false);
       expect(r.status).toBe(400);
       expect(r.json.erro).toContain("ainda não");
       expect(await linhas()).toHaveLength(0);

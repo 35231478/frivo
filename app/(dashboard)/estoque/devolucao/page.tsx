@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { ArrowLeft, ChevronRight, PackageMinus } from "lucide-react";
-import { auth } from "@/lib/auth";
+import { exigirModuloNaPagina } from "@/lib/modulos/pagina";
 import { pode } from "@/lib/permissoes";
 import { formatarQtd } from "@/lib/estoque/regras";
 import { filaDevolucao } from "@/lib/estoque/devolucao-server";
@@ -19,7 +19,7 @@ export const dynamic = "force-dynamic";
  * material ainda reservado. Some quando tudo voltou ao estoque. Rota de quem tem "Estoque › Separar material".
  */
 export default async function FilaDevolucaoPage() {
-  const u = (await auth())!.user!;
+  const u = (await exigirModuloNaPagina("estoque"))!.user!;
   if (!pode(u.permissoes, "estoque", "separar", u.role)) redirect("/sem-permissao");
   const verEstoque = pode(u.permissoes, "estoque", "visualizar", u.role);
   const fila = await filaDevolucao(u.empresaId);

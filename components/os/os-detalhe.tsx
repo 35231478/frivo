@@ -14,6 +14,7 @@ import { OsRelatorios } from "@/components/os/os-relatorios";
 import { ComprasSecao } from "@/components/compras/compras-secao";
 import { OsSeparacao, materiaisDaOs } from "@/components/os/os-separacao";
 import { resumoSeparacao } from "@/lib/estoque/separacao";
+import { useModulos } from "@/components/providers/modulos-provider";
 import { OsInativarBotao } from "@/components/os/os-inativar";
 import { OsFotosAnexos } from "@/components/os/os-fotos-anexos";
 import { OsAdicionais } from "@/components/os/os-adicionais";
@@ -59,6 +60,9 @@ export function OsDetalhe({ os: initialOs, abaInicial }: { os: any; abaInicial?:
   // E4.1/E4.2: a separação e o consumo de material (estado por material do snapshot) — o badge da aba conta o que falta
   const materiaisOs = useMemo(() => materiaisDaOs(os.itensOrcamento ?? []), [os.itensOrcamento]);
   const separacao = useMemo(() => resumoSeparacao(materiaisOs, os.status === "CANCELADA"), [materiaisOs, os.status]);
+  // Loja de Módulos: a OS é do núcleo e continua inteira; o que é do Estoque (separar, reservar,
+  // devolver) some quando a empresa não usa o módulo. O material consumido FICA: é custo da OS.
+  const temEstoque = useModulos().tem("estoque");
   const central = useMemo(() => centralDaOs({ ...os, prazosSla: os.prazos ?? [], materiais: materiaisOs, exigirPrestacaoMaterial: !!os.exigirPrestacaoMaterial }), [os, materiaisOs]);
 
   function irPara(id: string) {
@@ -82,7 +86,7 @@ export function OsDetalhe({ os: initialOs, abaInicial }: { os: any; abaInicial?:
     { id: "resumo", label: "Resumo", badge: central.falta.length },
     { id: "atividades", label: "Atividades", badge: central.atividades.total },
     { id: "comercial", label: "Comercial", badge: (os.orcamentos?.length ?? 0) + os.itensOrcamento.length },
-    { id: "materiais", label: "Materiais & Compras", badge: separacao.aSeparar + separacao.consumoPendente + separacao.aDevolver },
+    { id: "materiais", label: "Materiais & Compras", badge: (temEstoque ? separacao.aSeparar + separacao.aDevolver : 0) + separacao.consumoPendente },
     { id: "financeiro", label: "Financeiro", badge: os.medicoes.length },
     { id: "relatorios", label: "Relatórios & Anexos", badge: (os.galeria?.fotos.length ?? 0) + (os.galeria?.documentos.length ?? 0) },
   ];
@@ -170,7 +174,7 @@ export function OsDetalhe({ os: initialOs, abaInicial }: { os: any; abaInicial?:
                 <div className="space-y-6">
                   {/* E4.1: o que já foi separado (parcial/total), por quem, e o gancho da prestação de contas */}
                   <OsSeparacao
-                    osId={os.id} materiais={materiaisOs} resumo={separacao} podeSeparar={pode("estoque", "separar")}
+                    osId={os.id} materiais={materiaisOs} resumo={separacao} podeSeparar={pode("estoque", "separar")} temEstoque={temEstoque}
                     podeConsumir={pode("ordens", "editar") || pode("ordens", "concluir")} finalizada={os.status === "CONCLUIDA" || os.status === "CANCELADA" || !!os.fatura}
                     cancelada={os.status === "CANCELADA"} exigirPrestacao={!!os.exigirPrestacaoMaterial} onMudou={() => router.refresh()}
                   />

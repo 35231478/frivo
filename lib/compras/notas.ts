@@ -30,6 +30,7 @@ import { prisma } from "@/lib/prisma";
 import { formatarCpfCnpj, formatarData } from "@/lib/utils";
 import { arred } from "@/lib/estoque/regras";
 import { movimentar } from "@/lib/estoque/servidor";
+import { temModulo } from "@/lib/modulos/servidor";
 import { ultimosCustos } from "@/lib/estoque/custo";
 import { arred2, avisoCusto, converterItem, mesmaUnidade, precoPorMargem, type AvisoCusto } from "@/lib/estoque/preco";
 import { LABEL_STATUS_NOTA } from "@/lib/compras/rotulos";
@@ -371,9 +372,17 @@ export async function lancarNota({ empresaId, usuarioId, notaId, escolhas = [], 
     // Custo da compra anterior de cada produto (antes desta nota), para o aviso de custo
     const custoAnterior = await ultimosCustos(empresaId, nota.itens.map((i) => i.produtoId!), { excetoNotaId: nota.id }, tx);
 
-    // 1) Entrada no estoque — a função da E1, dentro desta transação — já na unidade do produto
+    // 1) Entrada no estoque — a função da E1, dentro desta transação — já na unidade do produto.
+    //
+    // DEGRADAÇÃO GRACIOSA (Loja de Módulos): a empresa que desligou o Estoque não controla saldo.
+    // `movimentar` devolve "não lancei nada" (lib/estoque/servidor) e a nota segue o seu caminho:
+    // a NF é um documento de COMPRA e de DINHEIRO — as contas a pagar nascem do mesmo jeito. O
+    // razão é que não existe para essa empresa. Nada aqui recusa: recusar faria a dívida com o
+    // fornecedor sumir por causa de um módulo opcional.
+    const temEstoqueAqui = await temModulo(empresaId, "estoque");
     const entradas = [];
     const avisos: string[] = [];
+    if (!temEstoqueAqui) avisos.push("Módulo Estoque desligado: a nota virou conta a pagar, sem entrada no estoque.");
     const avisosCusto: AvisoCusto[] = [];
     const custoDoItem = new Map<string, number>();
     for (const it of nota.itens) {

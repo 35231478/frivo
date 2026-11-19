@@ -129,7 +129,7 @@ const OPCIONAIS: ModuloCatalogo[] = [
     rotas: ["/pmoc", "/api/pmocs"], permissoes: [["pmoc"]], dependeDe: ["equipamentos"],
   },
   {
-    id: "estoque", nome: "Estoque", icone: "Package", categoria: "operacao",
+    id: "estoque", nome: "Estoque", icone: "Package", categoria: "operacao", gateAtivo: true,
     descricao: "Saldo de material, separação para a OS e devolução do que sobrou.",
     rotas: ["/estoque", "/api/estoque"], permissoes: [["estoque"]],
   },

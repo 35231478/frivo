@@ -5,6 +5,7 @@ import { corDado, paletaSelecao } from "@/lib/ui/tokens";
 import { useRouter } from "next/navigation";
 import { AvisoInativacaoStatus } from "@/components/ui/aviso-inativacao-status";
 import { cn } from "@/lib/utils";
+import { useModulos } from "@/components/providers/modulos-provider";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
@@ -59,6 +60,11 @@ export function EquipeForm({ initialData }: { initialData?: any }) {
 
   const [colaboradores, setColaboradores] = useState<Colab[]>([]);
   const [veiculos, setVeiculos] = useState<VeiculoOpt[]>([]);
+  // CAMPO-PONTE (Loja de Módulos): a equipe é do núcleo, o veículo é da Frota. Com a Frota
+  // desligada o campo SOME — em vez de ficar órfão, vazio, pedindo um cadastro que não existe
+  // mais nesta empresa. O que já estava vinculado fica no banco e volta ao religar.
+  const { tem } = useModulos();
+  const temFrota = tem("veiculos");
   // Cadastrar colaborador sem sair da equipe (Equipes › gerenciar, a mesma permissão da rota)
   const podeCadastrarColaborador = usePodeCriar(COLABORADOR.permissao);
   const [novoMembro, setNovoMembro] = useState(false);
@@ -163,6 +169,7 @@ export function EquipeForm({ initialData }: { initialData?: any }) {
             </FormField>
           </FormGrid>
 
+          {temFrota && (
           <FormField label="Veículos da equipe" dica="Marque todos os veículos que ficam com esta equipe.">
             {veiculos.length === 0 ? (
               <p className="text-sm text-ink-subtle">Nenhum veículo cadastrado.</p>
@@ -204,6 +211,7 @@ export function EquipeForm({ initialData }: { initialData?: any }) {
               </div>
             )}
           </FormField>
+          )}
 
           <FormField label="Membros" dica="Marque os colaboradores que compõem a equipe.">
             {podeCadastrarColaborador && (

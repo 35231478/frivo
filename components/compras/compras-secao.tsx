@@ -8,6 +8,7 @@ import { EditorPedido } from "@/components/compras/editor-pedido";
 import { PedidoPainel, StatusPedidoBadge } from "@/components/compras/pedido-painel";
 import { cn, formatarData } from "@/lib/utils";
 import type { PedidoTela, StatusPedido } from "@/lib/compras/pedido";
+import { useModulos } from "@/components/providers/modulos-provider";
 
 interface PedidoLinha {
   id: string; numero: string; status: StatusPedido; statusEm?: string | null; prazoNecessario?: string | null;
@@ -24,6 +25,10 @@ export function ComprasSecao({ ordemServicoId, orcamentoId }: { ordemServicoId?:
   const [aberto, setAberto] = useState<string | null>(null);
   const [detalhe, setDetalhe] = useState<Record<string, PedidoTela>>({});
   const [erroAbrir, setErroAbrir] = useState("");
+  // CAMPO-PONTE (Loja de Módulos): a OS e o orçamento são do núcleo, o pedido de compra é de
+  // Compras. Com Compras desligado o pedido que já existe CONTINUA à vista (desligar não apaga o
+  // passado); o que some é o botão de criar um novo — é a mesma regra do servidor, na tela.
+  const temCompras = useModulos().tem("compras");
 
   const query = ordemServicoId ? `ordemServicoId=${ordemServicoId}` : `orcamentoId=${orcamentoId}`;
   function carregar() {
@@ -48,7 +53,7 @@ export function ComprasSecao({ ordemServicoId, orcamentoId }: { ordemServicoId?:
     <div className="space-y-4">
       <div className="flex items-center justify-between gap-2">
         <h3 className="section-title flex items-center gap-2"><ShoppingCart className="w-4 h-4 text-primary-600" /> Compras</h3>
-        {!novo && (
+        {temCompras && !novo && (
           <Button variant="outline" size="sm" onClick={() => setNovo(true)} data-solicitar-compra>
             <Plus className="w-4 h-4" /> Solicitar compra de material
           </Button>

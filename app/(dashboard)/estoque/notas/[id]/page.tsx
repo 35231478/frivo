@@ -3,7 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { AlertTriangle, ArrowLeft, Barcode, CheckCircle2, FileText, Package, Tag, Wallet } from "lucide-react";
 import { Dica } from "@/components/ui/dica";
-import { auth } from "@/lib/auth";
+import { exigirModuloNaPagina } from "@/lib/modulos/pagina";
 import { pode } from "@/lib/permissoes";
 import { prisma } from "@/lib/prisma";
 import { LABELS_FORMA_PAGAMENTO, cn, formatarCpfCnpj, formatarData, formatarDataHora, formatarMoeda } from "@/lib/utils";
@@ -35,7 +35,7 @@ const moeda4 = (n: number) => n.toLocaleString("pt-BR", { style: "currency", cur
  * "Lançar a partir de NF" do Financeiro (o "voltar" leva para lá).
  */
 export default async function NotaCompraPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams?: Promise<{ de?: string }> }) {
-  const [{ id }, session, sp] = await Promise.all([params, auth(), searchParams ?? Promise.resolve({} as { de?: string })]);
+  const [{ id }, session, sp] = await Promise.all([params, exigirModuloNaPagina("estoque"), searchParams ?? Promise.resolve({} as { de?: string })]);
   const doFinanceiro = sp.de === "contas-pagar";
   const u = session!.user!;
   const nota = await carregarNota(u.empresaId, id);

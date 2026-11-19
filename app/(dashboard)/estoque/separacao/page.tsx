@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { ArrowLeft, ChevronRight, PackageOpen } from "lucide-react";
-import { auth } from "@/lib/auth";
+import { exigirModuloNaPagina } from "@/lib/modulos/pagina";
 import { pode } from "@/lib/permissoes";
 import { cn, formatarData } from "@/lib/utils";
 import { formatarQtd } from "@/lib/estoque/regras";
@@ -22,7 +22,7 @@ export const dynamic = "force-dynamic";
  * passar e a página confere a ação).
  */
 export default async function FilaSeparacaoPage() {
-  const u = (await auth())!.user!;
+  const u = (await exigirModuloNaPagina("estoque"))!.user!;
   if (!pode(u.permissoes, "estoque", "separar", u.role)) redirect("/sem-permissao");
   const verEstoque = pode(u.permissoes, "estoque", "visualizar", u.role);
   const fila = await filaSeparacao(u.empresaId);

@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { AlertTriangle, FileUp, Package, ScrollText } from "lucide-react";
-import { auth } from "@/lib/auth";
+import { exigirModuloNaPagina } from "@/lib/modulos/pagina";
 import { pode } from "@/lib/permissoes";
 import { cn } from "@/lib/utils";
 import { PLANILHA } from "@/lib/planilha";
@@ -25,7 +25,7 @@ const AJUDA = "O saldo de cada produto que controla estoque: a soma dos moviment
  */
 export default async function EstoquePage({ searchParams }: { searchParams: Promise<Record<string, string | undefined>> }) {
   const sp = await searchParams;
-  const session = await auth();
+  const session = await exigirModuloNaPagina("estoque");
   const u = session!.user!;
   const podeLancar = pode(u.permissoes, "estoque", "gerenciar", u.role);
   const [lista, alertas] = await Promise.all([listarEstoque(u.empresaId, sp), contarAlertas(u.empresaId)]);

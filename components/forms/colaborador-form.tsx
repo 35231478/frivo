@@ -13,6 +13,7 @@ import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { FormField, FormSection, FormGrid } from "@/components/ui/form-field";
 import { rotuloVeiculo, sufixoStatusVeiculo, type VeiculoResumo } from "@/lib/veiculo-sugestao";
+import { useModulos } from "@/components/providers/modulos-provider";
 import { AvatarTecnico } from "@/components/ui/avatar-tecnico";
 import { reduzirImagem } from "@/lib/imagem-cliente";
 import { FolhaColaborador } from "@/components/folha/folha-colaborador";
@@ -90,6 +91,9 @@ export function ColaboradorForm({ initialData, somenteLeitura = false, podeFolha
   // Veículo "padrão" (opcional): puxado automaticamente na OS quando ele executa sozinho
   const [veiculoId, setVeiculoId] = useState<string>(initialData?.veiculoId ?? "");
   const [veiculos, setVeiculos] = useState<VeiculoResumo[]>([]);
+  // CAMPO-PONTE (Loja de Módulos): o colaborador é do núcleo, o veículo padrão é da Frota.
+  // Frota desligada: o campo some (o vínculo que já existia fica no banco e volta ao religar).
+  const temFrota = useModulos().tem("veiculos");
 
   useEffect(() => {
     fetch("/api/tipos-os").then((r) => r.json()).then((d) => setTiposOs(Array.isArray(d) ? d.filter((t: any) => t.ativo !== false) : [])).catch(() => {});
@@ -357,14 +361,16 @@ export function ColaboradorForm({ initialData, somenteLeitura = false, podeFolha
                   <SeletorCadastro entidade="perfis-acesso" itens={perfis} valor={perfilAcessoId} vazio="Sem perfil" onChange={setPerfilAcessoId} />
                 </FormField>
               </FormGrid>
-              <FormField label="Veículo padrão" hint="Opcional — puxado automaticamente na OS quando este colaborador executa (dá para trocar na OS)">
-                <Select aria-label="Veículo padrão" value={veiculoId} onChange={(e) => setVeiculoId(e.target.value)}>
-                  <option value="">Sem veículo padrão</option>
-                  {veiculos.filter((v) => v.status === "ATIVO" || v.id === veiculoId).map((v) => (
-                    <option key={v.id} value={v.id}>{rotuloVeiculo(v)}{sufixoStatusVeiculo(v.status)}</option>
-                  ))}
-                </Select>
-              </FormField>
+              {temFrota && (
+                <FormField label="Veículo padrão" hint="Opcional — puxado automaticamente na OS quando este colaborador executa (dá para trocar na OS)">
+                  <Select aria-label="Veículo padrão" value={veiculoId} onChange={(e) => setVeiculoId(e.target.value)}>
+                    <option value="">Sem veículo padrão</option>
+                    {veiculos.filter((v) => v.status === "ATIVO" || v.id === veiculoId).map((v) => (
+                      <option key={v.id} value={v.id}>{rotuloVeiculo(v)}{sufixoStatusVeiculo(v.status)}</option>
+                    ))}
+                  </Select>
+                </FormField>
+              )}
               {tipo === "RESPONSAVEL_TECNICO" && (
                 <FormField label="CREA / Registro profissional" hint="Obrigatório para responsáveis técnicos">
                   <Input {...register("crea")} placeholder="Ex: 5012345-D/SP" />
