@@ -4,12 +4,23 @@ import { validarDocumentoDataUrl, validarFotos } from "@/lib/anexos-server";
 import { veiculoSchema } from "@/lib/validations";
 import { organizarFotosVeiculo } from "@/lib/veiculo-fotos";
 import { exigirAlgumaPermissao, exigirPermissao } from "@/lib/permissoes-server";
+import { temModulo } from "@/lib/modulos/servidor";
+
+/**
+ * Frota desligada: a LEITURA da lista devolve vazio em vez de 403, de propósito. Quem chama esta
+ * rota não é só a tela de Frota — é o formulário da OS, o do colaborador e o da equipe, que são
+ * do núcleo e não podem quebrar porque a empresa desligou um módulo opcional. Sem frota, não há
+ * veículo a escolher: lista vazia é a resposta honesta. A tela de Frota em si já é barrada antes,
+ * na rota, e tudo o que ESCREVE veículo passa por `exigirPermissao("veiculos", …)`, que recusa.
+ */
+const semFrota = async (empresaId: string) => !(await temModulo(empresaId, "veiculos"));
 
 export async function GET(req: NextRequest) {
   // ?resumo=1: só o necessário para escolher o veículo na OS / no colaborador (sem fotos)
   if (req.nextUrl.searchParams.get("resumo") === "1") {
     const guard = await exigirAlgumaPermissao([["veiculos", "visualizar"], ["ordens", "criar"], ["ordens", "editar"], ["equipes", "gerenciar"]]);
     if (guard.erro) return guard.resposta;
+    if (await semFrota(guard.session.user!.empresaId)) return NextResponse.json([]);
     const veiculos = await prisma.veiculo.findMany({
       where: { empresaId: guard.session.user!.empresaId },
       select: { id: true, placa: true, modelo: true, marca: true, status: true, equipeId: true },
@@ -22,6 +33,7 @@ export async function GET(req: NextRequest) {
   const guard = await exigirAlgumaPermissao([["veiculos", "visualizar"], ["equipes", "gerenciar"]]);
   if (guard.erro) return guard.resposta;
   const empresaId = guard.session.user!.empresaId;
+  if (await semFrota(empresaId)) return NextResponse.json([]);
 
   const veiculos = await prisma.veiculo.findMany({
     where: { empresaId },

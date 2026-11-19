@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { Plus, ShoppingCart } from "lucide-react";
 import { auth } from "@/lib/auth";
+import { exigirModuloNaPagina } from "@/lib/modulos/pagina";
 import { pode } from "@/lib/permissoes";
 import { prisma } from "@/lib/prisma";
 import { janela, lerPaginacao, paginaValida } from "@/lib/listagem";
@@ -28,7 +29,8 @@ const statusTela = (s: string): StatusPedido => (s === "COMPRADO" ? "COTANDO" : 
  */
 export default async function PedidosCompraPage({ searchParams }: { searchParams: Promise<Record<string, string | undefined>> }) {
   const sp = await searchParams;
-  const session = await auth();
+  // Módulo da empresa (entitlement): desligado, a rota redireciona — acima do RBAC do usuário
+  const session = await exigirModuloNaPagina("compras");
   const u = session!.user!;
   const empresaId = u.empresaId;
   const podeCriar = pode(u.permissoes, "compras", "gerenciar", u.role);

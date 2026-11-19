@@ -8,6 +8,7 @@ import { cn } from "@/lib/utils";
 import { moduloDaRota, pode, type Acao } from "@/lib/permissoes";
 import { FrivoLogo, FrivoMark } from "./frivo-logo";
 import { secoesVisiveis as secoesVisiveisConfig } from "@/lib/navegacao/configuracoes";
+import { useModulos } from "@/components/providers/modulos-provider";
 import type { Session } from "next-auth";
 import {
   LayoutDashboard, Users, Thermometer, ClipboardList, FileText, HardHat, Settings, ChevronDown, ChevronRight,
@@ -251,8 +252,13 @@ export function Sidebar({ session, variant = "desktop", avatarUrl }: SidebarProp
   // Permissão de visualização por item (item.modulo sobrescreve o 1º segmento da rota)
   const permissoes = (usuario as any).permissoes;
   const role = usuario.role;
+  // Os MÓDULOS que a empresa desligou: um gate acima do RBAC — o item some do menu mesmo para
+  // quem tem todas as permissões, porque a empresa não tem o módulo (lib/modulos/catalogo).
+  const { rotaDesligada } = useModulos();
   const podeVer = (i: Item) => {
-    const m = i.modulo ?? moduloDaRota(i.href.split("#")[0]);
+    const href = i.href.split("#")[0];
+    if (rotaDesligada(href)) return false;
+    const m = i.modulo ?? moduloDaRota(href);
     if (!m) return true;
     if (i.somenteAcao && i.acao) return pode(permissoes, m, i.acao, role);
     return pode(permissoes, m, "visualizar", role) && (!i.acao || pode(permissoes, m, i.acao, role));

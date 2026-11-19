@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { notFound, redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
+import { exigirModuloNaPagina } from "@/lib/modulos/pagina";
 import { pode } from "@/lib/permissoes";
 import { podeVerPedido } from "@/lib/compras/pedido";
 import { marcarNfVista } from "@/lib/compras/conciliacao-server";
@@ -14,7 +15,8 @@ const AJUDA = "O ciclo do pedido: Solicitado, Cotando, Comprado e Concluído. Ca
 
 export default async function PedidoCompraDetalhe({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const session = await auth();
+  // Módulo da empresa (entitlement): desligado, a rota redireciona — acima do RBAC do usuário
+  const session = await exigirModuloNaPagina("compras");
   const u = session!.user!;
   const pedido = await carregarPedido(id, u.empresaId);
   if (!pedido) notFound();

@@ -9,6 +9,7 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { ErroRefEmpresa, validarRefEmpresa } from "@/lib/ref-empresa";
+import { temModulo } from "@/lib/modulos/servidor";
 import { janela, lerOrdem, lerPaginacao, ordemPrisma, paginaValida, um, type MapaOrdem, type ParamsUrl } from "@/lib/listagem";
 import { lerPeriodo, type Periodo } from "@/lib/periodo";
 import { arred, avisoSaldo, calcularMovimento, situacaoEstoque, type Operacao, type OrigemMov, type Situacao, type TipoMov } from "@/lib/estoque/regras";
@@ -32,7 +33,8 @@ export interface Movimentar {
 }
 
 export interface Movimentado {
-  movimentacao: { id: string; tipo: TipoMov; origem: OrigemMov; quantidade: number; saldoApos: number };
+  /** `null` quando a empresa desligou o módulo Estoque: nada foi lançado, e isso não é erro */
+  movimentacao: { id: string; tipo: TipoMov; origem: OrigemMov; quantidade: number; saldoApos: number } | null;
   saldo: number;
   /** Saldo negativo é permitido — mas avisa */
   aviso: string | null;
@@ -42,16 +44,30 @@ export interface Movimentado {
  * Lança a movimentação (razão + saldo juntos). Sem `tx`: abre a própria transação. Com `tx`: roda
  * DENTRO da transação de quem chama (ex.: lançamento da nota de compra, que grava várias entradas
  * e as contas a pagar de uma vez — ou tudo, ou nada).
+ *
+ * DEGRADAÇÃO GRACIOSA (Loja de Módulos): a empresa que DESLIGOU o Estoque não controla saldo —
+ * então aqui não se lança nada e a vida segue, devolvendo `movimentacao: null`. É de propósito
+ * que isto não é um erro nem um 403: quem chama esta função é, na maior parte, o NÚCLEO —
+ * informar o consumo de material de uma OS, devolver a sobra, concluir o serviço. Recusar faria
+ * a OS quebrar porque a empresa desligou um módulo OPCIONAL, que é exatamente o que não pode
+ * acontecer. O material continua registrado na OS; o que não existe é o razão do estoque.
+ *
+ * (O caminho inverso — pedir diretamente uma tela ou uma API do Estoque — esse sim é recusado,
+ * em lib/permissoes-server › exigirPermissao. São as duas faces da mesma regra.)
  */
 export async function movimentar(m: Movimentar, tx?: Prisma.TransactionClient): Promise<Movimentado> {
   const defineSaldo = m.operacao === "AJUSTE" || m.operacao === "INVENTARIO";
   // Quantidade > 0 (o sinal vem da operação); saldo final ≥ 0. Também barra NaN/Infinity.
   if (!Number.isFinite(m.valor) || (defineSaldo ? m.valor < 0 : !(arred(m.valor) > 0)))
     throw new ErroEstoque(defineSaldo ? "O saldo informado não pode ser negativo." : "A quantidade precisa ser maior que zero.");
+  if (!(await temModulo(m.empresaId, "estoque"))) return SEM_ESTOQUE;
   if (tx) return lancarNaTransacao(tx, m);
   await validarRefEmpresa("produto", m.produtoId, m.empresaId, "Produto");
   return prisma.$transaction((t) => lancarNaTransacao(t, m));
 }
+
+/** O "não lancei nada" do módulo desligado: sem movimentação, sem saldo novo, sem aviso. */
+const SEM_ESTOQUE: Movimentado = { movimentacao: null, saldo: 0, aviso: null };
 
 async function lancarNaTransacao(tx: Prisma.TransactionClient, m: Movimentar): Promise<Movimentado> {
   // "saldo + 0" trava a linha do produto até o fim da transação e devolve o saldo atual:

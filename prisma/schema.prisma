@@ -578,8 +578,41 @@ model Empresa {
   documentoModelos  DocumentoModelo[]
   documentosEmitidos DocumentoEmitido[]
   documentacaoEnvios DocumentacaoEnvio[]
+  modulos            EmpresaModulo[]
 
   @@map("empresas")
+}
+
+/// MÓDULOS DA EMPRESA (entitlement) — a 3ª camada de acesso, acima do RBAC de usuário:
+/// a EMPRESA tem o módulo × o USUÁRIO pode a ação. O catálogo do que existe mora em
+/// lib/modulos/catalogo.ts; aqui só fica o que a empresa MEXEU.
+///
+/// AUSÊNCIA DE LINHA = MÓDULO LIGADO. A tabela nasce vazia e continua vazia para quem nunca
+/// desligou nada — por isso ligar o recurso não muda nada para ninguém. Só existe linha para o
+/// módulo desligado de propósito (ou religado depois, que vira `ativo = true` e mantém o rastro).
+/// Desligar NUNCA apaga dado: o que o módulo off impede é criar coisa nova, nunca ler o que já foi.
+///
+/// `modulo` é TEXTO (não enum) de propósito: módulo novo no catálogo não vira migração de banco.
+model EmpresaModulo {
+  id        String  @id @default(cuid())
+  empresaId String  @map("empresa_id")
+  /// Id do catálogo: "veiculos", "compras", "estoque"… (lib/modulos/catalogo.ts)
+  modulo    String
+  ativo     Boolean @default(true)
+
+  /// Auditoria: quem mexeu por último e quando (quem saiu da empresa vira null, a data fica)
+  alteradoPorId String?   @map("alterado_por_id")
+  alteradoEm    DateTime? @map("alterado_em")
+
+  criadoEm     DateTime @default(now()) @map("criado_em")
+  atualizadoEm DateTime @updatedAt @map("atualizado_em")
+
+  empresa     Empresa  @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  alteradoPor Usuario? @relation("ModuloAlteradoPor", fields: [alteradoPorId], references: [id], onDelete: SetNull)
+
+  @@unique([empresaId, modulo])
+  @@index([empresaId, ativo])
+  @@map("empresa_modulos")
 }
 
 /// Numeração de documentos (Configurações): o PRÓXIMO número de cada tipo (orçamento, OS, contrato…)
@@ -867,6 +900,7 @@ model Usuario {
   osMateriaisConsumidos  OsMaterial[]              @relation("OsMaterialConsumidoPor")
   osMateriaisDevolvidos  OsMaterial[]              @relation("OsMaterialDevolvidoPor")
   notasCompra            NotaCompra[]
+  modulosAlterados       EmpresaModulo[]           @relation("ModuloAlteradoPor")
   checklistRespostas     ChecklistResposta[]
   fotosAtendimento       FotoAtendimento[]
   servicosAdicionais     ServicoAdicional[]

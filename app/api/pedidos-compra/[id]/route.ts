@@ -6,6 +6,7 @@ import { pedidoCompraEdicaoSchema } from "@/lib/validations";
 import { mudancasPedido, pedidoEditavel, podeEditarPedido, podeVerPedido, type PedidoComparavel } from "@/lib/compras/pedido";
 import { carregarPedido, compradorValido, pedidoParaTela, registrarEventoPedido } from "@/lib/compras/pedido-server";
 import { chaveDiaCivil, diaCivilDeChave } from "@/lib/fuso";
+import { exigirModuloNaApi } from "@/lib/permissoes-server";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -37,6 +38,8 @@ export async function PUT(req: NextRequest, { params }: Params) {
   const pedido = await carregarPedido(id, empresaId);
   if (!pedido) return NextResponse.json({ erro: "Não encontrado" }, { status: 404 });
   if (!podeEditarPedido(u, pedido)) return semPermissao();
+  const semModulo = await exigirModuloNaApi(empresaId, "compras");
+  if (semModulo) return semModulo;
   if (!pedidoEditavel(pedido.status)) {
     return NextResponse.json({ erro: "Pedido concluído ou cancelado não pode mais ser editado." }, { status: 409 });
   }

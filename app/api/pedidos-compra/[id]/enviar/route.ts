@@ -6,6 +6,7 @@ import { formatarData, whatsappLink } from "@/lib/utils";
 import { emailConfigAtiva, enviarPedidoCompra } from "@/lib/email";
 import { LABEL_STATUS_PEDIDO, mensagemFornecedor, pedidoEncerrado, podeEnviarPedido, statusAposEnvio, type StatusPedido } from "@/lib/compras/pedido";
 import { carregarPedido, registrarEventoPedido } from "@/lib/compras/pedido-server";
+import { exigirModuloNaApi } from "@/lib/permissoes-server";
 
 /**
  * Baixar o PDF ou enviar o PC ao fornecedor do cadastro (e-mail pelo Resend da empresa, ou WhatsApp).
@@ -21,6 +22,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const pedido = await carregarPedido(id, empresaId);
   if (!pedido) return NextResponse.json({ erro: "Não encontrado" }, { status: 404 });
   if (!podeEnviarPedido(u, pedido)) return NextResponse.json({ erro: "Sem permissão para esta ação" }, { status: 403 });
+  const semModulo = await exigirModuloNaApi(empresaId, "compras");
+  if (semModulo) return semModulo;
   const corpo = pedidoCompraEnvioSchema.safeParse(await req.json().catch(() => null));
   if (!corpo.success) return NextResponse.json({ erro: "Canal de envio inválido." }, { status: 400 });
   const { canal } = corpo.data;

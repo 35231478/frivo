@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { auth } from "@/lib/auth";
+import { exigirModuloNaPagina } from "@/lib/modulos/pagina";
 import { prisma } from "@/lib/prisma";
 import { PageHeader } from "@/components/ui/page-header";
 import { ChecklistTela } from "@/components/veiculos/checklist-tela";
@@ -10,7 +11,8 @@ const AJUDA = "Preencha o checklist do veículo. Em Preenchidos ficam os já env
 
 export default async function ChecklistVeiculoPage({ searchParams }: { searchParams: Promise<{ veiculoId?: string; aba?: string }> }) {
   const { veiculoId = "", aba = "" } = await searchParams;
-  const session = await auth();
+  // Módulo da empresa (entitlement): desligado, a rota redireciona — acima do RBAC do usuário
+  const session = await exigirModuloNaPagina("veiculos");
   const empresaId = session!.user!.empresaId;
 
   const [veiculos, templates, colaboradores] = await Promise.all([
