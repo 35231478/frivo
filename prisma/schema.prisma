@@ -579,6 +579,7 @@ model Empresa {
   documentosEmitidos DocumentoEmitido[]
   documentacaoEnvios DocumentacaoEnvio[]
   modulos            EmpresaModulo[]
+  anotacoesInternas  AnotacaoInterna[]
 
   @@map("empresas")
 }
@@ -938,6 +939,7 @@ model Usuario {
   documentacaoEventos         DocumentacaoEnvioEvento[]
   documentosAnexados  ColaboradorDocumento[] @relation("DocumentoColaboradorCriadoPor")
   documentosExcluidos ColaboradorDocumento[] @relation("DocumentoColaboradorExcluidoPor")
+  anotacoesInternas   AnotacaoInterna[]
 
   @@unique([email, empresaId])
   @@index([empresaId, ativo])
@@ -5512,4 +5514,80 @@ model DocumentacaoEnvioEvento {
 
   @@index([envioId, criadoEm])
   @@map("documentacao_envio_eventos")
+}
+
+
+/// ANOTAÇÃO INTERNA — ferramenta de construção do DONO do Frivo (role SUPER_ADMIN), não é recurso
+/// do cliente. De qualquer tela do painel: marca o ponto exato, escreve o que mudar, e a anotação
+/// guarda o contexto (tela + elemento) e um print do momento. Ver docs/anotacoes-internas.md.
+///
+/// SUPER_ADMIN é a chave DESTA ferramenta e nada mais: o isolamento multiempresa continua valendo
+/// igual para ele, e toda leitura aqui fica presa a (empresaId, usuarioId) da sessão.
+model AnotacaoInterna {
+  id        String @id @default(cuid())
+  empresaId String @map("empresa_id")
+  /// De quem é a anotação (cada dono vê as suas)
+  usuarioId String @map("usuario_id")
+
+  /// Camada 1 — a TELA: rota normalizada ("/ordens/:id"), que agrupa a lista por tela, não por registro
+  tela       String
+  /// A URL literal do momento (com query): é o link do "ir para a tela"
+  rota       String
+  /// O título da tela no momento (o <h1>): deixa a lista legível sem abrir cada item
+  tituloTela String? @map("titulo_tela")
+
+  /// Camada 2 — o MARCO SEMÂNTICO mais próximo do clique (ex.: `data-secao=materiais`)…
+  ancora       String?
+  /// …e o índice entre os irmãos de mesma chave (data-cartao aparece 17x numa tela)
+  ancoraIndice Int     @default(0) @map("ancora_indice")
+
+  /// Camada 3 — caminho curto RELATIVO à âncora (até ~4 níveis), e a identidade do elemento
+  caminho String?
+  /// O texto do elemento clicado: é o que mais sobrevive a refatoração de layout
+  rotulo  String?
+  /// Tag + role/aria-label do elemento
+  papel   String?
+
+  /// Camada 4 — o clique em FRAÇÃO do retângulo da âncora (0..1): o pin acompanha o elemento
+  fx        Float?
+  fy        Float?
+  /// Último recurso: posição absoluta no documento e a largura da viewport de então
+  x         Int?
+  y         Int?
+  viewportW Int?   @map("viewport_w")
+
+  texto  String
+  /// "aberta" | "feita" | "descartada" — TEXT, não enum: a validação mora em lib/anotacoes/regras.ts
+  status String @default("aberta")
+
+  criadoEm     DateTime  @default(now()) @map("criado_em")
+  atualizadoEm DateTime  @updatedAt @map("atualizado_em")
+  resolvidoEm  DateTime? @map("resolvido_em")
+
+  empresa Empresa        @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  usuario Usuario        @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+  print   AnotacaoPrint?
+
+  @@index([empresaId, usuarioId, status])
+  @@index([empresaId, usuarioId, tela])
+  @@map("anotacoes_internas")
+}
+
+/// O PRINT da anotação (1-1), em tabela separada de propósito: a listagem lê só a anotação e nunca
+/// arrasta base64; a imagem vem por rota própria, como os anexos.
+model AnotacaoPrint {
+  anotacaoId String   @id @map("anotacao_id")
+  /// data URL (image/jpeg;base64) da VIEWPORT no momento do clique, já reduzida no navegador
+  conteudo   String
+  largura    Int
+  altura     Int
+  /// Onde o pin estava DENTRO da imagem (fração 0..1): desenha o alvo sem reprocessar o print
+  printFx    Float?   @map("print_fx")
+  printFy    Float?   @map("print_fy")
+  bytes      Int
+  criadoEm   DateTime @default(now()) @map("criado_em")
+
+  anotacao AnotacaoInterna @relation(fields: [anotacaoId], references: [id], onDelete: Cascade)
+
+  @@map("anotacao_prints")
 }

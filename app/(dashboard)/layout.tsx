@@ -16,6 +16,8 @@ import { CascaTecnico } from "@/components/tecnico/casca-tecnico";
 import { Avisos } from "@/components/ui/avisos";
 import { emModoTecnico } from "@/lib/tecnico/modo";
 import { modulosDesligados } from "@/lib/modulos/servidor";
+import { ehDonoDoFrivo } from "@/lib/anotacoes/dono";
+import { AnotacoesCarregador } from "@/components/anotacoes/carregador";
 
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
   const session = await auth();
@@ -62,6 +64,12 @@ export default async function DashboardLayout({ children }: { children: React.Re
             </main>
           </div>
           <MobileBottomNav />
+          {/* ANOTAÇÕES INTERNAS — ferramenta de construção do DONO do Frivo (role SUPER_ADMIN), não
+              recurso do cliente. Esta é a 1ª das três travas: quem não é o dono não recebe nem a
+              tag no HTML, e por isso nem chega a baixar o chunk da ferramenta (a 2ª trava está em
+              components/anotacoes/carregador.tsx; a 3ª é o 403 nas rotas). Sem consulta nova:
+              o papel já viaja no token da sessão. */}
+          {ehDonoDoFrivo(session.user) && <AnotacoesCarregador />}
         </div>
        </ModulosProvider>
       </PermissoesProvider>
