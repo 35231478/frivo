@@ -105,17 +105,26 @@ describe("Dependência: Compras não vive sem Estoque", () => {
 /* ═════════ o gate só alcança o que já foi migrado ═════════ */
 
 describe("A migração é módulo a módulo", () => {
-  it("nesta fase, só Frota e Compras têm as 3 camadas de gate", () => {
-    expect([...MODULOS_COM_GATE].sort()).toEqual(["compras", "veiculos"]);
+  it("nesta fase, Frota, Compras e Estoque têm as 3 camadas de gate", () => {
+    expect([...MODULOS_COM_GATE].sort()).toEqual(["compras", "estoque", "veiculos"]);
+  });
+
+  it("Estoque entrou com a dependência já fechada: Compras cai junto e não liga sem ele", () => {
+    expect(dependentesLigados(new Set(), "estoque")).toEqual(["compras"]);
+    expect(dependenciasFaltando(desligados("estoque"), "compras")).toEqual(["estoque"]);
+    // os dois lados da cascata estão no gate: a regra virou alcançável pela tela
+    expect(MODULOS_COM_GATE).toContain("estoque");
+    expect(MODULOS_COM_GATE).toContain("compras");
   });
 
   it("a permissão de um módulo migrado leva ao módulo; a de um não migrado, a lugar nenhum", () => {
     expect(moduloDaPermissao("veiculos")).toBe("veiculos");
     expect(moduloDaPermissao("veiculos", "checklist")).toBe("veiculos");
     expect(moduloDaPermissao("compras", "gerenciar")).toBe("compras");
+    expect(moduloDaPermissao("estoque", "separar")).toBe("estoque");
     // ainda não migrados: a API deles continua exatamente como sempre foi
-    expect(moduloDaPermissao("estoque")).toBeNull();
     expect(moduloDaPermissao("financeiro", "fiscal")).toBeNull();
+    expect(moduloDaPermissao("equipamentos")).toBeNull();
     // núcleo nunca entra no gate
     expect(moduloDaPermissao("ordens")).toBeNull();
     expect(moduloDaPermissao("clientes", "criar")).toBeNull();
@@ -126,9 +135,12 @@ describe("A migração é módulo a módulo", () => {
     expect(moduloDaRotaModular("/veiculos/abc/editar")).toBe("veiculos");
     expect(moduloDaRotaModular("/configuracoes/checklists-veiculo")).toBe("veiculos");
     expect(moduloDaRotaModular("/compras/pedidos/novo")).toBe("compras");
+    expect(moduloDaRotaModular("/estoque")).toBe("estoque");
+    expect(moduloDaRotaModular("/estoque/notas/abc")).toBe("estoque");
+    expect(moduloDaRotaModular("/estoque/separacao")).toBe("estoque");
     // a rota do núcleo e a do módulo não migrado passam direto
     expect(moduloDaRotaModular("/ordens")).toBeNull();
-    expect(moduloDaRotaModular("/estoque")).toBeNull();
+    expect(moduloDaRotaModular("/equipamentos")).toBeNull();
     expect(moduloDaRotaModular("/configuracoes")).toBeNull();
   });
 
@@ -181,13 +193,42 @@ describe("O catálogo é coerente com o resto do sistema", () => {
     }
   });
 
-  it("as rotas das páginas do piloto existem no disco (o gate não guarda porta que não existe)", () => {
-    const paginas = [
-      "app/(dashboard)/veiculos/page.tsx",
-      "app/(dashboard)/configuracoes/checklists-veiculo/page.tsx",
-      "app/(dashboard)/compras/pedidos/page.tsx",
+  it("as páginas dos módulos migrados CHAMAM o portão com o módulo certo (não basta importar)", () => {
+    const paginas: [arquivo: string, modulo: string][] = [
+      ["app/(dashboard)/veiculos/page.tsx", "veiculos"],
+      ["app/(dashboard)/configuracoes/checklists-veiculo/page.tsx", "veiculos"],
+      ["app/(dashboard)/compras/pedidos/page.tsx", "compras"],
+      ["app/(dashboard)/estoque/page.tsx", "estoque"],
+      ["app/(dashboard)/estoque/[produtoId]/page.tsx", "estoque"],
+      ["app/(dashboard)/estoque/notas/page.tsx", "estoque"],
+      ["app/(dashboard)/estoque/notas/[id]/page.tsx", "estoque"],
+      ["app/(dashboard)/estoque/separacao/page.tsx", "estoque"],
+      ["app/(dashboard)/estoque/separacao/[osId]/page.tsx", "estoque"],
+      ["app/(dashboard)/estoque/devolucao/page.tsx", "estoque"],
+      ["app/(dashboard)/estoque/devolucao/[osId]/page.tsx", "estoque"],
     ];
-    for (const p of paginas) expect(ler(p), p).toContain("exigirModuloNaPagina");
+    for (const [arquivo, modulo] of paginas) {
+      expect(ler(arquivo), arquivo).toContain(`exigirModuloNaPagina("${modulo}")`);
+    }
+  });
+
+  it("os CAMPOS-PONTE perguntam à lib dos módulos (o padrão das levas: some o campo do módulo off)", () => {
+    // Cada um destes é uma tela do NÚCLEO que mostra um campo de um módulo opcional. O padrão é
+    // perguntar `useModulos().tem(...)` e esconder o campo — nunca deixá-lo vazio e órfão.
+    const pontes: [arquivo: string, modulo: string][] = [
+      ["components/forms/equipe-form.tsx", "veiculos"],
+      ["components/forms/colaborador-form.tsx", "veiculos"],
+      ["components/os/seletor-execucao.tsx", "veiculos"],
+      ["components/compras/compras-secao.tsx", "compras"],
+      ["components/os/os-detalhe.tsx", "estoque"],
+    ];
+    for (const [arquivo, modulo] of pontes) {
+      const src = ler(arquivo);
+      expect(src, arquivo).toContain("useModulos");
+      expect(src, `${arquivo} → ${modulo}`).toContain(`tem("${modulo}")`);
+    }
+    // e a central da OS repassa ao painel de material (senão a ponte do Estoque não chega lá)
+    expect(ler("components/os/os-detalhe.tsx")).toContain("temEstoque={temEstoque}");
   });
 
   it("quem decide o entitlement é um arquivo só — a tela e a API perguntam, não decidem", () => {

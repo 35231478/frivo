@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { ArrowLeft, FileText } from "lucide-react";
-import { auth } from "@/lib/auth";
+import { exigirModuloNaPagina } from "@/lib/modulos/pagina";
 import { pode } from "@/lib/permissoes";
 import { cn, formatarData, formatarMoeda } from "@/lib/utils";
 import { lerPaginacao, paginaValida } from "@/lib/listagem";
@@ -24,7 +24,7 @@ const AJUDA = "O XML da NF-e do fornecedor entra aqui. Ao conciliar, cada item d
 export default async function NotasCompraPage({ searchParams }: { searchParams: Promise<Record<string, string | undefined>> }) {
   const sp = await searchParams;
   const doFinanceiro = sp.de === "contas-pagar";
-  const u = (await auth())!.user!;
+  const u = (await exigirModuloNaPagina("estoque"))!.user!;
   const podeImportar = pode(u.permissoes, "estoque", "gerenciar", u.role);
   const { pagina: pedida, porPagina } = lerPaginacao(sp);
   const { total } = await listarNotas(u.empresaId, { pagina: 1, porPagina: 1 });

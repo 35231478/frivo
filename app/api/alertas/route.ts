@@ -14,6 +14,8 @@ import { contarAvisosPmoc, registrarAvisosPmoc } from "@/lib/pmoc-avisos-server"
 import { SEM_AVISOS_DE_ACEITE, avisosDeAceite } from "@/lib/os/aceite-server";
 import { contarAdmissoesAssinadas } from "@/lib/admissao/admissao-server";
 import { escopoDaSessao, filtroEscopo } from "@/lib/tecnico/escopo";
+import { empresaTemModulo } from "@/lib/modulos/catalogo";
+import { modulosDesligados } from "@/lib/modulos/servidor";
 
 export async function GET() {
   const session = await auth();
@@ -35,6 +37,13 @@ export async function GET() {
   const verPmoc = pode(permissoes, "pmoc", "visualizar", role);
   const verAdmissoes = pode(permissoes, "admissao", "gerenciar", role);
 
+  // MÓDULOS DA EMPRESA (Loja de Módulos): o sino é tela do núcleo, mas conta coisa de módulo.
+  // O que é de um módulo desligado não vira aviso — some do sino como sumiu do menu. Não é 403:
+  // o sino segue respondendo com todo o resto (degradação graciosa, lib/modulos).
+  const desligados = await modulosDesligados(empresaId);
+  const temFrota = empresaTemModulo(desligados, "veiculos");
+  const temEstoque = empresaTemModulo(desligados, "estoque");
+
   // NFS-e paradas sem aviso do PlugNotas: o sino (2 em 2 min) puxa a reconciliação da empresa
   // DEPOIS de responder (no máximo 1 rodada por minuto por empresa; não atrasa o sino)
   after(() => reconciliarEmpresa(empresaId).catch((e) => console.error("[nfse] reconciliação", (e as Error)?.name)));
@@ -50,7 +59,7 @@ export async function GET() {
   const desde24h = new Date(Date.now() - 24 * 60 * 60 * 1000);
   const [prazosBrutos, veiculosBrutos, boletosPagos, orcamentosRespondidos, leadsSite, nfsDoPedido, nfse, faturamentoContratos, reajustesContrato, separacoesPendentes, devolucoesPendentes, pmoc, aceites, admissoes] = await Promise.all([
     verOrdens || verCompras ? contarAlertasPrazos(empresaId) : Promise.resolve(null),
-    verVeiculos ? contarAlertasVeiculos(empresaId) : Promise.resolve(null),
+    verVeiculos && temFrota ? contarAlertasVeiculos(empresaId) : Promise.resolve(null),
     verBoletos
       ? prisma.contaReceber.count({ where: { empresaId, boletoStatus: "PAGO", dataRecebimento: { gte: inicioHoje } } })
       : Promise.resolve(0),
@@ -76,9 +85,9 @@ export async function GET() {
     // PR4 (D8): contrato fez aniversário e o reajuste espera alguém aplicar/adiar/dispensar (Contratos › Editar)
     editarContratos ? contarReajustesPendentes(empresaId) : Promise.resolve(0),
     // E4.1: OS viva com material ainda não separado (fila "A separar") — só para quem tem Estoque › Separar material
-    separaMaterial ? contarFilaSeparacao(empresaId) : Promise.resolve(0),
+    separaMaterial && temEstoque ? contarFilaSeparacao(empresaId) : Promise.resolve(0),
     // E4.3: OS com sobra separada a devolver (ou cancelada com material reservado) — mesma permissão
-    separaMaterial ? contarFilaDevolucao(empresaId) : Promise.resolve(0),
+    separaMaterial && temEstoque ? contarFilaDevolucao(empresaId) : Promise.resolve(0),
     // PMOC perto de expirar (antecedência da empresa) e expirado, menos os que já tiveram ciência (PMOC › Visualizar)
     verPmoc ? contarAvisosPmoc(empresaId) : Promise.resolve({ pmocsVencendo: 0, pmocsExpirados: 0 }),
     // Aceite do cliente: confirmou pelo link (ou assinou com o técnico) e ninguém do escritório abriu a OS

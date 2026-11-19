@@ -5,6 +5,7 @@ import { Car } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { BuscaSelect } from "@/components/ui/busca-select";
 import { rotuloVeiculo, sufixoStatusVeiculo, sugerirVeiculo, type VeiculoResumo } from "@/lib/veiculo-sugestao";
+import { useModulos } from "@/components/providers/modulos-provider";
 import {
   SeletorTecnicos, VALOR_TECNICOS_VAZIO, corpoTecnicos, valorDaAtividade, valorDaEquipe,
   type EquipeOpcao, type TecnicoOpcao, type ValorTecnicos,
@@ -96,6 +97,9 @@ export function SeletorExecucao({ opcoes, tipoOsId, valor, onChange, erro }: {
   /** Destaca a falta de executor (ao tentar salvar sem escolher). */
   erro?: boolean;
 }) {
+  // CAMPO-PONTE (Loja de Módulos): quem executa é do núcleo; o veículo é da Frota. Frota
+  // desligada: o campo some da OS (e nada é sugerido). O veículo já gravado na atividade fica.
+  const temFrota = useModulos().tem("veiculos");
   const veiculoDe = useMemo(() => new Map(opcoes.tecnicos.map((t) => [t.id, t.veiculoId ?? null])), [opcoes.tecnicos]);
   const sugestao = sugerirVeiculo(valor, opcoes.veiculos, (id) => veiculoDe.get(id));
 
@@ -124,6 +128,7 @@ export function SeletorExecucao({ opcoes, tipoOsId, valor, onChange, erro }: {
           carregando={opcoes.carregando} onTecnicoCriado={opcoes.adicionarTecnico} onCompetencia={(id) => opcoes.marcarCompetencia(id, tipoOsId)}
         />
       </div>
+      {temFrota && (
       <div data-seletor-veiculo>
         <label className="flex items-center gap-1.5 text-xs font-semibold text-ink-muted mb-1"><Car className="w-3.5 h-3.5" /> Veículo</label>
         {/* Frota cresce: o seletor com busca da casa (digitar filtra placa e modelo) */}
@@ -140,6 +145,7 @@ export function SeletorExecucao({ opcoes, tipoOsId, valor, onChange, erro }: {
           )}
         </p>
       </div>
+      )}
     </div>
   );
 }

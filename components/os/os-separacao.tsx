@@ -54,13 +54,28 @@ export const TOM_SITUACAO_MATERIAL: Record<SituacaoMaterial, TomStatus> = {
 };
 export const TOM_SITUACAO_SEPARACAO: Record<SituacaoSeparacao, TomStatus> = { "sem-material": "previsto", pendente: "atencao", parcial: "atencao", completa: "ok" };
 
+/** A ⓘ do título muda com o módulo: com Estoque fala de separação; sem ele, do custo da OS. */
+const AJUDA_COM_ESTOQUE = "Antes de sair, o almoxarifado separa o material da OS (fica reservado no estoque). Na execução, quem conclui informa o que foi consumido de verdade: só isso sai do estoque; a sobra fica reservada até ser devolvida.";
+const AJUDA_SEM_ESTOQUE = "O material usado no serviço, informado por quem executa — é o custo desta OS. A empresa não usa o módulo Estoque: não há separação, reserva nem devolução; o consumo fica registrado aqui.";
+/** O rodapé da barra de consumo, pelo mesmo motivo. */
+const RODAPE_COM_ESTOQUE = "Em branco, assume o separado. Menos: sobra pendente de devolução. Mais: a diferença sai do estoque.";
+const RODAPE_SEM_ESTOQUE = "Quanto foi usado de verdade no serviço. Vem preenchido com o previsto do item — corrija o que for diferente.";
+
 const paraNumero = (v: string) => { const t = v.trim().replace(/\./g, "").replace(",", "."); return t === "" ? NaN : Number(t); };
 /** Material que ainda aceita consumo: tem produto e não está consumido/devolvido */
 const aceitaConsumo = (m: MaterialDaOs) => !!m.produtoId && m.estadoSeparacao !== "CONSUMIDO" && m.estadoSeparacao !== "DEVOLVIDO";
 
-export function OsSeparacao({ osId, materiais: iniciais, resumo: resumoInicial, podeSeparar, podeConsumir = false, finalizada = false, cancelada = false, exigirPrestacao = false, onMudou }: {
+export function OsSeparacao({ osId, materiais: iniciais, resumo: resumoInicial, podeSeparar, podeConsumir = false, finalizada = false, cancelada = false, exigirPrestacao = false, temEstoque = true, onMudou }: {
   osId: string; materiais: MaterialDaOs[]; resumo: ResumoSeparacao; podeSeparar: boolean;
-  podeConsumir?: boolean; finalizada?: boolean; cancelada?: boolean; exigirPrestacao?: boolean; onMudou?: () => void;
+  podeConsumir?: boolean; finalizada?: boolean; cancelada?: boolean; exigirPrestacao?: boolean;
+  /**
+   * A empresa tem o módulo Estoque? (Loja de Módulos). Sem ele NÃO existe separação, reserva nem
+   * devolução — some tudo o que é ponte com o razão. O que FICA é o material do serviço: a lista,
+   * o quanto foi consumido e quem informou. O custo do material é da OS (núcleo), não do Estoque;
+   * confundir os dois apagaria da OS uma informação que é dela.
+   */
+  temEstoque?: boolean;
+  onMudou?: () => void;
 }) {
   const [materiais, setMateriais] = useState<MaterialDaOs[]>(iniciais);
   const [resumo, setResumo] = useState<ResumoSeparacao>(resumoInicial);
@@ -76,7 +91,8 @@ export function OsSeparacao({ osId, materiais: iniciais, resumo: resumoInicial, 
   const mostrarInformar = podeConsumir && !cancelada && consumiveis.length > 0;
 
   function abrirConsumo() {
-    setAgora(Object.fromEntries(consumiveis.map((m) => [m.id, formatarQtd(m.quantidadeSeparada)])));
+    // Com Estoque: o padrão é o que foi separado. Sem Estoque: o previsto do item — não há separação
+    setAgora(Object.fromEntries(consumiveis.map((m) => [m.id, formatarQtd(temEstoque ? m.quantidadeSeparada : m.quantidade)])));
     setErro(""); setInformando(true);
   }
 
@@ -122,25 +138,27 @@ export function OsSeparacao({ osId, materiais: iniciais, resumo: resumoInicial, 
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h3 className="section-title flex items-center gap-2">
           <PackageOpen className="w-4 h-4 text-primary-600" /> Material da OS
-          <Dica rotulo="Material da OS" texto="Antes de sair, o almoxarifado separa o material da OS (fica reservado no estoque). Na execução, quem conclui informa o que foi consumido de verdade: só isso sai do estoque; a sobra fica reservada até ser devolvida." />
+          <Dica rotulo="Material da OS" texto={temEstoque ? AJUDA_COM_ESTOQUE : AJUDA_SEM_ESTOQUE} />
         </h3>
         <div className="flex flex-wrap items-center gap-2">
+          {temEstoque && (
           <StatusPill tom={TOM_SITUACAO_SEPARACAO[resumo.situacao]} data-resumo-separacao={resumo.situacao}>
             {LABEL_SITUACAO_SEPARACAO[resumo.situacao]}{resumo.total > 0 && resumo.situacao !== "completa" ? ` · ${resumo.aSeparar} de ${resumo.total} a separar` : ""}
           </StatusPill>
+          )}
           {semConsumo > 0 && (
             <StatusPill tom={exigirPrestacao ? "atrasado" : "atencao"} data-consumo-pendente-pill={semConsumo}>
               {semConsumo === 1 ? "1 consumo a informar" : `${semConsumo} consumos a informar`}{exigirPrestacao ? " · trava a conclusão" : ""}
             </StatusPill>
           )}
-          {resumo.aDevolver > 0 && <StatusPill tom={cancelada ? "atrasado" : "atencao"} data-pendentes-devolucao={resumo.aDevolver}>{cancelada ? "OS cancelada · liberar reserva" : resumo.aDevolver === 1 ? "1 sobra a devolver" : `${resumo.aDevolver} sobras a devolver`}</StatusPill>}
-          {resumo.prestado && (
+          {temEstoque && resumo.aDevolver > 0 && <StatusPill tom={cancelada ? "atrasado" : "atencao"} data-pendentes-devolucao={resumo.aDevolver}>{cancelada ? "OS cancelada · liberar reserva" : resumo.aDevolver === 1 ? "1 sobra a devolver" : `${resumo.aDevolver} sobras a devolver`}</StatusPill>}
+          {temEstoque && resumo.prestado && (
             <span className="inline-flex items-center gap-1">
               <StatusPill tom="ok" data-prestado>Material prestado contas</StatusPill>
               <Dica rotulo="Material prestado contas" texto="Todo material separado teve o consumo informado e a sobra devolvida ao estoque: nada pendente para faturar." />
             </span>
           )}
-          {resumo.prestacaoPendente && (
+          {temEstoque && resumo.prestacaoPendente && (
             <span className="inline-flex items-center gap-1">
               <StatusPill tom="acento" data-flag-prestacao>Prestação de contas pendente</StatusPill>
               <Dica rotulo="Prestação de contas pendente" texto={exigirPrestacao
@@ -148,12 +166,12 @@ export function OsSeparacao({ osId, materiais: iniciais, resumo: resumoInicial, 
                 : "Material sem consumo informado ou sobra sem devolução. Só avisa; a trava fica em Configurações."} />
             </span>
           )}
-          {podeSeparar && resumo.total > 0 && !informando && resumo.aDevolver > 0 && (
+          {temEstoque && podeSeparar && resumo.total > 0 && !informando && resumo.aDevolver > 0 && (
             <Link href={`/estoque/devolucao/${osId}`} className="inline-flex items-center gap-1.5 text-xs font-semibold text-primary-600 hover:underline" data-acao="ir-devolver">
               <PackageMinus className="w-3.5 h-3.5" /> Devolver material
             </Link>
           )}
-          {podeSeparar && resumo.total > 0 && !informando && !cancelada && (
+          {temEstoque && podeSeparar && resumo.total > 0 && !informando && !cancelada && (
             <Link href={`/estoque/separacao/${osId}`} className="inline-flex items-center gap-1.5 text-xs font-semibold text-primary-600 hover:underline" data-acao="ir-separar">
               <PackageOpen className="w-3.5 h-3.5" /> {resumo.aSeparar > 0 ? "Separar material" : "Ver separação"}
             </Link>
@@ -187,10 +205,17 @@ export function OsSeparacao({ osId, materiais: iniciais, resumo: resumoInicial, 
                   <p className="text-xs text-ink-subtle truncate">{m.item}{m.kitNome ? ` · Kit ${m.kitNome}` : ""}</p>
                 </div>
                 <div className="mt-1 sm:mt-0 flex flex-wrap items-center gap-x-3 gap-y-1 shrink-0">
-                  <span className="tabular-nums text-ink-muted" data-separado-de>
-                    <span className="text-[10px] uppercase text-ink-subtle mr-1">Separado</span>{" "}
-                    {formatarQtd(m.quantidadeSeparada)} de {formatarQtd(m.quantidade)} {m.unidade}
-                  </span>
+                  {temEstoque ? (
+                    <span className="tabular-nums text-ink-muted" data-separado-de>
+                      <span className="text-[10px] uppercase text-ink-subtle mr-1">Separado</span>{" "}
+                      {formatarQtd(m.quantidadeSeparada)} de {formatarQtd(m.quantidade)} {m.unidade}
+                    </span>
+                  ) : (
+                    <span className="tabular-nums text-ink-muted" data-previsto-de>
+                      <span className="text-[10px] uppercase text-ink-subtle mr-1">Previsto</span>{" "}
+                      {formatarQtd(m.quantidade)} {m.unidade}
+                    </span>
+                  )}
                   {editando ? (
                     <label className="inline-flex items-center gap-1.5">
                       <span className="text-[10px] uppercase text-ink-subtle">Consumir</span>
@@ -213,7 +238,7 @@ export function OsSeparacao({ osId, materiais: iniciais, resumo: resumoInicial, 
                           {formatarQtd(m.quantidadeDevolvida ?? 0)} {m.unidade}
                         </span>
                       )}
-                      {sobra > 0 && <StatusPill tom="atencao" tamanho="sm" data-sobra>{cancelada && sit !== "consumido" ? "Reservado · devolver" : "Pend. devolução"} {formatarQtd(sobra)} {m.unidade}</StatusPill>}
+                      {temEstoque && sobra > 0 && <StatusPill tom="atencao" tamanho="sm" data-sobra>{cancelada && sit !== "consumido" ? "Reservado · devolver" : "Pend. devolução"} {formatarQtd(sobra)} {m.unidade}</StatusPill>}
                       <StatusPill tom={TOM_SITUACAO_MATERIAL[sit]} tamanho="sm">{LABEL_SITUACAO_MATERIAL[sit]}</StatusPill>
                       {sit === "devolvido" && m.devolvidoPor && m.devolvidoEm
                         ? <span className="text-xs text-ink-subtle" data-devolvido-por>por {m.devolvidoPor} · {formatarDataHora(m.devolvidoEm)}</span>
@@ -223,7 +248,7 @@ export function OsSeparacao({ osId, materiais: iniciais, resumo: resumoInicial, 
                       {sit === "consumido" && podeConsumir && !finalizada && (
                         <button type="button" onClick={() => desfazer(m)} disabled={salvando} className="inline-flex items-center gap-1 text-xs font-semibold text-atrasado hover:underline" data-acao="desfazer-consumo"><Undo2 className="w-3.5 h-3.5" /> Desfazer</button>
                       )}
-                      {m.quantidadeSeparada > 0 && (
+                      {temEstoque && m.quantidadeSeparada > 0 && (
                         <button type="button" onClick={() => setDetalhe((d) => (d === m.id ? null : m.id))} aria-expanded={detalhe === m.id} aria-label={`Histórico de ${m.descricao}`}
                           className="inline-flex items-center gap-0.5 text-xs text-ink-muted hover:text-ink" data-acao="historico-material">
                           {detalhe === m.id ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
@@ -248,7 +273,7 @@ export function OsSeparacao({ osId, materiais: iniciais, resumo: resumoInicial, 
 
       {informando && (
         <div className="flex flex-wrap items-center justify-between gap-2" data-barra-consumo>
-          <p className="text-xs text-ink-muted">Em branco, assume o separado. Menos: sobra pendente de devolução. Mais: a diferença sai do estoque.</p>
+          <p className="text-xs text-ink-muted">{temEstoque ? RODAPE_COM_ESTOQUE : RODAPE_SEM_ESTOQUE}</p>
           <div className="flex items-center gap-2">
             <Button size="sm" variant="ghost" onClick={() => { setInformando(false); setErro(""); }} disabled={salvando} data-acao="cancelar-consumo"><X className="w-4 h-4" /> Cancelar</Button>
             <Button size="sm" onClick={confirmarConsumo} loading={salvando} data-acao="confirmar-consumo"><Check className="w-4 h-4" /> Confirmar consumo</Button>

@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { AlertTriangle, ArrowLeft, FileText, Package, Tag } from "lucide-react";
-import { auth } from "@/lib/auth";
+import { exigirModuloNaPagina } from "@/lib/modulos/pagina";
 import { pode } from "@/lib/permissoes";
 import { cn, formatarData } from "@/lib/utils";
 import { prisma } from "@/lib/prisma";
@@ -34,7 +34,7 @@ const moeda = (n: number) => n.toLocaleString("pt-BR", { style: "currency", curr
 export default async function ExtratoEstoquePage({ params, searchParams }: {
   params: Promise<{ produtoId: string }>; searchParams: Promise<Record<string, string | undefined>>;
 }) {
-  const [{ produtoId }, sp, session] = await Promise.all([params, searchParams, auth()]);
+  const [{ produtoId }, sp, session] = await Promise.all([params, searchParams, exigirModuloNaPagina("estoque")]);
   const u = session!.user!;
   const extrato = await extratoProduto(u.empresaId, produtoId, sp);
   if (!extrato) notFound();

@@ -40,7 +40,7 @@ continua sendo letra morta e não foi tocada.
 - `gateAtivo` → **a migração é módulo a módulo**. Só o módulo marcado assim tem o gate valendo nas
   três camadas. Os outros 24 estão catalogados e seguem exatamente como sempre foram.
 
-Na fase 1, `gateAtivo` existe só em **Frota** e **Compras** (o piloto).
+Hoje `gateAtivo` existe em **Frota**, **Compras** e **Estoque**.
 
 ## Como o gate age, camada por camada
 
@@ -55,6 +55,31 @@ A verdade é o **banco**, não o token: as permissões ficam congeladas no JWT d
 prop. Desligar vale em segundos, para todo mundo, sem ninguém sair e entrar de novo. O middleware
 (Edge, sem banco) não foi tocado.
 
+## O padrão dos campos-ponte (vale em cada leva daqui em diante)
+
+Uma tela do **núcleo** costuma mostrar um campo que pertence a um módulo **opcional**. Com o
+módulo desligado, esse campo **some** — em vez de ficar vazio e órfão, oferecendo um cadastro que
+aquela empresa não tem. Quem decide é o mesmo provider do menu (`useModulos().tem(...)`).
+
+| Tela (núcleo) | Campo-ponte | Módulo |
+| --- | --- | --- |
+| Formulário de equipe | "Veículos da equipe" | Frota |
+| Ficha do colaborador | "Veículo padrão" | Frota |
+| Execução da OS | seletor de veículo | Frota |
+| OS › Materiais | separar, reservar, devolver, "Separado X de Y" | Estoque |
+| OS / orçamento › Compras | botão "Solicitar compra de material" | Compras |
+| Sino (alertas) | filas "a separar"/"a devolver" e avisos de veículo | Estoque / Frota |
+
+**A distinção fina, que é o coração da leva do Estoque:** com o Estoque desligado some a **ponte
+com o razão** (separação, reserva, devolução, extrato) — mas o **material consumido continua na
+OS**, com quantidade, valor e quem informou. O custo do material é da **OS**, não do módulo
+Estoque; confundir os dois apagaria da OS uma informação que é dela. O campo "Separado X de Y"
+vira "Previsto X", e o consumo já vem preenchido com o previsto do item (não há separação de onde
+herdar).
+
+O que **fica** em todos os casos: o dado já gravado. O veículo que a equipe tinha, o pedido de
+compra que já existe, o material já consumido. Desligar não apaga; religar devolve a tela.
+
 ## Degradação graciosa — a regra mais importante
 
 Onde o **núcleo encosta num módulo opcional**, módulo desligado nunca é erro nem 403:
@@ -68,6 +93,11 @@ Onde o **núcleo encosta num módulo opcional**, módulo desligado nunca é erro
   passa por `exigirPermissao("veiculos", …)` e é recusado.
 - `app/api/pedidos-compra` (leitura): o pedido antigo continua aparecendo na OS depois de Compras
   ser desligado. Só **criar, editar, cancelar e enviar** são recusados.
+- `lib/compras/notas.ts › lancarNota`: a NF de compra é um documento de **compra e de dinheiro**.
+  Com o Estoque desligado ela **ainda vira conta a pagar** e não mexe no razão — e avisa isso em
+  texto. Recusar faria a dívida com o fornecedor sumir por causa de um módulo opcional.
+- `app/api/alertas` (o sino, que é do núcleo): não dá 403 — só para de contar o que é de módulo
+  desligado, e responde com todo o resto.
 
 O 403 é para o **pedido direto** a um módulo desligado; o `if (tem(modulo))` é para o núcleo que
 passa por ali. São as duas faces da mesma regra.
@@ -83,9 +113,14 @@ aconteceu. Aplicado na rotina de faturamento de contratos (Financeiro).
 **Configurações › Conta › Módulos**, atrás de "Configurações › Gerenciar" (a mesma permissão de
 quem mexe em perfis de acesso — ligar módulo é configurar a empresa, não é permissão nova).
 
-Nesta fase a tela oferece **só os dois do piloto**, de propósito: oferecer um interruptor antes de
-o gate valer nas três camadas seria apagar a luz de um cômodo e deixar a do outro acesa. A loja
-completa (todos os módulos, por categoria, com cartões) vem no PR seguinte.
+A tela oferece **só os módulos com `gateAtivo`**, de propósito: oferecer um interruptor antes de o
+gate valer nas três camadas seria apagar a luz de um cômodo e deixar a do outro acesa. Hoje são
+Frota, Compras e Estoque. A loja completa (todos os módulos, por categoria, com cartões) vem
+depois.
+
+Com o Estoque na tela, a **cascata Compras→Estoque ficou alcançável pelo clique**: desligar o
+Estoque pergunta antes e diz que Compras cai junto; ligar Compras sem Estoque é recusado dizendo
+o que falta.
 
 Desligar pergunta antes e diz o que mais cai junto (dependência). Ligar não pergunta nada, mas é
 recusado quando falta uma dependência, dizendo qual. Quem ligou/desligou e quando ficam na própria
@@ -100,7 +135,7 @@ módulo novo não exige mexer no banco. SQL aditivo e idempotente em
 
 ## O que ficou de fora (de propósito)
 
-- os outros 24 módulos do catálogo: entram em levas, um a um, cada um com os seus testes;
+- os outros 23 módulos do catálogo: entram em levas, um a um, cada um com os seus testes;
 - a loja completa (cartões, categorias, busca);
 - `licitacoes` (rota fantasma) e `empresas.plano` (letra morta) — ficam para depois;
 - middleware: continua sem ler banco.
