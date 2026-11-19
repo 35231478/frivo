@@ -17,6 +17,8 @@ import { carregarExecucao } from "@/lib/execucao/dados";
 import { itemDoEquipamento, marcarAtendido, type ContextoExecucao } from "@/lib/execucao/contexto";
 import { validarAudio } from "@/lib/execucao/audio";
 import { equipamentosDoCliente, nomeEquipamento } from "@/lib/execucao/vinculos";
+import { temModulo } from "@/lib/modulos/servidor";
+import { MSG_MODULO_DESLIGADO } from "@/lib/modulos/catalogo";
 import { sincronizarStatusOs } from "@/lib/os/sincronizar-status";
 import { equipamentosDaOs } from "@/lib/os/galeria-server";
 import { limparLegenda, MSG_EQUIPAMENTO_FORA, MSG_LEGENDA, nomeArquivoFoto } from "@/lib/os/galeria";
@@ -373,6 +375,9 @@ export async function marcarEquipamento(ctx: ContextoExecucao, d: z.infer<typeof
 
 /** Vincula equipamentos (da lista da unidade) à atividade. Só do cliente da OS e ativos; repetir não duplica. */
 export async function vincularEquipamentos(ctx: ContextoExecucao, equipamentoIds: string[]) {
+  // Equipamentos desligado: recusa GRACIOSA de um vínculo NOVO (403 com o motivo). O que já está
+  // vinculado continua na OS, e concluir a OS não passa por aqui — o vínculo é N:N e opcional.
+  if (!(await temModulo(ctx.empresaId, "equipamentos"))) return erro(403, MSG_MODULO_DESLIGADO("equipamentos"));
   const { validos, erro: msg } = await equipamentosDoCliente(ctx.empresaId, ctx.atividade.ordemServico.clienteId, equipamentoIds);
   if (msg) return erro(400, msg);
   await prisma.atividadeEquipamento.createMany({ data: validos.map((equipamentoId) => ({ atividadeId: ctx.atividade.id, equipamentoId })), skipDuplicates: true });
@@ -386,6 +391,8 @@ export async function vincularEquipamentos(ctx: ContextoExecucao, equipamentoIds
  */
 export async function vincularPorQr(ctx: ContextoExecucao, valorLido: string) {
   const { empresaId } = ctx;
+  // Ler etiqueta é do módulo QR Codes (que, pela cascata, já cai junto com Equipamentos)
+  if (!(await temModulo(empresaId, "qrcodes"))) return erro(403, MSG_MODULO_DESLIGADO("qrcodes"));
   const atividadeId = ctx.atividade.id;
   const valor = valorLido.trim();
   const m = valor.match(/\/qr\/([^/?#\s]+)/);

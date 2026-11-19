@@ -11,6 +11,8 @@
  * Equipamento vinculado e NÃO atendido não trava: sai como "não atendido" no relatório.
  *
  * Saídas da exigência de equipamento (os ATENDIDOS continuam exigindo o checklist completo):
+ *  - MODULO: a empresa desligou o módulo Equipamentos — não há equipamento a vincular, e concluir a
+ *    OS (que é do núcleo) não pode depender de um módulo opcional;
  *  - TIPO: o tipo de OS da atividade "não exige equipamento" (visita técnica, vistoria, orçamento);
  *  - RECORRENTE: OS recorrente de contrato sem nenhum equipamento vinculado;
  *  - JUSTIFICADA: exceção pontual, autorizada com motivo por quem pode concluir OS.
@@ -93,7 +95,7 @@ export function faltasEquipamento(e: EquipamentoParaPendencia): FaltasEquipament
 
 export const completo = (f: FaltasEquipamento) => !f.semResposta.length && !f.semFoto.length && !f.semObservacao.length && !f.formulario;
 
-export type MotivoDispensa = "TIPO" | "RECORRENTE" | "JUSTIFICADA";
+export type MotivoDispensa = "TIPO" | "RECORRENTE" | "JUSTIFICADA" | "MODULO";
 /** Por que esta atividade pode concluir sem equipamento atendido (null = a trava vale). */
 export interface DispensaEquipamento { motivo: MotivoDispensa; texto: string }
 
@@ -134,6 +136,7 @@ export const MSG_SAIDAS_SEM_EQUIPAMENTO = "Serviço sem equipamento (visita téc
 
 /** Texto da dispensa, para a tela e o histórico. */
 export function textoDispensa(motivo: MotivoDispensa, extra?: string | null): string {
+  if (motivo === "MODULO") return "A empresa não usa o módulo Equipamentos: pode concluir sem equipamento atendido.";
   if (motivo === "TIPO") return `O tipo de OS${extra ? ` “${extra}”` : ""} não exige equipamento: pode concluir sem equipamento atendido.`;
   if (motivo === "RECORRENTE") return "OS recorrente do contrato sem equipamento vinculado: pode concluir sem equipamento atendido.";
   return `Conclusão sem equipamento autorizada${extra ? `: “${extra}”` : ""}.`;

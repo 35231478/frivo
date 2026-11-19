@@ -190,14 +190,15 @@ export function BlocoFinanceiro({ d }: { d: DadosBloco["financeiro"] }) {
   );
 }
 
-export function BlocoEquipamentos({ d }: { d: DadosBloco["equipamentos"] }) {
+export function BlocoEquipamentos({ d, temQr = true }: { d: DadosBloco["equipamentos"]; temQr?: boolean }) {
   return (
     <Bloco id="equipamentos" titulo="Equipamentos" icone={Thermometer} href="/equipamentos" link="Ver equipamentos">
       <GradeKpi colunas={2}>
         <Kpi rotulo="Cadastrados" valor={d.total} icone={Thermometer} tom="info" href="/equipamentos" />
         <Kpi rotulo="Garantia vencendo" valor={d.garantiaVencendo} icone={ShieldCheck} tom={d.garantiaVencendo ? "atencao" : "ok"} href="/equipamentos"
           detalhe={d.garantiaVencendo ? "nos próximos 60 dias" : `${d.garantiaVigente} em garantia`} />
-        <Kpi rotulo="Sem QR Code" valor={d.semQr} icone={QrCode} tom={d.semQr ? "atencao" : "ok"} href="/qrcodes" detalhe="sem etiqueta vinculada" />
+        {/* Campo-ponte: a contagem "Sem QR Code" só faz sentido para quem usa o módulo QR Codes */}
+        {temQr && <Kpi rotulo="Sem QR Code" valor={d.semQr} icone={QrCode} tom={d.semQr ? "atencao" : "ok"} href="/qrcodes" detalhe="sem etiqueta vinculada" />}
       </GradeKpi>
     </Bloco>
   );

@@ -36,11 +36,12 @@ continua sendo letra morta e não foi tocada.
   `/configuracoes/checklists-veiculo` pertence à Frota sem arrastar o resto das Configurações);
 - `permissoes` → a ponte com o RBAC: é assim que `exigirPermissao("veiculos", …)` sabe que aquela
   rota de API pertence à Frota;
-- `dependeDe` → Compras depende de Estoque, NFS-e e Custo de pessoal dependem do Financeiro;
+- `dependeDe` → Compras depende de Estoque, QR Codes e PMOC dependem de Equipamentos, NFS-e e
+  Custo de pessoal dependem do Financeiro;
 - `gateAtivo` → **a migração é módulo a módulo**. Só o módulo marcado assim tem o gate valendo nas
   três camadas. Os outros 24 estão catalogados e seguem exatamente como sempre foram.
 
-Hoje `gateAtivo` existe em **Frota**, **Compras** e **Estoque**.
+Hoje `gateAtivo` existe em **Frota**, **Compras**, **Estoque**, **Equipamentos** e **QR Codes**.
 
 ## Como o gate age, camada por camada
 
@@ -69,6 +70,15 @@ aquela empresa não tem. Quem decide é o mesmo provider do menu (`useModulos().
 | OS › Materiais | separar, reservar, devolver, "Separado X de Y" | Estoque |
 | OS / orçamento › Compras | botão "Solicitar compra de material" | Compras |
 | Sino (alertas) | filas "a separar"/"a devolver" e avisos de veículo | Estoque / Frota |
+| Nova OS | seção "Equipamentos atendidos" e o seletor do chamado | Equipamentos |
+| OS › atividade | "Adicionar" e a lista da unidade | Equipamentos |
+| Execução da OS e app do técnico | "Escolher da lista" / "Da lista", cadastro em campo | Equipamentos |
+| Proposta de contrato | "Equipamentos cobertos" | Equipamentos |
+| Dashboard | blocos Equipamentos e Frota | Equipamentos / Frota |
+| Execução da OS e app do técnico | "Ler QR Code" | QR Codes |
+| Ficha e lista de equipamento | "Gerar QR", "Etiqueta QR", aba QR Code, filtro e atalho "Sem QR" | QR Codes |
+| Ações em massa | "Gerar QR" e "Imprimir etiquetas" | QR Codes |
+| Dashboard › Equipamentos | KPI "Sem QR Code" | QR Codes |
 
 **A distinção fina, que é o coração da leva do Estoque:** com o Estoque desligado some a **ponte
 com o razão** (separação, reserva, devolução, extrato) — mas o **material consumido continua na
@@ -97,7 +107,19 @@ Onde o **núcleo encosta num módulo opcional**, módulo desligado nunca é erro
   Com o Estoque desligado ela **ainda vira conta a pagar** e não mexe no razão — e avisa isso em
   texto. Recusar faria a dívida com o fornecedor sumir por causa de um módulo opcional.
 - `app/api/alertas` (o sino, que é do núcleo): não dá 403 — só para de contar o que é de módulo
-  desligado, e responde com todo o resto.
+  desligado, e responde com todo o resto. (Equipamentos e QR Codes não contam nada no sino: não há
+  o que calar.)
+- `app/api/equipamentos` (GET): com Equipamentos desligado devolve **lista vazia**, não 403 — quem
+  chama é a OS e o orçamento, que são do núcleo. Tudo o que escreve equipamento é recusado.
+- **Concluir a atividade da OS**: a exigência de "1 equipamento atendido" ganhou a saída `MODULO`
+  (`lib/execucao/pendencias.ts`). Com Equipamentos desligado não há o que vincular, e concluir a OS
+  é do núcleo: a trava sairia sem saída nenhuma. O vínculo OS↔equipamento é N:N e opcional, então
+  nada mais no caminho da conclusão depende do módulo.
+- `lib/execucao/cadastro-campo.ts`: com QR Codes desligado o equipamento cadastrado em campo nasce
+  **sem etiqueta** — e nasce assim mesmo. Recusar o cadastro inteiro por causa de um módulo opcional
+  perderia o equipamento que o técnico tem na frente. Com Equipamentos desligado o app nem oferece
+  o cadastro (o retrato vem sem ele).
+- `app/api/equipamentos` (POST com `gerarQrCode`): mesma regra — o equipamento é salvo, sem QR.
 
 O 403 é para o **pedido direto** a um módulo desligado; o `if (tem(modulo))` é para o núcleo que
 passa por ali. São as duas faces da mesma regra.
@@ -115,12 +137,25 @@ quem mexe em perfis de acesso — ligar módulo é configurar a empresa, não é
 
 A tela oferece **só os módulos com `gateAtivo`**, de propósito: oferecer um interruptor antes de o
 gate valer nas três camadas seria apagar a luz de um cômodo e deixar a do outro acesa. Hoje são
-Frota, Compras e Estoque. A loja completa (todos os módulos, por categoria, com cartões) vem
-depois.
+Frota, Compras, Estoque, Equipamentos e QR Codes. A loja completa (todos os módulos, por categoria,
+com cartões) vem depois.
 
 Com o Estoque na tela, a **cascata Compras→Estoque ficou alcançável pelo clique**: desligar o
 Estoque pergunta antes e diz que Compras cai junto; ligar Compras sem Estoque é recusado dizendo
-o que falta.
+o que falta. A **cascata QR Codes→Equipamentos** funciona igual: o QR é do equipamento, então
+desligar Equipamentos arrasta QR Codes na mesma transação (com o aviso antes), e ligar QR Codes com
+Equipamentos desligado é recusado dizendo o que falta.
+
+**A dependência PMOC → Equipamentos** está no catálogo, mas o PMOC ainda não tem gate — ele entra
+numa leva futura. Por isso a cascata só **arrasta e anuncia** módulos com `gateAtivo`: dizer "o
+PMOC vai junto" e o PMOC continuar inteiro no menu seria mentir para quem está desligando. A regra
+já vale do outro lado: quando o PMOC for ligável, `dependenciasFaltando` recusa ligá-lo com
+Equipamentos desligado.
+
+**O link público do QR não é gateado.** `/qr/<token>` e `/api/qr/<token>/chamado` continuam
+abrindo: a etiqueta já está colada no equipamento do cliente, e desligar não apaga o que existe. O
+que o módulo desligado impede é a empresa **gerar, imprimir e ler** etiqueta nova. As duas rotas
+ficam catalogadas em `rotas` (documentam a superfície do módulo), com o comentário dizendo por quê.
 
 Desligar pergunta antes e diz o que mais cai junto (dependência). Ligar não pergunta nada, mas é
 recusado quando falta uma dependência, dizendo qual. Quem ligou/desligou e quando ficam na própria
@@ -135,7 +170,9 @@ módulo novo não exige mexer no banco. SQL aditivo e idempotente em
 
 ## O que ficou de fora (de propósito)
 
-- os outros 23 módulos do catálogo: entram em levas, um a um, cada um com os seus testes;
+- os outros 21 módulos do catálogo: entram em levas, um a um, cada um com os seus testes;
+- o **PMOC**: a dependência está registrada, o gate não (leva futura);
+- o **link público do QR**: fica aberto, como está dito acima;
 - a loja completa (cartões, categorias, busca);
 - `licitacoes` (rota fantasma) e `empresas.plano` (letra morta) — ficam para depois;
 - middleware: continua sem ler banco.

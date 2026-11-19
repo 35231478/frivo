@@ -13,6 +13,7 @@ import { AvisoSerieDuplicada } from "@/components/equipamentos/aviso-serie-dupli
 import { Bloco, Opcionais } from "@/components/ui/bloco-cadastro";
 import { MapaEndereco } from "@/components/ui/mapa-endereco";
 import { EquipamentoQrSection } from "@/components/forms/equipamento-qr-section";
+import { useModulos } from "@/components/providers/modulos-provider";
 import { TipoBadge, TipoIcone } from "@/components/equipamentos/tipo-equipamento";
 import { StatusSelo } from "@/components/equipamentos/selos";
 import { SelectCadastroRapido, type CampoRapido, type OpcaoCadastro } from "@/components/ui/select-cadastro-rapido";
@@ -85,9 +86,12 @@ const ABAS_VALIDAS: Aba[] = ["identificacao", "localizacao", "tecnicos", "qrcode
 export function EquipamentoForm({ initialData, unidadeIdFixo, abaInicial }: EquipamentoFormProps) {
   const router = useRouter();
   const isEditing = !!initialData;
+  const temQr = useModulos().tem("qrcodes");
 
   const abaInicialValida =
-    abaInicial && ABAS_VALIDAS.includes(abaInicial as Aba) && (isEditing || (abaInicial !== "qrcode" && abaInicial !== "historico"))
+    abaInicial && ABAS_VALIDAS.includes(abaInicial as Aba)
+    && (isEditing || (abaInicial !== "qrcode" && abaInicial !== "historico"))
+    && (abaInicial !== "qrcode" || temQr)
       ? (abaInicial as Aba)
       : "identificacao";
   const [aba, setAba] = useState<Aba>(abaInicialValida);
@@ -321,7 +325,8 @@ export function EquipamentoForm({ initialData, unidadeIdFixo, abaInicial }: Equi
     { id: "identificacao", label: "Identificação", icone: ImageIcon },
     { id: "localizacao", label: "Localização", icone: MapPin },
     { id: "tecnicos", label: "Dados técnicos", icone: Cog },
-    { id: "qrcode", label: "QR Code", icone: QrCode },
+    // Campo-ponte: com o módulo QR Codes desligado, a aba inteira some do formulário
+    { id: "qrcode", label: "QR Code", icone: QrCode, oculta: !temQr },
     { id: "historico", label: "Atendimentos", icone: History, oculta: !isEditing },
   ];
 
@@ -726,7 +731,7 @@ export function EquipamentoForm({ initialData, unidadeIdFixo, abaInicial }: Equi
           )}
 
           {/* ABA 4 — QR Code */}
-          {aba === "qrcode" && (
+          {aba === "qrcode" && temQr && (
             isEditing ? (
               <EquipamentoQrSection
                 equipamentoId={initialData.id}

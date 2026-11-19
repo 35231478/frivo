@@ -4,6 +4,8 @@ import { contratoGeraFinanceiro, encerrarFinanceiroDoContrato, gerarPrevisaoCont
 import { motivoBloqueioInativacao } from "@/lib/os-server";
 import { anotarInativacao, cancelarPrevistasDoOrcamento, impactoColaborador, impactoEquipe, impactoOrcamento, impactoVeiculo } from "@/lib/inativacao-server";
 import { gerarQrCodeEquipamento } from "@/lib/qrcode-server";
+import { temModulo } from "@/lib/modulos/servidor";
+import { MSG_MODULO_DESLIGADO } from "@/lib/modulos/catalogo";
 import { CADASTROS, type EntidadeCadastro } from "@/lib/cadastros/registro";
 import { REGRAS, type Registro } from "@/lib/cadastros/especificos";
 import type { Permissoes } from "@/lib/permissoes";
@@ -81,6 +83,9 @@ export async function gerarQrEquipamento(id: string, ctx: ContextoItem): Promise
   const e = await prisma.equipamento.findFirst({ where: { id, empresaId: ctx.empresaId }, select: { qrcode: { select: { id: true, codigo: true } } } });
   if (!e) return NAO_ENCONTRADO;
   if (e.qrcode) return ok(`Já tinha o QR ${e.qrcode.codigo}`, { qrcodeId: e.qrcode.id });
+  // QR Codes desligado: o lote recusa o item com o motivo, em vez de gerar etiqueta de um módulo
+  // que a empresa não usa (o que JÁ tem etiqueta acima continua respondendo com o código dele).
+  if (!(await temModulo(ctx.empresaId, "qrcodes"))) return { ok: false, codigo: "sem_permissao", motivo: MSG_MODULO_DESLIGADO("qrcodes") };
   const qr = await gerarQrCodeEquipamento(ctx.empresaId, id);
   return ok(`QR ${qr.codigo} gerado`, { qrcodeId: qr.id });
 }

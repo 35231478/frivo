@@ -6,6 +6,7 @@ import { cartaoDaAtividade } from "@/lib/tecnico/dia";
 import { MSG_FORA_DO_ESCOPO, escopoDaSessao, filtroEscopo } from "@/lib/tecnico/escopo";
 import { aplicarPrivacidade } from "@/lib/tecnico/cartao";
 import { carregarConfigApp } from "@/lib/tecnico/config-app-server";
+import { temModulo } from "@/lib/modulos/servidor";
 import { cadastroParaRetrato } from "@/lib/execucao/cadastro-campo";
 import { avisoParaRetrato, avisosDeHoje } from "@/lib/execucao/aviso-cliente";
 import { aceiteParaRetrato } from "@/lib/os/aceite-server";
@@ -80,6 +81,8 @@ export async function GET(_: NextRequest, { params }: Params) {
     cadastro,
     avisoCliente,
     aceite,
+    // Campos-ponte do app: sem Equipamentos some o vínculo pela lista; sem QR Codes, a leitura de etiqueta
+    modulos: { equipamentos: await temModulo(empresaId, "equipamentos"), qrcodes: await temModulo(empresaId, "qrcodes") },
     geradoEm: new Date().toISOString(),
   }, { headers: { "Cache-Control": "private, no-store" } });
 }

@@ -183,7 +183,8 @@ export function OsAtividades({ osId, atividades: iniciais, clienteId, unidadeId,
         const aberto = expandido.has(a.id);
         return (
           <div key={a.id} className="border border-surface-border rounded-lg overflow-hidden">
-            <button type="button" onClick={() => toggleExpand(a.id)} className="flex items-center justify-between w-full p-3 text-left hover:bg-surface-page transition-colors">
+            <button type="button" onClick={() => toggleExpand(a.id)} data-abrir-atividade={a.id} aria-expanded={aberto}
+              className="flex items-center justify-between w-full p-3 text-left hover:bg-surface-page transition-colors">
               <div className="flex items-center gap-3 min-w-0">
                 <Wrench className="w-4 h-4 text-ink-muted shrink-0" />
                 <div className="min-w-0">

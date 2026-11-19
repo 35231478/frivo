@@ -110,6 +110,8 @@ export interface RetratoAtividade {
   avisoCliente?: AvisoClienteRetrato | null;
   /** Aceite do cliente na conclusão da OS: null = não se aplica a quem está logado; ausente em retratos antigos */
   aceite?: AceiteRetrato | null;
+  /** Módulos da empresa que o app usa (campo-ponte); ausente em retratos antigos = tudo ligado */
+  modulos?: { equipamentos: boolean; qrcodes: boolean };
   geradoEm: string;
 }
 

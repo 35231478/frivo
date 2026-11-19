@@ -11,6 +11,7 @@ import {
 } from "@/lib/utils";
 import { FileText, Wrench, Clock } from "lucide-react";
 import { InputData } from "@/components/ui/input-data";
+import { useModulos } from "@/components/providers/modulos-provider";
 
 export interface PropostaState {
   valorMensal: string;
@@ -51,6 +52,7 @@ interface PropostaCamposProps {
 const VIGENCIAS = [6, 12, 24, 36];
 
 export function PropostaCampos({ proposta, onChange, tecnicos, termoTemplates, equipamentos }: PropostaCamposProps) {
+  const temEquipamentos = useModulos().tem("equipamentos");
   const dataFim = calcularDataFimContrato(
     proposta.dataInicioContrato || null,
     proposta.vigenciaMeses ? Number(proposta.vigenciaMeses) : null,
@@ -173,6 +175,8 @@ export function PropostaCampos({ proposta, onChange, tecnicos, termoTemplates, e
                 onChange={(e) => onChange({ visitasPorPeriodo: e.target.value })} placeholder="Ex.: 1" />
             </FormField>
           </FormGrid>
+          {/* Campo-ponte: sem o módulo Equipamentos, a empresa não tem parque a cobrir — o campo some */}
+          {temEquipamentos && (
           <FormField label="Equipamentos cobertos">
             {equipamentos.length === 0 ? (
               <p className="text-sm text-ink-subtle">Nenhum equipamento cadastrado para este cliente.</p>
@@ -189,6 +193,7 @@ export function PropostaCampos({ proposta, onChange, tecnicos, termoTemplates, e
               </div>
             )}
           </FormField>
+          )}
         </FormSection>
       </div>
 

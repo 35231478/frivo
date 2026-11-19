@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
-import { auth } from "@/lib/auth";
+import { exigirModuloNaPagina } from "@/lib/modulos/pagina";
 import { prisma } from "@/lib/prisma";
 import { LABELS_TIPO_EQUIPAMENTO } from "@/lib/utils";
 import { EquipamentoPerfil } from "@/components/equipamentos/equipamento-perfil";
@@ -14,7 +14,7 @@ export default async function EquipamentoPerfilPage({
 }: { params: Promise<{ id: string }>; searchParams: Promise<{ aba?: string }> }) {
   const { id } = await params;
   const { aba } = await searchParams;
-  const session = await auth();
+  const session = await exigirModuloNaPagina("equipamentos");
   const empresaId = session!.user!.empresaId;
 
   const equipamento = await prisma.equipamento.findFirst({

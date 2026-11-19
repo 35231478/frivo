@@ -12,6 +12,8 @@ import { resolverTipoEquipamento } from "@/lib/tipo-equipamento";
 import { validarFotos } from "@/lib/anexos-server";
 import { gerarQrCodeEquipamento } from "@/lib/qrcode-server";
 import { carregarConfigApp } from "@/lib/tecnico/config-app-server";
+import { temModulo } from "@/lib/modulos/servidor";
+import { MSG_MODULO_DESLIGADO } from "@/lib/modulos/catalogo";
 import {
   MSG_CADASTRO_DESLIGADO, MSG_SEM_UNIDADE, SERIE_MIN, apresentarCadastro, type CadastroCampo, type CadastroEquipamento, type TipoCadastro,
 } from "@/lib/tecnico/cadastro-equipamento";
@@ -44,7 +46,8 @@ export async function cadastroParaRetrato(
   empresaId: string, permitido: boolean, os: { clienteId: string; unidadeId: string | null },
   daUnidade: readonly { setor: string | null; localizacao: string | null }[],
 ): Promise<CadastroCampo | null> {
-  if (!permitido) return null;
+  // Módulo Equipamentos desligado: o app nem oferece o cadastro em campo (campo-ponte do app)
+  if (!permitido || !(await temModulo(empresaId, "equipamentos"))) return null;
   const distintos = (vs: (string | null)[]) => [...new Set(vs.map((v) => (v ?? "").trim()).filter(Boolean))].sort((a, b) => a.localeCompare(b, "pt-BR")).slice(0, 60);
   return {
     unidadeId: await unidadeDoCadastro(empresaId, os),
@@ -106,6 +109,8 @@ export async function cadastrarEquipamentoEmCampo(ctx: ContextoExecucao, d: Cada
   const { empresaId } = ctx;
   const os = ctx.atividade.ordemServico;
   const atividadeId = ctx.atividade.id;
+  // Equipamentos desligado: recusa graciosa com o motivo — cadastrar equipamento é do módulo
+  if (!(await temModulo(empresaId, "equipamentos"))) return erro(403, MSG_MODULO_DESLIGADO("equipamentos"));
   if (!(await carregarConfigApp(empresaId)).cadastrarEquipamento) return erro(403, MSG_CADASTRO_DESLIGADO);
 
   // Reenvio (o aparelho perdeu a resposta): o equipamento já existe com este id — só garante o vínculo
@@ -149,8 +154,11 @@ export async function cadastrarEquipamentoEmCampo(ctx: ContextoExecucao, d: Cada
   let qr: string | null = null;
   let motivoQr: string | null = null;
   try {
-    if (d.qrLido) ({ codigo: qr, motivo: motivoQr } = await usarEtiquetaLida(empresaId, d.id, d.qrLido));
-    if (!qr) qr = (await gerarQrCodeEquipamento(empresaId, d.id)).codigo;
+    // QR Codes desligado: o equipamento nasce sem etiqueta — e nasce assim mesmo
+    if (await temModulo(empresaId, "qrcodes")) {
+      if (d.qrLido) ({ codigo: qr, motivo: motivoQr } = await usarEtiquetaLida(empresaId, d.id, d.qrLido));
+      if (!qr) qr = (await gerarQrCodeEquipamento(empresaId, d.id)).codigo;
+    }
   } catch (e) {
     console.error("[cadastro em campo] falha ao definir o QR do equipamento", e);
   }

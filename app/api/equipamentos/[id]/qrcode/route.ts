@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { exigirAlgumaPermissao, exigirPermissao } from "@/lib/permissoes-server";
+import { exigirAlgumaPermissao, exigirModuloNaApi, exigirPermissao } from "@/lib/permissoes-server";
 import { prisma } from "@/lib/prisma";
 import { z } from "zod";
 import { gerarQrCodeEquipamento } from "@/lib/qrcode-server";
@@ -14,12 +14,19 @@ const postSchema = z.object({
  * Gera um novo QR Code já vinculado ao equipamento, OU vincula um QR existente.
  * Aceita "criar" além de "editar": quem cadastra o equipamento precisa poder gerar o QR
  * depois (só acrescenta; trocar/desvincular continua exigindo "editar").
+ *
+ * Esta rota confere a permissão de EQUIPAMENTOS, mas o que ela cria é do módulo QR Codes: por
+ * isso o portão do módulo vem à mão (`exigirModuloNaApi`). O DELETE abaixo não leva portão de
+ * propósito — desvincular só limpa um vínculo que já existe, e módulo desligado impede criar
+ * coisa nova, não apagar o passado.
  */
 export async function POST(req: NextRequest, { params }: Params) {
   const guard = await exigirAlgumaPermissao([["equipamentos", "editar"], ["equipamentos", "criar"]]);
   if (guard.erro) return guard.resposta;
   const { session } = guard;
   const empresaId = session.user!.empresaId;
+  const semQr = await exigirModuloNaApi(empresaId, "qrcodes");
+  if (semQr) return semQr;
   const { id } = await params;
 
   const equip = await prisma.equipamento.findFirst({

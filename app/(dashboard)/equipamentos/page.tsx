@@ -1,7 +1,7 @@
 import { SelecaoMassaProvider } from "@/components/acoes-massa/selecao";
 import { BarraAcoesMassa } from "@/components/acoes-massa/barra";
 import type { Metadata } from "next";
-import { auth } from "@/lib/auth";
+import { exigirModuloNaPagina } from "@/lib/modulos/pagina";
 import { prisma } from "@/lib/prisma";
 import { LABELS_TIPO_EQUIPAMENTO } from "@/lib/utils";
 import { lerFiltros, montarWhere, montarOrderBy } from "@/lib/equipamento-listagem";
@@ -25,7 +25,7 @@ export default async function EquipamentosPage({
 }: {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
-  const session = await auth();
+  const session = await exigirModuloNaPagina("equipamentos");
   const empresaId = session!.user!.empresaId;
   const f = lerFiltros(await searchParams);
   const where = montarWhere(empresaId, f);

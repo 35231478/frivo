@@ -2,6 +2,8 @@ import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
 import { ITENS_CONFIGURACOES, ehAbaConfig, itemConfig, podeVerItemConfig } from "@/lib/navegacao/configuracoes";
+import { empresaTemModulo, moduloDaRotaModular } from "@/lib/modulos/catalogo";
+import { modulosDesligados } from "@/lib/modulos/servidor";
 import { PainelConfiguracoes } from "@/components/config/painel-configuracoes";
 import { TelaConfig, temTelaConfig } from "@/components/config/telas";
 
@@ -18,7 +20,17 @@ export default async function ConfiguracoesPage({ searchParams }: { searchParams
   const permissoes = session?.user?.permissoes;
   const role = session?.user?.role;
 
-  const visiveis = ITENS_CONFIGURACOES.filter((i) => podeVerItemConfig(i, permissoes, role)).map((i) => i.id);
+  // Os MÓDULOS que a empresa desligou somem daqui também: o cartão (e a gaveta) de um item que
+  // pertence a um módulo desligado não aparece — mesma regra do menu, que já some pelo provider.
+  const empresaId = session?.user?.empresaId as string | undefined;
+  const desligados = empresaId ? await modulosDesligados(empresaId) : null;
+  const moduloLigado = (href: string) => {
+    const m = moduloDaRotaModular(href.split("#")[0]);
+    return !m || !desligados || empresaTemModulo(desligados, m);
+  };
+  const visiveis = ITENS_CONFIGURACOES
+    .filter((i) => podeVerItemConfig(i, permissoes, role) && moduloLigado(i.href))
+    .map((i) => i.id);
   // A página se guarda sozinha (o middleware não exige "Configurações › Visualizar" aqui, para quem
   // tem só a permissão de um item — fiscal, admissão, modelos — chegar ao item dele): sem nenhum
   // cartão para abrir, não há o que fazer nesta tela.

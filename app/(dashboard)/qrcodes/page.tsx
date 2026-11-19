@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { auth } from "@/lib/auth";
+import { exigirModuloNaPagina } from "@/lib/modulos/pagina";
 import { prisma } from "@/lib/prisma";
 import { QrcodesClient } from "./qrcodes-client";
 import { espiarProximo } from "@/lib/numeracao-server";
@@ -8,7 +8,7 @@ import { localEquipamentoQr, nomeEquipamentoQr, rotuloParaVincular } from "@/lib
 export const metadata: Metadata = { title: "QR Codes" };
 
 export default async function QrcodesPage() {
-  const session = await auth();
+  const session = await exigirModuloNaPagina("qrcodes");
   const empresaId = session!.user!.empresaId;
 
   const [qrcodes, equipamentosLivres, proximoCodigo] = await Promise.all([

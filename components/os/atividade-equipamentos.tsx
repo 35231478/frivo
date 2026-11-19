@@ -7,6 +7,7 @@ import { EQUIPAMENTO, UNIDADE } from "@/components/cadastro-rapido/definicoes";
 import { Plus, X, Check, Trash2, HardDrive, AlertTriangle, Camera, ListChecks } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { usePermissoes } from "@/components/providers/permissoes-provider";
+import { useModulos } from "@/components/providers/modulos-provider";
 import { situacaoEquipamento, type EquipamentoTela } from "@/components/os/execucao-equipamento";
 import { SeletorEquipamentos, rotuloEquipLista } from "@/components/os/seletor-equipamentos";
 import { textoFaltas, type ResultadoConclusao } from "@/lib/execucao/pendencias";
@@ -32,7 +33,10 @@ export function AtividadeEquipamentos({ osId, atividadeId, clienteId, unidadeId 
   const [salvando, setSalvando] = useState(false);
   const [erro, setErro] = useState("");
   const { pode } = usePermissoes();
-  const podeVincular = pode("ordens", "editar") || pode("ordens", "concluir");
+  // Campo-ponte: sem o módulo Equipamentos some o vínculo (adicionar, lista da unidade, cadastro
+  // rápido) — mas o que JÁ está vinculado continua aqui, com checklist e fotos. Razão é razão.
+  const temEquipamentos = useModulos().tem("equipamentos");
+  const podeVincular = temEquipamentos && (pode("ordens", "editar") || pode("ordens", "concluir"));
   const podeRemover = pode("ordens", "editar");
   // Cadastro rápido de equipamento (mesmo componente do cadastro inline)
   const podeCriarEquip = usePodeCriar(EQUIPAMENTO.permissao);
@@ -81,6 +85,8 @@ export function AtividadeEquipamentos({ osId, atividadeId, clienteId, unidadeId 
 
   const equipamentos = execucao?.equipamentos ?? [];
   const bloqueada = !!execucao?.bloqueada;
+  // Módulo desligado e nada vinculado: o bloco inteiro some (nada de título órfão)
+  if (!temEquipamentos && equipamentos.length === 0) return null;
 
   return (
     <div className="space-y-3" data-atividade-equipamentos>
@@ -101,7 +107,7 @@ export function AtividadeEquipamentos({ osId, atividadeId, clienteId, unidadeId 
         </p>
       )}
 
-      {execucao && equipamentos.length === 0 && !mostraAdd && (
+      {execucao && equipamentos.length === 0 && !mostraAdd && temEquipamentos && (
         <p className="text-xs text-atencao-texto bg-atencao-claro border border-atencao/20 rounded-lg px-2.5 py-2 flex items-start gap-1.5" data-sem-equipamento>
           <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
           Nenhum equipamento vinculado. A atividade pode ser aberta assim, mas só é concluída com pelo menos 1 equipamento atendido e o checklist dele respondido.
@@ -146,7 +152,7 @@ export function AtividadeEquipamentos({ osId, atividadeId, clienteId, unidadeId 
         })}
       </div>
 
-      {mostraAdd && clienteId && (
+      {mostraAdd && clienteId && temEquipamentos && (
         <div className="border border-frivo-200 bg-frivo-50/30 rounded-lg p-3 space-y-2">
           <div className="flex items-center justify-between">
             <span className="text-xs font-semibold text-frivo-800">Equipamentos {unidadeId ? "deste endereço" : "do cliente"}</span>

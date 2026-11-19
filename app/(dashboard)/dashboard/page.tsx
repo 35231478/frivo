@@ -4,6 +4,8 @@ import { auth } from "@/lib/auth";
 import { pode, type Permissoes } from "@/lib/permissoes";
 import { aplicarPreferencia, blocosPermitidos, COOKIE_DASHBOARD, lerPreferencia, type BlocoId } from "@/lib/dashboard/blocos";
 import { carregarBlocos, type DadosBloco } from "@/lib/dashboard/dados";
+import { empresaTemModulo } from "@/lib/modulos/catalogo";
+import { modulosDesligados } from "@/lib/modulos/servidor";
 import { partesBR } from "@/lib/fuso";
 import { cn } from "@/lib/utils";
 import { PersonalizarDashboard } from "@/components/dashboard/personalizar-dashboard";
@@ -25,7 +27,7 @@ const ICONES: Record<BlocoId, LucideIcon> = {
   comercial: FileSignature, financeiro: Wallet, equipamentos: Thermometer, pmoc: FileBadge, frota: Truck, prazos: Timer,
 };
 
-function renderizar<K extends BlocoId>(id: K, d: DadosBloco[K]) {
+function renderizar<K extends BlocoId>(id: K, d: DadosBloco[K], temQr: boolean) {
   switch (id) {
     case "operacional": return <BlocoOperacional d={d as DadosBloco["operacional"]} />;
     case "os-do-dia": return <BlocoOsDoDia d={d as DadosBloco["os-do-dia"]} />;
@@ -33,7 +35,7 @@ function renderizar<K extends BlocoId>(id: K, d: DadosBloco[K]) {
     case "agenda": return <BlocoAgenda d={d as DadosBloco["agenda"]} />;
     case "comercial": return <BlocoComercial d={d as DadosBloco["comercial"]} />;
     case "financeiro": return <BlocoFinanceiro d={d as DadosBloco["financeiro"]} />;
-    case "equipamentos": return <BlocoEquipamentos d={d as DadosBloco["equipamentos"]} />;
+    case "equipamentos": return <BlocoEquipamentos d={d as DadosBloco["equipamentos"]} temQr={temQr} />;
     case "pmoc": return <BlocoPmoc d={d as DadosBloco["pmoc"]} />;
     case "frota": return <BlocoFrota d={d as DadosBloco["frota"]} />;
     case "prazos": return <BlocoPrazos d={d as DadosBloco["prazos"]} />;
@@ -51,7 +53,10 @@ export default async function DashboardPage() {
 
   // Blocos que o perfil pode ver, na ordem/visibilidade escolhidas pelo usuário (cookie deste navegador)
   const pref = lerPreferencia((await cookies()).get(COOKIE_DASHBOARD)?.value);
-  const { todos, visiveis } = aplicarPreferencia(blocosPermitidos(permissoes, user.role), pref);
+  // Os módulos que a empresa desligou somem do dashboard (que é núcleo) junto com o menu
+  const desligados = await modulosDesligados(user.empresaId);
+  const { todos, visiveis } = aplicarPreferencia(blocosPermitidos(permissoes, user.role, desligados), pref);
+  const temQr = empresaTemModulo(desligados, "qrcodes");
 
   // Só consulta o que vai aparecer; um bloco com erro não derruba a página
   const dados = await carregarBlocos(visiveis.map((b) => b.id), { empresaId: user.empresaId, podeVer });
@@ -93,7 +98,7 @@ export default async function DashboardPage() {
             const d = dados[b.id];
             return (
               <div key={b.id} className={cn("min-w-0", b.largo && "lg:col-span-2")}>
-                {!d || "erro" in d ? <BlocoComErro titulo={b.titulo} icone={ICONES[b.id]} /> : renderizar(b.id, d as never)}
+                {!d || "erro" in d ? <BlocoComErro titulo={b.titulo} icone={ICONES[b.id]} /> : renderizar(b.id, d as never, temQr)}
               </div>
             );
           })}
