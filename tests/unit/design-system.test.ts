@@ -169,9 +169,11 @@ describe("regras da identidade nas telas varridas", () => {
     const comBarra = casos.map(([, f]) => f).filter((f) => /data-barra-status/.test(ler(f)));
     expect(comBarra).toEqual(["components/calendario/calendario-grid.tsx"]);
     const grade = ler("components/calendario/calendario-grid.tsx");
-    // uma definição só (o componente BarraStatus), fina (3px), e a cor vem do status — nunca de técnico/tipo
+    // uma definição só (o componente BarraStatus), FINA, e a cor vem do status — nunca de técnico/tipo
     expect(grade.match(/data-barra-status/g)).toHaveLength(1);
-    expect(grade).toMatch(/<span className=\{cn\("w-\[3px\] shrink-0 self-stretch", estilo\(card\)\.barra\)\} aria-hidden="true" data-barra-status \/>/);
+    // a largura é a constante LARGURA_BARRA (lib/calendario/cores.ts), lida também pela legenda —
+    // nesta leva ela foi de 3px para 4px, e continua fina: o teto está travado lá
+    expect(grade).toMatch(/<span className=\{cn\(LARGURA_BARRA, "shrink-0 self-stretch", estilo\(card\)\.barra\)\} aria-hidden="true" data-barra-status \/>/);
     expect(ler("docs/design-system.md")).toMatch(/Exceção registrada: o evento do calendário/);
   });
 });

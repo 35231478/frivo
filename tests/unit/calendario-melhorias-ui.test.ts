@@ -17,7 +17,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { permissoesTotais } from "@/lib/permissoes";
 import { contraste } from "@/lib/ui/tokens";
-import { CORES_CARTAO, CORES_GRUPO, ESTILO_CARTAO, ESTILO_GRUPO, grupoDoCard, type GrupoStatus } from "@/lib/calendario/cores";
+import { CORES_CARTAO, CORES_GRUPO, ESTILO_CARTAO, ESTILO_GRUPO, LARGURA_BARRA, grupoDoCard, type GrupoStatus } from "@/lib/calendario/cores";
 
 (globalThis as any).IS_REACT_ACT_ENVIRONMENT = true;
 vi.setConfig({ testTimeout: 30_000 });
@@ -59,10 +59,12 @@ const OPCOES = {
   clientes: [{ value: "c1", label: "Hospital Santa Clara" }, { value: "c2", label: "Padaria Sol" }],
   tiposOs: [{ value: "tp1", label: "Preventiva" }],
   tecnicos: [{ value: "t1", label: "João Silva" }],
+  // O filtro "Localização / unidade" virou seletor do cadastro (Unidade), não mais texto solto
+  unidades: [{ value: "u1", label: "Matriz", clienteId: "c1" }, { value: "u2", label: "Loja Centro", clienteId: "c2" }],
 };
 const card = (id: string, dia: string, extra: Record<string, unknown> = {}) => ({
   chave: `${id}:${dia}`, id, numero: `OS-${id}`, origem: "MANUAL", atividadeId: `a-${id}`, clienteId: "c1", tecnicoId: "t1", tipoOsId: "tp1",
-  clienteCurto: "Hospital", clienteCompleto: "Hospital Santa Clara", unidade: "Matriz", tipoOs: "Preventiva", hora: "09:00",
+  clienteCurto: "Hospital", clienteCompleto: "Hospital Santa Clara", unidadeId: "u1", unidade: "Matriz", tipoOs: "Preventiva", hora: "09:00",
   dataFmt: "17/11/2026", tecnicoNome: "João Silva", tecnicoAvatar: null, status: "AGENDADA", prioridade: "NORMAL", atrasada: false, ...extra,
 });
 const EVENTOS = {
@@ -92,7 +94,17 @@ describe("Calendário — o cartão da OS é neutro e o status é uma barra à e
     expect(visiveis.map((g) => ESTILO_GRUPO[g].barra)).toEqual(["bg-acento", "bg-atencao", "bg-ok", "bg-atrasado"]);
     expect(new Set(GRUPOS.map((g) => CORES_GRUPO[g].barra)).size).toBe(GRUPOS.length);
     // o cartão não é pintado: fundo neutro único, sem contorno e sem sombra
-    expect(ESTILO_CARTAO).toBe("bg-surface-alt hover:bg-surface-linha");
+    // Um passo de contraste (pedido do dono): o cartão era fundo quase branco e SEM contorno sobre
+    // o branco do dia — se dissolvia na grade. Continua neutro: nenhuma cor nova, só corpo.
+    expect(ESTILO_CARTAO).toBe("bg-surface-linha border border-surface-border hover:bg-surface-border");
+    expect(ESTILO_CARTAO, "a cor continua só na barra do status").not.toMatch(/acento|atencao|ok|atrasado|previsto/);
+    // A barra ganhou UM passo de presença (3px → 4px). O valor fica preso aqui de propósito: sem
+    // isto, encolher a barra de volta não quebraria teste nenhum, porque o cartão e a legenda leem
+    // a constante. Um passo, não dois: mais que 6px vira faixa colorida, que é o que não se quer.
+    expect(LARGURA_BARRA).toBe("w-[4px]");
+    const px = Number(/w-\[(\d+)px\]/.exec(LARGURA_BARRA)![1]);
+    expect(px, "mais larga que a de antes").toBeGreaterThan(3);
+    expect(px, "sem virar faixa colorida").toBeLessThanOrEqual(6);
     expect(JSON.stringify(ESTILO_GRUPO)).not.toMatch(/-claro|border-|shadow/);
     // só o atrasado pinta a hora (tem que continuar óbvio); os outros usam o texto normal
     expect(GRUPOS.filter((g) => ESTILO_GRUPO[g].hora !== "text-ink")).toEqual(["atrasada"]);
@@ -119,13 +131,15 @@ describe("Calendário — o cartão da OS é neutro e o status é uma barra à e
     expect(doDia("2026-11-18").map((c) => c.dataset.cartaoOs)).toEqual(["atrasada"]);
     for (const c of $$("[data-dia] [data-cartao-os]")) {
       const estilo = ESTILO_GRUPO[c.dataset.cartaoOs as GrupoStatus];
-      // o cartão é neutro: mesmo fundo para todo status, sem contorno, sem sombra, sem fundo tingido
-      expect(c.className.split(" ")).toEqual(expect.arrayContaining(["bg-surface-alt", "hover:bg-surface-linha"]));
-      expect(c.className).not.toMatch(/border|shadow|-claro|bg-white/);
-      // a cor do status está SÓ na barra fina da esquerda (primeiro filho, 3px, altura toda)
+      // o cartão é NEUTRO: o mesmo fundo para todo status, sem sombra e sem fundo tingido. O fio
+      // em volta entrou nesta leva (o cartão sumia no branco do dia) e é neutro — nada de cor nele.
+      expect(c.className.split(" ")).toEqual(expect.arrayContaining(["bg-surface-linha", "border", "border-surface-border", "hover:bg-surface-border"]));
+      expect(c.className).not.toMatch(/shadow|-claro|bg-white/);
+      expect(c.className, "o fio não é colorido").not.toMatch(/border-(acento|atencao|ok|atrasado|previsto|primary)/);
+      // a cor do status está SÓ na barra fina da esquerda (primeiro filho, altura toda)
       const barra = c.firstElementChild as HTMLElement;
       expect(barra.hasAttribute("data-barra-status")).toBe(true);
-      expect(barra.className.split(" ")).toEqual(expect.arrayContaining(["w-[3px]", "self-stretch", estilo.barra]));
+      expect(barra.className.split(" ")).toEqual(expect.arrayContaining([LARGURA_BARRA, "self-stretch", estilo.barra]));
       expect($$("[class*='bg-acento'], [class*='bg-atencao'], [class*='bg-ok'], [class*='bg-atrasado']", c)).toEqual([barra]);
       // o status também vai em texto para o leitor de tela
       expect(txt($(".sr-only", c))).toBe(`${estilo.rotulo}:`);
@@ -186,7 +200,8 @@ describe("Calendário — o cartão da OS é neutro e o status é uma barra à e
     const f = fonte("app/(dashboard)/calendario/page.tsx");
     expect(f).toMatch(/const LEGENDA: GrupoStatus\[\] = \["aberta", "andamento", "concluida", "atrasada"\];/);
     const legenda = f.slice(f.indexOf("data-legenda-calendario"), f.indexOf("</SolicitacoesGaveta>"));
-    expect(legenda).toContain('cn("w-[3px] h-3.5 rounded-full", ESTILO_GRUPO[g].barra)');
+    // a legenda lê a MESMA largura do cartão (uma constante só, em lib/calendario/cores.ts)
+    expect(legenda).toContain('cn(LARGURA_BARRA, "h-3.5 rounded-full", ESTILO_GRUPO[g].barra)');
     expect(legenda).toContain("Prioridade alta ou urgente");
     expect(legenda).toContain("OS recorrente");
     expect(legenda).not.toMatch(/text-atencao|text-atrasado|\.cartao/);
@@ -293,6 +308,56 @@ describe("Calendário — cabeçalho compacto, sem perder filtro", () => {
     expect(apagados()).toBe(0);
   });
 
+  /* ── "Localização / unidade": seletor do cadastro, não texto solto (item 4 da leva) ── */
+
+  it("a unidade vem do CADASTRO: o seletor oferece as unidades, não um campo de digitar", async () => {
+    await abrir();
+    const campo = $("[data-filtro-unidade] [data-busca-select]");
+    expect(campo, "o campo virou seletor").toBeTruthy();
+    expect($('input[aria-label="Localização ou unidade"]'), "não há mais campo de digitar").toBeFalsy();
+    await clicar(campo);
+    // sem cliente escolhido, oferece todas — com o nome do cliente junto (duas empresas têm "Matriz")
+    expect($$("[data-unidade-opcao]").map((e) => txt(e))).toEqual(["Matriz — Hospital Santa Clara", "Loja Centro — Padaria Sol"]);
+  });
+
+  it("escolher uma unidade sem OS no mês esmaece a grade inteira (e conta como filtro ativo)", async () => {
+    nav.busca = "unidadeId=u2"; // Loja Centro: nenhum cartão do mês é dela
+    await abrir();
+    expect(txt($("[data-resumo-calendario]"))).toBe("0 de 5 ordens de serviço");
+    expect(txt($("[data-filtros-calendario]"))).toContain("1 filtro ativo");
+  });
+
+  it("escolher a unidade das OS do mês mantém todas à vista", async () => {
+    nav.busca = "unidadeId=u1";
+    await abrir();
+    expect(txt($("[data-resumo-calendario]"))).toBe("5 de 5 ordens de serviço");
+  });
+
+  it("link antigo com o NOME digitado (`unidade=Matriz`) continua valendo: vira o id do cadastro", async () => {
+    nav.busca = "unidade=Matriz";
+    await abrir();
+    expect(txt($("[data-resumo-calendario]"))).toBe("5 de 5 ordens de serviço");
+    expect(txt($("[data-filtro-unidade]"))).toContain("Matriz");
+  });
+
+  it("com um cliente escolhido, o seletor oferece só as unidades DELE", async () => {
+    nav.busca = "clienteId=c1";
+    await abrir();
+    await clicar($("[data-filtro-unidade] [data-busca-select]"));
+    expect($$("[data-unidade-opcao]").map((e) => txt(e))).toEqual(["Matriz"]); // sem repetir o cliente
+  });
+
+  it("cliente SEM unidade cadastrada: o campo sai e explica, em vez de oferecer uma lista vazia", async () => {
+    const { CalendarioPainel } = await import("@/components/calendario/calendario-painel");
+    nav.busca = "clienteId=c3";
+    await montar(createElement(CalendarioPainel, {
+      celulas: CELULAS, eventosPorDia: EVENTOS, totalMes: 5,
+      opcoes: { ...OPCOES, clientes: [...OPCOES.clientes, { value: "c3", label: "Mercado Bom Preço" }] },
+    } as any));
+    expect($("[data-filtro-unidade]")).toBeFalsy();
+    expect(txt($("[data-unidade-sem-cadastro]"))).toBe("Mercado Bom Preço não tem unidade cadastrada.");
+  });
+
   it("a página: uma barra só com título, mês e visão; o botão de atualizar; e nada de \"Gerar OS recorrentes\"", () => {
     const f = fonte("app/(dashboard)/calendario/page.tsx");
     expect(f).toMatch(/<h1 className="page-title[^"]*"[^>]*>Calendário <Dica texto=\{AJUDA\}/);
@@ -301,7 +366,11 @@ describe("Calendário — cabeçalho compacto, sem perder filtro", () => {
     expect(f).not.toMatch(/space-y-6/); // o título não é mais uma linha separada acima do cartão
     // título, navegação do mês e visão dentro da MESMA barra
     const barra = f.slice(f.indexOf("data-barra-calendario"), f.indexOf("{/* Painel de filtros + grade */}"));
-    for (const peca of ["Calendário <Dica", "Mês anterior", "Próximo mês", "Hoje", "<AtualizarCalendario />", ">Mês</Link>", ">Semana</Link>"]) expect(barra, peca).toContain(peca);
+    // As setas agora andam no período da VISÃO (semana a semana na Semana), então o rótulo delas
+    // e o do cabeçalho são calculados, não fixos no mês.
+    for (const peca of ["Calendário <Dica", "data-periodo-anterior", "data-periodo-seguinte", "{rotuloVoltar}", "{rotuloAvancar}", "{rotuloPeriodo}", "Hoje", "<AtualizarCalendario />", ">Mês</Link>", ">Semana</Link>"]) expect(barra, peca).toContain(peca);
+    expect(f).toContain('passoDoPeriodo(view, { ano, mes, dia: diaRef }, -1)');
+    expect(f).toContain('passoDoPeriodo(view, { ano, mes, dia: diaRef }, 1)');
     // a semana vazia do fim do mês não ocupa uma linha
     expect(f).toMatch(/while \(celulas\.length > 7 && celulas\.slice\(-7\)\.every\(\(c\) => !c\.inMonth\)\) celulas\.length -= 7;/);
   });

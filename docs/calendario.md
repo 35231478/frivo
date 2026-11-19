@@ -94,6 +94,11 @@ o efeito de mosaico.
   reagendar" continua ao passar o mouse).
 - O status vai também em texto para o leitor de tela (`sr-only`).
 
+O cartão tem **corpo**: fundo um tom acima do branco do dia e um fio neutro em volta. Antes era um
+fundo quase branco sem contorno (1,06:1 contra o dia) e, na grade cheia, cada OS se dissolvia — só a
+barra fina aparecia. O fio e o fundo são neutros: nenhuma cor nova entrou, e a cor continua só na
+barra, que passou de 3px para 4px (um passo de presença, não uma faixa colorida).
+
 Contraste conferido em teste (`tests/unit/calendario-melhorias-ui.test.ts`): nome, hora e sigla sobre o
 fundo do cartão ≥ 4.5:1 (WCAG AA); a barra sobre o cartão e sobre o branco do dia ≥ 3:1.
 
@@ -109,3 +114,55 @@ tema escuro, quando existir, troca os tokens e precisa repetir a conferência de
 
 O círculo do dia atual pulsa de leve (`.anim-hoje-pulso`, um anel que se abre e some). Em
 `prefers-reduced-motion: reduce` o pulso é desligado e o círculo continua.
+
+## Navegação: as setas andam no período da visão
+
+As setas `‹ ›` levam ao período **da visão que está na tela**, não sempre ao mês:
+
+| Visão | O que as setas fazem | O que o cabeçalho escreve |
+|---|---|---|
+| Mês | mês a mês, virando o ano | `Novembro 2026` |
+| Semana | semana a semana (sete dias), virando mês e ano | `15 – 21 de novembro de 2026` |
+
+Na Semana o nome do mês sozinho mentiria quando a semana atravessa o mês, então vai o intervalo:
+`29 de novembro – 5 de dezembro de 2026`, e, virando o ano, os dois anos.
+
+"Hoje" volta ao período atual nas duas visões (ele grava mês, ano e dia).
+
+O cálculo é puro, em `passoDoPeriodo` e `rotuloDoPeriodo` (`lib/calendario/grid.ts`), com teste.
+Antes desta leva as duas setas somavam um MÊS mesmo na visão Semana — não havia como ir para a
+semana seguinte.
+
+## Os filtros
+
+A página carrega TODAS as OS do período e os filtros rodam no navegador **esmaecendo** o que não
+corresponde, em vez de sumir com o cartão: quem filtra por um técnico continua vendo que o dia 12
+está cheio de outra coisa. O predicado é puro e mora em `lib/calendario/filtros.ts`, com um teste
+por filtro e um da combinação (`tests/unit/calendario-filtros.test.ts`).
+
+| Filtro | Olha para | Observação |
+|---|---|---|
+| Cliente | o cliente da OS | |
+| Tipo de OS | o tipo da **atividade** agendada | a OS em si não tem tipo: uma OS que está no calendário pela data prevista, sem atividade no período, não casa com tipo nenhum. É a regra, não um defeito |
+| Número da OS | trecho do número | sem caixa, sem espaço sobrando |
+| Localização / unidade | o **id** da unidade da OS | seletor do cadastro (`Unidade`), não texto digitado |
+| Técnico | o responsável **ou** qualquer membro da equipe da atividade | |
+| Status, Prioridade | os da OS | vazio = todos |
+
+Vários filtros juntos são **E**; vários valores do mesmo filtro são **OU**. A pílula "N filtros
+ativos" conta um por filtro em uso, não um por valor marcado.
+
+### Localização / unidade
+
+O campo é um seletor das unidades cadastradas, não um campo de digitar (antes, quem não lembrasse a
+grafia exata não achava nada, e não dava para saber o que existe):
+
+- com um cliente escolhido, oferece as unidades **dele**;
+- sem cliente, oferece todas com o nome do cliente ao lado (duas empresas têm uma "Matriz");
+- cliente sem unidade cadastrada: o campo sai e fica a explicação no lugar;
+- trocar de cliente limpa uma unidade que era de outro (senão o filtro ficaria com um par
+  impossível e a grade inteira esmaeceria sem explicação).
+
+Link antigo com `?unidade=Matriz` (o nome digitado, de antes desta leva) continua valendo: é
+traduzido para o id do cadastro na leitura, e o parâmetro velho sai da URL.
+

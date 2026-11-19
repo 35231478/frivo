@@ -6,15 +6,16 @@ import { cn, LABELS_STATUS_OS, LABELS_PRIORIDADE } from "@/lib/utils";
 import { BuscaSelect, type OpcaoBusca } from "@/components/ui/busca-select";
 import { AvatarTecnico } from "@/components/ui/avatar-tecnico";
 import { CalendarioGrid, type CelulaDia, type CardOs } from "@/components/calendario/calendario-grid";
+import {
+  CHAVES_FILTRO, FILTROS_VAZIOS, cardCasa, contarAtivos, gravarFiltrosNaUrl, lerFiltrosDaUrl,
+  type FiltrosCalendario,
+} from "@/lib/calendario/filtros";
 import { SlidersHorizontal, Filter, X, ChevronDown, Check } from "lucide-react";
 
 interface TecnicoOpc extends OpcaoBusca { avatar?: string | null }
-interface Opcoes { clientes: OpcaoBusca[]; tiposOs: OpcaoBusca[]; tecnicos: TecnicoOpc[] }
-
-interface Filtros {
-  clienteId: string; tipos: string[]; numero: string; unidade: string;
-  tecnicoId: string; status: string[]; prioridade: string[];
-}
+/** A unidade sabe de que cliente é: o seletor só oferece as do cliente escolhido. */
+interface UnidadeOpc extends OpcaoBusca { clienteId: string }
+interface Opcoes { clientes: OpcaoBusca[]; tiposOs: OpcaoBusca[]; tecnicos: TecnicoOpc[]; unidades: UnidadeOpc[] }
 
 const selectCls = "w-full bg-white border border-surface-border rounded-lg px-3 py-2 text-sm text-ink focus:outline-none focus:border-primary-500 focus:ring-4 focus:ring-primary-500/10 transition-all";
 
@@ -25,64 +26,43 @@ export function CalendarioPainel({
   const pathname = usePathname();
   const sp = useSearchParams();
 
-  const [filtros, setFiltros] = useState<Filtros>(() => ({
-    clienteId: sp.get("clienteId") ?? "",
-    tipos: (sp.get("tipos") ?? "").split(",").filter(Boolean),
-    numero: sp.get("numero") ?? "",
-    unidade: sp.get("unidade") ?? "",
-    tecnicoId: sp.get("tecnicoId") ?? "",
-    status: (sp.get("status") ?? "").split(",").filter(Boolean),
-    prioridade: (sp.get("prioridade") ?? "").split(",").filter(Boolean),
-  }));
+  const [filtros, setFiltros] = useState<FiltrosCalendario>(() => lerFiltrosDaUrl(sp, opcoes.unidades));
   const [mostrarMais, setMostrarMais] = useState(filtros.status.length > 0 || filtros.prioridade.length > 0);
   // No celular os filtros ficam recolhidos para a grade subir (no computador a faixa está sempre à vista).
   // Quem chega com filtro na URL já vê os campos abertos.
-  const [aberto, setAberto] = useState(() => ["clienteId", "tipos", "numero", "unidade", "tecnicoId", "status", "prioridade"].some((k) => (sp.get(k) ?? "") !== ""));
+  const [aberto, setAberto] = useState(() => [...CHAVES_FILTRO, "unidade"].some((k) => (sp.get(k) ?? "") !== ""));
   const montou = useRef(false);
 
-  function set<K extends keyof Filtros>(chave: K, valor: Filtros[K]) {
-    setFiltros((f) => ({ ...f, [chave]: valor }));
+  function set<K extends keyof FiltrosCalendario>(chave: K, valor: FiltrosCalendario[K]) {
+    setFiltros((f) => {
+      const novo = { ...f, [chave]: valor };
+      // Trocou de cliente: a unidade escolhida, se é de outro cliente, sai junto (senão o filtro
+      // ficaria com um par impossível e a grade inteira esmaeceria sem explicação)
+      if (chave === "clienteId" && novo.unidadeId) {
+        const u = opcoes.unidades.find((x) => x.value === novo.unidadeId);
+        if (novo.clienteId && u && u.clienteId !== novo.clienteId) novo.unidadeId = "";
+      }
+      return novo;
+    });
   }
 
   // Sincroniza filtros na URL (debounce 300ms) — mantém mes/ano/view/dia
   useEffect(() => {
     if (!montou.current) { montou.current = true; return; }
     const t = setTimeout(() => {
-      const p = new URLSearchParams(sp.toString());
-      const aplica = (k: string, v: string) => (v ? p.set(k, v) : p.delete(k));
-      aplica("clienteId", filtros.clienteId);
-      aplica("tipos", filtros.tipos.join(","));
-      aplica("numero", filtros.numero.trim());
-      aplica("unidade", filtros.unidade.trim());
-      aplica("tecnicoId", filtros.tecnicoId);
-      aplica("status", filtros.status.join(","));
-      aplica("prioridade", filtros.prioridade.join(","));
+      const p = gravarFiltrosNaUrl(new URLSearchParams(sp.toString()), filtros);
       router.replace(`${pathname}?${p.toString()}`, { scroll: false });
     }, 300);
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filtros]);
 
-  const ativos =
-    (filtros.clienteId ? 1 : 0) + (filtros.tipos.length ? 1 : 0) + (filtros.numero.trim() ? 1 : 0) +
-    (filtros.unidade.trim() ? 1 : 0) + (filtros.tecnicoId ? 1 : 0) + (filtros.status.length ? 1 : 0) +
-    (filtros.prioridade.length ? 1 : 0);
+  const ativos = contarAtivos(filtros);
   const filtrando = ativos > 0;
 
   const { dimmedIds, exibidos } = useMemo(() => {
-    const numero = filtros.numero.trim().toLowerCase();
-    const unidade = filtros.unidade.trim().toLowerCase();
-    const casa = (c: CardOs) => {
-      if (filtros.clienteId && c.clienteId !== filtros.clienteId) return false;
-      if (filtros.tipos.length && !(c.tipoOsId && filtros.tipos.includes(c.tipoOsId))) return false;
-      if (numero && !c.numero.toLowerCase().includes(numero)) return false;
-      if (unidade && !(c.unidade ?? "").toLowerCase().includes(unidade)) return false;
-      // Por técnico: o responsável OU qualquer membro da equipe da atividade
-      if (filtros.tecnicoId && c.tecnicoId !== filtros.tecnicoId && !(c.tecnicoIds ?? []).includes(filtros.tecnicoId)) return false;
-      if (filtros.status.length && !filtros.status.includes(c.status)) return false;
-      if (filtros.prioridade.length && !filtros.prioridade.includes(c.prioridade)) return false;
-      return true;
-    };
+    // O predicado mora em lib/calendario/filtros.ts, com um teste por filtro e um da combinação
+    const casa = (c: CardOs) => cardCasa(c, filtros);
     const inMonth = new Set(celulas.filter((c) => c.inMonth).map((c) => c.dateKey));
     const dim = new Set<string>();
     let x = 0;
@@ -97,7 +77,7 @@ export function CalendarioPainel({
   }, [eventosPorDia, celulas, filtros, filtrando]);
 
   function limpar() {
-    setFiltros({ clienteId: "", tipos: [], numero: "", unidade: "", tecnicoId: "", status: [], prioridade: [] });
+    setFiltros(FILTROS_VAZIOS);
   }
 
   const statusOpts = Object.entries(LABELS_STATUS_OS).map(([value, label]) => ({ value, label }));
@@ -155,7 +135,13 @@ export function CalendarioPainel({
               <MultiSelect rotulo="Tipo de OS" options={opcoes.tiposOs} selected={filtros.tipos} onChange={(v) => set("tipos", v)} placeholder="Tipo de OS" />
             </div>
             <input aria-label="Número da OS" value={filtros.numero} onChange={(e) => set("numero", e.target.value)} placeholder="Número da OS" className={cn(selectCls, "md:flex-1 md:min-w-[112px] md:w-auto")} />
-            <input aria-label="Localização ou unidade" value={filtros.unidade} onChange={(e) => set("unidade", e.target.value)} placeholder="Localização / unidade" className={cn(selectCls, "md:flex-1 md:min-w-[128px] md:w-auto")} />
+            <CampoUnidade
+              unidades={opcoes.unidades}
+              clientes={opcoes.clientes}
+              clienteId={filtros.clienteId}
+              value={filtros.unidadeId}
+              onChange={(v) => set("unidadeId", v)}
+            />
             <div className="md:flex-1 md:min-w-[128px]">
               <SelectTecnico options={opcoes.tecnicos} value={filtros.tecnicoId} onChange={(v) => set("tecnicoId", v)} placeholder="Técnico" />
             </div>
@@ -262,5 +248,51 @@ function SelectTecnico({
         </div>
       )}
     </div>
+  );
+}
+
+/**
+ * "Localização / unidade": SELETOR das unidades cadastradas (model Unidade), não mais texto solto.
+ *
+ * Antes era um campo de digitar que casava por trecho do nome — quem não lembrasse a grafia exata
+ * não achava nada, e não havia como saber o que existe. Agora:
+ *   • com um cliente escolhido, oferece as unidades DELE;
+ *   • sem cliente, oferece todas, com o nome do cliente ao lado (duas empresas têm "Matriz");
+ *   • cliente sem unidade cadastrada: o campo sai e fica a explicação no lugar.
+ */
+function CampoUnidade({
+  unidades, clientes, clienteId, value, onChange,
+}: {
+  unidades: UnidadeOpc[]; clientes: OpcaoBusca[]; clienteId: string; value: string; onChange: (v: string) => void;
+}) {
+  const nomeDoCliente = (id: string) => clientes.find((c) => c.value === id)?.label ?? "";
+  const lista = useMemo(() => {
+    const doCliente = clienteId ? unidades.filter((u) => u.clienteId === clienteId) : unidades;
+    return doCliente.map((u) => ({
+      value: u.value,
+      label: clienteId ? u.label : `${u.label} — ${nomeDoCliente(u.clienteId)}`,
+      atributos: { "data-unidade-opcao": u.value },
+    }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [unidades, clienteId, clientes]);
+
+  if (clienteId && lista.length === 0) {
+    return (
+      <p className="md:flex-1 md:min-w-[128px] text-xs text-ink-muted self-center" data-unidade-sem-cadastro>
+        {nomeDoCliente(clienteId) || "Este cliente"} não tem unidade cadastrada.
+      </p>
+    );
+  }
+
+  return (
+    <BuscaSelect
+      className="md:flex-1 md:min-w-[128px]"
+      rotulo="Localização ou unidade"
+      value={value}
+      onChange={onChange}
+      options={lista}
+      placeholder="Localização / unidade"
+      atributos={{ "data-filtro-unidade": true }}
+    />
   );
 }
