@@ -5,12 +5,18 @@ import { exigirPermissao } from "@/lib/permissoes-server";
 import { prisma } from "@/lib/prisma";
 import { validarFotos } from "@/lib/anexos-server";
 import { gerarQrCodeEquipamento } from "@/lib/qrcode-server";
+import { temModulo } from "@/lib/modulos/servidor";
 import { equipamentoSchema } from "@/lib/validations";
 import { resolverTipoEquipamento } from "@/lib/tipo-equipamento";
 
 /**
  * Lista equipamentos ativos. Além de quem visualiza o módulo, libera a leitura para
  * quem usa os seletores de equipamento na OS (ordens) e no orçamento (orcamentos).
+ *
+ * Equipamentos desligado: a LEITURA devolve lista vazia em vez de 403 — quem chama aqui também é
+ * a OS e o orçamento, que são do núcleo e não podem quebrar por um módulo opcional. A tela de
+ * Equipamentos já é barrada antes, na rota, e tudo o que ESCREVE equipamento passa por
+ * `exigirPermissao("equipamentos", …)`, que recusa.
  */
 export async function GET(req: NextRequest) {
   const session = await auth();
@@ -20,6 +26,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ erro: "Sem permissão para esta ação" }, { status: 403 });
 
   const empresaId = session.user!.empresaId;
+  if (!(await temModulo(empresaId, "equipamentos"))) return NextResponse.json([]);
   const { searchParams } = new URL(req.url);
   const unidadeId = searchParams.get("unidadeId");
   const clienteId = searchParams.get("clienteId");
@@ -107,8 +114,10 @@ export async function POST(req: NextRequest) {
     },
   });
 
-  // Cadastro pela foto da etiqueta pede o QR já na criação (mesma geração da aba "QR Code")
-  if (body?.gerarQrCode === true) {
+  // Cadastro pela foto da etiqueta pede o QR já na criação (mesma geração da aba "QR Code").
+  // Com o módulo QR Codes desligado o equipamento nasce sem etiqueta — e nasce assim mesmo:
+  // recusar o cadastro inteiro por causa de um módulo opcional seria perder o equipamento.
+  if (body?.gerarQrCode === true && (await temModulo(empresaId, "qrcodes"))) {
     try {
       const qrcode = await gerarQrCodeEquipamento(empresaId, equipamento.id);
       return NextResponse.json({ ...equipamento, qrcode: { id: qrcode.id, codigo: qrcode.codigo } }, { status: 201 });

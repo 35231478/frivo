@@ -148,10 +148,12 @@ describe.skipIf(!URL_PG)("Loja de Módulos — Estoque (PostgreSQL real)", () =>
     const definir = (modulo: string, ativo: boolean) => chamar("configuracoes/modulos", "PUT", { modulo, ativo });
     const previa = (modulo: string, ativo: boolean) => chamar("configuracoes/modulos", "POST", { modulo, ativo });
 
-    it("a tela passa a oferecer os três (Frota, Compras e Estoque)", async () => {
+    it("a tela oferece o Estoque junto dos outros módulos com gate (a lista cresce a cada leva)", async () => {
       const r = await ver();
       expect(r.status).toBe(200);
-      expect(r.json.modulos.map((m: any) => m.id)).toEqual(["veiculos", "compras", "estoque"]);
+      const ids = r.json.modulos.map((m: any) => m.id);
+      expect(ids).toContain("estoque");
+      expect(ids).toEqual(expect.arrayContaining(["veiculos", "compras"]));
       expect(r.json.modulos.every((m: any) => m.ativo)).toBe(true);
     });
 

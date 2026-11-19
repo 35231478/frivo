@@ -112,17 +112,22 @@ const OPCIONAIS: ModuloCatalogo[] = [
     permissoes: [["compras"]], dependeDe: ["estoque"],
   },
 
-  // ── o resto do mapa: catalogado agora, gateado nas fases seguintes
   {
-    id: "equipamentos", nome: "Equipamentos", icone: "Thermometer", categoria: "operacao",
+    id: "equipamentos", nome: "Equipamentos", icone: "Thermometer", categoria: "operacao", gateAtivo: true,
     descricao: "O parque de equipamentos do cliente, com histórico e garantia.",
-    rotas: ["/equipamentos", "/api/equipamentos", "/api/tipos-equipamento"], permissoes: [["equipamentos"]],
+    rotas: ["/equipamentos", "/configuracoes/tipos-equipamento", "/api/equipamentos", "/api/tipos-equipamento"],
+    permissoes: [["equipamentos"]],
   },
   {
-    id: "qrcodes", nome: "QR Codes", icone: "QrCode", categoria: "operacao",
+    id: "qrcodes", nome: "QR Codes", icone: "QrCode", categoria: "operacao", gateAtivo: true,
     descricao: "Etiqueta com QR no equipamento: o cliente aponta a câmera e abre um chamado.",
-    rotas: ["/qrcodes", "/qr", "/api/qrcodes", "/api/qr"], permissoes: [["qrcodes"]], dependeDe: ["equipamentos"],
+    // "/qr" e "/api/qr" (o link público da etiqueta) ficam catalogados, mas NÃO são gateados:
+    // a etiqueta já colada no equipamento continua abrindo para o cliente — desligar não apaga.
+    rotas: ["/qrcodes", "/configuracoes/qr-code", "/api/qrcodes", "/qr", "/api/qr"],
+    permissoes: [["qrcodes"]], dependeDe: ["equipamentos"],
   },
+
+  // ── o resto do mapa: catalogado agora, gateado nas fases seguintes
   {
     id: "pmoc", nome: "PMOC", icone: "FileBadge", categoria: "operacao",
     descricao: "Plano de manutenção exigido por lei, com cronograma e documento assinado.",
@@ -284,6 +289,12 @@ export function empresaTemModulo(desligados: ModulosDesligados | null | undefine
  * Quem o `id` arrasta junto ao ser desligado: os módulos ligados que dependem dele (em cascata).
  * Desligar Estoque arrasta Compras — senão sobraria um pedido de compra que não consegue dar
  * entrada em lugar nenhum.
+ *
+ * Só entram na lista os módulos com `gateAtivo`: a dependência de um módulo ainda não gateado
+ * (PMOC → Equipamentos) fica registrada no catálogo e vale na hora de LIGAR (`dependenciasFaltando`),
+ * mas não é anunciada nem gravada agora — dizer "o PMOC vai junto" e o PMOC continuar inteiro no
+ * menu seria mentir para quem está desligando. A travessia segue passando por ele, para o caso de
+ * alguém depender do dependente.
  */
 export function dependentesLigados(desligados: ModulosDesligados, id: string): string[] {
   const fora = new Set(desligados);
@@ -299,7 +310,7 @@ export function dependentesLigados(desligados: ModulosDesligados, id: string): s
       }
     }
   }
-  return arrastados;
+  return arrastados.filter((m) => moduloCatalogo(m)?.gateAtivo);
 }
 
 /** O que falta ligar para o `id` poder ser ligado (dependências desligadas, em cascata). */

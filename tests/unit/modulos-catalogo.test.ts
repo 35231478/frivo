@@ -89,9 +89,13 @@ describe("Dependência: Compras não vive sem Estoque", () => {
     expect(dependenciasFaltando(new Set(), "compras")).toEqual([]);
   });
 
-  it("a cascata vale em cadeia (NFS-e depende do Financeiro)", () => {
-    expect(dependentesLigados(new Set(), "financeiro")).toEqual(expect.arrayContaining(["fiscal", "folha"]));
+  it("a cascata vale em cadeia (NFS-e depende do Financeiro) — e só ARRASTA quem já tem gate", () => {
+    // a dependência está registrada e vale na hora de LIGAR, mesmo sem gate nenhum dos dois…
+    expect(moduloCatalogo("fiscal")!.dependeDe).toEqual(["financeiro"]);
     expect(dependenciasFaltando(desligados("financeiro"), "fiscal")).toEqual(["financeiro"]);
+    // …mas desligar o Financeiro (que também não tem gate) não anuncia nem grava nada: quem não
+    // tem gate continua inteiro na tela, e dizer que ele "cai junto" seria mentir.
+    expect(dependentesLigados(new Set(), "financeiro")).toEqual([]);
   });
 
   it("o aviso é escrito em português de gente, e diz que nada é apagado", () => {
@@ -105,8 +109,8 @@ describe("Dependência: Compras não vive sem Estoque", () => {
 /* ═════════ o gate só alcança o que já foi migrado ═════════ */
 
 describe("A migração é módulo a módulo", () => {
-  it("nesta fase, Frota, Compras e Estoque têm as 3 camadas de gate", () => {
-    expect([...MODULOS_COM_GATE].sort()).toEqual(["compras", "estoque", "veiculos"]);
+  it("nesta fase, Frota, Compras, Estoque, Equipamentos e QR Codes têm as 3 camadas de gate", () => {
+    expect([...MODULOS_COM_GATE].sort()).toEqual(["compras", "equipamentos", "estoque", "qrcodes", "veiculos"]);
   });
 
   it("Estoque entrou com a dependência já fechada: Compras cai junto e não liga sem ele", () => {
@@ -117,14 +121,33 @@ describe("A migração é módulo a módulo", () => {
     expect(MODULOS_COM_GATE).toContain("compras");
   });
 
+  it("Equipamentos arrasta QR Codes (o QR é do equipamento) e QR não liga sem Equipamentos", () => {
+    expect(dependentesLigados(new Set(), "equipamentos")).toEqual(["qrcodes"]);
+    expect(dependenciasFaltando(desligados("equipamentos"), "qrcodes")).toEqual(["equipamentos"]);
+    expect(MODULOS_COM_GATE).toContain("equipamentos");
+    expect(MODULOS_COM_GATE).toContain("qrcodes");
+  });
+
+  it("a dependência PMOC → Equipamentos existe no catálogo, mas o PMOC não é arrastado (sem gate)", () => {
+    // Registrada: quando o PMOC virar ligável, a regra já recusa ligá-lo sem Equipamentos…
+    expect(moduloCatalogo("pmoc")!.dependeDe).toEqual(["equipamentos"]);
+    expect(dependenciasFaltando(desligados("equipamentos"), "pmoc")).toEqual(["equipamentos"]);
+    // …mas hoje ele não tem gate: anunciar "o PMOC vai junto" com o PMOC inteiro no menu seria mentir
+    expect(moduloCatalogo("pmoc")!.gateAtivo).toBeUndefined();
+    expect(dependentesLigados(new Set(), "equipamentos")).not.toContain("pmoc");
+    expect(avisoDependencia(dependentesLigados(new Set(), "equipamentos"))).not.toContain("PMOC");
+  });
+
   it("a permissão de um módulo migrado leva ao módulo; a de um não migrado, a lugar nenhum", () => {
     expect(moduloDaPermissao("veiculos")).toBe("veiculos");
     expect(moduloDaPermissao("veiculos", "checklist")).toBe("veiculos");
     expect(moduloDaPermissao("compras", "gerenciar")).toBe("compras");
     expect(moduloDaPermissao("estoque", "separar")).toBe("estoque");
+    expect(moduloDaPermissao("equipamentos", "criar")).toBe("equipamentos");
+    expect(moduloDaPermissao("qrcodes", "gerenciar")).toBe("qrcodes");
     // ainda não migrados: a API deles continua exatamente como sempre foi
     expect(moduloDaPermissao("financeiro", "fiscal")).toBeNull();
-    expect(moduloDaPermissao("equipamentos")).toBeNull();
+    expect(moduloDaPermissao("pmoc")).toBeNull();
     // núcleo nunca entra no gate
     expect(moduloDaPermissao("ordens")).toBeNull();
     expect(moduloDaPermissao("clientes", "criar")).toBeNull();
@@ -138,15 +161,32 @@ describe("A migração é módulo a módulo", () => {
     expect(moduloDaRotaModular("/estoque")).toBe("estoque");
     expect(moduloDaRotaModular("/estoque/notas/abc")).toBe("estoque");
     expect(moduloDaRotaModular("/estoque/separacao")).toBe("estoque");
+    expect(moduloDaRotaModular("/equipamentos")).toBe("equipamentos");
+    expect(moduloDaRotaModular("/equipamentos/abc/editar")).toBe("equipamentos");
+    expect(moduloDaRotaModular("/qrcodes")).toBe("qrcodes");
+    expect(moduloDaRotaModular("/qrcodes/imprimir")).toBe("qrcodes");
     // a rota do núcleo e a do módulo não migrado passam direto
     expect(moduloDaRotaModular("/ordens")).toBeNull();
-    expect(moduloDaRotaModular("/equipamentos")).toBeNull();
+    expect(moduloDaRotaModular("/pmoc")).toBeNull();
     expect(moduloDaRotaModular("/configuracoes")).toBeNull();
   });
 
-  it("/configuracoes só cai na Frota no caminho dos checklists (o resto das Configurações é núcleo)", () => {
+  it("/configuracoes só cai no módulo nos caminhos dele (o resto das Configurações é núcleo)", () => {
     expect(moduloDaRotaModular("/configuracoes/usuarios")).toBeNull();
     expect(moduloDaRotaModular("/configuracoes/checklists-veiculo/novo")).toBe("veiculos");
+    expect(moduloDaRotaModular("/configuracoes/tipos-equipamento")).toBe("equipamentos");
+    expect(moduloDaRotaModular("/configuracoes/qr-code")).toBe("qrcodes");
+  });
+
+  it("o link público do QR fica catalogado, mas NÃO é gateado em lugar nenhum", () => {
+    const ler = (arq: string) => readFileSync(path.join(path.resolve(__dirname, "../.."), arq), "utf8");
+    // documenta a superfície do módulo; a etiqueta já colada continua abrindo para o cliente
+    expect(moduloCatalogo("qrcodes")!.rotas).toContain("/qr");
+    expect(moduloCatalogo("qrcodes")!.rotas).toContain("/api/qr");
+    const publica = ler("app/(publico)/qr/[token]/page.tsx");
+    expect(publica).not.toContain("exigirModuloNaPagina");
+    expect(publica).not.toContain("exigirModuloNaApi");
+    expect(ler("app/api/qr/[token]/chamado/route.ts")).not.toContain("exigirModuloNaApi");
   });
 });
 
@@ -206,6 +246,15 @@ describe("O catálogo é coerente com o resto do sistema", () => {
       ["app/(dashboard)/estoque/separacao/[osId]/page.tsx", "estoque"],
       ["app/(dashboard)/estoque/devolucao/page.tsx", "estoque"],
       ["app/(dashboard)/estoque/devolucao/[osId]/page.tsx", "estoque"],
+      ["app/(dashboard)/equipamentos/page.tsx", "equipamentos"],
+      ["app/(dashboard)/equipamentos/novo/page.tsx", "equipamentos"],
+      ["app/(dashboard)/equipamentos/novo/foto/page.tsx", "equipamentos"],
+      ["app/(dashboard)/equipamentos/[id]/page.tsx", "equipamentos"],
+      ["app/(dashboard)/equipamentos/[id]/editar/page.tsx", "equipamentos"],
+      ["app/(dashboard)/configuracoes/tipos-equipamento/page.tsx", "equipamentos"],
+      ["app/(dashboard)/qrcodes/page.tsx", "qrcodes"],
+      ["app/(dashboard)/qrcodes/imprimir/page.tsx", "qrcodes"],
+      ["app/(dashboard)/configuracoes/qr-code/page.tsx", "qrcodes"],
     ];
     for (const [arquivo, modulo] of paginas) {
       expect(ler(arquivo), arquivo).toContain(`exigirModuloNaPagina("${modulo}")`);
@@ -221,6 +270,13 @@ describe("O catálogo é coerente com o resto do sistema", () => {
       ["components/os/seletor-execucao.tsx", "veiculos"],
       ["components/compras/compras-secao.tsx", "compras"],
       ["components/os/os-detalhe.tsx", "estoque"],
+      ["app/(dashboard)/ordens/nova/page.tsx", "equipamentos"],
+      ["components/os/atividade-equipamentos.tsx", "equipamentos"],
+      ["components/orcamento/proposta-campos.tsx", "equipamentos"],
+      ["components/equipamentos/equipamento-perfil.tsx", "qrcodes"],
+      ["components/forms/equipamento-form.tsx", "qrcodes"],
+      ["app/(dashboard)/equipamentos/equipamentos-lista-client.tsx", "qrcodes"],
+      ["components/acoes-massa/barra.tsx", "qrcodes"],
     ];
     for (const [arquivo, modulo] of pontes) {
       const src = ler(arquivo);
@@ -229,6 +285,13 @@ describe("O catálogo é coerente com o resto do sistema", () => {
     }
     // e a central da OS repassa ao painel de material (senão a ponte do Estoque não chega lá)
     expect(ler("components/os/os-detalhe.tsx")).toContain("temEstoque={temEstoque}");
+    // a execução da OS pergunta os DOIS (lista = Equipamentos, leitura de etiqueta = QR Codes)
+    const exec = ler("components/os/atividade-execucao.tsx");
+    expect(exec).toContain('tem("equipamentos")');
+    expect(exec).toContain('tem("qrcodes")');
+    // o app do técnico não tem o provider: recebe os módulos no RETRATO que o servidor manda
+    expect(ler("app/api/tecnico/atividades/[atividadeId]/route.ts")).toContain('temModulo(empresaId, "qrcodes")');
+    expect(ler("components/tecnico/execucao.tsx")).toContain("r.modulos?.qrcodes !== false");
   });
 
   it("quem decide o entitlement é um arquivo só — a tela e a API perguntam, não decidem", () => {

@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { notFound, redirect } from "next/navigation";
-import { auth } from "@/lib/auth";
+import { exigirModuloNaPagina } from "@/lib/modulos/pagina";
 import { pode } from "@/lib/permissoes";
 import { prisma } from "@/lib/prisma";
 import { EquipamentoForm } from "@/components/forms/equipamento-form";
@@ -10,7 +10,7 @@ export const metadata: Metadata = { title: "Editar equipamento" };
 export default async function EditarEquipamentoPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ aba?: string }> }) {
   const { id } = await params;
   const { aba } = await searchParams;
-  const session = await auth();
+  const session = await exigirModuloNaPagina("equipamentos");
   const empresaId = session!.user!.empresaId;
   // Sem permissão de editar: abre o perfil (ficha técnica + histórico), que é somente leitura.
   if (!pode(session!.user!.permissoes, "equipamentos", "editar", session!.user!.role)) redirect(`/equipamentos/${id}`);

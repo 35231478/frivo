@@ -90,6 +90,21 @@ describe("preferência (cookie)", () => {
     expect(visiveis.map((b) => b.id)).not.toContain("agenda");
   });
 
+  it("o bloco de um MÓDULO que a empresa desligou some do dashboard (que é núcleo)", () => {
+    const todos = blocosPermitidos(permissoesTotais()).map((b) => b.id);
+    expect(todos).toEqual(expect.arrayContaining(["equipamentos", "frota", "pmoc"]));
+    // Equipamentos desligado arrasta o QR; o bloco de Equipamentos sai, os outros ficam
+    const semEquip = blocosPermitidos(permissoesTotais(), undefined, new Set(["equipamentos", "qrcodes"])).map((b) => b.id);
+    expect(semEquip).not.toContain("equipamentos");
+    expect(semEquip).toEqual(expect.arrayContaining(["operacional", "frota", "financeiro"]));
+    // Frota desligada: o bloco dela sai e o de Equipamentos fica
+    const semFrota = blocosPermitidos(permissoesTotais(), undefined, new Set(["veiculos"])).map((b) => b.id);
+    expect(semFrota).not.toContain("frota");
+    expect(semFrota).toContain("equipamentos");
+    // sem o conjunto (chamada antiga): nada muda — ausência de linha = tudo ligado
+    expect(blocosPermitidos(permissoesTotais(), undefined, new Set()).map((b) => b.id)).toEqual(todos);
+  });
+
   it("preferência nunca libera bloco sem permissão", () => {
     const pref = lerPreferencia(serializarPreferencia({ ordem: ["financeiro", "operacional"], ocultos: [] }));
     const { visiveis } = aplicarPreferencia(blocosPermitidos(PRESETS.TECNICO), pref);

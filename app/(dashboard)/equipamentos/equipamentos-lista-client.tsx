@@ -13,6 +13,7 @@ import { Camera,
 } from "lucide-react";
 import { BuscaSelect, type OpcaoBusca } from "@/components/ui/busca-select";
 import { usePermissoes } from "@/components/providers/permissoes-provider";
+import { useModulos } from "@/components/providers/modulos-provider";
 import { EquipamentoAtivoBotao } from "@/components/equipamentos/equipamento-ativo-botao";
 import { TipoIcone } from "@/components/equipamentos/tipo-equipamento";
 import { GarantiaSelo, StatusSelo } from "@/components/equipamentos/selos";
@@ -67,6 +68,8 @@ function ambienteTexto(e: Pick<EquipLinha, "setor" | "ambiente">): string | null
 export function EquipamentosListaClient({ itens, total, filtros: f, opcoes, resumo }: Props) {
   const massa = useAcoesMassaDisponiveis("equipamentos");
   const { pode } = usePermissoes();
+  // Campo-ponte: sem o módulo QR Codes somem o atalho "Sem QR", o filtro de QR e o botão da linha
+  const temQr = useModulos().tem("qrcodes");
   const podeCriar = pode("equipamentos", "criar");
   const podeEditar = pode("equipamentos", "editar");
   // URL = fonte da verdade; filtros salvos e visão lista/cards (mesmo hook da listagem de Veículos)
@@ -126,10 +129,12 @@ export function EquipamentosListaClient({ itens, total, filtros: f, opcoes, resu
           ativo={f.garantia === "vencida"} onClick={() => navegar({ garantia: f.garantia === "vencida" ? null : "vencida" })}
           icone={ShieldX} cor="text-atrasado" rotulo="Garantia vencida" valor={resumo.vencidas}
         />
+        {temQr && (
         <ChipResumo
           ativo={f.qr === "sem"} onClick={() => navegar({ qr: f.qr === "sem" ? null : "sem" })}
           icone={QrCode} cor="text-ink-muted" rotulo="Sem QR" valor={resumo.semQr}
         />
+        )}
       </div>
 
       {/* ── Busca + filtros ── */}
@@ -197,10 +202,12 @@ export function EquipamentosListaClient({ itens, total, filtros: f, opcoes, resu
           </button>
           {maisAberto && (
             <>
+              {temQr && (
               <SelectFiltro
                 valor={f.qr} onChange={(v) => navegar({ qr: v || null })}
                 vazio="QR: todos" opcoes={[{ value: "com", label: "Com QR" }, { value: "sem", label: "Sem QR" }]}
               />
+              )}
               <SelectFiltro
                 valor={f.fluido} onChange={(v) => navegar({ fluido: v || null })}
                 vazio="Fluido: todos" opcoes={opcoes.fluidos.map((x) => ({ value: x, label: x }))}
@@ -335,6 +342,8 @@ function Tabela({
 }
 
 function AcoesLinha({ e, podeEditar }: { e: EquipLinha; podeEditar: boolean }) {
+  // Campo-ponte: o atalho do QR na linha só existe para quem usa o módulo QR Codes
+  const temQr = useModulos().tem("qrcodes");
   const btn = "p-1.5 rounded text-ink-muted hover:text-primary-600 hover:bg-primary-50";
   const alvo = descricaoEquipamento(e);
   return (
@@ -342,6 +351,7 @@ function AcoesLinha({ e, podeEditar }: { e: EquipLinha; podeEditar: boolean }) {
       <Link href={`/equipamentos/${e.id}`} title="Ver ficha" aria-label={`Ver a ficha de ${alvo}`} className={btn}><Eye className="w-4 h-4" aria-hidden /></Link>
       {podeEditar && (
         <>
+          {temQr && (
           <Link
             href={`/equipamentos/${e.id}/editar?aba=qrcode`} data-qr-equipamento
             title={e.qrcodeId ? "QR Code vinculado" : "Gerar ou vincular QR Code"} aria-label={`QR Code de ${alvo}`}
@@ -349,6 +359,7 @@ function AcoesLinha({ e, podeEditar }: { e: EquipLinha; podeEditar: boolean }) {
           >
             <QrCode className="w-4 h-4" aria-hidden />
           </Link>
+          )}
           <Link href={`/equipamentos/${e.id}/editar`} title="Editar" aria-label={`Editar ${alvo}`} className={btn} data-editar-equipamento><Pencil className="w-4 h-4" aria-hidden /></Link>
         </>
       )}

@@ -4,6 +4,7 @@
  * (e o servidor nem roda as consultas dele).
  */
 import { pode, type Permissoes } from "@/lib/permissoes";
+import { empresaTemModulo, type ModulosDesligados } from "@/lib/modulos/catalogo";
 
 export type BlocoId =
   | "operacional" | "os-do-dia" | "solicitacoes" | "agenda"
@@ -17,6 +18,8 @@ export interface BlocoDef {
   largo?: boolean;
   /** Quem pode ver (recebe as permissões e o role do usuário). */
   visivel: (p: Permissoes | undefined, role?: string) => boolean;
+  /** Módulo da empresa a que o bloco pertence: desligado, o bloco some do dashboard (que é núcleo). */
+  modulo?: string;
 }
 
 export const BLOCOS: BlocoDef[] = [
@@ -51,17 +54,17 @@ export const BLOCOS: BlocoDef[] = [
     visivel: (p, r) => pode(p, "financeiro", "visualizar", r) && pode(p, "financeiro", "contasReceber", r),
   },
   {
-    id: "equipamentos", titulo: "Equipamentos",
+    id: "equipamentos", titulo: "Equipamentos", modulo: "equipamentos",
     descricao: "Total cadastrado e garantias vencendo",
     visivel: (p, r) => pode(p, "equipamentos", "visualizar", r),
   },
   {
-    id: "pmoc", titulo: "PMOC",
+    id: "pmoc", titulo: "PMOC", modulo: "pmoc",
     descricao: "Planos vigentes, perto de expirar e expirados",
     visivel: (p, r) => pode(p, "pmoc", "visualizar", r),
   },
   {
-    id: "frota", titulo: "Frota",
+    id: "frota", titulo: "Frota", modulo: "veiculos",
     descricao: "Veículos em manutenção, checklists pendentes, documentos e revisões",
     visivel: (p, r) => pode(p, "veiculos", "visualizar", r),
   },
@@ -74,9 +77,12 @@ export const BLOCOS: BlocoDef[] = [
 
 const IDS = new Set<string>(BLOCOS.map((b) => b.id));
 
-/** Blocos que o perfil pode ver, na ordem padrão. */
-export function blocosPermitidos(p: Permissoes | undefined, role?: string): BlocoDef[] {
-  return BLOCOS.filter((b) => b.visivel(p, role));
+/**
+ * Blocos que o perfil pode ver, na ordem padrão. `desligados`: os módulos que a EMPRESA desligou
+ * (omitido = tudo ligado) — o bloco de um módulo desligado some do dashboard, como some do menu.
+ */
+export function blocosPermitidos(p: Permissoes | undefined, role?: string, desligados?: ModulosDesligados): BlocoDef[] {
+  return BLOCOS.filter((b) => b.visivel(p, role) && (!b.modulo || !desligados || empresaTemModulo(desligados, b.modulo)));
 }
 
 /** Preferência do usuário (por dispositivo, em cookie): ordem e blocos ocultos. */

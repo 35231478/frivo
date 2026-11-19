@@ -6,6 +6,7 @@
  * A empresa SEMPRE vem da sessão de quem chama.
  */
 import { prisma } from "@/lib/prisma";
+import { temModulo } from "@/lib/modulos/servidor";
 import { textoPortaoConsumo } from "@/lib/estoque/separacao";
 import { paraSeparavel } from "@/lib/estoque/separacao-server";
 import { ambienteEquipamento, descricaoEquipamento, fabricanteModelo } from "@/lib/equipamento-descricao";
@@ -87,15 +88,19 @@ export interface Execucao {
 }
 
 /**
- * A atividade pode concluir sem equipamento atendido? Nesta ordem: o tipo de OS dela não exige
- * equipamento; a OS é recorrente de contrato e não tem equipamento vinculado em nenhuma atividade;
- * a OS tem a exceção justificada. null = a trava vale.
+ * A atividade pode concluir sem equipamento atendido? Nesta ordem: a empresa não usa o módulo
+ * Equipamentos; o tipo de OS dela não exige equipamento; a OS é recorrente de contrato e não tem
+ * equipamento vinculado em nenhuma atividade; a OS tem a exceção justificada. null = a trava vale.
+ *
+ * A primeira saída é a degradação graciosa do módulo: sem Equipamentos não há o que vincular, e
+ * concluir a OS é do NÚCLEO — travar por um módulo opcional desligado deixaria a OS sem saída.
  */
 export async function dispensaDaAtividade(
   empresaId: string, osId: string,
   a: { tipoOs: { nome: string; exigeEquipamento: boolean } | null },
   os: { origem: string; semEquipamentoMotivo: string | null },
 ): Promise<DispensaEquipamento | null> {
+  if (!(await temModulo(empresaId, "equipamentos"))) return { motivo: "MODULO", texto: textoDispensa("MODULO") };
   if (a.tipoOs?.exigeEquipamento === false) return { motivo: "TIPO", texto: textoDispensa("TIPO", a.tipoOs.nome) };
   if (os.origem === "RECORRENTE" && !(await temEquipamentoVinculado(empresaId, osId)))
     return { motivo: "RECORRENTE", texto: textoDispensa("RECORRENTE") };

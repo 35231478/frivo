@@ -387,7 +387,9 @@ describe.skipIf(!URL_PG)("Loja de Módulos — entitlement por empresa (PostgreS
     it("quem administra vê os módulos com gate ligados, desliga um e a auditoria fica gravada", async () => {
       const antes = await ver();
       expect(antes.status).toBe(200);
-      expect(antes.json.modulos.map((m: any) => [m.id, m.ativo])).toEqual([["veiculos", true], ["compras", true], ["estoque", true]]);
+      // a tela oferece os módulos COM GATE, na ordem do catálogo (a lista cresce a cada leva)
+      expect(antes.json.modulos.map((m: any) => [m.id, m.ativo])).toEqual(
+        [["veiculos", true], ["compras", true], ["equipamentos", true], ["qrcodes", true], ["estoque", true]]);
 
       const r = await definir("veiculos", false);
       expect(r.status).toBe(200);

@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { auth } from "@/lib/auth";
+import { exigirModuloNaPagina } from "@/lib/modulos/pagina";
 import { prisma } from "@/lib/prisma";
 import { gerarQrDataUrl } from "@/lib/portal-server";
 import { ImprimirClient } from "./imprimir-client";
@@ -9,7 +9,7 @@ export const metadata: Metadata = { title: "Imprimir QR Codes" };
 
 export default async function ImprimirQrPage({ searchParams }: { searchParams: Promise<{ ids?: string }> }) {
   const sp = await searchParams;
-  const session = await auth();
+  const session = await exigirModuloNaPagina("qrcodes");
   const empresaId = session!.user!.empresaId;
 
   const ids = (sp.ids ?? "").split(",").map((s) => s.trim()).filter(Boolean);

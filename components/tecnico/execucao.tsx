@@ -92,6 +92,9 @@ function ResumoOs({ r, x, aEnviar, registrar, camera }: { r: RetratoAtividade; x
   const [lista, setLista] = useState(false);
   const [cadastro, setCadastro] = useState(false);
   // "Permitir cadastrar equipamento em campo" (Equipes › App do colaborador): desligado, o botão nem aparece
+  // Retrato antigo (guardado no aparelho antes desta versão) não traz `modulos`: tudo ligado
+  const temEquipamentos = r.modulos?.equipamentos !== false;
+  const temQr = r.modulos?.qrcodes !== false;
   const podeCadastrar = !so && config.cadastrarEquipamento && !!r.cadastro;
   const [adicional, setAdicional] = useState<AdicionalTela | "novo" | null>(null);
   const [concluir, setConcluir] = useState(false);
@@ -209,10 +212,11 @@ function ResumoOs({ r, x, aEnviar, registrar, camera }: { r: RetratoAtividade; x
             );
           })}
         </ul>
-        {!so && (
-          <div className="grid grid-cols-2 gap-2">
-            <button type="button" onClick={() => setScan(true)} className="rounded-card border border-primary-200 bg-primary-50 text-primary-700 py-3 text-sm font-semibold inline-flex items-center justify-center gap-2 touch-target"><QrCode className="w-5 h-5" /> Ler QR Code</button>
-            <button type="button" onClick={() => setLista(true)} className="rounded-card border border-surface-border bg-white text-ink py-3 text-sm font-semibold inline-flex items-center justify-center gap-2 touch-target"><ListPlus className="w-5 h-5" /> Da lista</button>
+        {/* Campos-ponte do app: "Ler QR Code" é do módulo QR Codes; "Da lista", do Equipamentos */}
+        {!so && (temQr || temEquipamentos) && (
+          <div className={cn("grid gap-2", temQr && temEquipamentos ? "grid-cols-2" : "grid-cols-1")}>
+            {temQr && <button type="button" onClick={() => setScan(true)} className="rounded-card border border-primary-200 bg-primary-50 text-primary-700 py-3 text-sm font-semibold inline-flex items-center justify-center gap-2 touch-target"><QrCode className="w-5 h-5" /> Ler QR Code</button>}
+            {temEquipamentos && <button type="button" onClick={() => setLista(true)} className="rounded-card border border-surface-border bg-white text-ink py-3 text-sm font-semibold inline-flex items-center justify-center gap-2 touch-target"><ListPlus className="w-5 h-5" /> Da lista</button>}
           </div>
         )}
         {/* Não está na unidade (nem pelo QR, nem na lista): cadastra em campo, já vinculado a esta OS */}

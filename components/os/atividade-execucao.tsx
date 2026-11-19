@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import { SeletorEquipamentos } from "@/components/os/seletor-equipamentos";
 import { ScannerQR } from "@/components/os/scanner-qr";
+import { useModulos } from "@/components/providers/modulos-provider";
 import { EquipamentoExecucaoCard, type AcoesEquipamento, type CampoTela, type EquipamentoTela } from "@/components/os/execucao-equipamento";
 import { ConcluirSemEquipamento } from "@/components/os/concluir-sem-equipamento";
 import { completo, faltasEquipamento, paraPendencia, textoFaltas, verificarConclusao, type DispensaEquipamento, type ResultadoConclusao, type StatusItem } from "@/lib/execucao/pendencias";
@@ -53,6 +54,9 @@ function recalcular(x: ExecucaoTela): ExecucaoTela {
  * com pelo menos 1 equipamento atendido e o checklist dele completo (a tela mostra o que falta).
  */
 export function AtividadeExecucao({ osId, atividadeId, titulo, osNumero, tipoOs }: Props) {
+  const { tem } = useModulos();
+  const temEquipamentos = tem("equipamentos");
+  const temQr = tem("qrcodes");
   const base = `/api/ordens/${osId}/atividades/${atividadeId}`;
   const [exec, setExec] = useState<ExecucaoTela | null>(null);
   const [abertos, setAbertos] = useState<Set<string>>(new Set());
@@ -235,14 +239,19 @@ export function AtividadeExecucao({ osId, atividadeId, titulo, osNumero, tipoOs 
             </p>
           )}
 
-          {!somenteLeitura && (
-            <div className="grid grid-cols-2 gap-2 mb-4">
-              <Button type="button" onClick={() => setScanAberto(true)} className="justify-center" data-ler-qr>
-                <QrCode className="w-4 h-4" /> Ler QR Code
-              </Button>
-              <Button type="button" variant="secondary" onClick={() => setListaAberta(true)} className="justify-center" data-escolher-lista>
-                <ListPlus className="w-4 h-4" /> Escolher da lista
-              </Button>
+          {/* Campos-ponte: "Ler QR Code" é do módulo QR Codes; "Escolher da lista", do Equipamentos */}
+          {!somenteLeitura && (temQr || temEquipamentos) && (
+            <div className={cn("grid gap-2 mb-4", temQr && temEquipamentos ? "grid-cols-2" : "grid-cols-1")}>
+              {temQr && (
+                <Button type="button" onClick={() => setScanAberto(true)} className="justify-center" data-ler-qr>
+                  <QrCode className="w-4 h-4" /> Ler QR Code
+                </Button>
+              )}
+              {temEquipamentos && (
+                <Button type="button" variant="secondary" onClick={() => setListaAberta(true)} className="justify-center" data-escolher-lista>
+                  <ListPlus className="w-4 h-4" /> Escolher da lista
+                </Button>
+              )}
             </div>
           )}
 

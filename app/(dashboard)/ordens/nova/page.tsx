@@ -17,6 +17,7 @@ import { SeletorExecucao, VALOR_EXECUCAO_VAZIO, aplicarExecutor, corpoExecucao, 
 import { Sugestao, useSugestoesAbertura } from "@/components/os/sugestao-abertura";
 import { MSG_SEM_EXECUTOR_TELA } from "@/lib/atividade-equipe";
 import { GavetaEquipamentos } from "@/components/os/gaveta-equipamentos";
+import { useModulos } from "@/components/providers/modulos-provider";
 import { detalheEquipamento, rotuloEquipamento, type EquipamentoResumo } from "@/lib/os/vincular-equipamentos";
 import { InputData } from "@/components/ui/input-data";
 import { InputDataHora, MSG_HORA_INVALIDA } from "@/components/ui/input-data-hora";
@@ -42,6 +43,8 @@ const DICA_EQUIPAMENTOS = "Opcional na abertura: os equipamentos podem ser vincu
 
 export default function NovaOrdemPage() {
   const router = useRouter();
+  // Campo-ponte: a empresa sem o módulo Equipamentos não vê vínculo nem seletor de equipamento
+  const temEquipamentos = useModulos().tem("equipamentos");
   const [clientes, setClientes] = useState<Item[]>([]);
   const [unidades, setUnidades] = useState<UnidadeItem[]>([]);
   const [contratos, setContratos] = useState<ContratoItem[]>([]);
@@ -318,7 +321,8 @@ export default function NovaOrdemPage() {
               )}
             </div>
           )}
-          {solicitacao && (
+          {/* O equipamento que o cliente vinculou no chamado continua à vista mesmo sem o módulo */}
+          {solicitacao && (temEquipamentos || solicitacao.equipamentoCliente) && (
             <FormGrid>
               <FormField label="Equipamento">
                 {solicitacao.equipamentoCliente ? (
@@ -350,7 +354,8 @@ export default function NovaOrdemPage() {
           )}
         </FormSection>
 
-        {!solicitacao && (
+        {/* Campo-ponte: sem o módulo Equipamentos, a seção inteira some da Nova OS */}
+        {!solicitacao && temEquipamentos && (
           <FormSection title="Equipamentos atendidos" dica={DICA_EQUIPAMENTOS}>
             {atendidos.length > 0 && (
               <div data-equipamentos-escolhidos>

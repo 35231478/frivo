@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { AlertTriangle, Ban, CheckCircle2, Download, FileText, Loader2, Printer, QrCode, RotateCcw, Tags, X, XCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { usePermissoes } from "@/components/providers/permissoes-provider";
+import { useModulos } from "@/components/providers/modulos-provider";
 import { usePainelGaveta } from "@/components/ui/drawer";
 import { abrirCamada, fecharCamada, noTopo } from "@/components/ui/camadas";
 import { useSelecaoMassa } from "@/components/acoes-massa/selecao";
@@ -31,6 +32,7 @@ const fmt = (n: number) => n.toLocaleString("pt-BR");
 export function BarraAcoesMassa({ aoConcluir }: { aoConcluir?: () => void } = {}) {
   const sel = useSelecaoMassa();
   const { permissoes, role, pode } = usePermissoes();
+  const temQr = useModulos().tem("qrcodes");
   const router = useRouter();
   const def = ENTIDADE[sel.entidade];
   const [montado, setMontado] = useState(false);
@@ -41,7 +43,10 @@ export function BarraAcoesMassa({ aoConcluir }: { aoConcluir?: () => void } = {}
   const painel = usePainelGaveta();
   useEffect(() => setMontado(true), []);
 
-  const acoes = (Object.keys(def.acoes) as AcaoItem[]).filter((a) => podeAcao(permissoes, role, sel.entidade, a));
+  // Campo-ponte: "Gerar QR" só existe para quem usa o módulo QR Codes
+  const acoes = (Object.keys(def.acoes) as AcaoItem[])
+    .filter((a) => podeAcao(permissoes, role, sel.entidade, a))
+    .filter((a) => a !== "gerar-qr" || temQr);
   const exportar = podeExportar(permissoes, role, sel.entidade);
   const n = sel.selecionados.size;
 
@@ -122,7 +127,7 @@ export function BarraAcoesMassa({ aoConcluir }: { aoConcluir?: () => void } = {}
       {acao && (
         <ExecucaoMassa
           acao={acao} ids={[...sel.selecionados]}
-          podeImprimirQr={pode("qrcodes", "visualizar")}
+          podeImprimirQr={temQr && pode("qrcodes", "visualizar")}
           onFechar={(houveMudanca) => { setAcao(null); if (houveMudanca) { sel.limpar(); if (aoConcluir) aoConcluir(); else router.refresh(); } }}
         />
       )}

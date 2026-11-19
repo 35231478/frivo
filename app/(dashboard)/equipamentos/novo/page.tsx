@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
-import { auth } from "@/lib/auth";
+import { exigirModuloNaPagina } from "@/lib/modulos/pagina";
 import { pode } from "@/lib/permissoes";
 import { EquipamentoForm } from "@/components/forms/equipamento-form";
 
@@ -12,7 +12,7 @@ export default async function NovoEquipamentoPage({
   searchParams: Promise<{ unidadeId?: string }>;
 }) {
   const { unidadeId } = await searchParams;
-  const session = await auth();
+  const session = await exigirModuloNaPagina("equipamentos");
   // Sem permissão de criar: volta para a listagem (o botão "Novo" já fica oculto).
   if (!pode(session?.user?.permissoes, "equipamentos", "criar", session?.user?.role)) redirect("/equipamentos");
   return (

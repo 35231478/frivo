@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { cn, formatarData, formatarDataHora, LABELS_STATUS_OS } from "@/lib/utils";
 import { usePermissoes } from "@/components/providers/permissoes-provider";
+import { useModulos } from "@/components/providers/modulos-provider";
 import { EquipamentoAtivoBotao } from "@/components/equipamentos/equipamento-ativo-botao";
 import { GerarQrBotao } from "@/components/equipamentos/gerar-qr-botao";
 import { TipoBadge, TipoIcone } from "@/components/equipamentos/tipo-equipamento";
@@ -74,10 +75,13 @@ function emQuanto(iso: string) {
 export function EquipamentoPerfil({ equipamento: e, tipoNome, historico, linhaDoTempo, indicadores, abaInicial }: Props) {
   const { pode } = usePermissoes();
   const podeEditar = pode("equipamentos", "editar");
+  // Campo-ponte: sem o módulo QR Codes, a ficha não oferece gerar, gerenciar nem imprimir etiqueta
+  // — mas o código do QR que o equipamento JÁ tem continua à vista (desligar não apaga).
+  const temQr = useModulos().tem("qrcodes");
   // Quem só cria equipamentos também precisa gerar o QR depois (não tem acesso à edição)
-  const podeGerarQr = podeEditar || pode("equipamentos", "criar");
+  const podeGerarQr = temQr && (podeEditar || pode("equipamentos", "criar"));
   const podeAbrirOs = pode("ordens", "criar");
-  const podeEtiqueta = pode("qrcodes", "visualizar");
+  const podeEtiqueta = temQr && pode("qrcodes", "visualizar");
   // ?aba=atendimentos abre direto na linha do tempo (ex.: atalho do QR Code para a equipe)
   const [aba, setAba] = useState<Aba>(resolverAba(abaInicial));
   const [fotoAtual, setFotoAtual] = useState(0);
@@ -188,7 +192,7 @@ export function EquipamentoPerfil({ equipamento: e, tipoNome, historico, linhaDo
                   <Printer className="w-4 h-4" /> Etiqueta QR
                 </Link>
               ) : null}
-              {podeEditar && (
+              {temQr && podeEditar && (
                 <Link href={`/equipamentos/${e.id}/editar?aba=qrcode`} className="inline-flex items-center gap-1.5 text-sm text-ink border border-surface-border rounded-lg px-3 py-2 hover:border-primary-300 hover:text-primary-600">
                   <QrCode className="w-4 h-4" /> {e.qrcode ? "QR Code" : "Gerar QR"}
                 </Link>
@@ -285,9 +289,11 @@ export function EquipamentoPerfil({ equipamento: e, tipoNome, historico, linhaDo
           ]} vazio="Garantia não informada." />
           <CardFicha
             titulo="QR Code" icone={QrCode}
-            acao={podeEditar
-              ? <Link href={`/equipamentos/${e.id}/editar?aba=qrcode`} className="text-xs text-primary-600 hover:text-primary-700">{e.qrcode ? "Gerenciar" : "Gerar QR"}</Link>
-              : podeGerarQr && !e.qrcode ? <GerarQrBotao equipamentoId={e.id} /> : undefined}
+            acao={!temQr
+              ? undefined
+              : podeEditar
+                ? <Link href={`/equipamentos/${e.id}/editar?aba=qrcode`} className="text-xs text-primary-600 hover:text-primary-700">{e.qrcode ? "Gerenciar" : "Gerar QR"}</Link>
+                : podeGerarQr && !e.qrcode ? <GerarQrBotao equipamentoId={e.id} /> : undefined}
             itens={[
               { label: "Código", valor: e.qrcode?.codigo, mono: true },
               { label: "Situação", valor: e.qrcode ? (e.qrcode.ativo === false ? "Inativo" : "Vinculado") : null },
