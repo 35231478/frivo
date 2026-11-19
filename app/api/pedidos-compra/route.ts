@@ -9,6 +9,7 @@ import { formatarData, whatsappLink } from "@/lib/utils";
 import { diaCivilDeChave } from "@/lib/fuso";
 import { MOTIVO_AVULSO_PADRAO } from "@/lib/compras/pedido";
 import { compradorValido, proximoNumeroPedido, registrarEventoPedido } from "@/lib/compras/pedido-server";
+import { exigirModuloNaApi } from "@/lib/permissoes-server";
 
 const naoAutorizado = () => NextResponse.json({ erro: "Não autorizado" }, { status: 401 });
 const semPermissao = () => NextResponse.json({ erro: "Sem permissão para esta ação" }, { status: 403 });
@@ -79,6 +80,13 @@ export async function POST(req: NextRequest) {
     || (!!orcamentoId && pode(p, "orcamentos", "editar", u.role));
   if (!ok) return semPermissao();
   const empresaId = u.empresaId;
+  // Compras desligado: não nasce pedido novo — nem pela OS, nem pelo orçamento. (Os que já
+  // existem continuam aparecendo: desligar não apaga.) Fica DEPOIS do `pode()`, como em
+  // `exigirPermissao`: a permissão do usuário é a primeira porta, o módulo da empresa é a
+  // segunda — quem não tem a permissão não precisa saber o que a empresa usa. Esta rota confere
+  // `pode()` na mão, por aceitar várias portas, então o portão é chamado aqui.
+  const semModulo = await exigirModuloNaApi(empresaId, "compras");
+  if (semModulo) return semModulo;
 
   // A OS/orçamento de origem precisa ser da mesma empresa (senão a permissão acima não vale nada)
   if (ordemServicoId && !(await prisma.ordemServico.findFirst({ where: { id: ordemServicoId, empresaId }, select: { id: true } }))) {

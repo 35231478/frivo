@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { auth } from "@/lib/auth";
+import { exigirModuloNaPagina } from "@/lib/modulos/pagina";
 import { pode } from "@/lib/permissoes";
 import { prisma } from "@/lib/prisma";
 import { PageHeader } from "@/components/ui/page-header";
@@ -11,7 +12,8 @@ export const metadata: Metadata = { title: "Editar veículo" };
 
 export default async function EditarVeiculoPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const session = await auth();
+  // Módulo da empresa (entitlement): desligado, a rota redireciona — acima do RBAC do usuário
+  const session = await exigirModuloNaPagina("veiculos");
   const empresaId = session!.user!.empresaId;
 
   const veiculo = await prisma.veiculo.findFirst({

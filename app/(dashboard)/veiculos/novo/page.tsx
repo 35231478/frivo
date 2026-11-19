@@ -1,13 +1,15 @@
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
+import { exigirModuloNaPagina } from "@/lib/modulos/pagina";
 import { pode } from "@/lib/permissoes";
 import { VeiculoForm } from "@/components/forms/veiculo-form";
 
 export const metadata: Metadata = { title: "Novo veículo" };
 
 export default async function NovoVeiculoPage() {
-  const session = await auth();
+  // Módulo da empresa (entitlement): desligado, a rota redireciona — acima do RBAC do usuário
+  const session = await exigirModuloNaPagina("veiculos");
   // Cadastrar veículo (inclusive pela foto do CRLV) exige "veiculos.gerenciar"
   if (!pode(session?.user?.permissoes, "veiculos", "gerenciar", session?.user?.role)) redirect("/veiculos");
   return (

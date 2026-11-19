@@ -4,6 +4,7 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { LABEL_STATUS_PEDIDO, pedidoEncerrado, podeEditarPedido, type StatusPedido } from "@/lib/compras/pedido";
 import { carregarPedido, registrarEventoPedido } from "@/lib/compras/pedido-server";
+import { exigirModuloNaApi } from "@/lib/permissoes-server";
 
 const corpoSchema = z.object({ motivo: z.string().trim().max(500).optional().nullable() }).nullable();
 
@@ -16,6 +17,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const pedido = await carregarPedido(id, u.empresaId);
   if (!pedido) return NextResponse.json({ erro: "Não encontrado" }, { status: 404 });
   if (!podeEditarPedido(u, pedido)) return NextResponse.json({ erro: "Sem permissão para esta ação" }, { status: 403 });
+  const semModulo = await exigirModuloNaApi(u.empresaId, "compras");
+  if (semModulo) return semModulo;
   if (pedidoEncerrado(pedido.status)) {
     return NextResponse.json({ erro: `Pedido já ${LABEL_STATUS_PEDIDO[pedido.status as StatusPedido].toLowerCase()}.` }, { status: 409 });
   }

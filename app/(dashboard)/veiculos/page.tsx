@@ -2,6 +2,7 @@ import { SelecaoMassaProvider } from "@/components/acoes-massa/selecao";
 import { BarraAcoesMassa } from "@/components/acoes-massa/barra";
 import type { Metadata } from "next";
 import { auth } from "@/lib/auth";
+import { exigirModuloNaPagina } from "@/lib/modulos/pagina";
 import { prisma } from "@/lib/prisma";
 import {
   TIPOS_VEICULO, datasAviso, lerFiltrosVeiculos, montarOrderByVeiculos, montarWhereVeiculos, whereAviso,
@@ -19,7 +20,8 @@ const selectLinha = {
 } as const;
 
 export default async function VeiculosPage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
-  const session = await auth();
+  // Módulo da empresa (entitlement): desligado, a rota redireciona — acima do RBAC do usuário
+  const session = await exigirModuloNaPagina("veiculos");
   const empresaId = session!.user!.empresaId;
   const f = lerFiltrosVeiculos(await searchParams);
   const where = montarWhereVeiculos(empresaId, f);

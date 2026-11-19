@@ -9,11 +9,13 @@ import { InstallBanner } from "@/components/pwa/install-banner";
 import { SplashScreen } from "@/components/pwa/splash-screen";
 import { PullToRefresh } from "@/components/ui/pull-to-refresh";
 import { PermissoesProvider } from "@/components/providers/permissoes-provider";
+import { ModulosProvider } from "@/components/providers/modulos-provider";
 import { AuthSessionProvider } from "@/components/providers/session-provider";
 import { RecarregarAoVoltar } from "@/components/pwa/recarregar-ao-voltar";
 import { CascaTecnico } from "@/components/tecnico/casca-tecnico";
 import { Avisos } from "@/components/ui/avisos";
 import { emModoTecnico } from "@/lib/tecnico/modo";
+import { modulosDesligados } from "@/lib/modulos/servidor";
 
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
   const session = await auth();
@@ -32,13 +34,19 @@ export default async function DashboardLayout({ children }: { children: React.Re
     );
   }
 
-  // Avatar vem do banco (fora do JWT, para não estourar o cookie com base64)
-  const dbUser = await prisma.usuario.findUnique({ where: { id: session.user.id }, select: { avatar: true } });
+  // Avatar vem do banco (fora do JWT, para não estourar o cookie com base64) e, junto, os MÓDULOS
+  // que a empresa desligou: a permissão do usuário viaja no token, mas o que a empresa tem é
+  // lido aqui a cada navegação — desligar um módulo vale na hora, sem derrubar sessão de ninguém.
+  const [dbUser, desligados] = await Promise.all([
+    prisma.usuario.findUnique({ where: { id: session.user.id }, select: { avatar: true } }),
+    modulosDesligados(session.user.empresaId),
+  ]);
   const avatarUrl = dbUser?.avatar ?? null;
 
   return (
     <AuthSessionProvider session={session}>
       <PermissoesProvider role={session.user.role} permissoes={session.user.permissoes}>
+       <ModulosProvider desligados={[...desligados]}>
         <div className="flex h-screen overflow-hidden bg-surface-page">
           <Avisos />
           <SplashScreen />
@@ -55,6 +63,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
           </div>
           <MobileBottomNav />
         </div>
+       </ModulosProvider>
       </PermissoesProvider>
     </AuthSessionProvider>
   );

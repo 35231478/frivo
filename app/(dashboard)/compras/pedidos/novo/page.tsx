@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
+import { exigirModuloNaPagina } from "@/lib/modulos/pagina";
 import { pode } from "@/lib/permissoes";
 import { PageHeader } from "@/components/ui/page-header";
 import { NovoPedidoAvulso } from "@/components/compras/novo-pedido-avulso";
@@ -11,7 +12,8 @@ const AJUDA = "Pedido que não nasce de OS nem de orçamento — reposição de 
 
 /** PC avulso (sem OS/orçamento — ex.: reposição de estoque): Compras › Gerenciar, na tela e na API */
 export default async function NovoPedidoAvulsoPage() {
-  const session = await auth();
+  // Módulo da empresa (entitlement): desligado, a rota redireciona — acima do RBAC do usuário
+  const session = await exigirModuloNaPagina("compras");
   const u = session!.user!;
   if (!pode(u.permissoes, "compras", "gerenciar", u.role)) redirect("/sem-permissao");
   return (

@@ -62,7 +62,9 @@ describe("estrutura: 3 abas com cartões; cada item tem id, tela e a rota antiga
     ]);
     expect(sub("financeiras")).toEqual([["Classificação", ["Categorias financeiras", "Centros de custo"]], ["Integrações", ["Banco Inter"]], ["Fiscal", ["Dados fiscais (NFS-e)"]]]);
     expect(sub("conta")).toEqual([
-      ["Empresa", ["Dados da empresa", "Preferências", "Numeração de documentos"]],
+      // "Módulos" entrou na Loja de Módulos (fase 1): é o que a EMPRESA usa do Frivo — decisão da
+      // empresa, não permissão de usuário —, atrás de "Configurações › Gerenciar"
+      ["Empresa", ["Dados da empresa", "Preferências", "Numeração de documentos", "Módulos"]],
       // "Admissão digital" entrou aqui na leva da admissão: é configuração de pessoas (contrato,
       // documentos pedidos e orientações do link), atrás da permissão "Admissão digital › gerenciar"
       // "Modelos de documento" entrou ao lado da Admissão digital: também é configuração de pessoas

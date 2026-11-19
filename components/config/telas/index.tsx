@@ -28,6 +28,7 @@ import { TelaPortal } from "./portal";
 import { TelaQrCode } from "./qr-code";
 import { TelaNumeracao } from "./numeracao";
 import { TelaPadronizacao } from "./padronizacao";
+import { TelaModulos } from "./modulos";
 
 /**
  * A tela COMPLETA de cada item de Configurações (as mesmas de antes, sem nada capado), pelo id
@@ -64,6 +65,7 @@ const TELAS: Record<string, () => ReactNode> = {
   "qr-code": () => <TelaQrCode />,
   numeracao: () => <TelaNumeracao />,
   padronizacao: () => <TelaPadronizacao />,
+  modulos: () => <TelaModulos />,
 };
 
 export const temTelaConfig = (id: string) => id in TELAS;

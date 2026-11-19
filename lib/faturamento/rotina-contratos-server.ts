@@ -22,6 +22,7 @@ import { emitirNotas, ErroEmissao, previaEmissao } from "@/lib/nfse/emissao-serv
 import { statusVivo } from "@/lib/nfse/nota";
 import { emitirBoletoDaConta, ErroBoleto, motivoSemBoleto } from "@/lib/financeiro/boleto-server";
 import { cobrancasDaMedicao } from "@/lib/financeiro/parcelas-server";
+import { empresasComModulo } from "@/lib/modulos/servidor";
 
 const ABERTAS = ["PENDENTE", "AGUARDANDO", "PENDENCIA"] as const;
 const execucaoCompleta = { contrato: { include: { cliente: true } }, medicao: { select: { id: true, numero: true, status: true } } } as const;
@@ -287,13 +288,19 @@ export async function rodarFaturamentoContratos(o: { agora?: Date; empresaId?: s
   const hoje = { ano: p.ano, mes: p.mes + 1, dia: p.dia };
   const filtroEmpresa = o.empresaId ? { empresaId: o.empresaId } : {};
 
-  const contratos = await prisma.contrato.findMany({
+  const todos = await prisma.contrato.findMany({
     where: { ...filtroEmpresa, status: "ATIVO", faturamentoAutomatico: true },
     select: {
       id: true, empresaId: true, dataInicio: true, dataFim: true, periodicidade: true, diaFaturamento: true, diaFixoMes: true, diaVencimento: true,
       cliente: { select: { diaFaturamento: true } },
     },
   });
+  // Empresa que desligou o Financeiro fica de fora da rodada (Loja de Módulos): a rotina PAUSA —
+  // não gera competência nem cobrança enquanto o módulo estiver off. Religando, ela volta a rodar
+  // a partir dali, sem despejar de uma vez o que deixou de acontecer: `competenciaDevida` olha o
+  // mês corrente, então não há retroativo acumulado esperando para explodir no primeiro dia.
+  const comFinanceiro = new Set(await empresasComModulo([...new Set(todos.map((c) => c.empresaId))], "financeiro"));
+  const contratos = todos.filter((c) => comFinanceiro.has(c.empresaId));
   const devidas = contratos
     .map((c) => ({ c, comp: competenciaDevida(c, hoje, c.cliente.diaFaturamento) }))
     .filter((x): x is { c: typeof x.c; comp: { ano: number; mes: number } } => !!x.comp);

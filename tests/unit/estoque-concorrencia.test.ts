@@ -61,8 +61,8 @@ describe.skipIf(!URL_PG)("estoque no PostgreSQL real: concorrência e atomicidad
     // Serializados pela trava, os lançamentos formam UMA corrente: o "saldo antes" de cada um é o
     // "saldo depois" de outro (ou 0, o primeiro). Com atualização perdida, dois teriam o mesmo antes.
     const chave = (n: number) => (Math.round(n * 1000) / 1000).toFixed(3);
-    const antes = rs.map((r) => chave(r.movimentacao.saldoApos - r.movimentacao.quantidade)).sort();
-    const depois = ["0.000", ...rs.map((r) => chave(r.movimentacao.saldoApos))];
+    const antes = rs.map((r) => chave(r.movimentacao!.saldoApos - r.movimentacao!.quantidade)).sort();
+    const depois = ["0.000", ...rs.map((r) => chave(r.movimentacao!.saldoApos))];
     depois.splice(depois.indexOf(chave(7.5)), 1); // o último "depois" não é "antes" de ninguém
     expect(antes).toEqual(depois.sort());
     const movs = await prisma.movimentacaoEstoque.findMany({ where: { produtoId: "p1" } });

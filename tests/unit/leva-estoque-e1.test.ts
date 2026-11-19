@@ -244,7 +244,7 @@ describe("movimentar: lançamento + saldo juntos", () => {
 
   it("origem pode vir de quem chama (próximas levas: compra, OS)", async () => {
     const r = await mov("p2", "ENTRADA", 1, { origem: "INVENTARIO" });
-    expect(r.movimentacao.origem).toBe("INVENTARIO");
+    expect(r.movimentacao!.origem).toBe("INVENTARIO");
     expect(movs("p2")[0].origem).toBe("INVENTARIO");
   });
 
