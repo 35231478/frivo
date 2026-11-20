@@ -3,16 +3,16 @@ import Link from "next/link";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { Dica } from "@/components/ui/dica";
-import { cn, nomeMes, formatarData } from "@/lib/utils";
+import { cn, formatarData } from "@/lib/utils";
 import { AtualizarCalendario } from "@/components/calendario/atualizar-calendario";
-import { ESTILO_GRUPO, type GrupoStatus } from "@/lib/calendario/cores";
+import { ESTILO_GRUPO, LARGURA_BARRA, type GrupoStatus } from "@/lib/calendario/cores";
 import { CalendarioPainel } from "@/components/calendario/calendario-painel";
 import type { CelulaDia, CardOs } from "@/components/calendario/calendario-grid";
 import { SOLICITACAO_PENDENTE } from "@/lib/solicitacoes";
 import { pode } from "@/lib/permissoes";
 import { osAtrasada } from "@/lib/os/prazo-execucao";
 import { chaveDiaBR, chaveDiaCivil, partesBR } from "@/lib/fuso";
-import { gridCalendario, posicaoNoCalendario } from "@/lib/calendario/grid";
+import { gridCalendario, passoDoPeriodo, posicaoNoCalendario, rotuloDoPeriodo, type PontoDoCalendario } from "@/lib/calendario/grid";
 import { SolicitacoesGaveta } from "@/components/calendario/solicitacoes-gaveta";
 import { numerosDasVisitas } from "@/lib/os/visitas-server";
 import { AlertTriangle, CalendarDays, ChevronLeft, ChevronRight, Repeat } from "lucide-react";
@@ -72,13 +72,13 @@ export default async function CalendarioPage({
   const { permissoes, role } = session!.user!;
   const veSolicitacoes = pode(permissoes, "ordens", "editar", role) || pode(permissoes, "ordens", "excluir", role);
 
-  const [ordens, tecnicos, tiposOs, clientes, solicitacoesPendentes] = await Promise.all([
+  const [ordens, tecnicos, tiposOs, clientes, unidades, solicitacoesPendentes] = await Promise.all([
     prisma.ordemServico.findMany({
       where,
       select: {
         id: true, numero: true, status: true, prioridade: true, origem: true, previsaoConclusao: true, prazoExecucao: true,
         cliente: { select: { id: true, nome: true, nomeFantasia: true } },
-        unidade: { select: { nome: true } },
+        unidade: { select: { id: true, nome: true } },
         atividades: {
           where: { dataAgendada: periodo },
           select: {
@@ -100,6 +100,9 @@ export default async function CalendarioPage({
     prisma.tecnico.findMany({ where: { empresaId, ativo: true }, select: { id: true, nome: true, avatar: true }, orderBy: { nome: "asc" } }),
     prisma.tipoOs.findMany({ where: { empresaId, ativo: true }, select: { id: true, nome: true }, orderBy: { nome: "asc" } }),
     prisma.cliente.findMany({ where: { empresaId, ativo: true }, select: { id: true, nome: true, nomeFantasia: true }, orderBy: { nome: "asc" } }),
+    // As unidades/locais JÁ CADASTRADOS (model Unidade, a mesma que a OS aponta): o filtro
+    // "Localização / unidade" virou seletor delas, em vez de texto solto que ninguém acertava.
+    prisma.unidade.findMany({ where: { empresaId, ativo: true }, select: { id: true, nome: true, clienteId: true }, orderBy: [{ cliente: { nome: "asc" } }, { nome: "asc" }] }),
     veSolicitacoes ? prisma.ordemServico.count({ where: { empresaId, ...SOLICITACAO_PENDENTE } }) : Promise.resolve(0),
   ]);
 
@@ -141,6 +144,7 @@ export default async function CalendarioPage({
         tipoOsId: ativ?.tipoOs?.id ?? null,
         clienteCurto: os.cliente.nomeFantasia ?? os.cliente.nome,
         clienteCompleto: os.cliente.nome,
+        unidadeId: os.unidade?.id ?? null,
         unidade: os.unidade?.nome ?? null,
         tipoOs: ativ?.tipoOs?.nome ?? null,
         // Hora de Brasília; previsão só de dia (sem hora) não inventa "00:00"
@@ -180,15 +184,22 @@ export default async function CalendarioPage({
   const totalMes = celulas.reduce((acc, c) => acc + (c.inMonth ? (eventosPorDia[c.dateKey]?.length ?? 0) : 0), 0);
 
   // Navegação de mês/semana mantendo todos os filtros já presentes na URL
-  const baseParams = (extra: Record<string, string | number>) => {
+  const baseParams = (extra: Record<string, string | number> | PontoDoCalendario) => {
     const p = new URLSearchParams();
     for (const [k, v] of Object.entries(sp)) if (v) p.set(k, String(v));
-    const overrides: Record<string, string | number> = { mes, ano, view, ...extra };
+    // `extra` manda: é ele que leva o período novo (mês, ou mês+dia na visão Semana)
+    const overrides = Object.assign<Record<string, string | number>, typeof extra>({ mes, ano, view }, extra);
     for (const [k, v] of Object.entries(overrides)) if (v !== "" && v != null) p.set(k, String(v));
     return `?${p.toString()}`;
   };
-  const mesAnterior = mes === 1 ? { mes: 12, ano: ano - 1 } : { mes: mes - 1, ano };
-  const mesSeguinte = mes === 12 ? { mes: 1, ano: ano + 1 } : { mes: mes + 1, ano };
+  // As setas andam no período da VISÃO: semana a semana na Semana, mês a mês no Mês (até esta leva
+  // as duas somavam um mês, e na Semana não havia como ir para a semana seguinte).
+  const anterior = passoDoPeriodo(view, { ano, mes, dia: diaRef }, -1);
+  const seguinte = passoDoPeriodo(view, { ano, mes, dia: diaRef }, 1);
+  const rotuloVoltar = view === "semanal" ? "Semana anterior" : "Mês anterior";
+  const rotuloAvancar = view === "semanal" ? "Próxima semana" : "Próximo mês";
+  // Na Semana o nome do mês sozinho mentiria quando ela atravessa o mês: vai o intervalo
+  const rotuloPeriodo = rotuloDoPeriodo(view, dias, mes, ano);
 
   return (
     <SolicitacoesGaveta totalInicial={solicitacoesPendentes}>
@@ -203,9 +214,9 @@ export default async function CalendarioPage({
           </div>
 
           <div className="order-3 sm:order-2 w-full sm:w-auto flex items-center gap-2 sm:pl-3 sm:border-l sm:border-surface-border">
-            <Link href={baseParams(mesAnterior)} aria-label="Mês anterior" title="Mês anterior" className="p-1.5 rounded-lg border border-surface-border hover:bg-surface-alt"><ChevronLeft className="w-4 h-4" aria-hidden /></Link>
-            <Link href={baseParams(mesSeguinte)} aria-label="Próximo mês" title="Próximo mês" className="p-1.5 rounded-lg border border-surface-border hover:bg-surface-alt"><ChevronRight className="w-4 h-4" aria-hidden /></Link>
-            <div className="ml-1 text-base font-bold text-ink leading-tight capitalize whitespace-nowrap">{nomeMes(mes)} {ano}</div>
+            <Link href={baseParams(anterior)} aria-label={rotuloVoltar} title={rotuloVoltar} data-periodo-anterior className="p-1.5 rounded-lg border border-surface-border hover:bg-surface-alt"><ChevronLeft className="w-4 h-4" aria-hidden /></Link>
+            <Link href={baseParams(seguinte)} aria-label={rotuloAvancar} title={rotuloAvancar} data-periodo-seguinte className="p-1.5 rounded-lg border border-surface-border hover:bg-surface-alt"><ChevronRight className="w-4 h-4" aria-hidden /></Link>
+            <div className="ml-1 text-base font-bold text-ink leading-tight whitespace-nowrap" data-rotulo-periodo>{rotuloPeriodo}</div>
             <Link href={baseParams({ mes: hojeBR.mes + 1, ano: hojeBR.ano, dia: hojeBR.dia })}
               className="ml-1 inline-flex items-center px-3 py-1 rounded-lg border border-primary-500 text-primary-600 text-xs font-semibold hover:bg-primary-50 transition-colors">
               Hoje
@@ -230,6 +241,7 @@ export default async function CalendarioPage({
             clientes: clientes.map((c) => ({ value: c.id, label: c.nomeFantasia ?? c.nome })),
             tiposOs: tiposOs.map((t) => ({ value: t.id, label: t.nome })),
             tecnicos: tecnicos.map((t) => ({ value: t.id, label: t.nome, avatar: t.avatar })),
+            unidades: unidades.map((u) => ({ value: u.id, label: u.nome, clienteId: u.clienteId })),
           }}
         />
 
@@ -238,7 +250,7 @@ export default async function CalendarioPage({
           <span className="font-semibold text-ink-muted uppercase tracking-wider">Status:</span>
           {LEGENDA.map((g) => (
             <span key={g} className="flex items-center gap-1.5">
-              <span className={cn("w-[3px] h-3.5 rounded-full", ESTILO_GRUPO[g].barra)} aria-hidden />
+              <span className={cn(LARGURA_BARRA, "h-3.5 rounded-full", ESTILO_GRUPO[g].barra)} aria-hidden />
               {ESTILO_GRUPO[g].rotulo}
             </span>
           ))}

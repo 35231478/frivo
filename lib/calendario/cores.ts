@@ -27,8 +27,22 @@ export function grupoDoCard(c: { status: string; atrasada?: boolean }): GrupoSta
   return c.atrasada ? "atrasada" : GRUPO_DO_STATUS[c.status] ?? "neutra";
 }
 
-/** O cartão em si: neutro, sem contorno e sem sombra; um tom acima no hover */
-export const ESTILO_CARTAO = "bg-surface-alt hover:bg-surface-linha";
+/**
+ * O cartão em si: NEUTRO (a cor é da barra, não do fundo), mas com corpo.
+ *
+ * Um passo de contraste nesta leva, pedido do dono: o cartão era `bg-surface-alt` sem contorno
+ * nenhum sobre o branco do dia (1,06:1) — na grade cheia ele se dissolvia e só a barra de 3px
+ * aparecia. Agora o fundo é um tom acima (`surface-linha`) e há um fio neutro em volta, que é o
+ * que faz cada OS virar um bloco legível. NENHUMA cor nova entrou: o fundo e o fio são os dois
+ * neutros que o sistema já tem, e a cor continua só na barra do status.
+ */
+export const ESTILO_CARTAO = "bg-surface-linha border border-surface-border hover:bg-surface-border";
+
+/**
+ * A largura da barra de status, num lugar só (o cartão, o cartão grande e a legenda leem daqui).
+ * 3px → 4px: um passo de presença da cor, sem virar faixa colorida.
+ */
+export const LARGURA_BARRA = "w-[4px]";
 
 /** As classes de cada grupo (literais: o Tailwind só gera o que lê por extenso) */
 export const ESTILO_GRUPO: Record<GrupoStatus, { rotulo: string; barra: string; hora: string }> = {
@@ -49,4 +63,4 @@ export const CORES_GRUPO: Record<GrupoStatus, { barra: string; hora: string }> =
 };
 
 /** O que é igual em todo cartão: fundo neutro, nome do cliente, apoio (sigla do técnico, ícones) */
-export const CORES_CARTAO = { fundo: neutro.fundo, hover: neutro.linha, principal: neutro.texto, apoio: neutro.secundario, celula: neutro.superficie } as const;
+export const CORES_CARTAO = { fundo: neutro.linha, hover: neutro.borda, principal: neutro.texto, apoio: neutro.secundario, celula: neutro.superficie } as const;

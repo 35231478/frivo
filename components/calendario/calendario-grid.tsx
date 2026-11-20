@@ -9,7 +9,7 @@ import {
   type DragStartEvent, type DragEndEvent,
 } from "@dnd-kit/core";
 import { cn, iniciais, MESES_PT, LABELS_STATUS_OS, LABELS_PRIORIDADE } from "@/lib/utils";
-import { ESTILO_CARTAO, ESTILO_GRUPO, grupoDoCard, type GrupoStatus } from "@/lib/calendario/cores";
+import { ESTILO_CARTAO, ESTILO_GRUPO, LARGURA_BARRA, grupoDoCard, type GrupoStatus } from "@/lib/calendario/cores";
 import { AvatarTecnico } from "@/components/ui/avatar-tecnico";
 import { InputHora } from "@/components/ui/input-hora";
 import { MSG_HORA_INVALIDA, horaValida } from "@/components/ui/input-data-hora";
@@ -36,6 +36,8 @@ export interface CardOs {
   tipoOsId: string | null;
   clienteCurto: string;
   clienteCompleto: string;
+  /** A unidade/local da OS: o id é o que o filtro usa; o nome é o que o cartão mostra. */
+  unidadeId: string | null;
   unidade: string | null;
   tipoOs: string | null;
   hora: string | null;
@@ -84,7 +86,7 @@ const estilo = (c: CardOs) => ESTILO_GRUPO[grupoDoCard(c)];
 function BarraStatus({ card }: { card: CardOs }) {
   return (
     <>
-      <span className={cn("w-[3px] shrink-0 self-stretch", estilo(card).barra)} aria-hidden="true" data-barra-status />
+      <span className={cn(LARGURA_BARRA, "shrink-0 self-stretch", estilo(card).barra)} aria-hidden="true" data-barra-status />
       <span className="sr-only">{estilo(card).rotulo}:</span>
     </>
   );
