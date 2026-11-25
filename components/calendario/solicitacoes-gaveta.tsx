@@ -8,6 +8,8 @@ import { cn, formatarData, LABELS_PRIORIDADE } from "@/lib/utils";
 import { usePermissoes } from "@/components/providers/permissoes-provider";
 import { OsInativarBotao } from "@/components/os/os-inativar";
 import { URL_SOLICITACOES } from "@/lib/solicitacoes";
+import { maisRecente } from "@/lib/solicitacoes-vigia";
+import { gravarUltimoVisto, useVigiaDeSolicitacoes } from "@/components/calendario/vigia-solicitacoes";
 
 interface Solicitacao {
   id: string; numero: string; canal: string; prioridade: string; descricao: string; criadoEm: string;
@@ -21,6 +23,9 @@ interface Solicitacao {
  * - Aceitar: abre a tela de Nova OS (modo solicitação) para escolher data/hora — exige `ordens.editar`.
  * - Recusar: mesmo fluxo de inativar da OS (vira Cancelada, motivo no histórico) — exige `ordens.excluir`.
  * Desktop: painel à direita (o calendário encolhe e continua visível). Celular: painel que sobe.
+ * - O VIGIA: a cada minuto, só com a aba visível, confere o contador; chegou chamado NOVO e a pessoa
+ *   está ociosa (sem filtro, sem diálogo, sem arrasto, sem mexer há ~20s), o painel abre sozinho — sem
+ *   roubar o foco. A regra é pura (lib/solicitacoes-vigia.ts); abrir a gaveta marca tudo como visto.
  */
 export function SolicitacoesGaveta({ totalInicial, children }: { totalInicial: number; children: React.ReactNode }) {
   const router = useRouter();
@@ -43,10 +48,19 @@ export function SolicitacoesGaveta({ totalInicial, children }: { totalInicial: n
       const data = await res.json().catch(() => null);
       if (!res.ok || !Array.isArray(data)) { setErro(data?.erro ?? "Não foi possível carregar as solicitações."); return; }
       setLista(data); setTotal(data.length);
+      // Ver a gaveta é ver os chamados: o mais recente da lista vira o "último visto" do vigia
+      gravarUltimoVisto(maisRecente(...data.map((s: Solicitacao) => s.criadoEm)));
     } catch { setErro("Erro de conexão."); }
   }, []);
 
   useEffect(() => { if (aberta) carregar(); }, [aberta, carregar]);
+
+  // Chamado novo + pessoa ociosa → o painel abre sozinho (o foco fica onde está; Esc fecha como sempre)
+  useVigiaDeSolicitacoes({
+    ativo: permitido,
+    aoContar: setTotal,
+    aoNovo: () => setAberta(true),
+  });
 
   useEffect(() => {
     if (!aberta) return;
@@ -110,6 +124,7 @@ export function SolicitacoesGaveta({ totalInicial, children }: { totalInicial: n
           <aside
             data-gaveta
             aria-label="Solicitações de clientes"
+            aria-live="polite"
             className={cn(
               "fixed z-50 bg-white flex flex-col shadow-2xl",
               // celular: painel que sobe (quase tela cheia)

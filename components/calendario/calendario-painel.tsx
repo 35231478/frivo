@@ -94,7 +94,7 @@ export function CalendarioPainel({
   return (
     <>
       {/* Faixa de filtros numa linha só: o campo vazio mostra o próprio nome (vazio = todos); no celular fica recolhida */}
-      <div className="px-3 py-2 sm:px-4 border-b border-surface-border bg-surface-alt/30" data-filtros-calendario>
+      <div className="px-3 py-2 sm:px-4 border-b border-surface-border bg-surface-alt/30" data-filtros-calendario data-filtros-ativos={ativos}>
         <div className="flex flex-wrap items-center gap-2">
           {/* Resumo + abrir/fechar (o botão só existe no celular) */}
           {/* Sem filtro, o total cabe na ponta da linha dos campos; filtrando, o resumo (com "Limpar") desce inteiro */}
