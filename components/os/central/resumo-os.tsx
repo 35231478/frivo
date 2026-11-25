@@ -3,6 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { AlertTriangle, CalendarClock, CheckCircle2, ChevronRight, Clock, FileText, History, ListChecks, MapPin, User } from "lucide-react";
+import { OsPrazos } from "@/components/os/os-prazos";
 import { cn, formatarDataHora } from "@/lib/utils";
 import { formatarDiaCivil, textoPrazo } from "@/lib/os/prazos";
 import type { CentralOs } from "@/lib/os/central";
@@ -36,14 +37,11 @@ export function ResumoOs({ os, central, onAba, onAtualizado }: {
   const historico: any[] = os.historico ?? [];
   const visiveis = historicoTodo ? historico : historico.slice(0, 8);
   const comPrazo = (os.atividades ?? []).filter((a: any) => a.prazo && a.status !== "CANCELADA");
-  // Etapas com prazo (os antigos "prazos/SLA" por modelo): fluxos de etapas adicionados à OS
-  const etapasAtrasadas = (os.prazos ?? []).filter((p: any) => p.status === "ATRASADO").length;
-  const etapasAtivas = (os.prazos ?? []).filter((p: any) => p.status === "ATIVO" || p.status === "ATRASADO").length;
 
+  // Uma coluna de cartões (o Resumo divide a tela com o painel de Atividades): os pares que cabem lado a lado
+  // ficam em duas colunas a partir de `md`; o resto em largura total.
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-3 gap-5" data-resumo-os>
-      {/* Coluna principal */}
-      <div className="lg:col-span-2 space-y-5">
+    <div className="space-y-5" data-resumo-os>
         <Cartao titulo="O que falta" icone={ListChecks} dado="o-que-falta">
           {central.falta.length === 0 ? (
             <p className="flex items-center gap-2 text-sm text-ok-texto" data-nada-pendente><CheckCircle2 className="w-4 h-4 text-ok" aria-hidden="true" /> Nada pendente nesta OS.</p>
@@ -63,7 +61,7 @@ export function ResumoOs({ os, central, onAba, onAtualizado }: {
           )}
         </Cartao>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
           <Cartao titulo="Cliente e local" icone={User} dado="informacoes">
             <dl className="space-y-2 text-sm">
               {/* Referência: o lápis corrige o CADASTRO (telefone, e-mail, contatos; nome e endereço da unidade) — vale em
@@ -111,10 +109,9 @@ export function ResumoOs({ os, central, onAba, onAtualizado }: {
             </>
           )}
         </Cartao>
-      </div>
 
-      {/* Coluna lateral: prazos + histórico */}
-      <div className="space-y-5">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+        <div className="space-y-5 min-w-0">
         {/* O que o contrato prometeu ao cliente (comparecer / resolver) — só no chamado de cliente em contrato */}
         <PrazoDeAtendimento os={os} />
         {/* O compromisso interno com a equipe: até quando a OS e as atividades terminam */}
@@ -126,14 +123,12 @@ export function ResumoOs({ os, central, onAba, onAtualizado }: {
               return p ? <LinhaPrazo key={a.id} rotulo={a.titulo} dia={a.prazo} situacao={p} feminino /> : null;
             })}
             {!comPrazo.length && <p className="text-xs text-ink-muted">Nenhuma atividade com prazo próprio.</p>}
-            <button type="button" onClick={() => onAba("atividades")} data-ver-etapas className="w-full text-left text-xs font-medium text-acento hover:underline pt-1">
-              Etapas com prazo: {etapasAtivas ? `${etapasAtivas} em andamento${etapasAtrasadas ? ` (${etapasAtrasadas} atrasada${etapasAtrasadas > 1 ? "s" : ""})` : ""}` : "nenhuma"} — gerenciar na aba Atividades
-            </button>
             <AtrasoJustificado os={os} onAtualizado={(d) => onAtualizado?.(d)} />
           </div>
         </Cartao>
+        </div>
 
-        <Cartao titulo="Histórico" icone={History} dado="historico">
+        <Cartao titulo="Histórico" icone={History} dado="historico" className="min-w-0">
           {historico.length === 0 ? (
             <p className="text-sm text-ink-muted">Nenhum registro.</p>
           ) : (
@@ -154,7 +149,12 @@ export function ResumoOs({ os, central, onAba, onAtualizado }: {
             </button>
           )}
         </Cartao>
-      </div>
+        </div>
+
+        {/* As etapas com prazo (por modelo) — a antiga aba "Prazos", que vivia dentro de Atividades: aqui, ao lado dos prazos */}
+        <Card as="section" data-secao-sla data-cartao="etapas">
+          <OsPrazos osId={os.id} />
+        </Card>
     </div>
   );
 }

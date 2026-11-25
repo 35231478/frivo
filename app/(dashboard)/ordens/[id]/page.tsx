@@ -76,7 +76,7 @@ export default async function OsDetalhePage({ params, searchParams }: { params: 
         },
       },
       historico: { include: { usuario: { select: { nome: true } } }, orderBy: { criadoEm: "desc" } },
-      // Etapas com prazo (modelos de etapas): o Resumo conta as atrasadas; a gestão fica na aba Atividades
+      // Etapas com prazo (modelos de etapas): o Resumo conta as atrasadas e traz a gestão (cartão "Etapas com prazo")
       prazos: { select: { id: true, status: true } },
       orcamentos: {
         include: {

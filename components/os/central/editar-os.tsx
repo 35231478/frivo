@@ -28,7 +28,7 @@ const soData = (v: Date | string | null | undefined) => (v ? chaveDiaCivil(v) : 
 /**
  * A VISITA que trouxe a OS ao calendário: a atividade agendada daquele cartão. Quando vem, a gaveta
  * ganha "Agendamento desta visita" (dia e hora) e salva pelo mesmo PATCH que o arrastar usa.
- * Técnico e equipe não entram aqui — têm tela própria (aba Atividades da OS).
+ * Técnico e equipe não entram aqui — têm lugar próprio (o painel de Atividades da OS).
  */
 export interface VisitaDaGaveta {
   atividadeId: string;
@@ -171,7 +171,7 @@ export function EditarOs({
               <FormField label="Dia da visita" dica="O dia desta atividade no calendário. Mudar aqui é o mesmo que arrastar o cartão.">
                 <InputData aria-label="Dia da visita" value={visitaData} onChange={setVisitaData} disabled={travado} />
               </FormField>
-              <FormField label="Hora da visita" dica="O horário combinado com o cliente. Técnico e equipe se mudam na aba Atividades da OS.">
+              <FormField label="Hora da visita" dica="O horário combinado com o cliente. Técnico e equipe se mudam no painel de Atividades da OS.">
                 <InputHora aria-label="Hora da visita" value={visitaHora} onChange={setVisitaHora} disabled={travado} invalido={!!erro && visitaMudou && !visitaHora} />
               </FormField>
             </FormGrid>

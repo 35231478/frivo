@@ -24,7 +24,7 @@ Continua sendo **uma OS só**: um serviço, uma competência do PMOC, uma cobran
 
 ## Planejar
 
-Botão **Planejar visitas** na aba Atividades da OS, quando há uma atividade agendada, ainda não
+Botão **Planejar visitas** no painel de Atividades da OS, quando há uma atividade agendada, ainda não
 iniciada, com 2 equipamentos ou mais. O diálogo pede:
 
 | Campo | Observação |
