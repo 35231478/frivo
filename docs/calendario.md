@@ -195,3 +195,40 @@ no alto) para:
 No celular a gaveta é tela cheia. `Esc` fecha. Testes: `tests/unit/calendario-gaveta-ui.test.ts`
 (telas) e `tests/unit/calendario-gaveta-pg.test.ts` (o PATCH com hora e a trava, contra PostgreSQL).
 
+## Solicitações abrindo sozinhas
+
+Um chamado de cliente novo (portal ou QR Code) cai em "Solicitações" e quem está com o Calendário
+aberto **e ocioso** vê o painel abrir sozinho — sem roubar o foco (`Esc` fecha como sempre). Nunca
+interrompe quem está no meio de uma tarefa.
+
+**Como fica sabendo.** `GET /api/solicitacoes/contador` devolve só `{ total, maisRecenteEm }` (um
+count e um max; a lista inteira continua em `/api/solicitacoes`, que só roda quando a gaveta abre).
+O Calendário consulta a cada **60s, só com a aba visível**; aba em segundo plano não consulta e, ao
+voltar, confere na hora. Nenhuma outra tela paga por isso. A bolha da aba "Solicitações" acompanha o
+total a cada conferência, abrindo ou não.
+
+**"Novo" é comparação, não contagem.** O navegador guarda o `criadoEm` do chamado mais recente já
+visto (`localStorage`, `frivo:solicitacoes:ultimo-visto`); o painel só abre quando chega um mais novo.
+Um F5 não reabre o mesmo chamado. O que já estava pendente quando a pessoa abriu o calendário não é
+"novo": a primeira conferência só estabelece a linha de base (caixa vazia: um marco zero, para o
+primeiro chamado a cair ser novo). Abrir a gaveta (à mão ou sozinha) marca tudo como visto, e o
+último visto nunca anda para trás.
+
+**"Ocioso" é regra explícita** — todas valendo, ou não abre (e tenta no ciclo seguinte):
+
+| Condição | Como é lida |
+|---|---|
+| aba visível | `document.visibilityState` |
+| a gaveta já não está aberta | `[data-gaveta]` |
+| nenhum diálogo aberto (uma OS na gaveta, um modal, a lista do dia) | `[role="dialog"]` |
+| nenhum arrasto em curso | `[data-arrastando]` na grade |
+| **nenhum filtro ativo** | `[data-filtros-ativos]` na faixa de filtros |
+| sem toque no teclado ou no ponteiro há **20s** | `pointerdown`, `pointermove`, `keydown`, `wheel`, `touchstart` |
+
+Abre para quem tem a permissão da gaveta (Ordens de serviço › editar **ou** excluir) — não existe
+"responsável pelas solicitações". Os 60s/20s ficam para calibrar depois de usar (`lib/solicitacoes-vigia.ts`).
+
+A regra é pura (`lib/solicitacoes-vigia.ts`, `tests/unit/solicitacoes-vigia.test.ts`); o que toca o
+navegador mora em `components/calendario/vigia-solicitacoes.ts` (`tests/unit/solicitacoes-vigia-ui.test.ts`,
+com o relógio parado); o contador tem teste contra PostgreSQL (`tests/unit/solicitacoes-contador-pg.test.ts`).
+

@@ -231,7 +231,7 @@ export function CalendarioGrid({
   }
 
   return (
-    <div className="p-2 md:p-3">
+    <div className="p-2 md:p-3" data-arrastando={arrastando ? "" : undefined}>
       <DndContext sensors={sensors} collisionDetection={pointerWithin} onDragStart={aoIniciarArrasto} onDragEnd={aoTerminarArrasto}>
         {/* Sem overflow-hidden: o dia expandido cresce POR CIMA dos vizinhos sem mexer na grade */}
         <div className="grid grid-cols-7 gap-px bg-surface-border rounded-lg md:min-w-[680px]">
