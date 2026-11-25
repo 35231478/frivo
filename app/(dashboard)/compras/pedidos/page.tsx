@@ -130,7 +130,7 @@ export default async function PedidosCompraPage({ searchParams }: { searchParams
                 ]}
                 linhas={linhas.map((p) => ({
                   id: p.id,
-                  atributos: { "data-linha": p.id },
+                  atributos: { "data-linha": p.id }, href: `/compras/pedidos/${p.id}`,
                   titulos: { itens: p.itensTxt, fornecedor: p.fornecedor?.nome ?? "" },
                   celulas: {
                     numero: <Link href={`/compras/pedidos/${p.id}`} className={cn(PLANILHA.codigo, "font-semibold text-primary-600 hover:underline")}>{p.numero}</Link>,

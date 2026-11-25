@@ -78,7 +78,7 @@ export default async function NotasCompraPage({ searchParams }: { searchParams: 
               ]}
               linhas={notas.map((n) => ({
                 id: n.id,
-                atributos: { "data-nota": n.id },
+                atributos: { "data-nota": n.id }, href: `/estoque/notas/${n.id}${doFinanceiro ? "?de=contas-pagar" : ""}`,
                 titulos: { fornecedor: n.emitenteNome },
                 celulas: {
                   nf: <Link href={`/estoque/notas/${n.id}${doFinanceiro ? "?de=contas-pagar" : ""}`} className={cn(PLANILHA.codigo, "font-semibold text-ink hover:text-primary-600")}>{n.numero}/{n.serie}</Link>,

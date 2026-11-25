@@ -137,7 +137,7 @@ export default async function PmocListaPage({ searchParams }: { searchParams: Pr
             { id: "acoes", titulo: "Ações", fixa: true, semTitulo: true, largura: 112, alinhar: "direita", classe: "py-0.5" },
           ]}
           linhas={pmocs.map((p) => ({
-            id: p.id, atributos: { "data-pmoc-id": p.id }, classe: p.ativo ? undefined : "opacity-60",
+            id: p.id, atributos: { "data-pmoc-id": p.id }, classe: p.ativo ? undefined : "opacity-60", href: `/pmoc/${p.id}`,
             titulos: { cliente: p.cliente.nomeFantasia ? `${p.cliente.nomeFantasia} · ${p.cliente.nome}` : p.cliente.nome, local: local(p.unidade) },
             celulas: {
               nome: (

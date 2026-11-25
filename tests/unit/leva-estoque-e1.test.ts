@@ -537,7 +537,7 @@ describe("complemento da E1", () => {
     expect(h).toContain("data-tabela-estoque");
     expect(h).toContain("data-tabela-planilha");
     expect(h).toMatch(/data-linha="p2"[^>]*data-situacao-linha="negativo"/);
-    expect(h).toMatch(/<tr data-linha="p2" class="[^"]*bg-atrasado-claro/);
+    expect(h).toMatch(/<tr data-linha="p2" data-abrir="\/estoque\/p2" class="[^"]*bg-atrasado-claro/); // a linha inteira abre o produto
     expect(attrs(h, "data-cartao")).toEqual(["p3", "p2", "p1"]);
     expect(h).toContain("data-cartoes");
   });

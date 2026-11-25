@@ -280,7 +280,7 @@ function ContasPagarCorpo({
               ]}
               linhas={comStatus.map(({ c, sv }) => ({
                 id: c.id,
-                atributos: { "data-linha-conta": c.id },
+                atributos: { "data-linha-conta": c.id }, href: `/financeiro/contas-pagar/${c.id}`,
                 classe: sv.linhaVermelha ? "even:bg-atrasado-claro bg-atrasado-claro hover:bg-atrasado-claro/70" : undefined,
                 celulas: {
                   sel: <CheckboxSelecao id={c.id} rotulo={c.numero} />,

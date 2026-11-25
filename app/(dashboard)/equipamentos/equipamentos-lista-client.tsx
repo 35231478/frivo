@@ -305,7 +305,7 @@ function Tabela({
         const a = ambienteEquipamento(e);
         const ambiente = a.principal ? [a.principal, a.complemento].filter(Boolean).join(" · ") : null;
         return {
-          id: e.id, atributos: { "data-equipamento": e.id }, classe: e.ativo ? undefined : "opacity-60",
+          id: e.id, atributos: { "data-equipamento": e.id }, classe: e.ativo ? undefined : "opacity-60", href: `/equipamentos/${e.id}`,
           titulos: { equipamento: descricaoEquipamento(e), identificacao: detalhe || undefined, ambiente: ambiente ?? undefined },
           celulas: {
             sel: massa ? <CheckboxLinha id={e.id} rotulo={descricaoEquipamento(e)} /> : null,

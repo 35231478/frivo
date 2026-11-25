@@ -11,6 +11,8 @@ import { usePermissoes } from "@/components/providers/permissoes-provider";
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import { Dica } from "@/components/ui/dica";
 import { cn, formatarData, LABELS_STATUS_OS, LABELS_PRIORIDADE, LABELS_ORIGEM_OS } from "@/lib/utils";
+import { StatusPill, TOM_ESTAGIO_OS } from "@/components/ui/status-pill";
+import { ROTULO_ESTAGIO, type EstagioOs } from "@/lib/os/status";
 import { BarraPeriodo, type PeriodoTela } from "@/components/listagem/periodo-cards";
 import { BarraFiltros, FiltroTextoUrl, inputFiltro } from "@/components/listagem/barra-filtros";
 import { urlDoAtalho, urlVizinho, type Periodo } from "@/lib/periodo";
@@ -29,16 +31,13 @@ interface OrdemView {
   cliente: string; clienteLogo: string | null; unidade: string | null; responsavel: string | null; atividades: number;
   tecnicos: TecnicoView[];
   status: string; prioridade: string; criadoEm: string; previsaoConclusao: string | null;
-  /** Prazo de execução que vale (o próprio ou, sem ele, o dia previsto), a situação dele e, se houver, o motivo do atraso justificado */
-  prazo: string | null; prazoSituacao: string; prazoTexto: string; atrasoJustificado: string | null;
+  /** O estágio da OS (o mesmo da barra de andamento): Aberta › Agendada › Em execução › Concluída › Faturada, ou Cancelada */
+  estagio: EstagioOs;
+  /** Prazo de execução que vale (o próprio ou, sem ele, o dia previsto), se é próprio, a situação dele e, se houver, o motivo do atraso justificado */
+  prazo: string | null; prazoProprio: boolean; prazoSituacao: string; prazoTexto: string; atrasoJustificado: string | null;
 }
 interface Opcoes { clientes: OpcaoBusca[]; usuarios: OpcaoBusca[]; tiposOs: OpcaoBusca[]; contratos: OpcaoBusca[] }
 
-const CLASSE_STATUS: Record<string, string> = {
-  ABERTA: "badge-status-aberta", AGUARDANDO_ATENDIMENTO: "badge-status-aguardando_atendimento",
-  AGENDADA: "badge-status-agendada", EM_ANDAMENTO: "badge-status-em_andamento", PAUSADA: "badge-status-pausada",
-  AGUARDANDO_PECA: "badge-status-aguardando_peca", CONCLUIDA: "badge-status-concluida", CANCELADA: "badge-status-cancelada",
-};
 const CLASSE_PRIORIDADE: Record<string, string> = {
   BAIXA: "badge-prioridade-baixa", NORMAL: "badge-prioridade-normal", ALTA: "badge-prioridade-alta",
   URGENTE: "badge-prioridade-urgente", CRITICO: "badge-prioridade-critico",
@@ -48,22 +47,40 @@ const CLASSE_PRIORIDADE: Record<string, string> = {
 const PARAMS_FILTROS_OS = ["status", "prioridade", "prazo", "atendimento", "origem", "clienteId", "responsavelId", "tipoOsId", "contratoId", "numero"];
 
 /** Princípio 7: o que a lista mostra fica no ⓘ do título, não num parágrafo acima da tabela. */
-const AJUDA = "Todas as OS do período escolhido: o período olha o dia agendado, a data prevista, o prazo ou a abertura. A coluna Prazo mostra até quando a OS precisa estar concluída e avisa quando vence hoje ou atrasou. OS canceladas ficam fora até o filtro de status pedir.";
+const AJUDA = "Todas as OS do período escolhido: o período olha o dia agendado, a data prevista, o prazo ou a abertura. A coluna Status mostra o estágio da OS (o mesmo da barra de andamento) e avisa quando ela vence hoje ou atrasou. Prevista é o dia marcado para o serviço; o prazo de conclusão (coluna escondida por padrão, em Colunas) é um compromisso à parte e, quando a OS não tem um próprio, vale a data prevista. A linha inteira abre a OS. OS canceladas ficam fora até o filtro de status pedir.";
 
-/** A situação do prazo que merece destaque na lista: só o que pede ação (o resto é a data, sem selo) */
+/** A situação do prazo que merece destaque na lista: só o que pede ação (o resto não ganha selo) */
 const SELO_PRAZO: Record<string, string> = { ATRASADO: "pill-atrasado", VENCE_HOJE: "pill-atencao" };
 
-/** O prazo de uma OS: a data e, quando vence hoje ou atrasou, o selo; atraso justificado vai escrito ao lado */
-function PrazoDaOs({ os, compacto }: { os: OrdemView; compacto?: boolean }) {
-  if (!os.prazo) return <span className={PLANILHA.apagado}>—</span>;
+/** Quando a OS não tem prazo próprio, o prazo que vale é a data prevista — a coluna diz isso em vez de repetir a data como se fosse outra coisa */
+export const TITULO_PRAZO_HERDADO = "Sem prazo próprio: vale a data prevista";
+
+/**
+ * O STATUS de uma OS na lista: o estágio (o mesmo selo e as mesmas cores da barra de andamento e do
+ * calendário) e, ao lado, só o que pede ação — venceu hoje ou atrasou — e o "Justificado" quando houver.
+ */
+function StatusDaOs({ os }: { os: OrdemView }) {
   const selo = SELO_PRAZO[os.prazoSituacao];
   return (
-    <span className="inline-flex items-center gap-1.5 whitespace-nowrap" data-prazo-lista={os.prazoSituacao}>
-      <span className={cn(PLANILHA.data, !selo && PLANILHA.apagado)}>{compacto ? `Prazo ${formatarDiaCivil(os.prazo)}` : formatarDiaCivil(os.prazo)}</span>
+    <span className="inline-flex flex-wrap items-center gap-1" data-status-lista={os.estagio} data-prazo-lista={os.prazoSituacao}>
+      <StatusPill tom={TOM_ESTAGIO_OS[os.estagio] ?? "previsto"} tamanho="sm" data-estagio={os.estagio}>{ROTULO_ESTAGIO[os.estagio] ?? os.estagio}</StatusPill>
       {selo && <span className={cn(selo, "text-[11px] px-2")}>{os.prazoTexto}</span>}
       {os.atrasoJustificado && <span className="pill-previsto text-[11px] px-2" data-atraso-justificado title={`Atraso justificado: ${os.atrasoJustificado}`}>Justificado</span>}
     </span>
   );
+}
+
+/**
+ * O PRAZO de conclusão: a data do prazo próprio (digitado ou do tipo de OS). Sem um próprio, a data
+ * que vale é a prevista — ela aparece apagada, com o título dizendo isso (nunca duas colunas iguais
+ * sem explicação). Sem prazo nem data prevista, traço.
+ */
+function PrazoDaOs({ os, compacto }: { os: OrdemView; compacto?: boolean }) {
+  if (!os.prazo) return <span className={PLANILHA.apagado}>—</span>;
+  const data = compacto ? `Prazo ${formatarDiaCivil(os.prazo)}` : formatarDiaCivil(os.prazo);
+  return os.prazoProprio
+    ? <span className={cn(PLANILHA.data, "whitespace-nowrap")} data-prazo-proprio>{data}</span>
+    : <span className={cn(PLANILHA.data, PLANILHA.apagado, "whitespace-nowrap")} data-prazo-herdado title={TITULO_PRAZO_HERDADO}>{data}</span>;
 }
 
 export function OrdensListaClient({ ordens, total, pagina, porPagina, opcoes, periodo }: { ordens: OrdemView[]; total: number; pagina: number; porPagina: number; opcoes: Opcoes; periodo: PeriodoTela }) {
@@ -258,7 +275,7 @@ export function OrdensListaClient({ ordens, total, pagina, porPagina, opcoes, pe
                 </div>
                 <p className="text-xs text-ink-muted truncate mt-1">{os.unidade ?? "—"}{os.responsavel ? ` · ${os.responsavel}` : ""}</p>
                 <div className="flex items-center gap-2 mt-2 flex-wrap">
-                  <span className={CLASSE_STATUS[os.status]}>{LABELS_STATUS_OS[os.status]}</span>
+                  <StatusDaOs os={os} />
                   <span className={CLASSE_PRIORIDADE[os.prioridade]}>{LABELS_PRIORIDADE[os.prioridade]}</span>
                 </div>
                 <div className="flex items-center gap-2 mt-2">
@@ -266,7 +283,7 @@ export function OrdensListaClient({ ordens, total, pagina, porPagina, opcoes, pe
                   <AvatarStack tecnicos={os.tecnicos} size={28} />
                 </div>
                 <p className="text-[11px] text-ink-muted mt-2 tabular-nums">Aberta {formatarData(os.criadoEm)}{os.previsaoConclusao ? ` · Prevista ${formatarDiaCivil(os.previsaoConclusao)}` : ""}</p>
-                {os.prazo && <p className="text-[11px] mt-1"><PrazoDaOs os={os} compacto /></p>}
+                {os.prazoProprio && <p className="text-[11px] mt-1"><PrazoDaOs os={os} compacto /></p>}
               </Link>
               <div className="absolute bottom-2 right-2"><OsInativarBotao osId={os.id} numero={os.chamadoNumero ?? os.numero} status={os.status} variante="icone" /></div>
               </div>
@@ -280,17 +297,20 @@ export function OrdensListaClient({ ordens, total, pagina, porPagina, opcoes, pe
               ...(massa ? [{ id: "sel", titulo: "Selecionar a página", fixa: true, largura: 36, cabecalho: <CheckboxPagina />, classe: "pl-3" }] : []),
               { id: "numero", titulo: "Número", largura: 176, ordenar: "numero", obrigatoria: true },
               { id: "cliente", titulo: "Cliente", ordenar: "cliente", obrigatoria: true },
+              // O estágio (e o aviso de prazo) logo depois do cliente: é o que se olha primeiro
+              { id: "status", titulo: "Status", largura: 232, ordenar: "status" },
               { id: "tecnico", titulo: "Técnico", largura: 140, classe: "truncate" },
               { id: "abertura", titulo: "Abertura", largura: 96, ordenar: "criadoEm" },
               { id: "previsao", titulo: "Prevista", largura: 96, ordenar: "previsaoConclusao" },
-              { id: "prazo", titulo: "Prazo", largura: 284 },
-              { id: "status", titulo: "Status", largura: 168, ordenar: "status" },
+              // Escondida por padrão: quase sempre é a própria data prevista (quem liga em Colunas vê a diferença explicada)
+              { id: "prazo", titulo: "Prazo", largura: 96, oculta: true },
               { id: "prioridade", titulo: "Prioridade", largura: 104, ordenar: "prioridade" },
               { id: "equipe", titulo: "Equipe", largura: 128, alinhar: "direita" },
               { id: "acoes", titulo: "Ações", fixa: true, largura: 40, semTitulo: true, alinhar: "direita", classe: "py-0.5" },
             ]}
             linhas={ordens.map((os) => ({
               id: os.id,
+              href: `/ordens/${os.id}`,
               titulos: { cliente: os.cliente, tecnico: os.responsavel ?? undefined },
               celulas: {
                 sel: massa ? <CheckboxLinha id={os.id} rotulo={os.chamadoNumero ?? os.numero} /> : null,
@@ -310,7 +330,7 @@ export function OrdensListaClient({ ordens, total, pagina, porPagina, opcoes, pe
                 abertura: <span className={cn(PLANILHA.data, PLANILHA.apagado)}>{formatarData(os.criadoEm)}</span>,
                 previsao: <span className={cn(PLANILHA.data, PLANILHA.apagado)}>{formatarDiaCivil(os.previsaoConclusao)}</span>,
                 prazo: <PrazoDaOs os={os} />,
-                status: <span className={CLASSE_STATUS[os.status]}>{LABELS_STATUS_OS[os.status]}</span>,
+                status: <StatusDaOs os={os} />,
                 prioridade: <span className={CLASSE_PRIORIDADE[os.prioridade]}>{LABELS_PRIORIDADE[os.prioridade]}</span>,
                 equipe: <div className="flex justify-end"><AvatarStack tecnicos={os.tecnicos} size={24} /></div>,
                 acoes: <OsInativarBotao osId={os.id} numero={os.chamadoNumero ?? os.numero} status={os.status} variante="icone" />,

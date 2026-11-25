@@ -16,6 +16,8 @@ export const PLANILHA = {
    * `cn` (tailwind-merge) fica com o dela.
    */
   linhaHover: "hover:bg-primary-100/60",
+  /** A linha inteira abre o registro: cursor de link e foco visível ao chegar pelo Tab */
+  linhaAbre: "cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-acento/60",
   /**
    * Linha com a caixa de seleção marcada: fundo do acento claro (primary-50), permanente enquanto
    * marcada, por cima da zebra e da linha vermelha (como o selecionado do Conta Azul); sob o mouse

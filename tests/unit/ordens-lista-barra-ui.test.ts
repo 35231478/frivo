@@ -33,7 +33,7 @@ const clicar = async (el: Element | null) => { expect(el).not.toBeNull(); await 
 const tecla = async (key: string) => { await act(async () => { window.dispatchEvent(new KeyboardEvent("keydown", { key, bubbles: true })); }); await esperar(); };
 const ultimaUrl = () => String(nav.replace.mock.calls.at(-1)?.[0] ?? "");
 
-const OS1 = { id: "os1", numero: "OS-2026-0001", chamadoNumero: null, origem: "INTERNA", cliente: "Hospital Santa Clara", clienteLogo: null, unidade: "Matriz", responsavel: "Ana", atividades: 1, tecnicos: [], status: "ABERTA", prioridade: "NORMAL", criadoEm: "2026-11-02T12:00:00.000Z", previsaoConclusao: null };
+const OS1 = { id: "os1", numero: "OS-2026-0001", chamadoNumero: null, origem: "INTERNA", cliente: "Hospital Santa Clara", clienteLogo: null, unidade: "Matriz", responsavel: "Ana", atividades: 1, tecnicos: [], status: "ABERTA", estagio: "ABERTA", prioridade: "NORMAL", criadoEm: "2026-11-02T12:00:00.000Z", previsaoConclusao: null, prazo: null, prazoProprio: false, prazoSituacao: "SEM_PRAZO", prazoTexto: "Sem prazo", atrasoJustificado: null };
 async function montar(qs = "", ordens: unknown[] = []) {
   nav.qs = qs;
   if (root) { act(() => root.unmount()); caixa.remove(); } // dois "montar" no mesmo teste: um de cada vez
@@ -58,45 +58,94 @@ describe("lista de OS: barra enxuta", () => {
     await montar("", [OS1]);
     expect($("table[data-tabela-planilha]")).not.toBeNull();
     expect(txt($('th[aria-sort="descending"]'))).toContain("Abertura");
-    expect($$("[data-ordenar]").map((b) => b.getAttribute("data-ordenar"))).toEqual(["numero", "cliente", "criadoEm", "previsaoConclusao", "status", "prioridade"]);
+    // Status logo depois do cliente (o estágio é o que se olha primeiro); Prazo não ordena e fica escondida por padrão
+    expect($$("[data-ordenar]").map((b) => b.getAttribute("data-ordenar"))).toEqual(["numero", "cliente", "status", "criadoEm", "previsaoConclusao", "prioridade"]);
     await clicar($('[data-ordenar="numero"]'));
     expect(ultimaUrl()).toBe("/ordens?sort=numero&dir=desc");
     const numero = $('tr[data-linha="os1"] td[data-celula="numero"] a')!;
     expect(numero.className).toContain("font-mono");
     expect(numero.className).not.toContain("font-display");
     expect($('tr[data-linha="os1"] td[data-celula="cliente"]')!.getAttribute("title")).toBe("Hospital Santa Clara");
+    // a linha inteira abre a OS (o link do número continua, para abrir em nova aba)
+    expect($('tr[data-linha="os1"]')!.getAttribute("data-abrir")).toBe("/ordens/os1");
+    expect(numero.getAttribute("href")).toBe("/ordens/os1");
+    await clicar($('tr[data-linha="os1"] td[data-celula="cliente"]'));
+    expect(nav.push).toHaveBeenCalledWith("/ordens/os1");
   });
 
-  it("coluna Prazo: a data sempre; selo só quando pede ação (atrasada, vence hoje); atraso justificado escrito ao lado; OS sem prazo mostra traço", async () => {
+  it("coluna Status: o ESTÁGIO da OS (o mesmo selo do andamento e as cores do calendário) e, ao lado, só o que pede ação", async () => {
     const os = (id: string, extra: Record<string, unknown>) => ({ ...OS1, id, numero: `OS-${id}`, ...extra });
     await montar("", [
-      os("atrasada", { prazo: "2026-10-30T00:00:00.000Z", prazoSituacao: "ATRASADO", prazoTexto: "Atrasada 4 dias", atrasoJustificado: null }),
-      os("hoje", { prazo: "2026-11-03T00:00:00.000Z", prazoSituacao: "VENCE_HOJE", prazoTexto: "Vence hoje", atrasoJustificado: null }),
-      os("folga", { prazo: "2026-11-20T00:00:00.000Z", prazoSituacao: "NO_PRAZO", prazoTexto: "Faltam 17 dias", atrasoJustificado: null }),
-      os("justificada", { prazo: "2026-10-28T00:00:00.000Z", prazoSituacao: "ATRASADO", prazoTexto: "Atrasada 6 dias", atrasoJustificado: "Cliente ausente" }),
-      os("concluida", { status: "CONCLUIDA", prazo: "2026-10-20T00:00:00.000Z", prazoSituacao: "CUMPRIDO", prazoTexto: "Encerrada", atrasoJustificado: null }),
-      os("sem", { prazo: null, prazoSituacao: "SEM_PRAZO", prazoTexto: "Sem prazo", atrasoJustificado: null }),
+      os("aberta", { estagio: "ABERTA" }), os("agendada", { estagio: "AGENDADA" }), os("execucao", { status: "PAUSADA", estagio: "EM_ANDAMENTO" }),
+      os("concluida", { status: "CONCLUIDA", estagio: "CONCLUIDA" }), os("faturada", { status: "CONCLUIDA", estagio: "FATURADA" }), os("cancelada", { status: "CANCELADA", estagio: "CANCELADA" }),
+      os("atrasada", { estagio: "EM_ANDAMENTO", prazo: "2026-10-30T00:00:00.000Z", prazoProprio: true, prazoSituacao: "ATRASADO", prazoTexto: "Atrasada 4 dias" }),
+      os("hoje", { estagio: "AGENDADA", prazo: "2026-11-03T00:00:00.000Z", prazoSituacao: "VENCE_HOJE", prazoTexto: "Vence hoje" }),
+      os("folga", { estagio: "AGENDADA", prazo: "2026-11-20T00:00:00.000Z", prazoSituacao: "NO_PRAZO", prazoTexto: "Faltam 17 dias" }),
+      os("justificada", { estagio: "EM_ANDAMENTO", prazo: "2026-10-28T00:00:00.000Z", prazoSituacao: "ATRASADO", prazoTexto: "Atrasada 6 dias", atrasoJustificado: "Cliente ausente" }),
     ]);
-    expect($$("table thead th").map(txt)).toEqual(expect.arrayContaining(["Prevista", "Prazo"]));
-    const celula = (id: string) => $(`tr[data-linha="${id}"] td[data-celula="prazo"]`)!;
-    expect(txt(celula("atrasada"))).toBe("30/10/2026Atrasada 4 dias");
+    const celula = (id: string) => $(`tr[data-linha="${id}"] td[data-celula="status"]`)!;
+    const selo = (id: string) => celula(id).querySelector("[data-estagio]")!;
+    // os seis estágios, com o mesmo rótulo da barra de andamento e o tom do sistema de design
+    const esperado: Record<string, [string, string]> = {
+      aberta: ["Aberta", "previsto"], agendada: ["Agendada", "acento"], execucao: ["Em execução", "atencao"],
+      concluida: ["Concluída", "ok"], faturada: ["Faturada", "ok-solido"], cancelada: ["Cancelada", "atrasado"],
+    };
+    for (const [id, [rotulo, tom]] of Object.entries(esperado)) {
+      expect(txt(selo(id)), id).toBe(rotulo);
+      expect(selo(id).getAttribute("data-tom"), id).toBe(tom);
+    }
+    // "Pausada" (status gravado) aparece como o estágio "Em execução", nunca o nome cru do banco
+    expect(txt(celula("execucao"))).not.toContain("Pausada");
+    // o aviso de prazo mora aqui: só quando pede ação (atrasada, vence hoje); justificado escrito ao lado
+    expect(txt(celula("atrasada"))).toBe("Em execuçãoAtrasada 4 dias");
     expect(celula("atrasada").querySelector(".pill-atrasado")).not.toBeNull();
-    expect(txt(celula("hoje"))).toBe("03/11/2026Vence hoje");
+    expect(txt(celula("hoje"))).toBe("AgendadaVence hoje");
     expect(celula("hoje").querySelector(".pill-atencao")).not.toBeNull();
-    // com folga e concluída: só a data, sem selo (o selo é para o que pede ação)
-    expect(txt(celula("folga"))).toBe("20/11/2026");
-    expect(txt(celula("concluida"))).toBe("20/10/2026");
-    for (const id of ["folga", "concluida"]) expect(celula(id).querySelector("[class*='pill-']"), id).toBeNull();
-    // justificada: continua atrasada (o selo fica) e diz que foi justificada, com o motivo no título
-    expect(txt(celula("justificada"))).toBe("28/10/2026Atrasada 6 diasJustificado");
-    const selo = celula("justificada").querySelector("[data-atraso-justificado]")!;
-    expect(selo.getAttribute("title")).toBe("Atraso justificado: Cliente ausente");
-    expect(selo.className).toContain("pill-previsto"); // selo neutro: quem pede ação é o vermelho do atraso
-    for (const id of ["atrasada", "hoje", "folga", "sem"]) expect(celula(id).querySelector("[data-atraso-justificado]"), id).toBeNull();
-    expect(txt(celula("sem"))).toBe("—");
-    // os cartões (celular) trazem a mesma coisa
+    expect(txt(celula("folga"))).toBe("Agendada");
+    expect(txt(celula("justificada"))).toBe("Em execuçãoAtrasada 6 diasJustificado");
+    expect(celula("justificada").querySelector("[data-atraso-justificado]")!.getAttribute("title")).toBe("Atraso justificado: Cliente ausente");
+    for (const id of ["aberta", "folga", "concluida", "atrasada"]) expect(celula(id).querySelector("[data-atraso-justificado]"), id).toBeNull();
+    // os cartões (celular) trazem o mesmo selo
     const cartao = $$("[data-cartoes] > div").find((c) => txt(c).includes("OS-atrasada"))!;
-    expect(txt(cartao)).toContain("Prazo 30/10/2026Atrasada 4 dias");
+    expect(txt(cartao.querySelector("[data-status-lista]"))).toBe("Em execuçãoAtrasada 4 dias");
+    expect(txt(cartao)).toContain("Prazo 30/10/2026"); // prazo PRÓPRIO: o cartão mostra
+    const cartaoHoje = $$("[data-cartoes] > div").find((c) => txt(c).includes("OS-hoje"))!;
+    expect(txt(cartaoHoje)).not.toContain("Prazo 03/11"); // herdado da prevista: o cartão não repete
+  });
+
+  it("Prevista fica; Prazo é escondida por padrão (liga em Colunas) e nunca repete a prevista sem explicação: próprio em preto, herdado apagado com o título", async () => {
+    const os = (id: string, extra: Record<string, unknown>) => ({ ...OS1, id, numero: `OS-${id}`, ...extra });
+    await montar("", [
+      os("proprio", { previsaoConclusao: "2026-11-10T12:00:00.000Z", prazo: "2026-11-20T00:00:00.000Z", prazoProprio: true, prazoSituacao: "NO_PRAZO", prazoTexto: "Faltam 17 dias" }),
+      os("herdado", { previsaoConclusao: "2026-11-12T12:00:00.000Z", prazo: "2026-11-12T00:00:00.000Z", prazoProprio: false, prazoSituacao: "NO_PRAZO", prazoTexto: "Faltam 9 dias" }),
+      os("sem", { prazo: null, prazoSituacao: "SEM_PRAZO", prazoTexto: "Sem prazo" }),
+    ]);
+    const cabecalhos = () => $$("table thead th").map(txt);
+    expect(cabecalhos()).toContain("Prevista");
+    expect(cabecalhos()).not.toContain("Prazo");
+    // liga em Colunas
+    await clicar($("[data-colunas-menu]"));
+    expect($('[data-coluna-opcao="prazo"]')!.getAttribute("aria-checked")).toBe("false");
+    await clicar($('[data-coluna-opcao="prazo"]'));
+    expect(cabecalhos()).toContain("Prazo");
+    const celula = (id: string) => $(`tr[data-linha="${id}"] td[data-celula="prazo"]`)!;
+    const prevista = (id: string) => txt($(`tr[data-linha="${id}"] td[data-celula="previsao"]`));
+    // prazo próprio: a data, em preto, e diferente da prevista
+    expect(txt(celula("proprio"))).toBe("20/11/2026");
+    expect(prevista("proprio")).toBe("10/11/2026");
+    expect(celula("proprio").querySelector("[data-prazo-proprio]")).not.toBeNull();
+    expect(celula("proprio").querySelector("[data-prazo-herdado]")).toBeNull();
+    // herdado: a mesma data da prevista, apagada, com o título explicando por quê
+    expect(txt(celula("herdado"))).toBe("12/11/2026");
+    expect(prevista("herdado")).toBe("12/11/2026");
+    const herdado = celula("herdado").querySelector("[data-prazo-herdado]")!;
+    expect(herdado.getAttribute("title")).toBe("Sem prazo próprio: vale a data prevista");
+    expect(herdado.className).toContain("text-ink-muted");
+    expect(celula("herdado").querySelector("[data-prazo-proprio]")).toBeNull();
+    // o selo de atraso NÃO mora mais aqui (está no Status)
+    for (const id of ["proprio", "herdado"]) expect(celula(id).querySelector("[class*='pill-']"), id).toBeNull();
+    expect(txt(celula("sem"))).toBe("—");
+    expect(celula("sem").querySelector("[data-prazo-herdado], [data-prazo-proprio]")).toBeNull();
   });
 
   it("filtro Prazo de atendimento em 'Mais filtros': vencendo e estourado vão para a URL (?atendimento=) — separado do Prazo de execução", async () => {

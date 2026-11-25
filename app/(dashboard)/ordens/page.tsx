@@ -9,8 +9,9 @@ import { OrdensListaClient } from "@/components/ordens/ordens-lista-client";
 import { SelecaoMassaProvider } from "@/components/acoes-massa/selecao";
 import { BarraAcoesMassa } from "@/components/acoes-massa/barra";
 import { comparaNatural } from "@/lib/utils";
-import { atrasoJustificado, prazoEfetivo, rotuloMotivoAtraso, situacaoPrazoExecucao } from "@/lib/os/prazo-execucao";
+import { atrasoJustificado, prazoEfetivo, rotuloMotivoAtraso, situacaoPrazoExecucao, temPrazoProprio } from "@/lib/os/prazo-execucao";
 import { textoPrazo } from "@/lib/os/prazos";
+import { resumoStatus } from "@/lib/os/status";
 
 export const metadata: Metadata = { title: "Ordens de serviço" };
 
@@ -53,9 +54,12 @@ export default async function OrdensPage({ searchParams }: { searchParams: Promi
         unidade: { select: { nome: true } },
         responsavel: { select: { nome: true } },
         atividades: { select: {
+          status: true, dataAgendada: true,
           tecnico: { select: { id: true, nome: true, avatar: true } },
           tecnicosEquipe: { select: { tecnico: { select: { id: true, nome: true, avatar: true } } } },
         } },
+        // "Faturada" é a OS concluída que já entrou numa medição (o mesmo estágio da central da OS)
+        medicaoItens: { select: { medicao: { select: { status: true } } } },
       },
       // `id` no fim: desempate estável (a paginação não repete nem pula OS)
       orderBy: [SORT_MAP[sort](dir), { id: "asc" }],
@@ -87,11 +91,15 @@ export default async function OrdensPage({ searchParams }: { searchParams: Promi
       atividades: o.atividades.length,
       tecnicos: tecnicos.map((t) => ({ id: t.id, nome: t.nome, avatar: t.avatar ?? null })),
       status: o.status,
+      // O ESTÁGIO (o mesmo da barra de andamento da OS): Aberta › Agendada › Em execução › Concluída › Faturada, ou Cancelada
+      estagio: resumoStatus({ status: o.status, statusManual: o.statusManual, previsaoConclusao: o.previsaoConclusao, atividades: o.atividades, medicoes: o.medicaoItens.map((m) => m.medicao) }).exibido,
       prioridade: o.prioridade,
       criadoEm: o.criadoEm.toISOString(),
       previsaoConclusao: o.previsaoConclusao ? o.previsaoConclusao.toISOString() : null,
       // O PRAZO de execução (o próprio ou, sem ele, o dia previsto) e a situação dele hoje — a regra única
       prazo: prazoEfetivo(o)?.toISOString() ?? null,
+      // Prazo digitado (ou do tipo de OS) — sem ele, o prazo que vale É a data prevista, e a coluna diz isso
+      prazoProprio: temPrazoProprio(o),
       prazoSituacao: situacao.situacao,
       prazoTexto: textoPrazo(situacao, true),
       atrasoJustificado: atrasoJustificado(o) ? rotuloMotivoAtraso(o.atrasoJustificadoMotivo) || "Justificado" : null,

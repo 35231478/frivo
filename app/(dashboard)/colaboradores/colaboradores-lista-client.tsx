@@ -262,6 +262,7 @@ function Tabela({ massa, itens, f, onOrdenar, podeGerenciar }: {
         const contato = [formatarTelefone(c.telefone), c.email].filter(Boolean).join(" · ");
         return {
           id: c.id, atributos: { "data-colaborador-id": c.id }, classe: c.ativo ? undefined : "opacity-60",
+          href: podeGerenciar ? `/colaboradores/${c.id}/editar` : undefined,
           titulos: { colaborador: c.nome, cargo: funcaoCargo(c), contato },
           celulas: {
             sel: massa ? <CheckboxLinha id={c.id} rotulo={c.nome} /> : null,

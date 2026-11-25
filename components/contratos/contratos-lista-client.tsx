@@ -226,7 +226,7 @@ export function ContratosListaClient({ contratos, total, pagina, porPagina, soma
             { id: "proximaOs", titulo: "Próxima OS", largura: 160, classe: "truncate" },
           ]}
           linhas={contratos.map((ct) => ({
-            id: ct.id, atributos: { "data-contrato": ct.id },
+            id: ct.id, atributos: { "data-contrato": ct.id }, href: `/contratos/${ct.id}`,
             classe: cn(ct.vencido && "bg-atrasado-claro/60 hover:bg-atrasado-claro", (ct.status === "ENCERRADO" || ct.status === "CANCELADO") && "opacity-60"),
             titulos: { cliente: ct.cliente, fim: ct.dataFim ? undefined : "Sem data de fim: vigência indeterminada" },
             celulas: {

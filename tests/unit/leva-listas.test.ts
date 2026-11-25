@@ -33,7 +33,7 @@ vi.mock("@/lib/prisma", async () => {
         responsavelTecnico: null,
       }),
       orcamento: (r, T) => ({ cliente: T("cliente").find((c) => c.id === r.clienteId) ?? null, _count: { ordensServico: 0 } }),
-      ordemServico: (r, T) => ({ cliente: T("cliente").find((c) => c.id === r.clienteId) ?? null, unidade: null, responsavel: null, atividades: [] }),
+      ordemServico: (r, T) => ({ cliente: T("cliente").find((c) => c.id === r.clienteId) ?? null, unidade: null, responsavel: null, atividades: [], medicaoItens: [] }),
       contrato: (r, T) => ({ cliente: T("cliente").find((c) => c.id === r.clienteId) ?? null, ordensServico: [] }),
       tabelaPreco: (r, T) => ({ _count: { itens: 0, clientes: T("cliente").filter((c) => c.tabelaPrecoId === r.id).length } }),
       equipe: (r, T) => ({ lider: null, membros: T("tecnico").filter((t) => t.equipeId === r.id), veiculos: [] }),

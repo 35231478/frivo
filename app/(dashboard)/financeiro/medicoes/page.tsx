@@ -144,7 +144,7 @@ export default async function MedicoesPage({
                 const cliente = m.cliente.nomeFantasia ?? m.cliente.nome;
                 return {
                   id: m.id,
-                  atributos: { "data-linha-medicao": m.id },
+                  atributos: { "data-linha-medicao": m.id }, href: m.avulsa ? `/financeiro/faturas/${m.id}` : `/financeiro/medicoes/${m.id}`,
                   titulos: { cliente },
                   celulas: {
                     numero: <Link href={m.avulsa ? `/financeiro/faturas/${m.id}` : `/financeiro/medicoes/${m.id}`} className={cn(PLANILHA.codigo, "text-primary-600 hover:underline")}>{m.avulsa ? `Fatura ${numeroFatura(m.numero)}` : m.numero}</Link>,
