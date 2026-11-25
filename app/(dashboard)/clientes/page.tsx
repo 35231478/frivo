@@ -172,7 +172,7 @@ export default async function ClientesPage({
             const nome = c.nomeFantasia ?? c.nome;
             const sf = statusFinanceiroMap[c.id] ?? "SEM_HISTORICO";
             return {
-              id: c.id, atributos: { "data-cliente": c.id }, classe: c.ativo ? undefined : "opacity-60",
+              id: c.id, atributos: { "data-cliente": c.id }, classe: c.ativo ? undefined : "opacity-60", href: `/clientes/${c.id}/editar`,
               // A razão social (quando há fantasia) aparece inteira ao passar o mouse
               titulos: { nome: c.nomeFantasia ? `${c.nomeFantasia} · ${c.nome}` : c.nome, segmento: c.segmento ? (LABELS_SEGMENTO[c.segmento] ?? c.segmento) : undefined },
               celulas: {

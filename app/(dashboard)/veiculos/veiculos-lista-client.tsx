@@ -225,7 +225,7 @@ function Tabela({ massa, itens, f, onOrdenar, podeGerenciar, podeChecklist }: {
       linhas={itens.map((v) => {
         const descricao = [marcaModelo(v), v.cor].filter(Boolean).join(" · ");
         return {
-          id: v.id, atributos: { "data-veiculo-id": v.id }, classe: v.status === "INATIVO" ? "opacity-60" : undefined,
+          id: v.id, atributos: { "data-veiculo-id": v.id }, classe: v.status === "INATIVO" ? "opacity-60" : undefined, href: `/veiculos/${v.id}/editar`,
           titulos: { veiculo: [v.placa, descricao].filter(Boolean).join(" · "), combustivel: [v.combustivel, v.tipoLabel].filter(Boolean).join(" · ") },
           celulas: {
             sel: massa ? <CheckboxLinha id={v.id} rotulo={v.placa} /> : null,

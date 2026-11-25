@@ -165,7 +165,7 @@ export default async function OrcamentosPage({
               const cliente = o.cliente.nomeFantasia ?? o.cliente.nome;
               return {
                 id: o.id,
-                atributos: { "data-linha-orcamento": o.id },
+                atributos: { "data-linha-orcamento": o.id }, href: `/orcamentos/${o.id}`,
                 titulos: { nome: o.nome, cliente },
                 celulas: {
                   sel: massa ? <CheckboxLinha id={o.id} rotulo={o.codigo} /> : null,

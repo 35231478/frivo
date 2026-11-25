@@ -115,7 +115,7 @@ export default async function EstoquePage({ searchParams }: { searchParams: Prom
                     ]}
                     linhas={itens.map((p) => ({
                       id: p.id,
-                      atributos: { "data-linha": p.id, "data-situacao-linha": p.situacao },
+                      atributos: { "data-linha": p.id, "data-situacao-linha": p.situacao }, href: `/estoque/${p.id}`,
                       // Negativo: linha vermelha (como a conta vencida no financeiro); inativo apagado
                       classe: cn(p.situacao === "negativo" && "even:bg-atrasado-claro bg-atrasado-claro hover:bg-atrasado-claro/70", !p.ativo && "opacity-60"),
                       titulos: { nome: p.descricao ? `${p.nome} — ${p.descricao}` : p.nome },

@@ -2,7 +2,9 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent as PointerEventReact, type ReactNode } from "react";
 import { ArrowDown, ArrowUp, ArrowUpDown, Check, RotateCcw, Settings2 } from "lucide-react";
+import { useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
+import { cliqueAbreLinha, destinoDoClique, teclaAbreLinha } from "@/lib/listagem/abrir-linha";
 import { PLANILHA } from "@/lib/planilha";
 import { useLinhasSelecionadas } from "@/components/listagem/selecao-linhas";
 import {
@@ -25,6 +27,11 @@ import {
  * As células chegam prontas (ReactNode): a página do servidor monta os links e pílulas como sempre fez
  * e o componente cuida só de larguras, colunas visíveis e estilo. Uma coluna SEM `largura` é a
  * elástica (ocupa o que sobra); cada tela precisa de pelo menos uma, senão o navegador estica todas.
+ *
+ * A LINHA INTEIRA abre o registro quando a tela dá o `href` da linha (lib/listagem/abrir-linha):
+ * clique em qualquer célula, menos nos controles (checkbox, ações, links, campos) e nas colunas
+ * fixas; Ctrl/⌘ + clique e o botão do meio abrem em nova aba; a linha entra no Tab e abre no Enter.
+ * O link do número/nome continua existindo (botão direito › abrir em nova aba).
  */
 export interface ColunaPro {
   id: string;
@@ -60,6 +67,8 @@ export interface LinhaPro {
   atributos?: Record<string, string | undefined>;
   /** title de cada célula (o texto inteiro no hover de uma célula truncada) */
   titulos?: Record<string, string | undefined>;
+  /** O registro que a linha inteira abre (sem ele a linha é só leitura; quem não tem permissão não recebe) */
+  href?: string;
 }
 
 export interface OrdenacaoPro { ativa: string | null; dir: "asc" | "desc"; onOrdenar: (k: string) => void }
@@ -137,8 +146,23 @@ export function usePreferenciaTabela(tela: string, colunas: ColunaPro[]) {
 }
 const preferenciaVaziaLocal = (p: PreferenciaTabela) => Object.keys(p.larguras).length === 0 && p.ocultas === undefined;
 
+/**
+ * O roteador do App Router, ou nada fora dele (testes de componente montam a tabela sem o Next em
+ * volta): a mesma quantidade de hooks nos dois casos, então a ordem não muda.
+ */
+function useRoteadorSeguro() {
+  try { return useRouter(); } catch { return null; }
+}
+
+/** Abre o registro da linha: aqui (roteador) ou em nova aba */
+export function abrirRegistro(href: string, destino: "mesma-aba" | "nova-aba", roteador: { push: (h: string) => void } | null) {
+  if (destino === "nova-aba") { window.open(href, "_blank", "noopener"); return; }
+  if (roteador) roteador.push(href); else window.location.assign(href);
+}
+
 export function TabelaPro({ tela, colunas, linhas, ordenacao, cartoes, barra, quebra = "md", className, atributos }: TabelaProProps) {
   const { pref, gravar } = usePreferenciaTabela(tela, colunas);
+  const roteador = useRoteadorSeguro();
   // Linhas marcadas (seleção em massa ou seleção simples da lista em volta): ganham o realce permanente
   const selecionados = useLinhasSelecionadas();
   // Largura ao vivo enquanto arrasta (só grava ao soltar)
@@ -292,11 +316,29 @@ export function TabelaPro({ tela, colunas, linhas, ordenacao, cartoes, barra, qu
             </thead>
             <tbody>
               {linhas.map((l) => (
-                <tr key={l.id} data-linha={l.id} className={cn(PLANILHA.linha, PLANILHA.linhaHover, l.classe, selecionados?.has(l.id) && PLANILHA.linhaSelecionada)}
-                  aria-selected={selecionados ? selecionados.has(l.id) : undefined} data-selecionada={selecionados?.has(l.id) ? "" : undefined} {...l.atributos}>
+                <tr key={l.id} data-linha={l.id} data-abrir={l.href}
+                  className={cn(PLANILHA.linha, PLANILHA.linhaHover, l.href && PLANILHA.linhaAbre, l.classe, selecionados?.has(l.id) && PLANILHA.linhaSelecionada)}
+                  aria-selected={selecionados ? selecionados.has(l.id) : undefined} data-selecionada={selecionados?.has(l.id) ? "" : undefined}
+                  tabIndex={l.href ? 0 : undefined}
+                  onClick={l.href ? (e) => {
+                    const destino = destinoDoClique(e);
+                    if (destino === "nenhum" || !cliqueAbreLinha(e.target as Element, e.currentTarget, window.getSelection()?.toString())) return;
+                    abrirRegistro(l.href!, destino, roteador);
+                  } : undefined}
+                  onAuxClick={l.href ? (e) => {
+                    if (e.button !== 1 || !cliqueAbreLinha(e.target as Element, e.currentTarget)) return;
+                    e.preventDefault();
+                    abrirRegistro(l.href!, "nova-aba", roteador);
+                  } : undefined}
+                  onKeyDown={l.href ? (e) => {
+                    if (!teclaAbreLinha(e)) return;
+                    e.preventDefault();
+                    abrirRegistro(l.href!, e.ctrlKey || e.metaKey ? "nova-aba" : "mesma-aba", roteador);
+                  } : undefined}
+                  {...l.atributos}>
                   {visiveis.map((c) => (
                     <td key={c.id} className={cn(PLANILHA.td, "align-middle", ALINHAR[c.alinhar ?? "esquerda"], c.alinhar === "direita" && "tabular-nums whitespace-nowrap", c.classe)}
-                      title={l.titulos?.[c.id]} data-celula={c.id}>
+                      title={l.titulos?.[c.id]} data-celula={c.id} data-fixa={c.fixa ? "" : undefined}>
                       {l.celulas[c.id]}
                     </td>
                   ))}

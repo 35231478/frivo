@@ -237,7 +237,7 @@ export default async function LeadsSitePage({
               ]}
               linhas={linhas.map((l) => ({
                 id: l.id,
-                atributos: { "data-linha-lead": l.id },
+                atributos: { "data-linha-lead": l.id }, href: `/orcamentos/${l.id}`,
                 titulos: { cliente: l.nome, equipamento: l.recomendacao },
                 celulas: {
                   data: <span className={cn(PLANILHA.data, PLANILHA.apagado)}>{formatarDataHora(l.data)}</span>,

@@ -112,3 +112,4 @@ No celular a tabela não existe: a tela passa os seus cartões em `cartoes`.
 | Preferência por usuário | Larguras e colunas vão para `preferencias_usuario` pela rota `/api/preferencias/tabela:<tela>` (só a do próprio usuário da sessão) e seguem a pessoa entre dispositivos. O `localStorage` responde na hora e fica de reserva se a API falhar; a do servidor vence. |
 | Ordenação | `ordenacao={{ ativa, dir, onOrdenar }}` ou `TabelaProUrl` (lê `?ordem=&dir=`). O cabeçalho vira botão com `aria-sort`. |
 | Células | Chegam prontas (`ReactNode`): a página do servidor monta links e pílulas como sempre; o componente cuida de largura, visibilidade e estilo. |
+| A linha inteira abre | A tela dá `href` na linha e qualquer célula comum abre o registro; checkbox, ações, links e campos não; Ctrl/⌘ + clique e o botão do meio abrem em nova aba; Tab + Enter abre. Quem não tem permissão não recebe o `href`. Ver `docs/listas-linha-inteira.md`. |

@@ -76,6 +76,7 @@ export default async function AdmissoesPage({ searchParams }: { searchParams: Pr
   const linhas = itens.map((a) => ({
     id: a.id,
     atributos: { "data-admissao": a.id, "data-situacao": a.situacao },
+    href: abreFicha ? `/colaboradores/${a.colaborador.id}/editar` : undefined,
     celulas: {
       colaborador: (
         abreFicha ? (

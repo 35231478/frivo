@@ -196,7 +196,7 @@ export default async function CustoPessoalPage() {
             ]}
             linhas={linhas.map((l) => ({
               id: l.id,
-              atributos: { "data-linha": l.id },
+              atributos: { "data-linha": l.id }, href: `/financeiro/custo-pessoal/colaborador/${l.id}`,
               titulos: { nome: l.nome },
               celulas: {
                 nome: (
