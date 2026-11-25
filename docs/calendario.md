@@ -166,3 +166,32 @@ grafia exata não achava nada, e não dava para saber o que existe):
 Link antigo com `?unidade=Matriz` (o nome digitado, de antes desta leva) continua valendo: é
 traduzido para o id do cadastro na leitura, e o parâmetro velho sai da URL.
 
+## Clicar na OS abre a gaveta "Editar OS"
+
+Clicar num cartão (ou numa linha da lista do dia, no celular) abre **a mesma gaveta "Editar OS" da
+central da OS** (`components/os/central/editar-os.tsx`) por cima do calendário — não há gaveta nova.
+Até esta leva o clique navegava para a página da OS; a página inteira continua a um clique, no
+rodapé da gaveta ("Abrir a OS").
+
+O que a gaveta edita: responsável, data prevista, prazo para finalizar, prioridade, descrição e
+observações (o `PUT /api/ordens/[id]` de sempre) — e, **quando o cartão vem de uma atividade
+agendada**, o "Agendamento desta visita": dia e hora daquela atividade, salvos pelo **mesmo
+`PATCH /api/ordens/[id]` que o arrastar usa**, que ganhou um `hora` opcional ("HH:mm", relógio de
+Brasília). Sem `hora` o PATCH continua como era (o arrastar não manda hora). Técnico e equipe não
+entram: têm tela própria (aba Atividades da OS).
+
+Ao salvar, o cartão se move na tela na hora (o mesmo passo otimista do arrastar) e a página é
+recarregada por baixo, para o status e a cor acompanharem. Se o servidor recusar a visita, a gaveta
+fica aberta com o motivo e o cartão não sai do lugar.
+
+**Leitura, não porta fechada.** A gaveta abre travada (campos desabilitados, sem Salvar, o motivo
+no alto) para:
+
+- quem não tem "Ordens de serviço › editar";
+- OS inativada (aponta o "Reabrir" da página da OS);
+- registro fechado — assinado pelo cliente, faturado ou com nota. O motivo vem do servidor: o
+  `GET /api/ordens/[id]` passou a devolver `trava` (a mesma regra da central, `lib/os/trava-edicao-server.ts`).
+
+No celular a gaveta é tela cheia. `Esc` fecha. Testes: `tests/unit/calendario-gaveta-ui.test.ts`
+(telas) e `tests/unit/calendario-gaveta-pg.test.ts` (o PATCH com hora e a trava, contra PostgreSQL).
+
