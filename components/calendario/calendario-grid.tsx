@@ -23,6 +23,7 @@ import { Repeat, MapPin, CalendarClock, Wrench, AlertTriangle, X, Plus, Check, M
 import { deLocalBR } from "@/lib/fuso";
 import { toast } from "@/components/ui/avisos";
 import { usePermissoes } from "@/components/providers/permissoes-provider";
+import { GavetaOsCalendario, diaDoCartao } from "@/components/calendario/gaveta-os";
 
 export interface CardOs {
   /** Chave única do card (OS + dia): uma OS com visitas em dias diferentes gera um card por dia. */
@@ -145,6 +146,8 @@ export function CalendarioGrid({
   const [hover, setHover] = useState<{ card: CardOs; rect: DOMRect } | null>(null);
   const [modalDia, setModalDia] = useState<string | null>(null);
   const [criarDia, setCriarDia] = useState<string | null>(null);
+  // O cartão aberto na gaveta "Editar OS" (clique no cartão ou na lista do dia)
+  const [gavetaCard, setGavetaCard] = useState<CardOs | null>(null);
   const [arrastando, setArrastando] = useState<{ card: CardOs; fromDay: string } | null>(null);
   const arrastouRef = useRef(false);
   const semanal = celulas.length === 7;
@@ -168,9 +171,22 @@ export function CalendarioGrid({
   // Sem "ordens › editar" o arrasto nem começa (o servidor também recusa: PATCH /api/ordens/:id → 403)
   const sensors = useSensors(...(podeReagendar ? [sensorMouse, sensorToque] : []));
 
+  // Clicar no cartão abre a gaveta "Editar OS" por cima do calendário (a página inteira da OS fica
+  // a um clique, no rodapé da gaveta). Até esta leva o clique navegava para /ordens/[id].
   function navegar(card: CardOs) {
     if (arrastouRef.current) return;
-    router.push(`/ordens/${card.id}`);
+    setHover(null);
+    setGavetaCard(card);
+  }
+
+  /** Move um cartão de dia (e hora) só na tela — o mesmo passo otimista do arrastar e da gaveta. */
+  function moverNaTela(card: CardOs, fromDay: string, destino: string, hora?: string) {
+    setEventos((prev) => {
+      const origem = (prev[fromDay] ?? []).filter((c) => c.chave !== card.chave);
+      const movido = { ...card, chave: `${card.id}:${destino}`, dataFmt: dataCurta(destino), hora: hora ?? card.hora };
+      const alvo = [...(prev[destino] ?? []).filter((c) => c.chave !== movido.chave), movido].sort((a, b) => (a.hora ?? "99").localeCompare(b.hora ?? "99"));
+      return { ...prev, [fromDay]: origem, [destino]: alvo };
+    });
   }
 
   function aoIniciarArrasto(e: DragStartEvent) {
@@ -189,12 +205,7 @@ export function CalendarioGrid({
 
     const { card, fromDay } = data;
     // Move otimista
-    setEventos((prev) => {
-      const origem = (prev[fromDay] ?? []).filter((c) => c.chave !== card.chave);
-      const movido = { ...card, chave: `${card.id}:${destino}`, dataFmt: dataCurta(destino) };
-      const alvo = [...(prev[destino] ?? []), movido].sort((a, b) => (a.hora ?? "99").localeCompare(b.hora ?? "99"));
-      return { ...prev, [fromDay]: origem, [destino]: alvo };
-    });
+    moverNaTela(card, fromDay, destino);
 
     try {
       const res = await fetch(`/api/ordens/${card.id}`, {
@@ -263,8 +274,17 @@ export function CalendarioGrid({
         <ModalDia
           dateKey={modalDia} eventos={eventos[modalDia] ?? []} dimmedIds={dimmedIds}
           onClose={() => setModalDia(null)}
-          onNavegar={(c) => { setModalDia(null); router.push(`/ordens/${c.id}`); }}
+          onNavegar={(c) => { setModalDia(null); setGavetaCard(c); }}
           onCriar={podeCriar ? () => { const d = modalDia; setModalDia(null); setCriarDia(d); } : undefined}
+        />
+      )}
+
+      {/* A gaveta "Editar OS" do cartão clicado (a mesma da central da OS) */}
+      {gavetaCard && (
+        <GavetaOsCalendario
+          card={gavetaCard}
+          onFechar={() => setGavetaCard(null)}
+          onReagendado={(v) => moverNaTela(gavetaCard, diaDoCartao(gavetaCard), v.data, v.hora)}
         />
       )}
 

@@ -65,11 +65,15 @@ export async function GET(_: NextRequest, { params }: Params) {
     },
   });
   if (!os) return NextResponse.json({ erro: "Não encontrado" }, { status: 404 });
-  return NextResponse.json(os);
+  // `trava`: por que o registro está fechado (assinado, faturado, com nota) — ou null. A gaveta
+  // "Editar OS" aberta de fora da central (calendário) lê daqui para abrir em LEITURA em vez de
+  // deixar a pessoa digitar e só recusar no salvar. A central já calcula o mesmo no servidor.
+  return NextResponse.json({ ...os, trava: await travaDasLinhasDaOs(id) });
 }
 
-// Reagendamento rápido (drag-and-drop no calendário): move a OS para outro dia.
-// Body: { data: "YYYY-MM-DD", atividadeId?: string }
+// Reagendamento rápido: o arrastar do calendário manda só o dia; a gaveta "Editar OS" aberta do
+// calendário manda dia E hora da visita. Sem `hora`, o horário de Brasília que já estava é mantido.
+// Body: { data: "YYYY-MM-DD", hora?: "HH:mm", atividadeId?: string }
 export async function PATCH(req: NextRequest, { params }: Params) {
   const guard = await exigirPermissao("ordens", "editar");
   if (guard.erro) return guard.resposta;
@@ -93,10 +97,18 @@ export async function PATCH(req: NextRequest, { params }: Params) {
   if (!m) return NextResponse.json({ erro: "Data inválida." }, { status: 400 });
   const [, ys, ms, ds] = m;
   const y = Number(ys), mo = Number(ms) - 1, d = Number(ds);
+  // Hora opcional ("HH:mm", relógio de Brasília). Vazia/ausente = mantém a que estava (o arrastar).
+  const horaTexto = body?.hora == null || body.hora === "" ? undefined : String(body.hora);
+  const h = horaTexto === undefined ? null : /^(\d{2}):(\d{2})$/.exec(horaTexto);
+  if (horaTexto !== undefined && (!h || Number(h[1]) > 23 || Number(h[2]) > 59)) {
+    return NextResponse.json({ erro: "Hora inválida." }, { status: 400 });
+  }
+  const horaNova = h ? { hora: Number(h[1]), minuto: Number(h[2]) } : null;
 
   // Desloca para o dia escolhido mantendo o horário de BRASÍLIA (o mesmo que o calendário e o app
-  // mostram). Previsão só de dia (sem hora) continua só de dia; sem data, 08:00.
+  // mostram). Previsão só de dia (sem hora) continua só de dia; sem data, 08:00. Com `hora`, é ela.
   const desloca = (base: Date | null, soDia = false) => {
+    if (horaNova) return instanteBR(y, mo, d, horaNova.hora, horaNova.minuto);
     if (soDia && (!base || ehDiaCivil(base))) return diaCivilUTC(y, mo, d);
     const p = base ? partesBR(base) : { hora: 8, minuto: 0 };
     return instanteBR(y, mo, d, p.hora, p.minuto);
@@ -111,7 +123,7 @@ export async function PATCH(req: NextRequest, { params }: Params) {
   }
 
   await prisma.osHistorico.create({
-    data: { ordemServicoId: id, usuarioId, acao: "OS reagendada", detalhes: `Movida para ${ds}/${ms}/${ys}` },
+    data: { ordemServicoId: id, usuarioId, acao: "OS reagendada", detalhes: `Movida para ${ds}/${ms}/${ys}${horaTexto ? ` às ${horaTexto}` : ""}` },
   });
   await sincronizarStatusOs(id, empresaId, usuarioId);
 
