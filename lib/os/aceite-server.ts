@@ -20,6 +20,7 @@
 import { randomBytes } from "node:crypto";
 import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
+import { NOTA_BAIXA_ACEITE } from "@/lib/alertas/sino";
 import { whatsappLink } from "@/lib/utils";
 import { emailConfigAtiva, enviarEmail } from "@/lib/email";
 import { destinatariosDaOs, whatsappParaAviso } from "@/lib/execucao/aviso-cliente";
@@ -251,27 +252,45 @@ export async function marcarAceiteVisto(osId: string, empresaId: string, agora: 
 export interface AvisosDeAceite {
   /** Confirmações COM ressalva que ninguém viu, e a OS da mais recente (o destino do sino) */
   aceitesRessalva: number; aceiteRessalvaOsId: string | null;
-  /** Confirmações sem ressalva que ninguém viu, e a OS da mais recente */
+  /** Confirmações sem ressalva que ninguém viu, e a OS da mais recente (sem as de nota baixa, quando separadas) */
   aceitesConfirmados: number; aceiteConfirmadoOsId: string | null;
+  /** Confirmações sem ressalva com NOTA BAIXA (lib/alertas/sino › NOTA_BAIXA_ACEITE) que ninguém viu — o aviso do gestor */
+  avaliacoesBaixas: number; avaliacaoBaixaOsId: string | null;
 }
-export const SEM_AVISOS_DE_ACEITE: AvisosDeAceite = { aceitesRessalva: 0, aceiteRessalvaOsId: null, aceitesConfirmados: 0, aceiteConfirmadoOsId: null };
+export const SEM_AVISOS_DE_ACEITE: AvisosDeAceite = { aceitesRessalva: 0, aceiteRessalvaOsId: null, aceitesConfirmados: 0, aceiteConfirmadoOsId: null, avaliacoesBaixas: 0, avaliacaoBaixaOsId: null };
 
 /**
  * O sino: um aviso por confirmação ainda não vista — as com ressalva contadas à parte. `daAtividade`
  * é o escopo de quem pede (o técnico só é avisado das OS em que tem atividade); vazio = a empresa toda.
  */
-export async function avisosDeAceite(empresaId: string, daAtividade: Prisma.AtividadeOsWhereInput = {}): Promise<AvisosDeAceite> {
+export async function avisosDeAceite(
+  empresaId: string, daAtividade: Prisma.AtividadeOsWhereInput = {},
+  /** Separar as de nota baixa num aviso próprio (o do escritório); sem separar, elas contam como confirmadas */
+  { separarNotaBaixa = false }: { separarNotaBaixa?: boolean } = {},
+): Promise<AvisosDeAceite> {
   const restrito = Object.keys(daAtividade).length > 0;
   const naoVistos: Prisma.OsAceiteWhereInput = {
     empresaId, situacao: "CONFIRMADO", vistoEm: null,
     ordemServico: { empresaId, status: { not: "CANCELADA" }, ...(restrito && { atividades: { some: daAtividade } }) },
   };
-  const comRessalva = { ...naoVistos, ressalva: { not: null } }, semRessalva = { ...naoVistos, ressalva: null };
+  // Cada confirmação conta num aviso só: com ressalva › nota baixa (se separada) › confirmada
+  const baixa: Prisma.OsAceiteWhereInput = { avaliacao: { gte: 1, lte: NOTA_BAIXA_ACEITE } };
+  const comRessalva = { ...naoVistos, ressalva: { not: null } };
+  const notaBaixa = { ...naoVistos, ressalva: null, ...baixa };
+  const semRessalva: Prisma.OsAceiteWhereInput = separarNotaBaixa
+    ? { ...naoVistos, ressalva: null, OR: [{ avaliacao: null }, { avaliacao: { gt: NOTA_BAIXA_ACEITE } }] }
+    : { ...naoVistos, ressalva: null };
   const maisRecente = (where: Prisma.OsAceiteWhereInput) => prisma.osAceite.findFirst({ where, orderBy: { confirmadoEm: "desc" }, select: { ordemServicoId: true } });
-  const [nRessalva, nConfirmados, uRessalva, uConfirmado] = await Promise.all([
+  const [nRessalva, nConfirmados, uRessalva, uConfirmado, nBaixas, uBaixa] = await Promise.all([
     prisma.osAceite.count({ where: comRessalva }), prisma.osAceite.count({ where: semRessalva }), maisRecente(comRessalva), maisRecente(semRessalva),
+    separarNotaBaixa ? prisma.osAceite.count({ where: notaBaixa }) : Promise.resolve(0),
+    separarNotaBaixa ? maisRecente(notaBaixa) : Promise.resolve(null),
   ]);
-  return { aceitesRessalva: nRessalva, aceiteRessalvaOsId: uRessalva?.ordemServicoId ?? null, aceitesConfirmados: nConfirmados, aceiteConfirmadoOsId: uConfirmado?.ordemServicoId ?? null };
+  return {
+    aceitesRessalva: nRessalva, aceiteRessalvaOsId: uRessalva?.ordemServicoId ?? null,
+    aceitesConfirmados: nConfirmados, aceiteConfirmadoOsId: uConfirmado?.ordemServicoId ?? null,
+    avaliacoesBaixas: nBaixas, avaliacaoBaixaOsId: uBaixa?.ordemServicoId ?? null,
+  };
 }
 
 /* ───────── portal ───────── */

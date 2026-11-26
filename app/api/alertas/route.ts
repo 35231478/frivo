@@ -1,7 +1,7 @@
 import { NextResponse, after } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { pode } from "@/lib/permissoes";
+import { escopoDoSino } from "@/lib/alertas/sino";
 import { contarAlertasPrazos } from "@/lib/prazo-server";
 import { contarAlertasVeiculos } from "@/lib/veiculo-server";
 import { hojeDiaCivil } from "@/lib/fuso";
@@ -23,19 +23,14 @@ export async function GET() {
   const empresaId = session.user!.empresaId;
   const { permissoes, role } = session.user!;
 
-  // O sino só conta o que o usuário PODE ver: técnico/auxiliar não recebe
-  // "Compras pendentes" nem "Boletos pagos" (T1).
-  const verOrdens = pode(permissoes, "ordens", "visualizar", role);
-  const verCompras = pode(permissoes, "compras", "visualizar", role);
-  const verVeiculos = pode(permissoes, "veiculos", "visualizar", role);
-  const verBoletos = pode(permissoes, "financeiro", "contasReceber", role);
-  const verOrcamentos = pode(permissoes, "orcamentos", "visualizar", role);
-  const verFiscal = pode(permissoes, "financeiro", "fiscal", role);
-  const verMedicoes = pode(permissoes, "financeiro", "medicoes", role);
-  const editarContratos = pode(permissoes, "contratos", "editar", role);
-  const separaMaterial = pode(permissoes, "estoque", "separar", role);
-  const verPmoc = pode(permissoes, "pmoc", "visualizar", role);
-  const verAdmissoes = pode(permissoes, "admissao", "gerenciar", role);
+  // O sino só conta o que o usuário PODE ver (permissão) e o que é DELE (escopo do técnico): a regra pura
+  // está em lib/alertas/sino › escopoDoSino. No modo técnico, nada da empresa inteira — só os aceites das OS
+  // em que ele tem atividade e a NF dos pedidos que ele fez.
+  const escopoTecnico = escopoDaSessao(session);
+  const e = escopoDoSino({ permissoes, role, restrito: escopoTecnico.restrito });
+  const verOrdens = e.prazos, verCompras = e.comprasPendentes, verVeiculos = e.veiculos, verBoletos = e.boletos;
+  const verOrcamentos = e.orcamentos, verFiscal = e.fiscal, verMedicoes = e.medicoes, editarContratos = e.reajustes;
+  const separaMaterial = e.separacao, verPmoc = e.pmoc, verAdmissoes = e.admissoes;
 
   // MÓDULOS DA EMPRESA (Loja de Módulos): o sino é tela do núcleo, mas conta coisa de módulo.
   // O que é de um módulo desligado não vira aviso — some do sino como sumiu do menu. Não é 403:
@@ -92,7 +87,8 @@ export async function GET() {
     verPmoc ? contarAvisosPmoc(empresaId) : Promise.resolve({ pmocsVencendo: 0, pmocsExpirados: 0 }),
     // Aceite do cliente: confirmou pelo link (ou assinou com o técnico) e ninguém do escritório abriu a OS
     // ainda — as ressalvas à parte. Só para quem vê OS; o técnico, só das OS em que tem atividade
-    verOrdens ? avisosDeAceite(empresaId, filtroEscopo(escopoDaSessao(session))) : Promise.resolve(SEM_AVISOS_DE_ACEITE),
+    // A nota baixa (até 2 estrelas) vira aviso próprio do escritório, com o link para a OS (lib/alertas/sino)
+    e.aceites ? avisosDeAceite(empresaId, filtroEscopo(escopoTecnico), { separarNotaBaixa: e.notaBaixa }) : Promise.resolve(SEM_AVISOS_DE_ACEITE),
     // Admissão assinada esperando ir para o contador (Equipe › Admissões)
     verAdmissoes ? contarAdmissoesAssinadas(empresaId) : Promise.resolve({ admissoesAssinadas: 0, admissaoAssinadaId: null }),
   ]);
@@ -128,6 +124,6 @@ export async function GET() {
     ...pmoc,
     ...aceites,
     ...admissoes,
-    total: totalPrazos + totalVeiculos + boletosPagos + orcamentosRespondidos + leadsSite + nfsDoPedido.length + nfse.nfseAutorizadas + nfse.nfseRejeitadas + nfse.nfseAguardando + faturamentoContratos + reajustesContrato + separacoesPendentes + devolucoesPendentes + pmoc.pmocsVencendo + pmoc.pmocsExpirados + aceites.aceitesRessalva + aceites.aceitesConfirmados + admissoes.admissoesAssinadas,
+    total: totalPrazos + totalVeiculos + boletosPagos + orcamentosRespondidos + leadsSite + nfsDoPedido.length + nfse.nfseAutorizadas + nfse.nfseRejeitadas + nfse.nfseAguardando + faturamentoContratos + reajustesContrato + separacoesPendentes + devolucoesPendentes + pmoc.pmocsVencendo + pmoc.pmocsExpirados + aceites.aceitesRessalva + aceites.aceitesConfirmados + aceites.avaliacoesBaixas + admissoes.admissoesAssinadas,
   });
 }

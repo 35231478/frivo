@@ -1,7 +1,7 @@
 "use client";
 
 import { signOut } from "next-auth/react";
-import { Bell, ShieldAlert, ShieldX, ChevronRight, LogOut, Search, AlertTriangle, Clock, ShoppingCart, Timer, Headset, ClipboardCheck, FileWarning, Wrench, Menu, Barcode, MessageSquareReply, PackageCheck, FileCheck2, FileX2, Hourglass, CalendarX2, TrendingUp, PackageOpen, PackageMinus, Globe, BadgeCheck, MessageSquareWarning, UserPlus } from "lucide-react";
+import { Bell, ShieldAlert, ShieldX, ChevronRight, LogOut, Search, AlertTriangle, Clock, ShoppingCart, Timer, Headset, ClipboardCheck, FileWarning, Wrench, Menu, Barcode, MessageSquareReply, PackageCheck, FileCheck2, FileX2, Hourglass, CalendarX2, TrendingUp, PackageOpen, PackageMinus, Globe, BadgeCheck, MessageSquareWarning, StarOff, UserPlus } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -45,6 +45,9 @@ interface Alertas {
   aceiteRessalvaOsId?: string | null;
   aceitesConfirmados?: number;
   aceiteConfirmadoOsId?: string | null;
+  /** Nota baixa no aceite (até 2 estrelas) que ninguém do escritório viu */
+  avaliacoesBaixas?: number;
+  avaliacaoBaixaOsId?: string | null;
   /** Admissão digital: assinada e esperando ir para o contador */
   admissoesAssinadas?: number;
   admissaoAssinadaId?: string | null;
@@ -284,6 +287,7 @@ export function Header({ session, avatarUrl }: HeaderProps) {
                   {podeVer("orcamentos") && (alertas?.leadsSite ?? 0) > 0 && <AlertaItem href="/leads-site" icone={Globe} cor="text-primary-600" label="Novos leads do site" valor={alertas?.leadsSite ?? 0} onClick={() => setSinoAberto(false)} />}
                   {podeVer("orcamentos") && <AlertaItem href="/orcamentos?resposta=nova&periodo=todos" icone={MessageSquareReply} cor="text-acento" label="Respostas de orçamentos" valor={alertas?.orcamentosRespondidos ?? 0} onClick={() => setSinoAberto(false)} />}
                   {/* Aceite do cliente: confirmou pelo link (ou assinou com o técnico) e ninguém abriu a OS ainda; a ressalva primeiro */}
+                  {podeVer("ordens") && (alertas?.avaliacoesBaixas ?? 0) > 0 && <AlertaItem href={hrefOs(alertas?.avaliacaoBaixaOsId)} icone={StarOff} cor="text-atrasado" label="Avaliações baixas do cliente" valor={alertas?.avaliacoesBaixas ?? 0} onClick={() => setSinoAberto(false)} />}
                   {podeVer("ordens") && (alertas?.aceitesRessalva ?? 0) > 0 && <AlertaItem href={hrefOs(alertas?.aceiteRessalvaOsId)} icone={MessageSquareWarning} cor="text-atencao" label="Ressalvas de clientes" valor={alertas?.aceitesRessalva ?? 0} onClick={() => setSinoAberto(false)} />}
                   {podeVer("ordens") && (alertas?.aceitesConfirmados ?? 0) > 0 && <AlertaItem href={hrefOs(alertas?.aceiteConfirmadoOsId)} icone={BadgeCheck} cor="text-ok" label="Serviços confirmados pelo cliente" valor={alertas?.aceitesConfirmados ?? 0} onClick={() => setSinoAberto(false)} />}
                   {podeVer("admissao", "gerenciar") && (alertas?.admissoesAssinadas ?? 0) > 0 && <AlertaItem href="/admissoes?situacao=ASSINADO" icone={UserPlus} cor="text-ok" label="Admissões assinadas" valor={alertas?.admissoesAssinadas ?? 0} onClick={() => setSinoAberto(false)} />}
