@@ -1,6 +1,7 @@
 "use client";
 
 import { confirmar } from "@/components/ui/avisos";
+import { textoInativar } from "@/lib/cadastros/regras-arquivar";
 import { useState, useEffect, useCallback } from "react";
 import { buscarCep, cepCompleto } from "@/lib/cep";
 import { useAutoGeocode } from "@/hooks/use-auto-geocode";
@@ -13,7 +14,7 @@ import { MapaEndereco } from "@/components/ui/mapa-endereco";
 import { EnderecoAutocomplete, type EnderecoSelecionado } from "@/components/ui/endereco-autocomplete";
 import { haversine, formatarDistancia } from "@/lib/geo";
 import type { Unidade } from "@prisma/client";
-import { Plus, Pencil, Trash2, X, Check, ChevronDown, Navigation, Smartphone, Search } from "lucide-react";
+import { Plus, Pencil, Ban, X, Check, ChevronDown, Navigation, Smartphone, Search } from "lucide-react";
 import { cn, comparaNatural } from "@/lib/utils";
 
 const ESTADOS_BR = [
@@ -221,11 +222,14 @@ export function UnidadesManager({ clienteId, unidadesIniciais, enderecoCliente }
   async function remover(id: string) {
     const u = unidades.find((u) => u.id === id);
     if (u?.principal) { setErro("Não é possível remover o endereço principal."); return; }
-    if (!(await confirmar({ mensagem: "Tem certeza que deseja remover este endereço?", perigo: true, confirmarTexto: "Excluir" }))) return;
+    // O endereço é inativado (o histórico das OS e dos equipamentos continua apontando para ele), não
+    // apagado: o texto é o mesmo de todo lugar que inativa. Ainda não há reativação pela tela.
+    const t = textoInativar("endereço", u?.nome, "m", false);
+    if (!(await confirmar({ titulo: t.titulo, mensagem: t.mensagem, perigo: true, confirmarTexto: t.confirmar, cancelarTexto: "Voltar" }))) return;
     setErro("");
     try {
       const res = await fetch(`/api/unidades/${id}`, { method: "DELETE" });
-      if (!res.ok) { const e = await res.json(); setErro(e.erro ?? "Erro ao remover."); return; }
+      if (!res.ok) { const e = await res.json(); setErro(e.erro ?? "Erro ao inativar."); return; }
       setUnidades((prev) => prev.filter((u) => u.id !== id));
     } catch { setErro("Erro de conexão."); }
   }
@@ -380,8 +384,8 @@ export function UnidadesManager({ clienteId, unidadesIniciais, enderecoCliente }
                       <Button type="button" variant="ghost" onClick={() => marcarPrincipal(u.id)} className="text-xs h-7 px-2.5 text-atencao-texto hover:text-atencao-texto">
                         Tornar principal
                       </Button>
-                      <Button type="button" variant="ghost" onClick={() => remover(u.id)} className="text-xs h-7 px-2.5 text-atrasado hover:text-atrasado-texto">
-                        <Trash2 className="w-3 h-3" /> Excluir
+                      <Button type="button" variant="ghost" onClick={() => remover(u.id)} className="text-xs h-7 px-2.5 text-atrasado hover:text-atrasado-texto" data-inativar-endereco>
+                        <Ban className="w-3 h-3" /> Inativar
                       </Button>
                     </>
                   )}

@@ -29,6 +29,7 @@ import { InteracoesManager } from "@/components/forms/interacoes-manager";
 import { ToggleSwitch, ToggleGroup } from "@/components/ui/toggle-switch";
 import { usePermissoes } from "@/components/providers/permissoes-provider";
 import { AtalhoDocumentacao } from "@/components/documentacao/atalho-documentacao";
+import { InativarRegistro } from "@/components/ui/inativar-registro";
 import { cn } from "@/lib/utils";
 import {
   LABELS_STATUS_FINANCEIRO_CALC, COR_STATUS_FINANCEIRO_CALC, type StatusFinanceiroCalc,
@@ -103,8 +104,6 @@ export function ClienteForm({ initialData, statusFinanceiroCalc, perdas12m, cons
   // RBAC (o servidor também valida): sem permissão de salvar, a ficha abre somente leitura.
   const { pode } = usePermissoes();
   const podeSalvar = pode("clientes", isEditing ? "editar" : "criar");
-  const podeInativar = pode("clientes", "excluir");
-  const podeReativar = pode("clientes", "editar");
   // UX-2/E5: "cliente ligou → abrir OS" sem sair da ficha (RBAC igual ao resto do sistema)
   const podeNovaOs = pode("ordens", "criar");
   const podeNovoOrcamento = pode("orcamentos", "criar");
@@ -128,8 +127,6 @@ export function ClienteForm({ initialData, statusFinanceiroCalc, perdas12m, cons
   const [cnpjInfo, setCnpjInfo] = useState<{ nome: string; cidade?: string; estado?: string } | null>(null);
 
   // Controle do status ativo/inativo (header)
-  const [statusOpen, setStatusOpen] = useState(false);
-  const [mudandoAtivo, setMudandoAtivo] = useState(false);
 
   // UX-2/E5: salvar um cliente novo aterrissa NESTA ficha (?criado=1) — confirma e já oferece as ações
   const searchParams = useSearchParams();
@@ -141,27 +138,6 @@ export function ClienteForm({ initialData, statusFinanceiroCalc, perdas12m, cons
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [chegouCriado]);
-
-  // Inativa (DELETE = soft-delete, exige "excluir") ou reativa (PATCH, exige "editar")
-  // o cliente sem salvar o formulário inteiro.
-  async function alterarAtivo(novo: boolean) {
-    if (!isEditing) return;
-    setMudandoAtivo(true);
-    try {
-      const res = novo
-        ? await fetch(`/api/clientes/${initialData!.id}`, {
-            method: "PATCH",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ ativo: true }),
-          })
-        : await fetch(`/api/clientes/${initialData!.id}`, { method: "DELETE" });
-      if (!res.ok) { const e = await res.json().catch(() => ({})); setErroGlobal(e.erro ?? "Erro ao alterar status."); return; }
-      setValue("ativo", novo);
-      setStatusOpen(false);
-      toast(novo ? "Cliente reativado." : "Cliente inativado.");
-      router.refresh();
-    } catch { setErroGlobal("Erro de conexão."); } finally { setMudandoAtivo(false); }
-  }
 
   // Tabela de preços (em Dados gerais). O perfil de faturamento (tipo/dia/condição e canais de
   // cobrança) saiu da UI do cliente: as colunas ficam no banco e são preservadas na edição porque
@@ -337,8 +313,6 @@ export function ClienteForm({ initialData, statusFinanceiroCalc, perdas12m, cons
   const salvar = handleSubmit((d) => onSubmit(d, false), onError);
   const salvarEContinuar = handleSubmit((d) => onSubmit(d, true), onError);
   const titulo = isEditing ? (initialData?.nome || "Editar cliente") : "Novo cliente";
-  // Inativar exige "excluir"; reativar exige "editar". Sem a permissão, o status vira só um selo.
-  const podeAlterarStatus = ativoVal ? podeInativar : podeReativar;
 
   // "Cliente ligou → abrir OS" sem sair da ficha (E5): atalhos no cabeçalho, só para cliente ativo
   const AtalhosCliente = ({ compact = false }: { compact?: boolean }) => !isEditing || !ativoVal ? null : (
@@ -430,49 +404,23 @@ export function ClienteForm({ initialData, statusFinanceiroCalc, perdas12m, cons
               <span className={cn("text-xs font-medium px-2 py-0.5 rounded-full", COR_STATUS_FINANCEIRO_CALC[statusCalc])}>
                 {LABELS_STATUS_FINANCEIRO_CALC[statusCalc]}
               </span>
-              {isEditing && (consulta || !podeAlterarStatus) ? (
-                <span className={cn(
-                  "inline-flex items-center gap-1.5 text-xs font-medium rounded-lg px-2.5 py-1 border",
-                  ativoVal ? "bg-ok-claro border-ok/20 text-ok-texto" : "bg-atrasado-claro border-atrasado/20 text-atrasado",
-                )}>
-                  <span className={cn("w-1.5 h-1.5 rounded-full", ativoVal ? "bg-ok" : "bg-atrasado")} />
-                  {ativoVal ? "Ativo" : "Inativo"}
-                </span>
-              ) : isEditing ? (
-                <div className="relative">
-                  <button
-                    type="button"
-                    onClick={() => setStatusOpen((o) => !o)}
-                    title="Mudar status do cliente"
-                    className={cn(
-                      "inline-flex items-center gap-1.5 text-xs font-medium rounded-lg px-2.5 py-1 border transition-colors",
-                      ativoVal
-                        ? "bg-ok-claro border-ok/20 text-ok-texto hover:brightness-95"
-                        : "bg-atrasado-claro border-atrasado/20 text-atrasado hover:brightness-95",
-                    )}
-                  >
+              {isEditing ? (
+                <span className="inline-flex items-center gap-1">
+                  <span data-status-cliente className={cn(
+                    "inline-flex items-center gap-1.5 text-xs font-medium rounded-lg px-2.5 py-1 border",
+                    ativoVal ? "bg-ok-claro border-ok/20 text-ok-texto" : "bg-atrasado-claro border-atrasado/20 text-atrasado",
+                  )}>
                     <span className={cn("w-1.5 h-1.5 rounded-full", ativoVal ? "bg-ok" : "bg-atrasado")} />
                     {ativoVal ? "Ativo" : "Inativo"}
-                  </button>
-                  {statusOpen && (
-                    <>
-                      <div className="fixed inset-0 z-40" onClick={() => setStatusOpen(false)} />
-                      <div className="absolute left-0 mt-2 z-50 w-72 bg-white border border-surface-border rounded-card shadow-card-hover p-3 space-y-3">
-                        <p className="text-sm text-ink">
-                          {ativoVal
-                            ? "Deseja inativar este cliente? Ele não aparecerá nas listagens padrão, mas todo o histórico será preservado."
-                            : "Deseja reativar este cliente?"}
-                        </p>
-                        <div className="flex justify-end gap-2">
-                          <Button type="button" variant="secondary" size="sm" onClick={() => setStatusOpen(false)}>Cancelar</Button>
-                          <Button type="button" variant={ativoVal ? "danger" : "success"} size="sm" loading={mudandoAtivo} onClick={() => alterarAtivo(!ativoVal)}>
-                            {ativoVal ? "Inativar" : "Reativar"}
-                          </Button>
-                        </div>
-                      </div>
-                    </>
-                  )}
-                </div>
+                  </span>
+                  {/* Inativar/Reativar: o mesmo botão e a mesma confirmação da lista (e dos outros cadastros),
+                      na consulta e na edição. Inativar exige "excluir"; reativar, "editar" (o próprio botão confere). */}
+                  <InativarRegistro
+                    url={`/api/clientes/${initialData!.id}`} modulo="clientes" acaoReativar="editar"
+                    ativo={ativoVal} nome={initialData?.nomeFantasia || initialData?.nome || ""} entidade="cliente" comMotivo={false}
+                    aoConcluir={(novo) => { setValue("ativo", novo); router.refresh(); }}
+                  />
+                </span>
               ) : (
                 <span className="inline-flex items-center gap-1.5 text-xs font-medium rounded-lg px-2.5 py-1 border bg-ok-claro border-ok/20 text-ok-texto">
                   <span className="w-1.5 h-1.5 rounded-full bg-ok" /> Ativo
