@@ -8,9 +8,13 @@ import { linhasDadosBancarios } from "@/lib/orcamentos/dados-bancarios";
 import {
   quantidadesAlinhadas, valorSemMoeda,
   destinatarioOrcamento, linhasCondicoes, linhasNaoIncluso, normasDoDocumento, numeroFormalOrcamento, partesItemDocumento, textoArt, timbreEmpresa,
-  numerosOsDoDocumento,
-  type ContatoPara, type OsVinculadaDoc, type UnidadePara,
+  type ContatoPara, type UnidadePara,
 } from "@/lib/orcamentos/proposta";
+import {
+  materiaisNoDocumento, opcoesDoDocumento, osDoDocumento,
+  type MaterialDocumento, type MaterialOrcamentoEntrada, type OpcoesDocumentoOrcamento, type OsVinculadaComLink,
+} from "@/lib/orcamentos/documento-opcoes";
+import { formatarQtd } from "@/lib/estoque/regras";
 
 export interface ItemDoc {
   /** Presentes quando o documento vem do banco (a edição da linha no detalhe do orçamento usa) */
@@ -28,6 +32,8 @@ export interface ItemDoc {
   produtoId?: string | null;
   servico?: { nome: string } | null;
   produto?: { nome: string } | null;
+  /** Leva D: materiais do serviço (sem custo — ver SELECT_MATERIAL_DOCUMENTO); só aparecem com a opção ligada */
+  materiais?: MaterialOrcamentoEntrada[] | null;
 }
 
 /**
@@ -104,8 +110,14 @@ export interface OrcamentoDocumentoProps {
     produtos: ItemDoc[];
     /** Para filtrar as OS vinculadas pela mesma empresa */
     empresaId?: string | null;
-    /** OS vinculadas ao orçamento: o número aparece no cabeçalho do documento (sem link, por ora) */
-    ordensServico?: OsVinculadaDoc[] | null;
+    /**
+     * OS vinculadas ao orçamento: o número aparece no cabeçalho do documento e é link para a "versão do cliente"
+     * da OS (relatório GERAL, público com token) quando ela existe — nunca um endereço interno
+     */
+    ordensServico?: OsVinculadaComLink[] | null;
+    /** Leva D: "Mostrar materiais ao cliente" e "Mostrar valores dos produtos/materiais" (desligados = como sempre) */
+    mostrarMateriais?: boolean | null;
+    mostrarValoresMateriais?: boolean | null;
   };
   empresa: {
     nome: string;
@@ -211,7 +223,8 @@ export function OrcamentoDocumento({ orcamento, empresa, cliente, anexos = [], v
   const naoIncluso = linhasNaoIncluso(orcamento.naoIncluso);
   const normas = normasDoDocumento(orcamento.normas);
   const rt = orcamento.responsavelTecnico;
-  const numerosOs = numerosOsDoDocumento(orcamento.ordensServico, orcamento.empresaId);
+  const osDoc = osDoDocumento(orcamento.ordensServico, orcamento.empresaId);
+  const opcoes = opcoesDoDocumento(orcamento);
   const fotos = anexos.filter((a) => a.tipo === "FOTO");
   const arquivos = anexos.filter((a) => a.tipo === "ARQUIVO");
 
@@ -272,10 +285,20 @@ export function OrcamentoDocumento({ orcamento, empresa, cliente, anexos = [], v
               <dd className="font-medium text-ink">{formatarData(orcamento.validadeEm)}</dd>
             </div>
           )}
-          {numerosOs.length > 0 && (
+          {osDoc.length > 0 && (
             <div className="flex justify-between gap-3" data-os-documento>
               <dt className="text-ink-muted">OS</dt>
-              <dd className="font-medium text-ink font-mono text-right [overflow-wrap:anywhere]">{numerosOs.join(", ")}</dd>
+              <dd className="font-medium text-ink font-mono text-right [overflow-wrap:anywhere]">
+                {/* Com a versão do cliente da OS: o número é link (no PDF também — o navegador grava o endereço completo) */}
+                {osDoc.map((os, i) => (
+                  <span key={os.numero}>
+                    {i > 0 && ", "}
+                    {os.href ? (
+                      <a href={os.href} target="_blank" rel="noopener" className="text-primary-600 underline decoration-dotted underline-offset-2 hover:decoration-solid" data-link-os title="Abrir a OS (versão do cliente)">{os.numero}</a>
+                    ) : os.numero}
+                  </span>
+                ))}
+              </dd>
             </div>
           )}
         </dl>
@@ -289,7 +312,7 @@ export function OrcamentoDocumento({ orcamento, empresa, cliente, anexos = [], v
       </section>
 
       {orcamento.servicos.length > 0 && (
-        <TabelaGrupo titulo="Serviços" rotulo="serviços" itens={orcamento.servicos} grupo={grupoServicos} edicao={edicao} />
+        <TabelaGrupo titulo="Serviços" rotulo="serviços" itens={orcamento.servicos} grupo={grupoServicos} edicao={edicao} opcoes={opcoes} />
       )}
 
       {orcamento.produtos.length > 0 && (
@@ -488,6 +511,33 @@ export function OrcamentoDocumento({ orcamento, empresa, cliente, anexos = [], v
   );
 }
 
+/**
+ * Leva D — os materiais INCLUSOS no serviço, recuados dentro da linha dele ("Materiais inclusos"): descrição e
+ * quantidade; com a opção de valores, o preço de venda (unitário e total). Já vêm sem custo (materiaisNoDocumento).
+ */
+function MateriaisDoServico({ materiais }: { materiais: MaterialDocumento[] }) {
+  if (!materiais.length) return null;
+  return (
+    <div className="mt-1.5 print:mt-1 border-l-2 border-surface-linha pl-2.5" data-materiais-servico>
+      <p className="text-[10px] print:text-[9px] uppercase tracking-wide font-semibold text-ink-subtle">Materiais inclusos</p>
+      <ul className="mt-0.5 space-y-0.5 text-[11px] print:text-[10px] leading-snug text-ink-muted">
+        {materiais.map((m, i) => (
+          <li key={i} className="flex flex-wrap items-baseline justify-between gap-x-3" data-material-documento>
+            <span className="min-w-0">
+              {m.descricao} <span className="tabular-nums whitespace-nowrap">· {formatarQtd(m.quantidade)} {m.unidade}</span>
+            </span>
+            {m.valorUnitario != null && m.valorTotal != null && (
+              <span className="tabular-nums whitespace-nowrap" data-valor-material>
+                {formatarMoeda(m.valorUnitario)}/{m.unidade} · {formatarMoeda(m.valorTotal)}
+              </span>
+            )}
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
 interface GrupoDoc {
   itens: { quantidade: number; valorUnitario: number; valorTotal: number }[];
   subtotal: number;
@@ -503,8 +553,10 @@ interface GrupoDoc {
  * é cortada ao meio; os subtotais ficam FORA da tabela (num tfoot o navegador repetiria o
  * "Subtotal" em toda página) e não se separam da última linha.
  */
-function TabelaGrupo({ titulo, rotulo, itens, grupo, edicao }: {
+function TabelaGrupo({ titulo, rotulo, itens, grupo, edicao, opcoes }: {
   titulo: string; rotulo: string; itens: ItemDoc[]; grupo: GrupoDoc; edicao?: { orcamentoId: string; faturado: boolean; status: string };
+  /** Só nos serviços: os materiais de cada um, conforme as opções do documento */
+  opcoes?: OpcoesDocumentoOrcamento;
 }) {
   const comIss = (grupo.valorIss ?? 0) > 0;
   const mostrarTotal = grupo.desconto > 0 || comIss;
@@ -535,6 +587,7 @@ function TabelaGrupo({ titulo, rotulo, itens, grupo, edicao }: {
                 <td className={cn(td, "text-right text-ink-subtle tabular-nums")}>{i + 1}</td>
                 <td className={cn(td, "text-ink")}>
                   <TextoItemDocumento item={it} />
+                  {opcoes && <MateriaisDoServico materiais={materiaisNoDocumento(it.materiais, opcoes)} />}
                   <p className="sm:hidden text-[11px] text-ink-muted tabular-nums" data-qtd-unitario-celular>{qtds[i]} × {formatarMoeda(grupo.itens[i]?.valorUnitario ?? 0)}</p>
                 </td>
                 <td className={cn(td, "hidden sm:table-cell text-right text-ink-muted tabular-nums whitespace-nowrap")} data-qtd>{qtds[i]}</td>

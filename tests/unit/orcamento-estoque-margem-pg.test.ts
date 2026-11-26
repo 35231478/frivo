@@ -230,12 +230,15 @@ describe.skipIf(!URL_PG)("Orçamento: estoque e margem (PostgreSQL real)", () =>
     const v = await props();
     expect(v.inicial.servicos[0].materiais).toHaveLength(1);
     expect(JSON.stringify(v)).not.toMatch(/custoUnit/);
-    expect(JSON.stringify(v.inicial)).not.toMatch(/45/);
+    // o custo (45) como NÚMERO solto — não um pedaço de id aleatório (cuid), que às vezes contém "45"
+    expect(JSON.stringify(v.inicial)).not.toMatch(/(?<![\w.])45(\.0+)?(?![\w.])/);
   });
 
-  it("documento do cliente (link público e PDF): a consulta nem lê materiais nem custo", async () => {
+  it("documento do cliente (link público e PDF): a consulta nunca lê o custo", async () => {
     const { INCLUDE_DOCUMENTO_ORCAMENTO } = await import("@/lib/orcamentos/documento-server");
-    expect(JSON.stringify(INCLUDE_DOCUMENTO_ORCAMENTO)).not.toMatch(/materiais|custo/i);
+    // Orçamento, leva D: a consulta passou a ler os materiais do serviço (opção "Mostrar materiais ao cliente"),
+    // campo a campo e SEM o custo — o que esta trava protege continua igual: nenhum custo no documento
+    expect(JSON.stringify(INCLUDE_DOCUMENTO_ORCAMENTO)).not.toMatch(/custo/i);
     const doc = await prisma.orcamento.findUnique({ where: { id: ids.orc }, include: INCLUDE_DOCUMENTO_ORCAMENTO });
     expect(JSON.stringify(doc)).not.toMatch(/custoUnit|custo_unit|"45"/);
   });

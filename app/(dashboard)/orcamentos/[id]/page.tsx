@@ -4,9 +4,11 @@ import Link from "next/link";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { OrcamentoDocumento } from "@/components/orcamento/orcamento-documento";
-import { anexosDoDocumento, INCLUDE_DOCUMENTO_ORCAMENTO } from "@/lib/orcamentos/documento-server";
+import { anexosDoDocumento, INCLUDE_DOCUMENTO_ORCAMENTO, SELECT_RELATORIO_CLIENTE_OS } from "@/lib/orcamentos/documento-server";
 import { PropostaDocumento } from "@/components/orcamento/proposta-documento";
 import { AcoesEnvio } from "@/components/orcamento/acoes-envio";
+import { OpcoesDocumento } from "@/components/orcamento/opcoes-documento";
+import { motivoOpcoesTravadas } from "@/lib/orcamentos/documento-opcoes";
 import { ConverterContrato } from "@/components/orcamento/converter-contrato";
 import { ComprasSecao } from "@/components/compras/compras-secao";
 import { AnexosProposta } from "@/components/orcamento/anexos-proposta";
@@ -46,7 +48,7 @@ export default async function OrcamentoDetalhePage({
         osGerada: { select: { id: true, numero: true } },
         ordensServico: {
           include: {
-            ordemServico: { select: { id: true, numero: true, status: true, descricao: true, criadoEm: true, empresaId: true } },
+            ordemServico: { select: { id: true, numero: true, status: true, descricao: true, criadoEm: true, empresaId: true, relatorios: SELECT_RELATORIO_CLIENTE_OS } },
           },
         },
       },
@@ -120,6 +122,17 @@ export default async function OrcamentoDetalhePage({
           podeEditar={podeEditar}
           etapa={etapaCiclo(orcamento)}
         />
+        {/* Leva D: o que o cliente vê no link, na impressão e no PDF (materiais dentro do serviço, com/sem valores) */}
+        {!ehProposta && (
+          <div className="mt-4">
+            <OpcoesDocumento
+              orcamentoId={orcamento.id}
+              inicial={{ mostrarMateriais: orcamento.mostrarMateriais, mostrarValoresMateriais: orcamento.mostrarValoresMateriais }}
+              podeEditar={pode(u.permissoes, "orcamentos", "editar", u.role)}
+              travado={motivoOpcoesTravadas(orcamento.status)}
+            />
+          </div>
+        )}
       </div>
 
       {/* Faturamento avulso, caminho inverso: orçamento aprovado → OS */}
