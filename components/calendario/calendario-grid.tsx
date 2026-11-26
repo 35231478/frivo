@@ -627,11 +627,10 @@ function Tooltip({ card, rect }: { card: CardOs; rect: DOMRect }) {
       <div className="bg-white rounded-lg shadow-xl border border-surface-border p-4 space-y-2.5 text-left">
         <div className="flex items-center justify-between gap-2">
           <span className="font-mono font-bold text-primary-600 text-sm">OS #{card.numero}</span>
-          <span className="flex items-center gap-1.5">
-            {card.deslocamento && <span className="pill-deslocamento" data-selo-deslocamento>{ESTILO_GRUPO.deslocamento.rotulo}</span>}
-            <span className={badgeStatus(card.status)}>{LABELS_STATUS_OS[card.status] ?? card.status}</span>
-          </span>
+          <span className={badgeStatus(card.status)}>{LABELS_STATUS_OS[card.status] ?? card.status}</span>
         </div>
+        {/* O técnico está a caminho (lib/os/estado-atividade): numa linha própria, para o cabeçalho não apertar */}
+        {card.deslocamento && <div><span className="pill-deslocamento" data-selo-deslocamento>{ESTILO_GRUPO.deslocamento.rotulo}</span></div>}
         <div className="text-sm font-semibold text-ink leading-snug">{card.clienteCompleto}</div>
         <div className="space-y-1.5 text-xs text-ink-muted">
           {card.unidade && (
