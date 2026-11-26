@@ -241,6 +241,8 @@ describe("exportação = mesmas colunas, lidas de volta (round-trip)", () => {
   it("permissão de baixar: ver o módulo da lista", () => {
     expect(PERMISSOES_EXPORTACAO).toEqual({
       clientes: [["clientes", "visualizar"]], fornecedores: [["financeiro", "visualizar"], ["configuracoes", "visualizar"]],
+      // Implantação, leva 1: unidades e contatos vivem dentro do cliente — baixar pede ver clientes
+      unidades: [["clientes", "visualizar"]], contatos: [["clientes", "visualizar"]],
       servicos: [["configuracoes", "visualizar"]], produtos: [["configuracoes", "visualizar"]],
     });
   });
