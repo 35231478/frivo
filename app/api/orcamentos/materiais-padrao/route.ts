@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { exigirAlgumaPermissao } from "@/lib/permissoes-server";
 import { materialAvulso } from "@/lib/orcamentos/materiais";
 import { materiaisPadraoDoServico, produtoComoMaterial } from "@/lib/orcamentos/materiais-server";
+import { podeVerCusto } from "@/lib/orcamentos/estoque-margem-server";
+import { semCustoNosMateriais } from "@/lib/orcamentos/estoque-margem";
 
 /**
  * Estoque E3.3 — materializar no orçamento:
@@ -14,6 +16,8 @@ export async function GET(req: NextRequest) {
   const guard = await exigirAlgumaPermissao([["orcamentos", "criar"], ["orcamentos", "editar"]]);
   if (guard.erro) return guard.resposta;
   const empresaId = guard.session.user!.empresaId;
+  // "Orçamentos › Ver custo e margem": sem ela, o custo interno não sai daqui (o salvar o recalcula no servidor)
+  const verCusto = podeVerCusto(guard.session.user);
   const sp = req.nextUrl.searchParams;
   const clienteId = sp.get("clienteId") || null;
   const servicoId = sp.get("servicoId");
@@ -21,13 +25,14 @@ export async function GET(req: NextRequest) {
   if (servicoId) {
     const materiais = await materiaisPadraoDoServico(empresaId, servicoId, clienteId);
     if (!materiais) return NextResponse.json({ erro: "Serviço não encontrado" }, { status: 404 });
-    return NextResponse.json({ materiais });
+    return NextResponse.json({ materiais: verCusto ? materiais : semCustoNosMateriais(materiais) });
   }
   if (produtoId) {
     const r = await produtoComoMaterial(empresaId, produtoId, clienteId);
     if (!r) return NextResponse.json({ erro: "Produto não encontrado" }, { status: 404 });
     const { produto: p } = r;
-    return NextResponse.json({ material: materialAvulso({ produtoId: p.id, nome: p.nome, unidade: p.unidade, comportamento: p.categoriaProduto?.comportamento, valorVendaUnit: r.valorVendaUnit, custoUnit: r.custoUnit }) });
+    const material = materialAvulso({ produtoId: p.id, nome: p.nome, unidade: p.unidade, comportamento: p.categoriaProduto?.comportamento, valorVendaUnit: r.valorVendaUnit, custoUnit: r.custoUnit });
+    return NextResponse.json({ material: verCusto ? material : semCustoNosMateriais([material])[0] });
   }
   return NextResponse.json({ erro: "Informe servicoId ou produtoId" }, { status: 400 });
 }

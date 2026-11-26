@@ -10,6 +10,8 @@ import { diaCivilPassou } from "@/lib/fuso";
 import { registrarEvento } from "@/lib/orcamentos/ciclo-server";
 import { LABELS_STATUS_ORCAMENTO } from "@/lib/utils";
 import { exigirPermissao } from "@/lib/permissoes-server";
+import { fixarCustosDosMateriais, podeVerCusto } from "@/lib/orcamentos/estoque-margem-server";
+import { semCustoNosServicos } from "@/lib/orcamentos/estoque-margem";
 import { pode } from "@/lib/permissoes";
 import { cancelarPrevistasDoOrcamento, impactoOrcamento } from "@/lib/inativacao-server";
 import { cancelarOrcamento, reativarOrcamento, statusHttp } from "@/lib/acoes-massa/regras";
@@ -39,6 +41,8 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
   });
   if (!orcamento) return NextResponse.json({ erro: "Orçamento não encontrado" }, { status: 404 });
 
+  // Sem "Ver custo e margem", o custo dos materiais não sai do servidor
+  if (!podeVerCusto(session.user)) return NextResponse.json({ ...orcamento, servicos: semCustoNosServicos(orcamento.servicos) });
   return NextResponse.json(orcamento);
 }
 
@@ -151,6 +155,8 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     ? Number((await prisma.configuracao.findUnique({ where: { empresaId }, select: { issAliquota: true } }))?.issAliquota ?? 0)
     : Number(existente.issAliquota);
   const valores = montarValoresOrcamento(data, issAliquota);
+  // O custo dos materiais é decidido aqui (o gravado ou o último custo de compra), nunca o que veio do navegador
+  await fixarCustosDosMateriais(empresaId, id, valores.servicos);
   // RT/ART que não vieram: mantém os do orçamento (como garantias, normas e destinatário)
   const proposta = montarCamposProposta({
     ...data,

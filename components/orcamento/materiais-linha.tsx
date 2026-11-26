@@ -11,6 +11,8 @@ import {
   ajusteDosMateriais, diferencaDoMaterial, ehPeca, LABEL_ORIGEM, resumoMateriais, valorDaLinha, type MaterialOrcamento,
 } from "@/lib/orcamentos/materiais";
 import { CampoNumero } from "@/components/orcamento/itens-tabela";
+import { Disponivel } from "@/components/orcamento/estoque-margem";
+import type { SituacaoProduto } from "@/lib/orcamentos/estoque-margem";
 import { cn, formatarMoeda } from "@/lib/utils";
 
 const uid = () => Math.random().toString(36).slice(2);
@@ -39,7 +41,7 @@ export interface LinhaComMateriais {
  */
 const DICA_MATERIAIS = "Só para a equipe: o cliente vê apenas a linha do serviço (já ajustada) e as peças como produtos. Cópia da composição do serviço feita na hora de orçar (mudar o cadastro depois não altera este orçamento). Material INCLUSO ajusta o valor do serviço pela diferença do padrão: (quantidade − padrão) × venda — exceder soma, usar menos abate, avulso entra inteiro. PEÇA (venda à parte) vira uma linha de produto cobrada à parte. O custo é só interno (margem); não entra no preço. Sem baixa de estoque aqui.";
 
-export function MateriaisLinha({ item, clienteId, catalogoProdutos, onChange, somenteLeitura = false, buscarAvulso }: {
+export function MateriaisLinha({ item, clienteId, catalogoProdutos, onChange, somenteLeitura = false, buscarAvulso, verCusto = true, situacao }: {
   item: LinhaComMateriais;
   clienteId: string | null;
   catalogoProdutos: ItemCadastro[];
@@ -48,6 +50,10 @@ export function MateriaisLinha({ item, clienteId, catalogoProdutos, onChange, so
   somenteLeitura?: boolean;
   /** De onde vem o material avulso (padrão: a rota do orçamento; a OS usa a dela) */
   buscarAvulso?: (produtoId: string) => Promise<{ material?: MaterialOrcamento; erro?: string }>;
+  /** "Orçamentos › Ver custo e margem": sem ela, nenhum custo aparece (e o servidor nem o manda) */
+  verCusto?: boolean;
+  /** Disponível em estoque por produto (só com o módulo Estoque ligado) */
+  situacao?: Record<string, SituacaoProduto>;
 }) {
   const [aberto, setAberto] = useState(true);
   const [carregando, setCarregando] = useState(false);
@@ -100,6 +106,7 @@ export function MateriaisLinha({ item, clienteId, catalogoProdutos, onChange, so
                   data-material={m.produtoId ?? ""} data-comportamento-material={m.comportamento} data-nao-usado={naoUsado ? "true" : undefined}>
                   <div className="col-span-2 sm:col-span-1 min-w-0 flex flex-wrap items-center gap-1.5">
                     <span className="font-medium text-ink truncate">{m.descricao}</span>
+                    {m.produtoId && <span className="text-[10px]"><Disponivel quantidade={m.quantidade} situacao={situacao?.[m.produtoId]} compacto /></span>}
                     <span className="text-[10px] text-ink-subtle">{LABEL_ORIGEM[m.origem]}{m.origem === "KIT" && m.kitNome ? ` ${m.kitNome}` : ""}</span>
                     {naoUsado && <span className="text-[10px] font-semibold bg-surface-alt text-ink-muted px-1.5 py-0.5 rounded">não usado</span>}
                   </div>
@@ -121,9 +128,11 @@ export function MateriaisLinha({ item, clienteId, catalogoProdutos, onChange, so
                     <span className={cn("tabular-nums font-semibold", !peca && dif < 0 && "text-ok-texto")} data-diferenca={peca ? undefined : dif}>
                       {peca ? formatarMoeda(m.quantidade * m.valorVendaUnit) : sinal(dif)}
                     </span>
-                    <span className="block text-[10px] text-ink-subtle" data-custo-material>
-                      {m.custoUnit == null ? "sem custo" : `custo ${formatarMoeda(m.custoUnit * m.quantidade)}`}
-                    </span>
+                    {verCusto && (
+                      <span className="block text-[10px] text-ink-subtle" data-custo-material>
+                        {m.custoUnit == null ? "sem custo" : `custo ${formatarMoeda(m.custoUnit * m.quantidade)}`}
+                      </span>
+                    )}
                   </div>
                   <div className="flex justify-end">
                     {somenteLeitura ? null : naoUsado ? (
@@ -157,10 +166,10 @@ export function MateriaisLinha({ item, clienteId, catalogoProdutos, onChange, so
               </div>
             )}
             {r.quantasPecas > 0 && <p className="text-ink-muted"><Package className="inline w-3 h-3 mr-1" aria-hidden />{r.quantasPecas} {r.quantasPecas === 1 ? "peça vai" : "peças vão"} como linha de produto, cobrada à parte: <strong className="tabular-nums">{formatarMoeda(r.pecas)}</strong></p>}
-            <p className="flex items-center gap-1 text-ink-subtle" data-custo-interno={r.custoTotal}>
+            {verCusto && <p className="flex items-center gap-1 text-ink-subtle" data-custo-interno={r.custoTotal}>
               <span>Custo interno: {formatarMoeda(r.custoTotal)}{r.semCusto > 0 ? ` · ${r.semCusto} sem custo` : ""}</span>
               <Dica rotulo="Custo interno" texto="Último custo de compra dos materiais. Só para a margem: não entra no preço nem aparece para o cliente." />
-            </p>
+            </p>}
           </div>
         </div>
       )}

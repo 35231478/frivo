@@ -9,6 +9,7 @@ import { destinatarioSugerido, padroesOrcamento, validadeDoPadrao, validarDestin
 import { periodoInstanteBR } from "@/lib/fuso";
 import { comNumero } from "@/lib/numeracao-server";
 import { gravarItensOrcamento, validarMateriaisDoOrcamento } from "@/lib/orcamentos/materiais-server";
+import { fixarCustosDosMateriais } from "@/lib/orcamentos/estoque-margem-server";
 
 export async function GET(req: NextRequest) {
   const guard = await exigirPermissao("orcamentos", "visualizar");
@@ -99,6 +100,8 @@ export async function POST(req: NextRequest) {
   // ISS: a alíquota da empresa HOJE fica congelada no orçamento
   const cfg = await prisma.configuracao.findUnique({ where: { empresaId }, select: { issAliquota: true } });
   const valores = montarValoresOrcamento(data, Number(cfg?.issAliquota ?? 0));
+  // O custo dos materiais é decidido aqui (último custo de compra), nunca o que veio do navegador
+  await fixarCustosDosMateriais(empresaId, null, valores.servicos);
   // Campo que não veio = padrão de Configurações (validade, garantias, não incluso, normas, RT padrão)
   const padroes = await padroesOrcamento(empresaId);
   const proposta = montarCamposProposta(

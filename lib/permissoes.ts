@@ -8,7 +8,7 @@ import { corDado } from "@/lib/ui/tokens";
 export type Acao =
   | "visualizar" | "criar" | "editar" | "excluir" | "concluir" | "aprovar"
   | "gerenciar" | "medicoes" | "contasReceber" | "fluxoCaixa" | "folha" | "fiscal" | "perdas" | "checklist" | "exportar"
-  | "separar" | "revisar" | "disciplinar" | "enviar";
+  | "separar" | "revisar" | "disciplinar" | "enviar" | "verCusto";
 
 export type Permissoes = Record<string, Partial<Record<Acao, boolean>>>;
 
@@ -40,6 +40,7 @@ export const ACOES_LABEL: Record<Acao, string> = {
   revisar: "Revisar penalidades",
   disciplinar: "Advertência e suspensão",
   enviar: "Enviar ao cliente",
+  verCusto: "Ver custo e margem",
 };
 
 /** Matriz de permissões agrupada por seção (fonte da verdade da UI e dos defaults). */
@@ -61,7 +62,9 @@ export const SECOES: SecaoDef[] = [
   },
   {
     id: "comercial", label: "Comercial", modulos: [
-      { id: "orcamentos", label: "Orçamentos", icone: "Calculator", acoes: ["visualizar", "criar", "editar", "aprovar", "excluir"] },
+      // verCusto: custo dos produtos/materiais, lucro e margem no Editar orçamento. Nunca vai ao PDF nem ao link do
+      // cliente; sem ela, o custo nem chega ao navegador (lib/orcamentos/estoque-margem-server). Padrão: só administrador.
+      { id: "orcamentos", label: "Orçamentos", icone: "Calculator", acoes: ["visualizar", "criar", "editar", "aprovar", "excluir", "verCusto"] },
       { id: "contratos", label: "Contratos", icone: "FileText", acoes: ["visualizar", "criar", "editar"] },
       { id: "licitacoes", label: "Licitações", icone: "Landmark", acoes: ["visualizar", "gerenciar"] },
     ],

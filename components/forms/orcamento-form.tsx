@@ -23,6 +23,9 @@ import { chaveDiaCivil, chaveHojeBR } from "@/lib/fuso";
 import { calcularOrcamento, DIAS_VALIDADE_PADRAO, totalDoItem, validadePadrao } from "@/lib/orcamentos/calculo";
 import { pecasDosMateriais, valorDaLinha } from "@/lib/orcamentos/materiais";
 import { MateriaisLinha } from "@/components/orcamento/materiais-linha";
+import { InfoProduto, ResumoCustoMargem, useSituacaoProdutos } from "@/components/orcamento/estoque-margem";
+import { custosDoOrcamento, resumoMargem } from "@/lib/orcamentos/estoque-margem";
+import { usePermissoes } from "@/components/providers/permissoes-provider";
 import { confirmar, toast } from "@/components/ui/avisos";
 import { nomeAutomaticoOrcamento, type ContextoNomeOrcamento } from "@/lib/orcamentos/nome";
 import { Select } from "@/components/ui/select";
@@ -353,7 +356,18 @@ export function OrcamentoForm({
   const pecasDerivadas = useMemo<ItemTabela[]>(() => servicos.flatMap((s) => pecasDosMateriais(s.materiais).map((p, i) => ({
     id: `peca:${s.id}:${i}`, catalogoId: p.material.produtoId ?? null, descricao: p.descricao, quantidade: p.quantidade,
     valorUnitario: p.valorUnitario, valorTotal: p.valorTotal, derivada: { deServico: s.descricao || "serviço" },
+    ...("custoUnit" in p.material ? { custoUnit: p.material.custoUnit } : {}),
   }))), [servicos]);
+
+  // Leva B: disponível em estoque (módulo Estoque ligado) e custo/margem (só com "Orçamentos › Ver custo e margem").
+  // O servidor decide o que vem (lib/orcamentos/estoque-margem-server): sem a permissão, o custo nem chega aqui.
+  const { pode } = usePermissoes();
+  const produtoIds = useMemo(() => [
+    ...produtos.map((p) => p.catalogoId), ...pecasDerivadas.map((p) => p.catalogoId),
+    ...servicos.flatMap((s) => (s.materiais ?? []).map((m) => m.produtoId)),
+  ].filter((x): x is string => !!x), [produtos, pecasDerivadas, servicos]);
+  const situacao = useSituacaoProdutos(produtoIds);
+  const verCusto = pode("orcamentos", "verCusto") && situacao?.verCusto !== false;
   const totais = useMemo(() => calcularOrcamento({
     // Serviço com materiais: base + ajuste dos inclusos (ou o manual) — lib/orcamentos/materiais.ts
     servicos: servicos.filter((s) => s.descricao.trim()).map((s) => (s.materiais?.length ? { quantidade: s.quantidade, valorUnitario: valorDaLinha(s).valorUnitario, valorTotal: valorDaLinha(s).valorTotal } : s)),
@@ -704,7 +718,7 @@ export function OrcamentoForm({
           totalEditavel
           onAdicionadoDoCatalogo={(it, c) => void materializarServico(it, c)}
           extraLinha={(it) => (it.materiais ? (
-            <MateriaisLinha item={it} clienteId={clienteId || null} catalogoProdutos={catalogoProdutos as any}
+            <MateriaisLinha item={it} clienteId={clienteId || null} catalogoProdutos={catalogoProdutos as any} verCusto={verCusto} situacao={situacao?.produtos}
               onChange={(patch) => setServicos((prev) => prev.map((s) => (s.id === it.id ? { ...s, ...patch } : s)))} />
           ) : (
             <button type="button" onClick={() => setServicos((prev) => prev.map((s) => (s.id === it.id ? { ...s, materiais: [] } : s)))}
@@ -728,6 +742,11 @@ export function OrcamentoForm({
           tabela={tabelaPreco}
           cadastro={cadastroProduto}
           totalEditavel
+          infoLinha={(it, total) => (
+            <InfoProduto quantidade={it.quantidade} venda={total} verCusto={verCusto}
+              situacao={it.catalogoId ? situacao?.produtos[it.catalogoId] : undefined}
+              custoUnit={!verCusto ? undefined : it.derivada ? it.custoUnit : it.catalogoId ? situacao?.produtos[it.catalogoId]?.custo : null} />
+          )}
         />
       </div>
 
@@ -805,6 +824,9 @@ export function OrcamentoForm({
             onDescontoProdutos={setDescontoProdutos}
             issAliquotaEmpresa={mode === "editar" ? issAliquotaEmpresa : undefined}
             onUsarIssEmpresa={() => { setIssAliquota(issAliquotaEmpresa); setAtualizarIss(true); }}
+            margem={verCusto && situacao ? (
+              <ResumoCustoMargem resumo={resumoMargem(totais.totalGeral - totais.valorIss, custosDoOrcamento({ produtos, servicos }, (id) => situacao.produtos[id]?.custo))} />
+            ) : undefined}
           />
         </div>
       </div>
