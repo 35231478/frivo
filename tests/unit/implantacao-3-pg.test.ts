@@ -310,6 +310,22 @@ describe.skipIf(!URL_PG)("Implantação, levas 3 e 4 (PostgreSQL real)", () => {
     expect(await prisma.cargo.count({ where: { empresaId: "e1", nome: "Encarregado" } })).toBe(1);
   });
 
+  it("cargos novos: um por nome (sem acento e maiúsculas); o que outra importação acabou de criar é reaproveitado", async () => {
+    const { resolverCargos } = await import("@/lib/importacao/servidor");
+    // "Supervisor" criado por outra importação depois da análise desta
+    await prisma.cargo.create({ data: { id: "cg-sup", empresaId: "e1", nome: "Supervisor" } });
+    const linhas: any[] = [
+      { linha: 2, dados: { cargoNovo: "Técnico Sênior" } },
+      { linha: 3, dados: { cargoNovo: "tecnico senior" } },
+      { linha: 4, dados: { cargoNovo: "SUPERVISOR" } },
+      { linha: 5, dados: { cargoId: "cg-tec" } },
+    ];
+    expect(await resolverCargos(linhas, "e1")).toEqual(["Técnico Sênior"]);
+    const senior = await prisma.cargo.findFirst({ where: { empresaId: "e1", nome: "Técnico Sênior" } });
+    expect(linhas.map((l) => l.dados.cargoId)).toEqual([senior.id, senior.id, "cg-sup", "cg-tec"]);
+    expect(await prisma.cargo.count({ where: { empresaId: "e1" } })).toBe(4); // tec, antigo, supervisor, sênior
+  });
+
   it("colaboradores: planilha de outro sistema com as colunas ligadas", async () => {
     const cab = ["Nome completo", "Nº do documento", "Celular", "Função"];
     const plan = csv([cab, ["Rafael", fmtCpf(CPF_A), "31988880101", "Técnico de campo"]]);
@@ -401,6 +417,10 @@ describe.skipIf(!URL_PG)("Implantação, levas 3 e 4 (PostgreSQL real)", () => {
     logar(montarPermissoes({ configuracoes: ["visualizar"] }));
     expect((await marcar({ etapa: "veiculos", dispensada: true })).status).toBe(403);
     expect((await prisma.configuracao.findUnique({ where: { empresaId: "e1" } })).implantacaoDispensadas).toEqual(["contratos"]);
+    // Valor desconhecido na coluna (dado velho, digitado à mão) é ignorado na leitura
+    const { etapasDispensadas } = await import("@/lib/implantacao/servidor");
+    await prisma.configuracao.update({ where: { empresaId: "e1" }, data: { implantacaoDispensadas: ["contratos", "financeiro", "veiculos"] } });
+    expect(await etapasDispensadas("e1")).toEqual(["contratos", "veiculos"]);
   });
 
   it("SQL pendente (2027-01-29_implantacao_dispensadas): 3×, aditivo, não apaga marcações, igual ao que o Prisma espera", () => {

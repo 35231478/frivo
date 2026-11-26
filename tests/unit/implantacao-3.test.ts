@@ -276,6 +276,8 @@ describe("implantação (etapas)", () => {
     expect(e.find((x) => x.id === "veiculos")!.feita).toBe(false);
     expect(progresso(e)).toMatchObject({ feitas: 2, total: 7, pct: 28 });
     expect(progresso(e).proxima?.id).toBe("empresa");
+    // A marcada nunca é a "próxima etapa": pula para a seguinte a fazer
+    expect(progresso(montarEtapas(VAZIO, () => true, ["empresa", "clientes"])).proxima?.id).toBe("equipamentos");
     // Já feita: não fica "dispensada"
     expect(montarEtapas({ ...VAZIO, veiculos: 1 }, () => true, ["veiculos"]).find((x) => x.id === "veiculos")).toMatchObject({ feita: true, dispensada: false });
     // Só falta o que foi marcado: 100% e o destaque sai do painel

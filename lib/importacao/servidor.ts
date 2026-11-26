@@ -414,7 +414,7 @@ async function gravarVeiculo(l: LinhaAnalisada, dados: Record<string, unknown>, 
  * Cargos que a planilha cita e não existem: criados UMA vez cada (sem acento/maiúsculas), em sequência, antes de
  * gravar; o que já existe ativo (criado enquanto se importava) é reaproveitado. As linhas passam a ter o cargoId.
  */
-async function resolverCargos(linhas: LinhaAnalisada[], empresaId: string): Promise<string[]> {
+export async function resolverCargos(linhas: LinhaAnalisada[], empresaId: string): Promise<string[]> {
   const novos = new Map<string, string>(); // chave → nome como veio na 1ª linha
   for (const l of linhas) { const n = l.dados?.cargoNovo as string | undefined; if (n && !novos.has(chaveNome(n))) novos.set(chaveNome(n), n); }
   const ids = new Map<string, string>();
