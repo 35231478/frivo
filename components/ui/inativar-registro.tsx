@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import { Ban, Loader2, RotateCcw, AlertTriangle, Info } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -116,6 +117,9 @@ export function InativarRegistro({
         </button>
       )}
 
+      {/* Pelo portal, no <body>: dentro de um cabeçalho com desfoque (backdrop-blur, como o da ficha do
+          cliente) o "fixed" do modal ficaria preso ao cabeçalho e cortado pela barra do topo */}
+      {aberto && typeof document !== "undefined" && createPortal(
       <Modal aberto={aberto} onFechar={() => setAberto(false)} titulo={rotulo === (ativo ? "Inativar" : "Reativar") ? padrao.titulo : `${rotulo} ${entidade} ${nome}?`} tamanho="sm">
         <div className="space-y-4" onClick={(e) => e.stopPropagation()}>
           <p className="text-sm text-ink">
@@ -180,7 +184,8 @@ export function InativarRegistro({
             </button>
           </div>
         </div>
-      </Modal>
+      </Modal>,
+      document.body)}
     </>
   );
 }

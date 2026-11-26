@@ -92,6 +92,10 @@ describe("ficha do cliente: inativar e reativar pelo botão padrão", () => {
       expect(txt(d)).toContain("Inativar cliente Mercado do Zé?");
       expect(txt(d)).toContain("Tem certeza? O cliente sai das listas e seletores; nada é apagado e pode ser reativado depois.");
       expect(txt($("[data-avisos]"))).toContain("Tem 1 contrato ativo (CT-L4-001)");
+      // o modal vai para o <body> (portal): dentro do cabeçalho com desfoque da ficha, ele ficava preso
+      // ao cabeçalho e cortado pela barra do topo (visto no navegador real)
+      expect(caixa.contains(d)).toBe(false);
+      expect(d.parentElement).toBe(document.body);
       await clicar(botao("Sim, inativar"));
       expect(gravacoes()).toEqual([{ url: "/api/clientes/cl1", metodo: "DELETE", corpo: { motivo: "" } }]);
       expect(await toasts()).toEqual([["Cliente inativado.", "sucesso"]]);
