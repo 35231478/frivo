@@ -417,6 +417,20 @@ describe.skipIf(!URL_PG)("Implantação, levas 3 e 4 (PostgreSQL real)", () => {
     logar(montarPermissoes({ configuracoes: ["visualizar"] }));
     expect((await marcar({ etapa: "veiculos", dispensada: true })).status).toBe(403);
     expect((await prisma.configuracao.findUnique({ where: { empresaId: "e1" } })).implantacaoDispensadas).toEqual(["contratos"]);
+    // A tela geral de Configurações manda a configuração INTEIRA de volta ao salvar: com a coluna nova junto, continua
+    // salvando (antes desta correção, 400 "Unrecognized key") e não apaga a marcação, que tem rota própria
+    logar(montarPermissoes({ configuracoes: ["visualizar", "gerenciar"] }));
+    const rotaCfg = await import("@/app/api/configuracoes/route");
+    const chamarCfg = async (metodo: "GET" | "PUT", corpo?: unknown) => {
+      const res: Response = await (rotaCfg as any)[metodo](new NextRequest("http://localhost/api/configuracoes", { method: metodo, headers: { "Content-Type": "application/json" }, body: corpo === undefined ? undefined : JSON.stringify(corpo) }));
+      return { status: res.status, json: (await res.json().catch(() => null)) as any };
+    };
+    const lido = (await chamarCfg("GET")).json;
+    expect(lido.implantacaoDispensadas).toEqual(["contratos"]);
+    const salvo = await chamarCfg("PUT", { ...lido, implantacaoDispensadas: [] });
+    expect(salvo.status, JSON.stringify(salvo.json)).toBe(200);
+    expect((await prisma.configuracao.findUnique({ where: { empresaId: "e1" } })).implantacaoDispensadas).toEqual(["contratos"]);
+    logar();
     // Valor desconhecido na coluna (dado velho, digitado à mão) é ignorado na leitura
     const { etapasDispensadas } = await import("@/lib/implantacao/servidor");
     await prisma.configuracao.update({ where: { empresaId: "e1" }, data: { implantacaoDispensadas: ["contratos", "financeiro", "veiculos"] } });
