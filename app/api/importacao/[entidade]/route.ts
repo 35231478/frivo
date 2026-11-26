@@ -1,14 +1,17 @@
 import { NextRequest, NextResponse } from "next/server";
 import { ErroPlanilha, lerPlanilha } from "@/lib/folha/planilha";
 import { IMPORTACOES } from "@/lib/importacao/entidades";
-import { analisar, ErroImportacao, MAX_BYTES_IMPORTACAO } from "@/lib/importacao/motor";
+import { analisar, ErroColunas, ErroImportacao, lerLigacoes, MAX_BYTES_IMPORTACAO } from "@/lib/importacao/motor";
 import { carregarContexto, gravarImportacao } from "@/lib/importacao/servidor";
 import { exigirImportacao, type Ctx } from "@/lib/importacao/rotas";
 
 /**
- * Importação em massa por planilha (clientes, fornecedores, serviços, produtos) — motor único.
+ * Importação em massa por planilha (clientes, unidades, contatos, fornecedores, serviços, produtos) — motor único.
  * - etapa=previa: analisa e devolve o que vai acontecer (nada é gravado);
  * - etapa=confirmar: analisa o arquivo DE NOVO e grava as linhas válidas em lotes.
+ * - ligacoes (opcional, JSON): o de-para escolhido na tela (coluna do modelo → coluna da planilha),
+ *   para aceitar a planilha exportada de outro sistema sem renomear colunas. Faltando coluna
+ *   obrigatória, o 400 traz o cabeçalho da planilha (`ligar`) para a tela ligar as colunas.
  * Empresa sempre da sessão; criar exige a permissão de criar; atualizar duplicados, a de editar.
  */
 export const maxDuration = 60;
@@ -26,9 +29,11 @@ export async function POST(req: NextRequest, ctx: Ctx) {
 
   let analise;
   try {
+    const ligacoes = lerLigacoes(form.get("ligacoes"), def.colunas);
     const tabela = lerPlanilha(Buffer.from(await arquivo.arrayBuffer()), (arquivo as File).name ?? "", MAX_BYTES_IMPORTACAO);
-    analise = analisar(tabela, def, await carregarContexto(g.entidade, g.empresaId, g.podeAtualizar, g.permitido));
+    analise = analisar(tabela, def, await carregarContexto(g.entidade, g.empresaId, g.podeAtualizar, g.permitido), ligacoes);
   } catch (e) {
+    if (e instanceof ErroColunas) return NextResponse.json({ erro: e.message, ligar: e.ligar }, { status: 400 });
     if (e instanceof ErroPlanilha || e instanceof ErroImportacao) return NextResponse.json({ erro: e.message }, { status: 400 });
     throw e;
   }
@@ -44,5 +49,5 @@ export async function POST(req: NextRequest, ctx: Ctx) {
     return NextResponse.json({ erro: "Nenhuma linha válida para gravar: corrija a planilha e envie de novo." }, { status: 400 });
 
   const r = await gravarImportacao(g.entidade, analise, g.empresaId);
-  return NextResponse.json({ ok: true, criados: r.criados, atualizados: r.atualizados, comErro: r.erros.length, erros: r.erros });
+  return NextResponse.json({ ok: true, criados: r.criados, atualizados: r.atualizados, comErro: r.erros.length, erros: r.erros, observacoes: r.observacoes });
 }

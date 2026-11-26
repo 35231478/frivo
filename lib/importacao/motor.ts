@@ -9,7 +9,10 @@
  *    registros DIFERENTES = erro (nunca atualiza o registro errado);
  *  - linha que sumiu da planilha não apaga nada: a importação só cria e atualiza;
  *  - exporta no MESMO formato (as mesmas colunas), para baixar → editar → subir de novo;
- *  - teto de linhas, para não estourar o tempo da requisição.
+ *  - teto de linhas, para não estourar o tempo da requisição;
+ *  - LIGAR COLUNAS (de-para): a planilha exportada de outro sistema (cabeçalhos diferentes) é aceita
+ *    sem renomear nada — a pessoa liga cada coluna do modelo a uma coluna da planilha; o resto segue
+ *    automático. Faltando coluna obrigatória, o erro traz o cabeçalho da planilha para a tela ligar.
  * A gravação fica no servidor (lib/importacao/servidor.ts), que analisa o arquivo DE NOVO ao
  * confirmar — a prévia que o navegador mostrou nunca é a fonte da verdade.
  */
@@ -20,6 +23,52 @@ export const MAX_LINHAS_IMPORTACAO = 5000;
 export const MAX_BYTES_IMPORTACAO = 5 * 1024 * 1024;
 
 export class ErroImportacao extends Error {}
+
+/**
+ * Falta coluna obrigatória: além da mensagem, o cabeçalho da planilha e o que o motor já ligou
+ * sozinho — a tela mostra o "Ligar colunas" em vez de só recusar.
+ */
+export class ErroColunas extends ErroImportacao {
+  constructor(mensagem: string, readonly ligar: LigacaoColunas) { super(mensagem); }
+}
+
+/**
+ * De-para escolhido na tela: coluna do modelo → cabeçalho da planilha (texto exato, como veio) ou
+ * null ("não importar"). Coluna do modelo fora do mapa segue a ligação automática (título/apelido).
+ */
+export type Ligacoes = Record<string, string | null>;
+
+/** Para a tela: os cabeçalhos da planilha e a qual coluna do modelo cada um ficou ligado. */
+export interface LigacaoColunas {
+  cabecalho: string[];
+  /** coluna do modelo → cabeçalho da planilha ligado (null = nenhum) */
+  ligadas: Record<string, string | null>;
+  faltando: string[];
+}
+
+/** Teto de colunas e de tamanho de um cabeçalho no mapa enviado pela tela (o resto é recusado). */
+export const MAX_LIGACOES = 80;
+
+/**
+ * Lê o mapa de ligações que veio da tela (JSON): só colunas DESTE modelo, valores texto curto ou
+ * null. Qualquer coisa fora disso → ErroImportacao (nunca adivinha).
+ */
+export function lerLigacoes(bruto: unknown, colunas: ColunaImportacao[]): Ligacoes | undefined {
+  if (bruto == null || bruto === "") return undefined;
+  let v: unknown = bruto;
+  if (typeof bruto === "string") { try { v = JSON.parse(bruto); } catch { throw new ErroImportacao("Ligação de colunas inválida."); } }
+  if (!v || typeof v !== "object" || Array.isArray(v)) throw new ErroImportacao("Ligação de colunas inválida.");
+  const entradas = Object.entries(v as Record<string, unknown>);
+  if (entradas.length > MAX_LIGACOES) throw new ErroImportacao("Ligação de colunas inválida.");
+  const chaves = new Set(colunas.map((c) => c.chave));
+  const saida: Ligacoes = {};
+  for (const [k, x] of entradas) {
+    if (!chaves.has(k)) throw new ErroImportacao(`Ligação de colunas inválida: “${k}” não é uma coluna do modelo.`);
+    if (x !== null && (typeof x !== "string" || x.length > 200)) throw new ErroImportacao("Ligação de colunas inválida.");
+    saida[k] = x as string | null;
+  }
+  return saida;
+}
 
 export interface ColunaImportacao {
   chave: string;
@@ -46,6 +95,11 @@ export interface ContextoImportacao {
   podeAtualizar: boolean;
   /** Permissões do usuário, para campos com permissão própria (ex.: dados fiscais). Ausente = nenhuma. */
   permitido?: (modulo: string, acao: Acao) => boolean;
+  /**
+   * Vínculos com OUTROS cadastros da empresa (ex.: "clientes": CNPJ/CPF só dígitos → id do cliente;
+   * "unidadeDoCliente": id da unidade → id do cliente). Só da empresa da sessão.
+   */
+  mapas?: Record<string, Map<string, string>>;
 }
 
 export type ResultadoLinha =
@@ -72,6 +126,13 @@ export interface DefImportacao {
    * `undefined` (ao atualizar, vazio NUNCA apaga o que já existe).
    */
   validar: (v: Record<string, Celula>, ctx: ContextoImportacao) => ResultadoLinha;
+  /**
+   * Conferência ENTRE linhas, depois da análise linha a linha (ex.: duas linhas marcando "principal"
+   * para o mesmo cliente). Devolve, por número de linha, o erro a aplicar.
+   */
+  conferirPlanilha?: (linhas: LinhaAnalisada[]) => Map<number, string>;
+  /** Aviso fixo da prévia (ex.: "cada cliente novo ganha a unidade Principal"). */
+  avisoPrevia?: string;
 }
 
 export type StatusLinha = "criar" | "atualizar" | "erro";
@@ -94,6 +155,8 @@ export interface Analise {
   linhas: LinhaAnalisada[];
   resumo: { total: number; criar: number; atualizar: number; erros: number };
   colunasIgnoradas: string[];
+  /** Como as colunas ficaram ligadas (a tela mostra e deixa trocar) */
+  colunas: LigacaoColunas;
 }
 
 /* ───────────────────────── Cabeçalho ───────────────────────── */
@@ -109,18 +172,37 @@ export function chaveNome(s: string) {
 /** Colunas da planilha de erros que o motor aceita de volta sem reclamar */
 const COLUNAS_DE_SERVICO = new Set(["linha_original", "motivo_do_erro"]);
 
-export function mapearCabecalho(cab: Celula[], colunas: ColunaImportacao[]) {
+export function mapearCabecalho(cab: Celula[], colunas: ColunaImportacao[], ligacoes?: Ligacoes) {
   const mapa = new Map<string, number>();
+  const usados = new Set<number>();
+  const textos = cab.map((c) => (c == null ? "" : String(c).trim()));
+  // 1º: o que a pessoa ligou na tela (vence a ligação automática); null = não importar esta coluna
+  for (const [chave, alvo] of Object.entries(ligacoes ?? {})) {
+    if (alvo === null) continue;
+    const i = textos.findIndex((t, j) => t !== "" && t === alvo.trim() && !usados.has(j));
+    if (i >= 0) { mapa.set(chave, i); usados.add(i); }
+  }
+  const desligadas = new Set(Object.entries(ligacoes ?? {}).filter(([, a]) => a === null).map(([k]) => k));
   const ignoradas: string[] = [];
-  cab.forEach((c, i) => {
-    if (c == null) return;
-    const n = normalizar(String(c));
+  textos.forEach((t, i) => {
+    if (!t || usados.has(i)) return;
+    const n = normalizar(t);
     if (!n || COLUNAS_DE_SERVICO.has(n)) return;
-    const col = colunas.find((x) => normalizar(x.titulo) === n || x.chave === n || x.apelidos?.includes(n));
-    if (col && !mapa.has(col.chave)) mapa.set(col.chave, i);
-    else ignoradas.push(String(c));
+    const col = colunas.find((x) => (normalizar(x.titulo) === n || x.chave === n || x.apelidos?.includes(n)) && !mapa.has(x.chave) && !desligadas.has(x.chave) && !(ligacoes && x.chave in ligacoes));
+    if (col) { mapa.set(col.chave, i); usados.add(i); }
+    else ignoradas.push(t);
   });
   return { mapa, ignoradas };
+}
+
+/** Cabeçalho da planilha + a coluna dela ligada a cada coluna do modelo (para a tela de ligar colunas). */
+export function ligacaoColunas(cab: Celula[], colunas: ColunaImportacao[], mapa: Map<string, number>): LigacaoColunas {
+  const textos = cab.map((c) => (c == null ? "" : String(c).trim()));
+  return {
+    cabecalho: textos.filter((t) => t !== "" && !COLUNAS_DE_SERVICO.has(normalizar(t))),
+    ligadas: Object.fromEntries(colunas.map((c) => [c.chave, mapa.has(c.chave) ? textos[mapa.get(c.chave)!] : null])),
+    faltando: colunas.filter((c) => c.obrig && !mapa.has(c.chave)).map((c) => c.titulo),
+  };
 }
 
 /* ───────────────────────── Leitura de células ───────────────────────── */
@@ -155,13 +237,13 @@ export function opcao(v: Celula, opcoes: OpcaoRef[], campo: string): { valor?: s
 
 /* ───────────────────────── Análise ───────────────────────── */
 
-export function analisar(tabela: Tabela, def: DefImportacao, ctx: ContextoImportacao): Analise {
+export function analisar(tabela: Tabela, def: DefImportacao, ctx: ContextoImportacao, ligacoes?: Ligacoes): Analise {
   const iCab = tabela.findIndex((l) => l.some((c) => !vazia(c)));
   if (iCab < 0) throw new ErroImportacao("A planilha está vazia.");
-  const { mapa, ignoradas } = mapearCabecalho(tabela[iCab], def.colunas);
-  const faltando = def.colunas.filter((c) => c.obrig && !mapa.has(c.chave)).map((c) => c.titulo);
-  if (faltando.length)
-    throw new ErroImportacao(`Faltam colunas obrigatórias: ${faltando.join(", ")}. Baixe o modelo de ${def.plural} e preencha nele.`);
+  const { mapa, ignoradas } = mapearCabecalho(tabela[iCab], def.colunas, ligacoes);
+  const colunas = ligacaoColunas(tabela[iCab], def.colunas, mapa);
+  if (colunas.faltando.length)
+    throw new ErroColunas(`Faltam colunas obrigatórias: ${colunas.faltando.join(", ")}. Ligue cada uma a uma coluna da sua planilha (ou baixe o modelo de ${def.plural} e preencha nele).`, colunas);
 
   const corpo = tabela.slice(iCab + 1).map((l, i) => ({ l, linha: iCab + 2 + i })).filter(({ l }) => l.some((c) => !vazia(c)));
   if (corpo.length === 0) throw new ErroImportacao("A planilha não tem nenhuma linha preenchida abaixo do cabeçalho.");
@@ -203,7 +285,16 @@ export function analisar(tabela: Tabela, def: DefImportacao, ctx: ContextoImport
     return { linha, status: existenteId ? "atualizar" : "criar", rotulo: r.rotulo, erros: [], existenteId, chave: existenteId ? chave : undefined, dados: r.dados, valores };
   });
 
+  // Conferência entre linhas (ex.: dois "principal" para o mesmo cliente): a linha vira erro
+  const extras = def.conferirPlanilha?.(linhas.filter((l) => l.status !== "erro"));
+  if (extras?.size)
+    for (const l of linhas) {
+      const e = extras.get(l.linha);
+      if (e) Object.assign(l, { status: "erro" as const, erros: [e], dados: undefined, existenteId: undefined, chave: undefined });
+    }
+
   return {
+    colunas,
     linhas,
     resumo: {
       total: linhas.length,
@@ -215,11 +306,18 @@ export function analisar(tabela: Tabela, def: DefImportacao, ctx: ContextoImport
   };
 }
 
-const TIPOS_CHAVE: Record<string, string> = { id: "id_sistema", cod: "código", doc: "CNPJ/CPF", nome: "nome" };
+const TIPOS_CHAVE: Record<string, string> = {
+  id: "id_sistema", cod: "código", doc: "CNPJ/CPF", nome: "nome",
+  // Cadastros que vivem DENTRO de um cliente: a chave é "<id do cliente>|<valor>"
+  un: "nome de unidade no mesmo cliente", ctmail: "e-mail no mesmo cliente", ctnome: "nome no mesmo cliente",
+};
 /** "doc:123" → "CNPJ/CPF" (qual chave casou, para as mensagens) */
 export const tipoChave = (k: string) => TIPOS_CHAVE[k.slice(0, k.indexOf(":"))] ?? "identificador";
 /** "id:abc" → "o id_sistema abc"; "cod:LIMP01" → "o código LIMP01"… */
-export const descreverChave = (k: string) => `o ${tipoChave(k)} ${k.slice(k.indexOf(":") + 1)}`;
+export const descreverChave = (k: string) => {
+  const v = k.slice(k.indexOf(":") + 1);
+  return `o ${tipoChave(k)} ${v.includes("|") ? v.slice(v.indexOf("|") + 1) : v}`;
+};
 
 /* ───────────────────────── Modelo, exportação e planilha de erros ───────────────────────── */
 

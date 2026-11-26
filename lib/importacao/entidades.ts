@@ -7,10 +7,10 @@ import type { Celula } from "@/lib/folha/planilha";
 import { CADASTROS, camposSemPermissao, mensagemValidacao, type DefCadastro, type Requisito } from "@/lib/cadastros/registro";
 import { rotuloPermissao } from "@/lib/permissoes";
 import { digitos, formatarDocumento, tipoDocumento } from "@/lib/documento";
-import { LABELS_ORIGEM, LABELS_SEGMENTO } from "@/lib/utils";
+import { LABELS_ORIGEM, LABELS_SEGMENTO, LABELS_TIPO_CONTATO } from "@/lib/utils";
 import { normalizarCodigoProduto, normalizarCodigoServico } from "@/lib/cadastros/codigos";
 import {
-  chaveNome, numero, opcao, texto, type ColunaImportacao, type ContextoImportacao, type DefImportacao, type OpcaoRef, type ResultadoLinha,
+  chaveNome, numero, opcao, texto, type ColunaImportacao, type ContextoImportacao, type DefImportacao, type LinhaAnalisada, type OpcaoRef, type ResultadoLinha,
 } from "@/lib/importacao/motor";
 import { padronizarNome, padronizarEmail, apararTextoLivre } from "@/lib/texto/normalizar";
 
@@ -18,9 +18,27 @@ import { padronizarNome, padronizarEmail, apararTextoLivre } from "@/lib/texto/n
 const pNome = (s: string | undefined) => (s ? padronizarNome(s) : s);
 const pLivre = (s: string | undefined) => (s ? apararTextoLivre(s) : s);
 
-export const ENTIDADES_IMPORTACAO = ["clientes", "fornecedores", "servicos", "produtos"] as const;
+export const ENTIDADES_IMPORTACAO = ["clientes", "unidades", "contatos", "fornecedores", "servicos", "produtos"] as const;
 export type EntidadeImportacao = (typeof ENTIDADES_IMPORTACAO)[number];
 export const ehEntidadeImportacao = (v: string): v is EntidadeImportacao => (ENTIDADES_IMPORTACAO as readonly string[]).includes(v);
+
+/**
+ * Planilhas da mesma família, ligadas pelo CNPJ/CPF do cliente — importadas nesta ordem
+ * (clientes → unidades → contatos). O botão "Importar planilha" de Clientes deixa escolher qual.
+ */
+export const FAMILIAS_IMPORTACAO: Partial<Record<EntidadeImportacao, EntidadeImportacao[]>> = {
+  clientes: ["clientes", "unidades", "contatos"],
+};
+export const familiaDe = (e: EntidadeImportacao): EntidadeImportacao[] => FAMILIAS_IMPORTACAO[e] ?? [e];
+
+/**
+ * Unidade e contato são parte do cadastro do cliente: a tela exige "Clientes › Editar" para criá-los
+ * (e a importação também). Aqui, e não no servidor, para a tela esconder a opção de quem não pode.
+ */
+export const REQUISITO_FAMILIA: Partial<Record<EntidadeImportacao, Requisito>> = {
+  unidades: [["clientes", "editar"]],
+  contatos: [["clientes", "editar"]],
+};
 
 /* ───────── Peças ───────── */
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -87,8 +105,8 @@ function lerId(v: Celula, erros: string[]) {
   if (!/^[A-Za-z0-9_-]{1,64}$/.test(t)) { erros.push(`id_sistema: “${t}” não é um identificador do sistema. Não altere essa coluna (linha nova: deixe vazia).`); return undefined; }
   return t;
 }
-const chaveIdQueExiste = (singular: string) => ({
-  prefixo: "id:", erro: (id: string) => `id_sistema “${id}” não é de nenhum ${singular} desta empresa. Não altere essa coluna; para cadastrar um novo, deixe-a vazia.`,
+const chaveIdQueExiste = (singular: string, feminino = false) => ({
+  prefixo: "id:", erro: (id: string) => `id_sistema “${id}” não é de ${feminino ? "nenhuma" : "nenhum"} ${singular} desta empresa. Não altere essa coluna; para cadastrar ${feminino ? "uma nova" : "um novo"}, deixe-a vazia.`,
 });
 const txt = (v: unknown) => (v === null || v === undefined ? "" : String(v));
 /** Número para a planilha no formato BR, que a importação lê de volta ("1250,5" / "250,00") */
@@ -102,6 +120,7 @@ const rotuloDe = (opcoes: OpcaoRef[], valor: unknown) => opcoes.find((o) => o.va
 /* ───────── Clientes (dedup por id_sistema, depois CNPJ/CPF) ───────── */
 const clientes: DefImportacao = {
   entidade: "clientes", singular: "cliente", plural: "clientes", chaveDescricao: "id_sistema ou CNPJ/CPF",
+  avisoPrevia: "Cada cliente novo (e cada cliente sem nenhuma unidade) ganha a unidade “Principal” com o endereço dele. Outras unidades e os contatos entram pelas planilhas de unidades e de contatos.",
   colunas: [
     { chave: "nome", titulo: "nome", obrig: true, ajuda: "Razão social ou nome completo", exemplo: "Hospital Santa Clara Ltda", apelidos: ["razao_social", "nome_razao_social", "cliente"] },
     { chave: "cnpj_cpf", titulo: "cnpj_cpf", obrig: true, ajuda: "CNPJ ou CPF, com ou sem pontuação. Chave para não duplicar.", exemplo: "11.222.333/0001-81", apelidos: ["cnpj", "cpf", "cpf_cnpj", "documento"] },
@@ -166,6 +185,144 @@ const clientes: DefImportacao = {
         endereco: pNome(texto(v.endereco)), numero: texto(v.numero), complemento: pNome(texto(v.complemento)), bairro: pNome(texto(v.bairro)),
         cidade: pNome(texto(v.cidade)), estado: uf.valor, segmento: seg.valor, origem: ori.valor, tabelaPrecoId: tab.valor,
         observacoes: pLivre(texto(v.observacoes)),
+      },
+    };
+  },
+};
+
+/* ───────── Unidades e contatos: ligados ao cliente pelo CNPJ/CPF ───────── */
+const SIM_NAO: OpcaoRef[] = [{ valor: "sim", rotulo: "Sim", aceitos: ["s", "x", "1", "true", "verdadeiro", "principal"] }, { valor: "nao", rotulo: "Não", aceitos: ["n", "0", "false", "falso"] }];
+const COLUNA_CLIENTE: ColunaImportacao = {
+  chave: "cnpj_cpf", titulo: "cnpj_cpf", obrig: true, ajuda: "CNPJ ou CPF do cliente (já cadastrado — importe os clientes primeiro). É o que liga a linha ao cliente.",
+  exemplo: "11.222.333/0001-81", apelidos: ["cnpj", "cpf", "cpf_cnpj", "documento", "cnpj_cliente", "cpf_cnpj_cliente", "documento_cliente"],
+};
+/** O cliente da linha, pelo documento (só da empresa da sessão). */
+function lerCliente(v: Celula, erros: string[], ctx: ContextoImportacao) {
+  const doc = lerDocumento(v, erros, true);
+  if (!doc) return undefined;
+  const id = ctx.mapas?.clientes?.get(doc);
+  if (!id) erros.push(`cnpj_cpf: nenhum cliente com o ${doc.length === 11 ? "CPF" : "CNPJ"} ${formatarDocumento(doc)} nesta empresa. Importe a planilha de clientes primeiro.`);
+  return id;
+}
+/** "principal": Sim / Não / vazio (não muda). */
+function lerPrincipal(v: Celula, erros: string[]) {
+  const r = opcao(v, SIM_NAO, "principal");
+  if (r.erro) erros.push(r.erro);
+  return r.valor === undefined ? undefined : r.valor === "sim";
+}
+/** Duas linhas marcando "principal" para o MESMO cliente: só a 1ª vale (a outra vira erro). */
+function umPrincipalPorCliente(rotulo: string) {
+  return (linhas: LinhaAnalisada[]) => {
+    const vistos = new Map<string, number>();
+    const erros = new Map<number, string>();
+    for (const l of linhas) {
+      if (l.dados?.principal !== true) continue;
+      const c = String(l.dados.clienteId);
+      if (vistos.has(c)) erros.set(l.linha, `principal: a linha ${vistos.get(c)} já marca ${rotulo} principal deste cliente (só pode haver um).`);
+      else vistos.set(c, l.linha);
+    }
+    return erros;
+  };
+}
+
+const unidades: DefImportacao = {
+  entidade: "unidades", singular: "unidade", plural: "unidades", chaveDescricao: "id_sistema ou nome da unidade no mesmo cliente",
+  avisoPrevia: "Marcar uma unidade como principal tira a marcação da principal anterior do mesmo cliente.",
+  colunas: [
+    COLUNA_CLIENTE,
+    { chave: "nome", titulo: "nome", obrig: true, ajuda: "Nome da unidade (local de atendimento). Mesmo nome no mesmo cliente = atualiza. A unidade criada junto com o cliente se chama “Principal”.", exemplo: "Bloco Cirúrgico", apelidos: ["unidade", "nome_unidade", "local", "filial", "nome_do_local"] },
+    { chave: "principal", titulo: "principal", ajuda: "Sim = vira o endereço principal do cliente (só um por cliente; a anterior deixa de ser). Não ou vazio = não muda — o cliente nunca fica sem endereço principal.", exemplo: "Não", opcoes: SIM_NAO.map((o) => o.rotulo), apelidos: ["e_principal", "endereco_principal"] },
+    { chave: "cep", titulo: "cep", ajuda: "CEP (8 dígitos)", exemplo: "30140-000" },
+    { chave: "endereco", titulo: "endereco", ajuda: "Rua / avenida", exemplo: "Rua das Acácias", apelidos: ["logradouro", "rua"] },
+    { chave: "numero", titulo: "numero", ajuda: "Número", exemplo: "140", apelidos: ["n", "num"] },
+    { chave: "complemento", titulo: "complemento", ajuda: "Complemento", exemplo: "Térreo" },
+    { chave: "bairro", titulo: "bairro", ajuda: "Bairro", exemplo: "Centro" },
+    { chave: "cidade", titulo: "cidade", ajuda: "Cidade", exemplo: "Belo Horizonte", apelidos: ["municipio"] },
+    { chave: "estado", titulo: "estado", ajuda: "UF (sigla)", exemplo: "MG", opcoes: UFS, apelidos: ["uf"] },
+    { chave: "telefone", titulo: "telefone", ajuda: "Telefone da unidade", exemplo: "(31) 3222-1000", apelidos: ["fone"] },
+    { chave: "observacoes", titulo: "observacoes", ajuda: "Observações (acesso, portaria, horário…)", exemplo: "", apelidos: ["obs", "observacao"] },
+    COLUNA_ID,
+  ],
+  chavesQueExistem: [chaveIdQueExiste("unidade", true)],
+  conferirPlanilha: umPrincipalPorCliente("a unidade"),
+  exportar: (u) => ({
+    cnpj_cpf: txt((u.cliente as { cpfCnpj?: string } | undefined)?.cpfCnpj), nome: txt(u.nome), principal: u.principal ? "Sim" : "Não",
+    cep: txt(u.cep), endereco: txt(u.logradouro), numero: txt(u.numero), complemento: txt(u.complemento), bairro: txt(u.bairro),
+    cidade: txt(u.cidade), estado: txt(u.estado), telefone: txt(u.telefone), observacoes: txt(u.observacoes), id_sistema: txt(u.id),
+  }),
+  validar(v, ctx) {
+    const erros: string[] = [];
+    const rotulo = texto(v.nome) ?? "";
+    if (!rotulo) erros.push("nome: obrigatório.");
+    const id = lerId(v.id_sistema, erros);
+    const clienteId = lerCliente(v.cnpj_cpf, erros, ctx);
+    // id_sistema de uma unidade de OUTRO cliente: não move unidade de cliente
+    if (id && clienteId && ctx.mapas?.unidadeDoCliente?.has(id) && ctx.mapas.unidadeDoCliente.get(id) !== clienteId)
+      erros.push(`id_sistema “${id}” é de uma unidade de outro cliente. Uma unidade não muda de cliente pela planilha.`);
+    const principal = lerPrincipal(v.principal, erros);
+    const cep = texto(v.cep);
+    if (cep && digitos(cep).length !== 8) erros.push(`cep: “${cep}” precisa ter 8 dígitos.`);
+    const uf = opcao(v.estado, UFS.map((u) => ({ valor: u, rotulo: u })), "estado");
+    if (uf.erro) erros.push(uf.erro);
+    if (erros.length) return { ok: false, erros, rotulo };
+    return {
+      ok: true, rotulo, chaves: [...(id ? [`id:${id}`] : []), `un:${clienteId}|${chaveNome(rotulo)}`],
+      dados: {
+        clienteId, nome: padronizarNome(rotulo), principal,
+        cep: cep ? digitos(cep).replace(/(\d{5})(\d{3})/, "$1-$2") : undefined,
+        logradouro: pNome(texto(v.endereco)), numero: texto(v.numero), complemento: pNome(texto(v.complemento)), bairro: pNome(texto(v.bairro)),
+        cidade: pNome(texto(v.cidade)), estado: uf.valor, telefone: texto(v.telefone), observacoes: pLivre(texto(v.observacoes)),
+      },
+    };
+  },
+};
+
+const TIPOS_CONTATO: OpcaoRef[] = Object.entries(LABELS_TIPO_CONTATO).map(([valor, rotulo]) => ({
+  valor, rotulo, aceitos: valor === "OPERACIONAL" ? ["chamados", "operacao"] : valor === "DIRETORIA" ? ["diretor", "diretora", "dono", "socio"] : [],
+}));
+const contatos: DefImportacao = {
+  entidade: "contatos", singular: "contato", plural: "contatos", chaveDescricao: "id_sistema, e-mail ou nome no mesmo cliente",
+  avisoPrevia: "Marcar um contato como principal tira a marcação do principal anterior do mesmo cliente. O acesso ao portal não é criado pela planilha.",
+  colunas: [
+    COLUNA_CLIENTE,
+    { chave: "nome", titulo: "nome", obrig: true, ajuda: "Nome da pessoa de contato", exemplo: "Marta Soares", apelidos: ["contato", "nome_contato", "responsavel"] },
+    { chave: "cargo", titulo: "cargo", ajuda: "Cargo / função", exemplo: "Engenharia clínica", apelidos: ["funcao", "setor"] },
+    { chave: "tipo", titulo: "tipo", ajuda: "Para que serve o contato (vazio = Outro)", exemplo: "Técnico", opcoes: TIPOS_CONTATO.map((t) => t.rotulo), apelidos: ["tipo_contato", "departamento"] },
+    { chave: "email", titulo: "email", ajuda: "E-mail. Mesmo e-mail no mesmo cliente = atualiza esse contato.", exemplo: "marta@cliente.com.br", apelidos: ["e_mail"] },
+    { chave: "telefone", titulo: "telefone", ajuda: "Telefone", exemplo: "(31) 3222-1000", apelidos: ["fone"] },
+    { chave: "whatsapp", titulo: "whatsapp", ajuda: "WhatsApp / celular", exemplo: "(31) 99888-1000", apelidos: ["celular", "zap"] },
+    { chave: "principal", titulo: "principal", ajuda: "Sim = contato principal do cliente (só um por cliente). Vazio = não muda.", exemplo: "Sim", opcoes: SIM_NAO.map((o) => o.rotulo), apelidos: ["contato_principal"] },
+    COLUNA_ID,
+  ],
+  chavesQueExistem: [chaveIdQueExiste("contato")],
+  conferirPlanilha: umPrincipalPorCliente("o contato"),
+  exportar: (c) => ({
+    cnpj_cpf: txt((c.cliente as { cpfCnpj?: string } | undefined)?.cpfCnpj), nome: txt(c.nome), cargo: txt(c.cargo),
+    tipo: c.tipo ? LABELS_TIPO_CONTATO[c.tipo as string] ?? txt(c.tipo) : "", email: txt(c.email), telefone: txt(c.telefone),
+    whatsapp: txt(c.whatsapp), principal: c.principal ? "Sim" : "Não", id_sistema: txt(c.id),
+  }),
+  validar(v, ctx) {
+    const erros: string[] = [];
+    const rotulo = texto(v.nome) ?? "";
+    if (!rotulo) erros.push("nome: obrigatório.");
+    else if (rotulo.length < 2) erros.push("nome: use pelo menos 2 letras.");
+    const id = lerId(v.id_sistema, erros);
+    const clienteId = lerCliente(v.cnpj_cpf, erros, ctx);
+    if (id && clienteId && ctx.mapas?.contatoDoCliente?.has(id) && ctx.mapas.contatoDoCliente.get(id) !== clienteId)
+      erros.push(`id_sistema “${id}” é de um contato de outro cliente. Um contato não muda de cliente pela planilha.`);
+    const tipo = opcao(v.tipo, TIPOS_CONTATO, "tipo");
+    if (tipo.erro) erros.push(tipo.erro);
+    const email = texto(v.email);
+    if (email && !EMAIL.test(email)) erros.push(`email: “${email}” não é um e-mail válido.`);
+    const principal = lerPrincipal(v.principal, erros);
+    if (erros.length) return { ok: false, erros, rotulo };
+    const emailP = email ? padronizarEmail(email) : undefined;
+    return {
+      ok: true, rotulo,
+      chaves: [...(id ? [`id:${id}`] : []), ...(emailP ? [`ctmail:${clienteId}|${emailP}`] : []), `ctnome:${clienteId}|${chaveNome(rotulo)}`],
+      dados: {
+        clienteId, nome: padronizarNome(rotulo), cargo: pNome(texto(v.cargo)), tipo: tipo.valor, email: emailP,
+        telefone: texto(v.telefone), whatsapp: texto(v.whatsapp), principal,
       },
     };
   },
@@ -285,7 +442,7 @@ const produtos: DefImportacao = {
   },
 };
 
-export const IMPORTACOES: Record<EntidadeImportacao, DefImportacao> = { clientes, fornecedores, servicos, produtos };
+export const IMPORTACOES: Record<EntidadeImportacao, DefImportacao> = { clientes, unidades, contatos, fornecedores, servicos, produtos };
 
 /**
  * Baixar a planilha (exportar): ver o módulo da lista (tela e servidor usam esta tabela). Produtos e
@@ -293,6 +450,8 @@ export const IMPORTACOES: Record<EntidadeImportacao, DefImportacao> = { clientes
  */
 export const PERMISSOES_EXPORTACAO: Record<EntidadeImportacao, Requisito> = {
   clientes: [["clientes", "visualizar"]],
+  unidades: [["clientes", "visualizar"]],
+  contatos: [["clientes", "visualizar"]],
   fornecedores: [["financeiro", "visualizar"], ["configuracoes", "visualizar"]],
   servicos: [["configuracoes", "visualizar"]],
   produtos: [["configuracoes", "visualizar"]],
