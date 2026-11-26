@@ -17,6 +17,8 @@ export async function POST(req: NextRequest, ctx: Ctx) {
     erros: Array.isArray(e?.erros) ? e.erros.map(String) : [],
     valores: e?.valores && typeof e.valores === "object" ? Object.fromEntries(Object.entries(e.valores).map(([k, v]) => [k, String(v ?? "")])) : {},
   }));
-  const linhas = linhasErros(def, limpos);
-  return anexo(new Uint8Array(gerarXlsx([{ nome: "Erros", linhas, larguras: linhas[0].map((c, i) => (i === linhas[0].length - 1 ? 70 : Math.max(14, c.length + 4))) }])), XLSX, `erros-importacao-${def.entidade}.xlsx`);
+  // tipo=avisos: o relatório de revisão das linhas GRAVADAS com aviso (sem chave, possível duplicado)
+  const avisos = corpo?.tipo === "avisos";
+  const linhas = linhasErros(def, limpos, { avisos });
+  return anexo(new Uint8Array(gerarXlsx([{ nome: avisos ? "Avisos" : "Erros", linhas, larguras: linhas[0].map((c, i) => (i === linhas[0].length - 1 ? 70 : Math.max(14, c.length + 4))) }])), XLSX, `${avisos ? "avisos" : "erros"}-importacao-${def.entidade}.xlsx`);
 }

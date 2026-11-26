@@ -7,10 +7,10 @@ import type { Celula } from "@/lib/folha/planilha";
 import { CADASTROS, camposSemPermissao, mensagemValidacao, type DefCadastro, type Requisito } from "@/lib/cadastros/registro";
 import { rotuloPermissao } from "@/lib/permissoes";
 import { digitos, formatarDocumento, tipoDocumento } from "@/lib/documento";
-import { LABELS_ORIGEM, LABELS_SEGMENTO, LABELS_TIPO_CONTATO } from "@/lib/utils";
+import { LABELS_ORIGEM, LABELS_SEGMENTO, LABELS_TIPO_CONTATO, LABELS_TIPO_EQUIPAMENTO } from "@/lib/utils";
 import { normalizarCodigoProduto, normalizarCodigoServico } from "@/lib/cadastros/codigos";
 import {
-  chaveNome, numero, opcao, texto, type ColunaImportacao, type ContextoImportacao, type DefImportacao, type LinhaAnalisada, type OpcaoRef, type ResultadoLinha,
+  chaveNome, numero, opcao, texto, tipoChave, type ColunaImportacao, type ContextoImportacao, type DefImportacao, type LinhaAnalisada, type OpcaoRef, type ResultadoLinha,
 } from "@/lib/importacao/motor";
 import { padronizarNome, padronizarEmail, apararTextoLivre } from "@/lib/texto/normalizar";
 
@@ -18,7 +18,7 @@ import { padronizarNome, padronizarEmail, apararTextoLivre } from "@/lib/texto/n
 const pNome = (s: string | undefined) => (s ? padronizarNome(s) : s);
 const pLivre = (s: string | undefined) => (s ? apararTextoLivre(s) : s);
 
-export const ENTIDADES_IMPORTACAO = ["clientes", "unidades", "contatos", "fornecedores", "servicos", "produtos"] as const;
+export const ENTIDADES_IMPORTACAO = ["clientes", "unidades", "contatos", "equipamentos", "fornecedores", "servicos", "produtos"] as const;
 export type EntidadeImportacao = (typeof ENTIDADES_IMPORTACAO)[number];
 export const ehEntidadeImportacao = (v: string): v is EntidadeImportacao => (ENTIDADES_IMPORTACAO as readonly string[]).includes(v);
 
@@ -27,8 +27,11 @@ export const ehEntidadeImportacao = (v: string): v is EntidadeImportacao => (ENT
  * (clientes → unidades → contatos). O botão "Importar planilha" de Clientes deixa escolher qual.
  */
 export const FAMILIAS_IMPORTACAO: Partial<Record<EntidadeImportacao, EntidadeImportacao[]>> = {
-  clientes: ["clientes", "unidades", "contatos"],
+  clientes: ["clientes", "unidades", "contatos", "equipamentos"],
 };
+
+/** Planilhas de um MÓDULO de produto: com o módulo desligado na empresa, nem aparecem nem importam. */
+export const MODULO_DA_IMPORTACAO: Partial<Record<EntidadeImportacao, string>> = { equipamentos: "equipamentos" };
 export const familiaDe = (e: EntidadeImportacao): EntidadeImportacao[] => FAMILIAS_IMPORTACAO[e] ?? [e];
 
 /**
@@ -38,6 +41,7 @@ export const familiaDe = (e: EntidadeImportacao): EntidadeImportacao[] => FAMILI
 export const REQUISITO_FAMILIA: Partial<Record<EntidadeImportacao, Requisito>> = {
   unidades: [["clientes", "editar"]],
   contatos: [["clientes", "editar"]],
+  equipamentos: [["equipamentos", "criar"]],
 };
 
 /* ───────── Peças ───────── */
@@ -328,6 +332,177 @@ const contatos: DefImportacao = {
   },
 };
 
+/* ───────── Equipamentos: cliente pelo CNPJ/CPF, unidade pelo nome (vazia = a principal) ───────── */
+/** Apelidos que as pessoas (e outros sistemas) usam para os tipos do Frivo */
+export const APELIDOS_TIPO_EQUIPAMENTO: Record<string, string[]> = {
+  AR_CONDICIONADO_SPLIT: ["split", "hi wall", "hi-wall", "hiwall", "split hi wall", "split hi-wall", "parede", "split parede"],
+  AR_CONDICIONADO_JANELA: ["janela", "acj", "ar de janela"],
+  AR_CONDICIONADO_CENTRAL: ["central", "ar central"],
+  AR_CONDICIONADO_PORTATIL: ["portatil", "portátil"],
+  CASSETE: ["cassete", "cassette", "k7"],
+  PISO_TETO: ["piso teto", "piso-teto", "pisoteto", "piso/teto"],
+  VRF: ["vrf", "vrv", "vrf/vrv"],
+  FANCOIL: ["fancoil", "fan coil", "fan-coil"],
+  SELF_CONTAINED: ["self", "self contained", "self-contained"],
+  CONDENSADORA: ["condensadora", "unidade externa", "condensador"],
+  EVAPORADORA: ["evaporadora", "unidade interna", "evaporador"],
+  CHILLER: ["chiller"],
+  TORRE_RESFRIAMENTO: ["torre", "torre de resfriamento"],
+  CAMARA_FRIA: ["camara fria", "câmara fria"],
+  CAMARA_CLIMATIZADA: ["camara climatizada", "câmara climatizada"],
+  REFRIGERADOR_COMERCIAL: ["refrigerador", "geladeira", "expositor"],
+  CONGELADOR_COMERCIAL: ["congelador", "freezer"],
+  OUTRO: ["outro", "outros"],
+};
+/** Gases conhecidos (o resto fica como veio): "r-410a", "410A" → "R410A" */
+const FLUIDOS_CONHECIDOS = ["R22", "R410A", "R32", "R407C", "R404A", "R134a", "R290", "R600a", "R507A", "R417A", "R438A", "R454B"];
+export function normalizarFluido(t: string | undefined): string | undefined {
+  if (!t) return undefined;
+  const k = t.replace(/[\s-]/g, "").toUpperCase().replace(/^(\d)/, "R$1");
+  return FLUIDOS_CONHECIDOS.find((f) => f.toUpperCase() === k) ?? t.trim();
+}
+/** "220", "220v", "220 V" → "220V"; o resto (ex.: "220/380") fica como veio */
+export function normalizarTensao(t: string | undefined): string | undefined {
+  if (!t) return undefined;
+  const m = t.trim().match(/^(\d{2,3})\s*v?$/i);
+  return m ? `${m[1]}V` : t.trim();
+}
+const formatarBtu = (n: number) => `${Math.round(n).toLocaleString("pt-BR")} BTU/h`;
+const formatarTr = (n: number) => `${String(Math.round(n * 100) / 100).replace(".", ",")} TR`;
+/**
+ * Capacidade no formato do cadastro ("12.000 BTU/h", "5 TR"): "12000", "12.000 btu", "36.000 BTUs",
+ * "5 TR", "7,5 tr". Número sem unidade: de 1.000 para cima é BTU/h; abaixo, não dá para saber → erro.
+ */
+export function lerCapacidade(v: Celula): { valor?: string; erro?: string } {
+  if (v == null || (typeof v === "string" && !v.trim())) return {};
+  if (typeof v === "number") return v >= 1000 ? { valor: formatarBtu(v) } : { erro: `capacidade: “${v}” sem unidade — escreva BTU ou TR (ex.: 12.000 BTU, 5 TR).` };
+  const t = String(v).trim();
+  const m = t.match(/^([\d.,\s]+?)\s*(btu\/?h?|btus|tr|ton|toneladas?)?\.?$/i);
+  const n = m ? numero(m[1].replace(/\s/g, "")) : undefined;
+  if (!m || n === undefined || Number.isNaN(n) || n <= 0) return { erro: `capacidade: “${t}” não é uma capacidade (ex.: 12.000 BTU, 5 TR).` };
+  const un = (m[2] ?? "").toLowerCase();
+  if (un.startsWith("btu")) return { valor: formatarBtu(n) };
+  if (un) return { valor: formatarTr(n) };
+  return n >= 1000 ? { valor: formatarBtu(n) } : { erro: `capacidade: “${t}” sem unidade — escreva BTU ou TR (ex.: 12.000 BTU, 5 TR).` };
+}
+/** Série e patrimônio/TAG comparados sem espaços, hífens, pontos, barras e maiúsculas ("LGX-0001" = "lgx 0001") */
+export const chaveCodigo = (t: string) => t.replace(/[\s\-./_]+/g, "").toUpperCase();
+/** "Mesmo equipamento?" quando não há série nem patrimônio: cliente + unidade + marca + modelo + capacidade */
+export const chaveParecido = (clienteId: string, unidadeId: string, marca: string, modelo: string, capacidade?: string | null) =>
+  `${clienteId}|${unidadeId}|${chaveNome(marca)}|${chaveNome(modelo)}|${chaveNome(capacidade ?? "")}`;
+const livre = (v: Celula) => { const t = texto(v); return t ? apararTextoLivre(t) : undefined; };
+
+const equipamentos: DefImportacao = {
+  entidade: "equipamentos", singular: "equipamento", plural: "equipamentos", chaveDescricao: "id_sistema, nº de série ou patrimônio/TAG",
+  avisoPrevia: "Sem nº de série nem patrimônio/TAG, a linha entra com aviso: reimportar a mesma planilha criaria de novo. Os possíveis duplicados (mesmo cliente, unidade, marca, modelo e capacidade) aparecem para revisão.",
+  colunas: [
+    COLUNA_CLIENTE,
+    { chave: "unidade", titulo: "unidade", ajuda: "Nome da unidade do cliente. Vazio = a unidade principal. Precisa já existir (importe as unidades antes).", exemplo: "", apelidos: ["nome_unidade", "local_de_atendimento", "filial"] },
+    { chave: "tipo", titulo: "tipo", ajuda: "Tipo do equipamento (split, cassete, piso-teto, VRF…). Vazio = Outro, ao criar.", exemplo: "Split Hi-Wall (parede)", apelidos: ["tipo_equipamento", "categoria"] },
+    { chave: "marca", titulo: "marca", obrig: true, ajuda: "Marca / fabricante", exemplo: "LG", apelidos: ["fabricante"] },
+    { chave: "modelo", titulo: "modelo", obrig: true, ajuda: "Modelo", exemplo: "S4-Q12JA3WF" },
+    { chave: "capacidade", titulo: "capacidade", ajuda: "Com a unidade: 12.000 BTU ou 5 TR (só o número, de 1.000 para cima, é BTU)", exemplo: "12.000 BTU", apelidos: ["btu", "btus", "capacidade_btu", "potencia_btu", "tr"] },
+    { chave: "fluido", titulo: "fluido", ajuda: "Gás refrigerante (R410A, R32, R22…)", exemplo: "R410A", apelidos: ["gas", "gas_refrigerante", "refrigerante"] },
+    { chave: "tensao", titulo: "tensao", ajuda: "Tensão (127V, 220V, 380V…)", exemplo: "220V", apelidos: ["voltagem", "tensao_v"] },
+    { chave: "ambiente", titulo: "ambiente", ajuda: "Onde fica: sala, recepção, CPD…", exemplo: "Recepção", apelidos: ["localizacao", "local", "sala", "ambiente_local"] },
+    { chave: "setor", titulo: "setor", ajuda: "Andar, bloco, setor", exemplo: "Térreo", apelidos: ["andar", "bloco", "pavimento"] },
+    { chave: "numero_serie", titulo: "numero_serie", ajuda: "Nº de série (chave para não duplicar)", exemplo: "LGX-0001", apelidos: ["serie", "n_serie", "no_de_serie", "n_de_serie", "numero_de_serie", "serial"] },
+    { chave: "patrimonio", titulo: "patrimonio", ajuda: "Patrimônio ou TAG / etiqueta do cliente (chave quando não há nº de série)", exemplo: "", apelidos: ["tag", "etiqueta", "patrimonio_tag", "codigo_patrimonio", "tag_patrimonio"] },
+    { chave: "nome", titulo: "nome", ajuda: "Apelido do equipamento (opcional)", exemplo: "", apelidos: ["identificacao", "descricao"] },
+    { chave: "observacoes", titulo: "observacoes", ajuda: "Observações", exemplo: "", apelidos: ["obs", "observacao"] },
+    COLUNA_ID,
+  ],
+  chavesQueExistem: [chaveIdQueExiste("equipamento")],
+  avisarPlanilha(linhas) {
+    // Duas linhas SEM chave e iguais: pode ser o mesmo equipamento duas vezes (ou dois iguais na sala)
+    const vistos = new Map<string, number>();
+    const avisos = new Map<number, string>();
+    for (const l of linhas) {
+      const d = l.dados;
+      if (!d || d.semChave !== true) continue;
+      const k = chaveParecido(String(d.clienteId), String(d.unidadeId), String(d.marca), String(d.modelo), d.capacidade as string | undefined);
+      if (vistos.has(k)) avisos.set(l.linha, `Igual à linha ${vistos.get(k)} (mesmo cliente, unidade, marca, modelo e capacidade): confira se não é o mesmo equipamento.`);
+      else vistos.set(k, l.linha);
+    }
+    return avisos;
+  },
+  exportar: (e, refs) => {
+    const u = e.unidade as { nome?: string; principal?: boolean; cliente?: { cpfCnpj?: string } } | undefined;
+    return {
+      cnpj_cpf: txt(u?.cliente?.cpfCnpj), unidade: u?.principal ? "" : txt(u?.nome),
+      tipo: e.tipoEquipamentoId ? rotuloDe(refs.tipo ?? [], `c:${e.tipoEquipamentoId}`) : (LABELS_TIPO_EQUIPAMENTO[e.tipo as string] ?? txt(e.tipo)),
+      marca: txt(e.marca), modelo: txt(e.modelo), capacidade: txt(e.capacidade), fluido: txt(e.fluido), tensao: txt(e.tensao),
+      ambiente: txt(e.localizacao), setor: txt(e.setor), numero_serie: txt(e.numeroSerie), patrimonio: txt(e.patrimonio),
+      nome: txt(e.nome), observacoes: txt(e.observacoes), id_sistema: txt(e.id),
+    };
+  },
+  validar(v, ctx) {
+    const erros: string[] = [];
+    const avisos: string[] = [];
+    const marca = livre(v.marca);
+    const modelo = livre(v.modelo);
+    const ambiente = livre(v.ambiente);
+    const rotulo = [marca, modelo].filter(Boolean).join(" ") + (ambiente ? ` — ${ambiente}` : "");
+    if (!marca) erros.push("marca: obrigatória.");
+    if (!modelo) erros.push("modelo: obrigatório.");
+    const id = lerId(v.id_sistema, erros);
+    const clienteId = lerCliente(v.cnpj_cpf, erros, ctx);
+    // Unidade pelo nome no cliente; vazia = a principal
+    const nomeUnidade = texto(v.unidade);
+    let unidadeId: string | undefined;
+    if (clienteId) {
+      unidadeId = ctx.mapas?.unidades?.get(nomeUnidade ? `${clienteId}|${chaveNome(nomeUnidade)}` : `${clienteId}|*principal`);
+      if (!unidadeId)
+        erros.push(nomeUnidade
+          ? `unidade: “${nomeUnidade}” não existe neste cliente. Importe a planilha de unidades antes (ou deixe vazio para a unidade principal).`
+          : "unidade: este cliente não tem unidade principal. Informe o nome da unidade.");
+    }
+    const tipo = opcao(v.tipo, ctx.refs.tipo ?? [], "tipo");
+    if (tipo.erro) erros.push(tipo.erro);
+    const cap = lerCapacidade(v.capacidade);
+    if (cap.erro) erros.push(cap.erro);
+    const serie = texto(v.numero_serie);
+    const patrimonio = texto(v.patrimonio);
+    // Cada chave com o que a pessoa DIGITOU (as mensagens mostram o valor dela, não o normalizado)
+    const digitado: [string, string][] = [...(id ? [[`id:${id}`, id] as [string, string]] : []), ...(serie ? [[`serie:${chaveCodigo(serie)}`, serie] as [string, string]] : []), ...(patrimonio ? [[`pat:${chaveCodigo(patrimonio)}`, patrimonio] as [string, string]] : [])];
+    // Série/patrimônio que já está em MAIS de um equipamento: não dá para saber qual atualizar
+    // (com o id_sistema na linha, é ele que decide)
+    if (!id)
+      for (const [k, valor] of digitado) {
+        const n = ctx.mapas?.ambiguas?.get(k);
+        if (n) erros.push(`${k.startsWith("serie:") ? "numero_serie" : "patrimonio"}: “${valor}” já está em ${n} equipamentos desta empresa — não dá para saber qual atualizar. Baixe a planilha de equipamentos e use o id_sistema.`);
+      }
+    // Casou com um equipamento de OUTRO cliente: um equipamento não muda de cliente pela planilha
+    if (clienteId)
+      for (const [k, valor] of digitado) {
+        const eq = ctx.existentes.get(k);
+        const dono = eq ? ctx.mapas?.equipamentoDoCliente?.get(eq) : undefined;
+        if (dono && dono !== clienteId) {
+          erros.push(`${tipoChave(k)} “${valor}” é de um equipamento de outro cliente. Um equipamento não muda de cliente pela planilha.`);
+          break;
+        }
+      }
+    if (erros.length) return { ok: false, erros, rotulo };
+    // Com o id_sistema, série/TAG que já é repetida no cadastro não serve de chave (nem para "repete a linha")
+    const chaves = digitado.filter(([k]) => !(id && ctx.mapas?.ambiguas?.has(k))).map(([k]) => k);
+    const semChave = chaves.length === 0;
+    if (!texto(v.tipo)) avisos.push("tipo vazio: se o equipamento for novo, entra como “Outro”.");
+    if (semChave) {
+      avisos.push("Sem nº de série nem patrimônio/TAG: reimportar esta linha cria outro equipamento.");
+      const parecidos = ctx.mapas?.parecidos?.get(chaveParecido(clienteId!, unidadeId!, marca!, modelo!, cap.valor));
+      if (parecidos) avisos.push(`Possível duplicado — já cadastrado nesta unidade: ${parecidos}.`);
+    }
+    return {
+      ok: true, rotulo, chaves, avisos,
+      dados: {
+        clienteId, unidadeId, semChave, tipoRef: tipo.valor, marca, modelo, capacidade: cap.valor,
+        fluido: normalizarFluido(texto(v.fluido)), tensao: normalizarTensao(texto(v.tensao)),
+        localizacao: ambiente, setor: livre(v.setor), numeroSerie: serie, patrimonio, nome: livre(v.nome), observacoes: pLivre(texto(v.observacoes)),
+      },
+    };
+  },
+};
+
 /* ───────── Fornecedores (dedup por id_sistema, CNPJ/CPF; sem nenhum dos dois, pelo nome) ───────── */
 const fornecedores: DefImportacao = {
   entidade: "fornecedores", singular: "fornecedor", plural: "fornecedores", chaveDescricao: "id_sistema, CNPJ/CPF (ou nome, sem documento)",
@@ -442,7 +617,7 @@ const produtos: DefImportacao = {
   },
 };
 
-export const IMPORTACOES: Record<EntidadeImportacao, DefImportacao> = { clientes, unidades, contatos, fornecedores, servicos, produtos };
+export const IMPORTACOES: Record<EntidadeImportacao, DefImportacao> = { clientes, unidades, contatos, equipamentos, fornecedores, servicos, produtos };
 
 /**
  * Baixar a planilha (exportar): ver o módulo da lista (tela e servidor usam esta tabela). Produtos e
@@ -452,6 +627,7 @@ export const PERMISSOES_EXPORTACAO: Record<EntidadeImportacao, Requisito> = {
   clientes: [["clientes", "visualizar"]],
   unidades: [["clientes", "visualizar"]],
   contatos: [["clientes", "visualizar"]],
+  equipamentos: [["equipamentos", "visualizar"]],
   fornecedores: [["financeiro", "visualizar"], ["configuracoes", "visualizar"]],
   servicos: [["configuracoes", "visualizar"]],
   produtos: [["configuracoes", "visualizar"]],

@@ -243,6 +243,8 @@ describe("exportação = mesmas colunas, lidas de volta (round-trip)", () => {
       clientes: [["clientes", "visualizar"]], fornecedores: [["financeiro", "visualizar"], ["configuracoes", "visualizar"]],
       // Implantação, leva 1: unidades e contatos vivem dentro do cliente — baixar pede ver clientes
       unidades: [["clientes", "visualizar"]], contatos: [["clientes", "visualizar"]],
+      // Implantação, leva 2: equipamentos — baixar pede ver equipamentos
+      equipamentos: [["equipamentos", "visualizar"]],
       servicos: [["configuracoes", "visualizar"]], produtos: [["configuracoes", "visualizar"]],
     });
   });

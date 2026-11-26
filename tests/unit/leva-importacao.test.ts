@@ -116,7 +116,7 @@ describe("clientes (dedup por CNPJ/CPF)", () => {
     ]);
     const p = await previa("clientes", arq);
     expect(p.status).toBe(200);
-    expect(p.json.analise.resumo).toEqual({ total: 2, criar: 1, atualizar: 1, erros: 0 });
+    expect(p.json.analise.resumo).toEqual({ total: 2, criar: 1, atualizar: 1, erros: 0, avisos: 0 });
     expect(statusDa(p, 2).status).toBe("atualizar");
     expect(statusDa(p, 3).status).toBe("criar");
     expect(p.json.analise.linhas[0]).not.toHaveProperty("dados");
@@ -159,7 +159,7 @@ describe("clientes (dedup por CNPJ/CPF)", () => {
       ["Bom", "39053344705", "", "", "", ""],
     ]);
     const p = await previa("clientes", arq);
-    expect(p.json.analise.resumo).toEqual({ total: 8, criar: 1, atualizar: 0, erros: 7 });
+    expect(p.json.analise.resumo).toEqual({ total: 8, criar: 1, atualizar: 0, erros: 7, avisos: 0 });
     expect(statusDa(p, 2).erros).toContain("nome: obrigatório.");
     expect(statusDa(p, 3).erros).toContain("cnpj_cpf: obrigatório.");
     expect(statusDa(p, 4).erros[0]).toMatch(/cnpj_cpf: “11\.222\.333\/0001-82” não é um CNPJ/);
@@ -198,7 +198,7 @@ describe("fornecedores (dedup por CNPJ/CPF; sem documento, pelo nome)", () => {
       ["Leroy Merlin", CNPJ_A, "", "", "Material"],
     ]);
     const p = await previa("fornecedores", arq);
-    expect(p.json.analise.resumo).toEqual({ total: 3, criar: 1, atualizar: 2, erros: 0 });
+    expect(p.json.analise.resumo).toEqual({ total: 3, criar: 1, atualizar: 2, erros: 0, avisos: 0 });
     const c = await confirmar("fornecedores", arq);
     expect(c.json).toMatchObject({ criados: 1, atualizados: 2, comErro: 0 });
     expect(linha("fornecedor", "f-frig")).toMatchObject({ nome: "Frigelar Distribuidora SA", documento: CNPJ_B, email: "vendas@frig.com", telefone: "1100000000", observacoes: "antigo" });
@@ -239,7 +239,7 @@ describe("serviços e produtos (dedup pelo nome; números validados)", () => {
       ["Capacitor", "", "", ""],
     ]);
     const p = await previa("produtos", arq);
-    expect(p.json.analise.resumo).toEqual({ total: 5, criar: 1, atualizar: 1, erros: 3 });
+    expect(p.json.analise.resumo).toEqual({ total: 5, criar: 1, atualizar: 1, erros: 3, avisos: 0 });
     expect(statusDa(p, 2).erros[0]).toBe("unidade “caixa” não existe. Opções válidas: Unidade (un), Quilograma (kg), Metro linear (m), Metro quadrado (m²).");
     expect(statusDa(p, 3).erros).toEqual(["valor_padrao: “dez reais” não é um número."]);
     expect(statusDa(p, 4).erros).toEqual(["estoque_minimo: use um número inteiro (veio 2.5)."]);

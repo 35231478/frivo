@@ -149,7 +149,8 @@ describe("unidades e contatos (motor)", () => {
   });
 
   it("família: clientes abre clientes → unidades → contatos; os outros cadastros, só eles mesmos", () => {
-    expect(familiaDe("clientes")).toEqual(["clientes", "unidades", "contatos"]);
+    // leva 2: + equipamentos (ligados ao cliente pelo CNPJ/CPF e à unidade pelo nome)
+    expect(familiaDe("clientes")).toEqual(["clientes", "unidades", "contatos", "equipamentos"]);
     expect(familiaDe("produtos")).toEqual(["produtos"]);
     expect(familiaDe("unidades")).toEqual(["unidades"]);
   });
@@ -205,13 +206,13 @@ function rede(respostas: { status: number; json: unknown }[]) {
 const LIGAR = { cabecalho: ["Nome do Cliente", "CPF/CNPJ", "Telefone principal"], ligadas: { ...Object.fromEntries(COLS.map((c) => [c.chave, null])), cnpj_cpf: "CPF/CNPJ" }, faltando: ["nome"] };
 const PREVIA = (ligadas = LIGAR.ligadas) => ({
   podeAtualizar: true,
-  analise: { linhas: [{ linha: 2, status: "criar", rotulo: "Hospital", erros: [], valores: {} }], resumo: { total: 1, criar: 1, atualizar: 0, erros: 0 }, colunasIgnoradas: [], colunas: { ...LIGAR, ligadas, faltando: [] } },
+  analise: { linhas: [{ linha: 2, status: "criar", rotulo: "Hospital", erros: [], valores: {} }], resumo: { total: 1, criar: 1, atualizar: 0, erros: 0, avisos: 0 }, colunasIgnoradas: [], colunas: { ...LIGAR, ligadas, faltando: [] } },
 });
 
 describe("tela de importação: clientes → unidades → contatos", () => {
   it("com Clientes › Editar: escolhe a planilha (clientes, unidades, contatos); unidade mostra o texto dela e o link para baixar as cadastradas", async () => {
     await montar();
-    expect($$("[data-importar-o-que]").map((b) => b.dataset.importarOQue)).toEqual(["clientes", "unidades", "contatos"]);
+    expect($$("[data-importar-o-que]").map((b) => b.dataset.importarOQue)).toEqual(["clientes", "unidades", "contatos", "equipamentos"]);
     expect($("[data-importacao]")!.dataset.importacao).toBe("clientes");
     expect($("[data-acao='baixar-cadastrados']")).toBeNull();
     await clicar("[data-importar-o-que='unidades']");

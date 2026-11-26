@@ -3,7 +3,16 @@ import { auth } from "@/lib/auth";
 import { pode, type Acao, type Permissoes } from "@/lib/permissoes";
 import { ehEntidadeImportacao, IMPORTACOES, type EntidadeImportacao } from "@/lib/importacao/entidades";
 import { PERMISSOES_IMPORTACAO, temRequisito } from "@/lib/importacao/servidor";
-import { PERMISSOES_EXPORTACAO } from "@/lib/importacao/entidades";
+import { MODULO_DA_IMPORTACAO, PERMISSOES_EXPORTACAO } from "@/lib/importacao/entidades";
+import { MSG_MODULO_DESLIGADO } from "@/lib/modulos/catalogo";
+import { temModulo } from "@/lib/modulos/servidor";
+
+/** Planilha de um módulo que a empresa desligou: 403 com o motivo (permissão é do usuário, módulo é da empresa). */
+async function moduloDesligado(entidade: EntidadeImportacao, empresaId: string) {
+  const m = MODULO_DA_IMPORTACAO[entidade];
+  if (!m || (await temModulo(empresaId, m))) return null;
+  return NextResponse.json({ erro: MSG_MODULO_DESLIGADO(m), modulo: m }, { status: 403 });
+}
 
 export type Ctx = { params: Promise<{ entidade: string }> };
 
@@ -24,6 +33,8 @@ export async function exigirImportacao(ctx: Ctx): Promise<
   const req = PERMISSOES_IMPORTACAO[entidade];
   if (!temRequisito(req.criar, permissoes, u.role))
     return { ok: false, resposta: NextResponse.json({ erro: `Sem permissão para importar ${IMPORTACOES[entidade].plural} (precisa poder criar).` }, { status: 403 }) };
+  const desligado = await moduloDesligado(entidade, u.empresaId);
+  if (desligado) return { ok: false, resposta: desligado };
   return {
     ok: true, entidade, empresaId: u.empresaId, podeAtualizar: temRequisito(req.editar, permissoes, u.role),
     permitido: (m, a) => pode(permissoes, m, a, u.role),
@@ -42,6 +53,8 @@ export async function exigirExportacao(ctx: Ctx): Promise<
   if (!u) return { ok: false, resposta: NextResponse.json({ erro: "Não autorizado" }, { status: 401 }) };
   if (!temRequisito(PERMISSOES_EXPORTACAO[entidade], (u.permissoes ?? {}) as Permissoes, u.role))
     return { ok: false, resposta: NextResponse.json({ erro: `Sem permissão para baixar a planilha de ${IMPORTACOES[entidade].plural}.` }, { status: 403 }) };
+  const desligado = await moduloDesligado(entidade, u.empresaId);
+  if (desligado) return { ok: false, resposta: desligado };
   return { ok: true, entidade, empresaId: u.empresaId };
 }
 
