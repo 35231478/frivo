@@ -22,6 +22,7 @@ import { useListagemUrl } from "@/components/listagem/use-listagem-url";
 import { AlternarVisao, CampoBusca, sugerirPorUrl, ChipResumo, MultiSelect, Paginacao, SelectFiltro } from "@/components/listagem/listagem-ui";
 import { TabelaPro, type ColunaPro } from "@/components/listagem/tabela-pro";
 import { PLANILHA } from "@/lib/planilha";
+import { ImportarPlanilha } from "@/components/importacao/importar-planilha";
 
 export type EquipLinha = {
   id: string;
@@ -102,6 +103,7 @@ export function EquipamentosListaClient({ itens, total, filtros: f, opcoes, resu
         </div>
         <div className="flex items-center gap-2">
           <AlternarVisao visao={visao} onTrocar={trocarVisao} />
+          {podeCriar && <ImportarPlanilha entidade="equipamentos" onConcluido={() => roteador.refresh()} />}
           {podeCriar && (
             <Link href="/equipamentos/novo/foto" title="Cadastrar pela foto da etiqueta" aria-label="Cadastrar pela foto da etiqueta" data-novo-por-foto className="inline-flex items-center gap-2 border border-primary-300 text-primary-700 bg-primary-50 hover:bg-primary-100 px-3 py-2.5 rounded-lg text-sm font-semibold transition-all">
               <Camera className="w-4 h-4" /> <span className="hidden sm:inline">Por foto</span>

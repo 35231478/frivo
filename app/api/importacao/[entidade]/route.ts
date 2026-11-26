@@ -49,5 +49,5 @@ export async function POST(req: NextRequest, ctx: Ctx) {
     return NextResponse.json({ erro: "Nenhuma linha válida para gravar: corrija a planilha e envie de novo." }, { status: 400 });
 
   const r = await gravarImportacao(g.entidade, analise, g.empresaId);
-  return NextResponse.json({ ok: true, criados: r.criados, atualizados: r.atualizados, comErro: r.erros.length, erros: r.erros, observacoes: r.observacoes });
+  return NextResponse.json({ ok: true, criados: r.criados, atualizados: r.atualizados, comErro: r.erros.length, erros: r.erros, observacoes: r.observacoes, avisos: r.avisos });
 }

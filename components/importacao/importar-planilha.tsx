@@ -7,7 +7,8 @@ import { Dica } from "@/components/ui/dica";
 import { Drawer } from "@/components/ui/drawer";
 import { cn } from "@/lib/utils";
 import { usePermissoes } from "@/components/providers/permissoes-provider";
-import { familiaDe, IMPORTACOES, REQUISITO_FAMILIA, type EntidadeImportacao } from "@/lib/importacao/entidades";
+import { useModulos } from "@/components/providers/modulos-provider";
+import { familiaDe, IMPORTACOES, MODULO_DA_IMPORTACAO, REQUISITO_FAMILIA, type EntidadeImportacao } from "@/lib/importacao/entidades";
 import type { Analise, LigacaoColunas, Ligacoes, LinhaAnalisada, StatusLinha } from "@/lib/importacao/motor";
 
 /**
@@ -20,7 +21,8 @@ import type { Analise, LigacaoColunas, Ligacoes, LinhaAnalisada, StatusLinha } f
 
 type LinhaPrevia = Omit<LinhaAnalisada, "dados" | "existenteId" | "chave">;
 type LinhaErro = Pick<LinhaAnalisada, "linha" | "rotulo" | "erros" | "valores">;
-interface Resultado { criados: number; atualizados: number; comErro: number; erros: LinhaErro[]; observacoes?: string[] }
+type LinhaAviso = Pick<LinhaAnalisada, "linha" | "rotulo" | "valores"> & { avisos: string[] };
+interface Resultado { criados: number; atualizados: number; comErro: number; erros: LinhaErro[]; observacoes?: string[]; avisos?: LinhaAviso[] }
 
 const STATUS: Record<StatusLinha, { rotulo: string; cls: string }> = {
   criar: { rotulo: "Criar", cls: "bg-success-50 text-success-700 border-success-200" },
@@ -31,8 +33,11 @@ const STATUS: Record<StatusLinha, { rotulo: string; cls: string }> = {
 export function ImportarPlanilha({ entidade, onConcluido, className }: { entidade: EntidadeImportacao; onConcluido?: () => void; className?: string }) {
   const [aberto, setAberto] = useState(false);
   const { pode } = usePermissoes();
-  // Família (clientes → unidades → contatos): só as planilhas que a pessoa pode importar
-  const familia = familiaDe(entidade).filter((e) => e === entidade || (REQUISITO_FAMILIA[e] ?? []).some(([m, a]) => pode(m, a)));
+  const modulos = useModulos();
+  // Família (clientes → unidades → contatos → equipamentos): só as planilhas que a pessoa pode
+  // importar e cujo módulo a empresa tem ligado
+  const familia = familiaDe(entidade).filter((e) => e === entidade
+    || ((REQUISITO_FAMILIA[e] ?? []).some(([m, a]) => pode(m, a)) && (!MODULO_DA_IMPORTACAO[e] || modulos.tem(MODULO_DA_IMPORTACAO[e]!))));
   const [atual, setAtual] = useState<EntidadeImportacao>(entidade);
   return (
     <>
@@ -70,15 +75,15 @@ function EscolherPlanilha({ familia, atual, onEscolher }: { familia: EntidadeImp
   );
 }
 
-async function baixarErros(entidade: EntidadeImportacao, erros: LinhaErro[]) {
+async function baixarErros(entidade: EntidadeImportacao, erros: LinhaErro[], tipo?: "avisos") {
   const r = await fetch(`/api/importacao/${entidade}/erros`, {
     method: "POST", headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ erros: erros.map(({ linha, erros: e, valores }) => ({ linha, erros: e, valores })) }),
+    body: JSON.stringify({ erros: erros.map(({ linha, erros: e, valores }) => ({ linha, erros: e, valores })), ...(tipo && { tipo }) }),
   });
   if (!r.ok) throw new Error();
   const url = URL.createObjectURL(await r.blob());
   const a = document.createElement("a");
-  a.href = url; a.download = `erros-importacao-${entidade}.xlsx`;
+  a.href = url; a.download = `${tipo ?? "erros"}-importacao-${entidade}.xlsx`;
   document.body.appendChild(a); a.click(); a.remove();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
@@ -92,7 +97,7 @@ function Assistente({ entidade, onConcluido }: { entidade: EntidadeImportacao; o
   const [etapa, setEtapa] = useState<"escolher" | "analisando" | "previa" | "gravando" | "feito">("escolher");
   const [erro, setErro] = useState("");
   const [resultado, setResultado] = useState<Resultado | null>(null);
-  const [filtro, setFiltro] = useState<StatusLinha | "todos">("todos");
+  const [filtro, setFiltro] = useState<StatusLinha | "todos" | "aviso">("todos");
   const [baixando, setBaixando] = useState(false);
   // Ligar colunas: o de-para escolhido (vale para a prévia e para a confirmação) e o painel aberto
   const [ligacoes, setLigacoes] = useState<Ligacoes | undefined>(undefined);
@@ -140,14 +145,15 @@ function Assistente({ entidade, onConcluido }: { entidade: EntidadeImportacao; o
     void enviar(false, arquivo, nova);
   }
 
-  async function planilhaErros(erros: LinhaErro[]) {
+  async function planilhaErros(erros: LinhaErro[], tipo?: "avisos") {
     setBaixando(true); setErro("");
-    try { await baixarErros(entidade, erros); } catch { setErro("Não foi possível gerar a planilha de erros."); } finally { setBaixando(false); }
+    try { await baixarErros(entidade, erros, tipo); } catch { setErro(`Não foi possível gerar a planilha de ${tipo ?? "erros"}.`); } finally { setBaixando(false); }
   }
 
   const obrigatorias = def.colunas.filter((c) => c.obrig).map((c) => c.titulo);
   const gravaveis = analise ? analise.resumo.criar + analise.resumo.atualizar : 0;
-  const linhas = analise?.linhas.filter((l) => filtro === "todos" || l.status === filtro) ?? [];
+  const linhas = analise?.linhas.filter((l) => filtro === "todos" || (filtro === "aviso" ? l.status !== "erro" && !!l.avisos?.length : l.status === filtro)) ?? [];
+  const nAvisos = analise?.resumo.avisos ?? 0;
 
   return (
     <div className="space-y-5" data-importacao={entidade}>
@@ -221,8 +227,8 @@ function Assistente({ entidade, onConcluido }: { entidade: EntidadeImportacao; o
             </div>
             <div className="flex flex-wrap gap-2 text-sm" role="tablist">
               {([["todos", `Todas (${analise.resumo.total})`], ["criar", `Criar (${analise.resumo.criar})`],
-                ["atualizar", `Atualizar (${analise.resumo.atualizar})`], ["erro", `Com erro (${analise.resumo.erros})`]] as const)
-                .filter(([k]) => k === "todos" || (k === "criar" ? analise.resumo.criar : k === "atualizar" ? analise.resumo.atualizar : analise.resumo.erros) > 0)
+                ["atualizar", `Atualizar (${analise.resumo.atualizar})`], ["erro", `Com erro (${analise.resumo.erros})`], ["aviso", `Com aviso (${nAvisos})`]] as const)
+                .filter(([k]) => k === "todos" || (k === "criar" ? analise.resumo.criar : k === "atualizar" ? analise.resumo.atualizar : k === "erro" ? analise.resumo.erros : nAvisos) > 0)
                 .map(([k, r]) => (
                   <button key={k} type="button" onClick={() => setFiltro(k)} data-filtro={k}
                     className={cn("px-3 py-1 rounded-full border text-xs font-medium", filtro === k ? "bg-ink text-white border-ink" : "bg-white text-ink-muted border-surface-border hover:text-ink")}>
@@ -250,6 +256,7 @@ function Assistente({ entidade, onConcluido }: { entidade: EntidadeImportacao; o
                 <div className="min-w-0 flex-1">
                   <p className="text-sm font-medium text-ink truncate">{l.rotulo || "(sem nome)"}</p>
                   {l.erros.map((e) => <p key={e} className="text-xs text-atrasado break-words">• {e}</p>)}
+                  {l.status !== "erro" && l.avisos?.map((a) => <p key={a} className="text-xs text-atencao-texto break-words" data-linha-aviso>• {a}</p>)}
                 </div>
                 <span className={cn("text-[11px] font-semibold px-2 py-0.5 rounded-full border whitespace-nowrap", STATUS[l.status].cls)}>{STATUS[l.status].rotulo}</span>
               </li>
@@ -258,7 +265,7 @@ function Assistente({ entidade, onConcluido }: { entidade: EntidadeImportacao; o
           <div className="px-4 py-4 border-t border-surface-border space-y-3">
             <p className="text-sm text-ink">
               {gravaveis > 0
-                ? <>Serão gravados <strong>{analise.resumo.criar}</strong> novo(s) e <strong>{analise.resumo.atualizar}</strong> atualização(ões).{analise.resumo.erros > 0 && <> As {analise.resumo.erros} linha(s) com erro ficam de fora.</>}</>
+                ? <>Serão gravados <strong>{analise.resumo.criar}</strong> novo(s) e <strong>{analise.resumo.atualizar}</strong> atualização(ões).{analise.resumo.erros > 0 && <> As {analise.resumo.erros} linha(s) com erro ficam de fora.</>}{nAvisos > 0 && <> {nAvisos} linha(s) entram com aviso para revisar.</>}</>
                 : "Nada a gravar: corrija a planilha e envie de novo."}
             </p>
             <div className="flex flex-wrap gap-2 justify-end">
@@ -288,6 +295,15 @@ function Assistente({ entidade, onConcluido }: { entidade: EntidadeImportacao; o
               {resultado.observacoes.map((o) => <li key={o}>{o}</li>)}
             </ul>
           )}
+          {!!resultado.avisos?.length && (
+            <div className="space-y-1" data-avisos-resultado>
+              <p className="text-sm font-medium text-atencao-texto">{resultado.avisos.length} gravada(s) com aviso — revise:</p>
+              <ul className="text-xs text-atencao-texto space-y-0.5 max-h-48 overflow-y-auto">
+                {resultado.avisos.slice(0, 50).map((a) => <li key={a.linha}>linha {a.linha}{a.rotulo ? ` (${a.rotulo})` : ""}: {a.avisos.join(" ")}</li>)}
+                {resultado.avisos.length > 50 && <li>… e mais {resultado.avisos.length - 50} — veja todos na planilha de avisos.</li>}
+              </ul>
+            </div>
+          )}
           {resultado.comErro > 0 && (
             <>
               <ul className="text-xs text-atrasado space-y-0.5 max-h-48 overflow-y-auto">
@@ -303,7 +319,12 @@ function Assistente({ entidade, onConcluido }: { entidade: EntidadeImportacao; o
                 <Download className="w-4 h-4" /> Baixar planilha de erros
               </Button>
             )}
-            <Button type="button" variant="secondary" onClick={recomecar}>Importar outra planilha</Button>
+            {!!resultado.avisos?.length && (
+              <Button type="button" variant="secondary" onClick={() => planilhaErros(resultado.avisos!.map((a) => ({ linha: a.linha, rotulo: a.rotulo, valores: a.valores, erros: a.avisos })), "avisos")} loading={baixando} data-acao="baixar-avisos">
+                <Download className="w-4 h-4" /> Baixar avisos (para revisar)
+              </Button>
+            )}
+            <Button type="button" variant="secondary" onClick={recomecar} data-acao="recomecar">Importar outra planilha</Button>
           </div>
         </section>
       )}
