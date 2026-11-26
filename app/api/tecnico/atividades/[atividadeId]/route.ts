@@ -12,6 +12,7 @@ import { avisoParaRetrato, avisosDeHoje } from "@/lib/execucao/aviso-cliente";
 import { aceiteParaRetrato } from "@/lib/os/aceite-server";
 import { pode, type Permissoes } from "@/lib/permissoes";
 import { comMateriaisPrevistos } from "@/lib/tecnico/o-que-levar-server";
+import { materiaisDaAtividade } from "@/lib/execucao/materiais-campo";
 
 type Params = { params: Promise<{ atividadeId: string }> };
 
@@ -66,6 +67,8 @@ export async function GET(_: NextRequest, { params }: Params) {
   const semUnidade = <T extends { unidade: string | null }>(e: T): T => (config.exibirDadosCliente ? e : { ...e, unidade: null });
   // "O que levar": os materiais previstos desta OS (opção da empresa desligada = nada sai)
   const [comMateriais] = await comMateriaisPrevistos(empresaId, [cartao], config.oQueLevar);
+  // Materiais usados em campo nesta atividade (sem valores; "meu" = lançado por quem está com o aparelho)
+  const materiais = await materiaisDaAtividade(empresaId, atividadeId, guard.session.user.id);
   return NextResponse.json({
     cartao: aplicarPrivacidade(comMateriais, config),
     execucao: {
@@ -75,6 +78,7 @@ export async function GET(_: NextRequest, { params }: Params) {
       // só o sinal de que já foi avaliado, para o app travar a edição
       adicionais: execucao.adicionais.map(({ statusCobranca, ...a }) => ({ ...a, cobrancaDecidida: statusCobranca !== "A_AVALIAR" })),
       avisos,
+      materiais,
     },
     equipamentosUnidade: daUnidade.map(({ qrcode, ...e }) => ({ ...semUnidade(apresentarEquipamento(e)), tipoEquipamentoId: e.tipoEquipamentoId, qr: qrcode })),
     checklistsPorTipo,

@@ -17,6 +17,7 @@ import { ChegadaNaOs, useAgora } from "@/components/tecnico/aviso-cliente";
 import { AceiteNaOs } from "@/components/tecnico/aceite-cliente";
 import { CameraRapida, useRapida } from "@/components/tecnico/camera-rapida";
 import { ConferenciaRapida } from "@/components/tecnico/conferencia-rapida";
+import { MateriaisUsados } from "@/components/tecnico/materiais";
 import { MSG_SEM_UNIDADE } from "@/lib/tecnico/cadastro-equipamento";
 import { ConcluirSemEquipamento } from "@/components/os/concluir-sem-equipamento";
 import { srcFoto, TelaEquipamento } from "@/components/tecnico/equipamento";
@@ -41,7 +42,10 @@ export function situacao(e: EquipamentoTela) {
 }
 
 /** A OS no app: local, equipamentos (com o que falta), serviço extra e a conclusão (com a trava da Etapa 1). */
-export function VistaOs({ atividadeId, equipamentoId, camera }: { atividadeId: string; equipamentoId?: string | null; /** Abre já na câmera rápida (atalho do Meu dia) */ camera?: boolean }) {
+export function VistaOs({ atividadeId, equipamentoId, camera, incluir }: {
+  atividadeId: string; equipamentoId?: string | null; /** Abre já na câmera rápida (atalho do Meu dia) */ camera?: boolean;
+  /** QR lido no Meu dia: equipamento da unidade fora desta atividade — pergunta se inclui */ incluir?: string | null;
+}) {
   const { retrato, tela, fila, aEnviar, registrar, carregando } = useAtividade(atividadeId);
 
   if (carregando) return <div className="flex justify-center py-16"><Loader2 className="w-6 h-6 animate-spin text-ink-subtle" /></div>;
@@ -64,14 +68,14 @@ export function VistaOs({ atividadeId, equipamentoId, camera }: { atividadeId: s
       <div className="space-y-4" data-vista="os-antes-de-chegar">
         <Voltar />
         <p className="text-sm text-ink-muted" data-trava-chegada>Toque em “Cheguei” para abrir a OS.</p>
-        <CartaoAtividade c={retrato.cartao} fila={fila} guardado={guardadoDoRetrato(retrato, Number.MAX_SAFE_INTEGER)} />
+        <CartaoAtividade c={retrato.cartao} fila={fila} guardado={guardadoDoRetrato(retrato, Number.MAX_SAFE_INTEGER)} depoisDeChegar={{ e: equipamentoId, inc: incluir }} />
       </div>
     );
   }
   const e = equipamentoId ? tela.equipamentos.find((q) => q.equipamento.id === equipamentoId) : null;
   if (e) return <TelaEquipamento x={tela} e={e} registrar={registrar} endereco={retrato.cartao.endereco}
     qr={retrato.equipamentosUnidade.find((u) => u.id === e.equipamento.id)?.qr?.codigo ?? null} />;
-  return <ResumoOs r={retrato} x={tela} aEnviar={aEnviar} registrar={registrar} camera={camera} />;
+  return <ResumoOs r={retrato} x={tela} aEnviar={aEnviar} registrar={registrar} camera={camera} incluir={incluir} />;
 }
 
 function Voltar() {
@@ -82,7 +86,7 @@ function Voltar() {
   );
 }
 
-function ResumoOs({ r, x, aEnviar, registrar, camera }: { r: RetratoAtividade; x: ExecucaoTela; aEnviar: number; registrar: (ops: NovaOperacao[]) => Promise<void>; camera?: boolean }) {
+function ResumoOs({ r, x, aEnviar, registrar, camera, incluir }: { r: RetratoAtividade; x: ExecucaoTela; aEnviar: number; registrar: (ops: NovaOperacao[]) => Promise<void>; camera?: boolean; incluir?: string | null }) {
   const c = r.cartao;
   const atividadeId = x.atividade.id;
   const { motor, config } = useTecnico();
@@ -228,6 +232,8 @@ function ResumoOs({ r, x, aEnviar, registrar, camera }: { r: RetratoAtividade; x
         ) : <p className="text-xs text-ink-muted" data-cadastro-sem-unidade>{MSG_SEM_UNIDADE}</p>)}
       </section>
 
+      <MateriaisUsados x={x} registrar={registrar} nomeEquipamento={(id) => x.equipamentos.find((e) => e.equipamento.id === id)?.equipamento.titulo ?? null} />
+
       <FotosServico x={x} so={so} onAdicionar={() => setFotoServico(true)} registrar={registrar} />
 
       <section className="space-y-2" data-adicionais>
@@ -266,6 +272,7 @@ function ResumoOs({ r, x, aEnviar, registrar, camera }: { r: RetratoAtividade; x
         </div>
       )}
 
+      {incluir && !so && <IncluirPeloQr r={r} x={x} equipamentoId={incluir} registrar={registrar} />}
       {cameraAberta && (
         <CameraRapida atividadeId={atividadeId} marca={{ osNumero: x.os.numero, endereco: c.endereco }} onPronto={fecharCamera}
           resolverQr={(qr) => equipamentoDoQr(r, qr)?.id ?? null}
@@ -283,6 +290,42 @@ function ResumoOs({ r, x, aEnviar, registrar, camera }: { r: RetratoAtividade; x
         setConcluir(false);
       }} onJustificado={async () => { setConcluir(false); await motor?.baixarRetrato(atividadeId); }} />}
     </div>
+  );
+}
+
+/**
+ * QR lido no Meu dia de um equipamento da unidade que NÃO está nesta atividade: o app pergunta antes de
+ * incluir (nada entra sozinho). Incluir fica no histórico da OS e abre o equipamento; "Agora não" volta à OS.
+ */
+function IncluirPeloQr({ r, x, equipamentoId, registrar }: { r: RetratoAtividade; x: ExecucaoTela; equipamentoId: string; registrar: (ops: NovaOperacao[]) => Promise<void> }) {
+  const atividadeId = x.atividade.id;
+  const ja = x.equipamentos.some((e) => e.equipamento.id === equipamentoId);
+  const u = r.equipamentosUnidade.find((q) => q.id === equipamentoId);
+  const [gravando, setGravando] = useState(false);
+  // Já está na atividade (ex.: incluído agora há pouco): vai direto para ele
+  useEffect(() => { if (ja) irPara({ ver: "os", a: atividadeId, e: equipamentoId }, true); }, [ja, atividadeId, equipamentoId]);
+  if (ja || !u) return null;
+  const fechar = () => irPara({ ver: "os", a: atividadeId }, true);
+  async function incluirAgora() {
+    setGravando(true);
+    try {
+      await registrar([{ tipo: "vincular", atividadeId, equipamentoIds: [equipamentoId], origem: "qr" }]);
+      irPara({ ver: "os", a: atividadeId, e: equipamentoId }, true);
+    } finally { setGravando(false); }
+  }
+  return (
+    <Modal aberto titulo="Incluir nesta atividade?" onFechar={fechar}>
+      <div className="space-y-4" data-incluir-qr={equipamentoId}>
+        <div className="rounded-card border border-surface-border bg-surface-alt p-3">
+          <p className="font-semibold text-ink">{u.titulo}</p>
+          <p className="text-sm text-ink-muted">{[u.tipo?.nome, u.tag && `TAG ${u.tag}`, u.local].filter(Boolean).join(" · ")}</p>
+        </div>
+        <p className="text-sm text-ink">{x.os.numero} · {x.atividade.titulo}</p>
+        <button type="button" onClick={incluirAgora} disabled={gravando} data-confirmar-incluir
+          className="w-full rounded-card bg-primary-600 text-white py-4 text-base font-bold disabled:opacity-60 touch-target">Incluir e abrir</button>
+        <button type="button" onClick={fechar} className="w-full rounded-card border border-surface-border bg-white py-3 font-semibold text-ink touch-target">Agora não</button>
+      </div>
+    </Modal>
   );
 }
 
