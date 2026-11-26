@@ -194,3 +194,46 @@ describe("despoluição: o porquê vai para o ⓘ", () => {
     expect(document.body.textContent).not.toMatch(/alíquota 0% em Configurações\)/);
   });
 });
+
+describe("custo de compra no editor de kit e nos materiais do serviço (lib/estoque/custo-acesso)", () => {
+  async function montarComposicao(permissoes: Permissoes) {
+    const { PermissoesProvider } = await import("@/components/providers/permissoes-provider");
+    const { useCustosProdutos, CustoDoMaterial, ResumoCustoMateriais } = await import("@/components/estoque/composicao");
+    function Harness() {
+      const { custos } = useCustosProdutos(["tubo"]);
+      return createElement("div", { "data-harness": custos ? "com" : "sem" },
+        createElement(CustoDoMaterial, { produtoId: "tubo", quantidade: 2, custos }),
+        createElement(ResumoCustoMateriais, { materiais: [{ produtoId: "tubo", quantidade: 2, comportamento: "INCLUSO_NO_SERVICO" }] as any, custos }));
+    }
+    caixa = document.createElement("div"); document.body.appendChild(caixa); root = createRoot(caixa);
+    await act(async () => { root.render(createElement(PermissoesProvider, { role: "OPERADOR", permissoes, children: createElement(Harness) })); });
+    await esperar(20);
+  }
+  const pedidosCustos = () => chamadas.filter((c) => c.url.startsWith("/api/estoque/custos"));
+
+  it("sem Estoque › visualizar nem Orçamentos › ver custo: nem pede ao servidor, e nenhum custo aparece", async () => {
+    await montarComposicao(montarPermissoes({ configuracoes: ["gerenciar"] }));
+    expect(pedidosCustos()).toHaveLength(0);
+    expect($("[data-harness]")!.getAttribute("data-harness")).toBe("sem");
+    expect($("[data-resumo-custo]")).toBeNull();
+    expect(document.body.textContent).not.toMatch(/R\$|sem custo/);
+  });
+
+  it("com Estoque › visualizar (ou ver custo): busca e mostra o custo", async () => {
+    respostas["GET /api/estoque/custos"] = { status: 200, corpo: { custos: { tubo: 12 } } };
+    await montarComposicao(montarPermissoes({ configuracoes: ["gerenciar"], estoque: ["visualizar"] }));
+    expect(pedidosCustos()).toHaveLength(1);
+    expect($("[data-resumo-custo]")!.getAttribute("data-inclusos")).toBe("24");
+    act(() => root.unmount()); caixa.remove(); chamadas.length = 0;
+    await montarComposicao(montarPermissoes({ orcamentos: ["verCusto"] }));
+    expect(pedidosCustos()).toHaveLength(1);
+    expect($("[data-resumo-custo]")).toBeTruthy();
+  });
+
+  it("o servidor negou (403): a tela não mostra custo nenhum", async () => {
+    respostas["GET /api/estoque/custos"] = { status: 403, corpo: { erro: "Sem permissão para ver custo de compra" } };
+    await montarComposicao(montarPermissoes({ estoque: ["visualizar"] }));
+    expect($("[data-harness]")!.getAttribute("data-harness")).toBe("sem");
+    expect($("[data-resumo-custo]")).toBeNull();
+  });
+});

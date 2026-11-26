@@ -133,3 +133,14 @@ describe("segurança: o custo não sai sem a permissão", () => {
     expect(custoConfiavel({ id: "m1", produtoId: "p1", custoUnit: 999 } as any, new Map([["m1", { produtoId: "p1", custoUnit: 12 }]]), new Map())).toBe(12);
   });
 });
+
+describe("podeVerCustoDeCompra (regra única do custo de compra)", () => {
+  it("Estoque › visualizar OU Orçamentos › ver custo; mais nada abre o custo", async () => {
+    const { podeVerCustoDeCompra } = await import("@/lib/estoque/custo-acesso");
+    const com = (...ok: string[]) => (m: string, a: string) => ok.includes(`${m}.${a}`);
+    expect(podeVerCustoDeCompra(com("estoque.visualizar"))).toBe(true);
+    expect(podeVerCustoDeCompra(com("orcamentos.verCusto"))).toBe(true);
+    expect(podeVerCustoDeCompra(com())).toBe(false);
+    expect(podeVerCustoDeCompra(com("orcamentos.editar", "configuracoes.gerenciar", "ordens.editar", "estoque.separar", "compras.visualizar"))).toBe(false);
+  });
+});

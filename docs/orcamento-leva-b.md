@@ -78,12 +78,44 @@ PostgreSQL real rodando três vezes (`tests/unit/sql-orcamentos-ver-custo.test.t
 
 ## Perguntas em aberto (para o Zé)
 
-1. **`/api/estoque/custos`** entrega o último custo a **qualquer usuário logado** (rota do Estoque, fora deste
-   escopo e do RBAC do orçamento). Não mexi (regra: não mexer em RBAC do painel). Fechar com a permissão do
-   Estoque?
-2. **OS:** a tela/API de itens da OS (`/api/ordens/[id]/orcamento`, painel de materiais da OS) também mostra o
-   custo dos materiais a quem edita a OS. Aplicar a mesma permissão lá numa próxima leva?
-3. **SQL opcional:** aplicar para que perfis "Administrador" personalizados (sem o papel ADMIN) já vejam a margem?
+Respondidas pelo Zé no #241:
+
+1. **`/api/estoque/custos` aberto a qualquer logado** → era furo; **fechado neste PR** (ver abaixo).
+2. **Custo nos itens/materiais da OS** → mesma regra, mas em **leva própria logo depois do merge** (antes da leva
+   C). Não mexido aqui.
+3. **SQL opcional** → **não aplicar**; fica documentado como opcional (concede permissão: decisão do Zé).
+
+## Ajuste no #241 — as outras portas do custo de compra
+
+**Regra única** (`lib/estoque/custo-acesso.ts` → `podeVerCustoDeCompra`): vê custo de compra quem tem
+**Estoque › visualizar** OU **Orçamentos › Ver custo e margem** (administrador sempre).
+
+Por que essa e não só `orcamentos.verCusto`: o custo de compra **já é mostrado** a quem tem Estoque › visualizar
+(ficha do produto no Estoque: último custo e coluna "Custo unit." de cada entrada). Ou seja, essa permissão de
+estoque já inclui custo — exigir só `verCusto` numa rota do Estoque quebraria a coerência (quem vê o custo na
+ficha não veria no editor de kit). E exigir só a de estoque deixaria de fora quem ganhou "ver custo" no
+orçamento. As duas são exatamente as permissões que já dão direito ao dado; quem não tem nenhuma não recebe.
+
+| Rota | Antes | Agora |
+|---|---|---|
+| `GET /api/estoque/custos` (editor de kit e materiais padrão do serviço) | qualquer logado | **403** sem a regra; a tela nem pede e não mostra custo, total ou "sem custo" |
+| `GET /api/compras/ultima-compra` (dica "Última compra: R$ …" no pedido de compra) | bastava Orçamentos › editar | pelo orçamento só com a regra (senão **403** e a dica some). Compras › visualizar segue. **Ordens › editar segue como estava** — é a leva do custo na OS |
+| `PUT /api/estoque/[id]/preco` (salvar preço de venda) | Configurações › gerenciar recebia custo, margem e markup na resposta | salva igual; **custo/margem/markup só voltam** com a regra (a tela usa só o preço) |
+
+### Varredura — rotas e telas que devolvem custo ou preço de compra
+
+| Rota / tela | Permissão | Situação |
+|---|---|---|
+| `GET /api/estoque/[id]` (extrato com o custo de cada entrada) e a página do produto no Estoque (último custo) | Estoque › visualizar | ✅ coerente (é a permissão que inclui custo) |
+| `GET /api/compras/notas/[id]` e a página da nota (valores da NF de compra) | Estoque › visualizar | ✅ coerente |
+| Lançar/conciliar nota, entradas manuais (`movimentacoes`), recalcular, `compras/produtos` | Estoque › gerenciar | ✅ quem lança a compra vê o preço dela |
+| `GET /api/compras/sugestoes` | Compras › gerenciar | ✅ área de Compras |
+| `/api/estoque/custos`, `/api/compras/ultima-compra`, `PUT .../preco` | — | 🔧 **corrigidos neste PR** (tabela acima) |
+| Orçamento: página do Editar, `GET /api/orcamentos/[id]`, materiais-padrão, situação | Orçamentos › ver custo | ✅ leva B |
+| `GET /api/ordens/[id]/orcamento/catalogo`, `PUT/PATCH /api/ordens/[id]/orcamento/[itemId]` (materiais com custo) | Ordens › editar | ⏭️ **leva do custo na OS** (próxima) |
+| `GET /api/compras/ultima-compra` pela OS | Ordens › editar | ⏭️ leva do custo na OS |
+| **Outra área — só listado:** `GET /api/pedidos-compra` e `/api/pedidos-compra/[id]` | Compras › visualizar, ou o solicitante/comprador, ou **Ordens › visualizar / Orçamentos › visualizar** quando o pedido é de uma OS/orçamento | ⚠️ o pedido traz `valorEstimado` e `valorReal` (preço pago na NF) por item: quem só **vê** o orçamento/OS vê o preço de compra do pedido ligado a ele. É RBAC de Compras — não mexi. Sugestão: mesma regra de custo para os valores do pedido |
+| **Outra área — só listado:** folha, contas a pagar, fiscal | Financeiro | fora do assunto (custo de pessoal/despesa, não de compra) |
 
 ## Testes
 
@@ -95,6 +127,11 @@ PostgreSQL real rodando três vezes (`tests/unit/sql-orcamentos-ver-custo.test.t
 - `tests/unit/orcamento-estoque-margem-ui.test.ts` — o formulário num DOM real com e sem a permissão, Estoque
   desligado, rota falhando, "Sem ISS" no ⓘ; `tests/unit/proposta-corporativa-ui.test.ts` — Anexos no ⓘ.
 - `tests/unit/sql-orcamentos-ver-custo.test.ts` — o SQL opcional.
+- Ajuste do #241: `orcamento-estoque-margem-pg` ganhou `/api/estoque/custos` (401/403/200 por perfil, sem o dado
+  no 403, outra empresa fora), `ultima-compra` (orçamento sem custo = 403; Compras e OS como antes) e `PUT
+  .../preco` (sem custo na resposta para quem não pode); `orcamento-estoque-margem-ui` ganhou a composição (sem
+  permissão nem pede e não mostra; com Estoque ou ver custo mostra; 403 não mostra); `estoque-margem` ganhou a
+  regra única. Mutação dessas regras: 8/8.
 - Mutação: ver o PR. Navegador real: 22 conferências (desktop e celular, admin e vendedor, Estoque desligado,
   HTML do link e do PDF).
 

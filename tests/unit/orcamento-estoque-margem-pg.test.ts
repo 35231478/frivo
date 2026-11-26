@@ -59,7 +59,7 @@ describe.skipIf(!URL_PG)("Orçamento: estoque e margem (PostgreSQL real)", () =>
     (globalThis as any).prisma = undefined;
     ({ prisma } = await import("@/lib/prisma"));
     ({ esquecerModulos } = await import("@/lib/modulos/servidor"));
-    await Promise.all(["orcamentos", "orcamentos/[id]", "orcamentos/materiais-padrao", "orcamentos/situacao-produtos"].map((r) => import(/* @vite-ignore */ `@/app/api/${r}/route`)));
+    await Promise.all(["orcamentos", "orcamentos/[id]", "orcamentos/materiais-padrao", "orcamentos/situacao-produtos", "estoque/custos", "compras/ultima-compra", "estoque/[produtoId]/preco"].map((r) => import(/* @vite-ignore */ `@/app/api/${r}/route`)));
     await prisma.empresa.createMany({ data: [{ id: "e1", nome: "Clima Total", cnpj: "12345678000190", email: "e@x.com" }, { id: "e2", nome: "Outra", cnpj: "98765432000110", email: "o@x.com" }] });
     await prisma.usuario.createMany({ data: [{ id: "u1", empresaId: "e1", nome: "Ana", email: "a@x.com", senha: "x" }, { id: "u2", empresaId: "e2", nome: "Bia", email: "b@x.com", senha: "x" }] });
     await prisma.cliente.createMany({ data: [{ id: "c1", empresaId: "e1", nome: "Hospital", cpfCnpj: "22101333000111" }, { id: "c9", empresaId: "e2", nome: "Da outra", cpfCnpj: "33444555000100" }] });
@@ -238,5 +238,53 @@ describe.skipIf(!URL_PG)("Orçamento: estoque e margem (PostgreSQL real)", () =>
     expect(JSON.stringify(INCLUDE_DOCUMENTO_ORCAMENTO)).not.toMatch(/materiais|custo/i);
     const doc = await prisma.orcamento.findUnique({ where: { id: ids.orc }, include: INCLUDE_DOCUMENTO_ORCAMENTO });
     expect(JSON.stringify(doc)).not.toMatch(/custoUnit|custo_unit|"45"/);
+  });
+
+  /* ───── Outras portas do custo de compra (pedido do Zé no #241): a regra única é lib/estoque/custo-acesso ───── */
+
+  it("GET /api/estoque/custos: só com Estoque › visualizar ou Orçamentos › ver custo; sem login = 401; sem permissão = 403 sem o dado", async () => {
+    const custos = () => chamar("estoque/custos", "GET", undefined, {}, "?ids=gas,tubo,outro");
+    sessao.atual = null;
+    expect((await custos()).status).toBe(401);
+    VENDEDOR(); // orçamentos (visualizar/criar/editar), sem custo
+    const negado = await custos();
+    expect(negado.status).toBe(403);
+    expect(negado.texto).not.toMatch(/92|12/);
+    logar(montarPermissoes({ configuracoes: ["gerenciar"] })); // quem edita kit/serviço, mas sem permissão de custo
+    expect((await custos()).status).toBe(403);
+    logar(montarPermissoes({ estoque: ["visualizar"] }));
+    expect((await custos()).json).toEqual({ custos: { gas: 92, tubo: 12 } }); // "outro" é de outra empresa
+    logar(montarPermissoes({ orcamentos: ["visualizar", "verCusto"] }));
+    expect((await custos()).json).toEqual({ custos: { gas: 92, tubo: 12 } });
+    logar(montarPermissoes({}), "e1", "u1", "ADMIN");
+    expect((await custos()).status).toBe(200);
+  });
+
+  it("GET /api/compras/ultima-compra: pelo orçamento só com permissão de custo; Compras e OS como antes", async () => {
+    const ultima = () => chamar("compras/ultima-compra", "GET", undefined, {}, "?produtoIds=gas");
+    VENDEDOR();
+    const negado = await ultima();
+    expect(negado.status).toBe(403);
+    expect(negado.texto).not.toMatch(/92/);
+    logar(montarPermissoes({ orcamentos: ["visualizar", "editar", "verCusto"] }));
+    expect((await ultima()).json.gas).toMatchObject({ valorUnitario: 92 });
+    logar(montarPermissoes({ compras: ["visualizar"] }));
+    expect((await ultima()).status).toBe(200);
+    logar(montarPermissoes({ ordens: ["visualizar", "editar"] })); // OS: fica para a leva do custo na OS
+    expect((await ultima()).status).toBe(200);
+    logar(montarPermissoes({ orcamentos: ["visualizar"] }));
+    expect((await ultima()).status).toBe(403);
+  });
+
+  it("PUT /api/estoque/[id]/preco: salva o preço; custo, margem e markup só voltam para quem pode ver custo", async () => {
+    logar(montarPermissoes({ configuracoes: ["gerenciar"] }));
+    const sem = await chamar("estoque/[produtoId]/preco", "PUT", { modo: "preco", preco: 150 }, { produtoId: "gas" });
+    expect(sem.status).toBe(200);
+    expect(sem.json).toEqual({ preco: 150, margemVenda: null });
+    expect(sem.texto).not.toMatch(/custo|margem"|markup/);
+    expect(Number((await prisma.produto.findUnique({ where: { id: "gas" } })).valorPadrao)).toBe(150);
+    logar(montarPermissoes({ configuracoes: ["gerenciar"], estoque: ["visualizar"] }));
+    const com = await chamar("estoque/[produtoId]/preco", "PUT", { modo: "preco", preco: 184 }, { produtoId: "gas" });
+    expect(com.json).toMatchObject({ preco: 184, custo: 92, margem: 50 });
   });
 });
