@@ -260,7 +260,7 @@ describe.skipIf(!URL_PG)("Orçamento: estoque e margem (PostgreSQL real)", () =>
     expect((await custos()).status).toBe(200);
   });
 
-  it("GET /api/compras/ultima-compra: pelo orçamento só com permissão de custo; Compras e OS como antes", async () => {
+  it("GET /api/compras/ultima-compra: pelo orçamento ou pela OS só com permissão de custo; Compras segue", async () => {
     const ultima = () => chamar("compras/ultima-compra", "GET", undefined, {}, "?produtoIds=gas");
     VENDEDOR();
     const negado = await ultima();
@@ -270,7 +270,10 @@ describe.skipIf(!URL_PG)("Orçamento: estoque e margem (PostgreSQL real)", () =>
     expect((await ultima()).json.gas).toMatchObject({ valorUnitario: 92 });
     logar(montarPermissoes({ compras: ["visualizar"] }));
     expect((await ultima()).status).toBe(200);
-    logar(montarPermissoes({ ordens: ["visualizar", "editar"] })); // OS: fica para a leva do custo na OS
+    // Leva do custo na OS: quem chega pela OS (Ordens › editar) também precisa da permissão de ver custo
+    logar(montarPermissoes({ ordens: ["visualizar", "editar"] }));
+    expect((await ultima()).status).toBe(403);
+    logar(montarPermissoes({ ordens: ["visualizar", "editar"], estoque: ["visualizar"] }));
     expect((await ultima()).status).toBe(200);
     logar(montarPermissoes({ orcamentos: ["visualizar"] }));
     expect((await ultima()).status).toBe(403);

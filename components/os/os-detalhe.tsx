@@ -33,7 +33,11 @@ export type { AbaOs };
 /** Quanto tempo o painel fica destacado depois de a tela rolar até ele */
 const DESTAQUE_MS = 1600;
 
-export function OsDetalhe({ os: initialOs, abaInicial }: { os: any; abaInicial?: string }) {
+export function OsDetalhe({ os: initialOs, abaInicial, verCusto = false }: {
+  os: any; abaInicial?: string;
+  /** Custo na OS: a pessoa pode ver custo de compra (decidido no servidor; sem ela o custo nem vem nos itens) */
+  verCusto?: boolean;
+}) {
   const router = useRouter();
   const [os, setOs] = useState(initialOs);
   // router.refresh() traz a OS de novo do servidor (status automático, histórico): a central acompanha
@@ -156,7 +160,7 @@ export function OsDetalhe({ os: initialOs, abaInicial }: { os: any; abaInicial?:
                     </section>
                     <section data-secao-itens>
                       <h3 className="section-title mb-3">Itens da OS</h3>
-                      <OsOrcamento osId={os.id} itens={os.itensOrcamento} clienteId={os.cliente.id}
+                      <OsOrcamento osId={os.id} itens={os.itensOrcamento} clienteId={os.cliente.id} verCusto={verCusto}
                         situacao={situacaoDaOs({ aceite: os.aceite, faturada: !!os.fatura, notaEmitida: !!os.notaEmitida })} />
                     </section>
                   </div>

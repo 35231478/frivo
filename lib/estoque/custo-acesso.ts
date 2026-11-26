@@ -8,10 +8,19 @@
  * (ex.: GET /api/estoque/custos, usado no editor de kit e nos materiais padrão do serviço).
  * Administrador (role ADMIN/SUPER_ADMIN) sempre pode — `pode` já cuida disso.
  */
-import type { Acao } from "@/lib/permissoes";
+import { pode, type Acao, type Permissoes } from "@/lib/permissoes";
 
 export type FuncaoPode = (modulo: string, acao: Acao) => boolean;
 
 export function podeVerCustoDeCompra(pode: FuncaoPode): boolean {
   return pode("estoque", "visualizar") || pode("orcamentos", "verCusto");
+}
+
+/**
+ * A mesma regra para a SESSÃO (servidor): papel TECNICO nunca vê custo (o app do técnico não mostra custo, nem
+ * que o perfil tenha alguma permissão de estoque); os demais seguem `podeVerCustoDeCompra`. ADMIN/SUPER_ADMIN: sempre.
+ */
+export function usuarioVeCustoDeCompra(user: { permissoes?: unknown; role?: string | null } | null | undefined): boolean {
+  if (!user || user.role === "TECNICO") return false;
+  return podeVerCustoDeCompra((m, a) => pode(user.permissoes as Permissoes, m, a, user.role ?? undefined));
 }

@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { exigirPermissao } from "@/lib/permissoes-server";
 import { prisma } from "@/lib/prisma";
 import { catalogoParaItemOs } from "@/lib/os/materiais-server";
+import { usuarioVeCustoDeCompra } from "@/lib/estoque/custo-acesso";
+import { semCustoNosMateriais } from "@/lib/orcamentos/estoque-margem";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -20,5 +22,7 @@ export async function GET(req: NextRequest, { params }: Params) {
   const sp = req.nextUrl.searchParams;
   const r = await catalogoParaItemOs(empresaId, os.clienteId, { servicoId: sp.get("servicoId"), produtoId: sp.get("produtoId") });
   if (!r) return NextResponse.json({ erro: "Item do catálogo não encontrado" }, { status: 404 });
-  return NextResponse.json(r);
+  // Custo na OS: sem permissão de ver custo, os materiais vêm sem `custoUnit` (o salvar busca o custo no servidor)
+  if (usuarioVeCustoDeCompra(guard.session.user)) return NextResponse.json(r);
+  return NextResponse.json(r.tipo === "SERVICO" ? { ...r, materiais: semCustoNosMateriais(r.materiais) } : { ...r, material: semCustoNosMateriais([r.material])[0] });
 }

@@ -4,6 +4,8 @@ import { ErroRefEmpresa, validarRefEmpresa, validarRefsEmpresa } from "@/lib/ref
 import { erroDosMateriais, materialAvulso, type MaterialOrcamento } from "@/lib/orcamentos/materiais";
 import { materiaisPadraoDoServico, precosDeVendaParaCliente, produtoComoMaterial } from "@/lib/orcamentos/materiais-server";
 import { prepararItemOs, type EntradaItemOs, type ItemOsPreparado } from "@/lib/os/materiais";
+import { custoDoMaterialOs } from "@/lib/os/custo";
+import { ultimosCustos } from "@/lib/estoque/custo";
 
 /**
  * Estoque E3.3b — lado do servidor dos itens da OS com materiais/peças. A regra é a pura (lib/os/materiais +
@@ -110,3 +112,23 @@ export async function atualizarValoresDoItemOs(tx: Tx, itemId: string, p: ItemOs
 
 /** Include do item da OS com o snapshot e a peça de origem (o que a tela e a fatura leem). */
 export const INCLUIR_ITEM_OS = { materiais: { orderBy: { ordem: "asc" } }, material: { select: { osItemId: true } } } as const;
+
+/**
+ * Custo na OS: antes de gravar um item (novo ou regravado), troca o `custoUnit` de cada material pelo custo decidido
+ * AQUI (lib/os/custo → custoDoMaterialOs). Quem não vê custo nem recebe o campo; quem vê não consegue forjá-lo.
+ */
+export async function fixarCustosDosMateriaisOs(
+  empresaId: string, osItemId: string | null,
+  materiais: { produtoId?: string | null; custoUnit?: number | null }[] | undefined,
+  db: Tx | typeof prisma = prisma,
+) {
+  if (!materiais?.length) return;
+  const gravados = new Map<string, number | null>();
+  if (osItemId) {
+    const linhas = await db.osMaterial.findMany({ where: { osItemId, ordemServico: { empresaId } }, orderBy: { ordem: "asc" }, select: { produtoId: true, custoUnit: true } });
+    for (const l of linhas) if (l.produtoId && !gravados.has(l.produtoId)) gravados.set(l.produtoId, l.custoUnit == null ? null : Number(l.custoUnit));
+  }
+  const novos = materiais.filter((m) => m.produtoId && !gravados.has(m.produtoId)).map((m) => m.produtoId!);
+  const ultimos = novos.length ? await ultimosCustos(empresaId, novos, {}, db) : new Map<string, number>();
+  for (const m of materiais) m.custoUnit = custoDoMaterialOs(m, gravados, ultimos);
+}

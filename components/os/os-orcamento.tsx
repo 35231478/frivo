@@ -42,8 +42,10 @@ const ALVO_LINHA = "este item da OS";
  * preço aplicado NESTA OS; o catálogo nunca muda). Registro fechado (OS assinada pelo cliente, faturada ou com
  * nota) trava as linhas: cadeado com o motivo no ⓘ, e nada entra nem sai. O servidor confere de novo.
  */
-export function OsOrcamento({ osId, itens: iniciais, clienteId = null, situacao = null }: {
+export function OsOrcamento({ osId, itens: iniciais, clienteId = null, situacao = null, verCusto = false }: {
   osId: string; itens: ItemOs[]; clienteId?: string | null;
+  /** Custo na OS: mostra o custo dos materiais (só quem pode ver custo de compra; o servidor decide e nem manda) */
+  verCusto?: boolean;
   /** A situação da OS para a trava de registro fechado (lib/edicao-contexto › situacaoDaOs) */
   situacao?: SituacaoDoRegistro | null;
 }) {
@@ -214,9 +216,9 @@ export function OsOrcamento({ osId, itens: iniciais, clienteId = null, situacao 
               </div>
               {/* Snapshot do item que veio do orçamento: à vista, sem edição */}
               {doOrcamento && !!i.materiais?.length && (
-                <div className="px-3 pb-2"><MateriaisLinha item={{ id: i.id, descricao: i.descricao, quantidade: num(i.quantidade), valorUnitario: unitarioParaEdicao(i), valorTotal: num(i.valorTotal), valorManual: !!i.valorManual, materiais: i.materiais.map((m) => ({ ...m, quantidade: num(m.quantidade), quantidadePadrao: num(m.quantidadePadrao), valorVendaUnit: num(m.valorVendaUnit), custoUnit: m.custoUnit == null ? null : num(m.custoUnit) })) }} clienteId={clienteId} catalogoProdutos={[]} onChange={() => {}} somenteLeitura /></div>
+                <div className="px-3 pb-2"><MateriaisLinha item={{ id: i.id, descricao: i.descricao, quantidade: num(i.quantidade), valorUnitario: unitarioParaEdicao(i), valorTotal: num(i.valorTotal), valorManual: !!i.valorManual, materiais: i.materiais.map((m) => ({ ...m, quantidade: num(m.quantidade), quantidadePadrao: num(m.quantidadePadrao), valorVendaUnit: num(m.valorVendaUnit), custoUnit: m.custoUnit == null ? null : num(m.custoUnit) })) }} clienteId={clienteId} catalogoProdutos={[]} onChange={() => {}} somenteLeitura verCusto={verCusto} /></div>
               )}
-              {emEdicao && edicao && <FormItem edicao={edicao} setEdicao={setEdicao} total={totalEdicao} salvar={salvar} cancelar={() => setEdicao(null)} salvando={salvando} clienteId={clienteId} produtos={produtos.itens} buscarAvulso={buscarAvulso} />}
+              {emEdicao && edicao && <FormItem edicao={edicao} setEdicao={setEdicao} total={totalEdicao} salvar={salvar} cancelar={() => setEdicao(null)} salvando={salvando} clienteId={clienteId} produtos={produtos.itens} buscarAvulso={buscarAvulso} verCusto={verCusto} />}
             </div>
           );
         })}
@@ -238,7 +240,7 @@ export function OsOrcamento({ osId, itens: iniciais, clienteId = null, situacao 
           {!edicao && modo === "livre" && (
             <Button type="button" variant="secondary" size="sm" onClick={() => setEdicao({ tipo: "SERVICO", servicoId: null, produtoId: null, descricao: "", quantidade: 1, valorUnitario: 0, valorManual: false })} data-acao="linha-livre">Linha livre</Button>
           )}
-          {edicao && <FormItem edicao={edicao} setEdicao={setEdicao} total={totalEdicao} salvar={salvar} cancelar={() => { setEdicao(null); setModo(null); }} salvando={salvando} clienteId={clienteId} produtos={produtos.itens} buscarAvulso={buscarAvulso} />}
+          {edicao && <FormItem edicao={edicao} setEdicao={setEdicao} total={totalEdicao} salvar={salvar} cancelar={() => { setEdicao(null); setModo(null); }} salvando={salvando} clienteId={clienteId} produtos={produtos.itens} buscarAvulso={buscarAvulso} verCusto={verCusto} />}
           {!edicao && <div className="flex justify-end"><Button type="button" variant="secondary" size="sm" onClick={() => setModo(null)}><X className="w-4 h-4" /> Fechar</Button></div>}
         </div>
       )}
@@ -260,9 +262,10 @@ export function OsOrcamento({ osId, itens: iniciais, clienteId = null, situacao 
   );
 }
 
-function FormItem({ edicao: e, setEdicao, total, salvar, cancelar, salvando, clienteId, produtos, buscarAvulso }: {
+function FormItem({ edicao: e, setEdicao, total, salvar, cancelar, salvando, clienteId, produtos, buscarAvulso, verCusto }: {
   edicao: Edicao; setEdicao: (f: (e: Edicao | null) => Edicao | null) => void; total: number; salvar: () => void; cancelar: () => void; salvando: boolean;
   clienteId: string | null; produtos: ItemCadastro[]; buscarAvulso: (produtoId: string) => Promise<{ material?: MaterialOrcamento; erro?: string }>;
+  verCusto: boolean;
 }) {
   const comMateriais = !!e.materiais?.length;
   const patch = (p: Partial<Edicao>) => setEdicao((atual) => (atual ? { ...atual, ...p } : atual));
@@ -287,7 +290,7 @@ function FormItem({ edicao: e, setEdicao, total, salvar, cancelar, salvando, cli
         </FormField>
       </FormGrid>
       {e.tipo === "SERVICO" && (e.materiais ? (
-        <MateriaisLinha item={e} clienteId={clienteId} catalogoProdutos={produtos} onChange={(p) => patch(p as Partial<Edicao>)} buscarAvulso={buscarAvulso} />
+        <MateriaisLinha item={e} clienteId={clienteId} catalogoProdutos={produtos} onChange={(p) => patch(p as Partial<Edicao>)} buscarAvulso={buscarAvulso} verCusto={verCusto} />
       ) : (
         <button type="button" onClick={() => patch({ materiais: [] })} className="text-[11px] font-medium text-primary-600 hover:text-primary-700" data-adicionar-materiais>+ Materiais e peças</button>
       ))}

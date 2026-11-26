@@ -4,6 +4,8 @@ import { exigirPermissao } from "@/lib/permissoes-server";
 import { travaDasLinhasDaOs } from "@/lib/os/trava-edicao-server";
 import { bloqueioPainelTecnico } from "@/lib/tecnico/painel";
 import { pode } from "@/lib/permissoes";
+import { usuarioVeCustoDeCompra } from "@/lib/estoque/custo-acesso";
+import { semCustoNosItensOs } from "@/lib/os/custo";
 import { motivoBloqueioInativacao } from "@/lib/os-server";
 import { cancelarOs, statusHttp } from "@/lib/acoes-massa/regras";
 import { SOLICITACAO_PENDENTE } from "@/lib/solicitacoes";
@@ -68,7 +70,9 @@ export async function GET(_: NextRequest, { params }: Params) {
   // `trava`: por que o registro está fechado (assinado, faturado, com nota) — ou null. A gaveta
   // "Editar OS" aberta de fora da central (calendário) lê daqui para abrir em LEITURA em vez de
   // deixar a pessoa digitar e só recusar no salvar. A central já calcula o mesmo no servidor.
-  return NextResponse.json({ ...os, trava: await travaDasLinhasDaOs(id) });
+  // Custo na OS: sem permissão de ver custo, os materiais dos itens vêm sem `custoUnit`
+  const itensOrcamento = usuarioVeCustoDeCompra(session.user) ? os.itensOrcamento : semCustoNosItensOs(os.itensOrcamento);
+  return NextResponse.json({ ...os, itensOrcamento, trava: await travaDasLinhasDaOs(id) });
 }
 
 // Reagendamento rápido: o arrastar do calendário manda só o dia; a gaveta "Editar OS" aberta do
