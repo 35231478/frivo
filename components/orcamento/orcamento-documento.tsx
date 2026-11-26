@@ -587,8 +587,9 @@ function TabelaGrupo({ titulo, rotulo, itens, grupo, edicao, opcoes }: {
                 <td className={cn(td, "text-right text-ink-subtle tabular-nums")}>{i + 1}</td>
                 <td className={cn(td, "text-ink")}>
                   <TextoItemDocumento item={it} />
-                  {opcoes && <MateriaisDoServico materiais={materiaisNoDocumento(it.materiais, opcoes)} />}
                   <p className="sm:hidden text-[11px] text-ink-muted tabular-nums" data-qtd-unitario-celular>{qtds[i]} × {formatarMoeda(grupo.itens[i]?.valorUnitario ?? 0)}</p>
+                  {/* Os materiais vêm depois da linha do serviço (no celular, depois de "2 × R$ 220,00"): ficam claramente dentro dele */}
+                  {opcoes && <MateriaisDoServico materiais={materiaisNoDocumento(it.materiais, opcoes)} />}
                 </td>
                 <td className={cn(td, "hidden sm:table-cell text-right text-ink-muted tabular-nums whitespace-nowrap")} data-qtd>{qtds[i]}</td>
                 <td className={cn(td, "hidden sm:table-cell text-right text-ink-muted tabular-nums whitespace-nowrap")} data-unitario>{valorSemMoeda(grupo.itens[i]?.valorUnitario ?? 0)}</td>
