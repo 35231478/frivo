@@ -3,6 +3,7 @@ import { ErroRefEmpresa } from "@/lib/ref-empresa";
 import { chaveHojeBR, diaCivilDeChave } from "@/lib/fuso";
 import { validadePadrao } from "@/lib/orcamentos/calculo";
 import { diasValidadeValidos } from "@/lib/orcamentos/proposta";
+import { opcoesDoDocumento } from "@/lib/orcamentos/documento-opcoes";
 
 /**
  * Padrões do orçamento NOVO (Configurações › Orçamento + RT padrão do cadastro da empresa). A tela
@@ -16,6 +17,7 @@ export async function padroesOrcamento(empresaId: string) {
       select: {
         orcamentoValidadeDias: true, orcamentoGarantiaServico: true, orcamentoGarantiaPecas: true,
         orcamentoNaoIncluso: true, orcamentoNormas: true,
+        orcamentoMostrarMateriais: true, orcamentoMostrarValoresMateriais: true,
       },
     }),
     prisma.empresa.findUnique({
@@ -30,6 +32,8 @@ export async function padroesOrcamento(empresaId: string) {
     garantiaPecas: cfg ? cfg.orcamentoGarantiaPecas : "Conforme garantia do fabricante",
     naoIncluso: cfg?.orcamentoNaoIncluso ?? null,
     normas: cfg?.orcamentoNormas ?? [],
+    // Leva D: as opções do documento do cliente (materiais dentro do serviço; valores só com materiais)
+    ...opcoesDoDocumento({ mostrarMateriais: cfg?.orcamentoMostrarMateriais, mostrarValoresMateriais: cfg?.orcamentoMostrarValoresMateriais }),
     // RT padrão só vale se ainda for um responsável técnico ativo da empresa
     responsavelTecnicoId: rt && rt.ativo && rt.tipo === "RESPONSAVEL_TECNICO" && rt.empresaId === empresaId ? rt.id : null,
   };

@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { toast } from "@/components/ui/avisos";
 import { SomenteLeitura } from "@/components/config/permissao-config";
 import { Input } from "@/components/ui/input";
+import { ToggleSwitch } from "@/components/ui/toggle-switch";
 import { FormField, FormGrid, FormSection } from "@/components/ui/form-field";
 import {
   GARANTIAS_PECAS_SUGERIDAS, GARANTIAS_SERVICO_SUGERIDAS, NaoInclusoCampo, NormasCampo,
@@ -16,11 +17,14 @@ export interface PadroesOrcamentoTela {
   orcamentoGarantiaPecas: string | null;
   orcamentoNaoIncluso: string | null;
   orcamentoNormas: string[];
+  /** Leva D: padrão das opções do documento do cliente */
+  orcamentoMostrarMateriais?: boolean;
+  orcamentoMostrarValoresMateriais?: boolean;
 }
 
 /**
  * Configurações › Orçamentos e propostas: o que o orçamento NOVO já traz preenchido (validade,
- * garantias, não incluso e normas). Cada orçamento grava os seus e pode editar; mudar aqui não mexe
+ * garantias, não incluso, normas e as opções do documento do cliente). Cada orçamento grava os seus e pode editar; mudar aqui não mexe
  * nos que já existem. Salvou: toast. Sem Configurações › gerenciar: só leitura, sem o botão Salvar.
  */
 export function OrcamentoPadroesClient({ inicial, podeEditar }: { inicial: PadroesOrcamentoTela; podeEditar: boolean }) {
@@ -29,6 +33,8 @@ export function OrcamentoPadroesClient({ inicial, podeEditar }: { inicial: Padro
   const [garantiaPecas, setGarantiaPecas] = useState(inicial.orcamentoGarantiaPecas ?? "");
   const [naoIncluso, setNaoIncluso] = useState(inicial.orcamentoNaoIncluso ?? "");
   const [normas, setNormas] = useState<string[]>(inicial.orcamentoNormas ?? []);
+  const [mostrarMateriais, setMostrarMateriais] = useState(!!inicial.orcamentoMostrarMateriais);
+  const [mostrarValores, setMostrarValores] = useState(!!inicial.orcamentoMostrarMateriais && !!inicial.orcamentoMostrarValoresMateriais);
   const [salvando, setSalvando] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
   const mudou = <T,>(f: (v: T) => void) => (v: T) => { f(v); setMsg(null); };
@@ -45,6 +51,8 @@ export function OrcamentoPadroesClient({ inicial, podeEditar }: { inicial: Padro
           orcamentoGarantiaPecas: garantiaPecas,
           orcamentoNaoIncluso: naoIncluso,
           orcamentoNormas: normas,
+          orcamentoMostrarMateriais: mostrarMateriais,
+          orcamentoMostrarValoresMateriais: mostrarMateriais && mostrarValores,
         }),
       });
       const j = await r.json().catch(() => ({}));
@@ -76,6 +84,27 @@ export function OrcamentoPadroesClient({ inicial, podeEditar }: { inicial: Padro
 
         <FormSection title="Não incluso" dica="Itens listados como “Não incluso” em cada novo orçamento. Em branco, o bloco aparece apenas quando preenchido no orçamento.">
           <NaoInclusoCampo id="padrao-nao-incluso" valor={naoIncluso} onChange={mudou(setNaoIncluso)} />
+        </FormSection>
+
+        <FormSection title="Documento do cliente" dica="O que cada novo orçamento já traz ligado no link, na impressão e no PDF. Em cada orçamento dá para mudar. Os valores mostrados são sempre o preço de venda; o custo nunca aparece.">
+          <div className="divide-y divide-surface-linha">
+            <div data-padrao-mostrar-materiais>
+              <ToggleSwitch
+                label="Mostrar materiais ao cliente"
+                description="Dentro de cada serviço, os materiais inclusos nele. Desligado: o cliente vê só a linha do serviço."
+                checked={mostrarMateriais} disabled={!podeEditar}
+                onChange={(v) => { mudou(setMostrarMateriais)(v); if (!v) setMostrarValores(false); }}
+              />
+            </div>
+            <div data-padrao-mostrar-valores>
+              <ToggleSwitch
+                label="Mostrar valores dos produtos/materiais"
+                description={mostrarMateriais ? "O preço de venda de cada material." : "Ligue “Mostrar materiais” primeiro."}
+                checked={mostrarMateriais && mostrarValores} disabled={!podeEditar || !mostrarMateriais}
+                onChange={mudou(setMostrarValores)}
+              />
+            </div>
+          </div>
         </FormSection>
 
         <FormSection title="Normas atendidas" dica="As normas marcadas vêm selecionadas em cada novo orçamento. Para orçamentos simples, deixe-as desmarcadas e selecione no orçamento quando necessário.">

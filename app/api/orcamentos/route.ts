@@ -121,6 +121,9 @@ export async function POST(req: NextRequest) {
           codigo,
           nome,
           ...camposCondicoes(data, padroes),
+          // Leva D: as opções do documento do cliente nascem com o padrão da empresa
+          mostrarMateriais: padroes.mostrarMateriais,
+          mostrarValoresMateriais: padroes.mostrarValoresMateriais,
           clienteId: data.clienteId,
           unidadeId: data.unidadeId === undefined ? sugerido!.unidadeId : data.unidadeId || null,
           contatoClienteId: data.contatoClienteId === undefined ? sugerido!.contatoClienteId : data.contatoClienteId || null,
