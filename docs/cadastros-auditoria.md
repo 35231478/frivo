@@ -50,6 +50,7 @@ Levantamento de **todos os cadastros e registros** do sistema, feito pelo códig
    - **Agora:** lista e ficha (consulta e edição) usam o **botão padrão dos cadastros** (`InativarRegistro`), com o mesmo texto.
    - Antes de confirmar, o botão mostra o que continua andando: contratos ativos, OS em aberto, orçamentos, contas a receber e PMOC (`GET /api/clientes/[id]/impacto`, que exige "Clientes › Excluir").
    - Nada disso bloqueia: o cliente nunca é apagado.
+   - **Achado no navegador:** na ficha, o modal ficava preso ao cabeçalho com desfoque e cortado pela barra do topo. O modal do `InativarRegistro` passou a abrir pelo portal (`<body>`), em todos os lugares que o usam.
 2. **Endereços e contatos.**
    - O botão dizia "**Excluir**", mas a rota já só **inativava**. Agora diz "Inativar", com o mesmo texto padrão.
    - O texto não promete "pode ser reativado depois", porque ainda não há reativação pela tela.
