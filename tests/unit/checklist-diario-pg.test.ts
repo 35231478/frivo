@@ -17,6 +17,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { NextRequest } from "next/server";
 import { montarPermissoes, permissoesTotais, PRESETS, type Permissoes } from "@/lib/permissoes";
+import { envioDiarioSchema } from "@/lib/checklist-diario/envio";
 
 const URL_PG = process.env.PG_TESTE_URL;
 const SCHEMA = `teste_checklist_diario_${process.pid}`;
@@ -59,6 +60,7 @@ describe.skipIf(!URL_PG)("Checklist obrigatório no app (PostgreSQL real)", () =
   let prisma: any;
   let esquecerModulos: (e?: string) => void;
   let resumoPorteiro: typeof import("@/lib/checklist-diario/servidor").resumoPorteiro;
+  let registrarEnvioDiario: typeof import("@/lib/checklist-diario/servidor").registrarEnvioDiario;
   let hoje = "";
   let ontem = "";
   const ITENS = ["i-pneu", "i-oleo", "i-foto"];
@@ -83,7 +85,7 @@ describe.skipIf(!URL_PG)("Checklist obrigatório no app (PostgreSQL real)", () =
     (globalThis as any).prisma = undefined;
     ({ prisma } = await import("@/lib/prisma"));
     ({ esquecerModulos } = await import("@/lib/modulos/servidor"));
-    ({ resumoPorteiro } = await import("@/lib/checklist-diario/servidor"));
+    ({ resumoPorteiro, registrarEnvioDiario } = await import("@/lib/checklist-diario/servidor"));
     const { hojeBR, somarDias } = await import("@/lib/checklist-diario/regras");
     hoje = hojeBR(); ontem = somarDias(hoje, -1);
     await Promise.all(["tecnico/checklist-diario", "checklist-diario", "checklist-diario/config"].map((r) => import(/* @vite-ignore */ `@/app/api/${r}/route`)));
@@ -241,6 +243,12 @@ describe.skipIf(!URL_PG)("Checklist obrigatório no app (PostgreSQL real)", () =
     TECNICO();
     expect((await enviar(feito({ veiculoId: "vx" }))).status).toBe(400);
     expect((await enviar(feito({ templateId: "tpl-x" }))).status).toBe(400);
+    // o modelo de outra empresa com os itens DELE (não é o "item de fora" que barra: é a empresa do modelo)
+    const itemX = await prisma.checklistItemTemplate.findFirst({ where: { templateId: "tpl-x" }, select: { id: true } });
+    const outro = await enviar(feito({ templateId: "tpl-x", itens: [{ itemTemplateId: itemX.id, valor: "OK" }] }));
+    expect(outro.status).toBe(400);
+    expect(outro.json.erro).toMatch(/Modelo de checklist não encontrado/);
+    expect(await prisma.checklistPreenchido.count({ where: { templateId: "tpl-x" } })).toBe(0);
     expect((await enviar({ ...feito(), extra: 1 })).status).toBe(400);
     const corpo = naoVou();
     expect((await enviar(corpo)).status).toBe(200);
@@ -255,6 +263,9 @@ describe.skipIf(!URL_PG)("Checklist obrigatório no app (PostgreSQL real)", () =
       const r = await enviar(feito());
       expect(r.status).toBe(200);
       expect(r.json).toEqual({ ok: true, acao: "ignorado", registro: null });
+      // o serviço também se protege sozinho (não depende só da rota)
+      const direto = await registrarEnvioDiario({ empresaId: "e1", usuarioId: "u1", tecnicoId: "t1", envio: envioDiarioSchema.parse(feito()) });
+      expect(direto).toEqual({ ok: true, acao: "ignorado", registro: null });
     });
     expect(await prisma.checklistDiario.count()).toBe(0);
   });
