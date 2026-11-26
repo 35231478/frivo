@@ -75,6 +75,7 @@ describe.skipIf(!URL_PG)("Implantação, levas 3 e 4 (PostgreSQL real)", () => {
     ({ prisma } = await import("@/lib/prisma"));
     ({ esquecerModulos } = await import("@/lib/modulos/servidor"));
     await Promise.all(["", "/exportar", "/modelo", "/erros"].map((r) => import(/* @vite-ignore */ `@/app/api/importacao/[entidade]${r}/route`)));
+    await import("@/app/api/implantacao/etapas/route");
   }, 180_000);
   afterAll(async () => {
     await prisma?.$disconnect();
@@ -86,6 +87,7 @@ describe.skipIf(!URL_PG)("Implantação, levas 3 e 4 (PostgreSQL real)", () => {
     await prisma.veiculo.deleteMany({});
     await prisma.tecnico.deleteMany({});
     await prisma.cargo.deleteMany({});
+    await prisma.configuracao.deleteMany({});
     await prisma.usuario.deleteMany({});
     await prisma.empresaModulo.deleteMany({});
     await prisma.empresa.deleteMany({});
@@ -235,26 +237,37 @@ describe.skipIf(!URL_PG)("Implantação, levas 3 e 4 (PostgreSQL real)", () => {
 
   /* ───────────────────────── Colaboradores ───────────────────────── */
 
-  it("colaboradores: cria pelo CPF (formatado), atualiza o antigo pelos dígitos, e barra o que não pode", async () => {
+  it("colaboradores: cria pelo CPF (formatado), atualiza o antigo pelos dígitos, sem telefone entra com aviso, cargo novo é criado uma vez", async () => {
     const r = await importar("colaboradores", csv([
       ["nome", "cpf", "telefone", "email", "funcao", "equipe", "cargo", "cidade", "estado"],
       ["rafael teixeira", CPF_A, "(31) 98888-0101", "RAFAEL@EXEMPLO.COM", "", "", "tecnico de refrigeracao", "belo horizonte", "mg"], // 2: cria
       ["Juliana Prado", fmtCpf(CPF_B), "31988880102", "", "Administrativo", "", "", "", ""], // 3: cria, equipe pela função
       ["Carlos Atualizado", "90000000001", "", "carlos@exemplo.com", "", "", "", "Contagem", ""], // 4: atualiza o antigo (dígitos), sem telefone
-      ["Sem Telefone", CPF_C, "", "", "", "", "", "", ""], // 5: novo sem telefone
+      ["Sem Telefone", CPF_C, "", "", "", "", "", "", ""], // 5: novo sem telefone: entra com aviso (decisão do Zé)
       ["CPF Errado", "111.222.333-44", "31988880104", "", "", "", "", "", ""], // 6: CPF novo inválido
-      ["Cargo Fora", cpf("731004505"), "31988880105", "", "", "", "Gerente", "", ""], // 7: cargo de outra empresa
+      ["Cargo Novo", cpf("731004505"), "31988880105", "", "", "", "Gerente", "", ""], // 7: "Gerente" só existe na outra empresa: aqui é criado
       ["Cargo Inativo", cpf("731004506"), "31988880106", "", "", "", "Cargo antigo", "", ""], // 8: cargo inativo
       ["Duplo", CPF_VELHO, "31988880107", "", "", "", "", "", ""], // 9: CPF em 2 cadastros
       ["Função Errada", cpf("731004507"), "31988880108", "", "Gerente geral", "", "", "", ""], // 10
       ["UF Errada", cpf("731004508"), "31988880109", "", "", "", "", "", "XX"], // 11
+      ["Outro Gerente", cpf("731004509"), "31988880110", "", "", "", "GERENTE", "", ""], // 12: o mesmo cargo novo, outra grafia
     ]), "confirmar");
     expect(r.status).toBe(200);
-    expect(r.json).toMatchObject({ criados: 2, atualizados: 1, comErro: 7 });
-    expect(erroGravado(r, 5)).toMatch(/telefone: obrigatório para cadastrar um colaborador novo/);
+    expect(r.json).toMatchObject({ criados: 5, atualizados: 1, comErro: 5 });
     expect(erroGravado(r, 6)).toMatch(/cpf: “111\.222\.333-44” não é um CPF válido/);
-    expect(erroGravado(r, 7)).toMatch(/cargo “Gerente” não existe.*Configurações › Cargos/);
-    expect(erroGravado(r, 8)).toMatch(/cargo “Cargo antigo” não existe/);
+    expect(erroGravado(r, 8)).toMatch(/cargo “Cargo antigo” está inativo\. Reative em Configurações › Cargos/);
+    // Sem telefone: gravado (telefone vazio) e listado nos avisos do resultado
+    expect(await prisma.tecnico.findFirst({ where: { empresaId: "e1", cpf: fmtCpf(CPF_C) } })).toMatchObject({ telefone: "" });
+    expect(r.json.avisos.find((a: any) => a.linha === 5).avisos.join(" ")).toMatch(/Sem telefone: o colaborador entra/);
+    expect(r.json.avisos.find((a: any) => a.linha === 7).avisos.join(" ")).toMatch(/cargo “Gerente” não existe: será criado/);
+    // O cargo novo: criado UMA vez, nesta empresa, e listado no resultado
+    const gerentes = await prisma.cargo.findMany({ where: { empresaId: "e1", nome: { equals: "gerente", mode: "insensitive" } } });
+    expect(gerentes).toHaveLength(1);
+    expect(await prisma.tecnico.count({ where: { empresaId: "e1", cargoId: gerentes[0].id } })).toBe(2);
+    expect(await prisma.cargo.count({ where: { empresaId: "e2" } })).toBe(1);
+    expect(r.json.observacoes).toContain("Cargo criado (revise em Configurações › Cargos): Gerente.");
+    // O inativo não foi recriado nem reativado
+    expect(await prisma.cargo.findMany({ where: { empresaId: "e1", nome: "Cargo antigo" } })).toEqual([expect.objectContaining({ id: "cg-off", ativo: false })]);
     expect(erroGravado(r, 9)).toMatch(/está em 2 colaboradores desta empresa.*id_sistema/);
     expect(erroGravado(r, 10)).toMatch(/funcao “Gerente geral” não existe/);
     expect(erroGravado(r, 11)).toMatch(/estado: “XX” não é uma UF/);
@@ -284,6 +297,17 @@ describe.skipIf(!URL_PG)("Implantação, levas 3 e 4 (PostgreSQL real)", () => {
     logar(montarPermissoes({ equipes: ["visualizar"] }));
     expect((await baixar("colaboradores", "exportar")).status).toBe(403);
     expect((await importar("colaboradores", csv([["nome", "cpf", "telefone"], ["X", CPF_C, "31988880101"]]), "previa")).status).toBe(403);
+  });
+
+  it("colaboradores: reimportar com o cargo que já foi criado não cria de novo", async () => {
+    const plan = csv([["nome", "cpf", "telefone", "cargo"], ["Rafael", CPF_A, "31988880101", "Encarregado"]]);
+    const a = await importar("colaboradores", plan, "confirmar");
+    expect(a.json.observacoes).toContain("Cargo criado (revise em Configurações › Cargos): Encarregado.");
+    const p = await importar("colaboradores", plan, "previa");
+    expect(linhaDa(p, 2).avisos ?? []).toEqual([]); // agora é um cargo que existe
+    const b = await importar("colaboradores", plan, "confirmar");
+    expect(b.json.observacoes).toEqual([]);
+    expect(await prisma.cargo.count({ where: { empresaId: "e1", nome: "Encarregado" } })).toBe(1);
   });
 
   it("colaboradores: planilha de outro sistema com as colunas ligadas", async () => {
@@ -349,6 +373,53 @@ describe.skipIf(!URL_PG)("Implantação, levas 3 e 4 (PostgreSQL real)", () => {
   });
 
   /* ───────────────────────── Implantação ───────────────────────── */
+
+  it("implantação: 'não se aplica / fazer depois' conta como concluída, reabre, só com Configurações › Gerenciar", async () => {
+    const { carregarImplantacao } = await import("@/lib/implantacao/servidor");
+    const marcar = async (corpo: unknown) => {
+      const mod = await import("@/app/api/implantacao/etapas/route");
+      const res: Response = await mod.PATCH(new NextRequest("http://localhost/api/implantacao/etapas", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(corpo) }));
+      return { status: res.status, json: (await res.json().catch(() => null)) as any };
+    };
+    // A empresa ainda não tem linha de configuração: a 1ª marcação cria
+    expect(await prisma.configuracao.count({ where: { empresaId: "e1" } })).toBe(0);
+    expect(await marcar({ etapa: "contratos", dispensada: true })).toEqual({ status: 200, json: { ok: true, dispensadas: ["contratos"] } });
+    expect((await marcar({ etapa: "empresa", dispensada: true })).json.dispensadas).toEqual(["empresa", "contratos"]);
+    const a = await carregarImplantacao("e1");
+    expect(a.etapas.filter((e) => e.dispensada).map((e) => e.id)).toEqual(["empresa", "contratos"]);
+    expect(a.progresso).toMatchObject({ feitas: 4, total: 7, pct: 57 });
+    // Reabrir tira da lista; marcar de novo não duplica
+    expect((await marcar({ etapa: "empresa", dispensada: false })).json.dispensadas).toEqual(["contratos"]);
+    expect((await marcar({ etapa: "contratos", dispensada: true })).json.dispensadas).toEqual(["contratos"]);
+    // A outra empresa não é tocada
+    logar(permissoesTotais(), "e2");
+    expect((await carregarImplantacao("e2")).etapas.some((e) => e.dispensada)).toBe(false);
+    // Etapa que não existe e sem permissão
+    logar();
+    expect((await marcar({ etapa: "financeiro", dispensada: true })).status).toBe(400);
+    expect((await marcar({ etapa: "contratos", dispensada: "sim" })).status).toBe(400);
+    logar(montarPermissoes({ configuracoes: ["visualizar"] }));
+    expect((await marcar({ etapa: "veiculos", dispensada: true })).status).toBe(403);
+    expect((await prisma.configuracao.findUnique({ where: { empresaId: "e1" } })).implantacaoDispensadas).toEqual(["contratos"]);
+  });
+
+  it("SQL pendente (2027-01-29_implantacao_dispensadas): 3×, aditivo, não apaga marcações, igual ao que o Prisma espera", () => {
+    const ARQ = path.join(RAIZ, "prisma/sql/2027-01-29_implantacao_dispensadas.sql");
+    const SQLS = `${SCHEMA}_sql`;
+    const psql = (args: string[]) => execFileSync("psql", [URL_PG!, "-q", "-At", "-v", "ON_ERROR_STOP=1", ...args], { env: { ...process.env, PGOPTIONS: `-c search_path=${SQLS}` } }).toString().trim();
+    execFileSync("psql", [URL_PG!, "-q", "-c", `DROP SCHEMA IF EXISTS ${SQLS} CASCADE; CREATE SCHEMA ${SQLS};`]);
+    psql(["-c", `CREATE TABLE "configuracoes" ("id" TEXT PRIMARY KEY, "empresa_id" TEXT NOT NULL); INSERT INTO "configuracoes" VALUES ('c1', 'e1');`]);
+    for (let i = 0; i < 3; i++) psql(["-f", ARQ]);
+    expect(psql(["-c", `SELECT cardinality("implantacao_dispensadas") FROM "configuracoes"`])).toBe("0");
+    psql(["-c", `UPDATE "configuracoes" SET "implantacao_dispensadas" = ARRAY['contratos']`]);
+    psql(["-f", ARQ]);
+    expect(psql(["-c", `SELECT array_to_string("implantacao_dispensadas", ',') FROM "configuracoes"`])).toBe("contratos");
+    const coluna = (schema: string) => execFileSync("psql", [URL_PG!, "-q", "-At", "-c",
+      `SELECT data_type || '|' || udt_name || '|' || is_nullable || '|' || coalesce(column_default, '') FROM information_schema.columns WHERE table_schema = '${schema}' AND table_name = 'configuracoes' AND column_name = 'implantacao_dispensadas'`]).toString().trim();
+    expect(coluna(SQLS)).toBe(coluna(SCHEMA));
+    expect(coluna(SQLS)).not.toBe("");
+    execFileSync("psql", [URL_PG!, "-q", "-c", `DROP SCHEMA IF EXISTS ${SQLS} CASCADE;`]);
+  });
 
   it("implantação: contagens reais da empresa; etapa de módulo desligado sai; 100% quando tudo existe", async () => {
     const { contarImplantacao, carregarImplantacao } = await import("@/lib/implantacao/servidor");

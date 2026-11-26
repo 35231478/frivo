@@ -18,7 +18,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { montarPermissoes, permissoesTotais, pode, type Permissoes } from "@/lib/permissoes";
 import { analisar, type ContextoImportacao } from "@/lib/importacao/motor";
 import { chavePlaca, defPara, IMPORTACOES, PERMISSOES_IMPORTACAO, placaValida } from "@/lib/importacao/entidades";
-import { destaqueNoPainel, montarEtapas, progresso, type Contagens } from "@/lib/implantacao/etapas";
+import { destaqueNoPainel, ehEtapaId, montarEtapas, progresso, type Contagens } from "@/lib/implantacao/etapas";
 import { itemConfig, podeVerItemConfig } from "@/lib/navegacao/configuracoes";
 
 (globalThis as any).IS_REACT_ACT_ENVIRONMENT = true;
@@ -130,16 +130,32 @@ describe("colaboradores (motor)", () => {
     expect(r.ok && r.dados.tipoEquipe).toBeUndefined();
   });
 
-  it("erros: CPF novo inválido, curto; telefone só ao criar e incompleto; e-mail; CPF repetido sem id; CPF trocado com id", () => {
+  it("erros: CPF novo inválido, curto; telefone incompleto; e-mail; CPF repetido sem id; CPF trocado com id", () => {
     const e = (o: Record<string, string | number | null>) => { const r = validar("colaboradores", o, ctxColab()); return r.ok ? "" : r.erros.join(" "); };
     expect(e({ nome: "X", cpf: "111.222.333-44", telefone: "31988880101" })).toMatch(/não é um CPF válido/);
     expect(e({ nome: "X", cpf: "123", telefone: "31988880101" })).toMatch(/cpf: “123” não tem 11 dígitos/);
-    expect(e({ nome: "X", cpf: CPF_A })).toMatch(/telefone: obrigatório para cadastrar/);
     expect(e({ nome: "X", cpf: CPF_A, telefone: "1234" })).toMatch(/telefone: “1234” está incompleto/);
     expect(e({ nome: "X", cpf: CPF_A, telefone: "31988880101", email: "sem-arroba" })).toMatch(/não é um e-mail válido/);
     expect(e({ nome: "", cpf: "" })).toMatch(/nome: obrigatório.*cpf: obrigatório/);
     expect(e({ nome: "X", cpf: CPF_B, telefone: "31988880101" })).toMatch(/está em 2 colaboradores desta empresa/);
     expect(e({ nome: "X", cpf: CPF_A, id_sistema: "t-velho" })).toMatch(/O CPF não muda pela planilha/);
+  });
+
+  it("sem telefone: entra com aviso só ao cadastrar (decisão do Zé); o existente não recebe aviso", () => {
+    const novo = validar("colaboradores", { nome: "X", cpf: CPF_A }, ctxColab());
+    expect(novo).toMatchObject({ ok: true, avisos: [expect.stringMatching(/Sem telefone: o colaborador entra, mas o app e o WhatsApp precisam do telefone/)] });
+    expect(validar("colaboradores", { nome: "Carlos", cpf: "90000000001" }, ctxColab())).toMatchObject({ ok: true, avisos: [] });
+  });
+
+  it("cargo: o ativo casa; o que não existe vira 'cargo novo' com aviso; o inativo é erro (não recria)", () => {
+    const c = ctxColab({ mapas: { ...ctxColab().mapas, cargosInativos: new Map([["cargo antigo", "cg-off"]]) } });
+    expect(validar("colaboradores", { nome: "X", cpf: CPF_A, telefone: "31988880101", cargo: "TÉCNICO de refrigeração" }, c)).toMatchObject({ ok: true, avisos: [], dados: { cargoId: "cg-tec", cargoNovo: undefined } });
+    expect(validar("colaboradores", { nome: "X", cpf: CPF_A, telefone: "31988880101", cargo: " Encarregado " }, c))
+      .toMatchObject({ ok: true, avisos: ["cargo “Encarregado” não existe: será criado em Configurações › Cargos."], dados: { cargoId: undefined, cargoNovo: "Encarregado" } });
+    const r = validar("colaboradores", { nome: "X", cpf: CPF_A, telefone: "31988880101", cargo: "Cargo Antigo" }, c);
+    expect(r.ok ? "" : r.erros.join(" ")).toMatch(/cargo “Cargo Antigo” está inativo/);
+    const longo = validar("colaboradores", { nome: "X", cpf: CPF_A, telefone: "31988880101", cargo: "x".repeat(101) }, c);
+    expect(longo.ok ? "" : longo.erros.join(" ")).toMatch(/cargo: no máximo 100/);
   });
 
   it("CPF repetido no cadastro: com o id_sistema, é o id que decide (o CPF sai das chaves)", () => {
@@ -254,6 +270,22 @@ describe("implantação (etapas)", () => {
     expect(podeVerItemConfig(item, montarPermissoes({ configuracoes: ["visualizar"] }), "OPERADOR")).toBe(false);
     expect(podeVerItemConfig(item, montarPermissoes({ configuracoes: ["visualizar", "gerenciar"] }), "OPERADOR")).toBe(true);
   });
+  it("não se aplica / fazer depois: conta como concluída; feita de verdade vence a marcação; id desconhecido é ignorado", () => {
+    const e = montarEtapas(VAZIO, () => true, ["contratos", "veiculos", "qualquer-coisa"]);
+    expect(e.filter((x) => x.dispensada).map((x) => x.id)).toEqual(["veiculos", "contratos"]);
+    expect(e.find((x) => x.id === "veiculos")!.feita).toBe(false);
+    expect(progresso(e)).toMatchObject({ feitas: 2, total: 7, pct: 28 });
+    expect(progresso(e).proxima?.id).toBe("empresa");
+    // Já feita: não fica "dispensada"
+    expect(montarEtapas({ ...VAZIO, veiculos: 1 }, () => true, ["veiculos"]).find((x) => x.id === "veiculos")).toMatchObject({ feita: true, dispensada: false });
+    // Só falta o que foi marcado: 100% e o destaque sai do painel
+    const quase = montarEtapas({ ...CHEIO, contratos: 0, pmocs: 0 }, () => true, ["contratos"]);
+    expect(progresso(quase)).toMatchObject({ completa: true, pct: 100 });
+    expect(destaqueNoPainel(true, progresso(quase))).toBe(false);
+    expect(ehEtapaId("contratos")).toBe(true);
+    expect(ehEtapaId("financeiro")).toBe(false);
+  });
+
   it("progresso arredonda para baixo (6 de 7 = 85%, nunca 100% antes da hora)", () => {
     expect(progresso(montarEtapas({ ...CHEIO, logo: false }, () => true))).toMatchObject({ feitas: 6, pct: 85, completa: false });
     expect(progresso([])).toMatchObject({ total: 0, pct: 100, completa: true });
@@ -356,6 +388,25 @@ describe("tela: Implantação", () => {
     expect($$("[data-importar]").map((b) => b.dataset.importar)).toEqual(["clientes"]);
     expect($$("[data-modelo]").map((a) => a.dataset.modelo)).toEqual(["clientes", "unidades", "contatos"]);
     expect($("[data-etapa='colaboradores'] [data-abrir-lista]")).not.toBeNull(); // a lista continua (o portão é dela)
+  });
+
+  it("não se aplica / fazer depois: o botão marca, a etapa marcada mostra e reabre; só para quem configura", async () => {
+    const pedidos: unknown[] = [];
+    vi.stubGlobal("fetch", vi.fn(async (_u: string, init?: RequestInit) => { pedidos.push(JSON.parse(String(init?.body))); return new Response(JSON.stringify({ ok: true }), { status: 200 }); }));
+    const e = montarEtapas({ ...CHEIO, contratos: 0, pmocs: 0, veiculos: 0 }, () => true, ["contratos"]);
+    await render(createElement(PainelImplantacao, { etapas: e, progresso: progresso(e) }));
+    expect($("[data-etapa='contratos']")!.dataset.etapaFeita).toBe("depois");
+    expect($("[data-etapa='contratos'] [data-etapa-depois]")!.textContent).toMatch(/não se aplica \/ fazer depois/);
+    expect($("[data-implantacao-progresso]")!.textContent).toMatch(/6 de 7 etapas · 1 para depois/);
+    // Feita não tem botão; a pendente tem "Não se aplica"; a marcada tem "Reabrir"
+    expect($("[data-etapa='clientes'] [data-acao$='-etapa']")).toBeNull();
+    await act(async () => { ($("[data-etapa='veiculos'] [data-acao='dispensar-etapa']") as HTMLButtonElement).click(); });
+    await act(async () => { ($("[data-etapa='contratos'] [data-acao='reabrir-etapa']") as HTMLButtonElement).click(); });
+    expect(pedidos).toEqual([{ etapa: "veiculos", dispensada: true }, { etapa: "contratos", dispensada: false }]);
+    act(() => root?.unmount()); caixa.remove(); document.body.innerHTML = "";
+    // Sem Configurações › Gerenciar: nenhum botão de marcar
+    await render(createElement(PainelImplantacao, { etapas: e, progresso: progresso(e) }), montarPermissoes({ clientes: ["criar"] }));
+    expect($$("[data-acao$='-etapa']")).toHaveLength(0);
   });
 
   it("100%: a tela diz que está concluída", async () => {

@@ -703,11 +703,11 @@ const colaboradores: DefImportacao = {
   colunas: [
     { chave: "nome", titulo: "nome", obrig: true, ajuda: "Nome completo", exemplo: "Rafael Teixeira", apelidos: ["nome_completo", "colaborador", "funcionario", "tecnico"] },
     { chave: "cpf", titulo: "cpf", obrig: true, ajuda: "CPF, com ou sem pontuação (chave para não duplicar)", exemplo: "529.982.247-25", apelidos: ["documento", "cpf_colaborador", "n_cpf"] },
-    { chave: "telefone", titulo: "telefone", ajuda: "Telefone ou celular — obrigatório para cadastrar (como na tela)", exemplo: "(31) 98888-0101", apelidos: ["celular", "fone", "whatsapp", "telefone_celular"] },
+    { chave: "telefone", titulo: "telefone", ajuda: "Telefone ou celular (o app e o WhatsApp precisam dele; vazio entra com aviso)", exemplo: "(31) 98888-0101", apelidos: ["celular", "fone", "whatsapp", "telefone_celular"] },
     { chave: "email", titulo: "email", ajuda: "E-mail", exemplo: "rafael@empresa.com.br", apelidos: ["e_mail"] },
     { chave: "funcao", titulo: "funcao", ajuda: "Função no Frivo (vazio = Técnico de campo, ao cadastrar)", exemplo: "Técnico de campo", opcoes: Object.values(LABELS_FUNCAO), apelidos: ["tipo", "funcao_no_sistema"] },
     { chave: "equipe", titulo: "equipe", ajuda: "Campo ou Administrativo (vazio = pela função)", exemplo: "Campo", opcoes: OPCOES_TIPO_EQUIPE.map((o) => o.rotulo), apelidos: ["tipo_equipe", "lotacao"] },
-    { chave: "cargo", titulo: "cargo", ajuda: "Cargo já cadastrado em Configurações › Cargos", exemplo: "", apelidos: ["funcao_cargo", "cargo_funcao"] },
+    { chave: "cargo", titulo: "cargo", ajuda: "Cargo (Configurações › Cargos). Se não existir, é criado e aparece no resultado para revisar.", exemplo: "Técnico de refrigeração", apelidos: ["funcao_cargo", "cargo_funcao"] },
     { chave: "crea", titulo: "crea", ajuda: "CREA/CFT (responsável técnico)", exemplo: "", apelidos: ["cft", "registro_profissional"] },
     { chave: "endereco", titulo: "endereco", ajuda: "Rua / avenida", exemplo: "", apelidos: ["logradouro", "rua"] },
     { chave: "numero", titulo: "numero", ajuda: "Número", exemplo: "" },
@@ -749,28 +749,38 @@ const colaboradores: DefImportacao = {
     // O CPF é a identidade do colaborador: não muda pela planilha
     if (doId && kCpf && !doCpf && !ambiguo) erros.push("cpf: diferente do CPF deste colaborador. O CPF não muda pela planilha — corrija na ficha do colaborador.");
     const novo = !doId && !doCpf;
+    const avisos: string[] = [];
     const telefone = texto(v.telefone);
     if (telefone && !minimoDigitos(telefone, 8)) erros.push(`telefone: “${telefone}” está incompleto.`);
-    else if (!telefone && novo) erros.push("telefone: obrigatório para cadastrar um colaborador novo (como na tela).");
+    // Sem telefone o colaborador entra (não trava a implantação), mas o app e o WhatsApp precisam dele
+    else if (!telefone && novo) avisos.push("Sem telefone: o colaborador entra, mas o app e o WhatsApp precisam do telefone. Complete na ficha.");
     const email = texto(v.email);
     if (email && !EMAIL.test(email)) erros.push(`email: “${email}” não é um e-mail válido.`);
     const funcao = opcao(v.funcao, OPCOES_FUNCAO, "funcao");
     if (funcao.erro) erros.push(funcao.erro);
     const equipe = opcao(v.equipe, OPCOES_TIPO_EQUIPE, "equipe");
     if (equipe.erro) erros.push(equipe.erro);
+    // Cargo: um ativo da empresa; o que não existe é CRIADO na gravação (como na planilha da folha) e listado no
+    // resultado para o gestor revisar; o inativo não é recriado nem reativado
+    const nomeCargo = livre(v.cargo);
     const cargo = opcao(v.cargo, ctx.refs.cargo ?? [], "cargo");
-    if (cargo.erro) erros.push(`${cargo.erro} Cadastre o cargo em Configurações › Cargos antes.`);
+    let cargoNovo: string | undefined;
+    if (cargo.erro && nomeCargo) {
+      if (ctx.mapas?.cargosInativos?.has(chaveNome(nomeCargo))) erros.push(`cargo “${nomeCargo}” está inativo. Reative em Configurações › Cargos (ou use outro).`);
+      else if (nomeCargo.length > 100) erros.push("cargo: no máximo 100 letras.");
+      else { cargoNovo = nomeCargo; avisos.push(`cargo “${nomeCargo}” não existe: será criado em Configurações › Cargos.`); }
+    }
     const uf = texto(v.estado)?.toUpperCase();
     if (uf && !UFS.includes(uf)) erros.push(`estado: “${texto(v.estado)}” não é uma UF.`);
     if (erros.length) return { ok: false, erros, rotulo };
     const chaves = [...(id ? [`id:${id}`] : []), ...(kCpf && !ambiguo ? [kCpf] : [])];
     return {
-      ok: true, rotulo, chaves,
+      ok: true, rotulo, chaves, avisos,
       dados: {
         nome: pNome(nome), cpf: formatarCpf(cpf!), telefone, email: email ? padronizarEmail(email) : undefined,
         tipo: funcao.valor ?? (novo ? "TECNICO_CAMPO" : undefined),
         tipoEquipe: equipe.valor ?? (novo ? equipeDaFuncao(funcao.valor ?? "TECNICO_CAMPO") : undefined),
-        cargoId: cargo.valor, crea: livre(v.crea),
+        cargoId: cargo.valor, cargoNovo, crea: livre(v.crea),
         endereco: pNome(texto(v.endereco)), numero: texto(v.numero), complemento: livre(v.complemento), bairro: pNome(texto(v.bairro)),
         cidade: pNome(texto(v.cidade)), estado: uf, cep: texto(v.cep), observacoes: pLivre(texto(v.observacoes)),
       },

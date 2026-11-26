@@ -762,6 +762,10 @@ model Configuracao {
   checklistDiarioTodos      Boolean  @default(true) @map("checklist_diario_todos")
   checklistDiarioTecnicos   String[] @default([]) @map("checklist_diario_tecnicos")
 
+  /// Implantação: etapas marcadas "Não se aplica / fazer depois" (contam como concluídas; podem ser reabertas).
+  /// Ids de lib/implantacao/etapas (ex.: "contratos"). SQL: prisma/sql/2027-01-29_implantacao_dispensadas.sql
+  implantacaoDispensadas    String[] @default([]) @map("implantacao_dispensadas")
+
   empresa                 Empresa            @relation(fields: [empresaId], references: [id], onDelete: Cascade)
   checklistDiarioTemplate ChecklistTemplate? @relation(fields: [checklistDiarioTemplateId], references: [id], onDelete: SetNull)
 

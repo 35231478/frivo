@@ -7,7 +7,9 @@
  *  - etapa de um módulo que a EMPRESA desligou não aparece e não conta (quem não usa Frota não fica preso
  *    em "Veículos");
  *  - uma etapa está feita quando o mínimo dela existe (ex.: 1 cliente); as contagens ao lado mostram o resto;
- *  - 100% = todas as etapas que aparecem feitas. Até lá, o painel (dashboard) mostra o destaque; depois,
+ *  - "Não se aplica / fazer depois": a etapa marcada conta como concluída (e pode ser reaberta); feita de
+ *    verdade continua sendo o que o cadastro mostra;
+ *  - 100% = todas as etapas que aparecem concluídas (feitas ou marcadas). Até lá, o painel (dashboard) mostra o destaque; depois,
  *    a Implantação fica só em Configurações.
  */
 import type { EntidadeImportacao } from "@/lib/importacao/entidades";
@@ -49,7 +51,10 @@ export interface Etapa {
   titulo: string;
   /** Uma linha: o que fazer nesta etapa */
   descricao: string;
+  /** O mínimo existe no cadastro */
   feita: boolean;
+  /** Marcada "Não se aplica / fazer depois" (e ainda não feita) */
+  dispensada: boolean;
   itens: ItemEtapa[];
   /** Planilhas desta etapa (atalho para importar e baixar o modelo), na ordem de importação */
   importacoes: EntidadeImportacao[];
@@ -68,8 +73,14 @@ export const MODULO_DA_ETAPA: Partial<Record<EtapaId, string[]>> = {
   contratos: ["contratos", "pmoc"],
 };
 
-export function montarEtapas(c: Contagens, temModulo: (m: string) => boolean): Etapa[] {
-  const todas: Omit<Etapa, "numero">[] = [
+export const ETAPAS_IDS: EtapaId[] = ["empresa", "clientes", "equipamentos", "estoque", "colaboradores", "veiculos", "contratos"];
+export const ehEtapaId = (v: unknown): v is EtapaId => typeof v === "string" && (ETAPAS_IDS as string[]).includes(v);
+
+/** Concluída = feita de verdade OU marcada "Não se aplica / fazer depois" */
+export const concluida = (e: Pick<Etapa, "feita" | "dispensada">) => e.feita || e.dispensada;
+
+export function montarEtapas(c: Contagens, temModulo: (m: string) => boolean, dispensadas: readonly string[] = []): Etapa[] {
+  const todas: Omit<Etapa, "numero" | "dispensada">[] = [
     {
       id: "empresa", titulo: "Empresa e configurações", descricao: "Dados da empresa, logo, tipos de OS e quem vai usar o sistema.",
       feita: c.dadosEmpresa && c.logo && c.tiposOs > 0,
@@ -121,20 +132,21 @@ export function montarEtapas(c: Contagens, temModulo: (m: string) => boolean): E
   ];
   return todas
     .filter((e) => !MODULO_DA_ETAPA[e.id] || MODULO_DA_ETAPA[e.id]!.some(temModulo))
-    .map((e, i) => ({ ...e, numero: i + 1 }));
+    // Feita de verdade vence a marcação: "dispensada" é só para o que ainda não existe
+    .map((e, i) => ({ ...e, numero: i + 1, dispensada: !e.feita && dispensadas.includes(e.id) }));
 }
 
 export interface Progresso { feitas: number; total: number; pct: number; completa: boolean; proxima: Etapa | null }
 
 /** Quanto falta: % arredondado para baixo (99,9% não vira 100% antes da hora). */
 export function progresso(etapas: Etapa[]): Progresso {
-  const feitas = etapas.filter((e) => e.feita).length;
+  const feitas = etapas.filter(concluida).length;
   const total = etapas.length;
   return {
     feitas, total,
     pct: total ? Math.floor((feitas / total) * 100) : 100,
     completa: feitas === total,
-    proxima: etapas.find((e) => !e.feita) ?? null,
+    proxima: etapas.find((e) => !concluida(e)) ?? null,
   };
 }
 

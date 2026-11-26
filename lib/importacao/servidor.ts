@@ -154,12 +154,15 @@ export async function carregarContexto(
     case "colaboradores": {
       const [ts, cargos] = await Promise.all([
         prisma.tecnico.findMany({ where: { empresaId }, select: { id: true, cpf: true } }),
-        prisma.cargo.findMany({ where: { empresaId, ativo: true }, select: { id: true, nome: true }, orderBy: { nome: "asc" } }),
+        prisma.cargo.findMany({ where: { empresaId }, select: { id: true, nome: true, ativo: true }, orderBy: { nome: "asc" } }),
       ]);
       porId(ts);
       // O cadastro guarda o CPF como foi digitado: compara só os dígitos
       unicas(ts.map((t) => [`cpf:${t.cpf.replace(/\D/g, "")}`, t.id]));
-      refs.cargo = cargos.map((c) => ({ valor: c.id, rotulo: c.nome }));
+      refs.cargo = cargos.filter((c) => c.ativo).map((c) => ({ valor: c.id, rotulo: c.nome }));
+      // Inativo não é recriado: o nome do inativo (sem um ativo igual) vira erro na linha
+      const ativos = new Set(refs.cargo.map((c) => chaveNome(c.rotulo)));
+      mapas.cargosInativos = new Map(cargos.filter((c) => !c.ativo && !ativos.has(chaveNome(c.nome))).map((c) => [chaveNome(c.nome), c.id]));
       break;
     }
     case "veiculos": {
@@ -384,8 +387,10 @@ async function gravarEstoque(l: LinhaAnalisada, dados: Record<string, unknown>, 
 /** Colaborador: cria (com o CPF formatado e o cargo conferido) ou atualiza só o que veio — nunca o CPF. */
 async function gravarColaborador(l: LinhaAnalisada, dados: Record<string, unknown>, empresaId: string): Promise<"criado" | "atualizado"> {
   if (dados.cargoId) await validarRefEmpresa("cargo", dados.cargoId as string, empresaId, "Cargo", { novoAtivo: true });
+  delete dados.cargoNovo; // já virou cargoId (resolverCargos)
   if (l.status === "criar") {
-    await prisma.tecnico.create({ data: { ...(dados as Prisma.TecnicoUncheckedCreateInput), empresaId, ativo: true } });
+    // Sem telefone entra vazio (a coluna é obrigatória), como na planilha da folha; a prévia avisou
+    await prisma.tecnico.create({ data: { ...(dados as Prisma.TecnicoUncheckedCreateInput), telefone: (dados.telefone as string | undefined) ?? "", empresaId, ativo: true } });
     return "criado";
   }
   const { cpf: _cpf, ...resto } = dados;
@@ -403,6 +408,28 @@ async function gravarVeiculo(l: LinhaAnalisada, dados: Record<string, unknown>, 
   const { placa: _placa, ...resto } = dados;
   await atualizar(prisma.veiculo as unknown as Delegate, { id: l.existenteId, empresaId }, resto);
   return "atualizado";
+}
+
+/**
+ * Cargos que a planilha cita e não existem: criados UMA vez cada (sem acento/maiúsculas), em sequência, antes de
+ * gravar; o que já existe ativo (criado enquanto se importava) é reaproveitado. As linhas passam a ter o cargoId.
+ */
+async function resolverCargos(linhas: LinhaAnalisada[], empresaId: string): Promise<string[]> {
+  const novos = new Map<string, string>(); // chave → nome como veio na 1ª linha
+  for (const l of linhas) { const n = l.dados?.cargoNovo as string | undefined; if (n && !novos.has(chaveNome(n))) novos.set(chaveNome(n), n); }
+  const ids = new Map<string, string>();
+  const criados: string[] = [];
+  for (const [k, nome] of novos) {
+    const existe = await prisma.cargo.findFirst({ where: { empresaId, ativo: true, nome: { equals: nome, mode: "insensitive" } }, select: { id: true } });
+    if (existe) { ids.set(k, existe.id); continue; }
+    const c = await prisma.cargo.create({ data: { empresaId, nome }, select: { id: true } });
+    ids.set(k, c.id); criados.push(nome);
+  }
+  for (const l of linhas) {
+    const n = l.dados?.cargoNovo as string | undefined;
+    if (n) l.dados = { ...l.dados, cargoId: ids.get(chaveNome(n)), cargoNovo: undefined };
+  }
+  return criados.sort((a, b) => a.localeCompare(b, "pt-BR"));
 }
 
 type Gravado = "criado" | "atualizado" | "igual";
@@ -480,6 +507,7 @@ export async function gravarImportacao(entidade: EntidadeImportacao, analise: An
   const gravar = analise.linhas.filter((l) => l.status !== "erro");
   await reservarCodigos(entidade, gravar, empresaId);
   const tipos = entidade === "equipamentos" ? await resolverTipos(gravar, empresaId) : new Map<string, TipoResolvido>();
+  const cargosCriados = entidade === "colaboradores" ? await resolverCargos(gravar, empresaId) : [];
   for (let i = 0; i < gravar.length; i += TAMANHO_LOTE) {
     const lote = gravar.slice(i, i + TAMANHO_LOTE);
     // Unidades e contatos: uma linha por vez (o "principal" de um cliente não pode correr em paralelo)
@@ -507,6 +535,8 @@ export async function gravarImportacao(entidade: EntidadeImportacao, analise: An
   res.avisos.sort((a, b) => a.linha - b.linha);
   if (ef.unidadesPrincipais)
     res.observacoes.push(`${ef.unidadesPrincipais} ${ef.unidadesPrincipais === 1 ? "cliente ganhou" : "clientes ganharam"} a unidade “Principal” com o endereço do cadastro.`);
+  if (cargosCriados.length)
+    res.observacoes.push(`${cargosCriados.length === 1 ? "Cargo criado" : "Cargos criados"} (revise em Configurações › Cargos): ${cargosCriados.join(", ")}.`);
   if (ef.saldosIguais)
     res.observacoes.push(`${ef.saldosIguais} ${ef.saldosIguais === 1 ? "produto já estava" : "produtos já estavam"} com esse saldo: nada foi lançado.`);
   if (ef.principaisTrocados)
