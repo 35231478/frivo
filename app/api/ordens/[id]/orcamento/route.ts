@@ -4,7 +4,9 @@ import { prisma } from "@/lib/prisma";
 import { osDaEmpresa } from "@/lib/os-server";
 import { respostaRefEmpresa } from "@/lib/ref-empresa";
 import { itemOsSchema } from "@/lib/validations";
-import { criarItemOs, INCLUIR_ITEM_OS, prepararItemOsConferido } from "@/lib/os/materiais-server";
+import { criarItemOs, fixarCustosDosMateriaisOs, INCLUIR_ITEM_OS, prepararItemOsConferido } from "@/lib/os/materiais-server";
+import { usuarioVeCustoDeCompra } from "@/lib/estoque/custo-acesso";
+import { semCustoNosItensOs } from "@/lib/os/custo";
 import { travaDasLinhasDaOs } from "@/lib/os/trava-edicao-server";
 
 type Params = { params: Promise<{ id: string }> };
@@ -28,6 +30,8 @@ export async function POST(req: NextRequest, { params }: Params) {
   const parsed = itemOsSchema.safeParse(body);
   if (!parsed.success) return NextResponse.json({ erro: parsed.error.issues[0]?.message ?? "Dados inválidos" }, { status: 400 });
 
+  // Custo na OS: o custo dos materiais é decidido aqui (último custo de compra), nunca o que veio do navegador
+  await fixarCustosDosMateriaisOs(empresaId, null, parsed.data.materiais);
   let prep;
   try { prep = await prepararItemOsConferido(empresaId, parsed.data); } catch (e) { const r = respostaRefEmpresa(e); if (r) return r; throw e; }
   const criado = await prisma.$transaction(async (tx) => {
@@ -39,5 +43,8 @@ export async function POST(req: NextRequest, { params }: Params) {
   });
   const item = await prisma.osItemOrcamento.findUnique({ where: { id: criado.id }, include: INCLUIR_ITEM_OS });
   const pecas = await prisma.osItemOrcamento.findMany({ where: { ordemServicoId: id, material: { osItemId: criado.id } }, orderBy: { ordem: "asc" }, include: INCLUIR_ITEM_OS });
-  return NextResponse.json({ ...item, pecas }, { status: 201 });
+  // Sem permissão de ver custo, a resposta não traz o custo dos materiais (a chave some)
+  const ver = usuarioVeCustoDeCompra(session.user);
+  const [itemSaida] = item && !ver ? semCustoNosItensOs([item]) : [item];
+  return NextResponse.json({ ...itemSaida, pecas: ver ? pecas : semCustoNosItensOs(pecas) }, { status: 201 });
 }

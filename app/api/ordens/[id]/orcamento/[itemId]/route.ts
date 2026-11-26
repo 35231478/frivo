@@ -4,7 +4,9 @@ import { prisma } from "@/lib/prisma";
 import { osDaEmpresa } from "@/lib/os-server";
 import { respostaRefEmpresa } from "@/lib/ref-empresa";
 import { itemOsSchema, linhaOsContextoSchema } from "@/lib/validations";
-import { atualizarValoresDoItemOs, INCLUIR_ITEM_OS, prepararItemOsConferido, regravarItemOs } from "@/lib/os/materiais-server";
+import { atualizarValoresDoItemOs, fixarCustosDosMateriaisOs, INCLUIR_ITEM_OS, prepararItemOsConferido, regravarItemOs } from "@/lib/os/materiais-server";
+import { usuarioVeCustoDeCompra } from "@/lib/estoque/custo-acesso";
+import { semCustoNosItensOs } from "@/lib/os/custo";
 import { prepararItemOs, unitarioParaEdicao } from "@/lib/os/materiais";
 import { motivoDaLinhaDaOs } from "@/lib/edicao-contexto";
 import { situacaoDaOsNoBanco, travaDasLinhasDaOs } from "@/lib/os/trava-edicao-server";
@@ -59,12 +61,17 @@ export async function PUT(req: NextRequest, { params }: Params) {
   if (!parsed.success) return NextResponse.json({ erro: parsed.error.issues[0]?.message ?? "Dados inválidos" }, { status: 400 });
   if (parsed.data.tipo !== item.tipo || (parsed.data.servicoId ?? null) !== item.servicoId || (parsed.data.produtoId ?? null) !== item.produtoId)
     return NextResponse.json({ erro: "O tipo e o vínculo com o catálogo não mudam: remova o item e adicione outro." }, { status: 400 });
+  // Custo na OS: produto que já estava no item mantém o custo gravado; produto novo pega o último custo de compra.
+  // O custo vindo do navegador é ignorado (quem não vê custo nem o recebe; quem vê não o forja).
+  await fixarCustosDosMateriaisOs(empresaId, itemId, parsed.data.materiais);
   let prep;
   try { prep = await prepararItemOsConferido(empresaId, parsed.data); } catch (e) { const r = respostaRefEmpresa(e); if (r) return r; throw e; }
   await prisma.$transaction((tx) => regravarItemOs(tx, id, itemId, prep));
   const atualizado = await prisma.osItemOrcamento.findUnique({ where: { id: itemId }, include: INCLUIR_ITEM_OS });
   const pecas = await prisma.osItemOrcamento.findMany({ where: { ordemServicoId: id, material: { osItemId: itemId } }, orderBy: { ordem: "asc" }, include: INCLUIR_ITEM_OS });
-  return NextResponse.json({ ...atualizado, pecas });
+  const ver = usuarioVeCustoDeCompra(session.user);
+  const [saida] = atualizado && !ver ? semCustoNosItensOs([atualizado]) : [atualizado];
+  return NextResponse.json({ ...saida, pecas: ver ? pecas : semCustoNosItensOs(pecas) });
 }
 
 /**
@@ -114,6 +121,7 @@ export async function PATCH(req: NextRequest, { params }: Params) {
     if (mudou.length) await tx.osHistorico.create({ data: { ordemServicoId: id, usuarioId: session.user!.id, acao: "Item da OS editado", detalhes: `${item.descricao} — ${mudou.join("; ")}`.slice(0, 500) } });
   });
   const atualizado = await prisma.osItemOrcamento.findUnique({ where: { id: itemId }, include: INCLUIR_ITEM_OS });
+  if (atualizado && !usuarioVeCustoDeCompra(session.user)) return NextResponse.json(semCustoNosItensOs([atualizado])[0]);
   return NextResponse.json(atualizado);
 }
 

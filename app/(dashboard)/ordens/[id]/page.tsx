@@ -13,6 +13,8 @@ import { faturamentoDaOs } from "@/lib/faturamento/faturar-server";
 import { competenciasDosAtrasos } from "@/lib/os/prazo-execucao";
 import { hojeDiaCivil } from "@/lib/fuso";
 import { mesesFechadosEntre } from "@/lib/desempenho/fechamento-estado";
+import { usuarioVeCustoDeCompra } from "@/lib/estoque/custo-acesso";
+import { semCustoNosItensOs } from "@/lib/os/custo";
 
 export const metadata: Metadata = { title: "Ordem de serviço" };
 
@@ -125,5 +127,8 @@ export default async function OsDetalhePage({ params, searchParams }: { params: 
   // é de um mês que já fechou (tolerante: sem o Desempenho no banco, só não há aviso).
   const mesesFechadosDoAtraso = await mesesFechadosEntre(empresaId, competenciasDosAtrasos(os)).catch(() => [] as string[]);
 
-  return <OsDetalhe os={{ ...os, medicoes: medicoesDaOs, galeria, contasReceber, fatura, faturamento, notaEmitida, pmoc, mesesFechadosDoAtraso, exigirPrestacaoMaterial: cfg?.osExigirPrestacaoMaterial ?? false }} abaInicial={aba} />;
+  // Custo na OS: sem permissão de ver custo (lib/estoque/custo-acesso), o custo dos materiais NÃO vai ao navegador
+  const verCusto = usuarioVeCustoDeCompra(u);
+  const itensOrcamento = verCusto ? os.itensOrcamento : semCustoNosItensOs(os.itensOrcamento);
+  return <OsDetalhe verCusto={verCusto} os={{ ...os, itensOrcamento, medicoes: medicoesDaOs, galeria, contasReceber, fatura, faturamento, notaEmitida, pmoc, mesesFechadosDoAtraso, exigirPrestacaoMaterial: cfg?.osExigirPrestacaoMaterial ?? false }} abaInicial={aba} />;
 }
