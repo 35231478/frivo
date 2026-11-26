@@ -70,6 +70,13 @@ export const corDado = {
   vermelho: status.atrasado.DEFAULT, rosa: "#BE185D", ciano: "#0F766E", indigo: "#4338CA", cinza: status.previsto.DEFAULT,
 } as const;
 
+/**
+ * Séries de GRÁFICO (categorias, não status): o verde e o vermelho de status ficam para "ok"/"atrasado".
+ * Par validado (skill de visualização: banda de luminosidade, croma, separação para daltonismo e contraste
+ * ≥ 3:1 sobre o branco): serie1 é o petróleo da marca um tom mais saturado; serie2, um laranja-queimado.
+ */
+export const serieGrafico = { serie1: "#0E7FA0", serie2: "#C2410C" } as const;
+
 /** As cores oferecidas no seletor (equipe, perfil…): a mesma lista em toda tela, na ordem de uso. */
 export const paletaSelecao: readonly string[] = [corDado.azul, corDado.verde, corDado.roxo, corDado.ambar, corDado.vermelho, corDado.rosa, corDado.ciano, corDado.indigo];
 

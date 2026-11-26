@@ -758,7 +758,7 @@ export async function resumoFinanceiro(empresaId: string) {
   });
 
   // Série de 6 meses (entradas recebidas x saídas pagas)
-  const meses: { mes: string; entradas: number; saidas: number }[] = [];
+  const meses: { mes: string; ref: string; entradas: number; saidas: number }[] = [];
   for (let i = 5; i >= 0; i--) {
     const ini = inicioMesDiaCivil(agora, -i);
     const fim = new Date(inicioMesDiaCivil(agora, -i + 1).getTime() - 1);
@@ -768,6 +768,7 @@ export async function resumoFinanceiro(empresaId: string) {
     ]);
     meses.push({
       mes: formatarData(ini, "MMM"),
+      ref: formatarData(ini, "yyyy-MM"), // o ano e o nome completo no gráfico (lib/financeiro/grafico-meses)
       entradas: ent.valor,
       saidas: Number(sai._sum.valor ?? 0),
     });
