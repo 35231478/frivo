@@ -102,6 +102,8 @@ describe.skipIf(!URL_PG)("Orçamento, leva D — impressão do orçamento (Postg
       { empresaId: "e1", ordemServicoId: "os2", numero: "REL-2", escopo: "ATIVIDADE", mesReferencia: 11, anoReferencia: 2026, tokenPublico: "so-atividade-123" },
       { empresaId: "e2", ordemServicoId: "osX", numero: "REL-X", escopo: "GERAL", mesReferencia: 11, anoReferencia: 2026, tokenPublico: TK_OUTRA },
     ] });
+    // relatório de uma ATIVIDADE da os1, MAIS NOVO que o GERAL: a consulta tem de buscar o GERAL, não o último qualquer
+    await prisma.relatorioOs.create({ data: { empresaId: "e1", ordemServicoId: "os1", numero: "REL-3", escopo: "ATIVIDADE", mesReferencia: 11, anoReferencia: 2026, tokenPublico: "atividade-mais-nova-123", criadoEm: new Date(Date.now() + 60_000) } });
     ADMIN();
     const mat = (produtoId: string, descricao: string, quantidade: number, valorVendaUnit: number, unidade = "un", comportamento = "INCLUSO_NO_SERVICO") =>
       ({ produtoId, descricao, unidade, comportamento, quantidade, quantidadePadrao: quantidade, valorVendaUnit, origem: "SOLTO", kitNome: null, custoUnit: 1234 });
@@ -157,7 +159,7 @@ describe.skipIf(!URL_PG)("Orçamento, leva D — impressão do orçamento (Postg
     expect(html).toMatch(/data-link-os[^>]*>OS-8901<\/a>/);
     expect(html).toContain("OS-8902");
     expect(html).not.toMatch(/data-link-os[^>]*>OS-8902/);
-    expect(html).not.toContain("so-atividade-123");
+    expect(html).not.toMatch(/so-atividade-123|atividade-mais-nova-123/);
     expect(html).not.toMatch(/OS-9999|aaaaaaaa-bbbb/);
     // nunca endereço interno
     expect(html).not.toMatch(/href="\/(ordens|orcamentos)\//);

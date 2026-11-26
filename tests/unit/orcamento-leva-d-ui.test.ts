@@ -166,6 +166,13 @@ describe("O documento — materiais dentro do serviço e a OS como link", () => 
     expect(t(interna.querySelector("[data-valor-material]"))).toBe("R$ 89,90/un · R$ 179,80");
   });
 
+  it("materiais só dentro de SERVIÇOS: uma linha de produto nunca ganha o bloco, mesmo que venha com materiais", async () => {
+    const d = await html({ mostrarMateriais: true, mostrarValoresMateriais: true,
+      produtos: [{ descricao: "Capacitor", quantidade: 1, valorUnitario: 30, valorTotal: 30, materiais: BASE.servicos[0].materiais }], totalProdutos: 30, totalGeral: 470 });
+    expect(d.querySelectorAll("[data-materiais-servico]")).toHaveLength(1);
+    expect(d.querySelector("[data-grupo-documento='produtos'] [data-materiais-servico]")).toBeNull();
+  });
+
   it("valores sem materiais: nada (a regra vale no documento, não só na tela)", async () => {
     const d = await html({ mostrarMateriais: false, mostrarValoresMateriais: true });
     expect(d.querySelector("[data-materiais-servico]")).toBeNull();
