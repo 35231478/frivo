@@ -399,7 +399,8 @@ describe("tela do checklist de veículo (Preencher | Preenchidos)", () => {
 
   it("as abas seguem a permissão: quem só preenche vê só o formulário; quem só vê, só os preenchidos", async () => {
     await abrir(V(["visualizar", "checklist"]));
-    expect(abas()).toEqual(["preencher", "preenchidos"]);
+    // + "Diário" (o histórico do checklist obrigatório no app), para quem vê a frota
+    expect(abas()).toEqual(["preencher", "preenchidos", "diario"]);
     expect($("[data-checklist-preenchimento]")).toBeTruthy();
     expect($("[data-checklists-preenchidos]")).toBeNull();
     act(() => root.unmount()); caixa.remove();
@@ -411,7 +412,8 @@ describe("tela do checklist de veículo (Preencher | Preenchidos)", () => {
     act(() => root.unmount()); caixa.remove();
 
     await abrir(V(["visualizar"]));
-    expect(abas()).toEqual([]);
+    // quem só vê: Preenchidos (aberta) e Diário — duas abas, então a barra aparece
+    expect(abas()).toEqual(["preenchidos", "diario"]);
     expect($("[data-checklist-preenchimento]")).toBeNull();
     expect($("[data-checklists-preenchidos]")).toBeTruthy();
     act(() => root.unmount()); caixa.remove();
