@@ -45,6 +45,7 @@ import {
   ClipboardPlus, ClipboardList, Calculator, Receipt, ChevronDown, Wallet,
 } from "lucide-react";
 import { AlertaPerdasCliente, type PerdasCliente } from "@/components/financeiro/alerta-perdas-cliente";
+import { FichaCliente } from "@/components/clientes/ficha-cliente";
 
 type ResponsavelItem = Pick<Tecnico, "id" | "nome" | "crea">;
 type AnexoItem = { id: string; nome: string; tipo: string; tamanho: number; criadoEm: string | Date };
@@ -65,7 +66,13 @@ interface ClienteFormProps {
   totalProximos30Dias?: number;
   /** Perdas (inadimplência) nos últimos 12 meses: alerta informativo, não bloqueia */
   perdas12m?: PerdasCliente | null;
+  /** FICHA em modo consulta (/clientes/[id]): o cadastro como texto, "Editar" como ação */
+  consulta?: boolean;
+  /** Aba aberta ao chegar (?aba=), para "Editar" manter a aba em que a pessoa estava */
+  abaInicial?: string;
 }
+
+const IDS_ABAS = ["geral", "atendimento", "comunicacao", "portal", "relacionamento", "documentos"];
 
 // Mapeia cada campo (RHF) à aba onde ele está, para destacar abas com erro
 const CAMPO_ABA: Record<string, string> = {
@@ -83,9 +90,12 @@ function Painel({ ativo, children }: { ativo: boolean; children: React.ReactNode
   return <div className={cn("space-y-8", !ativo && "hidden")}>{children}</div>;
 }
 
-export function ClienteForm({ initialData, statusFinanceiroCalc, perdas12m }: ClienteFormProps) {
+export function ClienteForm({ initialData, statusFinanceiroCalc, perdas12m, consulta: consultaPedida, abaInicial }: ClienteFormProps) {
   const router = useRouter();
   const isEditing = !!initialData;
+  // Consulta só existe para um cliente que já existe (o "novo" é sempre formulário)
+  const consulta = !!consultaPedida && isEditing;
+  const fichaHref = isEditing ? `/clientes/${initialData!.id}` : "/clientes";
   // RBAC (o servidor também valida): sem permissão de salvar, a ficha abre somente leitura.
   const { pode } = usePermissoes();
   const podeSalvar = pode("clientes", isEditing ? "editar" : "criar");
@@ -110,7 +120,7 @@ export function ClienteForm({ initialData, statusFinanceiroCalc, perdas12m }: Cl
   const [satisfacao, setSatisfacao] = useState<number | null>(initialData?.satisfacao ?? null);
 
   // Abas
-  const [aba, setAba] = useState("geral");
+  const [aba, setAba] = useState(abaInicial && IDS_ABAS.includes(abaInicial) ? abaInicial : "geral");
   const [abasErro, setAbasErro] = useState<Set<string>>(new Set());
   const [cnpjInfo, setCnpjInfo] = useState<{ nome: string; cidade?: string; estado?: string } | null>(null);
 
@@ -301,7 +311,8 @@ export function ClienteForm({ initialData, statusFinanceiroCalc, perdas12m }: Cl
         toast("Cliente salvo.");
         router.refresh();
       } else {
-        router.push("/clientes"); router.refresh();
+        // Salvou a edição: volta para a ficha do cliente, em consulta, na aba em que estava
+        router.push(aba === "geral" ? fichaHref : `${fichaHref}?aba=${aba}`); router.refresh();
       }
     } catch { setErroGlobal("Erro de conexão."); }
   }
@@ -353,15 +364,31 @@ export function ClienteForm({ initialData, statusFinanceiroCalc, perdas12m }: Cl
     </>
   );
 
-  const BotoesAcao = ({ compact = false }: { compact?: boolean }) => !podeSalvar ? (
+  // Consulta: os atalhos e "Editar" (só para quem pode editar). Editar abre na mesma aba.
+  const BotoesConsulta = ({ compact = false }: { compact?: boolean }) => (
     <div className="flex items-center gap-2 flex-wrap">
       <AtalhosCliente compact={compact} />
-      <Button type="button" variant="secondary" size={compact ? "sm" : "md"} onClick={() => router.push("/clientes")}>Voltar</Button>
+      {podeSalvar && (
+        <Link
+          href={aba === "geral" ? `${fichaHref}/editar` : `${fichaHref}/editar?aba=${aba}`} data-editar-cliente
+          className={cn("inline-flex items-center gap-1.5 font-semibold bg-white border border-surface-border text-ink hover:bg-surface-page rounded-lg whitespace-nowrap",
+            compact ? "text-xs px-3 py-1.5" : "text-sm px-4 py-2.5")}
+        >
+          <Pencil className="w-4 h-4" aria-hidden /> Editar
+        </Link>
+      )}
+    </div>
+  );
+
+  const BotoesAcao = ({ compact = false }: { compact?: boolean }) => consulta ? <BotoesConsulta compact={compact} /> : !podeSalvar ? (
+    <div className="flex items-center gap-2 flex-wrap">
+      <AtalhosCliente compact={compact} />
+      <Button type="button" variant="secondary" size={compact ? "sm" : "md"} onClick={() => router.push(isEditing ? fichaHref : "/clientes")}>Voltar</Button>
     </div>
   ) : (
     <div className="flex items-center gap-2 flex-wrap">
       <AtalhosCliente compact={compact} />
-      <Button type="button" variant="secondary" size={compact ? "sm" : "md"} onClick={() => router.push("/clientes")}>Cancelar</Button>
+      <Button type="button" variant="secondary" size={compact ? "sm" : "md"} onClick={() => router.push(isEditing ? fichaHref : "/clientes")}>Cancelar</Button>
       <Button type="button" variant="outline" size={compact ? "sm" : "md"} loading={isSubmitting} onClick={salvarEContinuar}>
         <span className={compact ? "hidden lg:inline" : ""}>Salvar e continuar</span>
         <span className={compact ? "lg:hidden" : "hidden"}>Continuar</span>
@@ -400,7 +427,7 @@ export function ClienteForm({ initialData, statusFinanceiroCalc, perdas12m }: Cl
               <span className={cn("text-xs font-medium px-2 py-0.5 rounded-full", COR_STATUS_FINANCEIRO_CALC[statusCalc])}>
                 {LABELS_STATUS_FINANCEIRO_CALC[statusCalc]}
               </span>
-              {isEditing && !podeAlterarStatus ? (
+              {isEditing && (consulta || !podeAlterarStatus) ? (
                 <span className={cn(
                   "inline-flex items-center gap-1.5 text-xs font-medium rounded-lg px-2.5 py-1 border",
                   ativoVal ? "bg-ok-claro border-ok/20 text-ok-texto" : "bg-atrasado-claro border-atrasado/20 text-atrasado",
@@ -453,7 +480,7 @@ export function ClienteForm({ initialData, statusFinanceiroCalc, perdas12m }: Cl
           </div>
         </div>
 
-        {!podeSalvar && (
+        {!podeSalvar && !consulta && (
           <div className="bg-atencao-claro border border-atencao/20 text-atencao-texto text-sm rounded-lg px-4 py-3 flex items-center gap-2">
             <Lock className="w-4 h-4 shrink-0" /> Modo somente leitura: seu perfil não tem permissão para {isEditing ? "editar" : "cadastrar"} clientes.
           </div>
@@ -494,9 +521,16 @@ export function ClienteForm({ initialData, statusFinanceiroCalc, perdas12m }: Cl
           </nav>
 
           <div className="p-5 sm:p-6 lg:p-8">
-          <fieldset disabled={!podeSalvar} className="min-w-0">
+          {consulta && (
+            <div className={cn("space-y-8", aba !== "geral" && "hidden")} data-ficha-cliente>
+              <FichaCliente cliente={initialData!} />
+            </div>
+          )}
+          <fieldset disabled={!podeSalvar && !consulta} className="min-w-0">
 
       {/* ABA 1 — Dados Gerais */}
+      {/* Na consulta, "Dados gerais" é a ficha (acima) — o formulário nem é montado */}
+      {!consulta && (
       <Painel ativo={aba === "geral"}>
         <FormSection title="Identificação" icon={<Building2 className="w-3.5 h-3.5" />}>
           {isEditing && (
@@ -668,6 +702,7 @@ export function ClienteForm({ initialData, statusFinanceiroCalc, perdas12m }: Cl
           </ToggleGroup>
         </FormSection>
       </Painel>
+      )}
 
       {/* ABA — Atendimento (histórico de OS) */}
       <Painel ativo={aba === "atendimento"}>
@@ -685,7 +720,7 @@ export function ClienteForm({ initialData, statusFinanceiroCalc, perdas12m }: Cl
             Defina quais contatos recebem cada tipo de comunicação e por qual canal. Os contatos são cadastrados em <strong>Dados gerais</strong>.
           </p>
           {isEditing ? (
-            <ComunicacaoPreferencias clienteId={initialData!.id} ativo={aba === "comunicacao"} onGerenciar={() => setAba("geral")} />
+            <fieldset disabled={consulta} className="min-w-0"><ComunicacaoPreferencias clienteId={initialData!.id} ativo={aba === "comunicacao"} onGerenciar={() => setAba("geral")} /></fieldset>
           ) : (
             <p className="text-sm text-ink-muted">Salve o cliente para configurar a comunicação dos contatos.</p>
           )}
@@ -696,7 +731,7 @@ export function ClienteForm({ initialData, statusFinanceiroCalc, perdas12m }: Cl
       <Painel ativo={aba === "documentos"}>
         <FormSection title="Anexos" icon={<Paperclip className="w-3.5 h-3.5" />}>
           {isEditing
-            ? <AnexosManager clienteId={initialData!.id} anexosIniciais={initialData!.anexos ?? []} />
+            ? <AnexosManager clienteId={initialData!.id} anexosIniciais={initialData!.anexos ?? []} somenteLeitura={consulta} />
             : <AnexosLocal anexos={anexosNovos} onChange={setAnexosNovos} />}
         </FormSection>
       </Painel>
@@ -706,18 +741,24 @@ export function ClienteForm({ initialData, statusFinanceiroCalc, perdas12m }: Cl
         <FormSection title="Satisfação" icon={<Star className="w-3.5 h-3.5" />}>
           <div className="flex items-center gap-3">
             <span className="text-sm text-ink-muted">Nível de satisfação:</span>
-            <StarRating value={satisfacao} onChange={(v) => { setSatisfacao(v || null); setValue("satisfacao", v || null); }} />
+            {consulta
+              ? (satisfacao ? <StarRating value={satisfacao} readOnly /> : <span className="text-sm text-ink-muted">Não informado</span>)
+              : <StarRating value={satisfacao} onChange={(v) => { setSatisfacao(v || null); setValue("satisfacao", v || null); }} />}
           </div>
         </FormSection>
         {isEditing && (
           <FormSection title="Histórico de interações" icon={<MessageSquare className="w-3.5 h-3.5" />}>
-            <InteracoesManager clienteId={initialData!.id} interacoesIniciais={initialData!.interacoes ?? []} />
+            <fieldset disabled={consulta} className="min-w-0"><InteracoesManager clienteId={initialData!.id} interacoesIniciais={initialData!.interacoes ?? []} /></fieldset>
           </FormSection>
         )}
         <FormSection title="Observações" icon={<FileText className="w-3.5 h-3.5" />}>
-          <FormField label="Observações internas">
-            <Textarea {...register("observacoes")} placeholder="Informações adicionais…" rows={3} />
-          </FormField>
+          {consulta ? (
+            <p className={cn("text-sm whitespace-pre-wrap", initialData?.observacoes ? "text-ink" : "text-ink-muted")} data-observacoes-ficha>{initialData?.observacoes || "Nenhuma observação."}</p>
+          ) : (
+            <FormField label="Observações internas">
+              <Textarea {...register("observacoes")} placeholder="Informações adicionais…" rows={3} />
+            </FormField>
+          )}
         </FormSection>
       </Painel>
 
@@ -725,6 +766,7 @@ export function ClienteForm({ initialData, statusFinanceiroCalc, perdas12m }: Cl
       <Painel ativo={aba === "portal"}>
         <FormSection title="Portal do cliente" icon={<Globe className="w-3.5 h-3.5" />} dica="Acesso individual por contato: senha provisória, redefinição e revogação.">
           <p className="text-xs text-ink-muted -mt-2 mb-1">Acesso do cliente ao portal externo.</p>
+          <fieldset disabled={consulta} className="min-w-0 space-y-4">
           <ToggleSwitch
             label="Portal ativo"
             description="Quando desligado, nenhum contato deste cliente consegue acessar o portal."
@@ -736,15 +778,18 @@ export function ClienteForm({ initialData, statusFinanceiroCalc, perdas12m }: Cl
           ) : (
             <PortalContatos clienteId={initialData!.id} ativo={aba === "portal"} onGerenciar={() => setAba("geral")} />
           )}
+          </fieldset>
         </FormSection>
       </Painel>
           </fieldset>
           </div>{/* fim do conteúdo */}
 
-          {/* Barra de ações no rodapé */}
-          <div className="flex items-center justify-end gap-3 px-5 sm:px-6 lg:px-8 py-4 bg-surface-alt/40 border-t border-surface-border">
-            <BotoesAcao />
-          </div>
+          {/* Barra de ações no rodapé (na consulta não há o que salvar: as ações ficam no cabeçalho) */}
+          {!consulta && (
+            <div className="flex items-center justify-end gap-3 px-5 sm:px-6 lg:px-8 py-4 bg-surface-alt/40 border-t border-surface-border">
+              <BotoesAcao />
+            </div>
+          )}
         </div>{/* fim do card */}
       </div>{/* fim do container */}
     </form>

@@ -24,8 +24,9 @@ export function ClienteAcoes({ id, nome, ativo = true }: { id: string; nome?: st
   const router = useRouter();
   const { pode } = usePermissoes();
   const [inativando, setInativando] = useState(false);
-  const fichaHref = `/clientes/${id}/editar`;
   const podeEditar = pode("clientes", "editar");
+  // O lápis vai direto para a edição; sem permissão de editar, o olho abre a ficha em consulta
+  const fichaHref = podeEditar ? `/clientes/${id}/editar` : `/clientes/${id}`;
   const podeInativar = pode("clientes", "excluir") && ativo;
   const podeReativar = podeEditar && !ativo;
   const alvo = nome ?? "cliente";

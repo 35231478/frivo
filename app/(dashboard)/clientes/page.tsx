@@ -141,7 +141,7 @@ export default async function ClientesPage({
               <li key={c.id} data-cartao={c.id} className={cn("flex items-start gap-3 px-4 py-3", !c.ativo && "opacity-60")}>
                 {massa && <span className="pt-0.5"><CheckboxLinha id={c.id} rotulo={c.nomeFantasia ?? c.nome} /></span>}
                 <div className="min-w-0 flex-1">
-                  <Link href={`/clientes/${c.id}/editar`} className="font-semibold text-ink hover:text-primary-600 block truncate">{c.nomeFantasia ?? c.nome}</Link>
+                  <Link href={`/clientes/${c.id}`} className="font-semibold text-ink hover:text-primary-600 block truncate">{c.nomeFantasia ?? c.nome}</Link>
                   <p className="text-xs text-ink-muted truncate">{formatarCpfCnpj(c.cpfCnpj)}{c.segmento ? ` · ${LABELS_SEGMENTO[c.segmento] ?? c.segmento}` : ""}</p>
                   <div className="mt-1.5 flex flex-wrap items-center gap-1.5 text-[11px]">
                     <span className={cn("font-semibold px-2 py-0.5 rounded-full", COR_STATUS_FINANCEIRO_CALC[sf])}>{LABELS_STATUS_FINANCEIRO_CALC[sf]}</span>
@@ -161,8 +161,11 @@ export default async function ClientesPage({
             ...(massa ? [{ id: "sel", titulo: "Selecionar a página", fixa: true, largura: 36, cabecalho: <CheckboxPagina />, classe: "pl-3" }] : []),
             { id: "nome", titulo: "Nome", ordenar: "nome", obrigatoria: true, minimo: 220 },
             { id: "documento", titulo: "CPF/CNPJ", largura: 152, ordenar: "documento" },
-            { id: "segmento", titulo: "Segmento", largura: 140, ordenar: "segmento", classe: "truncate" },
-            { id: "satisfacao", titulo: "Satisfação", largura: 100, ordenar: "satisfacao" },
+            // Fora do padrão (continuam em "Colunas"): o Segmento saiu do formulário do cliente e só chega pela
+            // importação de planilha; a Satisfação é digitada à mão na aba Relacionamento — não é a nota que o
+            // cliente dá no aceite da OS. Na prática, as duas ficavam vazias em quase toda a lista.
+            { id: "segmento", titulo: "Segmento", largura: 140, ordenar: "segmento", classe: "truncate", oculta: true },
+            { id: "satisfacao", titulo: "Satisfação", largura: 100, ordenar: "satisfacao", oculta: true },
             { id: "unidades", titulo: "Endereços", largura: 116, alinhar: "centro", ordenar: "unidades" },
             { id: "os", titulo: "OS", largura: 60, alinhar: "centro", ordenar: "os" },
             { id: "status", titulo: "Status financeiro", largura: 148 },
@@ -172,14 +175,14 @@ export default async function ClientesPage({
             const nome = c.nomeFantasia ?? c.nome;
             const sf = statusFinanceiroMap[c.id] ?? "SEM_HISTORICO";
             return {
-              id: c.id, atributos: { "data-cliente": c.id }, classe: c.ativo ? undefined : "opacity-60", href: `/clientes/${c.id}/editar`,
+              id: c.id, atributos: { "data-cliente": c.id }, classe: c.ativo ? undefined : "opacity-60", href: `/clientes/${c.id}`, // a ficha em consulta; "Editar" é ação dela (e o lápis da linha)
               // A razão social (quando há fantasia) aparece inteira ao passar o mouse
               titulos: { nome: c.nomeFantasia ? `${c.nomeFantasia} · ${c.nome}` : c.nome, segmento: c.segmento ? (LABELS_SEGMENTO[c.segmento] ?? c.segmento) : undefined },
               celulas: {
                 sel: massa ? <CheckboxLinha id={c.id} rotulo={nome} /> : null,
                 nome: (
                   <span className="flex items-center gap-2 min-w-0">
-                    <Link href={`/clientes/${c.id}/editar`} className={cn(PLANILHA.nome, "truncate hover:text-primary-600")}>{nome}</Link>
+                    <Link href={`/clientes/${c.id}`} className={cn(PLANILHA.nome, "truncate hover:text-primary-600")}>{nome}</Link>
                     {!c.ativo && <span className="text-[10px] font-bold bg-surface-linha text-ink-muted px-2 py-0.5 rounded-full whitespace-nowrap">Inativo</span>}
                     {c._count.contratos > 0 && (
                       <span className="inline-flex items-center gap-1 text-[10px] font-bold bg-ok-claro text-ok-texto px-2 py-0.5 rounded-full whitespace-nowrap" title="Tem contrato ativo">

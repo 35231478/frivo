@@ -31,7 +31,7 @@ export const SUGESTOES: Record<string, DefSugestao> = {
     buscar: async (empresaId, q) => (await p.cliente.findMany({
       where: whereClientes(empresaId, { busca: q }).where, select: { id: true, nome: true, nomeFantasia: true, cpfCnpj: true },
       orderBy: [{ nome: "asc" }, { id: "asc" }], take: CANDIDATOS,
-    })).map((c: any) => ({ id: c.id, rotulo: c.nome, detalhe: c.cpfCnpj, href: `/clientes/${c.id}/editar` })),
+    })).map((c: any) => ({ id: c.id, rotulo: c.nome, detalhe: c.cpfCnpj, href: `/clientes/${c.id}` })),
   },
   ordens: {
     modulo: "ordens",

@@ -295,7 +295,7 @@ describe("/api/listas/sugestoes", () => {
     const r = await sugestoes("lista=clientes&q=cliente 0");
     expect(r.status).toBe(200);
     expect(r.json.sugestoes).toHaveLength(5);
-    expect(r.json.sugestoes[0]).toMatchObject({ id: "c01", rotulo: "Cliente 01", href: "/clientes/c01/editar" });
+    expect(r.json.sugestoes[0]).toMatchObject({ id: "c01", rotulo: "Cliente 01", href: "/clientes/c01" }); // (leva 2) a ficha em consulta
     const doc = await sugestoes("lista=clientes&q=11222305");
     expect(doc.json.sugestoes.map((s: any) => s.id)).toEqual(["c06"]);
   });

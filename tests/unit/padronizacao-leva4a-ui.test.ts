@@ -345,7 +345,8 @@ describe("Clientes: ações da linha", () => {
   it("quem só visualiza: abre a ficha para ver (olho), sem Inativar nem Reativar", async () => {
     await abrir(P(["visualizar"]));
     expect($("[data-abrir-cliente]")!.getAttribute("aria-label")).toBe("Ver Padaria Pão Quente");
-    expect($("[data-abrir-cliente]")!.getAttribute("href")).toBe("/clientes/c1/editar");
+    // (leva 2) o olho abre a FICHA em consulta, não o formulário de edição
+    expect($("[data-abrir-cliente]")!.getAttribute("href")).toBe("/clientes/c1");
     expect($("[data-inativar-cliente]")).toBeNull();
     expect($("[data-reativar-cliente]")).toBeNull();
   });
@@ -353,6 +354,7 @@ describe("Clientes: ações da linha", () => {
   it("editar sem excluir: lápis, sem Inativar; excluir sem editar: Inativar, e a ficha abre para ver", async () => {
     await abrir(P(["visualizar", "editar"]));
     expect($("[data-abrir-cliente]")!.getAttribute("aria-label")).toBe("Editar Padaria Pão Quente");
+    expect($("[data-abrir-cliente]")!.getAttribute("href")).toBe("/clientes/c1/editar"); // o lápis vai direto para a edição
     expect($("[data-inativar-cliente]")).toBeNull();
     expect($("[data-reativar-cliente]")).toBeNull(); // cliente ativo não tem o que reativar
     act(() => root.unmount());

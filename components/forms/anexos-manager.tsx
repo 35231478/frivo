@@ -31,9 +31,11 @@ function iconeDoTipo(tipo: string) {
 interface AnexosManagerProps {
   clienteId: string;
   anexosIniciais: Anexo[];
+  /** Ficha em consulta: lista e visualiza; enviar e excluir ficam na edição */
+  somenteLeitura?: boolean;
 }
 
-export function AnexosManager({ clienteId, anexosIniciais }: AnexosManagerProps) {
+export function AnexosManager({ clienteId, anexosIniciais, somenteLeitura }: AnexosManagerProps) {
   const [anexos, setAnexos] = useState<Anexo[]>(anexosIniciais);
   const [uploading, setUploading] = useState(false);
   const [erro, setErro] = useState("");
@@ -117,26 +119,34 @@ export function AnexosManager({ clienteId, anexosIniciais }: AnexosManagerProps)
                 <button type="button" onClick={() => visualizar(a.id, a.tipo)} className="p-1 text-ink-muted hover:text-frivo-600 rounded" title="Visualizar">
                   <Eye className="w-3.5 h-3.5" />
                 </button>
-                <button type="button" onClick={() => remover(a.id)} className="p-1 text-ink-muted hover:text-atrasado rounded" title="Excluir">
-                  <Trash2 className="w-3.5 h-3.5" />
-                </button>
+                {!somenteLeitura && (
+                  <button type="button" onClick={() => remover(a.id)} className="p-1 text-ink-muted hover:text-atrasado rounded" title="Excluir">
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
+                )}
               </div>
             </div>
           ))}
         </div>
       )}
 
-      <Button
-        type="button"
-        variant="secondary"
-        loading={uploading}
-        onClick={() => inputRef.current?.click()}
-        className="w-full justify-center border-dashed"
-      >
-        <Upload className="w-4 h-4" />
-        {uploading ? "Enviando..." : "Enviar anexo"}
-      </Button>
-      <p className="text-xs text-ink-muted text-center">PDF, DOC, XLS ou imagens — máx. 5 MB</p>
+      {somenteLeitura ? (
+        anexos.length === 0 && <p className="text-sm text-ink-muted" data-sem-anexos>Nenhum anexo.</p>
+      ) : (
+        <>
+          <Button
+            type="button"
+            variant="secondary"
+            loading={uploading}
+            onClick={() => inputRef.current?.click()}
+            className="w-full justify-center border-dashed"
+          >
+            <Upload className="w-4 h-4" />
+            {uploading ? "Enviando..." : "Enviar anexo"}
+          </Button>
+          <p className="text-xs text-ink-muted text-center">PDF, DOC, XLS ou imagens — máx. 5 MB</p>
+        </>
+      )}
 
       {/* Modal de preview */}
       {preview && (
