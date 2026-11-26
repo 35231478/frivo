@@ -9,7 +9,8 @@ Fase 1 entregue: fundação (tokens, fontes, componentes-base), o shell global e
 ## Princípios
 
 - **Base neutra e um acento só.** O petróleo marca a ação principal, o item ativo, o foco e os links.
-- **A cor do status tem função.** Verde = OK, âmbar = atenção, vermelho = atrasado, cinza = previsto.
+- **A cor do status tem função.** Verde = OK, âmbar = atenção, vermelho = atrasado, cinza = previsto,
+  índigo = em deslocamento (o técnico a caminho; `docs/atividade-em-deslocamento.md`).
   A palavra sempre aparece junto; a cor só reforça.
 - **Sem degradê, sem borda colorida à esquerda, sem emoji.** Respiro entre blocos: `gap-5`, `p-5`.
   - **Exceção registrada: o evento do calendário.** No cartão da OS do calendário o status é uma barra
@@ -40,6 +41,7 @@ em componente.
 | Atenção | `#B45309` / `#FBF0E0` | `bg-atencao-claro text-atencao-texto` |
 | Atrasado | `#B42318` / `#FBEAE8` | `bg-atrasado-claro text-atrasado-texto`, `bg-atrasado` |
 | Previsto | `#475569` / `#EEF1F5` | `bg-previsto-claro text-previsto-texto` |
+| Em deslocamento | `#4338CA` / `#EEF0FB` (texto `#3730A3`) | `bg-deslocamento-claro text-deslocamento-texto`, `bg-deslocamento` |
 
 O **texto** das pílulas de OK e de atenção usa um tom um pouco mais escuro do mesmo matiz
 (`#137A3A` e `#A14A07`). O motivo: as cores aprovadas sobre o próprio fundo claro dão 4.46:1, abaixo
@@ -65,7 +67,7 @@ inteiro já herdou o acento. Em código novo, prefira os nomes semânticos.
 | `Button` (`components/ui/button.tsx`) | `primary` = acento sólido · `secondary` = borda · `ghost` = só texto · `outline` = borda com texto no acento · `danger` = atrasado. Foco: `focus-visible:ring-acento`. |
 | Classes `.btn-primary/.btn-secondary/.btn-ghost/.btn-danger` | Mesmas regras para `<Link>`/`<a>` com cara de botão. |
 | `Card`, `CardTitulo` (`card.tsx`) | Superfície branca, borda, raio 14px, sombra levíssima, `p-5`. Título em caixa-alta pequena. |
-| `StatusPill` (`status-pill.tsx`) | Pílula por **tom**: `ok`, `atencao`, `atrasado`, `previsto`, `acento`, `ok-solido`, `atrasado-solido`. Mapas prontos: `TOM_ESTAGIO_OS`, `TOM_PRIORIDADE`, `TOM_PRAZO`. Classes CSS equivalentes: `.pill-ok`, `.pill-atencao`… e os `.badge-*` antigos já apontam para elas. |
+| `StatusPill` (`status-pill.tsx`) | Pílula por **tom**: `ok`, `atencao`, `atrasado`, `previsto`, `acento`, `deslocamento`, `ok-solido`, `atrasado-solido`. Mapas prontos: `TOM_ESTAGIO_OS`, `TOM_PRIORIDADE`, `TOM_PRAZO`. Classes CSS equivalentes: `.pill-ok`, `.pill-atencao`… e os `.badge-*` antigos já apontam para elas. |
 | `Stepper` (`stepper.tsx`) | Andamento em etapas: feitos e atual no acento, futuros neutros; `<ol>` com `aria-current="step"`. |
 | `Kpi` (`kpi.tsx`) | Número-chave com rótulo pequeno e valor em Archivo; vira `<button>` quando tem ação. |
 | `Tabs` (`tabs.tsx`) | Sublinhado no acento, `aria-current`. |

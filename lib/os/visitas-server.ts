@@ -13,6 +13,8 @@ import { chaveDiaBR, instanteBR, partesBR } from "@/lib/fuso";
 import { textoTecnicosAtividade } from "@/lib/atividade-equipe";
 import { ErroTecnicos, gravarTecnicos, resolverTecnicos, resolverVeiculo } from "@/lib/atividade-tecnicos";
 import { sincronizarStatusOs } from "@/lib/os/sincronizar-status";
+import { avisosDeHojePorAtividade } from "@/lib/execucao/aviso-cliente";
+import { estadoVisivelDaAtividade } from "@/lib/os/estado-atividade";
 import {
   MINIMO_PARA_PLANEJAR, POR_DIA_SUGERIDO, diaUtil, incluirDia, moverEquipamentos, moverVisita, numerarVisitas, ordemDoEquipamento, pendentesEmOrdem,
   planejarVisitas, progressoDasVisitas, resumoDoPlano, sobras, tirarDia, visitaPendente,
@@ -98,6 +100,11 @@ export async function estadoDasVisitas(osId: string, empresaId: string, agora: D
   if (!c) return null;
   const hoje = chaveDiaBR(agora);
   const doPlano = c.plano ? c.visitas : [];
+  // "Em deslocamento": os toques "A caminho"/"Cheguei" de HOJE das visitas (uma consulta para todas)
+  const avisosHoje = await avisosDeHojePorAtividade(doPlano.map((a) => a.id), agora);
+  const estadoDe = (a: Atividade) => estadoVisivelDaAtividade({
+    status: a.status, avisosCliente: Object.entries(avisosHoje.get(a.id) ?? {}).map(([evento, x]) => ({ evento, registradoEm: x!.em })),
+  }, agora);
   const regras = c.visitas.map(paraRegra);
   const numeros = numerarVisitas(doPlano);
   const pendentes = pendentesEmOrdem(regras);
@@ -108,7 +115,7 @@ export async function estadoDasVisitas(osId: string, empresaId: string, agora: D
   return {
     plano: c.plano ? { porDia: c.plano.porDia, pularFimSemana: c.plano.pularFimSemana } : null,
     visitas: doPlano.map((a): VisitaTela => ({
-      id: a.id, titulo: a.titulo, status: a.status, dataAgendada: a.dataAgendada?.toISOString() ?? null, dia: a.dataAgendada ? chaveDiaBR(a.dataAgendada) : null,
+      id: a.id, titulo: a.titulo, status: a.status, estado: estadoDe(a), dataAgendada: a.dataAgendada?.toISOString() ?? null, dia: a.dataAgendada ? chaveDiaBR(a.dataAgendada) : null,
       numero: numeros.get(a.id)?.numero ?? null, pendente: visitaPendente(paraRegra(a)), executor: textoTecnicosAtividade(a), equipamentos: equipamentosDaTela(a),
     })).sort((a, b) => (a.numero ?? 9999) - (b.numero ?? 9999)),
     progresso: progressoDasVisitas(c.plano ? regras : []),

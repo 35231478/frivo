@@ -320,7 +320,9 @@ describe("'A caminho': opcional — avisa e some, deixando o 'Cheguei'", () => {
     expect(dito("A_CAMINHO")).toBe("A caminho · avisado às 12:00");
     expect([...registro("A_CAMINHO")!.querySelectorAll("span > span")].map((x) => texto(x))).toEqual(["A caminho", "avisado às 12:00"]);
     expect(registro("A_CAMINHO")!.tagName).toBe("P"); // registro, não botão
-    expect(texto(card()!.querySelector("[data-status]"))).toBe("A caminho");
+    // o chip do estado fala a língua do gestor ("Em deslocamento", tom próprio); o registro continua "A caminho" (o nome do toque)
+    expect(texto(card()!.querySelector("[data-status]"))).toBe("Em deslocamento");
+    expect(card()!.querySelector("[data-status]")!.className).toContain("bg-deslocamento-claro text-deslocamento-texto");
     expect(recados).toEqual(["Cliente avisado: técnico a caminho."]);
     // ainda não chegou: o card não abre a OS (expande) e não tem Câmera
     expect(window.location.search).toBe("");

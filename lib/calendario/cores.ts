@@ -4,12 +4,16 @@
  * uma por grupo de status, todas dos tokens (lib/ui/tokens.ts) — nunca cor por técnico nem por tipo.
  * O atrasado, que precisa ser óbvio, pinta também a hora.
  *
+ * "Em deslocamento" (lib/os/estado-atividade) é o quinto grupo: o técnico tocou "A caminho" hoje e
+ * ainda não chegou — derivado do que o app grava, sem status novo. Vale para o cartão do DIA em que
+ * alguma atividade da OS está a caminho; atrasada continua vencendo tudo.
+ *
  * Exceção registrada à regra "sem borda colorida à esquerda" da identidade (docs/design-system.md):
  * vale só para o evento do calendário, onde a barra é o status — pedido explícito de produto.
  */
 import { acento, neutro, status } from "@/lib/ui/tokens";
 
-export type GrupoStatus = "aberta" | "andamento" | "concluida" | "atrasada" | "neutra";
+export type GrupoStatus = "aberta" | "deslocamento" | "andamento" | "concluida" | "atrasada" | "neutra";
 
 const GRUPO_DO_STATUS: Record<string, GrupoStatus> = {
   ABERTA: "aberta",
@@ -22,9 +26,11 @@ const GRUPO_DO_STATUS: Record<string, GrupoStatus> = {
   CANCELADA: "neutra",
 };
 
-/** Atrasada vence o status: é o que a pessoa precisa ver primeiro */
-export function grupoDoCard(c: { status: string; atrasada?: boolean }): GrupoStatus {
-  return c.atrasada ? "atrasada" : GRUPO_DO_STATUS[c.status] ?? "neutra";
+/** Atrasada vence o status: é o que a pessoa precisa ver primeiro. Depois, o deslocamento de hoje; depois, o status da OS. */
+export function grupoDoCard(c: { status: string; atrasada?: boolean; deslocamento?: boolean }): GrupoStatus {
+  if (c.atrasada) return "atrasada";
+  if (c.deslocamento) return "deslocamento";
+  return GRUPO_DO_STATUS[c.status] ?? "neutra";
 }
 
 /**
@@ -47,6 +53,7 @@ export const LARGURA_BARRA = "w-[4px]";
 /** As classes de cada grupo (literais: o Tailwind só gera o que lê por extenso) */
 export const ESTILO_GRUPO: Record<GrupoStatus, { rotulo: string; barra: string; hora: string }> = {
   aberta: { rotulo: "Aberta / agendada", barra: "bg-acento", hora: "text-ink" },
+  deslocamento: { rotulo: "Em deslocamento", barra: "bg-deslocamento", hora: "text-ink" },
   andamento: { rotulo: "Em andamento", barra: "bg-atencao", hora: "text-ink" },
   concluida: { rotulo: "Concluída", barra: "bg-ok", hora: "text-ink" },
   atrasada: { rotulo: "Atrasada", barra: "bg-atrasado", hora: "text-atrasado-texto" },
@@ -56,6 +63,7 @@ export const ESTILO_GRUPO: Record<GrupoStatus, { rotulo: string; barra: string; 
 /** As MESMAS cores, em hexadecimal, para o teste de contraste (um par por classe acima) */
 export const CORES_GRUPO: Record<GrupoStatus, { barra: string; hora: string }> = {
   aberta: { barra: acento.DEFAULT, hora: neutro.texto },
+  deslocamento: { barra: status.deslocamento.DEFAULT, hora: neutro.texto },
   andamento: { barra: status.atencao.DEFAULT, hora: neutro.texto },
   concluida: { barra: status.ok.DEFAULT, hora: neutro.texto },
   atrasada: { barra: status.atrasado.DEFAULT, hora: status.atrasado.texto },

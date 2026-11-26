@@ -293,6 +293,33 @@ describe("abas consolidadas, o painel de Atividades e O que falta", () => {
     expect($("[data-form-nova-atividade]")!.compareDocumentPosition($("[data-abrir-atividade]")!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
+  it("'Em deslocamento': o técnico tocou 'A caminho' HOJE e ainda não chegou — selo com tom próprio; 'Cheguei' ou toque de ontem voltam ao de sempre", async () => {
+    // relógio do teste: 30/10/2026 12:00 em Brasília
+    const hojeCedo = "2026-10-30T11:20:00.000Z"; // 08:20 BR
+    const ontem = "2026-10-29T20:00:00.000Z";
+    await montar(fixture({ atividades: [
+      atividade("desloc", { status: "AGENDADA", dataAgendada: "2026-10-30T17:00:00Z", avisosCliente: [{ evento: "A_CAMINHO", registradoEm: hojeCedo }] }),
+      atividade("chegou", { status: "AGENDADA", dataAgendada: "2026-10-30T18:00:00Z", avisosCliente: [{ evento: "A_CAMINHO", registradoEm: hojeCedo }, { evento: "CHEGOU", registradoEm: "2026-10-30T14:00:00.000Z" }] }),
+      atividade("ontem", { status: "AGENDADA", dataAgendada: "2026-10-31T12:00:00Z", avisosCliente: [{ evento: "A_CAMINHO", registradoEm: ontem }] }),
+      atividade("andamento", { status: "EM_ANDAMENTO", dataAgendada: "2026-10-30T12:00:00Z", avisosCliente: [{ evento: "A_CAMINHO", registradoEm: hojeCedo }] }),
+      atividade("sem-avisos", { status: "AGENDADA", dataAgendada: "2026-11-02T12:00:00Z" }),
+    ] }));
+    const selo = (id: string) => $(`[data-atividade='${id}'] [data-selo-atividade]`)!;
+    expect([selo("desloc").textContent, selo("desloc").getAttribute("data-tom"), selo("desloc").getAttribute("data-selo-atividade")]).toEqual(["Em deslocamento", "deslocamento", "EM_DESLOCAMENTO"]);
+    expect($("[data-atividade='desloc']")!.getAttribute("data-estado-atividade")).toBe("EM_DESLOCAMENTO");
+    // o status GRAVADO não muda (sem status novo no banco): a linha continua AGENDADA
+    expect($("[data-atividade='desloc']")!.getAttribute("data-status-atividade")).toBe("AGENDADA");
+    expect([selo("chegou").textContent, selo("chegou").getAttribute("data-tom")]).toEqual(["Agendada", "acento"]);
+    expect([selo("ontem").textContent, selo("andamento").textContent, selo("sem-avisos").textContent]).toEqual(["Agendada", "Em andamento", "Agendada"]);
+    expect(selo("andamento").getAttribute("data-tom")).toBe("atencao");
+    // o resumo do título não muda: deslocamento não é concluída
+    expect(texto("[data-resumo-painel]")).toBe("· 5 atividades");
+    // ao abrir a atividade, o seletor de status do escritório continua com os quatro status gravados (deslocamento não é opção)
+    await clicar($("[data-atividade='desloc'] [data-abrir-atividade]"));
+    const opcoes = [...$("[data-atividade='desloc'] select")!.querySelectorAll("option")].map((o) => o.textContent);
+    expect(opcoes).toEqual(["Agendada", "Em andamento", "Concluída", "Cancelada"]);
+  });
+
   it("o painel respeita a permissão: quem só visualiza vê a lista, sem 'Nova atividade' nem editar/excluir", async () => {
     const { montarPermissoes } = await import("@/lib/permissoes");
     await montar(fixture(), undefined, montarPermissoes({ ordens: ["visualizar"] }));

@@ -54,12 +54,13 @@ no hover), sem contorno e sem sombra; só uma **barra fina (3 px) à esquerda** 
 
 ### O que cada cor significa
 
-Quatro cores, uma por grupo de status, todas dos tokens da identidade (`lib/ui/tokens.ts`). Nunca cor
+Cinco cores, uma por grupo de status, todas dos tokens da identidade (`lib/ui/tokens.ts`). Nunca cor
 por técnico nem por tipo de OS.
 
 | Cor | Token | Significa | Status que entram |
 |---|---|---|---|
 | Petróleo | `acento` | **Aberta / agendada** — ainda vai acontecer | Aberta, Aguardando atendimento, Agendada |
+| Índigo | `deslocamento` | **Em deslocamento** — o técnico tocou "A caminho" hoje e ainda não chegou (derivado dos avisos, `docs/atividade-em-deslocamento.md`); vence o status da OS, perde para a atrasada | qualquer OS com alguma atividade do dia em deslocamento |
 | Âmbar | `atencao` | **Em andamento** — começou e não terminou | Em andamento, Pausada, Aguardando peça |
 | Verde | `ok` | **Concluída** | Concluída |
 | Vermelho | `atrasado` | **Atrasada** — prazo vencido e não finalizada; vence o status | qualquer um dos de cima, com o prazo vencido |

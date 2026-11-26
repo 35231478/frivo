@@ -43,6 +43,9 @@ describe("tokens: definidos uma vez e com contraste acessível (4.5:1)", () => {
     expect(neutro.bordaCampo).toBe("#CFD5DE");
     expect(acento).toEqual({ DEFAULT: "#0E7490", hover: "#0B5566", claro: "#E6F2F5" });
     expect(status.ok).toMatchObject({ DEFAULT: "#15803D", claro: "#E7F5EC" });
+    // "Em deslocamento": tom próprio (índigo), entre o acento (agendada) e a atenção (em andamento)
+    expect(status.deslocamento).toEqual({ DEFAULT: "#4338CA", claro: "#EEF0FB", texto: "#3730A3" });
+    expect(contraste("#FFFFFF", status.deslocamento.DEFAULT)).toBeGreaterThanOrEqual(4.5);
     expect(status.atencao).toMatchObject({ DEFAULT: "#B45309", claro: "#FBF0E0" });
     expect(status.atrasado).toMatchObject({ DEFAULT: "#B42318", claro: "#FBEAE8" });
     expect(status.previsto).toMatchObject({ DEFAULT: "#475569", claro: "#EEF1F5" });

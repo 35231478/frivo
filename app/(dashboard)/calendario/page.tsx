@@ -11,7 +11,8 @@ import type { CelulaDia, CardOs } from "@/components/calendario/calendario-grid"
 import { SOLICITACAO_PENDENTE } from "@/lib/solicitacoes";
 import { pode } from "@/lib/permissoes";
 import { osAtrasada } from "@/lib/os/prazo-execucao";
-import { chaveDiaBR, chaveDiaCivil, partesBR } from "@/lib/fuso";
+import { chaveDiaBR, chaveDiaCivil, hojeDiaCivil, partesBR } from "@/lib/fuso";
+import { estadoVisivelDaAtividade } from "@/lib/os/estado-atividade";
 import { gridCalendario, passoDoPeriodo, posicaoNoCalendario, rotuloDoPeriodo, type PontoDoCalendario } from "@/lib/calendario/grid";
 import { SolicitacoesGaveta } from "@/components/calendario/solicitacoes-gaveta";
 import { numerosDasVisitas } from "@/lib/os/visitas-server";
@@ -24,8 +25,8 @@ function chave(d: Date) {
   return chaveDiaCivil(d);
 }
 
-/** A legenda: a barra de cada status, como aparece à esquerda do cartão (4 cores, uma por status) */
-const LEGENDA: GrupoStatus[] = ["aberta", "andamento", "concluida", "atrasada"];
+/** A legenda: a barra de cada status, como aparece à esquerda do cartão (5 cores, uma por status) */
+const LEGENDA: GrupoStatus[] = ["aberta", "deslocamento", "andamento", "concluida", "atrasada"];
 
 /** Princípio 7: como a tela funciona fica no ⓘ do título, não num parágrafo em cima da grade. */
 const AJUDA = "Cada cartão é uma OS agendada no dia. Arraste para reagendar, clique no dia para ver tudo e abrir uma OS nova ali mesmo. Uma OS dividida em visitas aparece em cada dia dela.";
@@ -90,6 +91,9 @@ export default async function CalendarioPage({
             equipe: { select: { nome: true, cor: true } },
             tecnicosEquipe: { select: { tecnico: { select: { id: true, nome: true, avatar: true } } }, orderBy: { criadoEm: "asc" } },
             veiculo: { select: { placa: true, modelo: true } },
+            status: true,
+            // Os toques "A caminho"/"Cheguei" de HOJE: o cartão de hoje fica "Em deslocamento" (lib/os/estado-atividade)
+            avisosCliente: { where: { dia: hojeDiaCivil(hoje) }, select: { evento: true, registradoEm: true } },
           },
           orderBy: { dataAgendada: "asc" },
         },
@@ -115,12 +119,15 @@ export default async function CalendarioPage({
     // aparecia e as visitas seguintes sumiam do calendário). Sem atividade no
     // período, o card fica na previsão de conclusão.
     const porDia = new Map<string, { data: Date; ativ: (typeof os.atividades)[number] | null }>();
+    // Dias em que ALGUMA atividade da OS está "Em deslocamento" (o cartão do dia é um só, pela 1ª atividade)
+    const diasEmDeslocamento = new Set<string>();
     for (const at of os.atividades) {
       if (!at.dataAgendada) continue;
       const d = new Date(at.dataAgendada);
       const k = posicaoNoCalendario(d, true).chave;
       if (!chavesGrid.has(k)) continue;
       if (!porDia.has(k)) porDia.set(k, { data: d, ativ: at });
+      if (estadoVisivelDaAtividade(at, hoje) === "EM_DESLOCAMENTO") diasEmDeslocamento.add(k);
     }
     // Sem atividade no período: a OS fica na DATA PREVISTA (agenda) ou, sem ela, no dia do prazo
     const semAtividade = os.previsaoConclusao ?? os.prazoExecucao;
@@ -162,6 +169,7 @@ export default async function CalendarioPage({
         status: os.status,
         prioridade: os.prioridade,
         atrasada,
+        deslocamento: diasEmDeslocamento.has(k),
       };
       (eventosPorDia[k] ??= []).push(card);
     }

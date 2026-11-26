@@ -31,12 +31,16 @@ export const acento = {
  * sólido com texto branco); claro = fundo da pílula; texto = a letra sobre o claro. Em OK e
  * atenção o texto é um tom um pouco mais escuro do mesmo matiz: #15803D e #B45309 sobre o
  * próprio claro dão 4.46:1, abaixo do mínimo de 4.5:1.
+ *
+ * `deslocamento` (índigo): o técnico está a caminho — um estado VIVO, entre "agendada" (acento) e
+ * "em andamento" (atenção). Matiz próprio para não se confundir com nenhum dos dois.
  */
 export const status = {
   ok: { DEFAULT: "#15803D", claro: "#E7F5EC", texto: "#137A3A" },
   atencao: { DEFAULT: "#B45309", claro: "#FBF0E0", texto: "#A14A07" },
   atrasado: { DEFAULT: "#B42318", claro: "#FBEAE8", texto: "#B42318" },
   previsto: { DEFAULT: "#475569", claro: "#EEF1F5", texto: "#475569" },
+  deslocamento: { DEFAULT: "#4338CA", claro: "#EEF0FB", texto: "#3730A3" },
 } as const;
 
 /**

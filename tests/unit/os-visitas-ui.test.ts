@@ -214,6 +214,20 @@ describe("OS › visitas: o painel", () => {
     expect([texto($("[data-progresso]")), texto($("[data-visitas-concluidas]")), $("[role=progressbar]")!.getAttribute("aria-valuenow")]).toEqual(["60 de 60 equipamentos", "1 de 1 visita concluída", "100"]);
   });
 
+  it("a visita com o técnico a caminho hoje mostra 'Em deslocamento' (o estado visível que o servidor manda), com o tom próprio", async () => {
+    await abrir({ ...COM_PLANO, visitas: [
+      COM_PLANO.visitas[0],
+      visita(2, "2026-11-13", faixa(26, 50), { estado: "EM_DESLOCAMENTO" }),
+      visita(3, "2026-11-16", faixa(51, 60), { estado: "AGENDADA" }),
+    ] });
+    const selos = $$("[data-visita] [data-situacao]");
+    expect(selos.map((s) => texto(s))).toEqual(["Concluída", "Em deslocamento", "Agendada"]);
+    expect(selos[1].className).toContain("bg-deslocamento-claro text-deslocamento-texto");
+    // sem o campo (lista antiga em cache): cai no status gravado
+    await abrir(COM_PLANO);
+    expect($$("[data-visita] [data-situacao]").map((s) => texto(s))).toEqual(["Concluída", "Agendada", "Agendada"]);
+  });
+
   it("cada visita no SEU dia, com a situação, o lote e quem executa — ou 'Sem quem execute'", async () => {
     await abrir(COM_PLANO);
     expect($$("[data-visita]").map((v) => texto(v))).toEqual([
