@@ -208,7 +208,7 @@ export function ChecklistsPreenchidos({ veiculoId, colaboradores, onMudou }: {
 }
 
 /** A gaveta do checklist: o detalhe (só leitura) ou a correção das respostas */
-function PainelDoChecklist({ aberto, colaboradores, podeEditar, onFechar, onEditar, onSalvo }: {
+export function PainelDoChecklist({ aberto, colaboradores, podeEditar, onFechar, onEditar, onSalvo }: {
   aberto: { id: string; modo: "ver" | "editar" } | null; colaboradores: { id: string; nome: string }[]; podeEditar: boolean;
   onFechar: () => void; onEditar: () => void; onSalvo: () => void;
 }) {

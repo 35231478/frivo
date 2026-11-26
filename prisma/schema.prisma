@@ -494,6 +494,7 @@ model Empresa {
 
   responsavelTecnico     Tecnico?                      @relation("EmpresaResponsavelTecnico", fields: [responsavelTecnicoId], references: [id], onDelete: SetNull)
   usuarios               Usuario[]
+  checklistsDiarios      ChecklistDiario[]
   clientes               Cliente[]
   equipamentos           Equipamento[]
   faturamentoExecucoes   FaturamentoContratoExecucao[]
@@ -750,7 +751,19 @@ model Configuracao {
   orcamentoMostrarMateriais        Boolean @default(false) @map("orcamento_mostrar_materiais")
   orcamentoMostrarValoresMateriais Boolean @default(false) @map("orcamento_mostrar_valores_materiais")
 
-  empresa Empresa @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  /// Checklist de veículo obrigatório no app (o "porteiro"): nos dias escolhidos, o colaborador com veículo padrão só
+  /// usa o app depois do checklist do dia (ou de "Hoje não vou usar o veículo"). Tudo desligado por padrão.
+  checklistDiarioAtivo      Boolean  @default(false) @map("checklist_diario_ativo")
+  /// Dias da semana com checklist: 0 = domingo … 6 = sábado
+  checklistDiarioDias       Int[]    @default([1, 2, 3, 4, 5]) @map("checklist_diario_dias")
+  /// O modelo de checklist usado; sem modelo (ou inativo), o porteiro não aparece
+  checklistDiarioTemplateId String?  @map("checklist_diario_template_id")
+  /// true = todos com veículo padrão; false = só os de checklistDiarioTecnicos
+  checklistDiarioTodos      Boolean  @default(true) @map("checklist_diario_todos")
+  checklistDiarioTecnicos   String[] @default([]) @map("checklist_diario_tecnicos")
+
+  empresa                 Empresa            @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  checklistDiarioTemplate ChecklistTemplate? @relation(fields: [checklistDiarioTemplateId], references: [id], onDelete: SetNull)
 
   @@map("configuracoes")
 }
@@ -880,6 +893,7 @@ model Usuario {
   atualizadoEm DateTime  @updatedAt @map("atualizado_em")
 
   empresa                Empresa                   @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  checklistsDiarios ChecklistDiario[]
   ordensEmitidas         OrdemServico[]            @relation("UsuarioCriador")
   ordensResponsavel      OrdemServico[]            @relation("OsResponsavel")
   osAtrasoJustificado    OrdemServico[]            @relation("OsAtrasoJustificadoPor")
@@ -1057,6 +1071,7 @@ model Tecnico {
 
   empresa               Empresa                         @relation(fields: [empresaId], references: [id], onDelete: Cascade)
   veiculoPadrao         Veiculo?                        @relation("VeiculoPadraoColaborador", fields: [veiculoId], references: [id], onDelete: SetNull)
+  checklistsDiarios     ChecklistDiario[]
   cargo                 Cargo?                          @relation(fields: [cargoId], references: [id])
   perfilAcesso          PerfilAcesso?                   @relation(fields: [perfilAcessoId], references: [id])
   clientesResponsavel   Cliente[]
@@ -4136,6 +4151,7 @@ model Veiculo {
   manutencoes         VeiculoManutencao[]
   documentos          VeiculoDocumento[]
   checklists          ChecklistPreenchido[]
+  checklistsDiarios   ChecklistDiario[]
   colaboradoresPadrao Tecnico[]             @relation("VeiculoPadraoColaborador")
   atividadesOs        AtividadeOs[]
 
@@ -4188,6 +4204,8 @@ model ChecklistTemplate {
   empresa     Empresa                 @relation(fields: [empresaId], references: [id], onDelete: Cascade)
   itens       ChecklistItemTemplate[]
   preenchidos ChecklistPreenchido[]
+  /// Empresas que usam este modelo no checklist obrigatório do app
+  configuracoesDiario Configuracao[]
 
   @@map("checklist_templates")
 }
@@ -4233,6 +4251,8 @@ model ChecklistPreenchido {
   editadoPor   Usuario?                  @relation("ChecklistEditadoPor", fields: [editadoPorId], references: [id], onDelete: SetNull)
   inativadoPor Usuario?                  @relation("ChecklistInativadoPor", fields: [inativadoPorId], references: [id], onDelete: SetNull)
   itens        ChecklistItemPreenchido[]
+  /// O registro do checklist obrigatório do app que gerou este checklist (se veio de lá)
+  diario       ChecklistDiario?
 
   @@index([empresaId, criadoEm])
   @@index([empresaId, status, criadoEm])
@@ -4253,6 +4273,50 @@ model ChecklistItemPreenchido {
   itemTemplate ChecklistItemTemplate @relation(fields: [itemTemplateId], references: [id])
 
   @@map("checklist_item_preenchidos")
+}
+
+enum SituacaoChecklistDiario {
+  FEITO
+  NAO_VAI_USAR
+}
+
+/// Checklist de veículo obrigatório no app (o "porteiro"): UM registro por colaborador por dia (dia civil de Brasília).
+/// FEITO aponta para o checklist preenchido (respostas, fotos, "Com alertas"); NAO_VAI_USAR guarda o motivo opcional.
+/// O aparelho manda com um client_id próprio: reenviar não duplica. "Não vou usar" → feito fica com o rastro da troca.
+model ChecklistDiario {
+  id               String                   @id @default(cuid())
+  empresaId        String                   @map("empresa_id")
+  tecnicoId        String                   @map("tecnico_id")
+  /// Quem tocou (o login do colaborador)
+  usuarioId        String?                  @map("usuario_id")
+  dia              DateTime                 @db.Date
+  veiculoId        String?                  @map("veiculo_id")
+  situacao         SituacaoChecklistDiario
+  checklistId      String?                  @unique @map("checklist_id")
+  /// "Hoje não vou usar o veículo": o motivo (opcional)
+  motivo           String?
+  /// Quando o colaborador tocou (relógio do aparelho)
+  feitoEm          DateTime                 @map("feito_em")
+  /// Quando chegou ao servidor
+  recebidoEm       DateTime                 @default(now()) @map("recebido_em")
+  /// Chegou depois, sem sinal na hora do toque
+  enviadoOffline   Boolean                  @default(false) @map("enviado_offline")
+  clientId         String                   @unique @map("client_id")
+  /// O gestor viu o "não vou usar" (sai do sino)
+  vistoEm          DateTime?                @map("visto_em")
+  /// Rastro da troca: era "não vou usar" e virou "feito" (quando)
+  situacaoAnterior SituacaoChecklistDiario? @map("situacao_anterior")
+  trocadoEm        DateTime?                @map("trocado_em")
+
+  empresa   Empresa              @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  tecnico   Tecnico              @relation(fields: [tecnicoId], references: [id], onDelete: Cascade)
+  usuario   Usuario?             @relation(fields: [usuarioId], references: [id], onDelete: SetNull)
+  veiculo   Veiculo?             @relation(fields: [veiculoId], references: [id], onDelete: SetNull)
+  checklist ChecklistPreenchido? @relation(fields: [checklistId], references: [id], onDelete: SetNull)
+
+  @@unique([tecnicoId, dia])
+  @@index([empresaId, dia])
+  @@map("checklist_diario")
 }
 
 /// Registro de uso do assistente Frivo IA (uma linha por pergunta): tokens, custo estimado e

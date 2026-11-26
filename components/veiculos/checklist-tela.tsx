@@ -5,9 +5,10 @@ import { cn } from "@/lib/utils";
 import { usePermissoes } from "@/components/providers/permissoes-provider";
 import { ChecklistPreenchimento } from "@/components/veiculos/checklist-preenchimento";
 import { ChecklistsPreenchidos } from "@/components/veiculos/checklists-preenchidos";
+import { ChecklistDiario } from "@/components/veiculos/checklist-diario";
 import { PERMISSAO_CHECKLIST, type ItemDoModelo } from "@/lib/veiculos/checklist";
 
-type Aba = "preencher" | "preenchidos";
+type Aba = "preencher" | "preenchidos" | "diario";
 
 interface Props {
   veiculos: { id: string; placa: string; modelo: string }[];
@@ -26,8 +27,9 @@ export function ChecklistTela({ veiculos, templates, colaboradores, veiculoInici
   const { pode } = usePermissoes();
   const podePreencher = pode("veiculos", "checklist");
   const podeVer = pode(PERMISSAO_CHECKLIST.ver.modulo, PERMISSAO_CHECKLIST.ver.acao);
-  const abas: Aba[] = [...(podePreencher ? ["preencher" as const] : []), ...(podeVer ? ["preenchidos" as const] : [])];
-  const [aba, setAba] = useState<Aba>(abaInicial === "preenchidos" && podeVer ? "preenchidos" : abas[0] ?? "preencher");
+  // "Diário": o histórico do checklist obrigatório no app (o porteiro) — para quem vê a frota
+  const abas: Aba[] = [...(podePreencher ? ["preencher" as const] : []), ...(podeVer ? ["preenchidos" as const, "diario" as const] : [])];
+  const [aba, setAba] = useState<Aba>((abaInicial === "preenchidos" || abaInicial === "diario") && podeVer ? abaInicial : abas[0] ?? "preencher");
 
   return (
     <div className="space-y-4" data-checklist-tela>
@@ -37,7 +39,7 @@ export function ChecklistTela({ veiculos, templates, colaboradores, veiculoInici
             <button key={a} type="button" role="tab" aria-selected={aba === a} onClick={() => setAba(a)} data-aba-tela={a}
               className={cn("px-4 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors",
                 aba === a ? "border-primary-600 text-primary-700" : "border-transparent text-ink-muted hover:text-ink")}>
-              {a === "preencher" ? "Preencher" : "Preenchidos"}
+              {a === "preencher" ? "Preencher" : a === "preenchidos" ? "Preenchidos" : "Diário"}
             </button>
           ))}
         </div>
@@ -51,6 +53,7 @@ export function ChecklistTela({ veiculos, templates, colaboradores, veiculoInici
         </div>
       )}
       {aba === "preenchidos" && podeVer && <ChecklistsPreenchidos colaboradores={colaboradores} />}
+      {aba === "diario" && podeVer && <ChecklistDiario colaboradores={colaboradores} />}
       {abas.length === 0 && <p className="text-sm text-ink-muted" data-somente-leitura>Somente leitura: requer a permissão Veículos › checklist.</p>}
     </div>
   );

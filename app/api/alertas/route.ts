@@ -54,7 +54,7 @@ export async function GET() {
 
   const inicioHoje = hojeDiaCivil(); // recebimento é dia civil: hoje em Brasília
 
-  const zeroVeiculos = { checklistPendente: 0, checklistsComAlertas: 0, documentosVencendo: 0, veiculosManutencao: 0, revisaoChegando: 0 };
+  const zeroVeiculos = { checklistPendente: 0, checklistsComAlertas: 0, checklistNaoVaiUsar: 0, documentosVencendo: 0, veiculosManutencao: 0, revisaoChegando: 0 };
   const zeroNfse = { nfseAutorizadas: 0, nfseAutorizadaMedicaoId: null, nfseRejeitadas: 0, nfseRejeitadaMedicaoId: null, nfseAguardando: 0, nfseAguardandoMedicaoId: null };
   const desde24h = new Date(Date.now() - 24 * 60 * 60 * 1000);
   const [prazosBrutos, veiculosBrutos, boletosPagos, orcamentosRespondidos, leadsSite, nfsDoPedido, nfse, faturamentoContratos, reajustesContrato, separacoesPendentes, devolucoesPendentes, pmoc, aceites, admissoes] = await Promise.all([
@@ -110,7 +110,7 @@ export async function GET() {
 
   const totalPrazos = prazos.prazosVencidos + prazos.etapasVencendoHoje + prazos.atendimentosAtraso + prazos.chamadosPortal + prazos.pedidosPendentes
     + prazos.atendimentoVencendo + prazos.atendimentoEstourado;
-  const totalVeiculos = veiculos.checklistPendente + veiculos.checklistsComAlertas + veiculos.documentosVencendo + veiculos.veiculosManutencao;
+  const totalVeiculos = veiculos.checklistPendente + veiculos.checklistsComAlertas + veiculos.checklistNaoVaiUsar + veiculos.documentosVencendo + veiculos.veiculosManutencao;
 
   return NextResponse.json({
     ...prazos,
