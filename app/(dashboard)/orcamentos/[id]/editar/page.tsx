@@ -4,6 +4,8 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { OrcamentoForm } from "@/components/forms/orcamento-form";
 import { padroesOrcamento } from "@/lib/orcamentos/padroes-server";
+import { podeVerCusto } from "@/lib/orcamentos/estoque-margem-server";
+import { semCustoNosServicos } from "@/lib/orcamentos/estoque-margem";
 
 export const metadata: Metadata = { title: "Editar orçamento" };
 
@@ -65,6 +67,9 @@ export default async function EditarOrcamentoPage({
   // Só para os textos de ajuda (ex.: validade padrão); os valores do orçamento são os gravados
   const padroes = await padroesOrcamento(empresaId);
 
+  // "Orçamentos › Ver custo e margem": sem ela, o custo dos materiais NÃO vai ao navegador (o salvar recalcula no servidor)
+  const verCusto = podeVerCusto(session!.user);
+  const cortarCusto = <S extends { materiais?: { custoUnit?: unknown }[] | null }>(servicos: S[]): S[] => (verCusto ? servicos : semCustoNosServicos(servicos));
   const inicial = {
     id: orcamento.id,
     nome: orcamento.nome,
@@ -106,7 +111,7 @@ export default async function EditarOrcamentoPage({
       prazoNormal: orcamento.prazoNormal,
       horarioAtendimento: orcamento.horarioAtendimento,
     },
-    servicos: orcamento.servicos.map((s) => ({
+    servicos: cortarCusto(orcamento.servicos.map((s) => ({
       id: s.id,
       catalogoId: s.servicoId,
       descricao: s.descricao,
@@ -121,7 +126,7 @@ export default async function EditarOrcamentoPage({
         quantidade: Number(m.quantidade), quantidadePadrao: Number(m.quantidadePadrao), valorVendaUnit: Number(m.valorVendaUnit),
         custoUnit: m.custoUnit == null ? null : Number(m.custoUnit), origem: m.origem, kitNome: m.kitNome,
       })),
-    })),
+    }))),
     // Peças derivadas dos materiais (materialId) não são editadas aqui: a tela as recompõe das linhas de serviço
     produtos: orcamento.produtos.filter((p) => !p.materialId).map((p) => ({
       id: p.id,

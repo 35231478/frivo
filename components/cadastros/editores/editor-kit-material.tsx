@@ -55,7 +55,8 @@ export function EditorKitMaterial({ item, aberto, onFechar, onSalvo }: EditorCad
   const produtoDe = (id: string) => produtos.itens.find((p) => p.id === id) ?? null;
   const ids = useMemo(() => itens.map((i) => i.produtoId).filter(Boolean), [itens]);
   const { custos, carregando: custosCarregando } = useCustosProdutos(ids);
-  const custo = custoDoKit({ itens: itens.filter((i) => i.produtoId).map((i) => ({ produtoId: i.produtoId, quantidade: i.quantidade })) }, custos);
+  // Sem permissão de ver custo de compra (custos === null): nem o custo por item nem o total aparecem
+  const custo = custos ? custoDoKit({ itens: itens.filter((i) => i.produtoId).map((i) => ({ produtoId: i.produtoId, quantidade: i.quantidade })) }, custos) : null;
   const patch = (id: string, p: Partial<ItemEdit>) => setItens((arr) => arr.map((i) => (i._id === id ? { ...i, ...p } : i)));
 
   async function salvar() {
@@ -119,7 +120,7 @@ export function EditorKitMaterial({ item, aberto, onFechar, onSalvo }: EditorCad
           </div>
           <div className="flex flex-wrap items-center justify-between gap-2 mt-3">
             <Button type="button" variant="outline" size="sm" onClick={() => setItens((a) => [...a, { _id: uid(), produtoId: "", quantidade: "1" }])} data-acao="add-item-kit"><Plus className="w-4 h-4" /> Adicionar produto</Button>
-            {itens.length > 0 && (
+            {itens.length > 0 && custo && custos && (
               <span className="text-sm text-ink-muted flex items-center gap-1" data-custo-kit={custo.total}>
                 Custo de referência: <strong className="tabular-nums text-ink">{custosCarregando && !custos.size ? "…" : formatarMoeda(custo.total)}</strong>
                 {custo.semCusto.length > 0 && <span className="text-[11px] text-atencao-texto">({custo.semCusto.length} sem custo de compra)</span>}

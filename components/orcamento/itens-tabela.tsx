@@ -30,6 +30,8 @@ export interface ItemTabela {
   valorManual?: boolean;
   /** E3.3 (produto): peça derivada de um material de serviço — linha só de leitura, recomposta das linhas de serviço */
   derivada?: { deServico: string };
+  /** Só na peça derivada: o custo copiado no material (vem só para quem tem "Ver custo e margem"; não é gravado) */
+  custoUnit?: number | null;
 }
 
 export interface CatalogoItem {
@@ -83,6 +85,8 @@ interface ItensTabelaProps {
   totalEditavel?: boolean;
   /** E3.3: conteúdo extra embaixo da linha (o painel de materiais do serviço) */
   extraLinha?: (it: ItemTabela) => React.ReactNode;
+  /** Informação sob a linha (disponível em estoque, custo e margem) — também nas peças derivadas */
+  infoLinha?: (it: ItemTabela, totalDaLinha: number) => React.ReactNode;
   /** E3.3: avisa quem adicionou um item do catálogo (para materializar a composição do serviço) */
   onAdicionadoDoCatalogo?: (it: ItemTabela, c: CatalogoItem) => void;
 }
@@ -197,7 +201,7 @@ function ObservacaoItem({ valor, onChange, descricao }: { valor: string; onChang
 const COLUNAS = "grid grid-cols-3 sm:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)_4.5rem_7.25rem_7.25rem_2rem] gap-x-2 sm:gap-x-3";
 const rotuloCelular = "block sm:sr-only text-[11px] font-semibold uppercase tracking-wider text-ink-muted mb-0.5";
 
-export function ItensTabela({ titulo, dica, labelAdicionar, catalogo, itens, onChange, tabela, cadastro, totalEditavel = false, extraLinha, onAdicionadoDoCatalogo }: ItensTabelaProps) {
+export function ItensTabela({ titulo, dica, labelAdicionar, catalogo, itens, onChange, tabela, cadastro, totalEditavel = false, extraLinha, infoLinha, onAdicionadoDoCatalogo }: ItensTabelaProps) {
   function atualizar(id: string, patch: Partial<ItemTabela>) {
     onChange(itens.map((it) => (it.id === id ? { ...it, ...patch } : it)));
   }
@@ -392,6 +396,7 @@ export function ItensTabela({ titulo, dica, labelAdicionar, catalogo, itens, onC
                 </button>}
               </div>
             </div>
+            {infoLinha?.(it, total)}
             {extraLinha && !derivada && <div className="px-3">{extraLinha(it)}</div>}
             </div>
           );

@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { exigirPermissao } from "@/lib/permissoes-server";
 import { prisma } from "@/lib/prisma";
 import { ultimosCustos } from "@/lib/estoque/custo";
+import { pode, type Permissoes } from "@/lib/permissoes";
+import { podeVerCustoDeCompra } from "@/lib/estoque/custo-acesso";
 import { arred2, margemSobreVenda, markupSobreCusto, precoPorMargem, precoVendaSchema } from "@/lib/estoque/preco";
 
 type Params = { params: Promise<{ produtoId: string }> };
@@ -31,6 +33,9 @@ export async function PUT(req: NextRequest, { params }: Params) {
   const margemVenda = d.modo === "margem" ? arred2(d.margem) : null;
   await prisma.produto.update({ where: { id: produtoId, empresaId }, data: { valorPadrao: preco, margemVenda } });
 
+  // Custo, margem e markup voltam só para quem pode ver custo de compra (lib/estoque/custo-acesso); a tela usa só o preço
+  const u = guard.session.user!;
+  if (!podeVerCustoDeCompra((m, a) => pode(u.permissoes as Permissoes, m, a, u.role))) return NextResponse.json({ preco, margemVenda });
   const custo = d.modo === "margem" ? d.custoBase : (await ultimosCustos(empresaId, [produtoId])).get(produtoId) ?? null;
   return NextResponse.json({ preco, margemVenda, custo, margem: margemSobreVenda(preco, custo), markup: markupSobreCusto(preco, custo) });
 }

@@ -20,6 +20,8 @@ interface TotaisBlocoProps {
   /** Alíquota da empresa hoje, quando difere da congelada neste orçamento (edição): oferece atualizar */
   issAliquotaEmpresa?: number;
   onUsarIssEmpresa?: () => void;
+  /** Custo e margem (só para quem tem "Orçamentos › Ver custo e margem") */
+  margem?: React.ReactNode;
 }
 
 const pct = (v: number) => `${String(v).replace(".", ",")}%`;
@@ -30,7 +32,7 @@ const pct = (v: number) => `${String(v).replace(".", ",")}%`;
  * TOTAL GERAL. O ISS aparece aqui (tela interna); no documento do cliente vem embutido nos preços.
  */
 export function TotaisBloco({
-  totais: t, descontoServicos, descontoProdutos, onDescontoServicos, onDescontoProdutos, issAliquotaEmpresa, onUsarIssEmpresa,
+  totais: t, descontoServicos, descontoProdutos, onDescontoServicos, onDescontoProdutos, issAliquotaEmpresa, onUsarIssEmpresa, margem,
 }: TotaisBlocoProps) {
   const issDiferente = issAliquotaEmpresa != null && issAliquotaEmpresa !== t.issAliquota;
   return (
@@ -48,7 +50,9 @@ export function TotaisBloco({
             <span className="font-mono font-bold text-primary-700 tabular-nums" data-valor="iss">+ {formatarMoeda(t.valorIss)}</span>
           </div>
         ) : (
-          <p className="text-xs text-ink-subtle" data-sem-iss>Sem ISS (alíquota 0% em Configurações).</p>
+          <p className="flex items-center gap-1 text-xs text-ink-subtle" data-sem-iss>
+            Sem ISS <Dica rotulo="ISS" lado="direita" texto="A alíquota de ISS da empresa está em 0% (Configurações › Orçamentos). Com alíquota, o ISS entra aqui e vem embutido nos preços dos serviços no documento do cliente." />
+          </p>
         )}
         {issDiferente && onUsarIssEmpresa && (
           <p className="text-xs text-atencao-texto" data-iss-diferente>
@@ -70,6 +74,7 @@ export function TotaisBloco({
         <span className="text-sm font-bold uppercase tracking-wider text-ink-muted">Total geral</span>
         <span className="text-2xl font-bold text-success-700 tabular-nums" data-valor="total-geral">{formatarMoeda(t.totalGeral)}</span>
       </div>
+      {margem}
     </div>
   );
 }

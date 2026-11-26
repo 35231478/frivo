@@ -119,7 +119,7 @@ function Cartao({ icone, children, onRemover, rotulo, disabled, tipo }: { icone:
 }
 
 function LinhaProduto({ linha, produtos, produto, custos, disabled, onChange, onRemover }: {
-  linha: LinhaEdit; produtos: ProdutoLista[]; produto: ProdutoLista | null; custos: ReadonlyMap<string, number>; disabled: boolean;
+  linha: LinhaEdit; produtos: ProdutoLista[]; produto: ProdutoLista | null; custos: ReadonlyMap<string, number> | null; disabled: boolean;
   onChange: (p: Partial<LinhaEdit>) => void; onRemover: () => void;
 }) {
   const daCategoria = LABEL_COMPORTAMENTO[comportamentoDoProduto(produto)];
@@ -152,7 +152,7 @@ function LinhaProduto({ linha, produtos, produto, custos, disabled, onChange, on
 }
 
 function LinhaKit({ linha, kits, kit, custos, disabled, onChange, onRemover }: {
-  linha: LinhaEdit; kits: KitLista[]; kit: KitLista | null; custos: ReadonlyMap<string, number>; disabled: boolean;
+  linha: LinhaEdit; kits: KitLista[]; kit: KitLista | null; custos: ReadonlyMap<string, number> | null; disabled: boolean;
   onChange: (p: Partial<LinhaEdit>) => void; onRemover: () => void;
 }) {
   const vezes = qtd(linha.quantidade);

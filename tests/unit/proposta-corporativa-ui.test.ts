@@ -267,6 +267,10 @@ describe("anexos da proposta (tela do orçamento)", () => {
     expect($$("[data-anexo-foto]")).toHaveLength(1);
     expect($("[data-anexo-arquivo]")!.textContent).toContain("Datasheet.pdf");
     expect($("[data-anexo-arquivo]")!.textContent).toContain("244 KB");
+    // Leva B: o "porquê" foi para o ⓘ do título; na tela fica só a contagem
+    expect($("[data-contagem-anexos]")!.textContent).toMatch(/^2\/\d+$/);
+    expect($("[data-anexos-orcamento]")!.textContent).not.toMatch(/registro fotográfico|só mudam com o orçamento/);
+    expect($("#titulo-anexos-proposta [aria-label]")).toBeTruthy();
     await clicar($("[data-escolher-fotos-os]"));
     expect($$("[data-foto-os]")).toHaveLength(2);
     await clicar($("[data-foto-os='ANEXO:oa1'] input"));

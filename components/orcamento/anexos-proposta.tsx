@@ -8,6 +8,7 @@ import { Modal } from "@/components/ui/modal";
 import { confirmar, toast } from "@/components/ui/avisos";
 import { ACCEPT_ANEXO } from "@/lib/anexos";
 import { cn } from "@/lib/utils";
+import { Dica } from "@/components/ui/dica";
 
 interface AnexoMeta { id: string; tipo: string; nome: string; mime: string; tamanho: number; legenda: string | null; origem: string | null }
 interface FotoOs { origem: "EXECUCAO" | "ADICIONAL" | "ANEXO"; id: string; src: string; legenda: string; equipamento: string | null }
@@ -65,13 +66,14 @@ export function AnexosProposta({ orcamentoId, editavel, temOs, podeVerOs }: { or
   const cheio = (anexos?.length ?? 0) >= MAX;
 
   return (
-    <section className="space-y-4" data-anexos-orcamento aria-labelledby="titulo-anexos-proposta">
+    <section className="space-y-4" data-anexos-orcamento data-anexos-somente-leitura={editavel ? undefined : ""} aria-labelledby="titulo-anexos-proposta">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h2 id="titulo-anexos-proposta" className="card-title flex items-center gap-2"><Paperclip className="w-4 h-4 text-primary-600" aria-hidden /> Anexos da proposta</h2>
-          <p className="text-xs text-ink-muted mt-0.5">
-            Fotos saem no registro fotográfico do documento; arquivos (datasheet, catálogo) saem como anexos para baixar. Até {MAX}.
-          </p>
+          <h2 id="titulo-anexos-proposta" className="card-title flex items-center gap-2">
+            <Paperclip className="w-4 h-4 text-primary-600" aria-hidden /> Anexos da proposta
+            <span className="text-xs font-normal text-ink-muted tabular-nums" data-contagem-anexos>{anexos?.length ?? 0}/{MAX}</span>
+            <Dica rotulo="Anexos da proposta" texto={`Fotos saem no registro fotográfico do documento; arquivos (datasheet, catálogo) saem como anexos para baixar. Até ${MAX}. Os anexos só mudam com o orçamento em rascunho: o documento enviado fica como foi enviado.`} />
+          </h2>
         </div>
         {editavel && (
           <div className="flex flex-wrap gap-2">
@@ -88,9 +90,6 @@ export function AnexosProposta({ orcamentoId, editavel, temOs, podeVerOs }: { or
         )}
       </div>
 
-      {!editavel && (
-        <p className="text-xs text-ink-muted" data-anexos-somente-leitura>Os anexos só mudam com o orçamento em rascunho: o documento enviado fica como foi enviado.</p>
-      )}
 
       {anexos === null ? (
         <p className="text-sm text-ink-muted">Carregando…</p>
