@@ -115,7 +115,7 @@ export function PorteiroChecklist({ resumo, porteiro, trocando = false }: { resu
       const comAlerta = modelo.itens.some((it) => itemGeraAlerta(it, respostas[it.id]?.valor ?? null));
       await porteiro.registrar({ ...base(), situacao: "FEITO", templateId: modelo.id, itens, observacaoGeral: observacao.trim() || null });
       const semSinal = typeof navigator !== "undefined" && navigator.onLine === false;
-      toast(comAlerta ? "Checklist registrado. Os itens com problema foram registrados e o gestor vai ver." : "Checklist registrado. Bom trabalho!");
+      toast(comAlerta ? "Checklist registrado com alertas. O gestor vai ver os itens com problema." : "Checklist registrado.");
       if (semSinal) toast("Sem sinal agora: o checklist ficou no aparelho e sobe sozinho quando o sinal voltar.", "info");
     } finally { setSalvando(false); }
   }
