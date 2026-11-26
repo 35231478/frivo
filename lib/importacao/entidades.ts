@@ -226,7 +226,7 @@ function umPrincipalPorCliente(rotulo: string) {
 }
 
 const unidades: DefImportacao = {
-  entidade: "unidades", singular: "unidade", plural: "unidades", chaveDescricao: "id_sistema ou nome da unidade no mesmo cliente",
+  entidade: "unidades", singular: "unidade", plural: "unidades", feminino: true, chaveDescricao: "id_sistema ou nome da unidade no mesmo cliente",
   avisoPrevia: "Marcar uma unidade como principal tira a marcação da principal anterior do mesmo cliente.",
   colunas: [
     COLUNA_CLIENTE,

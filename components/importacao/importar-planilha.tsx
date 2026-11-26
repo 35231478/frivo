@@ -98,7 +98,8 @@ function Assistente({ entidade, onConcluido }: { entidade: EntidadeImportacao; o
   const [ligacoes, setLigacoes] = useState<Ligacoes | undefined>(undefined);
   const [ligar, setLigar] = useState<LigacaoColunas | null>(null);
 
-  async function enviar(confirmar: boolean, arq = arquivo, lig = ligacoes) {
+  // lig: null = sem ligação (arquivo novo); ausente = a ligação atual
+  async function enviar(confirmar: boolean, arq = arquivo, lig: Ligacoes | null | undefined = ligacoes) {
     if (!arq) return;
     setErro("");
     setEtapa(confirmar ? "gravando" : "analisando");
@@ -127,7 +128,7 @@ function Assistente({ entidade, onConcluido }: { entidade: EntidadeImportacao; o
     if (!f) return;
     // Arquivo novo: a ligação de colunas da planilha anterior não vale para ele
     setArquivo(f); setAnalise(null); setResultado(null); setLigacoes(undefined); setLigar(null);
-    void enviar(false, f, undefined);
+    void enviar(false, f, null);
   }
 
   function recomecar() {
@@ -160,7 +161,7 @@ function Assistente({ entidade, onConcluido }: { entidade: EntidadeImportacao; o
           Uma linha por {def.singular}. Obrigatória{obrigatorias.length > 1 ? "s" : ""}: {obrigatorias.map((t, i) => <span key={t}>{i > 0 && ", "}<strong>{t}</strong></span>)}.
         </p>
         <p className="text-xs text-ink-muted">
-          {def.plural[0].toUpperCase() + def.plural.slice(1)} existentes (mesmo <strong>{def.chaveDescricao}</strong>) são <strong>atualizados</strong>; células vazias não apagam dados. Nenhum registro é excluído.
+          {def.plural[0].toUpperCase() + def.plural.slice(1)} existentes (mesmo <strong>{def.chaveDescricao}</strong>) são <strong>{def.feminino ? "atualizadas" : "atualizados"}</strong>; células vazias não apagam dados. Nenhum registro é excluído.
         </p>
         <div className="flex flex-wrap gap-2">
           <a href={`/api/importacao/${entidade}/modelo?formato=xlsx`} className="btn-secondary inline-flex items-center gap-1.5 text-sm" data-acao="baixar-modelo-xlsx">
@@ -172,7 +173,7 @@ function Assistente({ entidade, onConcluido }: { entidade: EntidadeImportacao; o
         </div>
         {familiaDe("clientes").includes(entidade) && entidade !== "clientes" && (
           <a href={`/api/importacao/${entidade}/exportar`} className="text-xs font-medium text-primary-700 hover:underline inline-flex items-center gap-1" data-acao="baixar-cadastrados">
-            <Download className="w-3.5 h-3.5" /> Baixar {def.plural} já cadastrad{def.singular === "unidade" ? "as" : "os"} (para editar em massa)
+            <Download className="w-3.5 h-3.5" /> Baixar {def.plural} já cadastrad{def.feminino ? "as" : "os"} (para editar em massa)
           </a>
         )}
         <p className="text-xs text-ink-muted flex items-center gap-1" data-dica-exportar>

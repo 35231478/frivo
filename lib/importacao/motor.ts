@@ -110,6 +110,8 @@ export interface DefImportacao {
   entidade: string;
   singular: string;
   plural: string;
+  /** Palavra feminina (unidade): "atualizadas", "cadastradas"… nas frases da tela */
+  feminino?: boolean;
   /** "CNPJ/CPF", "nome"… — explica a dedup nas mensagens */
   chaveDescricao: string;
   colunas: ColunaImportacao[];
@@ -344,7 +346,7 @@ export function linhasModelo(def: DefImportacao, refs: Record<string, OpcaoRef[]
     o.exportada
       ? ["Importante", "", `Esta planilha veio do sistema: edite e envie de volta em “Importar planilha”. Cada linha ATUALIZA o seu cadastro pelo id_sistema — não altere essa coluna. Linhas novas (id_sistema vazio) são cadastradas.`, ""]
       : ["Importante", "", `A linha de exemplo (linha 2) é só um modelo: apague ou troque pelos seus dados antes de enviar.`, ""],
-    ["", "", `${def.plural[0].toUpperCase()}${def.plural.slice(1)} que já existem (mesmo ${def.chaveDescricao}) são ATUALIZADOS; células vazias não apagam nada.`, ""],
+    ["", "", `${def.plural[0].toUpperCase()}${def.plural.slice(1)} que já existem (mesmo ${def.chaveDescricao}) são ${def.feminino ? "ATUALIZADAS" : "ATUALIZADOS"}; células vazias não apagam nada.`, ""],
     ["", "", `Até ${MAX_LINHAS_IMPORTACAO} linhas por arquivo. Nada é gravado antes da sua confirmação na prévia.`, ""],
     ["", "", "Linha apagada da planilha NÃO apaga nada no sistema: a importação só cria e atualiza.", ""],
   ];
