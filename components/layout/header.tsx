@@ -19,6 +19,8 @@ interface Alertas {
   atendimentoEstourado: number;
   checklistPendente: number;
   checklistsComAlertas: number;
+  /** Checklist obrigatório no app: "Hoje não vou usar o veículo" que o escritório ainda não viu */
+  checklistNaoVaiUsar?: number;
   documentosVencendo: number;
   veiculosManutencao: number;
   boletosPagos: number;
@@ -306,6 +308,7 @@ export function Header({ session, avatarUrl }: HeaderProps) {
                   {podeVer("ordens") && (alertas?.atendimentoVencendo ?? 0) > 0 && <AlertaItem href="/ordens?atendimento=vencendo" icone={Headset} cor="text-atencao" label="Prazo de atendimento vencendo" valor={alertas?.atendimentoVencendo ?? 0} onClick={() => setSinoAberto(false)} />}
                   {podeVer("veiculos") && <AlertaItem href="/veiculos/checklist" icone={ClipboardCheck} cor="text-acento" label="Checklists pendentes" valor={alertas?.checklistPendente ?? 0} onClick={() => setSinoAberto(false)} />}
                   {podeVer("veiculos") && <AlertaItem href="/veiculos" icone={AlertTriangle} cor="text-atencao" label="Checklists com alertas" valor={alertas?.checklistsComAlertas ?? 0} onClick={() => setSinoAberto(false)} />}
+                  {podeVer("veiculos") && (alertas?.checklistNaoVaiUsar ?? 0) > 0 && <AlertaItem href="/veiculos/checklist?aba=diario" icone={ClipboardCheck} cor="text-atencao" label="Não vão usar o veículo hoje" valor={alertas?.checklistNaoVaiUsar ?? 0} onClick={() => setSinoAberto(false)} />}
                   {podeVer("veiculos") && <AlertaItem href="/veiculos" icone={FileWarning} cor="text-atencao" label="Documentos de veículo vencendo" valor={alertas?.documentosVencendo ?? 0} onClick={() => setSinoAberto(false)} />}
                   {podeVer("veiculos") && <AlertaItem href="/veiculos" icone={Wrench} cor="text-acento" label="Veículos em manutenção" valor={alertas?.veiculosManutencao ?? 0} onClick={() => setSinoAberto(false)} />}
                   {podeVer("financeiro", "contasReceber") && <AlertaItem href="/financeiro/contas-receber?card=RECEBIDO&periodo=todos" icone={Barcode} cor="text-ok" label="Boletos pagos hoje" valor={alertas?.boletosPagos ?? 0} onClick={() => setSinoAberto(false)} />}

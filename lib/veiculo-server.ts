@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { contarNaoVaiUsar } from "@/lib/checklist-diario/servidor";
 import { hojeDiaCivil, inicioHojeBR } from "@/lib/fuso";
 
 /**
@@ -36,6 +37,8 @@ export async function contarAlertasVeiculos(empresaId: string) {
   return {
     checklistPendente,
     checklistsComAlertas,
+    // Checklist obrigatório no app: colaborador marcou "Hoje não vou usar o veículo" e ninguém do escritório viu
+    checklistNaoVaiUsar: await contarNaoVaiUsar(empresaId, agora),
     documentosVencendo,
     veiculosManutencao,
     revisaoChegando,

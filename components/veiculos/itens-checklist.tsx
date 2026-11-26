@@ -13,12 +13,14 @@ const FOTO_MAXIMA = 3 * 1024 * 1024;
  * Os itens de um checklist de veículo, agrupados por categoria — o MESMO bloco para preencher, ver o
  * detalhe e corrigir depois. `somenteLeitura` mostra as respostas sem campo nenhum.
  */
-export function ItensChecklist({ itens, respostas, onResposta, onErro, somenteLeitura }: {
+export function ItensChecklist({ itens, respostas, onResposta, onErro, somenteLeitura, reduzirFoto }: {
   itens: ItemDoModelo[];
   respostas: Record<string, RespostaDoItem | undefined>;
   onResposta?: (itemId: string, r: RespostaDoItem) => void;
   onErro?: (mensagem: string) => void;
   somenteLeitura?: boolean;
+  /** App do técnico: reduz a foto no aparelho antes de guardar (fica leve para salvar sem sinal e enviar depois) */
+  reduzirFoto?: (arquivo: File) => Promise<string>;
 }) {
   const fotoRef = useRef<HTMLInputElement>(null);
   const fotoItem = useRef<string | null>(null);
@@ -29,6 +31,10 @@ export function ItensChecklist({ itens, respostas, onResposta, onErro, somenteLe
     const file = e.target.files?.[0]; const itemId = fotoItem.current;
     if (fotoRef.current) fotoRef.current.value = "";
     if (!file || !itemId) return;
+    if (reduzirFoto) {
+      reduzirFoto(file).then((foto) => mudar(itemId, { foto })).catch(() => onErro?.("Não foi possível usar esta foto. Tente de novo."));
+      return;
+    }
     if (file.size > FOTO_MAXIMA) { onErro?.("Foto muito grande. Máximo 3 MB."); return; }
     const leitor = new FileReader();
     leitor.onload = () => mudar(itemId, { foto: typeof leitor.result === "string" ? leitor.result : null });

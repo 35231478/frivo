@@ -17,6 +17,8 @@ import { PerfilTecnico } from "@/components/tecnico/perfil";
 import { DesempenhoTecnico } from "@/components/tecnico/desempenho";
 import { BloqueioLocalizacao, useLocalizacaoObrigatoria } from "@/components/tecnico/localizacao-gate";
 import type { PerfilClient } from "@/components/perfil/perfil-client";
+import { AtalhoChecklist, PorteiroChecklist, usePorteiro } from "@/components/tecnico/porteiro";
+import type { ResumoPorteiro } from "@/lib/checklist-diario/regras";
 
 type PerfilInicial = React.ComponentProps<typeof PerfilClient>["initial"];
 
@@ -33,21 +35,28 @@ const NAV_DESEMPENHO = { ver: "desempenho" as const, rotulo: "Desempenho", Icone
  * execução da OS. Navegação mínima — sem o menu do sistema. Tudo o que ele grava fica no aparelho e
  * sobe sozinho; o indicador no topo diz se está offline, sincronizando ou sincronizado.
  */
-export function AppTecnico({ usuario, config, perfilInicial }: { usuario: UsuarioApp; config: ConfigApp; perfilInicial: PerfilInicial }) {
+export function AppTecnico({ usuario, config, perfilInicial, porteiro = null }: {
+  usuario: UsuarioApp; config: ConfigApp; perfilInicial: PerfilInicial;
+  /** Checklist de veículo obrigatório (o "porteiro"): null = este colaborador não tem */
+  porteiro?: ResumoPorteiro | null;
+}) {
   return (
     <ProvedorTecnico usuario={usuario} config={config}>
-      <Casca perfilInicial={perfilInicial} />
+      <Casca perfilInicial={perfilInicial} resumoPorteiro={porteiro} />
     </ProvedorTecnico>
   );
 }
 
-function Casca({ perfilInicial }: { perfilInicial: PerfilInicial }) {
+function Casca({ perfilInicial, resumoPorteiro }: { perfilInicial: PerfilInicial; resumoPorteiro: ResumoPorteiro | null }) {
   const { estado, semBanco, motor, config, usuario, avatar } = useTecnico();
   const vista = useVista();
   const ativa = vista?.ver === "os" ? "dia" : vista?.ver;
   // "Exigir localização ativa": sem GPS, o app fica travado (libera sozinho quando a posição volta)
   const loc = useLocalizacaoObrigatoria(config.exigirLocalizacao);
   const travadoLoc = config.exigirLocalizacao && loc.estado !== "ok";
+  // Checklist do veículo obrigatório: nos dias de checklist, a única tela até fazer (ou "não vou usar")
+  const porteiro = usePorteiro(resumoPorteiro);
+  const travadoPorteiro = !travadoLoc && !!resumoPorteiro && (porteiro.aberto || porteiro.carregando);
   const nav = usuario.desempenho ? [NAV[0], NAV[1], NAV_DESEMPENHO, NAV[2]] : NAV;
 
   // G12/UX-3: quem clicou num link do escritório foi trazido para cá — avisa em vez de só "piscar"
@@ -83,9 +92,21 @@ function Casca({ perfilInicial }: { perfilInicial: PerfilInicial }) {
       <main className="max-w-2xl mx-auto px-4 pt-4 pb-28">
         {travadoLoc
           ? <BloqueioLocalizacao estado={loc.estado} onTentar={loc.tentar} />
-          : !vista || !motor ? <div className="flex justify-center py-16"><Loader2 className="w-6 h-6 animate-spin text-ink-subtle" /></div> : <Conteudo vista={vista} perfilInicial={perfilInicial} />}
+          : travadoPorteiro
+            ? (porteiro.carregando ? <div className="flex justify-center py-16"><Loader2 className="w-6 h-6 animate-spin text-ink-subtle" /></div>
+              : <PorteiroChecklist resumo={resumoPorteiro!} porteiro={porteiro} trocando={porteiro.situacaoHoje === "NAO_VAI_USAR"} />)
+            : !vista || !motor ? <div className="flex justify-center py-16"><Loader2 className="w-6 h-6 animate-spin text-ink-subtle" /></div> : (
+              <>
+                {resumoPorteiro && ativa === "dia" && <AtalhoChecklist porteiro={porteiro} />}
+                {resumoPorteiro && ativa === "perfil" && porteiro.erro && (
+                  <p role="alert" className="mb-3 rounded-lg bg-atencao-claro px-3 py-2 text-sm text-atencao-texto" data-erro-envio-checklist>Checklist do veículo: {porteiro.erro}</p>
+                )}
+                <Conteudo vista={vista} perfilInicial={perfilInicial} />
+              </>
+            )}
       </main>
-      <nav className="fixed bottom-0 inset-x-0 z-30 bg-white border-t border-surface-border safe-bottom" aria-label="Navegação do técnico">
+      {/* No porteiro, a navegação some: a única tela é o checklist do veículo */}
+      {!travadoPorteiro && <nav className="fixed bottom-0 inset-x-0 z-30 bg-white border-t border-surface-border safe-bottom" aria-label="Navegação do técnico">
         <div className={cn("grid max-w-2xl mx-auto", nav.length === 4 ? "grid-cols-4" : "grid-cols-3")}>
           {nav.map(({ ver, rotulo, Icone }) => (
             // Pulso tátil curtinho no toque (Android; onde não há suporte, nada acontece)
@@ -96,7 +117,7 @@ function Casca({ perfilInicial }: { perfilInicial: PerfilInicial }) {
             </button>
           ))}
         </div>
-      </nav>
+      </nav>}
     </div>
   );
 }
