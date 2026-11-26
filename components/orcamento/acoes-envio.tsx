@@ -1,10 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
-import { confirmar } from "@/components/ui/avisos";
+import { confirmar, toast } from "@/components/ui/avisos";
+import { copiarTexto } from "@/lib/ui/copiar";
+import { buildPublicUrl } from "@/lib/orcamento-helpers";
 import { Mail, MessageCircle, Link2, Printer, Pencil, Check, AlertCircle, Undo2, XCircle } from "lucide-react";
 import type { EtapaCiclo } from "@/lib/orcamentos/ciclo";
 import { abaPendente, pedirEnvio, resultadoEmail, SEM_WHATSAPP, type CanalEnvio } from "@/components/orcamento/envio-proposta";
@@ -29,10 +31,42 @@ export function AcoesEnvio({ orcamentoId, tokenPublico, status, podeEditar, etap
   const router = useRouter();
   const [carregando, setCarregando] = useState<string | null>(null);
   const [feedback, setFeedback] = useState<{ tipo: "ok" | "erro"; msg: string } | null>(null);
+  /** O navegador recusou a cópia: o link fica à vista, já selecionado, para copiar à mão */
+  const [linkManual, setLinkManual] = useState<string | null>(null);
   const printUrl = `/orcamento/${tokenPublico}/imprimir`;
   const e = etapa ?? (status === "REPROVADO" ? "RECUSADO" : (status as EtapaCiclo));
 
+  /**
+   * Copiar link: a cópia começa NO CLIQUE (antes de esperar o servidor — o Safari recusa depois) com o
+   * link montado aqui (o mesmo que o servidor monta: origem + /orcamento/<token>); depois o servidor
+   * registra o envio. Copiou → toast. Não copiou (ou o servidor devolveu outro endereço) → o link
+   * aparece selecionado para copiar à mão. Nunca diz "copiado" sem ter copiado.
+   */
+  async function copiarLink() {
+    const url = buildPublicUrl(tokenPublico, window.location.origin);
+    const copia = copiarTexto(url);
+    setCarregando("LINK");
+    setFeedback(null);
+    setLinkManual(null);
+    try {
+      const { ok, dados } = await pedirEnvio(orcamentoId, "LINK");
+      if (!ok) { toast(dados.erro ?? "Não foi possível gerar o link.", "erro"); return; }
+      const final = dados.publicUrl || url;
+      if ((await copia) && final === url) toast("Link copiado.");
+      else {
+        setLinkManual(final);
+        toast("Não foi possível copiar. Copie o link selecionado abaixo.", "info");
+      }
+      router.refresh();
+    } catch {
+      toast("Erro de conexão.", "erro");
+    } finally {
+      setCarregando(null);
+    }
+  }
+
   async function enviar(canal: CanalEnvio) {
+    if (canal === "LINK") return copiarLink();
     setCarregando(canal);
     setFeedback(null);
     const aba = canal === "WHATSAPP" ? abaPendente() : null;
@@ -47,9 +81,6 @@ export function AcoesEnvio({ orcamentoId, tokenPublico, status, podeEditar, etap
       } else if (canal === "WHATSAPP") {
         if (data.whatsappUrl) aba?.ir(data.whatsappUrl);
         else { aba?.fechar(); setFeedback({ tipo: "erro", msg: SEM_WHATSAPP }); }
-      } else {
-        await navigator.clipboard?.writeText(data.publicUrl ?? "").catch(() => {});
-        setFeedback({ tipo: "ok", msg: "Link copiado." });
       }
       router.refresh();
     } catch {
@@ -102,6 +133,8 @@ export function AcoesEnvio({ orcamentoId, tokenPublico, status, podeEditar, etap
           {feedback.msg}
         </div>
       )}
+
+      {linkManual && <LinkParaCopiar url={linkManual} />}
 
       {e === "EXPIRADO" && (
         <p className="text-sm text-atencao-texto bg-atencao-claro rounded-lg px-3 py-2" data-aviso-expirado>
@@ -160,5 +193,23 @@ export function AcoesEnvio({ orcamentoId, tokenPublico, status, podeEditar, etap
         </div>
       )}
     </div>
+  );
+}
+
+/** O link à vista e já selecionado, para copiar à mão quando o navegador recusa a cópia automática */
+function LinkParaCopiar({ url }: { url: string }) {
+  const ref = useRef<HTMLInputElement>(null);
+  useEffect(() => { ref.current?.focus(); ref.current?.select(); }, [url]);
+  return (
+    <input
+      ref={ref}
+      readOnly
+      value={url}
+      onFocus={(ev) => ev.currentTarget.select()}
+      onClick={(ev) => ev.currentTarget.select()}
+      aria-label="Link da proposta para copiar"
+      className="w-full rounded-lg border border-surface-border bg-white px-3 py-2 text-sm font-mono text-ink"
+      data-link-manual
+    />
   );
 }

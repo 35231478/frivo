@@ -319,3 +319,25 @@ export function destinatarioOrcamento(
     endereco: endUnidade || enderecoEmLinha(c),
   };
 }
+
+/** Uma OS vinculada ao orçamento (orcamento_ordens_servico), só o que o documento usa */
+export interface OsVinculadaDoc {
+  ordemServico: { numero: string; criadoEm?: Date | string | null; empresaId?: string | null } | null;
+}
+
+/**
+ * Os números das OS vinculadas que o documento do cliente mostra ("OS: OS-753, OS-754"): só as da
+ * MESMA empresa do orçamento (multiempresa), sem repetir, sem vazio, na ordem em que as OS foram
+ * abertas (a mais antiga primeiro; empate pelo número). Sem nenhuma, a linha não aparece. Só o
+ * número — o link clicável para o cliente fica para depois (exige link público da OS com token).
+ */
+export function numerosOsDoDocumento(vinculos: readonly OsVinculadaDoc[] | null | undefined, empresaId?: string | null): string[] {
+  const ms = (d: Date | string | null | undefined) => { const t = d ? new Date(d).getTime() : NaN; return Number.isFinite(t) ? t : Infinity; };
+  const vistos = new Set<string>();
+  return (vinculos ?? [])
+    .map((v) => v.ordemServico)
+    .filter((os): os is NonNullable<OsVinculadaDoc["ordemServico"]> => !!os && !!os.numero?.trim() && (!empresaId || !os.empresaId || os.empresaId === empresaId))
+    .sort((a, b) => ms(a.criadoEm) - ms(b.criadoEm) || a.numero.localeCompare(b.numero, "pt-BR", { numeric: true }))
+    .map((os) => os.numero.trim())
+    .filter((n) => (vistos.has(n) ? false : (vistos.add(n), true)));
+}

@@ -46,7 +46,7 @@ export default async function OrcamentoDetalhePage({
         osGerada: { select: { id: true, numero: true } },
         ordensServico: {
           include: {
-            ordemServico: { select: { id: true, numero: true, status: true, descricao: true, criadoEm: true } },
+            ordemServico: { select: { id: true, numero: true, status: true, descricao: true, criadoEm: true, empresaId: true } },
           },
         },
       },

@@ -661,7 +661,9 @@ export function OrcamentoForm({
                 {descricao.trim() ? "Gerar outra descrição (IA)" : "Gerar descrição profissional (IA)"}
               </Button>
               {!iaDisponivel ? (
-                <span className="text-xs text-ink-muted" data-ia-indisponivel>IA não configurada</span>
+                <span className="inline-flex" data-ia-indisponivel>
+                  <Dica rotulo="Descrição pela IA" lado="direita" texto="IA não configurada nesta empresa: o botão fica desligado. Com a IA ligada, ele rascunha a descrição a partir da OS e dos itens." />
+                </span>
               ) : (
                 <Dica rotulo="Descrição pela IA" lado="direita"
                   texto={`Rascunho gerado a partir ${osDaIa ? "da OS (descrição, equipamentos e fotos) e " : ""}dos itens do orçamento, sem inventar informações. Revise antes de salvar.`} />

@@ -6,6 +6,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
+import { Dica } from "@/components/ui/dica";
 import {
   FORMAS_PAGAMENTO, FORMA_PAGAMENTO_MAX, lerFormaPagamento, OPCAO_OUTRO, PARCELAS_MAX, PARCELAS_MIN, textoFormaPagamento, type EscolhaPagamento,
 } from "@/lib/orcamentos/forma-pagamento";
@@ -80,25 +81,25 @@ export function NormasCampo({ valor, onChange }: { valor: string[]; onChange: (v
       {NORMAS.map((n) => {
         const ativo = marcadas.has(n.codigo);
         return (
-          <label
+          <div
             key={n.codigo}
             className={cn(
-              "flex items-start gap-3 rounded-lg border px-3 py-2.5 cursor-pointer transition-colors",
+              "flex items-center gap-1 rounded-lg border pr-2 transition-colors",
               ativo ? "border-primary-300 bg-primary-50/60" : "border-surface-border bg-white hover:bg-surface-alt",
             )}
           >
-            <input
-              type="checkbox"
-              className="mt-0.5 h-4 w-4 accent-primary-600"
-              checked={ativo}
-              onChange={() => onChange(NORMAS.map((x) => x.codigo).filter((c) => (c === n.codigo ? !ativo : marcadas.has(c))))}
-              data-norma={n.codigo}
-            />
-            <span className="min-w-0">
-              <span className="block text-sm font-semibold text-ink">{n.titulo}</span>
-              <span className="block text-xs text-ink-muted">{n.descricao}</span>
-            </span>
-          </label>
+            <label className="flex flex-1 min-w-0 items-center gap-3 px-3 py-2 cursor-pointer">
+              <input
+                type="checkbox"
+                className="h-4 w-4 accent-primary-600"
+                checked={ativo}
+                onChange={() => onChange(NORMAS.map((x) => x.codigo).filter((c) => (c === n.codigo ? !ativo : marcadas.has(c))))}
+                data-norma={n.codigo}
+              />
+              <span className="text-sm font-semibold text-ink">{n.titulo}</span>
+            </label>
+            <Dica rotulo={n.titulo} texto={n.descricao} />
+          </div>
         );
       })}
     </div>
