@@ -298,10 +298,12 @@ describe.skipIf(!URL_PG)("PMOC — renovação anual (PostgreSQL real)", () => {
     expect((await ler(id)).historico).toHaveLength(2);
   });
 
-  it("RBAC: renovar exige PMOC › Editar — visualizar ou criar não bastam; sem o módulo e o técnico do app: 403; nada é criado", async () => {
+  // Mudou de propósito (leva 3 do go-live): renovar CRIA um plano novo — a permissão é "PMOC › Criar", a mesma do
+  // "Novo PMOC" e da cópia. Antes pedia "Editar", e quem só editava criava planos por aqui.
+  it("RBAC: renovar exige PMOC › Criar — visualizar ou editar não bastam; sem o módulo e o técnico do app: 403; nada é criado", async () => {
     const id = await plano();
     const negados: [string, () => void][] = [
-      ["só visualizar", () => comPmoc(["visualizar"])], ["visualizar + criar + excluir (sem editar)", () => comPmoc(["visualizar", "criar", "excluir"])],
+      ["só visualizar", () => comPmoc(["visualizar"])], ["visualizar + editar + excluir (sem criar)", () => comPmoc(["visualizar", "editar", "excluir"])],
       ["sem o módulo PMOC", semModulo], ["técnico do app", tecnicoDoApp],
     ];
     for (const [quem, entrar] of negados) {
@@ -312,8 +314,8 @@ describe.skipIf(!URL_PG)("PMOC — renovação anual (PostgreSQL real)", () => {
     expect([(await chamar("renovacao", "GET", id)).status, (await chamar("renovacao", "POST", id, NOVA)).status]).toEqual([401, 401]);
     expect(await totalDePlanos()).toBe(1);
     expect((await ler(id)).historico).toHaveLength(2);
-    // com Editar (mesmo sem Criar), renova
-    comPmoc(["visualizar", "editar"]);
+    // com Criar (mesmo sem Editar), renova
+    comPmoc(["visualizar", "criar"]);
     expect((await chamar("renovacao", "GET", id)).status).toBe(200);
     expect((await chamar("renovacao", "POST", id, NOVA)).status).toBe(201);
     expect(await totalDePlanos()).toBe(2);

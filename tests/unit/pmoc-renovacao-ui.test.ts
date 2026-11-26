@@ -104,14 +104,15 @@ describe("PMOC › Renovar: o botão", () => {
     expect($("[data-modal-renovar]")).toBeNull();
   });
 
-  it("exige PMOC › Editar: quem só visualiza (ou visualiza e cria) não vê o botão; plano novo ainda não tem o que renovar", async () => {
+  // Mudou de propósito (leva 3 do go-live): renovar CRIA um plano — a permissão é "PMOC › Criar", a mesma da cópia.
+  it("exige PMOC › Criar: quem só visualiza (ou visualiza e edita) não vê o botão; plano novo ainda não tem o que renovar", async () => {
     await abrirEditor({}, montarPermissoes({ pmoc: ["visualizar"] }));
     expect($("[data-renovar]")).toBeNull();
-    await abrirEditor({}, montarPermissoes({ pmoc: ["visualizar", "criar"] }));
-    expect($("[data-renovar]")).toBeNull();
-    expect($$("button").some((b) => texto(b) === "Criar cópia")).toBe(true); // a cópia continua com "Criar"
     await abrirEditor({}, montarPermissoes({ pmoc: ["visualizar", "editar"] }));
+    expect($("[data-renovar]")).toBeNull();
+    await abrirEditor({}, montarPermissoes({ pmoc: ["visualizar", "criar"] }));
     expect($("[data-renovar]")).toBeTruthy();
+    expect($$("button").some((b) => texto(b) === "Criar cópia")).toBe(true); // a mesma permissão da cópia
     await abrirEditor({ inicial: undefined });
     expect($("[data-renovar]")).toBeNull();
   });

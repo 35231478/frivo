@@ -86,7 +86,7 @@ export default async function OrcamentoPublicoPage({
           {expirado && (
             <StatusAviso
               tipo="atencao"
-              titulo="Orçamento expirado"
+              titulo="Orçamento vencido"
               mensagem={`Válido até ${formatarData(orcamento.validadeEm)}. Entre em contato com a empresa para uma nova proposta.`}
             />
           )}

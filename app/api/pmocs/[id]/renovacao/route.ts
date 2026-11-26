@@ -5,9 +5,9 @@ import { previaDaRenovacao, renovarPmoc } from "@/lib/pmoc-renovacao-server";
 
 type Params = { params: Promise<{ id: string }> };
 
-/** O que o diálogo "Renovar" mostra: a vigência proposta, o que vai e o que fica. Exige "PMOC › Editar". */
+/** O que o diálogo "Renovar" mostra: a vigência proposta, o que vai e o que fica. Exige "PMOC › Criar" (renovar cria um plano novo). */
 export async function GET(_: NextRequest, { params }: Params) {
-  const guard = await exigirPermissao("pmoc", "editar");
+  const guard = await exigirPermissao("pmoc", "criar");
   if (guard.erro) return guard.resposta;
   const { id } = await params;
   const previa = await previaDaRenovacao(id, guard.session.user!.empresaId);
@@ -18,10 +18,10 @@ export async function GET(_: NextRequest, { params }: Params) {
 /**
  * Renova o plano: cria um plano NOVO, em rascunho, para a vigência informada, com os equipamentos
  * ativos e o cronograma deslocado. Não leva ART, link público, histórico, avisos, ocorrências nem as OS geradas.
- * Exige "PMOC › Editar".
+ * Exige "PMOC › Criar" — a mesma permissão de criar e de copiar um plano (antes pedia "Editar").
  */
 export async function POST(req: NextRequest, { params }: Params) {
-  const guard = await exigirPermissao("pmoc", "editar");
+  const guard = await exigirPermissao("pmoc", "criar");
   if (guard.erro) return guard.resposta;
   const { session } = guard;
   const { id } = await params;

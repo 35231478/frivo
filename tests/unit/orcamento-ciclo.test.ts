@@ -51,7 +51,8 @@ describe("etapaCiclo", () => {
     }
     expect(LABELS_ETAPA.RECUSADO).toBe("Recusado");
     expect(LABELS_ETAPA.VISUALIZADO).toBe("Visualizado");
-    expect(LABELS_ETAPA.EXPIRADO).toBe("Expirado");
+    // (leva 3 do go-live) um termo só na área: "Vencido", como o card "Vencidos" e a "Validade" do cliente
+    expect(LABELS_ETAPA.EXPIRADO).toBe("Vencido");
   });
 });
 

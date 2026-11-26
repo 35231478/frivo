@@ -13,7 +13,6 @@ import { Textarea } from "@/components/ui/textarea";
 import { PhoneInput } from "@/components/ui/phone-input";
 import { WhatsAppInput } from "@/components/ui/whatsapp-input";
 import { EmailsInput } from "@/components/ui/emails-input";
-import { StarRating } from "@/components/ui/star-rating";
 import { FormField, FormSection, FormGrid } from "@/components/ui/form-field";
 import { UnidadesManager } from "@/components/forms/unidades-manager";
 import { UnidadesLocal, type UnidadeLocal } from "@/components/forms/unidades-local";
@@ -46,6 +45,9 @@ import {
 } from "lucide-react";
 import { AlertaPerdasCliente, type PerdasCliente } from "@/components/financeiro/alerta-perdas-cliente";
 import { FichaCliente } from "@/components/clientes/ficha-cliente";
+import { NomeNaTrilha } from "@/components/layout/nome-na-trilha";
+import { SatisfacaoFicha } from "@/components/clientes/satisfacao-cliente";
+import type { ResumoSatisfacao } from "@/lib/clientes/satisfacao";
 
 type ResponsavelItem = Pick<Tecnico, "id" | "nome" | "crea">;
 type AnexoItem = { id: string; nome: string; tipo: string; tamanho: number; criadoEm: string | Date };
@@ -70,6 +72,8 @@ interface ClienteFormProps {
   consulta?: boolean;
   /** Aba aberta ao chegar (?aba=), para "Editar" manter a aba em que a pessoa estava */
   abaInicial?: string;
+  /** A satisfação de verdade: a média das notas do aceite das OS do cliente (lib/clientes/satisfacao) */
+  satisfacaoAceite?: ResumoSatisfacao | null;
 }
 
 const IDS_ABAS = ["geral", "atendimento", "comunicacao", "portal", "relacionamento", "documentos"];
@@ -90,7 +94,7 @@ function Painel({ ativo, children }: { ativo: boolean; children: React.ReactNode
   return <div className={cn("space-y-8", !ativo && "hidden")}>{children}</div>;
 }
 
-export function ClienteForm({ initialData, statusFinanceiroCalc, perdas12m, consulta: consultaPedida, abaInicial }: ClienteFormProps) {
+export function ClienteForm({ initialData, statusFinanceiroCalc, perdas12m, consulta: consultaPedida, abaInicial, satisfacaoAceite }: ClienteFormProps) {
   const router = useRouter();
   const isEditing = !!initialData;
   // Consulta só existe para um cliente que já existe (o "novo" é sempre formulário)
@@ -117,7 +121,6 @@ export function ClienteForm({ initialData, statusFinanceiroCalc, perdas12m, cons
   const [sugestaoContato, setSugestaoContato] = useState<ContatoConsulta | null>(null);
   const [consultaNonce, setConsultaNonce] = useState(0);
   const [config, setConfig] = useState<Partial<Configuracao>>({});
-  const [satisfacao, setSatisfacao] = useState<number | null>(initialData?.satisfacao ?? null);
 
   // Abas
   const [aba, setAba] = useState(abaInicial && IDS_ABAS.includes(abaInicial) ? abaInicial : "geral");
@@ -273,7 +276,6 @@ export function ClienteForm({ initialData, statusFinanceiroCalc, perdas12m, cons
 
     const payload: any = {
       ...data,
-      satisfacao,
       tabelaPrecoId: tabelaPrecoId || null,
       portalAtivo,
       // Segmento e Origem não são mais editáveis no formulário; preserva o valor
@@ -401,6 +403,7 @@ export function ClienteForm({ initialData, statusFinanceiroCalc, perdas12m, cons
 
   return (
     <form onSubmit={salvar} className="min-h-full -m-6 bg-surface-page p-4 sm:p-6">
+      {isEditing && <NomeNaTrilha id={initialData!.id} nome={initialData!.nomeFantasia || initialData!.nome} />}
       <div className="max-w-[1600px] mx-auto space-y-5">
         {/* Cabeçalho fixo: título + status + ações */}
         <div className="sticky top-0 z-30 -mx-4 sm:-mx-6 px-4 sm:px-6 py-3 bg-surface-page/90 backdrop-blur border-b border-surface-border">
@@ -738,14 +741,12 @@ export function ClienteForm({ initialData, statusFinanceiroCalc, perdas12m, cons
 
       {/* ABA 6 — Relacionamento */}
       <Painel ativo={aba === "relacionamento"}>
-        <FormSection title="Satisfação" icon={<Star className="w-3.5 h-3.5" />}>
-          <div className="flex items-center gap-3">
-            <span className="text-sm text-ink-muted">Nível de satisfação:</span>
-            {consulta
-              ? (satisfacao ? <StarRating value={satisfacao} readOnly /> : <span className="text-sm text-ink-muted">Não informado</span>)
-              : <StarRating value={satisfacao} onChange={(v) => { setSatisfacao(v || null); setValue("satisfacao", v || null); }} />}
-          </div>
-        </FormSection>
+        {/* A satisfação vem do aceite das OS (média das notas): não se digita mais — o campo manual saiu */}
+        {isEditing && (
+          <FormSection title="Satisfação" icon={<Star className="w-3.5 h-3.5" />} dica="Média das notas que o cliente deu ao confirmar o serviço (aceite da OS), de 1 a 5 estrelas.">
+            <SatisfacaoFicha resumo={satisfacaoAceite} />
+          </FormSection>
+        )}
         {isEditing && (
           <FormSection title="Histórico de interações" icon={<MessageSquare className="w-3.5 h-3.5" />}>
             <fieldset disabled={consulta} className="min-w-0"><InteracoesManager clienteId={initialData!.id} interacoesIniciais={initialData!.interacoes ?? []} /></fieldset>

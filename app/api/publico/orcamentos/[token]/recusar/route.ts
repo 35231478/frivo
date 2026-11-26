@@ -25,7 +25,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tok
   const orcamento = await prisma.orcamento.findUnique({ where: { tokenPublico: token }, select: { id: true, empresaId: true, status: true, validadeEm: true } });
   if (!orcamento) return NextResponse.json({ erro: "Orçamento não encontrado" }, { status: 404 });
   if (orcamento.status !== "ENVIADO") return NextResponse.json({ erro: "Este orçamento não está disponível para resposta" }, { status: 400 });
-  if (diaCivilPassou(orcamento.validadeEm)) return NextResponse.json({ erro: "Orçamento expirado" }, { status: 410 });
+  if (diaCivilPassou(orcamento.validadeEm)) return NextResponse.json({ erro: "Orçamento vencido: a validade terminou." }, { status: 410 });
 
   const ip = ipDaRequisicao(req.headers);
   const r = await prisma.orcamento.updateMany({

@@ -2,6 +2,8 @@ import { prisma } from "@/lib/prisma";
 import { calcularStatusFinanceiroDetalhado } from "@/lib/status-financeiro";
 import { contatoSeguro } from "@/lib/contato-cliente";
 import { perdasRecentesDoCliente } from "@/lib/financeiro/perda-estorno-server";
+import { satisfacaoDosClientes } from "@/lib/clientes/satisfacao-server";
+import { SEM_AVALIACAO } from "@/lib/clientes/satisfacao";
 
 /**
  * O cliente como a ficha e a edição precisam: o mesmo carregamento nas duas telas (/clientes/[id] em
@@ -22,11 +24,12 @@ export async function carregarFichaCliente(id: string, empresaId: string) {
   });
   if (!cliente) return null;
 
-  const [{ status, totalProximos30Dias }, perdas12m] = await Promise.all([
+  const [{ status, totalProximos30Dias }, perdas12m, satisfacao] = await Promise.all([
     calcularStatusFinanceiroDetalhado(id, empresaId),
     perdasRecentesDoCliente(id, empresaId),
+    satisfacaoDosClientes(empresaId, [id]),
   ]);
   // Contatos vão para o client sem hash/senha do portal
   const dados = { ...cliente, contatosCliente: cliente.contatosCliente.map(contatoSeguro) };
-  return { dados, status, totalProximos30Dias, perdas12m };
+  return { dados, status, totalProximos30Dias, perdas12m, satisfacao: satisfacao.get(id) ?? SEM_AVALIACAO };
 }

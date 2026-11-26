@@ -108,7 +108,7 @@ const ETAPA_DO_STATUS: Record<string, string> = { REPROVADO: "RECUSADO", CONVERT
 export function whereOrcamentos(empresaId: string, sp: SP, agora = new Date()) {
   const where: any = { empresaId };
   const e: any[] = [];
-  // Filtro pela etapa do ciclo (Visualizado/Expirado dependem das datas: lib/orcamentos/ciclo.ts)
+  // Filtro pela etapa do ciclo (Visualizado/Vencido dependem das datas: lib/orcamentos/ciclo.ts)
   const etapa = sp.status ? ETAPA_DO_STATUS[sp.status] ?? sp.status : "";
   const porEtapa = etapa ? whereEtapa(etapa, hojeDiaCivil(agora)) : null;
   // Cancelado = orçamento inativado: fica fora da lista padrão (filtre o status ou marque "Mostrar cancelados")

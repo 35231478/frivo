@@ -1,13 +1,13 @@
 /**
  * Ciclo do orçamento — regra pura (tela, lista, link público e servidor usam a mesma):
  *
- *   Rascunho → Enviado → Visualizado → Aprovado / Recusado / Expirado   (+ Cancelado, Convertido)
+ *   Rascunho → Enviado → Visualizado → Aprovado / Recusado / Vencido   (+ Cancelado, Convertido)
  *
  * O status GRAVADO continua o de sempre (RASCUNHO, ENVIADO, APROVADO, REPROVADO, CANCELADO,
- * CONVERTIDA). "Visualizado" e "Expirado" são DERIVADOS de um orçamento ENVIADO:
+ * CONVERTIDA). "Visualizado" e "Vencido" (chave EXPIRADO) são DERIVADOS de um orçamento ENVIADO:
  *  - Visualizado: o cliente abriu o link (visualizadoEm);
- *  - Expirado: passou o dia da validade (dia civil, Brasília) sem resposta.
- * Assim nada do que já filtra por ENVIADO (lembretes, aprovação, ações em massa) muda, e "Expirado"
+ *  - Vencido: passou o dia da validade (dia civil, Brasília) sem resposta.
+ * Assim nada do que já filtra por ENVIADO (lembretes, aprovação, ações em massa) muda, e "Vencido"
  * é sempre exato (não depende de uma rotina rodar).
  */
 import { diaCivilPassou } from "@/lib/fuso";
@@ -23,7 +23,9 @@ export const LABELS_ETAPA: Record<EtapaCiclo, string> = {
   VISUALIZADO: "Visualizado",
   APROVADO: "Aprovado",
   RECUSADO: "Recusado",
-  EXPIRADO: "Expirado",
+  // "Vencido" (e não expirado): o par natural de "Validade"/"Válido até", o termo do comércio para o
+  // cliente final e o mesmo do card "Vencidos" e do lembrete ("vence em X dias"). A chave segue EXPIRADO.
+  EXPIRADO: "Vencido",
   CANCELADO: "Cancelado",
   CONVERTIDO: "Convertido",
 };
@@ -88,7 +90,7 @@ export function bloqueioEnvio(o: OrcamentoCiclo, agora: Date = new Date()): stri
   return null;
 }
 
-/** Dia seguinte ao último dia da validade (quando virou "Expirado"), como dia civil "AAAA-MM-DD". */
+/** Dia seguinte ao último dia da validade (quando virou "Vencido"), como dia civil "AAAA-MM-DD". */
 function diaSeguinte(d: Date | string): Date {
   const x = new Date(d);
   return new Date(Date.UTC(x.getUTCFullYear(), x.getUTCMonth(), x.getUTCDate() + 1));
@@ -127,7 +129,7 @@ export function marcosCiclo(o: OrcamentoCiclo, agora: Date = new Date()): MarcoC
     m.push({ etapa: "RECUSADO", rotulo: "Recusado", em: recusado, detalhe: [o.recusadoPor, o.recusaMotivo && `“${o.recusaMotivo}”`].filter(Boolean).join(" · ") || null });
   }
   if (etapaCiclo(o, agora) === "EXPIRADO" && o.validadeEm) {
-    m.push({ etapa: "EXPIRADO", rotulo: "Expirado (validade vencida sem resposta)", em: diaSeguinte(o.validadeEm), detalhe: null });
+    m.push({ etapa: "EXPIRADO", rotulo: "Vencido (passou da validade sem resposta)", em: diaSeguinte(o.validadeEm), detalhe: null });
   }
   return m.sort((a, b) => a.em.getTime() - b.em.getTime());
 }
@@ -140,7 +142,7 @@ export function dataDaEtapa(o: OrcamentoCiclo, agora: Date = new Date()): Date |
 }
 
 /**
- * Filtro da lista pela etapa: o `where` do Prisma para cada uma (Visualizado/Expirado/Enviado
+ * Filtro da lista pela etapa: o `where` do Prisma para cada uma (Visualizado/Vencido/Enviado
  * dependem das datas). `hoje` = início do dia civil de hoje (gravado como meia-noite UTC).
  */
 export function whereEtapa(etapa: string, hoje: Date): Record<string, unknown> | null {

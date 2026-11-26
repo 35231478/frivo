@@ -13,7 +13,7 @@ export interface EventoLinha {
   usuario?: { nome: string } | null;
 }
 
-/** As etapas do caminho feliz, na ordem (Recusado/Expirado/Cancelado substituem o fim). */
+/** As etapas do caminho feliz, na ordem (Recusado/Vencido/Cancelado substituem o fim). */
 const TRILHA: EtapaCiclo[] = ["RASCUNHO", "ENVIADO", "VISUALIZADO", "APROVADO"];
 
 const ICONE_EVENTO: Record<string, typeof Circle> = {
@@ -39,7 +39,7 @@ export function PilulaEtapa({ etapa, desde, compacta }: {
 
 /**
  * Ciclo do orçamento na tela interna: a trilha (Rascunho → Enviado → Visualizado → Aprovado, ou o
- * fim que aconteceu: Recusado/Expirado/Cancelado) com a data de cada marco, e a linha do tempo dos
+ * fim que aconteceu: Recusado/Vencido/Cancelado) com a data de cada marco, e a linha do tempo dos
  * envios e respostas (quem, quando, por qual canal, IP do cliente).
  */
 export function CicloOrcamento({ orcamento, eventos, agora = new Date() }: { orcamento: OrcamentoCiclo; eventos: EventoLinha[]; agora?: Date }) {

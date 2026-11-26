@@ -286,7 +286,7 @@ export function PmocEditor({ inicial, abaInicial, copiaRecente, criadoRecente, r
           className={cn("flex items-center gap-3 flex-wrap rounded-xl px-4 py-3 text-sm border", aviso.tipo === "EXPIRADO" ? "bg-atrasado-claro border-atrasado/20 text-atrasado-texto" : "bg-atencao-claro border-atencao/20 text-atencao-texto")}>
           {aviso.tipo === "EXPIRADO" ? <ShieldX className="w-4 h-4 shrink-0" /> : <ShieldAlert className="w-4 h-4 shrink-0" />}
           <span className="flex-1 min-w-[12rem]">
-            <strong>{textoAviso(aviso, pmoc.dataExpiracao)}.</strong> Use “Renovar” para criar o plano da próxima vigência, já com o cronograma.
+            <strong>{textoAviso(aviso, pmoc.dataExpiracao)}.</strong>{pode("pmoc", "criar") && " Use “Renovar” para criar o plano da próxima vigência, já com o cronograma."}
           </span>
           {pode("pmoc", "editar") && (
             <button type="button" onClick={darCiencia} disabled={dandoCiencia} data-ciente

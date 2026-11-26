@@ -15,7 +15,7 @@ export type Permissoes = Record<string, Partial<Record<Acao, boolean>>>;
 /** Nome do ícone (lucide-react) que representa o módulo na UI — este arquivo não importa a biblioteca. */
 export type IconeModulo =
   | "ClipboardList" | "Users" | "Thermometer" | "CalendarDays" | "QrCode" | "Package" | "ShoppingCart" | "Calculator"
-  | "FileText" | "Landmark" | "Wallet" | "UsersRound" | "Truck" | "Settings" | "BarChart3" | "LayoutDashboard" | "FileBadge" | "Trophy"
+  | "FileText" | "Wallet" | "UsersRound" | "Truck" | "Settings" | "BarChart3" | "LayoutDashboard" | "FileBadge" | "Trophy"
   | "UserPlus" | "FileSignature";
 export interface ModuloDef { id: string; label: string; icone: IconeModulo; acoes: Acao[] }
 export interface SecaoDef { id: string; label: string; modulos: ModuloDef[] }
@@ -66,7 +66,6 @@ export const SECOES: SecaoDef[] = [
       // cliente; sem ela, o custo nem chega ao navegador (lib/orcamentos/estoque-margem-server). Padrão: só administrador.
       { id: "orcamentos", label: "Orçamentos", icone: "Calculator", acoes: ["visualizar", "criar", "editar", "aprovar", "excluir", "verCusto"] },
       { id: "contratos", label: "Contratos", icone: "FileText", acoes: ["visualizar", "criar", "editar"] },
-      { id: "licitacoes", label: "Licitações", icone: "Landmark", acoes: ["visualizar", "gerenciar"] },
     ],
   },
   {
@@ -109,6 +108,15 @@ export const MODULOS: ModuloDef[] = [
   { id: "dashboard", label: "Dashboard", icone: "LayoutDashboard", acoes: ["visualizar"] },
   ...SECOES.flatMap((s) => s.modulos),
 ];
+const MODULOS_POR_ID = new Set(MODULOS.map((m) => m.id));
+
+/**
+ * Módulos que já existiram e saíram do sistema. A chave pode continuar nos perfis gravados (nada é
+ * apagado); aqui só fica registrado o porquê.
+ *  - "licitacoes" (Licitações): só existia como permissão (no cadastro de perfis e no preset Financeiro) —
+ *    nunca teve tela, rota de API, item de menu nem tabela. Saiu na leva 3.
+ */
+export const MODULOS_REMOVIDOS = ["licitacoes"] as const;
 
 export function permissoesVazias(): Permissoes {
   const p: Permissoes = {};
@@ -203,6 +211,9 @@ export function permissoesExcedentes(
   const faltando: string[] = [];
   for (const [modulo, acoes] of Object.entries(alvo ?? {})) {
     if (modulo === "dashboard") continue;
+    // Módulo que não existe mais (ex.: "licitacoes", removido na leva 3) não concede nada: a chave fica nos
+    // perfis gravados (nada é apagado), mas não pode travar quem edita um perfil por uma permissão invisível
+    if (!MODULOS_POR_ID.has(modulo)) continue;
     for (const [acao, ligado] of Object.entries(acoes ?? {})) {
       if (ligado === true && base?.[modulo]?.[acao as Acao] !== true) faltando.push(`${modulo}.${acao}`);
     }
@@ -224,7 +235,6 @@ const ROTA_MODULO: Record<string, string> = {
   qrcodes: "qrcodes",
   orcamentos: "orcamentos",
   contratos: "contratos",
-  licitacoes: "licitacoes",
   financeiro: "financeiro",
   equipes: "equipes",
   colaboradores: "equipes",
@@ -349,7 +359,6 @@ export const PRESETS: Record<string, Permissoes> = {
     ordens: ["visualizar"],
     orcamentos: ["visualizar", "criar", "editar", "aprovar"],
     contratos: ["visualizar", "criar", "editar"],
-    licitacoes: ["visualizar", "gerenciar"],
     financeiro: ["visualizar", "medicoes", "contasReceber", "fluxoCaixa", "folha", "fiscal"],
     compras: ["visualizar", "gerenciar"],
     estoque: ["visualizar"],

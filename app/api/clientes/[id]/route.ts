@@ -82,7 +82,9 @@ export async function PUT(req: NextRequest, { params }: Params) {
       responsavelTecnicoId: responsavelTecnicoId || null,
       segmento: segmento || null,
       origem: origem || null,
-      satisfacao: satisfacao ?? null,
+      // O campo manual de satisfação saiu da tela (a satisfação é a média do aceite das OS): só grava se
+      // vier explícito — a edição do cadastro não apaga o que já estava no banco
+      ...(satisfacao !== undefined && { satisfacao }),
     },
   });
   return NextResponse.json(atualizado);

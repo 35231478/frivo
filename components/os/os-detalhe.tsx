@@ -19,6 +19,7 @@ import { OsAceite } from "@/components/os/os-aceite";
 import { CabecalhoOs } from "@/components/os/central/cabecalho-os";
 import { ResumoOs } from "@/components/os/central/resumo-os";
 import { PainelAtividades } from "@/components/os/central/painel-atividades";
+import { NomeNaTrilha } from "@/components/layout/nome-na-trilha";
 import { usePermissoes } from "@/components/providers/permissoes-provider";
 import { centralDaOs } from "@/lib/os/central";
 import { situacaoDaOs } from "@/lib/edicao-contexto";
@@ -125,6 +126,7 @@ export function OsDetalhe({ os: initialOs, abaInicial, verCusto = false }: {
 
   return (
     <div className="space-y-5" data-os-central>
+      <NomeNaTrilha id={os.id} nome={os.chamadoNumero ?? os.numero} />
       <CabecalhoOs
         os={os} central={central} acoes={acoes} onAba={irPara}
         onAtualizado={(d) => setOs((prev: any) => ({ ...prev, ...d }))}
