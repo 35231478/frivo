@@ -205,6 +205,28 @@ describe.skipIf(!URL_PG)("Orçamento, leva D — impressão do orçamento (Postg
     expect(html).toContain("R$ 799,60");
   });
 
+  it("ISS 5% (versão do cliente, a impressão): materiais na mesma base do serviço; a soma exibida bate; o total não muda", async () => {
+    await prisma.orcamento.update({ where: { id: orc }, data: { issAliquota: 5 } });
+    try {
+      const html = await impressao();
+      const valores = [...html.matchAll(/data-valor-material[^>]*>([\s\S]*?)<\/span>/g)].map((m) => m[1].replace(/<[^>]+>/g, "").replace(/\s+/g, " ").trim());
+      const totais = valores.map((v) => Number(v.split("· R$")[1].replace(/\./g, "").replace(",", ".").trim()));
+      // serviço 440 → 462 (fator 1,05); materiais 179,80 + 12,50 = 192,30 → × 1,05 = 201,92
+      expect(html).toMatch(/data-total-item[^>]*>462,00</);
+      expect(Math.round(totais.reduce((a, b) => a + b, 0) * 100) / 100).toBe(201.92);
+      expect(valores[0]).toMatch(/^R\$\s94,40\/un · R\$\s188,79$/);
+      expect(html).not.toMatch(/179,80|38,50|6,90/);
+      // total geral: 462 + 359,60 = 821,60 — igual com ou sem materiais
+      expect(html).toContain("R$ 821,60");
+      VENDEDOR();
+      expect((await opcoes({ mostrarMateriais: false, mostrarValoresMateriais: false })).status).toBe(200);
+      expect(await impressao()).toContain("R$ 821,60");
+      expect((await opcoes({ mostrarMateriais: true, mostrarValoresMateriais: true })).status).toBe(200);
+    } finally {
+      await prisma.orcamento.update({ where: { id: orc }, data: { issAliquota: 0 } });
+    }
+  });
+
   it("aprovado ou cancelado: 409 com o motivo, nada muda", async () => {
     VENDEDOR();
     await prisma.orcamento.update({ where: { id: orc }, data: { status: "APROVADO" } });

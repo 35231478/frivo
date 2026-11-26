@@ -7,7 +7,7 @@
  *    empresa; sem relatório, sem link; nunca endereço interno.
  */
 import { describe, expect, it } from "vitest";
-import { materiaisNoDocumento, opcoesDoDocumento, osDoDocumento, type MaterialOrcamentoEntrada } from "@/lib/orcamentos/documento-opcoes";
+import { fatorPrecoDoServico, materiaisNoDocumento, opcoesDoDocumento, osDoDocumento, type MaterialOrcamentoEntrada } from "@/lib/orcamentos/documento-opcoes";
 
 const M = (descricao: string, quantidade: unknown, valorVendaUnit: unknown, extra: Partial<MaterialOrcamentoEntrada> & { custoUnit?: unknown } = {}) => ({
   descricao, quantidade, valorVendaUnit, unidade: "un", comportamento: "INCLUSO_NO_SERVICO", ordem: 0, custoUnit: 7.77, ...extra,
@@ -88,6 +88,45 @@ describe("materiaisNoDocumento — os materiais dentro do serviço", () => {
     const original = [M("B", 1, 1, { ordem: 1 }), M("A", 1, 1, { ordem: 0 })];
     materiaisNoDocumento(original, LIGADO);
     expect(original.map((m) => m.descricao)).toEqual(["B", "A"]);
+  });
+});
+
+describe("ISS embutido — o material na MESMA base de preço do serviço (versão do cliente)", () => {
+  const soma = (xs: { valorTotal: number | null }[]) => Math.round(xs.reduce((a, m) => a + (m.valorTotal ?? 0), 0) * 100) / 100;
+
+  it("fator do serviço = valor no documento ÷ valor gravado; sem ISS (ou valor zerado) = 1", () => {
+    expect(fatorPrecoDoServico(440, 462)).toBeCloseTo(1.05, 10);
+    expect(fatorPrecoDoServico(440, 440)).toBe(1);
+    expect(fatorPrecoDoServico(0, 10)).toBe(1);
+    expect(fatorPrecoDoServico(440, 0)).toBe(1);
+    expect(fatorPrecoDoServico(Number.NaN, 10)).toBe(1);
+  });
+
+  it("ISS 5%: cada material sobe o mesmo 5% do serviço; a SOMA exibida bate exatamente com Σ preço × qtd × fator", () => {
+    const lista = [M("Filtro G4", 2, 89.9), M("Limpa-serpentina", 1, 38, { unidade: "L" }), M("Fita", 2, 12.5, { unidade: "rl" })];
+    const r = materiaisNoDocumento(lista, COM_VALORES, fatorPrecoDoServico(440, 462));
+    expect(r.map((m) => [m.valorUnitario, m.valorTotal])).toEqual([[94.4, 188.79], [39.9, 39.9], [13.13, 26.25]]);
+    // 242,80 × 1,05 = 254,94: a soma do que o cliente lê é exatamente essa
+    expect(soma(r)).toBe(254.94);
+    expect(soma(r)).toBe(Math.round(soma(materiaisNoDocumento(lista, COM_VALORES)) * 1.05 * 100) / 100);
+  });
+
+  it("fator que gera dízima: a sobra de centavo vai para quem tem a maior fração (nada se perde)", () => {
+    const lista = [M("A", 1, 10), M("B", 1, 10), M("C", 1, 10)];
+    const f = 30.01 / 30; // 30,00 → 30,01: um centavo que não divide por 3
+    const r = materiaisNoDocumento(lista, COM_VALORES, f);
+    expect(soma(r)).toBe(30.01);
+    expect(r.map((m) => m.valorTotal)).toEqual([10.01, 10, 10]);
+  });
+
+  it("fator 1 (sem ISS / versão interna): o preço cadastrado, intacto", () => {
+    expect(materiaisNoDocumento([M("Filtro", 2, 89.9)], COM_VALORES, 1)).toEqual([{ descricao: "Filtro", quantidade: 2, unidade: "un", valorUnitario: 89.9, valorTotal: 179.8 }]);
+  });
+
+  it("fator inválido vira 1; sem a opção de valores o fator não importa (nada de preço)", () => {
+    expect(materiaisNoDocumento([M("Filtro", 2, 89.9)], COM_VALORES, Number.NaN)[0].valorTotal).toBe(179.8);
+    expect(materiaisNoDocumento([M("Filtro", 2, 89.9)], COM_VALORES, -2)[0].valorTotal).toBe(179.8);
+    expect(materiaisNoDocumento([M("Filtro", 2, 89.9)], LIGADO, 1.05)[0]).toMatchObject({ valorUnitario: null, valorTotal: null });
   });
 });
 

@@ -151,6 +151,21 @@ describe("O documento — materiais dentro do serviço e a OS como link", () => 
     expect(d.innerHTML).not.toMatch(/38,50|38\.5|custo/i);
   });
 
+  it("ISS 5% (versão do cliente): os materiais vêm na mesma base do serviço e a soma exibida bate", async () => {
+    const d = await html({ mostrarMateriais: true, mostrarValoresMateriais: true, issAliquota: 5, totalGeral: 462,
+      servicos: [{ ...BASE.servicos[0], materiais: [...BASE.servicos[0].materiais, { descricao: "Fita", unidade: "rl", quantidade: 2, valorVendaUnit: 12.5, comportamento: "INCLUSO_NO_SERVICO", ordem: 2 }] }] });
+    // o serviço: 440 → 462 (ISS embutido, fator 1,05)
+    expect(t(d.querySelector("[data-linha-item] [data-total-item]"))).toBe("462,00");
+    const valores = [...d.querySelectorAll("[data-valor-material]")].map(t);
+    expect(valores).toEqual(["R$ 94,40/un · R$ 188,79", "R$ 13,13/rl · R$ 26,25"]);
+    const reais = (x: string) => Number(x.split("· R$ ")[1].replace(/\./g, "").replace(",", "."));
+    // a soma do que o cliente lê = Σ preço × qtd × 1,05 (179,80 + 25,00 = 204,80 → 215,04)
+    expect(Math.round(valores.map(reais).reduce((a, b) => a + b, 0) * 100) / 100).toBe(215.04);
+    // a versão interna (ISS em linha própria) mostra o preço cadastrado
+    const interna = await html({ mostrarMateriais: true, mostrarValoresMateriais: true, issAliquota: 5, totalGeral: 462 }, "interna");
+    expect(t(interna.querySelector("[data-valor-material]"))).toBe("R$ 89,90/un · R$ 179,80");
+  });
+
   it("valores sem materiais: nada (a regra vale no documento, não só na tela)", async () => {
     const d = await html({ mostrarMateriais: false, mostrarValoresMateriais: true });
     expect(d.querySelector("[data-materiais-servico]")).toBeNull();

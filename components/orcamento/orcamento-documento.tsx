@@ -1,7 +1,7 @@
 import { TimbreEmpresa } from "@/components/documento/timbre-empresa";
 import { EditarLinhaOrcamento } from "@/components/orcamento/editar-linha-orcamento";
 import { formatarCpfCnpj, formatarData, formatarMoeda, formatarTelefone, cn } from "@/lib/utils";
-import { calcularOrcamento, versaoCliente, type EntradaCalculo, type TipoDesconto } from "@/lib/orcamentos/calculo";
+import { calcularOrcamento, totalDoItem, versaoCliente, type EntradaCalculo, type TipoDesconto } from "@/lib/orcamentos/calculo";
 import { PLANILHA } from "@/lib/planilha";
 import { CLASSE_ETAPA, LABELS_ETAPA, etapaCiclo } from "@/lib/orcamentos/ciclo";
 import { linhasDadosBancarios } from "@/lib/orcamentos/dados-bancarios";
@@ -11,7 +11,7 @@ import {
   type ContatoPara, type UnidadePara,
 } from "@/lib/orcamentos/proposta";
 import {
-  materiaisNoDocumento, opcoesDoDocumento, osDoDocumento,
+  fatorPrecoDoServico, materiaisNoDocumento, opcoesDoDocumento, osDoDocumento,
   type MaterialDocumento, type MaterialOrcamentoEntrada, type OpcoesDocumentoOrcamento, type OsVinculadaComLink,
 } from "@/lib/orcamentos/documento-opcoes";
 import { formatarQtd } from "@/lib/estoque/regras";
@@ -513,7 +513,8 @@ export function OrcamentoDocumento({ orcamento, empresa, cliente, anexos = [], v
 
 /**
  * Leva D — os materiais INCLUSOS no serviço, recuados dentro da linha dele ("Materiais inclusos"): descrição e
- * quantidade; com a opção de valores, o preço de venda (unitário e total). Já vêm sem custo (materiaisNoDocumento).
+ * quantidade; com a opção de valores, o preço de venda (unitário e total) na mesma base de preço do serviço (na versão
+ * do cliente, com o ISS embutido como no serviço). Já vêm sem custo (materiaisNoDocumento).
  */
 function MateriaisDoServico({ materiais }: { materiais: MaterialDocumento[] }) {
   if (!materiais.length) return null;
@@ -589,7 +590,7 @@ function TabelaGrupo({ titulo, rotulo, itens, grupo, edicao, opcoes }: {
                   <TextoItemDocumento item={it} />
                   <p className="sm:hidden text-[11px] text-ink-muted tabular-nums" data-qtd-unitario-celular>{qtds[i]} × {formatarMoeda(grupo.itens[i]?.valorUnitario ?? 0)}</p>
                   {/* Os materiais vêm depois da linha do serviço (no celular, depois de "2 × R$ 220,00"): ficam claramente dentro dele */}
-                  {opcoes && <MateriaisDoServico materiais={materiaisNoDocumento(it.materiais, opcoes)} />}
+                  {opcoes && <MateriaisDoServico materiais={materiaisNoDocumento(it.materiais, opcoes, fatorPrecoDoServico(totalDoItem(it), grupo.itens[i]?.valorTotal ?? 0))} />}
                 </td>
                 <td className={cn(td, "hidden sm:table-cell text-right text-ink-muted tabular-nums whitespace-nowrap")} data-qtd>{qtds[i]}</td>
                 <td className={cn(td, "hidden sm:table-cell text-right text-ink-muted tabular-nums whitespace-nowrap")} data-unitario>{valorSemMoeda(grupo.itens[i]?.valorUnitario ?? 0)}</td>

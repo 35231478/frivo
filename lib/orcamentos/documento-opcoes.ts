@@ -15,6 +15,7 @@
  *    si não tem link público (o cliente não tem login): sem esse relatório, o número fica só texto.
  */
 import { numerosOsDoDocumento } from "@/lib/orcamentos/proposta";
+import { repartir } from "@/lib/orcamentos/calculo";
 
 export interface OpcoesDocumentoOrcamento {
   mostrarMateriais: boolean;
@@ -50,28 +51,43 @@ const num = (v: unknown) => { const n = typeof v === "number" ? v : Number(v ?? 
 const round = (v: number, casas: number) => { const f = 10 ** casas; return Math.round((v + Number.EPSILON) * f) / f; };
 
 /**
+ * O fator de preço da linha do serviço no documento: o valor que o documento mostra ÷ o valor gravado. Na versão do
+ * cliente com ISS, é o ISS embutido no serviço (ex.: 462 ÷ 440 = 1,05); sem ISS, ou na versão interna (ISS em linha
+ * própria), é 1. Os materiais do serviço usam o MESMO fator: ficam na mesma base de preço do serviço.
+ */
+export function fatorPrecoDoServico(valorGravado: number, valorNoDocumento: number): number {
+  if (!(valorGravado > 0) || !(valorNoDocumento > 0)) return 1;
+  const f = valorNoDocumento / valorGravado;
+  return Number.isFinite(f) ? f : 1;
+}
+
+/**
  * Os materiais de UM serviço no documento: só com "Mostrar materiais" ligado; só os INCLUSOS no serviço, com
- * quantidade e descrição, na ordem do orçamento. Preço de venda (unitário × quantidade) só com "Mostrar valores".
+ * quantidade e descrição, na ordem do orçamento. Preço de venda só com "Mostrar valores", na base de preço do serviço
+ * (`fatorPreco`, ver fatorPrecoDoServico): a soma dos totais exibidos é exatamente Σ (preço × quantidade) × fator,
+ * repartida sem perder centavo (lib/orcamentos/calculo → repartir, a mesma regra que embute o ISS nos serviços).
  */
 export function materiaisNoDocumento(
   materiais: readonly MaterialOrcamentoEntrada[] | null | undefined,
   opcoes: OpcoesDocumentoOrcamento,
+  fatorPreco = 1,
 ): MaterialDocumento[] {
   if (!opcoes.mostrarMateriais) return [];
-  return [...(materiais ?? [])]
+  const lista = [...(materiais ?? [])]
     .filter((m) => m.comportamento === "INCLUSO_NO_SERVICO" && num(m.quantidade) > 0 && !!m.descricao?.trim())
     .sort((a, b) => (a.ordem ?? 0) - (b.ordem ?? 0))
-    .map((m) => {
-      const quantidade = round(num(m.quantidade), 3);
-      const unitario = round(num(m.valorVendaUnit), 2);
-      return {
-        descricao: m.descricao.trim(),
-        quantidade,
-        unidade: m.unidade?.trim() || "un",
-        valorUnitario: opcoes.mostrarValoresMateriais ? unitario : null,
-        valorTotal: opcoes.mostrarValoresMateriais ? round(quantidade * unitario, 2) : null,
-      };
-    });
+    .map((m) => ({ descricao: m.descricao.trim(), quantidade: round(num(m.quantidade), 3), unidade: m.unidade?.trim() || "un", unitario: round(num(m.valorVendaUnit), 2) }));
+  if (!opcoes.mostrarValoresMateriais) {
+    return lista.map((m) => ({ descricao: m.descricao, quantidade: m.quantidade, unidade: m.unidade, valorUnitario: null, valorTotal: null }));
+  }
+  const brutos = lista.map((m) => round(m.quantidade * m.unitario, 2));
+  const f = Number.isFinite(fatorPreco) && fatorPreco > 0 ? fatorPreco : 1;
+  const totais = f === 1 ? brutos : repartir(round(brutos.reduce((a, b) => a + b, 0) * f, 2), brutos);
+  return lista.map((m, i) => ({
+    descricao: m.descricao, quantidade: m.quantidade, unidade: m.unidade,
+    valorUnitario: f === 1 ? m.unitario : round(totais[i] / m.quantidade, 2),
+    valorTotal: totais[i],
+  }));
 }
 
 /** OS vinculada como o documento recebe (com a "versão do cliente" da OS, se houver). */
