@@ -57,7 +57,11 @@ export async function PUT(req: NextRequest, { params }: Params) {
   // PR3-A/B: a automação do faturamento fatura sem ninguém olhar — pede Financeiro › Medições (+ Fiscal / Contas a receber)
   const faltaAutomacao = faltaPermissaoAutomacao(parsed.data, existente, session.user!);
   if (faltaAutomacao) return NextResponse.json({ erro: faltaAutomacao }, { status: 403 });
-  const { unidadeIds, recorrenciasLocais, prazosAtendimento, dataInicio, dataFim, valorMensal, valorTotal, responsavelTecnicoId, tipoOsRecorrenciaId, tecnicoRecorrenciaId, artVencimento, ...resto } = parsed.data;
+  const { unidadeIds, recorrenciasLocais, prazosAtendimento, dataInicio, dataFim, valorMensal, valorTotal, responsavelTecnicoId, tipoOsRecorrenciaId, tecnicoRecorrenciaId, artVencimento, status: _statusIgnorado, ...resto } = parsed.data;
+  // O status NÃO muda por aqui: o formulário só o mostra, e a troca passa por PATCH …/status (com as
+  // regras e o histórico dela). Antes, o padrão "ATIVO" do schema reativava um contrato suspenso ou
+  // encerrado a cada edição que não mandasse o campo.
+  void _statusIgnorado;
   // Cliente, locais, tipos de OS e técnicos (inclusive os da recorrência por local) precisam ser da mesma empresa
   try {
     await Promise.all([
