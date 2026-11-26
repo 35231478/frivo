@@ -27,7 +27,7 @@ dia, horário registrado na atividade e no histórico da OS, e-mail ao cliente s
 | Estado | Quando | O card mostra | Tocar no card | Ações |
 |---|---|---|---|---|
 | **Antes de chegar** | Agendada, sem toque hoje | "Agendada", seta para baixo | Expande / recolhe | Rota · **Cheguei** · "Avisar que estou a caminho" |
-| **A caminho** | Tocou "A caminho" hoje | "A caminho" + registro "avisado às 13:40" | Expande / recolhe | Rota · **Cheguei** |
+| **A caminho** | Tocou "A caminho" hoje | "Em deslocamento" (o mesmo nome e tom que o gestor vê no painel e no calendário — `docs/atividade-em-deslocamento.md`) + registro "A caminho · avisado às 13:40" | Expande / recolhe | Rota · **Cheguei** |
 | **Chegou** | Tocou "Cheguei" hoje | "No local" + registro "avisado às 14:02" | Abre a OS | Câmera · Rota |
 | **Em andamento** | Já tem gravação (de hoje ou de outro dia) | "Em andamento" | Abre a OS | Câmera · Rota |
 | **Concluída** | — | "Concluída", esmaecida | Abre para leitura | Rota |

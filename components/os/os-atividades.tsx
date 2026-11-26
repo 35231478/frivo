@@ -23,10 +23,16 @@ import { InputDataHora, MSG_HORA_INVALIDA } from "@/components/ui/input-data-hor
 import { numerarVisitas } from "@/lib/os/visitas";
 import { observacaoCurta, ordenarParaPainel } from "@/lib/os/painel-atividades";
 import { StatusPill, type TomStatus } from "@/components/ui/status-pill";
+import { ROTULO_ESTADO_ATIVIDADE, TOM_ESTADO_ATIVIDADE, estadoVisivelDaAtividade } from "@/lib/os/estado-atividade";
 
-/** O estado da atividade: o mesmo rótulo e o mesmo tom em toda a OS (lista, plano de visitas, calendário) */
+/**
+ * O estado da atividade: o mesmo rótulo e o mesmo tom em toda a OS (lista, plano de visitas, calendário).
+ * O selo mostra o estado VISÍVEL (lib/os/estado-atividade): "Em deslocamento" quando o técnico tocou
+ * "A caminho" hoje e ainda não chegou — derivado dos avisos, sem status novo. O seletor de status do
+ * escritório continua com os quatro status gravados.
+ */
 const STATUS_LABELS: Record<string, string> = { AGENDADA: "Agendada", EM_ANDAMENTO: "Em andamento", CONCLUIDA: "Concluída", CANCELADA: "Cancelada" };
-const TOM_STATUS: Record<string, TomStatus> = { AGENDADA: "acento", EM_ANDAMENTO: "atencao", CONCLUIDA: "ok", CANCELADA: "atrasado" };
+const TOM_STATUS: Record<string, TomStatus> = TOM_ESTADO_ATIVIDADE;
 
 /** O máximo de atividades que uma OS comporta pela lista (o plano de visitas tem o limite próprio) */
 export const ATIVIDADES_MAX = 20;
@@ -257,8 +263,9 @@ export function OsAtividades({ osId, atividades: iniciais, clienteId, unidadeId,
       {lista.map((a) => {
         const aberto = expandido.has(a.id);
         const obs = observacaoCurta(a.observacao);
+        const estado = estadoVisivelDaAtividade(a);
         return (
-          <div key={a.id} className="border border-surface-border rounded-lg overflow-hidden" data-atividade={a.id} data-status-atividade={a.status}>
+          <div key={a.id} className="border border-surface-border rounded-lg overflow-hidden" data-atividade={a.id} data-status-atividade={a.status} data-estado-atividade={estado}>
             <button type="button" onClick={() => toggleExpand(a.id)} data-abrir-atividade={a.id} aria-expanded={aberto}
               className="flex items-center justify-between w-full p-3 text-left hover:bg-surface-page transition-colors">
               <div className="flex items-center gap-3 min-w-0">
@@ -267,7 +274,7 @@ export function OsAtividades({ osId, atividades: iniciais, clienteId, unidadeId,
                   <div className="flex items-center gap-2 flex-wrap">
                     <span className="text-sm font-medium text-ink">{a.titulo}</span>
                     {a.tipoOs && <span className="inline-flex items-center gap-1 text-[10px] font-medium text-ink-muted bg-surface-page border border-surface-border px-1.5 py-0.5 rounded-full"><span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: a.tipoOs.cor }} aria-hidden />{a.tipoOs.nome}</span>}
-                    <StatusPill tom={TOM_STATUS[a.status] ?? "previsto"} tamanho="sm" data-selo-atividade={a.status}>{STATUS_LABELS[a.status]}</StatusPill>
+                    <StatusPill tom={TOM_STATUS[estado] ?? "previsto"} tamanho="sm" data-selo-atividade={estado}>{ROTULO_ESTADO_ATIVIDADE[estado] ?? STATUS_LABELS[a.status]}</StatusPill>
                     {visitas.get(a.id) && (
                       <span data-chip-visita className="text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-surface-page border border-surface-border text-ink-muted">
                         Visita {visitas.get(a.id)!.numero} de {visitas.get(a.id)!.total}

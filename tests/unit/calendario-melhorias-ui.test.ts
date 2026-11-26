@@ -76,22 +76,27 @@ const EVENTOS = {
   ],
   "2026-11-18": [card("atr", "2026-11-18", { status: "ABERTA", atrasada: true, origem: "RECORRENTE" })],
 };
-const GRUPOS: GrupoStatus[] = ["aberta", "andamento", "concluida", "atrasada", "neutra"];
+const GRUPOS: GrupoStatus[] = ["aberta", "deslocamento", "andamento", "concluida", "atrasada", "neutra"];
 
 /* ═════════ o status no cartão: acento, não fundo ═════════ */
-describe("Calendário — o cartão da OS é neutro e o status é uma barra à esquerda (4 cores, legível em AA)", () => {
+describe("Calendário — o cartão da OS é neutro e o status é uma barra à esquerda (5 cores, legível em AA)", () => {
   it("cada status cai no seu grupo; atrasada vence o status; desconhecido fica neutro", () => {
     const g = (status: string, atrasada = false) => grupoDoCard({ status, atrasada });
+    // "Em deslocamento" (técnico a caminho hoje) vence o status da OS, mas não a atrasada
+    expect([grupoDoCard({ status: "AGENDADA", deslocamento: true }), grupoDoCard({ status: "EM_ANDAMENTO", deslocamento: true }), grupoDoCard({ status: "ABERTA", atrasada: true, deslocamento: true })])
+      .toEqual(["deslocamento", "deslocamento", "atrasada"]);
+    expect(grupoDoCard({ status: "AGENDADA", deslocamento: false })).toBe("aberta");
     expect(["ABERTA", "AGUARDANDO_ATENDIMENTO", "AGENDADA"].map((s) => g(s))).toEqual(["aberta", "aberta", "aberta"]);
     expect(["EM_ANDAMENTO", "PAUSADA", "AGUARDANDO_PECA"].map((s) => g(s))).toEqual(["andamento", "andamento", "andamento"]);
     expect([g("CONCLUIDA"), g("CANCELADA"), g("QUALQUER")]).toEqual(["concluida", "neutra", "neutra"]);
     expect([g("ABERTA", true), g("EM_ANDAMENTO", true)]).toEqual(["atrasada", "atrasada"]);
   });
 
-  it("paleta enxuta: uma cor por status que aparece no calendário (4), todas dos tokens — e o fundo é o MESMO para todos", () => {
-    // cancelada não entra no calendário; as 4 que aparecem têm cada uma a sua cor
-    const visiveis: GrupoStatus[] = ["aberta", "andamento", "concluida", "atrasada"];
-    expect(visiveis.map((g) => ESTILO_GRUPO[g].barra)).toEqual(["bg-acento", "bg-atencao", "bg-ok", "bg-atrasado"]);
+  it("paleta enxuta: uma cor por status que aparece no calendário (5, com o deslocamento), todas dos tokens — e o fundo é o MESMO para todos", () => {
+    // cancelada não entra no calendário; as 5 que aparecem têm cada uma a sua cor (deslocamento = tom próprio, índigo)
+    const visiveis: GrupoStatus[] = ["aberta", "deslocamento", "andamento", "concluida", "atrasada"];
+    expect(visiveis.map((g) => ESTILO_GRUPO[g].barra)).toEqual(["bg-acento", "bg-deslocamento", "bg-atencao", "bg-ok", "bg-atrasado"]);
+    expect(ESTILO_GRUPO.deslocamento.rotulo).toBe("Em deslocamento");
     expect(new Set(GRUPOS.map((g) => CORES_GRUPO[g].barra)).size).toBe(GRUPOS.length);
     // o cartão não é pintado: fundo neutro único, sem contorno e sem sombra
     // Um passo de contraste (pedido do dono): o cartão era fundo quase branco e SEM contorno sobre
@@ -184,6 +189,39 @@ describe("Calendário — o cartão da OS é neutro e o status é uma barra à e
     expect($("[data-sigla-tecnico]", c("2026-11-19"))!.getAttribute("title")).toBe("Sem técnico definido");
   });
 
+  it("'Em deslocamento': barra índigo e hora normal; vence o status da OS, perde para a atrasada; no celular o ponto vem logo depois do atrasado; o cartão grande ganha a pílula", async () => {
+    const { CalendarioGrid } = await import("@/components/calendario/calendario-grid");
+    await montar(createElement(CalendarioGrid, { celulas: CELULAS, opcoes: OPCOES, eventosPorDia: {
+      "2026-11-17": [
+        card("d", "2026-11-17", { status: "AGENDADA", deslocamento: true, hora: "14:00" }),
+        card("e", "2026-11-17", { status: "EM_ANDAMENTO", deslocamento: true, hora: "08:30", clienteCurto: "Padaria" }),
+        card("f", "2026-11-17", { status: "AGENDADA", deslocamento: false, hora: "10:00" }),
+      ],
+      "2026-11-18": [card("g", "2026-11-18", { status: "ABERTA", atrasada: true, deslocamento: true })],
+    } } as any));
+    const doDia = (k: string) => $$(`[data-dia="${k}"] [data-cartao-os]`);
+    expect(doDia("2026-11-17").map((c) => c.getAttribute("data-cartao-os"))).toEqual(["deslocamento", "deslocamento", "aberta"]);
+    const d = doDia("2026-11-17")[0];
+    expect($("[data-barra-status]", d)!.className).toContain("bg-deslocamento");
+    expect($("[data-hora-card]", d)!.className).toContain("text-ink");
+    expect(txt($(".sr-only", d))).toBe("Em deslocamento:");
+    expect(doDia("2026-11-18")[0].getAttribute("data-cartao-os")).toBe("atrasada"); // atrasada continua vencendo
+    // celular: um ponto por grupo, deslocamento logo depois do atrasado
+    const pontos = (k: string) => $$("[data-pontos-dia] span", $(`[data-dia-mobile="${k}"]`)!).map((p) => p.className.match(/bg-[a-z]+/)![0]);
+    expect(pontos("2026-11-17")).toEqual(["bg-deslocamento", "bg-acento"]);
+    expect(pontos("2026-11-18")).toEqual(["bg-atrasado"]);
+    // o cartão grande (passar o mouse): a pílula "Em deslocamento" ao lado do status da OS; sem deslocamento, nada
+    await act(async () => { d.dispatchEvent(new MouseEvent("mouseover", { bubbles: true })); });
+    await esperar();
+    expect(txt($("[data-selo-deslocamento]"))).toBe("Em deslocamento");
+    expect($("[data-selo-deslocamento]")!.className).toContain("pill-deslocamento");
+    await act(async () => { d.dispatchEvent(new MouseEvent("mouseout", { bubbles: true })); });
+    await esperar();
+    await act(async () => { doDia("2026-11-17")[2].dispatchEvent(new MouseEvent("mouseover", { bubbles: true })); });
+    await esperar();
+    expect($("[data-selo-deslocamento]")).toBeNull();
+  });
+
   it("no celular o dia mostra quantas OS tem (em tom neutro) e um ponto por status presente", async () => {
     const { CalendarioGrid } = await import("@/components/calendario/calendario-grid");
     await montar(createElement(CalendarioGrid, { celulas: CELULAS, eventosPorDia: EVENTOS, opcoes: OPCOES } as any));
@@ -196,9 +234,9 @@ describe("Calendário — o cartão da OS é neutro e o status é uma barra à e
     expect($("[data-pontos-dia]", dia("2026-11-15"))).toBeNull();
   });
 
-  it("a legenda mostra as 4 barras de status e os dois ícones, sem amostra pintada", () => {
+  it("a legenda mostra as 5 barras de status (deslocamento entre agendada e em andamento) e os dois ícones, sem amostra pintada", () => {
     const f = fonte("app/(dashboard)/calendario/page.tsx");
-    expect(f).toMatch(/const LEGENDA: GrupoStatus\[\] = \["aberta", "andamento", "concluida", "atrasada"\];/);
+    expect(f).toMatch(/const LEGENDA: GrupoStatus\[\] = \["aberta", "deslocamento", "andamento", "concluida", "atrasada"\];/);
     const legenda = f.slice(f.indexOf("data-legenda-calendario"), f.indexOf("</SolicitacoesGaveta>"));
     // a legenda lê a MESMA largura do cartão (uma constante só, em lib/calendario/cores.ts)
     expect(legenda).toContain('cn(LARGURA_BARRA, "h-3.5 rounded-full", ESTILO_GRUPO[g].barra)');

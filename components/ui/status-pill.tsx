@@ -8,9 +8,10 @@ import type { ReactNode } from "react";
  *  - atrasado: vencido, atrasado, cancelado/erro;
  *  - previsto: neutro, ainda não começou, sem prazo;
  *  - acento: informação/agendado (a cor da marca, sem juízo de valor);
+ *  - deslocamento: o técnico está a caminho (estado vivo, entre agendado e em andamento);
  *  - ok-solido / atrasado-solido: o mesmo significado, com mais peso (faturada, crítico).
  */
-export type TomStatus = "ok" | "atencao" | "atrasado" | "previsto" | "acento" | "ok-solido" | "atrasado-solido";
+export type TomStatus = "ok" | "atencao" | "atrasado" | "previsto" | "acento" | "deslocamento" | "ok-solido" | "atrasado-solido";
 
 export const CLASSE_TOM: Record<TomStatus, string> = {
   ok: "bg-ok-claro text-ok-texto",
@@ -18,6 +19,7 @@ export const CLASSE_TOM: Record<TomStatus, string> = {
   atrasado: "bg-atrasado-claro text-atrasado-texto",
   previsto: "bg-previsto-claro text-previsto-texto",
   acento: "bg-acento-claro text-acento",
+  deslocamento: "bg-deslocamento-claro text-deslocamento-texto",
   "ok-solido": "bg-ok text-white",
   "atrasado-solido": "bg-atrasado text-white",
 };

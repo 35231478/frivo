@@ -95,6 +95,7 @@
   .pill-atrasado  { @apply badge-base bg-atrasado-claro text-atrasado-texto; }
   .pill-previsto  { @apply badge-base bg-previsto-claro text-previsto-texto; }
   .pill-acento    { @apply badge-base bg-acento-claro text-acento; }
+  .pill-deslocamento { @apply badge-base bg-deslocamento-claro text-deslocamento-texto; }
 
   .badge-status-aberta          { @apply pill-previsto; }
   .badge-status-aguardando_atendimento { @apply pill-previsto; }

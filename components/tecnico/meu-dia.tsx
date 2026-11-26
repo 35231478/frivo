@@ -56,7 +56,8 @@ export function situacaoLocal(c: CartaoTela, fila: OperacaoFila[]) {
 
 /** O que o card mostra no lugar de "Agendada" depois de um toque de hoje */
 const ROTULO_ESTADO: Partial<Record<EstadoCartao, { rotulo: string; classe: string }>> = {
-  "a-caminho": { rotulo: "A caminho", classe: "bg-acento-claro text-acento-hover" },
+  // O mesmo vocabulário e o mesmo tom do painel do gestor (lib/os/estado-atividade); o BOTÃO continua "A caminho"
+  "a-caminho": { rotulo: "Em deslocamento", classe: "bg-deslocamento-claro text-deslocamento-texto" },
   chegou: { rotulo: "No local", classe: "bg-success-100 text-success-700" },
 };
 

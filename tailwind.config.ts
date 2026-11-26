@@ -32,6 +32,7 @@ const config: Config = {
         atencao: status.atencao,
         atrasado: status.atrasado,
         previsto: status.previsto,
+        deslocamento: status.deslocamento,
         primary: escalaAcento,
         success: escalaOk,
         ink: {

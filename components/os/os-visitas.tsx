@@ -22,8 +22,10 @@ const br = (dia: string | null) => (dia ? dia.split("-").reverse().join("/") : "
 /** "qui, 12/11/2026" */
 export const rotuloDia = (dia: string | null) => (dia ? `${SEMANA[diaDaSemana(dia)]}, ${br(dia)}` : "sem data");
 const plural = (n: number, um: string, varios: string) => `${n} ${n === 1 ? um : varios}`;
+/** O selo da visita mostra o estado VISÍVEL (lib/os/estado-atividade), o mesmo do painel de Atividades e do calendário */
 const STATUS: Record<string, { rotulo: string; classe: string }> = {
   AGENDADA: { rotulo: "Agendada", classe: "bg-acento-claro text-acento" },
+  EM_DESLOCAMENTO: { rotulo: "Em deslocamento", classe: "bg-deslocamento-claro text-deslocamento-texto" },
   EM_ANDAMENTO: { rotulo: "Em andamento", classe: "bg-atencao-claro text-atencao-texto" },
   CONCLUIDA: { rotulo: "Concluída", classe: "bg-ok-claro text-ok-texto" },
   CANCELADA: { rotulo: "Cancelada", classe: "bg-atrasado-claro text-atrasado-texto" },
@@ -129,7 +131,7 @@ export function OsVisitas({ osId, onMudou }: { osId: string; onMudou?: () => voi
         {visitas.map((v) => {
           const feitos = v.equipamentos.filter((e) => e.feito).length;
           const expandida = aberta === v.id;
-          const st = STATUS[v.status] ?? STATUS.AGENDADA;
+          const st = STATUS[v.estado ?? v.status] ?? STATUS.AGENDADA;
           const outras = pendentes.filter((p) => p.id !== v.id);
           const podeMover = podeEditar && v.pendente && outras.length > 0;
           return (

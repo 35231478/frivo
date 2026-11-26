@@ -11,6 +11,7 @@ import { osJaFaturada } from "@/lib/faturamento-os";
 import { osTemNotaEmitida } from "@/lib/os/trava-edicao-server";
 import { faturamentoDaOs } from "@/lib/faturamento/faturar-server";
 import { competenciasDosAtrasos } from "@/lib/os/prazo-execucao";
+import { hojeDiaCivil } from "@/lib/fuso";
 import { mesesFechadosEntre } from "@/lib/desempenho/fechamento-estado";
 
 export const metadata: Metadata = { title: "Ordem de serviço" };
@@ -48,6 +49,8 @@ export default async function OsDetalhePage({ params, searchParams }: { params: 
           respostas: { include: { campo: true } },
           // equipamentoId: o cabeçalho conta equipamento DISTINTO (igual ao card e ao relatório)
           equipamentos: { select: { feito: true, equipamentoId: true } },
+          // Os toques "A caminho"/"Cheguei" de HOJE: o painel deriva "Em deslocamento" deles (lib/os/estado-atividade)
+          avisosCliente: { where: { dia: hojeDiaCivil() }, select: { evento: true, registradoEm: true } },
         },
         orderBy: { criadoEm: "asc" },
       },

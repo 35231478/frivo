@@ -58,6 +58,8 @@ export interface CardOs {
   status: string;
   prioridade: string;
   atrasada: boolean;
+  /** Alguma atividade da OS NESTE dia está "Em deslocamento" (técnico a caminho, ainda sem "Cheguei") */
+  deslocamento?: boolean;
 }
 
 export interface CelulaDia {
@@ -99,7 +101,7 @@ function AlertaPrioridade({ card, grande }: { card: CardOs; grande?: boolean }) 
   return <AlertTriangle className={cn("shrink-0 text-ink-muted", grande ? "w-3.5 h-3.5" : "w-3 h-3")} aria-label={`Prioridade ${card.prioridade.toLowerCase()}`} data-alerta-prioridade />;
 }
 /** Os status presentes num dia, na ordem da legenda (para os pontos do dia no celular) */
-const ORDEM_GRUPOS: GrupoStatus[] = ["atrasada", "andamento", "aberta", "concluida", "neutra"];
+const ORDEM_GRUPOS: GrupoStatus[] = ["atrasada", "deslocamento", "andamento", "aberta", "concluida", "neutra"];
 const gruposDoDia = (cards: CardOs[]) => { const tem = new Set(cards.map(grupoDoCard)); return ORDEM_GRUPOS.filter((g) => tem.has(g)); };
 const badgeStatus = (s: string) => `badge-status-${s.toLowerCase()}`;
 const badgePrioridade = (p: string) => `badge-prioridade-${p.toLowerCase()}`;
@@ -625,7 +627,10 @@ function Tooltip({ card, rect }: { card: CardOs; rect: DOMRect }) {
       <div className="bg-white rounded-lg shadow-xl border border-surface-border p-4 space-y-2.5 text-left">
         <div className="flex items-center justify-between gap-2">
           <span className="font-mono font-bold text-primary-600 text-sm">OS #{card.numero}</span>
-          <span className={badgeStatus(card.status)}>{LABELS_STATUS_OS[card.status] ?? card.status}</span>
+          <span className="flex items-center gap-1.5">
+            {card.deslocamento && <span className="pill-deslocamento" data-selo-deslocamento>{ESTILO_GRUPO.deslocamento.rotulo}</span>}
+            <span className={badgeStatus(card.status)}>{LABELS_STATUS_OS[card.status] ?? card.status}</span>
+          </span>
         </div>
         <div className="text-sm font-semibold text-ink leading-snug">{card.clienteCompleto}</div>
         <div className="space-y-1.5 text-xs text-ink-muted">

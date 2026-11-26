@@ -323,6 +323,8 @@ export type PedidoVisitas = z.infer<typeof pedidoVisitasSchema>;
 /** O que a tela recebe do servidor */
 export interface VisitaTela {
   id: string; titulo: string; status: string;
+  /** O estado VISÍVEL (lib/os/estado-atividade): "EM_DESLOCAMENTO" quando o técnico está a caminho hoje; senão o status */
+  estado?: string;
   /** Instante agendado (ISO) e o dia em Brasília */
   dataAgendada: string | null; dia: string | null;
   numero: number | null;
