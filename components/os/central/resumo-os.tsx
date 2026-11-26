@@ -1,9 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import Link from "next/link";
 import { AlertTriangle, CalendarClock, CheckCircle2, ChevronRight, Clock, FileText, History, ListChecks, MapPin, User } from "lucide-react";
 import { OsPrazos } from "@/components/os/os-prazos";
+import { Dica } from "@/components/ui/dica";
+import { resumirHistorico } from "@/lib/os/historico";
 import { cn, formatarDataHora } from "@/lib/utils";
 import { formatarDiaCivil, textoPrazo } from "@/lib/os/prazos";
 import type { CentralOs } from "@/lib/os/central";
@@ -32,14 +34,12 @@ export function ResumoOs({ os, central, onAba, onAtualizado }: {
   /** O cadastro do cliente ou da unidade foi corrigido daqui: a tela acompanha */
   onAtualizado?: (parcial: any) => void;
 }) {
-  const [historicoTodo, setHistoricoTodo] = useState(false);
   const { pode } = usePermissoes();
   const historico: any[] = os.historico ?? [];
-  const visiveis = historicoTodo ? historico : historico.slice(0, 8);
   const comPrazo = (os.atividades ?? []).filter((a: any) => a.prazo && a.status !== "CANCELADA");
 
-  // Uma coluna de cartões (o Resumo divide a tela com o painel de Atividades): os pares que cabem lado a lado
-  // ficam em duas colunas a partir de `md`; o resto em largura total.
+  // Uma coluna de cartões (o Resumo divide a tela com o painel de Atividades): os pares ficam lado a lado só
+  // quando a COLUNA das abas tem espaço (.os-pares, container query em app/globals.css) — não pela largura da tela.
   return (
     <div className="space-y-5" data-resumo-os>
         <Cartao titulo="O que falta" icone={ListChecks} dado="o-que-falta">
@@ -61,7 +61,7 @@ export function ResumoOs({ os, central, onAba, onAtualizado }: {
           )}
         </Cartao>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+        <div className="os-pares">
           <Cartao titulo="Cliente e local" icone={User} dado="informacoes">
             <dl className="space-y-2 text-sm">
               {/* Referência: o lápis corrige o CADASTRO (telefone, e-mail, contatos; nome e endereço da unidade) — vale em
@@ -72,7 +72,7 @@ export function ResumoOs({ os, central, onAba, onAtualizado }: {
               {os.unidade && (
                 <Info rotulo="Endereço" acao={<EditarNoContexto id={os.unidade.id} rotulo="Editar o cadastro da unidade"
                   edicao={UNIDADE.edicao<{ id: string; nome: string; cidade?: string | null; estado?: string | null }>(os.cliente.id, (u) => onAtualizado?.({ unidade: { ...os.unidade, nome: u.nome, cidade: u.cidade ?? null, estado: u.estado ?? null } }))} />}>
-                  <span className="inline-flex items-start gap-1"><MapPin className="w-3.5 h-3.5 mt-0.5 text-ink-subtle shrink-0" aria-hidden="true" />{os.unidade.nome}{os.unidade.cidade ? ` — ${os.unidade.cidade}/${os.unidade.estado}` : ""}</span>
+                  <span className="flex items-start gap-1 min-w-0"><MapPin className="w-3.5 h-3.5 mt-0.5 text-ink-subtle shrink-0" aria-hidden="true" /><span className="min-w-0 break-words">{os.unidade.nome}{os.unidade.cidade ? ` — ${os.unidade.cidade}/${os.unidade.estado}` : ""}</span></span>
                 </Info>
               )}
               {os.contrato && <Info rotulo="Contrato"><span className="font-mono">{os.contrato.numero}</span></Info>}
@@ -110,7 +110,7 @@ export function ResumoOs({ os, central, onAba, onAtualizado }: {
           )}
         </Cartao>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+        <div className="os-pares">
         <div className="space-y-5 min-w-0">
         {/* O que o contrato prometeu ao cliente (comparecer / resolver) — só no chamado de cliente em contrato */}
         <PrazoDeAtendimento os={os} />
@@ -129,25 +129,7 @@ export function ResumoOs({ os, central, onAba, onAtualizado }: {
         </div>
 
         <Cartao titulo="Histórico" icone={History} dado="historico" className="min-w-0">
-          {historico.length === 0 ? (
-            <p className="text-sm text-ink-muted">Nenhum registro.</p>
-          ) : (
-            <ol className="relative ml-1 border-l border-surface-border">
-              {visiveis.map((h: any) => (
-                <li key={h.id} className="relative pl-4 pb-4" data-historico-item>
-                  <span className="absolute -left-[4.5px] top-1.5 w-2 h-2 rounded-full bg-surface-border ring-2 ring-white" aria-hidden="true" />
-                  <p className="text-[11px] text-ink-muted tabular-nums">{formatarDataHora(h.criadoEm)} — {h.usuario?.nome}</p>
-                  <p className="text-sm text-ink font-medium leading-snug">{h.acao}</p>
-                  {h.detalhes && <p className="text-xs text-ink-muted">{h.detalhes}</p>}
-                </li>
-              ))}
-            </ol>
-          )}
-          {historico.length > 8 && (
-            <button type="button" onClick={() => setHistoricoTodo((v) => !v)} data-historico-todo className="text-xs font-semibold text-acento hover:underline">
-              {historicoTodo ? "Mostrar menos" : `Ver todo o histórico (${historico.length})`}
-            </button>
-          )}
+          <HistoricoOs historico={historico} />
         </Cartao>
         </div>
 
@@ -159,11 +141,90 @@ export function ResumoOs({ os, central, onAba, onAtualizado }: {
   );
 }
 
+/** Quantas linhas o cartão mostra antes de "Ver todo o histórico" */
+const LINHAS_HISTORICO = 8;
+
+/**
+ * O histórico em duas leituras: o RESUMO do gestor (lib/os/historico: agrupado, sem códigos, com o status
+ * automático junto da causa — cada linha agrupada abre os registros dela) e o REGISTRO COMPLETO, a lista
+ * de auditoria exatamente como foi gravada.
+ */
+export function HistoricoOs({ historico }: { historico: any[] }) {
+  const [modo, setModo] = useState<"resumo" | "registro">("resumo");
+  const [todo, setTodo] = useState(false);
+  const [abertas, setAbertas] = useState<Set<string>>(new Set());
+  const linhas = useMemo(() => resumirHistorico(historico), [historico]);
+  if (historico.length === 0) return <p className="text-sm text-ink-muted">Nenhum registro.</p>;
+
+  const total = modo === "resumo" ? linhas.length : historico.length;
+  const alternar = (id: string) => setAbertas((a) => { const n = new Set(a); if (n.has(id)) n.delete(id); else n.add(id); return n; });
+  const ponto = <span className="absolute -left-[4.5px] top-1.5 w-2 h-2 rounded-full bg-surface-border ring-2 ring-white" aria-hidden="true" />;
+
+  return (
+    <div className="space-y-3" data-historico={modo}>
+      <div className="flex items-center gap-1 text-xs" role="group" aria-label="Como ver o histórico">
+        {(["resumo", "registro"] as const).map((m) => (
+          <button key={m} type="button" onClick={() => { setModo(m); setTodo(false); }} aria-pressed={modo === m} data-modo-historico={m}
+            className={cn("px-2.5 py-1 rounded-md font-medium transition-colors", modo === m ? "bg-surface-alt text-ink" : "text-ink-muted hover:text-ink")}>
+            {m === "resumo" ? "Resumo" : "Registro completo"}
+          </button>
+        ))}
+        <Dica rotulo="Histórico" texto="O resumo junta o que se repete (fotos, itens executados, edições seguidas) e mostra o status da OS junto do que o causou. O registro completo é a auditoria: cada evento como foi gravado, com data, hora e quem fez." />
+      </div>
+      <ol className="relative ml-1 border-l border-surface-border">
+        {modo === "resumo"
+          ? (todo ? linhas : linhas.slice(0, LINHAS_HISTORICO)).map((l) => (
+            <li key={l.id} className="relative pl-4 pb-4" data-historico-item data-historico-qtd={l.quantidade}>
+              {ponto}
+              <p className="text-[11px] text-ink-muted tabular-nums">{formatarDataHora(l.quando)}{l.quem ? ` — ${l.quem}` : ""}</p>
+              <p className="text-sm text-ink font-medium leading-snug">
+                {l.titulo}
+                {l.consequencia && <span className="ml-1.5 text-xs font-medium text-ink-muted" data-historico-consequencia>· {l.consequencia}</span>}
+              </p>
+              {l.detalhe && <p className="text-xs text-ink-muted break-words">{l.detalhe}</p>}
+              {l.itens.length > 1 && (
+                <>
+                  <button type="button" onClick={() => alternar(l.id)} aria-expanded={abertas.has(l.id)} data-historico-abrir={l.id}
+                    className="mt-0.5 inline-flex items-center gap-0.5 text-[11px] font-semibold text-acento hover:underline">
+                    <ChevronRight className={cn("w-3 h-3 transition-transform", abertas.has(l.id) && "rotate-90")} aria-hidden="true" />
+                    {abertas.has(l.id) ? "Ocultar os registros" : `Ver os ${l.itens.length} registros`}
+                  </button>
+                  {abertas.has(l.id) && (
+                    <ul className="mt-1 space-y-1 border-l border-surface-linha pl-3" data-historico-registros={l.id}>
+                      {l.itens.map((r: any) => (
+                        <li key={r.id} className="text-xs text-ink-muted">
+                          <span className="tabular-nums">{formatarDataHora(r.criadoEm)}</span> — <span className="text-ink">{r.acao}</span>{r.detalhes ? `: ${r.detalhes}` : ""}
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </>
+              )}
+            </li>
+          ))
+          : (todo ? historico : historico.slice(0, LINHAS_HISTORICO)).map((h: any) => (
+            <li key={h.id} className="relative pl-4 pb-4" data-historico-item data-historico-registro>
+              {ponto}
+              <p className="text-[11px] text-ink-muted tabular-nums">{formatarDataHora(h.criadoEm)} — {h.usuario?.nome}</p>
+              <p className="text-sm text-ink font-medium leading-snug">{h.acao}</p>
+              {h.detalhes && <p className="text-xs text-ink-muted break-words">{h.detalhes}</p>}
+            </li>
+          ))}
+      </ol>
+      {total > LINHAS_HISTORICO && (
+        <button type="button" onClick={() => setTodo((v) => !v)} data-historico-todo className="text-xs font-semibold text-acento hover:underline">
+          {todo ? "Mostrar menos" : modo === "resumo" ? `Ver todo o histórico (${linhas.length})` : `Ver todos os registros (${historico.length})`}
+        </button>
+      )}
+    </div>
+  );
+}
+
 function Info({ rotulo, children, acao }: { rotulo: string; children: React.ReactNode; acao?: React.ReactNode }) {
   return (
     <div className="flex gap-2 items-start">
       <dt className="text-ink-muted w-24 shrink-0">{rotulo}</dt>
-      <dd className="text-ink min-w-0 flex-1">{children}</dd>
+      <dd className="text-ink min-w-0 flex-1 break-words">{children}</dd>
       {/* -my-1.5: o lápis não aumenta a altura da linha */}
       {acao && <dd className="shrink-0 -my-1.5">{acao}</dd>}
     </div>

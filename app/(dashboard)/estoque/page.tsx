@@ -10,12 +10,13 @@ import { formatarQtd } from "@/lib/estoque/regras";
 import { LancarEstoque } from "@/components/estoque/lancar-estoque";
 import { BarraEstoque } from "@/components/estoque/estoque-barra";
 import { SaldoQtd, SeloSituacao } from "@/components/estoque/situacao";
+import { avisosEstoque } from "@/lib/estoque/regras";
 import { ConteudoUrl, LimparBuscaUrl, ListaUrl, PaginacaoUrl, TabelaProUrl } from "@/components/listagem/lista-url";
 import { Dica } from "@/components/ui/dica";
 
 export const metadata: Metadata = { title: "Estoque" };
 
-const AJUDA = "O saldo de cada produto que controla estoque: a soma dos movimentos (entrada, saída, ajuste e inventário), que ficam no extrato do produto. Quem gerencia lança movimento aqui mesmo; nenhum movimento é apagado — corrigir é lançar ajuste, e o extrato guarda os dois. No mínimo ou abaixo e negativo aparecem destacados e no aviso de cima.";
+const AJUDA = "O saldo de cada produto que controla estoque: a soma dos movimentos (entrada, saída, ajuste e inventário), que ficam no extrato do produto. Quem gerencia lança movimento aqui mesmo; nenhum movimento é apagado — corrigir é lançar ajuste, e o extrato guarda os dois. Sem estoque (saldo zero), abaixo do mínimo (saldo até o mínimo cadastrado) e saldo negativo aparecem destacados e no aviso de cima.";
 
 /**
  * Estoque (padrão da casa: barra de busca/filtros + TabelaPro): o saldo de cada produto que
@@ -29,6 +30,7 @@ export default async function EstoquePage({ searchParams }: { searchParams: Prom
   const u = session!.user!;
   const podeLancar = pode(u.permissoes, "estoque", "gerenciar", u.role);
   const [lista, alertas] = await Promise.all([listarEstoque(u.empresaId, sp), contarAlertas(u.empresaId)]);
+  const avisos = avisosEstoque(alertas);
   const { itens, total, pagina, porPagina, busca } = lista;
 
   return (
@@ -56,21 +58,18 @@ export default async function EstoquePage({ searchParams }: { searchParams: Prom
         {/* Barra enxuta (padrão da casa): busca por produto + "Mais filtros" (situação, inativos) */}
         <BarraEstoque situacoes={Object.entries(FILTROS_SITUACAO).map(([value, label]) => ({ value, label }))} />
 
-        {/* Aviso no topo: quantos estão no mínimo (ou abaixo) e quantos negativos — clicar filtra */}
-        {(alertas.abaixo > 0 || alertas.negativo > 0) && (
+        {/* Aviso no topo: quantos sem estoque, abaixo do mínimo e negativos — cada frase filtra a lista */}
+        {avisos.length > 0 && (
           <div className="flex flex-wrap items-center gap-2 rounded-card border border-atencao/20 bg-atencao-claro px-4 py-3 text-sm" data-alertas>
             <AlertTriangle className="w-4 h-4 text-atencao-texto shrink-0" />
-            {alertas.abaixo > 0 && (
-              <Link href="/estoque?situacao=abaixo" className="font-semibold text-atencao-texto hover:underline" data-alerta="abaixo">
-                {alertas.abaixo} {alertas.abaixo === 1 ? "produto" : "produtos"} no mínimo ou abaixo
-              </Link>
-            )}
-            {alertas.abaixo > 0 && alertas.negativo > 0 && <span className="text-atencao-texto">·</span>}
-            {alertas.negativo > 0 && (
-              <Link href="/estoque?situacao=negativo" className="font-semibold text-atrasado-texto hover:underline" data-alerta="negativo">
-                {alertas.negativo} com saldo negativo
-              </Link>
-            )}
+            {avisos.map((a, i) => (
+              <span key={a.situacao} className="inline-flex items-center gap-2">
+                {i > 0 && <span className="text-atencao-texto">·</span>}
+                <Link href={a.href} className={cn("font-semibold hover:underline", a.situacao === "abaixo" ? "text-atencao-texto" : "text-atrasado-texto")} data-alerta={a.situacao}>
+                  {a.texto}
+                </Link>
+              </span>
+            ))}
           </div>
         )}
 

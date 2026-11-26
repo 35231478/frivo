@@ -54,6 +54,23 @@
 }
 
 @layer components {
+  /* --- Central da OS: o layout decide pela LARGURA DISPONÍVEL (container query), não pela tela ---
+     A tela conta o menu lateral (aberto ou recolhido) e o padding: em 1280–1366 px, o painel lado a lado
+     espremia as abas em ~550 px enquanto os cartões ainda se punham em pares (o "md:" via a tela).
+     - .os-central: o espaço da central; o painel de Atividades só vai para o lado com 68rem (1088 px)
+       disponíveis — sobram ≥ 704 px para as abas. Abaixo disso, empilha (abas e, embaixo, o painel);
+     - .os-abas: a coluna das abas; os pares de cartões do Resumo só ficam lado a lado com 40rem (640 px). */
+  .os-central { container: os-central / inline-size; }
+  .os-colunas { display: flex; flex-direction: column; gap: 1.25rem; }
+  @container os-central (min-width: 68rem) {
+    .os-colunas { display: grid; grid-template-columns: minmax(0, 1fr) 24rem; align-items: start; }
+  }
+  .os-abas { container: os-abas / inline-size; }
+  .os-pares { display: grid; grid-template-columns: minmax(0, 1fr); gap: 1.25rem; }
+  @container os-abas (min-width: 40rem) {
+    .os-pares { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  }
+
   /* --- Cards e superfícies: branco, borda discreta, raio 14px, sombra levíssima --- */
   .card {
     @apply bg-white rounded-card border border-surface-border shadow-card;

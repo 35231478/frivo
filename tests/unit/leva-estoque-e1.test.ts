@@ -113,15 +113,18 @@ describe("regras", () => {
     expect(calcularMovimento("ENTRADA", 0, 1.23449).delta).toBe(1.234);
   });
 
-  it("situação: negativo < 0; no mínimo ou abaixo = saldo ≤ mínimo; sem mínimo nunca é 'abaixo'", () => {
+  // Mudou de propósito (leva 2, 26/11): saldo 0 é "Sem estoque" (zerado), com ou sem mínimo — antes, sem
+  // mínimo cadastrado, aparecia "OK" justamente no produto que acabou. A ordem: negativo › zerado › abaixo › ok.
+  it("situação: negativo < 0; zerado = saldo 0 (com ou sem mínimo); abaixo = 0 < saldo ≤ mínimo; sem mínimo e com saldo é ok", () => {
     expect(situacaoEstoque(-0.001, null)).toBe("negativo");
     expect(situacaoEstoque(-1, 5)).toBe("negativo");
     expect(situacaoEstoque(5, 5)).toBe("abaixo");
     expect(situacaoEstoque(4.999, 5)).toBe("abaixo");
     expect(situacaoEstoque(5.001, 5)).toBe("ok");
-    expect(situacaoEstoque(0, 0)).toBe("abaixo");
-    expect(situacaoEstoque(0, null)).toBe("ok");
-    expect(situacaoEstoque(0, undefined)).toBe("ok");
+    expect(situacaoEstoque(0, 0)).toBe("zerado");
+    expect(situacaoEstoque(0, null)).toBe("zerado");
+    expect(situacaoEstoque(0, undefined)).toBe("zerado");
+    expect(situacaoEstoque(3, null)).toBe("ok");
   });
 
   it("aviso só quando negativo; números no formato brasileiro", () => {
@@ -385,13 +388,15 @@ describe("GET extrato / lista / alertas", () => {
     expect(r.status).toBe(200);
     expect(r.json.itens.map((p: any) => [p.id, p.saldo, p.situacao])).toEqual([["p3", 2, "abaixo"], ["p2", -1, "negativo"], ["p1", 8, "ok"]]);
     expect(r.json.total).toBe(3);
-    expect(r.json.alertas).toEqual({ abaixo: 2, negativo: 1 });
+    // cada produto conta numa situação só (antes "abaixo" incluía os negativos)
+    expect(r.json.alertas).toEqual({ semEstoque: 0, abaixo: 1, negativo: 1 });
     expect((await listaApi("inativos=1")).json.itens.map((p: any) => p.id)).toContain("p4");
     expect((await listaApi("busca=gás")).json.itens.map((p: any) => p.id)).toEqual(["p1"]);
     expect((await listaApi("busca=cilindro")).json.itens.map((p: any) => p.id)).toEqual(["p1"]);
     expect((await listaApi("ordem=saldo&dir=desc")).json.itens.map((p: any) => p.id)).toEqual(["p1", "p3", "p2"]);
     expect((await listaApi("ordem=minimo")).json.itens.map((p: any) => p.id)).toEqual(["p3", "p1", "p2"]);
-    expect((await listaApi("situacao=abaixo")).json.itens.map((p: any) => p.id)).toEqual(["p3", "p2"]);
+    expect((await listaApi("situacao=abaixo")).json.itens.map((p: any) => p.id)).toEqual(["p3"]);
+    expect((await listaApi("situacao=zerado")).json.itens.map((p: any) => p.id)).toEqual([]);
     expect((await listaApi("situacao=negativo")).json.itens.map((p: any) => p.id)).toEqual(["p2"]);
     expect((await listaApi("situacao=qualquer")).json).toMatchObject({ total: 3, situacao: "" });
     expect((await listaApi("situacao=negativo&busca=capacitor")).json.total).toBe(0);
@@ -408,13 +413,15 @@ describe("GET extrato / lista / alertas", () => {
     expect((await listaApi("situacao=negativo&por=25&pagina=9")).json.pagina).toBe(2);
   });
 
-  it("alertas: conta ativos no mínimo/abaixo (inclui negativos) e negativos; inativos e outra empresa fora", async () => {
-    expect((await alertasApi()).json).toEqual({ abaixo: 2, negativo: 0 }); // p1 (0 ≤ 5) e p3 (0 ≤ 2); p4 inativo
+  it("alertas: conta ativos sem estoque, abaixo do mínimo e negativos (cada um numa só); inativos e outra empresa fora", async () => {
+    expect((await alertasApi()).json).toEqual({ semEstoque: 3, abaixo: 0, negativo: 0 }); // p1, p2 e p3 com saldo 0; p4 inativo
     await mov("p1", "ENTRADA", 6);
     await mov("p2", "SAIDA", 1);
     T("produto").find((p) => p.id === "p4").saldo = -5;
     T("produto").find((p) => p.id === "pB").saldo = -5;
-    expect((await alertasApi()).json).toEqual({ abaixo: 2, negativo: 1 });
+    expect((await alertasApi()).json).toEqual({ semEstoque: 1, abaixo: 0, negativo: 1 }); // p3 zerado, p2 negativo, p1 ok
+    await mov("p3", "ENTRADA", 1); // 1 ≤ mínimo 2
+    expect((await alertasApi()).json).toEqual({ semEstoque: 0, abaixo: 1, negativo: 1 });
     logar(permissoesVazias());
     expect((await alertasApi()).status).toBe(403);
     expect((await listaApi()).status).toBe(403);
@@ -465,7 +472,7 @@ describe("complemento da E1", () => {
     await mov("p5", "SAIDA", 2); // negativo, mas não entra nos alertas
     const lista = await listaApi();
     expect(lista.json.itens.map((p: any) => p.id)).not.toContain("p5");
-    expect(lista.json.alertas).toEqual({ abaixo: 2, negativo: 0 }); // p1 e p3 no mínimo; p5 fora
+    expect(lista.json.alertas).toEqual({ semEstoque: 3, abaixo: 0, negativo: 0 }); // p1, p2 e p3 zerados; p5 fora
     expect((await listaApi("busca=visita")).json.total).toBe(0);
     expect((await listaApi("inativos=1")).json.itens.map((p: any) => p.id)).not.toContain("p5");
     const ex = await extratoApi("p5");
@@ -574,11 +581,14 @@ describe("telas", () => {
     await mov("p2", "SAIDA", 1.5);
     const h = await lista();
     expect(attrs(h, "data-cartao")).toEqual(["p3", "p2", "p1"]);
-    expect(attrs(h, "data-situacao")).toEqual(expect.arrayContaining(["negativo", "abaixo", "ok"]));
+    expect(attrs(h, "data-situacao")).toEqual(expect.arrayContaining(["negativo", "zerado", "ok"]));
     expect(h).toMatch(/data-saldo="-1.5" class="[^"]*text-atrasado(?!-)/);
-    expect(h).toMatch(/data-saldo="0" class="[^"]*text-atencao-texto/);
-    expect(h).toMatch(/data-alerta="abaixo"[^>]*>2 produtos no mínimo ou abaixo</);
-    expect(h).toMatch(/data-alerta="negativo"[^>]*>1 com saldo negativo</);
+    expect(h).toMatch(/data-saldo="0" class="[^"]*text-atrasado(?!-)/); // saldo zero: sem estoque, em vermelho
+    expect(h).toContain(">Sem estoque<");
+    expect(h).not.toContain(">OK<");
+    expect(h).toMatch(/data-alerta="negativo"[^>]*>1 produto com saldo negativo</);
+    expect(h).toMatch(/data-alerta="zerado"[^>]*>1 produto sem estoque</);
+    expect(h).toContain('href="/estoque?situacao=zerado"');
     expect(h).toContain('href="/estoque?situacao=negativo"');
     expect(attrs(h, "data-lancar")).toEqual(["p3", "p2", "p1", "p3", "p2", "p1"]); // cartões + tabela
     expect(h).toContain('href="/estoque/p1"');
@@ -589,7 +599,8 @@ describe("telas", () => {
   });
 
   it("lista: sem alerta não mostra o aviso; vazio com busca mostra a mensagem", async () => {
-    T("produto").forEach((p) => { p.estoqueMinimo = null; });
+    // sem alerta = todos com saldo e acima do mínimo (saldo 0 agora é "Sem estoque" e avisa)
+    T("produto").forEach((p) => { p.estoqueMinimo = null; p.saldo = 4; });
     expect(await lista()).not.toContain("data-alertas");
     const v = await lista("busca=zzz");
     expect(v).toContain("data-lista-vazia");

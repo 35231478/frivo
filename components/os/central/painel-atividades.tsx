@@ -35,10 +35,13 @@ export const PainelAtividades = forwardRef<HTMLElement, {
         novaNoTopo
         cabecalho={(botaoNova) => (
           <div className="flex items-center justify-between gap-3 px-4 pt-4 pb-3 border-b border-surface-linha">
-            <h2 id="titulo-painel-atividades" className="flex items-center gap-1.5 text-xs font-semibold text-ink-muted uppercase tracking-wider min-w-0">
-              <ListChecks className="w-3.5 h-3.5 text-ink-subtle shrink-0" aria-hidden /> Atividades
-              <span className="normal-case tracking-normal font-medium text-ink-muted" data-resumo-painel>· {resumo.texto}</span>
-            </h2>
+            {/* Título e resumo em duas linhas: lado a lado o painel tem 24rem, e o resumo quebrava no meio */}
+            <div className="min-w-0">
+              <h2 id="titulo-painel-atividades" className="flex items-center gap-1.5 text-xs font-semibold text-ink-muted uppercase tracking-wider">
+                <ListChecks className="w-3.5 h-3.5 text-ink-subtle shrink-0" aria-hidden /> Atividades
+              </h2>
+              <p className="text-xs font-medium text-ink-muted mt-0.5 truncate" data-resumo-painel>{resumo.texto}</p>
+            </div>
             {botaoNova}
           </div>
         )}

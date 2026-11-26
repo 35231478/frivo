@@ -1,5 +1,4 @@
 import type { Metadata } from "next";
-import { acento } from "@/lib/ui/tokens";
 import Link from "next/link";
 import { auth } from "@/lib/auth";
 import { pode } from "@/lib/permissoes";
@@ -7,6 +6,7 @@ import { redirect } from "next/navigation";
 import { formatarMoeda, cn } from "@/lib/utils";
 import { resumoFinanceiro } from "@/lib/financeiro-server";
 import { Dica } from "@/components/ui/dica";
+import { GraficoEntradasSaidas } from "@/components/financeiro/grafico-entradas-saidas";
 import {
   Wallet, TrendingUp, TrendingDown, AlertTriangle, CheckCircle, Receipt, Upload, CalendarClock,
 } from "lucide-react";
@@ -37,11 +37,6 @@ export default async function FinanceiroDashboardPage() {
       dica: "Contas a receber em aberto do mês + orçamentos aprovados a faturar − contas a pagar do mês." },
   ] as { titulo: string; valor: number; qtd?: number; icone: typeof Wallet; cor: string; bg: string; href: string; alerta?: boolean; aFaturar?: { valor: number; qtd: number }; dica?: string }[];
 
-  const maxBar = Math.max(1, ...r.meses.map((m) => Math.max(m.entradas, m.saidas)));
-  // Saldo acumulado para a linha
-  let acc = 0;
-  const saldoAcc = r.meses.map((m) => (acc += m.entradas - m.saidas));
-  const maxSaldo = Math.max(1, ...saldoAcc.map((s) => Math.abs(s)));
 
   return (
     <div className="space-y-6">
@@ -80,39 +75,8 @@ export default async function FinanceiroDashboardPage() {
         ))}
       </div>
 
-      {/* Gráfico entradas x saídas (6 meses) + saldo acumulado */}
-      <div className="card-padded">
-        <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
-          <h2 className="card-title">Entradas × Saídas — últimos 6 meses</h2>
-          <div className="flex items-center gap-4 text-xs">
-            <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-success-500" /> Entradas</span>
-            <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-atrasado" /> Saídas</span>
-            <span className="flex items-center gap-1.5"><span className="w-3 h-0.5 bg-primary-500" /> Saldo acumulado</span>
-          </div>
-        </div>
-        <div className="relative flex items-end justify-between gap-2 h-56 pt-6">
-          {/* Linha de saldo acumulado (SVG sobreposto) */}
-          <svg className="absolute inset-0 w-full h-full pointer-events-none" preserveAspectRatio="none" viewBox="0 0 100 100">
-            <polyline
-              fill="none" stroke={acento.DEFAULT} strokeWidth="0.6"
-              points={saldoAcc.map((s, i) => {
-                const x = (i + 0.5) * (100 / r.meses.length);
-                const y = 50 - (s / maxSaldo) * 38;
-                return `${x},${Math.max(2, Math.min(98, y))}`;
-              }).join(" ")}
-            />
-          </svg>
-          {r.meses.map((m, i) => (
-            <div key={i} className="flex-1 flex flex-col items-center gap-1 h-full justify-end z-10">
-              <div className="flex items-end gap-0.5 w-full justify-center h-full">
-                <div className="w-1/2 bg-success-500 rounded-t" style={{ height: `${(m.entradas / maxBar) * 100}%` }} title={`Entradas: ${formatarMoeda(m.entradas)}`} />
-                <div className="w-1/2 bg-atrasado rounded-t" style={{ height: `${(m.saidas / maxBar) * 100}%` }} title={`Saídas: ${formatarMoeda(m.saidas)}`} />
-              </div>
-              <span className="text-[11px] text-ink-muted capitalize">{m.mes}</span>
-            </div>
-          ))}
-        </div>
-      </div>
+      {/* Entradas × Saídas: um eixo, valores no eixo, resultado do mês e do período (components/financeiro/grafico-entradas-saidas) */}
+      <GraficoEntradasSaidas meses={r.meses} />
 
       {/* Alertas do dia */}
       <div className="card-padded">

@@ -112,7 +112,8 @@ export const ORDEM_ESTOQUE: MapaOrdem = {
   unidade: (d) => ({ unidade: d }),
 };
 export const ORDEM_PADRAO_ESTOQUE = { nome: "asc" };
-export const FILTROS_SITUACAO = { abaixo: "Abaixo do mínimo", negativo: "Saldo negativo" } as const;
+/** Os filtros da lista: uma situação cada (a de "Em estoque" não filtra — é o resto da lista). */
+export const FILTROS_SITUACAO = { zerado: "Sem estoque", abaixo: "Abaixo do mínimo", negativo: "Saldo negativo" } as const;
 export type FiltroSituacao = keyof typeof FILTROS_SITUACAO;
 
 export interface LinhaEstoque {
@@ -147,10 +148,7 @@ export async function listarEstoque(empresaId: string, sp: ParamsUrl) {
   if (situacao) {
     // O banco não compara saldo (decimal) com o mínimo (inteiro): filtra aqui e pagina os ids.
     const candidatos = await prisma.produto.findMany({ where, select: { id: true, saldo: true, estoqueMinimo: true }, orderBy });
-    const ids = candidatos.filter((p) => {
-      const s = situacaoEstoque(Number(p.saldo), p.estoqueMinimo);
-      return situacao === "negativo" ? s === "negativo" : s !== "ok";
-    }).map((p) => p.id);
+    const ids = candidatos.filter((p) => situacaoEstoque(Number(p.saldo), p.estoqueMinimo) === situacao).map((p) => p.id);
     total = ids.length;
     pagina = paginaValida(pedida, porPagina, total);
     const { skip, take } = janela(pagina, porPagina);
@@ -164,19 +162,23 @@ export async function listarEstoque(empresaId: string, sp: ParamsUrl) {
   return { itens, total, pagina, porPagina, busca, situacao, inativos: inativos === "1" };
 }
 
-/** Produtos ativos (que controlam estoque) abaixo do mínimo (inclui os negativos) e com saldo negativo — para o aviso no topo. */
+/**
+ * Produtos ativos (que controlam estoque) por situação, para o aviso no topo — cada um conta numa só:
+ * sem estoque (saldo 0), abaixo do mínimo e com saldo negativo (a regra em lib/estoque/regras › situacaoEstoque).
+ */
 export async function contarAlertas(empresaId: string) {
   const ps = await prisma.produto.findMany({
-    where: { empresaId, ativo: true, controlaEstoque: true, OR: [{ estoqueMinimo: { not: null } }, { saldo: { lt: 0 } }] },
+    where: { empresaId, ativo: true, controlaEstoque: true, OR: [{ estoqueMinimo: { not: null } }, { saldo: { lte: 0 } }] },
     select: { saldo: true, estoqueMinimo: true },
   });
-  let abaixo = 0, negativo = 0;
+  let semEstoque = 0, abaixo = 0, negativo = 0;
   for (const p of ps) {
     const s = situacaoEstoque(Number(p.saldo), p.estoqueMinimo);
-    if (s !== "ok") abaixo++;
-    if (s === "negativo") negativo++;
+    if (s === "zerado") semEstoque++;
+    else if (s === "abaixo") abaixo++;
+    else if (s === "negativo") negativo++;
   }
-  return { abaixo, negativo };
+  return { semEstoque, abaixo, negativo };
 }
 
 /* ───────── Extrato ───────── */
