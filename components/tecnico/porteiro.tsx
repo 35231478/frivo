@@ -68,7 +68,11 @@ export function usePorteiro(resumo: ResumoPorteiro | null | undefined, opcoes: {
 
   const registrar = useCallback(async (envio: EnvioDiario) => {
     if (!fila) return;
-    try { setGuardado(await fila.registrar(envio)); } catch { /* nunca prende: segue liberado */ setGuardado((g) => ({ ...(g ?? { pendentes: [], erro: null }), registros: [...(g?.registros ?? []), { dia: envio.dia, situacao: envio.situacao }] })); }
+    try {
+      setGuardado(await fila.registrar(envio));
+      // Depois do envio (subiu, ficou para depois ou foi recusado), a tela mostra o que ficou guardado
+      void fila.enviar().then(() => fila.ler()).then(setGuardado).catch(() => {});
+    } catch { /* nunca prende: segue liberado */ setGuardado((g) => ({ ...(g ?? { pendentes: [], erro: null }), registros: [...(g?.registros ?? []), { dia: envio.dia, situacao: envio.situacao }] })); }
     setReaberto(false);
   }, [fila]);
 

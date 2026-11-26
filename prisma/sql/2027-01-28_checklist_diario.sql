@@ -31,13 +31,13 @@
 
 -- 1. Configuração por empresa
 ALTER TABLE "configuracoes" ADD COLUMN IF NOT EXISTS "checklist_diario_ativo" BOOLEAN NOT NULL DEFAULT false;
-ALTER TABLE "configuracoes" ADD COLUMN IF NOT EXISTS "checklist_diario_dias" INTEGER[] NOT NULL DEFAULT ARRAY[1, 2, 3, 4, 5]::INTEGER[];
+ALTER TABLE "configuracoes" ADD COLUMN IF NOT EXISTS "checklist_diario_dias" INTEGER[] DEFAULT ARRAY[1, 2, 3, 4, 5]::INTEGER[];
 ALTER TABLE "configuracoes" ADD COLUMN IF NOT EXISTS "checklist_diario_template_id" TEXT;
 ALTER TABLE "configuracoes" ADD COLUMN IF NOT EXISTS "checklist_diario_todos" BOOLEAN NOT NULL DEFAULT true;
-ALTER TABLE "configuracoes" ADD COLUMN IF NOT EXISTS "checklist_diario_tecnicos" TEXT[] NOT NULL DEFAULT ARRAY[]::TEXT[];
+ALTER TABLE "configuracoes" ADD COLUMN IF NOT EXISTS "checklist_diario_tecnicos" TEXT[] DEFAULT ARRAY[]::TEXT[];
 
 DO $$ BEGIN
-  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'configuracoes_checklist_diario_template_id_fkey') THEN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'configuracoes_checklist_diario_template_id_fkey' AND conrelid = '"configuracoes"'::regclass) THEN
     ALTER TABLE "configuracoes" ADD CONSTRAINT "configuracoes_checklist_diario_template_id_fkey"
       FOREIGN KEY ("checklist_diario_template_id") REFERENCES "checklist_templates"("id") ON DELETE SET NULL ON UPDATE CASCADE;
   END IF;
@@ -77,23 +77,23 @@ CREATE UNIQUE INDEX IF NOT EXISTS "checklist_diario_tecnico_id_dia_key" ON "chec
 CREATE INDEX IF NOT EXISTS "checklist_diario_empresa_id_dia_idx" ON "checklist_diario"("empresa_id", "dia");
 
 DO $$ BEGIN
-  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'checklist_diario_empresa_id_fkey') THEN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'checklist_diario_empresa_id_fkey' AND conrelid = '"checklist_diario"'::regclass) THEN
     ALTER TABLE "checklist_diario" ADD CONSTRAINT "checklist_diario_empresa_id_fkey"
       FOREIGN KEY ("empresa_id") REFERENCES "empresas"("id") ON DELETE CASCADE ON UPDATE CASCADE;
   END IF;
-  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'checklist_diario_tecnico_id_fkey') THEN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'checklist_diario_tecnico_id_fkey' AND conrelid = '"checklist_diario"'::regclass) THEN
     ALTER TABLE "checklist_diario" ADD CONSTRAINT "checklist_diario_tecnico_id_fkey"
       FOREIGN KEY ("tecnico_id") REFERENCES "tecnicos"("id") ON DELETE CASCADE ON UPDATE CASCADE;
   END IF;
-  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'checklist_diario_usuario_id_fkey') THEN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'checklist_diario_usuario_id_fkey' AND conrelid = '"checklist_diario"'::regclass) THEN
     ALTER TABLE "checklist_diario" ADD CONSTRAINT "checklist_diario_usuario_id_fkey"
       FOREIGN KEY ("usuario_id") REFERENCES "usuarios"("id") ON DELETE SET NULL ON UPDATE CASCADE;
   END IF;
-  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'checklist_diario_veiculo_id_fkey') THEN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'checklist_diario_veiculo_id_fkey' AND conrelid = '"checklist_diario"'::regclass) THEN
     ALTER TABLE "checklist_diario" ADD CONSTRAINT "checklist_diario_veiculo_id_fkey"
       FOREIGN KEY ("veiculo_id") REFERENCES "veiculos"("id") ON DELETE SET NULL ON UPDATE CASCADE;
   END IF;
-  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'checklist_diario_checklist_id_fkey') THEN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'checklist_diario_checklist_id_fkey' AND conrelid = '"checklist_diario"'::regclass) THEN
     ALTER TABLE "checklist_diario" ADD CONSTRAINT "checklist_diario_checklist_id_fkey"
       FOREIGN KEY ("checklist_id") REFERENCES "checklist_preenchidos"("id") ON DELETE SET NULL ON UPDATE CASCADE;
   END IF;
