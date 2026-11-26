@@ -381,7 +381,7 @@ describe("Clientes: ações da linha", () => {
   });
 
   it("inativar: o texto padrão e o que continua andando; confirma, grava, avisa e atualiza a lista", async () => {
-    respostas["GET /api/clientes/c1/impacto"] = { status: 200, corpo: { bloqueio: null, avisos: ["Tem 1 contrato ativo (CT-1): ele continua gerando OS e cobrança até você encerrar."] } };
+    respostas["GET /api/clientes/c1/impacto"] = { status: 200, corpo: { bloqueio: null, avisos: ["Tem 1 contrato ativo (CT-1): continua gerando OS e cobrança até o encerramento."] } };
     await abrir(P(["visualizar", "editar", "excluir"]));
     await clicar(inativarBtn());
     expect(txt(dialogo())).toContain("Inativar cliente Padaria Pão Quente?");

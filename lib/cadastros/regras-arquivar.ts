@@ -62,7 +62,7 @@ export interface ConfigChecklistDiario { checklistDiarioAtivo: boolean; checklis
  */
 export function motivoNaoInativarModeloChecklist(modeloId: string, cfg: ConfigChecklistDiario | null): string | null {
   if (cfg?.checklistDiarioAtivo && cfg.checklistDiarioTemplateId === modeloId) {
-    return "Este é o modelo do checklist diário obrigatório: inativado, o app deixaria de cobrar o checklist. Escolha outro modelo no checklist diário antes.";
+    return "Modelo do checklist diário obrigatório: troque o modelo do checklist diário antes de inativar.";
   }
   return null;
 }
@@ -132,8 +132,16 @@ const ate3 = (xs: string[]) => xs.slice(0, 3).join(", ") + (xs.length > 3 ? ` e 
  */
 export function avisosInativarCliente(u: UsoCliente): string[] {
   const a: string[] = [];
-  if (u.contratosAtivos.length) a.push(`Tem ${pl(u.contratosAtivos.length, "contrato ativo", "contratos ativos")} (${ate3(u.contratosAtivos)}): ele${u.contratosAtivos.length === 1 ? " continua" : "s continuam"} gerando OS e cobrança até você encerrar.`);
-  if (u.osAbertas.length) a.push(`Tem ${pl(u.osAbertas.length, "OS em aberto", "OS em aberto")} (${ate3(u.osAbertas)}): elas seguem normalmente.`);
+  const ct = u.contratosAtivos, os = u.osAbertas;
+  if (ct.length) {
+    const qtd = pl(ct.length, "contrato ativo", "contratos ativos");
+    const segue = ct.length === 1 ? "continua" : "continuam";
+    a.push(`Tem ${qtd} (${ate3(ct)}): ${segue} gerando OS e cobrança até o encerramento.`);
+  }
+  if (os.length) {
+    const segue = os.length === 1 ? "segue" : "seguem";
+    a.push(`Tem ${pl(os.length, "OS em aberto", "OS em aberto")} (${ate3(os)}): ${segue} normalmente.`);
+  }
   if (u.orcamentosAbertos) a.push(`Tem ${pl(u.orcamentosAbertos, "orçamento em aberto", "orçamentos em aberto")}.`);
   if (u.contasAbertas) a.push(`Tem ${pl(u.contasAbertas, "conta a receber em aberto", "contas a receber em aberto")}: a cobrança continua.`);
   if (u.pmocsAtivos) a.push(`Tem ${pl(u.pmocsAtivos, "PMOC ativo", "PMOCs ativos")}.`);

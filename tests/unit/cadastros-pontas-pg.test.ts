@@ -169,8 +169,8 @@ describe.skipIf(!URL_PG)("pontas soltas de cadastro (PostgreSQL real)", () => {
     expect(r.status).toBe(200);
     expect(r.json.bloqueio).toBeNull();
     expect(r.json.avisos).toEqual([
-      "Tem 1 contrato ativo (CT-L4-001): ele continua gerando OS e cobrança até você encerrar.",
-      "Tem 1 OS em aberto (OS-L4-1): elas seguem normalmente.",
+      "Tem 1 contrato ativo (CT-L4-001): continua gerando OS e cobrança até o encerramento.",
+      "Tem 1 OS em aberto (OS-L4-1): segue normalmente.",
       "Tem 1 orçamento em aberto.",
       "Tem 1 conta a receber em aberto: a cobrança continua.",
     ]);
@@ -189,7 +189,7 @@ describe.skipIf(!URL_PG)("pontas soltas de cadastro (PostgreSQL real)", () => {
     await prisma.configuracao.create({ data: { empresaId: "e1", checklistDiarioAtivo: true, checklistDiarioTemplateId: "mDiario" } });
     como();
     const r = await rota("api/checklist-templates/[id]", "DELETE", undefined, { id: "mDiario" });
-    expect(r).toEqual({ status: 409, json: { erro: "Este é o modelo do checklist diário obrigatório: inativado, o app deixaria de cobrar o checklist. Escolha outro modelo no checklist diário antes." } });
+    expect(r).toEqual({ status: 409, json: { erro: "Modelo do checklist diário obrigatório: troque o modelo do checklist diário antes de inativar." } });
     expect((await prisma.checklistTemplate.findUnique({ where: { id: "mDiario" } })).ativo).toBe(true);
     expect((await rota("api/checklist-templates/[id]", "DELETE", undefined, { id: "mOutro" })).status).toBe(200);
     // checklist diário desligado: o modelo sai normalmente

@@ -82,7 +82,7 @@ describe("ficha do cliente: inativar e reativar pelo botão padrão", () => {
 
   for (const consulta of [true, false]) {
     it(`${consulta ? "consulta" : "edição"}: Inativar com o texto padrão e o que continua andando; confirmado, o selo vira Inativo`, async () => {
-      respostas["GET /api/clientes/cl1/impacto"] = { status: 200, corpo: { bloqueio: null, avisos: ["Tem 1 contrato ativo (CT-L4-001): ele continua gerando OS e cobrança até você encerrar."] } };
+      respostas["GET /api/clientes/cl1/impacto"] = { status: 200, corpo: { bloqueio: null, avisos: ["Tem 1 contrato ativo (CT-L4-001): continua gerando OS e cobrança até o encerramento."] } };
       await ficha(consulta, permissoesTotais());
       expect(status()).toBe("Ativo");
       // o antigo seletor de status (com o texto próprio) saiu

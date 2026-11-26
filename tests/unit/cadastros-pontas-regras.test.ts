@@ -55,7 +55,7 @@ describe("conta a pagar: paga não cancela nem edita", () => {
 
 describe("modelo de checklist do checklist diário", () => {
   it("ligado e é este modelo: não inativa; desligado, outro modelo ou sem configuração: inativa", () => {
-    expect(motivoNaoInativarModeloChecklist("m1", { checklistDiarioAtivo: true, checklistDiarioTemplateId: "m1" })).toMatch(/^Este é o modelo do checklist diário obrigatório/);
+    expect(motivoNaoInativarModeloChecklist("m1", { checklistDiarioAtivo: true, checklistDiarioTemplateId: "m1" })).toMatch(/^Modelo do checklist diário obrigatório/);
     expect(motivoNaoInativarModeloChecklist("m1", { checklistDiarioAtivo: false, checklistDiarioTemplateId: "m1" })).toBeNull();
     expect(motivoNaoInativarModeloChecklist("m2", { checklistDiarioAtivo: true, checklistDiarioTemplateId: "m1" })).toBeNull();
     expect(motivoNaoInativarModeloChecklist("m1", null)).toBeNull();
@@ -102,14 +102,15 @@ describe("inativar cliente: o que continua andando", () => {
   it("nada em andamento: nenhum aviso", () => expect(avisosInativarCliente(vazio)).toEqual([]));
   it("um de cada (singular) e vários (plural, até 3 nomes)", () => {
     expect(avisosInativarCliente({ contratosAtivos: ["CT-1"], osAbertas: ["OS-1"], orcamentosAbertos: 1, contasAbertas: 1, pmocsAtivos: 1 })).toEqual([
-      "Tem 1 contrato ativo (CT-1): ele continua gerando OS e cobrança até você encerrar.",
-      "Tem 1 OS em aberto (OS-1): elas seguem normalmente.",
+      "Tem 1 contrato ativo (CT-1): continua gerando OS e cobrança até o encerramento.",
+      "Tem 1 OS em aberto (OS-1): segue normalmente.",
       "Tem 1 orçamento em aberto.",
       "Tem 1 conta a receber em aberto: a cobrança continua.",
       "Tem 1 PMOC ativo.",
     ]);
-    expect(avisosInativarCliente({ ...vazio, contratosAtivos: ["A", "B", "C", "D"], orcamentosAbertos: 2, contasAbertas: 3, pmocsAtivos: 2 })).toEqual([
-      "Tem 4 contratos ativos (A, B, C e mais 1): eles continuam gerando OS e cobrança até você encerrar.",
+    expect(avisosInativarCliente({ ...vazio, contratosAtivos: ["A", "B", "C", "D"], osAbertas: ["OS-1", "OS-2"], orcamentosAbertos: 2, contasAbertas: 3, pmocsAtivos: 2 })).toEqual([
+      "Tem 4 contratos ativos (A, B, C e mais 1): continuam gerando OS e cobrança até o encerramento.",
+      "Tem 2 OS em aberto (OS-1, OS-2): seguem normalmente.",
       "Tem 2 orçamentos em aberto.",
       "Tem 3 contas a receber em aberto: a cobrança continua.",
       "Tem 2 PMOCs ativos.",
