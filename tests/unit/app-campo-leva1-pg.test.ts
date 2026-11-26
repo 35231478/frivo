@@ -432,6 +432,32 @@ describe.skipIf(!URL_PG)("app de campo, leva 1: QR e materiais usados (PostgreSQ
       // Corrigir estornado: recusado
       expect((await chamar("ordens/[id]/materiais-campo/[linhaId]", "PATCH", { id: "osA", linhaId: l.id }, { quantidade: 1 })).status).toBe(409);
     });
+    it("OS já numa medição válida: o uso em campo não muda mais (o faturamento já contou); medição cancelada não trava", async () => {
+      comoEscritorio();
+      const l = await linha("cap1");
+      const med = await prisma.medicao.create({ data: { empresaId: "e1", clienteId: "c1", numero: "MED-1", tokenPublico: "tok-med-1", status: "APROVADA" } });
+      await prisma.medicaoItem.create({ data: { medicaoId: med.id, ordemServicoId: "osA", descricao: "OS-0001", quantidade: 1, valorUnitario: 1, valorTotal: 1 } });
+      const antes = await saldo("pCap");
+      const r = await chamar("ordens/[id]/materiais-campo/[linhaId]", "PATCH", { id: "osA", linhaId: l.id }, { quantidade: 9 });
+      expect(r).toMatchObject({ status: 409, json: { erro: "OS já está numa medição: o material usado não pode mais ser alterado." } });
+      expect((await chamar("ordens/[id]/materiais-campo/[linhaId]", "DELETE", { id: "osA", linhaId: l.id })).status).toBe(409);
+      expect(await saldo("pCap")).toBe(antes);
+      await prisma.medicao.update({ where: { id: med.id }, data: { status: "CANCELADA" } });
+      expect((await chamar("ordens/[id]/materiais-campo/[linhaId]", "PATCH", { id: "osA", linhaId: l.id }, { quantidade: 3 })).status).toBe(200);
+    });
+    it("sino: saldo exatamente zero não é negativo (só abaixo de zero avisa)", async () => {
+      comoEscritorio();
+      await prisma.produto.update({ where: { id: "pCabo" }, data: { saldo: 0 } });
+      await prisma.atividadeMaterial.updateMany({ where: { clientId: "cabo1" }, data: { removidoEm: null } });
+      expect((await chamar("alertas", "GET")).json.estoqueNegativoCampo).toBe(0);
+      await prisma.produto.update({ where: { id: "pCabo" }, data: { saldo: -0.001 } });
+      expect((await chamar("alertas", "GET")).json.estoqueNegativoCampo).toBe(1);
+      // Uso em campo antigo (fora da janela) não conta
+      await prisma.atividadeMaterial.updateMany({ where: { produtoId: "pCabo" }, data: { criadoEm: new Date(Date.now() - 31 * 24 * H) } });
+      expect((await chamar("alertas", "GET")).json.estoqueNegativoCampo).toBe(0);
+      await prisma.produto.update({ where: { id: "pCabo" }, data: { saldo: 1 } });
+      await prisma.atividadeMaterial.updateMany({ where: { clientId: "cabo1" }, data: { removidoEm: new Date() } });
+    });
     it("o técnico (modo técnico) não usa a rota do escritório, mesmo com OS › Editar", async () => {
       comoTecnico();
       const l = await linha("cap1");
