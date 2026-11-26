@@ -335,60 +335,71 @@ describe("QR Codes (impressão)", () => {
 });
 
 /* ═════════ Clientes ═════════ */
+// (leva 4 de cadastros) Inativar/Reativar do cliente passou a ser o InativarRegistro, o botão padrão dos
+// cadastros: o mesmo texto de confirmação de todo lugar, o "Antes de confirmar, saiba que" (GET …/impacto)
+// e a reativação também confirmada. Antes eram dois botões próprios com um confirmar() e um texto só dele.
 describe("Clientes: ações da linha", () => {
   async function abrir(permissoes: Permissoes, ativo = true) {
     const { ClienteAcoes } = await import("@/components/clientes/cliente-acoes");
     await montar(createElement(ClienteAcoes, { id: "c1", nome: "Padaria Pão Quente", ativo }), permissoes);
   }
   const P = (acoes: ("visualizar" | "criar" | "editar" | "excluir")[]) => montarPermissoes({ clientes: acoes });
+  const inativarBtn = () => $('[data-acoes-cliente="c1"] [data-inativar-registro="inativar"]');
+  const reativarBtn = () => $('[data-acoes-cliente="c1"] [data-inativar-registro="reativar"]');
+  const dialogo = () => $('[role="dialog"]');
+  beforeEach(() => { respostas["GET /api/clientes/c1/impacto"] = { status: 200, corpo: { bloqueio: null, avisos: [] } }; });
 
   it("quem só visualiza: abre a ficha para ver (olho), sem Inativar nem Reativar", async () => {
     await abrir(P(["visualizar"]));
     expect($("[data-abrir-cliente]")!.getAttribute("aria-label")).toBe("Ver Padaria Pão Quente");
     // (leva 2) o olho abre a FICHA em consulta, não o formulário de edição
     expect($("[data-abrir-cliente]")!.getAttribute("href")).toBe("/clientes/c1");
-    expect($("[data-inativar-cliente]")).toBeNull();
-    expect($("[data-reativar-cliente]")).toBeNull();
+    expect(inativarBtn()).toBeNull();
+    expect(reativarBtn()).toBeNull();
   });
 
   it("editar sem excluir: lápis, sem Inativar; excluir sem editar: Inativar, e a ficha abre para ver", async () => {
     await abrir(P(["visualizar", "editar"]));
     expect($("[data-abrir-cliente]")!.getAttribute("aria-label")).toBe("Editar Padaria Pão Quente");
     expect($("[data-abrir-cliente]")!.getAttribute("href")).toBe("/clientes/c1/editar"); // o lápis vai direto para a edição
-    expect($("[data-inativar-cliente]")).toBeNull();
-    expect($("[data-reativar-cliente]")).toBeNull(); // cliente ativo não tem o que reativar
+    expect(inativarBtn()).toBeNull();
+    expect(reativarBtn()).toBeNull(); // cliente ativo não tem o que reativar
     act(() => root.unmount());
     await abrir(P(["visualizar", "excluir"]));
     expect($("[data-abrir-cliente]")!.getAttribute("aria-label")).toBe("Ver Padaria Pão Quente");
-    expect($("[data-inativar-cliente]")).toBeTruthy();
+    expect(inativarBtn()!.getAttribute("aria-label")).toBe("Inativar cliente");
   });
 
   it("cliente inativo: Reativar com editar (sem Inativar); sem editar, nada", async () => {
     await abrir(P(["visualizar", "editar", "excluir"]), false);
-    expect($("[data-reativar-cliente]")).toBeTruthy();
-    expect($("[data-inativar-cliente]")).toBeNull();
+    expect(reativarBtn()).toBeTruthy();
+    expect(inativarBtn()).toBeNull();
     act(() => root.unmount());
     await abrir(P(["visualizar", "excluir"]), false);
-    expect($("[data-reativar-cliente]")).toBeNull();
-    expect($("[data-inativar-cliente]")).toBeNull();
+    expect(reativarBtn()).toBeNull();
+    expect(inativarBtn()).toBeNull();
   });
 
-  it("inativar: confirma, grava, avisa e atualiza a lista", async () => {
+  it("inativar: o texto padrão e o que continua andando; confirma, grava, avisa e atualiza a lista", async () => {
+    respostas["GET /api/clientes/c1/impacto"] = { status: 200, corpo: { bloqueio: null, avisos: ["Tem 1 contrato ativo (CT-1): ele continua gerando OS e cobrança até você encerrar."] } };
     await abrir(P(["visualizar", "editar", "excluir"]));
-    await clicar($("[data-inativar-cliente]"));
-    expect(txt(confirmacao())).toContain("Inativar Padaria Pão Quente?");
-    expect(txt(confirmacao())).toContain("pode ser reativado");
+    await clicar(inativarBtn());
+    expect(txt(dialogo())).toContain("Inativar cliente Padaria Pão Quente?");
+    expect(txt(dialogo())).toContain("Tem certeza? O cliente sai das listas e seletores; nada é apagado e pode ser reativado depois.");
+    expect(txt($("[data-avisos]"))).toContain("Tem 1 contrato ativo (CT-1)");
+    // sem campo de motivo: o cliente não tem onde guardar (e o servidor não lê)
+    expect($("textarea", dialogo()!)).toBeNull();
     expect(gravacoes()).toEqual([]);
-    await clicar($("[data-confirmar-sim]"));
-    expect(gravacoes()).toEqual([{ url: "/api/clientes/c1", metodo: "DELETE", corpo: null }]);
+    await clicar(botao("Sim, inativar"));
+    expect(gravacoes()).toEqual([{ url: "/api/clientes/c1", metodo: "DELETE", corpo: { motivo: "" } }]);
     expect(await toasts()).toEqual([["Cliente inativado.", "sucesso"]]);
     expect(nav.refresh).toHaveBeenCalledTimes(1);
   });
 
-  it("cancelar a confirmação NÃO inativa", async () => {
+  it("voltar na confirmação NÃO inativa", async () => {
     await abrir(P(["visualizar", "editar", "excluir"]));
-    await clicar($("[data-inativar-cliente]"));
-    await clicar($("[data-confirmar-nao]"));
+    await clicar(inativarBtn());
+    await clicar(botao("Voltar"));
     expect(gravacoes()).toEqual([]);
     expect(await toasts()).toEqual([]);
     expect(nav.refresh).not.toHaveBeenCalled();
@@ -397,16 +408,20 @@ describe("Clientes: ações da linha", () => {
   it("o servidor recusa (403): a lista não atualiza e o motivo aparece", async () => {
     respostas["DELETE /api/clientes/c1"] = { status: 403, corpo: { erro: "Sem permissão" } };
     await abrir(P(["visualizar", "editar", "excluir"]));
-    await clicar($("[data-inativar-cliente]"));
-    await clicar($("[data-confirmar-sim]"));
-    expect(await toasts()).toEqual([["Sem permissão", "erro"]]);
+    await clicar(inativarBtn());
+    await clicar(botao("Sim, inativar"));
+    expect(txt(dialogo())).toContain("Sem permissão");
+    expect(await toasts()).toEqual([]);
     expect(nav.refresh).not.toHaveBeenCalled();
-    expect($("[data-inativar-cliente]")).toBeTruthy();
+    expect(inativarBtn()).toBeTruthy();
   });
 
-  it("reativar: grava { ativo: true }, avisa e atualiza; recusado, não atualiza", async () => {
+  it("reativar: confirma, grava { ativo: true }, avisa e atualiza; recusado, não atualiza", async () => {
     await abrir(P(["visualizar", "editar"]), false);
-    await clicar($("[data-reativar-cliente]"));
+    await clicar(reativarBtn());
+    expect(txt(dialogo())).toContain("Reativar cliente Padaria Pão Quente?");
+    expect(gravacoes()).toEqual([]);
+    await clicar(botao("Reativar", dialogo()!));
     expect(gravacoes()).toEqual([{ url: "/api/clientes/c1", metodo: "PATCH", corpo: { ativo: true } }]);
     expect(await toasts()).toEqual([["Cliente reativado.", "sucesso"]]);
     expect(nav.refresh).toHaveBeenCalledTimes(1);
@@ -414,8 +429,9 @@ describe("Clientes: ações da linha", () => {
     nav.refresh.mockClear();
     respostas["PATCH /api/clientes/c1"] = { status: 403, corpo: { erro: "Sem permissão" } };
     await abrir(P(["visualizar", "editar"]), false);
-    await clicar($("[data-reativar-cliente]"));
-    expect((await toasts()).at(-1)).toEqual(["Sem permissão", "erro"]);
+    await clicar(reativarBtn());
+    await clicar(botao("Reativar", dialogo()!));
+    expect(txt(dialogo())).toContain("Sem permissão");
     expect(nav.refresh).not.toHaveBeenCalled();
   });
 });
@@ -811,7 +827,8 @@ describe("as telas da leva seguem o padrão (varredura)", () => {
 
   it("gravações das telas de equipamento avisam (toast) e os seletores editam no contexto", () => {
     for (const f of ["components/forms/equipamento-form.tsx", "components/equipamentos/cadastro-por-foto.tsx", "components/equipamentos/gerar-qr-botao.tsx", "components/forms/equipamento-qr-section.tsx", "components/equipamentos/equipamento-ativo-botao.tsx", "components/clientes/cliente-acoes.tsx"]) {
-      expect([f, /\btoast\(/.test(fonte(f))]).toEqual([f, true]);
+      // (leva 4 de cadastros) as ações do cliente usam o InativarRegistro, que avisa por dentro
+      expect([f, /\btoast\(|<InativarRegistro\b/.test(fonte(f))]).toEqual([f, true]);
     }
     const form = fonte("components/forms/equipamento-form.tsx");
     expect(form.match(/edicao=\{CLIENTE\.edicao\(\)\}/g)).toHaveLength(2);
