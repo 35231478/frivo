@@ -19,6 +19,8 @@ export const INCLUDE_DOCUMENTO_ORCAMENTO = {
   // O nome ATUAL do catálogo: o documento separa "Nome — descrição cadastrada" em nome + descrição discreta
   servicos: { orderBy: { ordem: "asc" }, include: { servico: { select: { nome: true } } } },
   produtos: { orderBy: { ordem: "asc" }, include: { produto: { select: { nome: true } } } },
+  // OS vinculadas: o número sai no cabeçalho do documento (lib/orcamentos/proposta → numerosOsDoDocumento)
+  ordensServico: { select: { ordemServico: { select: { numero: true, criadoEm: true, empresaId: true } } } },
 } satisfies Prisma.OrcamentoInclude;
 
 /** Título da página do documento (= nome sugerido ao salvar em PDF): "Orçamento 2026-0015 - Cliente" */

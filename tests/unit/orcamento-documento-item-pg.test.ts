@@ -83,7 +83,7 @@ describe.skipIf(!URL_PG)("Documento do orçamento: título do PDF e item do cat�
     }
   });
 
-  it("impressão: item do catálogo em nome + descrição + Obs.; renomeado separa no ' — '; à mão fica inteiro", async () => {
+  it("impressão: item do catálogo em nome + descrição + observação (sem o rótulo 'Obs.:'); renomeado separa no ' — '; à mão fica inteiro", async () => {
     const { default: Pagina } = await import("@/app/(publico)/orcamento/[token]/imprimir/page");
     const html = renderToStaticMarkup(await Pagina({ params: Promise.resolve({ token: "tok-1" }) }));
     const d = document.createElement("div");
@@ -91,7 +91,7 @@ describe.skipIf(!URL_PG)("Documento do orçamento: título do PDF e item do cat�
     const linhas = (g: string) => [...d.querySelectorAll(`[data-grupo-documento='${g}'] tr[data-linha-item]`)].map((tr) =>
       [...tr.querySelectorAll("[data-nome-item], [data-descricao-item], [data-observacao-item]")].map((e) => e.textContent));
     expect(linhas("serviços")).toEqual([
-      ["Limpeza de Filtro", "Higienização completa", "Obs.: 2º andar"], ["Instalação — 2 aparelhos"], ["Split — 12.000 BTUs", "Instalação padrão"],
+      ["Limpeza de Filtro", "Higienização completa", "2º andar"], ["Instalação — 2 aparelhos"], ["Split — 12.000 BTUs", "Instalação padrão"],
     ]);
     expect(linhas("produtos")).toEqual([["Capacitor 35uF", "Duplo"], ["Tubo — 1/4 pol", "Cobre flexível"]]);
   });

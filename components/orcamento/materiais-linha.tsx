@@ -33,6 +33,12 @@ export interface LinhaComMateriais {
  * como linhas de produto e o custo interno (margem). Valor manual: o total digitado na linha vale; "Recalcular"
  * volta a base + ajuste.
  */
+/**
+ * O que a orientação "Interno: o cliente vê só a linha do serviço…" dizia em uma linha inteira, agora
+ * no ⓘ ao lado de "Materiais e peças" (economiza a linha em cada serviço do orçamento).
+ */
+const DICA_MATERIAIS = "Só para a equipe: o cliente vê apenas a linha do serviço (já ajustada) e as peças como produtos. Cópia da composição do serviço feita na hora de orçar (mudar o cadastro depois não altera este orçamento). Material INCLUSO ajusta o valor do serviço pela diferença do padrão: (quantidade − padrão) × venda — exceder soma, usar menos abate, avulso entra inteiro. PEÇA (venda à parte) vira uma linha de produto cobrada à parte. O custo é só interno (margem); não entra no preço. Sem baixa de estoque aqui.";
+
 export function MateriaisLinha({ item, clienteId, catalogoProdutos, onChange, somenteLeitura = false, buscarAvulso }: {
   item: LinhaComMateriais;
   clienteId: string | null;
@@ -68,23 +74,22 @@ export function MateriaisLinha({ item, clienteId, catalogoProdutos, onChange, so
 
   return (
     <div className="mt-1 mb-1 rounded-lg border border-surface-border bg-surface-page/60" data-materiais-linha data-total-materiais={ms.length} data-somente-leitura={somenteLeitura ? "true" : undefined}>
-      <button type="button" onClick={() => setAberto((a) => !a)} className="w-full flex flex-wrap items-center justify-between gap-2 px-3 py-1.5 text-left" aria-expanded={aberto} data-abrir-materiais>
-        <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-ink">
-          <Boxes className="w-3.5 h-3.5 text-ink-muted" aria-hidden /> Materiais e peças ({ms.length})
+      <div className="flex flex-wrap items-center justify-between gap-2 px-3 py-1.5">
+        <span className="inline-flex items-center gap-1">
+          <button type="button" onClick={() => setAberto((a) => !a)} className="inline-flex items-center gap-1.5 text-xs font-semibold text-ink text-left" aria-expanded={aberto} data-abrir-materiais>
+            <Boxes className="w-3.5 h-3.5 text-ink-muted" aria-hidden /> Materiais e peças ({ms.length})
+          </button>
+          <Dica rotulo="Materiais e peças" texto={DICA_MATERIAIS} />
         </span>
         <span className="text-[11px] text-ink-muted tabular-nums">
           Ajuste no serviço: <strong className={cn(r.ajuste > 0 && "text-ink", r.ajuste < 0 && "text-ok-texto")} data-ajuste={r.ajuste}>{sinal(r.ajuste)}</strong>
           {r.quantasPecas > 0 && <> · Peças à parte: <strong data-pecas={r.pecas}>{formatarMoeda(r.pecas)}</strong></>}
         </span>
-      </button>
+      </div>
       {aberto && (
         <div className="px-3 pb-3 space-y-2">
-          <div className="flex items-center gap-1 text-[11px] text-ink-muted">
-            Interno: o cliente vê só a linha do serviço (já ajustada) e as peças como produtos.
-            <Dica rotulo="Materiais e peças" texto="Cópia da composição do serviço feita na hora de orçar (mudar o cadastro depois não altera este orçamento). Material INCLUSO ajusta o valor do serviço pela diferença do padrão: (quantidade − padrão) × venda — exceder soma, usar menos abate, avulso entra inteiro. PEÇA (venda à parte) vira uma linha de produto cobrada à parte. O custo é só interno (margem); não entra no preço. Sem baixa de estoque aqui." />
-          </div>
           {erro && <p role="alert" className="text-xs text-atrasado-texto">{erro}</p>}
-          {ms.length === 0 && <p className="text-xs text-ink-subtle italic">Nenhum material. Adicione um produto avulso abaixo.</p>}
+          {ms.length === 0 && <p className="text-xs text-ink-subtle italic" data-sem-materiais>Nenhum material.</p>}
           <div className="space-y-1">
             {ms.map((m) => {
               const peca = ehPeca(m);
@@ -152,8 +157,9 @@ export function MateriaisLinha({ item, clienteId, catalogoProdutos, onChange, so
               </div>
             )}
             {r.quantasPecas > 0 && <p className="text-ink-muted"><Package className="inline w-3 h-3 mr-1" aria-hidden />{r.quantasPecas} {r.quantasPecas === 1 ? "peça vai" : "peças vão"} como linha de produto, cobrada à parte: <strong className="tabular-nums">{formatarMoeda(r.pecas)}</strong></p>}
-            <p className="text-ink-subtle" data-custo-interno={r.custoTotal}>
-              Custo interno (último custo de compra): {formatarMoeda(r.custoTotal)}{r.semCusto > 0 ? ` · ${r.semCusto} sem custo` : ""} — não entra no preço.
+            <p className="flex items-center gap-1 text-ink-subtle" data-custo-interno={r.custoTotal}>
+              <span>Custo interno: {formatarMoeda(r.custoTotal)}{r.semCusto > 0 ? ` · ${r.semCusto} sem custo` : ""}</span>
+              <Dica rotulo="Custo interno" texto="Último custo de compra dos materiais. Só para a margem: não entra no preço nem aparece para o cliente." />
             </p>
           </div>
         </div>

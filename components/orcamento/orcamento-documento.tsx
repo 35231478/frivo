@@ -8,7 +8,8 @@ import { linhasDadosBancarios } from "@/lib/orcamentos/dados-bancarios";
 import {
   quantidadesAlinhadas, valorSemMoeda,
   destinatarioOrcamento, linhasCondicoes, linhasNaoIncluso, normasDoDocumento, numeroFormalOrcamento, partesItemDocumento, textoArt, timbreEmpresa,
-  type ContatoPara, type UnidadePara,
+  numerosOsDoDocumento,
+  type ContatoPara, type OsVinculadaDoc, type UnidadePara,
 } from "@/lib/orcamentos/proposta";
 
 export interface ItemDoc {
@@ -31,7 +32,7 @@ export interface ItemDoc {
 
 /**
  * Texto do item no documento, em hierarquia: nome (destaque, como sempre) → descrição cadastrada (linha
- * de baixo, menor e cinza) → observação do item (menor, cinza, itálico, com "Obs.:"). Item digitado à mão
+ * de baixo, menor e cinza) → observação do item (menor, cinza, itálico; sem rótulo: o itálico já a distingue). Item digitado à mão
  * fica como estava (tudo é o nome).
  */
 export function TextoItemDocumento({ item }: { item: ItemDoc }) {
@@ -45,7 +46,7 @@ export function TextoItemDocumento({ item }: { item: ItemDoc }) {
       {detalhe && <p className="mt-0.5 text-[11px] print:text-[10px] leading-snug text-ink-muted whitespace-pre-line" data-descricao-item>{detalhe}</p>}
       {obs && (
         <p className="mt-0.5 text-[11px] print:text-[10px] leading-snug text-ink-muted italic whitespace-pre-line" data-observacao-item>
-          <span className="not-italic font-semibold">Obs.:</span> {obs}
+          {obs}
         </p>
       )}
     </>
@@ -101,6 +102,10 @@ export interface OrcamentoDocumentoProps {
     totalGeral: unknown;
     servicos: ItemDoc[];
     produtos: ItemDoc[];
+    /** Para filtrar as OS vinculadas pela mesma empresa */
+    empresaId?: string | null;
+    /** OS vinculadas ao orçamento: o número aparece no cabeçalho do documento (sem link, por ora) */
+    ordensServico?: OsVinculadaDoc[] | null;
   };
   empresa: {
     nome: string;
@@ -206,6 +211,7 @@ export function OrcamentoDocumento({ orcamento, empresa, cliente, anexos = [], v
   const naoIncluso = linhasNaoIncluso(orcamento.naoIncluso);
   const normas = normasDoDocumento(orcamento.normas);
   const rt = orcamento.responsavelTecnico;
+  const numerosOs = numerosOsDoDocumento(orcamento.ordensServico, orcamento.empresaId);
   const fotos = anexos.filter((a) => a.tipo === "FOTO");
   const arquivos = anexos.filter((a) => a.tipo === "ARQUIVO");
 
@@ -264,6 +270,12 @@ export function OrcamentoDocumento({ orcamento, empresa, cliente, anexos = [], v
             <div className="flex justify-between gap-3" data-validade-documento>
               <dt className="text-ink-muted">Válido até</dt>
               <dd className="font-medium text-ink">{formatarData(orcamento.validadeEm)}</dd>
+            </div>
+          )}
+          {numerosOs.length > 0 && (
+            <div className="flex justify-between gap-3" data-os-documento>
+              <dt className="text-ink-muted">OS</dt>
+              <dd className="font-medium text-ink font-mono text-right [overflow-wrap:anywhere]">{numerosOs.join(", ")}</dd>
             </div>
           )}
         </dl>

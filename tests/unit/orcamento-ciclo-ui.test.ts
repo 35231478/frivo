@@ -165,11 +165,15 @@ describe("envio rastreável (tela do orçamento)", () => {
     expect(chamadas.at(-1)!.corpo).toEqual({ canal: "WHATSAPP" });
     expect(abrir).toHaveBeenCalledWith("https://wa.me/5531988887777?text=oi", "_blank", "noopener");
 
-    respostas[ENVIAR] = { status: 200, corpo: { publicUrl: "https://app/orcamento/tk1" } };
+    // Copiar link (leva A do orçamento): a cópia começa NO CLIQUE com o link montado na tela (origem +
+    // /orcamento/<token>, o mesmo que o servidor devolve) e a confirmação é um toast — o detalhe (gesto do
+    // Safari, recusa do navegador, campo para copiar à mão) está em orcamento-copiar-link.test.ts
+    const url = `${window.location.origin}/orcamento/tk1`;
+    respostas[ENVIAR] = { status: 200, corpo: { publicUrl: url } };
     await clicar($("[data-copiar-link]"));
     expect(chamadas.at(-1)!.corpo).toEqual({ canal: "LINK" });
-    expect(copiar).toHaveBeenCalledWith("https://app/orcamento/tk1");
-    expect($("[data-feedback-envio]")?.textContent).toContain("Link copiado.");
+    expect(copiar).toHaveBeenCalledWith(url);
+    expect($("[data-link-manual]")).toBeNull();
   });
 
   it("retornos sem envio: sem WhatsApp cadastrado, sem e-mail, erro do servidor, erro do Resend", async () => {

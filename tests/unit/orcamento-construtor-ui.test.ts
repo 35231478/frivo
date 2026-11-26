@@ -224,7 +224,10 @@ describe("Gerar descrição profissional (IA)", () => {
   it("sem chave: botão desabilitado e aviso 'IA não configurada'", async () => {
     await montar({ iaDisponivel: false });
     expect($<HTMLButtonElement>("[data-gerar-descricao-ia]")!.disabled).toBe(true);
-    expect($("[data-ia-indisponivel]")?.textContent).toBe("IA não configurada");
+    // o aviso em texto virou ⓘ (leva A do orçamento): o botão continua desligado e o porquê está na dica
+    expect($("[data-ia-indisponivel]")?.textContent).toBe("");
+    expect($("[data-ia-indisponivel] button")).toBeTruthy();
+    expect(document.body.textContent).toContain("IA não configurada nesta empresa");
   });
 
   it("descrição vazia: preenche com o texto da IA (pedido leva a OS e os itens, sem preços)", async () => {

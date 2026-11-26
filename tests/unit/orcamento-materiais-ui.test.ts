@@ -156,7 +156,18 @@ describe("materiais e peças no construtor", () => {
     expect(txt(linhasProduto()[0].querySelector("[data-campo='total']"))).toMatch(/160,00/);
     expect(campo(linhasServico()[0], "total").value).toBe("840,00");
     expect(txt($("[data-resumo-materiais]"))).toMatch(/1 peça vai como linha de produto, cobrada à parte: R\$\s?160,00/);
-    expect(txt($("[data-resumo-materiais]"))).toMatch(/Custo interno .*: R\$\s?170,00 · 1 sem custo/); // tubo 5 × 12 + filtro 20 + cap 2 × 45; suporte sem custo
+    // o "porquê" (último custo de compra; não entra no preço) foi para o ⓘ ao lado — leva A do orçamento
+    expect(txt($("[data-resumo-materiais]"))).toMatch(/Custo interno: R\$\s?170,00 · 1 sem custo/); // tubo 5 × 12 + filtro 20 + cap 2 × 45; suporte sem custo
+    expect(txt($("[data-resumo-materiais]"))).not.toContain("não entra no preço");
+    expect($("[data-custo-interno] button[aria-label='Ajuda: Custo interno']")).toBeTruthy();
+    // a orientação "Interno: o cliente vê só…" virou o ⓘ ao lado do título "Materiais e peças" (sem a linha inteira)
+    expect(txt(painel)).not.toContain("Interno: o cliente vê só");
+    const tituloMateriais = painel.querySelector("[data-abrir-materiais]")!;
+    const dicaMateriais = painel.querySelector("button[aria-label='Ajuda: Materiais e peças']")!;
+    expect(dicaMateriais).toBeTruthy();
+    expect(tituloMateriais.nextElementSibling!.contains(dicaMateriais)).toBe(true); // logo ao lado do que explica
+    expect(tituloMateriais.contains(dicaMateriais)).toBe(false); // botão dentro de botão, não
+    expect(document.getElementById(dicaMateriais.getAttribute("aria-describedby") ?? "")?.textContent ?? document.body.textContent).toContain("o cliente vê apenas a linha do serviço (já ajustada) e as peças como produtos");
     const corpo = await salvar();
     expect(corpo.servicos).toHaveLength(1);
     expect(corpo.servicos[0]).toMatchObject({ catalogoId: "s1", valorUnitario: 800, valorTotal: 840, valorManual: false });

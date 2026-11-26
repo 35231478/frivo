@@ -2,7 +2,8 @@
 /**
  * Documento do orçamento — o item em hierarquia e o nome do arquivo:
  *  - o construtor grava "Nome — descrição cadastrada"; o documento separa de volta: nome em destaque,
- *    descrição numa linha abaixo (menor, cinza), observação por último (menor, cinza, itálico, "Obs.:");
+ *    descrição numa linha abaixo (menor, cinza), observação por último (menor, cinza, itálico — sem o rótulo
+ *    "Obs.:", que saiu na leva A do orçamento: o itálico já distingue a observação);
  *  - só separa o que veio do catálogo (nome atual como prefixo; vinculado e renomeado: o 1º " — ");
  *    item digitado à mão fica inteiro, mesmo com " — " no meio (orçamento antigo não muda);
  *  - título da página = nome do PDF: "Orçamento 2026-0015 - CLIENTE", sem / \ : * ? " < > |.
@@ -100,14 +101,14 @@ describe("documento: hierarquia do item (DOM)", () => {
     e.hasAttribute("data-nome-item") ? "nome" : e.hasAttribute("data-descricao-item") ? "descricao" : "obs", e.textContent,
   ]);
 
-  it("nome → descrição (menor, cinza) → observação (menor, cinza, itálico, 'Obs.:'), em Serviços e Produtos", async () => {
+  it("nome → descrição (menor, cinza) → observação (menor, cinza, itálico, sem o rótulo 'Obs.:'), em Serviços e Produtos", async () => {
     const d = await montar();
     const celula = (g: string, i: number) => d.querySelectorAll(`[data-grupo-documento='${g}'] tr[data-linha-item]`)[i].querySelectorAll("td")[1];
     expect(partes(celula("serviços", 0))).toEqual([
-      ["nome", "Limpeza de Filtro"], ["descricao", "Higienização completa do filtro e bandeja"], ["obs", "Obs.: Aparelhos do 2º andar"],
+      ["nome", "Limpeza de Filtro"], ["descricao", "Higienização completa do filtro e bandeja"], ["obs", "Aparelhos do 2º andar"],
     ]);
     expect(partes(celula("produtos", 0))).toEqual([
-      ["nome", "Capacitor 35uF"], ["descricao", "Capacitor duplo para compressor"], ["obs", "Obs.: Trocar os dois"],
+      ["nome", "Capacitor 35uF"], ["descricao", "Capacitor duplo para compressor"], ["obs", "Trocar os dois"],
     ]);
     expect(partes(celula("produtos", 1))).toEqual([["nome", "Tubo — 1/4 pol"], ["descricao", "Cobre flexível"]]);
     // Item à mão fica inteiro; observação em branco não aparece
@@ -127,8 +128,9 @@ describe("documento: hierarquia do item (DOM)", () => {
     }
     expect(desc.className).not.toContain("italic"); // descrição ≠ observação
     expect(obs.className).toContain("italic");
-    expect(obs.querySelector("span")!.textContent).toBe("Obs.:");
-    expect(obs.querySelector("span")!.className).toContain("not-italic");
+    // o rótulo "Obs.:" saiu (pedido do dono: redundante); o texto da observação fica inteiro
+    expect(obs.textContent).not.toMatch(/Obs\.?:/);
+    expect(obs.querySelector("span")).toBeNull();
   });
 
   it("o resto da linha não muda: qtd × unitário no celular continua abaixo, valores com ISS embutido", async () => {
@@ -147,7 +149,7 @@ describe("documento: hierarquia do item (DOM)", () => {
       orcamento: { ...orcamento, tipo: "PROPOSTA_CONTRATO", equipamentosCobertos: [] }, empresa, cliente, responsavelTecnico: null, equipamentos: [],
     }));
     const td = [...d.querySelectorAll("tbody tr")].find((tr) => tr.textContent?.includes("Limpeza de Filtro"))!.querySelector("td")!;
-    expect(partes(td)).toEqual([["nome", "Limpeza de Filtro"], ["descricao", "Higienização completa do filtro e bandeja"], ["obs", "Obs.: Aparelhos do 2º andar"]]);
+    expect(partes(td)).toEqual([["nome", "Limpeza de Filtro"], ["descricao", "Higienização completa do filtro e bandeja"], ["obs", "Aparelhos do 2º andar"]]);
   });
 });
 
