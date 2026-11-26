@@ -1,5 +1,6 @@
 "use client";
 
+import { useNomesDaTrilha } from "@/components/layout/nome-na-trilha";
 import { signOut } from "next-auth/react";
 import { Bell, ShieldAlert, ShieldX, ChevronRight, LogOut, Search, AlertTriangle, Clock, ShoppingCart, Timer, Headset, ClipboardCheck, FileWarning, Wrench, Menu, Barcode, MessageSquareReply, PackageCheck, FileCheck2, FileX2, Hourglass, CalendarX2, TrendingUp, PackageOpen, PackageMinus, Globe, BadgeCheck, MessageSquareWarning, StarOff, UserPlus } from "lucide-react";
 import Link from "next/link";
@@ -148,7 +149,14 @@ const ROTULOS_ROTA: Record<string, string> = {
   "sem-permissao": "Sem permissão",
 };
 
-export function gerarBreadcrumb(pathname: string) {
+/** Segmento da URL que é o id de um registro (cuid ou hex), não uma palavra da rota */
+export const ehIdDeRegistro = (seg: string) => /^[0-9a-f]{8,}/i.test(seg) || /^c[a-z0-9]{20,}$/.test(seg);
+
+/**
+ * A trilha do topo. Um id na URL vira o NOME do registro quando a página o informou (NomeNaTrilha:
+ * cliente, OS com número, orçamento com número); sem nome, "Detalhes", como antes.
+ */
+export function gerarBreadcrumb(pathname: string, nomes: ReadonlyMap<string, string> = new Map()) {
   const segs = pathname.split("/").filter(Boolean);
   const itens: { label: string; href: string }[] = [];
   let acc = "";
@@ -156,7 +164,7 @@ export function gerarBreadcrumb(pathname: string) {
     acc += "/" + seg;
     const label =
       ROTULOS_ROTA[seg] ??
-      (/^[0-9a-f]{8,}/i.test(seg) || /^c[a-z0-9]{20,}$/.test(seg) ? "Detalhes" : seg.charAt(0).toUpperCase() + seg.slice(1));
+      (ehIdDeRegistro(seg) ? nomes.get(seg) ?? "Detalhes" : seg.charAt(0).toUpperCase() + seg.slice(1));
     itens.push({ label, href: acc });
   }
   return itens;
@@ -167,7 +175,9 @@ export function Header({ session, avatarUrl }: HeaderProps) {
   // Atalhos do sino seguem o RBAC: cada item só aparece para quem pode abrir o destino (T1)
   const podeVer = (modulo: string, acao?: string) => pode(usuario.permissoes, modulo, (acao as never) ?? "visualizar", usuario.role);
   const pathname = usePathname();
-  const breadcrumb = useMemo(() => gerarBreadcrumb(pathname), [pathname]);
+  const nomesTrilha = useNomesDaTrilha();
+  // o Map é o mesmo objeto: o tamanho entra na dependência para redesenhar quando um nome chega
+  const breadcrumb = useMemo(() => gerarBreadcrumb(pathname, nomesTrilha), [pathname, nomesTrilha, nomesTrilha.size]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const [alertas, setAlertas] = useState<Alertas | null>(null);
   const [sinoAberto, setSinoAberto] = useState(false);

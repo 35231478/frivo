@@ -45,6 +45,7 @@ import {
 } from "lucide-react";
 import { AlertaPerdasCliente, type PerdasCliente } from "@/components/financeiro/alerta-perdas-cliente";
 import { FichaCliente } from "@/components/clientes/ficha-cliente";
+import { NomeNaTrilha } from "@/components/layout/nome-na-trilha";
 import { SatisfacaoFicha } from "@/components/clientes/satisfacao-cliente";
 import type { ResumoSatisfacao } from "@/lib/clientes/satisfacao";
 
@@ -402,6 +403,7 @@ export function ClienteForm({ initialData, statusFinanceiroCalc, perdas12m, cons
 
   return (
     <form onSubmit={salvar} className="min-h-full -m-6 bg-surface-page p-4 sm:p-6">
+      {isEditing && <NomeNaTrilha id={initialData!.id} nome={initialData!.nomeFantasia || initialData!.nome} />}
       <div className="max-w-[1600px] mx-auto space-y-5">
         {/* Cabeçalho fixo: título + status + ações */}
         <div className="sticky top-0 z-30 -mx-4 sm:-mx-6 px-4 sm:px-6 py-3 bg-surface-page/90 backdrop-blur border-b border-surface-border">

@@ -1,3 +1,4 @@
+import { NomeNaTrilha } from "@/components/layout/nome-na-trilha";
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import Link from "next/link";
@@ -93,6 +94,7 @@ export default async function OrcamentoDetalhePage({
 
   return (
     <div className="space-y-6 max-w-5xl mx-auto">
+      <NomeNaTrilha id={orcamento.id} nome={orcamento.codigo} />
       <PageHeader
         title={`Orçamento ${orcamento.codigo}`}
         description={orcamento.nome}
