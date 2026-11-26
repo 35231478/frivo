@@ -100,7 +100,8 @@ export interface ContextoImportacao {
 }
 
 export type ResultadoLinha =
-  | { ok: true; dados: Record<string, unknown>; chaves: string[]; rotulo: string }
+  /** avisos: a linha ENTRA, mas a pessoa precisa saber (ex.: sem chave, possível duplicado) */
+  | { ok: true; dados: Record<string, unknown>; chaves: string[]; rotulo: string; avisos?: string[] }
   | { ok: false; erros: string[]; rotulo: string };
 
 export interface DefImportacao {
@@ -130,6 +131,8 @@ export interface DefImportacao {
    * para o mesmo cliente). Devolve, por número de linha, o erro a aplicar.
    */
   conferirPlanilha?: (linhas: LinhaAnalisada[]) => Map<number, string>;
+  /** Avisos ENTRE linhas que não impedem a gravação (ex.: duas linhas iguais sem nº de série). */
+  avisarPlanilha?: (linhas: LinhaAnalisada[]) => Map<number, string>;
   /** Aviso fixo da prévia (ex.: "cada cliente novo ganha a unidade Principal"). */
   avisoPrevia?: string;
 }
@@ -142,6 +145,8 @@ export interface LinhaAnalisada {
   status: StatusLinha;
   rotulo: string;
   erros: string[];
+  /** A linha entra, mas com um aviso para a pessoa revisar */
+  avisos?: string[];
   existenteId?: string;
   /** Chave de dedup que casou com o cadastro (ex.: "doc:…", "nome:…") */
   chave?: string;
@@ -152,7 +157,7 @@ export interface LinhaAnalisada {
 
 export interface Analise {
   linhas: LinhaAnalisada[];
-  resumo: { total: number; criar: number; atualizar: number; erros: number };
+  resumo: { total: number; criar: number; atualizar: number; erros: number; avisos: number };
   colunasIgnoradas: string[];
   /** Como as colunas ficaram ligadas (a tela mostra e deixa trocar) */
   colunas: LigacaoColunas;
@@ -169,7 +174,7 @@ export function chaveNome(s: string) {
 }
 
 /** Colunas da planilha de erros que o motor aceita de volta sem reclamar */
-const COLUNAS_DE_SERVICO = new Set(["linha_original", "motivo_do_erro"]);
+const COLUNAS_DE_SERVICO = new Set(["linha_original", "motivo_do_erro", "aviso"]);
 
 export function mapearCabecalho(cab: Celula[], colunas: ColunaImportacao[], ligacoes?: Ligacoes) {
   const mapa = new Map<string, number>();
@@ -281,7 +286,10 @@ export function analisar(tabela: Tabela, def: DefImportacao, ctx: ContextoImport
     const existenteId = chave ? ctx.existentes.get(chave) : undefined;
     if (existenteId && !ctx.podeAtualizar)
       return { linha, status: "erro", rotulo: r.rotulo, erros: [`Já existe ${def.singular} com este ${tipoChave(chave!)} e você não tem permissão para editar — não dá para atualizar.`], valores };
-    return { linha, status: existenteId ? "atualizar" : "criar", rotulo: r.rotulo, erros: [], existenteId, chave: existenteId ? chave : undefined, dados: r.dados, valores };
+    return {
+      linha, status: existenteId ? "atualizar" : "criar", rotulo: r.rotulo, erros: [], existenteId, chave: existenteId ? chave : undefined, dados: r.dados, valores,
+      ...(r.avisos?.length && { avisos: r.avisos }),
+    };
   });
 
   // Conferência entre linhas (ex.: dois "principal" para o mesmo cliente): a linha vira erro
@@ -289,7 +297,14 @@ export function analisar(tabela: Tabela, def: DefImportacao, ctx: ContextoImport
   if (extras?.size)
     for (const l of linhas) {
       const e = extras.get(l.linha);
-      if (e) Object.assign(l, { status: "erro" as const, erros: [e], dados: undefined, existenteId: undefined, chave: undefined });
+      if (e) Object.assign(l, { status: "erro" as const, erros: [e], dados: undefined, existenteId: undefined, chave: undefined, avisos: undefined });
+    }
+  // Avisos entre linhas (não barram): somam aos da própria linha
+  const avisosExtras = def.avisarPlanilha?.(linhas.filter((l) => l.status !== "erro"));
+  if (avisosExtras?.size)
+    for (const l of linhas) {
+      const a = avisosExtras.get(l.linha);
+      if (a) l.avisos = [...(l.avisos ?? []), a];
     }
 
   return {
@@ -300,13 +315,14 @@ export function analisar(tabela: Tabela, def: DefImportacao, ctx: ContextoImport
       criar: linhas.filter((l) => l.status === "criar").length,
       atualizar: linhas.filter((l) => l.status === "atualizar").length,
       erros: linhas.filter((l) => l.status === "erro").length,
+      avisos: linhas.filter((l) => l.status !== "erro" && l.avisos?.length).length,
     },
     colunasIgnoradas: ignoradas,
   };
 }
 
 const TIPOS_CHAVE: Record<string, string> = {
-  id: "id_sistema", cod: "código", doc: "CNPJ/CPF", nome: "nome",
+  id: "id_sistema", cod: "código", doc: "CNPJ/CPF", nome: "nome", serie: "nº de série", pat: "patrimônio/TAG",
   // Cadastros que vivem DENTRO de um cliente: a chave é "<id do cliente>|<valor>"
   un: "nome de unidade no mesmo cliente", ctmail: "e-mail no mesmo cliente", ctnome: "nome no mesmo cliente",
 };
@@ -350,11 +366,14 @@ export function linhasModelo(def: DefImportacao, refs: Record<string, OpcaoRef[]
   return { cabecalho, exemplo, instrucoes };
 }
 
-/** Planilha de erros: as colunas do modelo + linha original + motivo (corrige e sobe de novo). */
-export function linhasErros(def: DefImportacao, erros: { linha: number; erros: string[]; valores: Record<string, string> }[]) {
+/**
+ * Planilha de erros: as colunas do modelo + linha original + motivo (corrige e sobe de novo).
+ * Com `avisos`, o mesmo formato vira o relatório de revisão (última coluna = "aviso").
+ */
+export function linhasErros(def: DefImportacao, erros: { linha: number; erros: string[]; valores: Record<string, string> }[], o: { avisos?: boolean } = {}) {
   const titulos = def.colunas.map((c) => c.titulo);
   return [
-    [...titulos, "linha_original", "motivo_do_erro"],
+    [...titulos, "linha_original", o.avisos ? "aviso" : "motivo_do_erro"],
     ...erros.map((e) => [...titulos.map((t) => e.valores[t] ?? ""), String(e.linha), e.erros.join(" | ")]),
   ];
 }
