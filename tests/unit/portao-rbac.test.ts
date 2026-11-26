@@ -45,26 +45,43 @@ const MODELOS = montarPermissoes({ documentos: ["gerenciar"] });
 const NADA = permissoesVazias();
 
 describe("o portão do middleware: a regra estrutural", () => {
-  it("todo módulo que o portão exige TEM a ação \"visualizar\" (senão só o administrador master passaria)", () => {
+  // Mudou de propósito (leva 1, 26/11): antes a regra era "todo módulo do portão TEM visualizar", e
+  // as telas de módulos sem "visualizar" ficavam FORA do mapa (exceção escrita à mão). Agora a regra
+  // está no próprio portão (podeEntrarNoModulo): ele nunca exige uma ação que o módulo não tem —
+  // módulo sem "visualizar" abre com qualquer ação dele. As telas voltaram ao mapa e quem não tem
+  // NADA do módulo é barrado já no portão; a página continua conferindo a ação certa.
+  it("o portão nunca exige uma ação que o módulo não tem: com qualquer ação de um módulo sem \"visualizar\" se entra", () => {
     const pastas = readdirSync(PAINEL).filter((p) => statSync(path.join(PAINEL, p)).isDirectory());
     expect(pastas.length).toBeGreaterThan(15);
-    const semVisualizar = pastas
-      .map((p) => [p, moduloDaRota(`/${p}`)] as const)
-      .filter(([, m]) => m && !MODULOS.find((x) => x.id === m)?.acoes.includes("visualizar"))
-      .map(([p, m]) => `/${p} → ${m}`);
-    expect(semVisualizar).toEqual([]);
+    let semVisualizarNoMapa = 0;
+    for (const p of pastas) {
+      const m = moduloDaRota(`/${p}`);
+      const def = m ? MODULOS.find((x) => x.id === m) : null;
+      if (!def || def.acoes.includes("visualizar")) continue;
+      semVisualizarNoMapa++;
+      for (const a of def.acoes) {
+        expect(portaoBarra(`/${p}`, montarPermissoes({ [m!]: [a] }), "OPERADOR"), `/${p} com só ${m}.${a}`).toBe(false);
+      }
+      expect(portaoBarra(`/${p}`, NADA, "OPERADOR"), `/${p} sem nada do módulo`).toBe(true);
+    }
+    expect(semVisualizarNoMapa, "/admissoes e /documentacao-equipe").toBe(2);
     // os dois módulos sem "visualizar" são exatamente os das telas que se guardam sozinhas
     expect(MODULOS.filter((m) => !m.acoes.includes("visualizar")).map((m) => m.id).sort()).toEqual(["admissao", "documentos"]);
   });
 
-  it("todo item do menu em que \"a ação basta sozinha\" fica fora do portão — e o perfil que só tem a ação passa", () => {
+  it("todo item do menu em que \"a ação basta sozinha\" deixa passar quem só tem a ação", () => {
     const soAcao = itensDoMenu.filter((i) => i.somenteAcao);
     expect(soAcao.map((i) => i.href).sort()).toEqual([
       "/admissoes", "/documentacao-equipe", "/equipes/app-colaborador", "/estoque/devolucao", "/estoque/separacao",
       "/ordens/cumprimento",
     ]);
     for (const i of soAcao) {
-      expect(moduloDaRota(i.href), `${i.href}: o portão não pode exigir "visualizar"`).toBeNull();
+      // ou fica fora do portão, ou o portão é do PRÓPRIO módulo da ação e ele não tem "visualizar"
+      const m = moduloDaRota(i.href);
+      if (m !== null) {
+        expect(m, i.href).toBe(i.modulo);
+        expect(MODULOS.find((x) => x.id === m)!.acoes, i.href).not.toContain("visualizar");
+      }
       const soAAcao = montarPermissoes({ [i.modulo!]: [i.acao as never] });
       expect(pode(soAAcao, i.modulo!, i.acao as never), i.href).toBe(true);
       expect(portaoBarra(i.href, soAAcao, "OPERADOR"), `${i.href}: quem tem só a ação não é barrado`).toBe(false);
@@ -99,6 +116,8 @@ describe("o portão do middleware: a regra estrutural", () => {
     const m = fonte("middleware.ts");
     expect(m).toContain("if (portaoBarra(pathname, user?.permissoes, user?.role)) {");
     expect(m, "nenhuma conferência de permissão solta além do portão").not.toMatch(/\bpode\(|moduloDaRota\(/);
+    // quem o portão barra leva o endereço junto: /sem-permissao confere se o acesso foi concedido depois do login
+    expect(m).toContain("NextResponse.redirect(new URL(destinoSemPermissao(pathname), req.url))");
   });
 });
 
@@ -111,9 +130,10 @@ describe("Admissões: a lista é de quem gerencia admissão", () => {
     expect(portaoBarra("/admissoes", PRESETS.ADMINISTRADOR, "OPERADOR")).toBe(false);
   });
 
-  it("quem não gerencia admissão continua fora: o portão não barra mais, quem barra é a página", () => {
+  it("quem não tem nada da admissão é barrado já no portão; e a página confere a ação de novo", () => {
     for (const perfil of [NADA, ENVIA, PRESETS.SUPERVISOR, montarPermissoes({ equipes: ["visualizar", "gerenciar", "excluir"] })]) {
       expect(pode(perfil, "admissao", "gerenciar", "OPERADOR")).toBe(false);
+      expect(portaoBarra("/admissoes", perfil, "OPERADOR")).toBe(true);
     }
     const pagina = fonte("app/(dashboard)/admissoes/page.tsx");
     const guarda = pagina.indexOf('redirect("/sem-permissao")');
@@ -133,6 +153,10 @@ describe("Documentação da equipe e App do colaborador", () => {
     expect(portaoBarra("/documentacao-equipe", ENVIA, "OPERADOR")).toBe(false);
     expect(portaoBarra("/documentacao-equipe/novo", ENVIA, "OPERADOR")).toBe(false);
     expect(portaoBarra("/colaboradores", ENVIA, "OPERADOR")).toBe(true);
+    // gerar documento na ficha passa pelo portão de "Documentos", mas a página exige "Enviar ao cliente"
+    expect(portaoBarra("/documentacao-equipe", MODELOS, "OPERADOR")).toBe(false);
+    expect(portaoBarra("/documentacao-equipe", NADA, "OPERADOR")).toBe(true);
+    expect(pode(MODELOS, "documentos", "enviar", "OPERADOR")).toBe(false);
   });
 
   it("App do colaborador: \"Configurações › Gerenciar\" basta — o endereço mora em /equipes, mas não pede \"Equipes › Visualizar\"", () => {

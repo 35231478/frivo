@@ -2,6 +2,9 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { Lock, LayoutDashboard, PowerOff } from "lucide-react";
 import { moduloCatalogo } from "@/lib/modulos/catalogo";
+import { auth } from "@/lib/auth";
+import { portaoBarra, rotaInternaSegura } from "@/lib/permissoes";
+import { LiberarAcesso } from "@/components/acesso/liberar-acesso";
 
 export const metadata: Metadata = { title: "Sem permissão" };
 
@@ -11,12 +14,24 @@ export const metadata: Metadata = { title: "Sem permissão" };
  *  - MÓDULO DESLIGADO: a EMPRESA desligou o módulo (`?modulo=`) — é uma decisão da empresa, não
  *    uma falta de acesso da pessoa, e quem resolve é Configurações. Dizer "sem permissão" num
  *    caso desses mandaria a pessoa pedir à toa um acesso que ela já tem.
+ *
+ * E um terceiro caso, que não é recusa: o ACESSO FOI CONCEDIDO DEPOIS DO LOGIN. O portão do
+ * middleware só lê o cookie (o acesso antigo); esta página confere no cadastro (`auth()` já traz o
+ * acesso de agora) se o endereço de onde a pessoa veio (`de`) está liberado — e, se está, regrava o
+ * cookie e volta para lá, sem pedir que ela saia e entre.
  */
-export default async function SemPermissaoPage({ searchParams }: { searchParams: Promise<{ modulo?: string }> }) {
-  const { modulo } = await searchParams;
+export default async function SemPermissaoPage({ searchParams }: { searchParams: Promise<{ modulo?: string; de?: string }> }) {
+  const { modulo, de } = await searchParams;
   const def = modulo ? moduloCatalogo(modulo) : null;
 
-  return (
+  const destino = def ? null : rotaInternaSegura(de);
+  let liberado = false;
+  if (destino) {
+    const u = (await auth())?.user;
+    liberado = !!u && !portaoBarra(destino.split("?")[0], u.permissoes, u.role);
+  }
+
+  const recusa = (
     <div className="min-h-[70vh] flex flex-col items-center justify-center text-center px-6">
       <div className={`w-20 h-20 rounded-card flex items-center justify-center mb-6 ${def ? "bg-previsto-claro" : "bg-atrasado-claro"}`}>
         {def
@@ -53,4 +68,6 @@ export default async function SemPermissaoPage({ searchParams }: { searchParams:
       </div>
     </div>
   );
+
+  return liberado && destino ? <LiberarAcesso destino={destino}>{recusa}</LiberarAcesso> : recusa;
 }

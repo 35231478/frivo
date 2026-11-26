@@ -154,6 +154,24 @@ export function pode(
 }
 
 /**
+ * Pode ENTRAR na área do módulo? É a pergunta do portão do middleware e do menu.
+ *  - módulo com a ação "visualizar" (quase todos): é ela que abre a área;
+ *  - módulo SEM "visualizar" (Admissão digital, Documentos do colaborador): não há o que "ver"
+ *    separado de fazer — entra quem tem QUALQUER ação do módulo, e a página confere a ação certa.
+ * Assim o portão nunca exige uma ação que o módulo não tem (o bug do /admissoes, em que só o
+ * administrador master passava), e quem não tem nada do módulo continua barrado já no portão.
+ */
+export function podeEntrarNoModulo(
+  permissoes: Permissoes | null | undefined,
+  modulo: string,
+  role?: string,
+): boolean {
+  const def = MODULOS.find((m) => m.id === modulo);
+  if (!def || def.acoes.includes("visualizar")) return pode(permissoes, modulo, "visualizar", role);
+  return def.acoes.some((a) => pode(permissoes, modulo, a, role));
+}
+
+/**
  * Permissões efetivas de um usuário no login:
  * - role ADMIN (administrador master) → acesso total;
  * - perfil de acesso ATIVO → permissões do perfil;
@@ -210,6 +228,8 @@ const ROTA_MODULO: Record<string, string> = {
   financeiro: "financeiro",
   equipes: "equipes",
   colaboradores: "equipes",
+  admissoes: "admissao",            // sem "visualizar": entra quem tem alguma ação (podeEntrarNoModulo)
+  "documentacao-equipe": "documentos", // idem; a página exige "Documentos › Enviar ao cliente"
   desempenho: "desempenho",
   veiculos: "veiculos",
   estoque: "estoque",
@@ -227,7 +247,8 @@ const ROTA_MODULO: Record<string, string> = {
 export const CONFIG_COM_PERMISSAO_PROPRIA = ["dados-fiscais", "admissao", "modelos-documento"];
 
 /**
- * Retorna o módulo da rota — o de "visualizar" que o middleware exige — ou null se a rota não tem
+ * Retorna o módulo da rota — aquele em que o middleware exige poder ENTRAR (`podeEntrarNoModulo`:
+ * "visualizar", ou qualquer ação quando o módulo não tem "visualizar") — ou null se a rota não tem
  * esse portão. Rota sem portão NÃO é rota aberta: é rota em que a PÁGINA confere sozinha a
  * permissão certa (e o servidor confere de novo em cada rota de API). Entram aqui as telas cuja
  * permissão é uma AÇÃO que não depende de "visualizar" o módulo do endereço — sem isso o menu
@@ -255,10 +276,6 @@ export function moduloDaRota(pathname: string): string | null {
   // o endereço mora em /ordens, mas quem lê o relatório do SLA não precisa ver a lista de OS.
   // A página confere a permissão sozinha (e manda para /ordens quem não a tem).
   if (seg === "ordens" && segs[1] === "cumprimento") return null;
-  // As listas de Admissões (/admissoes, "Admissão digital › Gerenciar") e da Documentação da equipe
-  // (/documentacao-equipe, "Documentos › Enviar ao cliente") não estão no mapa de propósito: esses
-  // módulos não têm a ação "visualizar", então o portão barraria todo mundo que não é o
-  // administrador master. As páginas conferem a ação sozinhas.
   return ROTA_MODULO[seg] ?? null;
 }
 
@@ -277,7 +294,7 @@ function configuracoesSeGuarda(pathname: string): boolean {
 }
 
 /**
- * O PORTÃO do middleware: a rota pede "visualizar" de um módulo e o perfil não tem? Então barra
+ * O PORTÃO do middleware: a rota pede para entrar num módulo e o perfil não pode (`podeEntrarNoModulo`)? Então barra
  * (o middleware manda para /sem-permissao). Função pura para a regra ser a mesma no middleware e
  * nos testes — e para ficar claro o que o portão NÃO decide: as rotas em que `moduloDaRota` devolve
  * null passam por aqui e são conferidas pela própria página.
@@ -285,7 +302,28 @@ function configuracoesSeGuarda(pathname: string): boolean {
 export function portaoBarra(pathname: string, permissoes: Permissoes | null | undefined, role?: string): boolean {
   if (configuracoesSeGuarda(pathname)) return false;
   const modulo = moduloDaRota(pathname);
-  return !!modulo && pathname !== "/sem-permissao" && !pode(permissoes, modulo, "visualizar", role);
+  return !!modulo && pathname !== "/sem-permissao" && !podeEntrarNoModulo(permissoes, modulo, role);
+}
+
+/**
+ * Para onde o middleware manda quem o portão barrou: /sem-permissao com o endereço pedido em `de`.
+ * Com ele, /sem-permissao consegue perceber que o acesso foi concedido DEPOIS do login (o token do
+ * middleware ainda é o antigo) e devolver a pessoa ao endereço, sem pedir que ela saia e entre.
+ */
+export function destinoSemPermissao(pathname: string): string {
+  return `/sem-permissao?de=${encodeURIComponent(pathname)}`;
+}
+
+/**
+ * O `de` de /sem-permissao só é aceito se for um caminho DESTE sistema: começa com uma barra, não
+ * com duas (//outro-site.com) nem com barra invertida, e não volta para a própria /sem-permissao.
+ * Qualquer outra coisa vira null — nada de redirecionar para fora a partir de um parâmetro de URL.
+ */
+export function rotaInternaSegura(de: string | null | undefined): string | null {
+  if (typeof de !== "string" || de.length === 0 || de.length > 512) return null;
+  if (!de.startsWith("/") || de.startsWith("//") || de.includes("\\") || /[\u0000-\u001f]/.test(de)) return null;
+  if (de === "/sem-permissao" || de.startsWith("/sem-permissao?") || de.startsWith("/sem-permissao/")) return null;
+  return de;
 }
 
 /** Presets por tipo de perfil (usados no seed e como template ao escolher o tipo). */

@@ -9,7 +9,7 @@ import { Select } from "@/components/ui/select";
 import { FormField, FormGrid } from "@/components/ui/form-field";
 import { Drawer } from "@/components/ui/drawer";
 import { salvarCadastro, type EditorCadastroProps } from "@/components/cadastros/cadastro-padrao";
-import { SECOES, ACOES_LABEL, PRESETS, TIPOS_PERFIL_LABEL, permissoesVazias, type Permissoes, type Acao, type IconeModulo } from "@/lib/permissoes";
+import { SECOES, ACOES_LABEL, PRESETS, TIPOS_PERFIL_LABEL, permissoesVazias, podeEntrarNoModulo, type Permissoes, type Acao, type IconeModulo } from "@/lib/permissoes";
 import { corDado } from "@/lib/ui/tokens";
 
 /** Ícone de cada módulo (lib/permissoes.ts guarda só o nome: é um arquivo puro, sem a biblioteca). */
@@ -78,7 +78,8 @@ export function EditorPerfil({ item, aberto, onFechar, onSalvo }: EditorCadastro
     onSalvo(r.item);
   }
 
-  const visiveis = SECOES.flatMap((s) => s.modulos).filter((m) => permissoes[m.id]?.visualizar);
+  // A regra do portão: módulo sem "visualizar" (Admissão digital, Documentos) aparece com qualquer ação
+  const visiveis = SECOES.flatMap((s) => s.modulos).filter((m) => podeEntrarNoModulo(permissoes, m.id));
 
   return (
     <Drawer

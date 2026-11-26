@@ -166,7 +166,7 @@ describe.skipIf(!URL_PG)("O portão com contas não-administradoras (PostgreSQL 
 
     for (const perfil of [SO_EQUIPES, SEM_NADA]) {
       perfil();
-      expect(barrado("/admissoes"), "o portão não decide mais esta rota").toBe(false);
+      expect(barrado("/admissoes"), "barrado já no portão (nada da admissão) — e a página e a API recusam de novo").toBe(true);
       await expect(paginaAdmissoes()).rejects.toThrow("NEXT_REDIRECT /sem-permissao");
       expect((await api("api/admissoes", "GET")).status).toBe(403);
       expect((await api("api/admissoes", "POST", { nome: "X", cpf: "11144477735", cargoId: "g1", salario: 1 })).status).toBe(403);

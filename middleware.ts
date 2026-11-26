@@ -1,8 +1,9 @@
 import NextAuth from "next-auth";
 import { NextResponse } from "next/server";
-import type { NextRequest } from "next/server";
+import type { NextFetchEvent, NextRequest } from "next/server";
 import { authConfig } from "@/auth.config";
-import { portaoBarra } from "@/lib/permissoes";
+import { destinoSemPermissao, portaoBarra } from "@/lib/permissoes";
+import { semCookieDaSessao } from "@/lib/acesso/cookie-sessao";
 import { ROTA_TECNICO, destinoModoTecnico, emModoTecnico } from "@/lib/tecnico/modo";
 
 // Instância leve do Auth.js (sem provider/bcrypt/Prisma) — apenas lê e verifica o
@@ -50,7 +51,7 @@ const rotasPublicas = [
 // Públicas por caminho EXATO: a home de vendas ("/" como prefixo liberaria o sistema inteiro).
 const rotasPublicasExatas = ["/"];
 
-export default auth(function middleware(req: NextRequest & { auth: any }) {
+const portao = auth(function middleware(req: NextRequest & { auth: any }) {
   const { pathname } = req.nextUrl;
 
   const ehRotaPublica = rotasPublicasExatas.includes(pathname) || rotasPublicas.some((rota) => pathname.startsWith(rota));
@@ -73,23 +74,35 @@ export default auth(function middleware(req: NextRequest & { auth: any }) {
     if (destino) return NextResponse.redirect(new URL(destino, req.url));
   }
 
-  // Controle de acesso por perfil: se a rota exige um módulo e o usuário não tem
-  // permissão de visualizar, redireciona para /sem-permissao (ADMIN passa direto).
+  // Controle de acesso por perfil: se a rota exige um módulo e o usuário não pode entrar nele
+  // (lib/permissoes.ts › podeEntrarNoModulo), redireciona para /sem-permissao (ADMIN passa direto).
+  // O endereço pedido vai junto (`de`): se o acesso foi concedido depois do login, o token daqui
+  // ainda é o antigo — /sem-permissao confere no cadastro e devolve a pessoa ao endereço.
   // Rota sem módulo no mapa (lib/permissoes.ts › moduloDaRota) não é rota aberta: é rota em que a
   // PÁGINA confere a permissão certa — a de uma ação que não depende de "visualizar" o módulo.
   if (req.auth && !ehRotaPublica) {
     const user = req.auth.user;
     if (portaoBarra(pathname, user?.permissoes, user?.role)) {
-      return NextResponse.redirect(new URL("/sem-permissao", req.url));
+      return NextResponse.redirect(new URL(destinoSemPermissao(pathname), req.url));
     }
   }
 
   return NextResponse.next();
 });
 
+// O middleware LÊ a sessão, mas não regrava o cookie dela: uma resposta que saiu com o cookie antigo
+// gravaria o acesso antigo por cima do novo (lib/acesso/cookie-sessao › semCookieDaSessao).
+export default async function middleware(req: NextRequest, ev: NextFetchEvent) {
+  const res = await portao(req as any, ev as any);
+  return res ? semCookieDaSessao(res) : res;
+}
+
 export const config = {
   matcher: [
-    // Ignora assets estáticos e arquivos do PWA (service worker, workbox, manifest, ícones)
-    "/((?!_next/static|_next/image|favicon.ico|sw.js|swe-worker-.*|workbox-.*|fallback-.*|manifest.json|icons/.*|.*\\.png$).*)",
+    // Ignora assets estáticos e arquivos do PWA (service worker, workbox, manifest, ícones) e as
+    // rotas do próprio Auth.js (/api/auth/*): lá o middleware não decide nada, e o cookie da sessão
+    // que ele regrava (com o token que chegou) não pode competir com o que /api/auth/session grava
+    // com o acesso atualizado do cadastro (lib/acesso/acesso-atual).
+    "/((?!_next/static|_next/image|api/auth/|favicon.ico|sw.js|swe-worker-.*|workbox-.*|fallback-.*|manifest.json|icons/.*|.*\\.png$).*)",
   ],
 };

@@ -5,7 +5,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { signOut } from "next-auth/react";
 import { cn } from "@/lib/utils";
-import { moduloDaRota, pode, type Acao } from "@/lib/permissoes";
+import { moduloDaRota, pode, podeEntrarNoModulo, type Acao } from "@/lib/permissoes";
 import { FrivoLogo, FrivoMark } from "./frivo-logo";
 import { secoesVisiveis as secoesVisiveisConfig } from "@/lib/navegacao/configuracoes";
 import { useModulos } from "@/components/providers/modulos-provider";
@@ -261,7 +261,8 @@ export function Sidebar({ session, variant = "desktop", avatarUrl }: SidebarProp
     const m = i.modulo ?? moduloDaRota(href);
     if (!m) return true;
     if (i.somenteAcao && i.acao) return pode(permissoes, m, i.acao, role);
-    return pode(permissoes, m, "visualizar", role) && (!i.acao || pode(permissoes, m, i.acao, role));
+    // A mesma regra do portão do middleware (podeEntrarNoModulo) — o menu não oferece o que o portão barra
+    return podeEntrarNoModulo(permissoes, m, role) && (!i.acao || pode(permissoes, m, i.acao, role));
   };
 
   // Filtra seções por permissão (itens sem permissão somem; grupos/seções vazios somem)

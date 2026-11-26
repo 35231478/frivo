@@ -32,7 +32,7 @@ import { DocumentacaoPublicaLista } from "@/components/documentacao/documentacao
 import { SeloLink } from "@/components/documentacao/selo-link";
 import { Avisos } from "@/components/ui/avisos";
 import { CATEGORIAS_PROIBIDAS, fraseEmailNaoSaiu } from "@/lib/documentacao/pacote";
-import { PRESETS, moduloDaRota, montarPermissoes, pode, type Permissoes } from "@/lib/permissoes";
+import { PRESETS, moduloDaRota, montarPermissoes, pode, portaoBarra, type Permissoes } from "@/lib/permissoes";
 import { AtalhoDocumentacao, hrefNovoEnvio } from "@/components/documentacao/atalho-documentacao";
 import { PermissoesProvider } from "@/components/providers/permissoes-provider";
 import type { DocumentacaoPublica, EnvioDaLista, EnvioDetalhe, Previa } from "@/lib/documentacao/pacote-server";
@@ -932,7 +932,11 @@ describe("quem entra nas telas da documentação", () => {
   });
 
   it("as páginas internas conferem a permissão sozinhas (a rota não tem módulo de \"visualizar\" no middleware)", () => {
-    expect(moduloDaRota("/documentacao-equipe"), "sem gate de visualizar: quem só tem \"enviar\" entra").toBeNull();
+    // (26/11) No mapa do portão de novo, sem exigir "visualizar" (o módulo não tem): quem só tem
+    // "enviar" entra; quem não tem nada de Documentos é barrado já no portão
+    expect(moduloDaRota("/documentacao-equipe")).toBe("documentos");
+    expect(portaoBarra("/documentacao-equipe", montarPermissoes({ documentos: ["enviar"] }), "OPERADOR")).toBe(false);
+    expect(portaoBarra("/documentacao-equipe", montarPermissoes({}), "OPERADOR")).toBe(true);
     for (const pagina of ["app/(dashboard)/documentacao-equipe/page.tsx", "app/(dashboard)/documentacao-equipe/novo/page.tsx"]) {
       expect(fonte(pagina), pagina).toContain('if (!pode(user.permissoes, "documentos", "enviar", user.role)) redirect("/sem-permissao");');
     }

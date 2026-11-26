@@ -3,7 +3,7 @@ import {
   Target, Thermometer, UserCog, Wallet, Wrench, type LucideIcon,
   Hash, CaseSensitive, UserPlus, Blocks,
 } from "lucide-react";
-import { moduloDaRota, pode, type Acao, type Permissoes } from "@/lib/permissoes";
+import { moduloDaRota, pode, podeEntrarNoModulo, type Acao, type Permissoes } from "@/lib/permissoes";
 
 /**
  * Configurações: UMA página (/configuracoes) com 3 abas (operacionais, financeiras, conta), cada
@@ -179,7 +179,9 @@ export function hrefSecaoConfig(id: string) {
 /** O perfil pode abrir este item? (permissão do módulo da rota antiga, ou o módulo/ação próprios do item) */
 export function podeVerItemConfig(i: ItemConfig, permissoes: Permissoes | null | undefined, role?: string) {
   const m = i.modulo ?? moduloDaRota(i.href.split("#")[0]);
-  return !m || pode(permissoes, m, i.acao ?? "visualizar", role);
+  if (!m) return true;
+  // Sem ação própria, vale a regra do portão: "visualizar", ou alguma ação do módulo que não tem "visualizar"
+  return i.acao ? pode(permissoes, m, i.acao, role) : podeEntrarNoModulo(permissoes, m, role);
 }
 
 /** Abas/subgrupos/itens que o perfil vê (permissão do módulo da rota antiga de cada item). */
