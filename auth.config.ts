@@ -49,6 +49,9 @@ export const authConfig = {
       (session.user as any).permissoes = token.permissoes ?? {};
       (session.user as any).perfilNome = token.perfilNome ?? null;
       (session.user as any).tecnicoId = token.tecnicoId ?? null;
+      // O cookie desta requisição trazia um acesso diferente do cadastro (lib/acesso/acesso-atual):
+      // o layout pede ao navegador que regrave o cookie (components/acesso/sincronizar-acesso)
+      (session.user as any).acessoMudou = token.acessoMudou === true;
       return session;
     },
   },

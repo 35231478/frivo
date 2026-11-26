@@ -16,6 +16,8 @@ declare module "next-auth" {
       perfilNome?: string | null;
       /** Técnico ligado ao usuário (mesmo e-mail), gravado no login */
       tecnicoId?: string | null;
+      /** O cookie desta requisição trazia papel/permissões diferentes do cadastro atual */
+      acessoMudou?: boolean;
     };
   }
 

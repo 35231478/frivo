@@ -18,6 +18,7 @@ import { emModoTecnico } from "@/lib/tecnico/modo";
 import { modulosDesligados } from "@/lib/modulos/servidor";
 import { ehDonoDoFrivo } from "@/lib/anotacoes/dono";
 import { AnotacoesCarregador } from "@/components/anotacoes/carregador";
+import { SincronizarAcesso } from "@/components/acesso/sincronizar-acesso";
 
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
   const session = await auth();
@@ -30,6 +31,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
       <AuthSessionProvider session={session}>
         <PermissoesProvider role={session.user.role} permissoes={session.user.permissoes}>
           <Avisos />
+          <SincronizarAcesso mudou={session.user.acessoMudou === true} />
           <CascaTecnico>{children}</CascaTecnico>
         </PermissoesProvider>
       </AuthSessionProvider>
@@ -37,8 +39,8 @@ export default async function DashboardLayout({ children }: { children: React.Re
   }
 
   // Avatar vem do banco (fora do JWT, para não estourar o cookie com base64) e, junto, os MÓDULOS
-  // que a empresa desligou: a permissão do usuário viaja no token, mas o que a empresa tem é
-  // lido aqui a cada navegação — desligar um módulo vale na hora, sem derrubar sessão de ninguém.
+  // que a empresa desligou: a permissão do usuário também é a do cadastro de agora (lib/sessao-ativa),
+  // e o que a empresa tem é lido aqui a cada navegação — desligar um módulo vale na hora, sem derrubar sessão de ninguém.
   const [dbUser, desligados] = await Promise.all([
     prisma.usuario.findUnique({ where: { id: session.user.id }, select: { avatar: true } }),
     modulosDesligados(session.user.empresaId),
@@ -51,6 +53,9 @@ export default async function DashboardLayout({ children }: { children: React.Re
        <ModulosProvider desligados={[...desligados]}>
         <div className="flex h-screen overflow-hidden bg-surface-page">
           <Avisos />
+          {/* Papel e permissões vêm do cadastro a cada requisição; este mantém o cookie (que o portão
+              do middleware lê) igual a eles — conceder ou retirar acesso vale sem sair e entrar */}
+          <SincronizarAcesso mudou={session.user.acessoMudou === true} />
           <SplashScreen />
           <RecarregarAoVoltar />
           <Sidebar session={session} avatarUrl={avatarUrl} />

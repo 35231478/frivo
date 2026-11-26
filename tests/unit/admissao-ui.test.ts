@@ -358,8 +358,12 @@ describe("quem entra nas telas da admissão", () => {
   // (tests/unit/portao-rbac.test.ts cobre o portão inteiro). O que este teste protegia continua:
   // admissão não é "ver equipes", e nenhum perfil pronto ganha a permissão de graça.
   it("/admissoes é de quem gerencia admissão (não é \"ver equipes\") e nenhum preset o ganha de graça", () => {
-    expect(moduloDaRota("/admissoes"), "fora do portão de \"visualizar\": a página confere a ação").toBeNull();
+    // (26/11) A rota voltou ao mapa: o portão aprendeu que módulo sem "visualizar" abre com qualquer
+    // ação dele (lib/permissoes.ts › podeEntrarNoModulo). Quem só gerencia admissão passa; quem não
+    // tem nada da admissão é barrado já no portão; a página continua conferindo "gerenciar".
+    expect(moduloDaRota("/admissoes")).toBe("admissao");
     expect(portaoBarra("/admissoes", montarPermissoes({ admissao: ["gerenciar"] }), "OPERADOR")).toBe(false);
+    expect(portaoBarra("/admissoes", montarPermissoes({ equipes: ["visualizar", "gerenciar"] }), "OPERADOR")).toBe(true);
     expect(moduloDaRota("/colaboradores")).toBe("equipes");
     // Dado sensível de pessoa: só o administrador já tem; os outros perfis recebem por escolha
     expect(pode(PRESETS.ADMINISTRADOR, "admissao", "gerenciar")).toBe(true);

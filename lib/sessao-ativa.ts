@@ -2,6 +2,7 @@ import { cache } from "react";
 import type { JWT } from "next-auth/jwt";
 import { prisma } from "@/lib/prisma";
 import { impressaoDaSenha } from "@/lib/acesso/impressao-senha";
+import { acessoAtual, acessoMudou } from "@/lib/acesso/acesso-atual";
 
 /**
  * Sessão (JWT) x cadastro atual: o token é assinado no login e valeria até expirar, mesmo com o
@@ -19,6 +20,8 @@ const lerUsuario = cache(async (usuarioId: string) => {
       where: { id: usuarioId },
       select: {
         ativo: true, senha: true, sessaoAtiva: true,
+        // O ACESSO de agora (lib/acesso/acesso-atual): papel e perfil, na mesma consulta
+        role: true, perfilAcesso: { select: { nome: true, ativo: true, permissoes: true } },
         empresa: { select: { ativo: true, configuracao: { select: { appUmDispositivo: true } } } },
       },
     });
@@ -31,7 +34,8 @@ const lerUsuario = cache(async (usuarioId: string) => {
 
 /**
  * Callback `jwt` do runtime Node: depois do login, a cada leitura confere se o usuário segue ativo e
- * se a senha é a mesma do login (impressão `fs` no token). Sessão aberta antes de existir a impressão
+ * se a senha é a mesma do login (impressão `fs` no token), e põe no token o papel e as permissões
+ * do cadastro de agora (`acessoMudou` diz se o cookie recebido estava desatualizado). Sessão aberta antes de existir a impressão
  * passa a carregar a da senha de agora — a partir daí, trocar a senha também a encerra.
  */
 export async function conferirTokenAtivo(token: JWT | null, acabouDeEntrar: boolean): Promise<JWT | null> {
@@ -45,9 +49,14 @@ export async function conferirTokenAtivo(token: JWT | null, acabouDeEntrar: bool
   // Entrar em outro aparelho regrava o nonce; este token (nonce velho) é encerrado aqui.
   if (u.empresa.configuracao?.appUmDispositivo && u.sessaoAtiva && token.sa !== u.sessaoAtiva) return null;
   const atual = impressaoDaSenha(u.senha ?? "");
-  if (typeof token.fs !== "string") return { ...token, fs: atual };
-  return token.fs === atual ? token : null;
+  if (typeof token.fs === "string" && token.fs !== atual) return null;
+  // Papel e permissões são os do cadastro de AGORA, não os do login: conceder ou retirar acesso vale
+  // na requisição seguinte, sem pedir que ninguém saia e entre. `acessoMudou` marca que o token que
+  // CHEGOU (o cookie) estava diferente — o navegador então pede /api/auth/session, que regrava o
+  // cookie com o acesso novo, e o portão do middleware (que só lê o cookie) passa a concordar.
+  const acesso = acessoAtual(u);
+  return { ...token, fs: atual, ...acesso, acessoMudou: acessoMudou(token, acesso) };
 }
 
 /** Cookies da sessão do painel (com prefixo seguro e em pedaços). Não toca no cookie do portal. */
-export const COOKIE_SESSAO = /^(__Secure-)?authjs\.session-token(\.\d+)?$/;
+export { COOKIE_SESSAO } from "@/lib/acesso/cookie-sessao";
