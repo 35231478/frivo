@@ -14,6 +14,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { FormField, FormSection, FormGrid } from "@/components/ui/form-field";
 import { rotuloVeiculo, sufixoStatusVeiculo, type VeiculoResumo } from "@/lib/veiculo-sugestao";
 import { useModulos } from "@/components/providers/modulos-provider";
+import { usePermissoes } from "@/components/providers/permissoes-provider";
+import { mostrarOpcaoInativo } from "@/lib/cadastros/regras-arquivar";
 import { AvatarTecnico } from "@/components/ui/avatar-tecnico";
 import { reduzirImagem } from "@/lib/imagem-cliente";
 import { FolhaColaborador } from "@/components/folha/folha-colaborador";
@@ -63,6 +65,8 @@ interface EstadoAcessoInicial { email: string | null; temLogin: boolean; acessoA
 export function ColaboradorForm({ initialData, somenteLeitura = false, podeFolha = false, podeAcesso = false, acessoInicial, podeAdmissao = false, admissao = null, cargosAdmissao = [], validadeAdmissao = 7, documentosIniciais = [], podeExcluirDocumento = false, contratoAssinado = null, podeGerarDocumento = false, podeDisciplinar = false, modelosDocumento = [], emitidosIniciais = [] }: ColaboradorFormProps & { somenteLeitura?: boolean; podeFolha?: boolean; podeAcesso?: boolean; acessoInicial?: EstadoAcessoInicial; podeAdmissao?: boolean; admissao?: AdmissaoDoRh | null; cargosAdmissao?: OpcaoCargo[]; validadeAdmissao?: number; documentosIniciais?: DocumentoLinha[]; podeExcluirDocumento?: boolean; contratoAssinado?: ContratoAssinado | null; podeGerarDocumento?: boolean; podeDisciplinar?: boolean; modelosDocumento?: ModeloDaLista[]; emitidosIniciais?: EmitidoDaTela[] }) {
   const router = useRouter();
   const isEditing = !!initialData;
+  // "Inativo" no status = inativar (exige "Equipes › Excluir", como o botão; o servidor confere de novo)
+  const podeInativarColab = usePermissoes().pode("equipes", "excluir");
   const [aba, setAba] = useState<Aba>("pessoais");
   const [erroGlobal, setErroGlobal] = useState("");
 
@@ -383,7 +387,7 @@ export function ColaboradorForm({ initialData, somenteLeitura = false, podeFolha
                 <FormField label="Status">
                   <Select {...register("statusColaborador")}>
                     <option value="ATIVO">Ativo</option>
-                    <option value="INATIVO">Inativo</option>
+                    {mostrarOpcaoInativo(podeInativarColab, initialData?.statusColaborador) && <option value="INATIVO">Inativo</option>}
                     <option value="FERIAS">Férias</option>
                     <option value="AFASTADO">Afastado</option>
                   </Select>
