@@ -9,6 +9,7 @@ import { PedidoPainel, StatusPedidoBadge } from "@/components/compras/pedido-pai
 import { cn, formatarData } from "@/lib/utils";
 import type { PedidoTela, StatusPedido } from "@/lib/compras/pedido";
 import { useModulos } from "@/components/providers/modulos-provider";
+import { CompraFaltantes } from "@/components/orcamento/compra-faltantes";
 
 interface PedidoLinha {
   id: string; numero: string; status: StatusPedido; statusEm?: string | null; prazoNecessario?: string | null;
@@ -25,6 +26,8 @@ export function ComprasSecao({ ordemServicoId, orcamentoId }: { ordemServicoId?:
   const [aberto, setAberto] = useState<string | null>(null);
   const [detalhe, setDetalhe] = useState<Record<string, PedidoTela>>({});
   const [erroAbrir, setErroAbrir] = useState("");
+  // Orçamento, leva C: os "Itens sem estoque" recarregam quando a lista de pedidos muda
+  const [versao, setVersao] = useState(0);
   // CAMPO-PONTE (Loja de Módulos): a OS e o orçamento são do núcleo, o pedido de compra é de
   // Compras. Com Compras desligado o pedido que já existe CONTINUA à vista (desligar não apaga o
   // passado); o que some é o botão de criar um novo — é a mesma regra do servidor, na tela.
@@ -32,7 +35,7 @@ export function ComprasSecao({ ordemServicoId, orcamentoId }: { ordemServicoId?:
 
   const query = ordemServicoId ? `ordemServicoId=${ordemServicoId}` : `orcamentoId=${orcamentoId}`;
   function carregar() {
-    fetch(`/api/pedidos-compra?${query}`).then((r) => r.json()).then((d) => setPedidos(Array.isArray(d) ? d : [])).catch(() => {});
+    fetch(`/api/pedidos-compra?${query}`).then((r) => r.json()).then((d) => { setPedidos(Array.isArray(d) ? d : []); setVersao((v) => v + 1); }).catch(() => {});
   }
   useEffect(() => {
     carregar();
@@ -59,6 +62,11 @@ export function ComprasSecao({ ordemServicoId, orcamentoId }: { ordemServicoId?:
           </Button>
         )}
       </div>
+
+      {orcamentoId && (
+        <CompraFaltantes orcamentoId={orcamentoId} versao={versao} onMudou={carregar}
+          onAbrirPedido={(id) => { if (aberto !== id) void abrir(id); document.querySelector(`[data-abrir-pedido="${id}"]`)?.scrollIntoView({ block: "nearest" }); }} />
+      )}
 
       {novo && (
         <div className="border border-primary-200 bg-primary-50/30 rounded-lg p-3 sm:p-4 space-y-3">
