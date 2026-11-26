@@ -495,7 +495,7 @@ describe.skipIf(!URL_PG)("Ciclo do orçamento: link público, aceite/recusa, env
       expect(texto(h)).toContain("Recusada por Juliana Ramos em 20/10/2026 às 10:30");
       expect(h).not.toContain("data-abrir-aprovacao");
       h = await pagina((await criar({ validadeEm: ONTEM })).tokenPublico);
-      expect(texto(h)).toContain("Orçamento expirado");
+      expect(texto(h)).toContain("Orçamento vencido"); // (leva 3) o mesmo termo do card "Vencidos"
       expect(h).not.toContain("data-abrir-recusa");
       h = await pagina((await criar({ status: "APROVADO", assinadoEm: new Date(), assinadoPor: "Juliana" })).tokenPublico);
       expect(h).not.toContain("data-abrir-aprovacao");

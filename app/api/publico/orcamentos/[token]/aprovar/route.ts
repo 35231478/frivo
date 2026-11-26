@@ -32,7 +32,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tok
     );
   }
   if (diaCivilPassou(orcamento.validadeEm)) { // validade é dia civil: aprova até o fim do dia (Brasília)
-    return NextResponse.json({ erro: "Orçamento expirado" }, { status: 410 });
+    return NextResponse.json({ erro: "Orçamento vencido: a validade terminou." }, { status: 410 });
   }
 
   const cpfLimpo = parsed.data.cpf.replace(/\D/g, "");

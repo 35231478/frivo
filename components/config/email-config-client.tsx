@@ -28,7 +28,7 @@ const NOTIFS: { key: string; label: string; desc: string }[] = [
 const LEMBRETES_ORC: { key: string; label: string; desc: string }[] = [
   { key: "lembreteOrcNaoRespondido", label: "Orçamento não respondido", desc: "Enviado após o prazo configurado sem resposta do cliente." },
   { key: "lembreteOrcVencendo", label: "Orçamento vencendo", desc: "Enviado com a antecedência configurada antes do fim da validade." },
-  { key: "lembreteOrcVencido", label: "Orçamento vencido", desc: "Enviado quando a validade expira sem resposta." },
+  { key: "lembreteOrcVencido", label: "Orçamento vencido", desc: "Enviado quando a validade vence sem resposta." },
   { key: "lembreteOrcAprovadoSemOs", label: "Aprovado sem OS gerada", desc: "Enviado após o prazo configurado sem OS vinculada ao orçamento aprovado." },
 ];
 
