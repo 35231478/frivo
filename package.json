@@ -10,6 +10,7 @@
     "lint": "next lint",
     "test": "vitest run",
     "despoluicao:baseline": "DESPOLUICAO_BASELINE=atualizar vitest run tests/unit/despoluicao-ratchet.test.ts",
+    "prints:vendas": "node scripts/vendas/gerar-prints.mjs",
     "typecheck": "tsc --noEmit",
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate dev",

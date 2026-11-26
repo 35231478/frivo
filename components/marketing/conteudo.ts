@@ -2,9 +2,11 @@
  * Home de vendas do Frivo (rota "/"): TODO o conteúdo num arquivo só — textos do briefing, a lista dos
  * prints e os links. Trocar um texto, o destino do CTA ou o contato é mexer aqui; a página só diagrama.
  *
- * Regras do briefing: um CTA primário repetido, nenhum número de cliente ou depoimento inventado
- * (PROVA_SOCIAL nasce vazia) e os prints e a foto ficam como espaços reservados nomeados até os
- * arquivos reais chegarem (ver public/marketing/prints/LEIA-ME.md).
+ * Regras do briefing: um CTA primário repetido, nenhum número de cliente ou depoimento inventado e
+ * nenhum espaço reservado à vista: a prova social e a foto da equipe só aparecem com conteúdo real.
+ *
+ * Os prints são telas do sistema com a EMPRESA DE DEMONSTRAÇÃO (dados fictícios), gerados por
+ * `npm run prints:vendas` (scripts/vendas). Ver public/marketing/prints/LEIA-ME.md.
  */
 
 /** Destino do CTA primário. Um lugar só: quando o cadastro do teste existir, troca-se aqui. */
@@ -19,16 +21,29 @@ export const CTA = {
   apoio: "Sem cartão de crédito. Cancele quando quiser.",
 } as const;
 
-/**
- * Enquanto houver espaço reservado (prints, foto, prova social), a página fica fora dos buscadores.
- * No lançamento, com as telas reais no lugar: `true`.
- */
+/** Fora dos buscadores até o lançamento (decisão do dono do produto): no dia, `true`. */
 export const PUBLICADA = false;
 
-/** Contato do rodapé e da página do teste grátis. O link do WhatsApp sai dos dígitos do número (DDI 55). */
-export const CONTATO = { whatsapp: "(62) 99999-9999", email: "contato@termofrioengenharia.com.br" } as const;
-export const LINK_WHATSAPP = `https://wa.me/55${CONTATO.whatsapp.replace(/\D/g, "")}`;
-export const LINK_EMAIL = `mailto:${CONTATO.email}`;
+export interface Contato {
+  email: string;
+  /** WhatsApp de vendas, como aparece na tela — só existe com número configurado */
+  whatsapp: string | null;
+  linkWhatsapp: string | null;
+  linkEmail: string;
+}
+
+/**
+ * O contato do rodapé e da página do teste grátis. O WhatsApp vem da configuração do ambiente
+ * (WHATSAPP_VENDAS, com DDD: "62912345678"); sem ela — ou com um número que não é de telefone —, o
+ * WhatsApp não aparece. Número fixo no código, nunca: um número errado no ar é pior que nenhum.
+ */
+export function contatoDeVendas(env: Record<string, string | undefined> = process.env): Contato {
+  const email = "contato@termofrioengenharia.com.br";
+  const digitos = (env.WHATSAPP_VENDAS ?? "").replace(/\D/g, "").replace(/^55(?=\d{10,11}$)/, "");
+  const valido = /^\d{10,11}$/.test(digitos);
+  const whatsapp = valido ? `(${digitos.slice(0, 2)}) ${digitos.slice(2, -4)}-${digitos.slice(-4)}` : null;
+  return { email, whatsapp, linkWhatsapp: valido ? `https://wa.me/55${digitos}` : null, linkEmail: `mailto:${email}` };
+}
 
 /** Endereço público do site: base do canonical e da imagem de Open Graph. */
 export const URL_SITE = process.env.NEXT_PUBLIC_SITE_URL ?? process.env.NEXTAUTH_URL ?? "https://app.frivo.com.br";
@@ -43,36 +58,35 @@ export const SEO = {
 
 export type FormatoPrint = "desktop" | "celular";
 export interface Print {
-  /** Número do print (1 a 10: telas enviadas; 11 em diante: ainda por enviar). */
-  n: number;
   /** Nome do arquivo em public/marketing/prints, SEM extensão (.webp, .avif, .png ou .jpg). */
   arquivo: string;
-  /** Qual tela do sistema entra aqui. */
+  /** Qual tela do sistema (legenda das miniaturas). */
   tela: string;
+  /** Computador = 16:10; celular = 9:19 (o tamanho que `npm run prints:vendas` grava). */
   formato: FormatoPrint;
-  /** Texto alternativo da imagem real. */
+  /** Texto alternativo. */
   alt: string;
-  /** Proporção "largura/altura" da imagem real, quando ela é um recorte da tela (sem isso: 16:10 ou 9:19). */
-  proporcao?: string;
 }
 
-// Os 10 primeiros são as telas reais enviadas (numeração do dono do produto); 11 a 14 são telas do
-// briefing que ainda não chegaram e seguem como espaço reservado.
+// Numeração do dono do produto (01 a 14) + as telas extras de cada bloco. Todas da empresa de demonstração.
 export const PRINTS = {
-  dashboard: { n: 1, arquivo: "01-dashboard", tela: "Dashboard", formato: "desktop", alt: "Painel do Frivo com os indicadores do dia" },
-  calendario: { n: 2, arquivo: "02-calendario-os", tela: "Calendário de OS", formato: "desktop", alt: "Calendário de ordens de serviço com a equipe distribuída" },
-  orcamentoAprovado: { n: 3, arquivo: "03-orcamento-aprovado", tela: "Orçamento com aprovação", formato: "desktop", alt: "Orçamento aprovado pelo cliente por link, com a linha do tempo da proposta" },
-  orcamentos: { n: 4, arquivo: "04-orcamentos", tela: "Orçamentos", formato: "desktop", alt: "Lista de orçamentos com status e totais do período" },
-  contratos: { n: 5, arquivo: "05-contratos", tela: "Contratos", formato: "desktop", alt: "Lista de contratos com valor da cobrança e próxima OS" },
-  estoque: { n: 6, arquivo: "06-estoque", tela: "Estoque", formato: "desktop", alt: "Saldos do estoque com aviso de produtos no mínimo", proporcao: "1382/640" },
-  mapa: { n: 7, arquivo: "07-mapa-tecnicos", tela: "Mapa dos técnicos", formato: "desktop", alt: "Mapa com a posição do técnico em campo e a OS em execução" },
-  equipes: { n: 8, arquivo: "08-equipes", tela: "Equipes", formato: "desktop", alt: "Equipes de campo com líder e membros", proporcao: "1000/320" },
-  colaboradores: { n: 9, arquivo: "09-colaboradores", tela: "Colaboradores", formato: "desktop", alt: "Cadastro de colaboradores com cargo, equipe e status", proporcao: "800/256" },
-  financeiro: { n: 10, arquivo: "10-financeiro", tela: "Financeiro", formato: "desktop", alt: "Dashboard financeiro com contas a receber, a pagar e saldo previsto" },
-  appTecnico: { n: 11, arquivo: "11-app-tecnico", tela: "App do técnico (Meu dia / execução)", formato: "celular", alt: "App do técnico com a agenda do dia" },
-  pmoc: { n: 12, arquivo: "12-pmoc", tela: "PMOC (cronograma + documento PDF)", formato: "desktop", alt: "Cronograma do PMOC e o documento gerado" },
-  aceite: { n: 13, arquivo: "13-aceite", tela: "Aceite (assinatura + estrelas)", formato: "celular", alt: "Aceite do cliente com assinatura e avaliação em estrelas" },
-  equipamento: { n: 14, arquivo: "14-equipamento-qr", tela: "Equipamento + QR", formato: "desktop", alt: "Ficha do equipamento com histórico e QR Code" },
+  dashboard: { arquivo: "01-dashboard", tela: "Dashboard", formato: "desktop", alt: "Painel do Frivo com as OS do dia, a agenda e os indicadores" },
+  calendario: { arquivo: "02-calendario-os", tela: "Calendário de OS", formato: "desktop", alt: "Calendário do mês com as ordens de serviço de cada técnico" },
+  orcamentoAprovado: { arquivo: "03-orcamento-aprovado", tela: "Orçamento aprovado", formato: "desktop", alt: "Orçamento aprovado pelo cliente por link, com a OS gerada e a linha do tempo da proposta" },
+  orcamentos: { arquivo: "04-orcamentos", tela: "Orçamentos", formato: "desktop", alt: "Lista de orçamentos com status e totais do período" },
+  contratos: { arquivo: "05-contratos", tela: "Contratos", formato: "desktop", alt: "Contratos de manutenção com valor mensal e próxima OS" },
+  estoque: { arquivo: "06-estoque-saldos", tela: "Estoque", formato: "desktop", alt: "Saldos do estoque com o aviso de produtos no mínimo" },
+  mapa: { arquivo: "07-mapa-equipe", tela: "Mapa da equipe", formato: "desktop", alt: "Mapa com a posição dos técnicos em campo e a OS que cada um executa" },
+  desempenho: { arquivo: "08-desempenho", tela: "Desempenho", formato: "desktop", alt: "Ranking do mês por escore de qualidade, com faixas de bônus e o prêmio em disputa" },
+  desempenhoTv: { arquivo: "08-desempenho-tv", tela: "Modo TV", formato: "desktop", alt: "Ranking do mês no modo TV, para a parede da empresa" },
+  equipes: { arquivo: "09-equipes", tela: "Colaboradores", formato: "desktop", alt: "Colaboradores com cargo, equipe e atividades" },
+  financeiro: { arquivo: "10-financeiro-painel", tela: "Financeiro", formato: "desktop", alt: "Dashboard financeiro com a receber, a pagar e entradas e saídas dos últimos meses" },
+  appTecnico: { arquivo: "11-app-tecnico", tela: "App do técnico", formato: "celular", alt: "App do técnico com as OS do dia, o endereço e o botão Cheguei" },
+  pmoc: { arquivo: "12-pmoc", tela: "PMOC", formato: "desktop", alt: "Cronograma do PMOC com as manutenções geradas para o ano" },
+  aceite: { arquivo: "13-aceite", tela: "Aceite do cliente", formato: "celular", alt: "Cliente confirmando o serviço pelo link e avaliando com cinco estrelas" },
+  equipamento: { arquivo: "14-equipamento-qr", tela: "Equipamento", formato: "desktop", alt: "Ficha do equipamento com foto, garantia, próxima manutenção e QR Code" },
+  qrCelular: { arquivo: "14-qr-celular", tela: "Leitura do QR", formato: "celular", alt: "O que abre no celular ao ler o QR do equipamento: ficha, próxima manutenção e histórico" },
+  osAtividades: { arquivo: "15-os-atividades", tela: "OS com atividades", formato: "desktop", alt: "Ordem de serviço com o painel de atividades: etapas concluídas, equipe em deslocamento e próxima visita" },
 } as const satisfies Record<string, Print>;
 
 // ── 1. Hero ─────────────────────────────────────────────────────────────────────────────────────
@@ -124,8 +138,10 @@ export const MODULOS: Modulo[] = [
     titulo: "Da abertura da OS ao serviço na palma da mão do técnico.",
     texto:
       "Agende, distribua a equipe, acompanhe no calendário. O técnico recebe a agenda no celular, executa o checklist, tira fotos e registra medições — funciona até sem internet.",
-    print: PRINTS.calendario,
+    print: PRINTS.osAtividades,
     printCelular: PRINTS.appTecnico,
+    printAbaixo: PRINTS.calendario,
+    printEmDestaque: true,
   },
   {
     id: "pmoc",
@@ -150,8 +166,8 @@ export const MODULOS: Modulo[] = [
     titulo: "Sua equipe com meta, ranking e bônus — medidos pela qualidade.",
     texto:
       "Escore de qualidade por técnico (no prazo, relatório completo, avaliação do cliente, sem retorno), ranking por função, bônus do mês e modo TV pra parede da empresa.",
-    print: PRINTS.equipes,
-    printAbaixo: PRINTS.colaboradores,
+    print: PRINTS.desempenho,
+    extras: [PRINTS.desempenhoTv, PRINTS.equipes],
   },
   {
     id: "equipamentos",
@@ -160,6 +176,7 @@ export const MODULOS: Modulo[] = [
     texto:
       "Cadastre pela foto da etiqueta, gere o QR, tenha todo o histórico. O técnico lê o QR em campo e já sabe tudo.",
     print: PRINTS.equipamento,
+    printCelular: PRINTS.qrCelular,
   },
   {
     id: "estoque",
@@ -214,8 +231,8 @@ export const ORIGEM = {
     nome: "Edione Bonfim",
     papel: "fundador · Termofrio Engenharia e Clima",
   },
-  /** Foto REAL (equipe/campo), ao lado do texto. Mesmo esquema dos prints: o arquivo com este nome troca o espaço reservado. */
-  foto: { arquivo: "foto-equipe", descricao: "Foto real · equipe / campo", alt: "Equipe da Termofrio Engenharia e Clima em campo" },
+  /** Foto REAL (equipe/campo), ao lado do texto: entra quando o arquivo existir em public/marketing/prints; sem ele, o texto ocupa a linha. */
+  foto: { arquivo: "foto-equipe", alt: "Equipe da Termofrio Engenharia e Clima em campo" },
 } as const;
 
 // ── 5. Como funciona ────────────────────────────────────────────────────────────────────────────
@@ -229,7 +246,7 @@ export const COMO_FUNCIONA = {
   ],
 } as const;
 
-// ── 6. Prova social (VAZIA de propósito: só entra dado real) ────────────────────────────────────
+// ── 6. Prova social (só dado real; vazia, a seção não aparece) ──────────────────────────────────
 
 export interface Depoimento { texto: string; nome: string; empresa: string }
 export interface NumeroReal { valor: string; rotulo: string }

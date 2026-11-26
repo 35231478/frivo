@@ -20,70 +20,77 @@ mesmo projeto e define-se `NEXT_PUBLIC_SITE_URL` (base do canonical e da imagem 
 | Arquivo | Papel |
 |---|---|
 | `components/marketing/conteudo.ts` | **Todo o conteúdo**: textos do briefing, lista dos prints, FAQ, links, contato e o destino do CTA |
-| `app/(publico)/(marketing)/page.tsx` | A página: as 10 seções na ordem do briefing + SEO |
-| `components/marketing/print.tsx` | Print do sistema e foto (imagem real ou espaço reservado) e as molduras (notebook, celular, janela) |
+| `app/(publico)/(marketing)/page.tsx` | A página: as seções na ordem do briefing + SEO |
+| `components/marketing/print.tsx` | Prints e foto, nas molduras (notebook, celular, janela, miniatura) |
 | `components/marketing/botao-teste.tsx` | O CTA primário (um só, repetido) |
 | `components/marketing/cabecalho.tsx`, `rodape.tsx` | Cabeçalho fixo com o botão; rodapé |
 | `app/(publico)/(marketing)/opengraph-image.tsx` | Imagem de compartilhamento (Open Graph), gerada no build |
 | `app/(publico)/(institucional)/teste-gratis/page.tsx` | Destino **provisório** do CTA |
-| `public/marketing/prints/` | Pasta dos prints e da foto reais (ver o `LEIA-ME.md` dela) |
+| `public/marketing/prints/` | Os prints (ver o `LEIA-ME.md` dela) |
+| `scripts/vendas/` | A empresa de demonstração e o gerador dos prints (`npm run prints:vendas`) |
 
 Seções: hero · a dor · módulos (8 blocos em zigue-zague, PMOC em destaque) · por que Frivo · por que o Frivo
-existe · como funciona · prova social · planos · FAQ · CTA final · rodapé.
+existe · como funciona · prova social (só com dado real) · planos · FAQ · CTA final · rodapé.
 
-**Por que o Frivo existe.** A origem do sistema (nasceu dentro da Termofrio Engenharia e Clima): texto, uma
-foto real ao lado e o depoimento do fundador em destaque. O depoimento é do próprio fundador — fica nesta
-seção (`ORIGEM`), não na prova social, que continua reservada a clientes.
+**Por que o Frivo existe.** A origem do sistema (nasceu dentro da Termofrio Engenharia e Clima) e o depoimento
+do fundador em destaque. A foto real da equipe entra ao lado do texto quando existir
+`public/marketing/prints/foto-equipe.(jpg|png|webp|avif)`; sem ela, o texto ocupa a linha.
 
-## Prints do sistema
+**Nada de espaço reservado no ar.** Print sem arquivo não aparece (e o teste falha); a prova social e a foto
+só aparecem com conteúdo real; o WhatsApp só com número configurado.
 
-Cada lugar de print tem um **nome** (`PRINTS`, em `conteudo.ts`). Se o arquivo com esse nome está em
-`public/marketing/prints/`, entra a imagem real; se não, fica o espaço reservado nomeado. Colocar o arquivo
-na pasta troca o espaço sozinho, sem mexer em código. A tabela completa (nome, onde aparece, situação) está
-no `LEIA-ME.md` da pasta.
+## Prints: empresa de demonstração
 
-| # | Tela | Onde aparece |
-|---|---|---|
-| 01 | Dashboard | Hero (notebook) |
-| 02 | Calendário de OS | Ordens de serviço |
-| 03 | Orçamento com aprovação | Financeiro — print principal, **em destaque** |
-| 04, 05, 10 | Orçamentos, Contratos, Financeiro | Financeiro — miniaturas com legenda |
-| 06 | Estoque | Estoque, compras e materiais |
-| 07 | Mapa dos técnicos | Mapa da equipe — **em destaque** |
-| 08, 09 | Equipes, Colaboradores | Desempenho da equipe (um abaixo do outro) |
-| 11 a 14 | App do técnico, PMOC, Aceite, Equipamento + QR | Seguem como espaço reservado (telas não enviadas) |
+Os prints são telas reais do sistema, tiradas de uma **empresa fictícia** — nunca da produção (o repositório e
+a página são públicos). Um comando refaz todos, sempre que a interface mudar:
 
-"Em destaque" = o print ocupa a coluna larga do bloco (`printEmDestaque`). Um recorte fora de 16:10 declara a
-`proporcao` no print, e a moldura segue a imagem.
+```bash
+DATABASE_URL="postgresql://…@localhost:5432/frivo_prints" npm run prints:vendas
+```
 
-**Tratamento das telas reais.** Entram só com a área da tela: sem a barra lateral e sem a barra do topo, que
-mostra o e-mail do usuário. O 09 saiu sem a coluna Contato (telefone e e-mail do colaborador) e o 07 teve a
-coordenada do técnico borrada. Nomes de clientes, de colaboradores e valores que aparecem nas telas ficam
-visíveis — conferir antes de publicar.
+1. **Seed** (`scripts/vendas/seed-demo.ts`): cria a "Polar Climatização" com um mês de operação — 8 clientes
+   (clínica, condomínio, colégio, empório, edifício corporativo, hotel, loja, academia), 6 técnicos em 3
+   equipes, ~50 equipamentos (split, cassete, piso-teto, VRF, chiller, câmara fria) com QR, ~120 OS
+   (preventiva, corretiva, instalação, limpeza química) com checklist, fotos e aceite com nota, PMOC com
+   cronograma gerado pelo próprio sistema, orçamentos, contratos, estoque, 6 meses de financeiro,
+   Desempenho e a posição dos técnicos no mapa. As datas são relativas a hoje. Documentos com dígito
+   verificador inválido de propósito, e-mails `.exemplo`, imagens geradas na hora.
+2. **Trava**: seed e gerador só rodam com `DATABASE_URL` em `localhost` (`scripts/vendas/banco-local.ts`).
+3. **Prints** (`scripts/vendas/gerar-prints.mjs`): sobe `next dev` (ou usa `PRINTS_URL`), entra como a
+   gestora e como o técnico, e fotografa cada tela em 2x sem a barra lateral e sem a barra do topo. Grava
+   WebP: computador 1600 × 1000, celular 780 × 1646. `PRINTS_SO=07-mapa-equipe,12-pmoc` refaz só esses.
 
-## Trocar a foto
+Pré-requisitos: um Postgres local com o schema (`npx prisma db push`), o Chromium do Playwright e acesso aos
+blocos do OpenStreetMap (o print do mapa).
 
-A foto da seção "Por que o Frivo existe" segue o mesmo esquema: o arquivo `foto-equipe` (`.jpg`, `.png`,
-`.webp` ou `.avif`) em `public/marketing/prints/` troca o espaço reservado.
-
-## O que ainda é placeholder
-
-| O quê | Onde trocar |
+| Tela | Onde aparece |
 |---|---|
-| Os prints que faltam (01 a 05 em arquivo; 11 a 14 por enviar) | `public/marketing/prints/` |
-| A foto da equipe / campo | `public/marketing/prints/foto-equipe` |
-| Prova social (depoimentos, números, logos) | `PROVA_SOCIAL` em `conteudo.ts` — nasce vazia; só entra dado real |
+| 01 Dashboard + 11 app do técnico | Hero (notebook + celular) |
+| 15 OS com o painel de Atividades + 11 app do técnico + 02 calendário | Ordens de serviço — **em destaque** |
+| 12 PMOC (cronograma) | PMOC automático (bloco de destaque) |
+| 13 Aceite pelo link (estrelas) | Aceite e avaliação |
+| 08 Desempenho + 08 modo TV + 09 colaboradores | Desempenho da equipe |
+| 14 ficha do equipamento + 14 leitura do QR no celular | Equipamentos com QR |
+| 06 Estoque | Estoque, compras e materiais |
+| 03 Orçamento aprovado + 04 orçamentos, 05 contratos, 10 financeiro | Financeiro — **em destaque** |
+| 07 Mapa | Mapa da equipe — **em destaque** |
+
+## Configuração
+
+| O quê | Onde |
+|---|---|
+| WhatsApp de vendas | variável de ambiente `WHATSAPP_VENDAS` (com DDD, ex.: `62912345678`); sem ela, o WhatsApp não aparece. A home é estática: a variável vale a partir do **próximo build/deploy** |
+| E-mail de contato | `contatoDeVendas` em `conteudo.ts` |
+| Prova social (depoimentos, números, logos) | `PROVA_SOCIAL` em `conteudo.ts` — só dado real |
 | Destino do CTA | `LINK_TESTE_GRATIS` em `conteudo.ts` |
 | Indexação nos buscadores | `PUBLICADA` em `conteudo.ts` (`false` = `noindex`) |
 
-**Contato.** WhatsApp e e-mail do rodapé e da página do teste grátis vêm de `CONTATO` em `conteudo.ts`; o
-link do WhatsApp (`wa.me`) é montado a partir do número.
+O contato vale para o rodapé da home, para a página do teste grátis e para o rodapé das páginas institucionais.
 
 **Destino do CTA.** O Frivo ainda não tem o cadastro automático da empresa. Todos os botões apontam para
-`/teste-gratis`, uma página provisória que encaminha para o contato. Quando o cadastro existir, troca-se
-`LINK_TESTE_GRATIS` (ou a página vira o formulário).
-
-**Publicação.** Enquanto houver espaço reservado, a página sai com `noindex`. No lançamento: `PUBLICADA = true`.
+`/teste-gratis`, uma página provisória: os três passos do teste e o pedido de acesso pelo WhatsApp (com a
+mensagem pronta) ou por e-mail. Quando o cadastro existir, troca-se `LINK_TESTE_GRATIS` (ou a página vira o
+formulário).
 
 ## Desempenho
 
@@ -101,12 +108,11 @@ ficam fora do ratchet de tom, como as páginas institucionais.
 ## Testes
 
 `tests/unit/marketing-home.test.ts`: seções e módulos na ordem, um CTA com um destino só, cada print no bloco
-certo (imagem real ou espaço reservado nomeado; 03 e 07 em destaque), a seção da origem (texto, depoimento do fundador, espaço da
-foto), prova social vazia e sem número inventado, FAQ, rodapé com o contato, SEO, e o
+certo e com o arquivo presente (03, 07 e 15 em destaque), nenhum espaço reservado na página, prova social e foto
+fora quando vazias, WhatsApp só com número configurado, FAQ, rodapé, SEO, a trava de banco local dos scripts e o
 acesso pelo middleware real (anônimo abre a home; liberar a `/` não libera o sistema; logado vai ao painel).
 
-## Prints
+## Prints da página
 
-`docs/prints/marketing-home/`: hero e página inteira no computador e no celular, a imagem de compartilhamento,
-a página provisória do teste grátis, a seção "Por que o Frivo existe", o rodapé com o contato e os blocos
-que já têm tela real.
+`docs/prints/marketing-home/`: a página antes e depois desta troca de prints, no computador e no celular, e a
+página do teste grátis.
