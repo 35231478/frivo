@@ -21,7 +21,8 @@ export function Cabecalho() {
         </nav>
 
         <div className="flex items-center gap-1 sm:gap-2">
-          <Link href={LINK_ENTRAR} className="inline-flex min-h-[44px] items-center rounded-lg px-3 text-sm font-medium text-ink-muted hover:text-acento">
+          {/* Sem pré-carregar o login: o JavaScript dele pesaria na home de quem ainda nem é cliente */}
+          <Link href={LINK_ENTRAR} prefetch={false} className="inline-flex min-h-[44px] items-center rounded-lg px-3 text-sm font-medium text-ink-muted hover:text-acento">
             Entrar
           </Link>
           <BotaoTeste local="cabecalho" tamanho="medio" rotulo={CTA.curto} className="sm:hidden" />

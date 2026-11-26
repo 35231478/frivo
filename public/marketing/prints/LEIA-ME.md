@@ -1,50 +1,44 @@
-# Prints e foto da home de vendas
+# Prints da home de vendas
 
-Coloque aqui as telas reais do sistema, **com exatamente estes nomes**. A página (`/`) troca o espaço
-reservado pela imagem sozinha, sem mexer em código. Extensões aceitas: `.webp` (preferida), `.avif`,
-`.png` ou `.jpg`.
+Telas do Frivo com a **empresa de demonstração** ("Polar Climatização"): clientes, pessoas, endereços,
+documentos e valores são inventados. Nada aqui vem da produção — o repositório e a página são públicos.
 
-| # | Arquivo | Tela | Formato | Onde aparece | Situação |
-|---|---|---|---|---|---|
-| 1 | `01-dashboard` | Dashboard | computador | Hero (notebook) | falta o arquivo |
-| 2 | `02-calendario-os` | Calendário de OS | computador | Ordens de serviço | falta o arquivo |
-| 3 | `03-orcamento-aprovado` | Orçamento com aprovação | computador | Financeiro — print principal, em destaque | falta o arquivo |
-| 4 | `04-orcamentos` | Orçamentos | computador | Financeiro — miniatura | falta o arquivo |
-| 5 | `05-contratos` | Contratos | computador | Financeiro — miniatura | falta o arquivo |
-| 6 | `06-estoque` | Estoque | computador | Estoque, compras e materiais | no lugar |
-| 7 | `07-mapa-tecnicos` | Mapa dos técnicos | computador | Mapa da equipe — em destaque | no lugar |
-| 8 | `08-equipes` | Equipes | computador | Desempenho da equipe — print principal | no lugar |
-| 9 | `09-colaboradores` | Colaboradores | computador | Desempenho da equipe — abaixo do principal | no lugar |
-| 10 | `10-financeiro` | Financeiro | computador | Financeiro — miniatura | no lugar |
-| 11 | `11-app-tecnico` | App do técnico (Meu dia / execução) | celular | Hero (celular) e Ordens de serviço | não enviado |
-| 12 | `12-pmoc` | PMOC (cronograma + documento PDF) | computador | PMOC automático | não enviado |
-| 13 | `13-aceite` | Aceite (assinatura + estrelas) | celular | Aceite e avaliação | não enviado |
-| 14 | `14-equipamento-qr` | Equipamento + QR | computador | Equipamentos com QR | não enviado |
+## Regenerar
 
-Os prints já no lugar foram recortados só na área da tela: sem a barra lateral e sem a barra do topo (que
-mostra o e-mail do usuário). Equipes (08), colaboradores (09) e estoque (06) ficaram só com a parte que tem
-conteúdo, para o texto aparecer maior; o 09 saiu sem a coluna Contato (telefone e e-mail do colaborador) e o
-mapa (07) teve a coordenada do técnico borrada. Um recorte fora de 16:10 precisa da `proporcao` do print em
-`components/marketing/conteudo.ts`.
+```bash
+npm run prints:vendas
+```
 
-## Foto (seção "Por que o Frivo existe")
+O comando cria a empresa de demonstração num banco **local** (`scripts/vendas/seed-demo.ts`), sobe o app
+(ou usa o que estiver em `PRINTS_URL`), entra como a gestora e como o técnico e grava cada tela aqui, em
+WebP. Rode de novo sempre que a interface mudar. Detalhes e pré-requisitos em `docs/marketing-home.md`.
 
-| Arquivo | O quê | Onde aparece |
-|---|---|---|
-| `foto-equipe` | Foto real da equipe / em campo | Ao lado do texto "Feito por climatização. Para climatização." |
+## Arquivos
 
-Qualquer orientação serve, com pelo menos 1200 px no lado menor. No computador a foto aparece em pé (4:5) e
-no celular deitada (4:3), cortada pelo centro — deixe as pessoas no meio do quadro.
+| Arquivo | Tela | Formato | Onde aparece |
+|---|---|---|---|
+| `01-dashboard` | Dashboard | computador | Hero (notebook) e página do teste grátis |
+| `02-calendario-os` | Calendário de OS | computador | Ordens de serviço (abaixo da OS) |
+| `03-orcamento-aprovado` | Orçamento aprovado pelo link | computador | Financeiro — print principal, em destaque |
+| `04-orcamentos` | Lista de orçamentos | computador | Financeiro — miniatura |
+| `05-contratos` | Contratos | computador | Financeiro — miniatura |
+| `06-estoque-saldos` | Estoque | computador | Estoque, compras e materiais |
+| `07-mapa-equipe` | Mapa da equipe | computador | Mapa da equipe — em destaque |
+| `08-desempenho` | Desempenho (ranking) | computador | Desempenho da equipe |
+| `08-desempenho-tv` | Desempenho no modo TV | computador | Desempenho da equipe — miniatura |
+| `09-equipes` | Colaboradores | computador | Desempenho da equipe — miniatura |
+| `10-financeiro-painel` | Dashboard financeiro | computador | Financeiro — miniatura |
+| `11-app-tecnico` | App do técnico (Meu dia) | celular | Hero e Ordens de serviço |
+| `12-pmoc` | PMOC — cronograma | computador | PMOC automático |
+| `13-aceite` | Aceite do cliente pelo link (estrelas) | celular | Aceite e avaliação |
+| `14-equipamento-qr` | Ficha do equipamento | computador | Equipamentos com QR |
+| `14-qr-celular` | O que abre ao ler o QR | celular | Equipamentos com QR |
+| `15-os-atividades` | OS com o painel de Atividades | computador | Ordens de serviço — em destaque |
+| `foto-equipe` | Foto real da equipe (opcional) | foto | "Por que o Frivo existe"; sem ela, a seção fica só com o texto |
 
-## Tamanho dos prints
+Os arquivos que já existiram com telas da produção (`06-estoque`, `07-mapa-tecnicos`, `08-equipes`,
+`09-colaboradores`, `10-financeiro`) não voltam com o mesmo nome: um cache de imagem otimizada poderia
+servir a versão antiga nesse endereço.
 
-- **Computador:** proporção 16:10 — 1600 × 1000 px (janela do navegador em 1280 × 800, captura em 2x, já sem a barra do navegador).
-- **Celular:** proporção 9:19 — 780 × 1646 px (tela de 390 px de largura, captura em 2x).
-
-Fora da proporção a imagem é cortada (mantém o topo). Não precisa comprimir à mão: a página entrega
-cada print no tamanho da tela de quem abre, em WebP/AVIF.
-
-## Antes de publicar
-
-Confira o que cada tela mostra: nome, telefone, e-mail, endereço e valores de clientes e de colaboradores
-ficam visíveis para qualquer visitante.
+Computador: 1600 × 1000 (16:10). Celular: 780 × 1646 (9:19). Os nomes são os de
+`components/marketing/conteudo.ts`; o teste da página falha se algum faltar.

@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import Link from "next/link";
 import Image from "next/image";
 import {
@@ -7,7 +7,7 @@ import {
 import { Cabecalho } from "@/components/marketing/cabecalho";
 import { Rodape } from "@/components/marketing/rodape";
 import { BotaoTeste } from "@/components/marketing/botao-teste";
-import { Celular, Foto, Janela, Miniatura, Notebook } from "@/components/marketing/print";
+import { Celular, Foto, Janela, Miniatura, Notebook, localizarPrint } from "@/components/marketing/print";
 import { FaqLista } from "@/components/publico/faq-lista";
 import {
   COMO_FUNCIONA, CTA, CTA_FINAL, DOR, FAQ, HERO, MODULOS, type Modulo, ORIGEM, PLANOS, POR_QUE, PRINTS, PROVA_SOCIAL, PUBLICADA, SEO, URL_SITE,
@@ -29,6 +29,9 @@ export const metadata: Metadata = {
   twitter: { card: "summary_large_image", title: SEO.titulo, description: SEO.descricao },
 };
 
+// O app trava o zoom (PWA, layout raiz); a página de vendas deixa o visitante ampliar (acessibilidade)
+export const viewport: Viewport = { width: "device-width", initialScale: 1, maximumScale: 5, userScalable: true };
+
 const ICONES: Record<string, LucideIcon> = {
   os: FileX2, pmoc: CalendarClock, aceite: Signature, equipe: Target, financeiro: Receipt,
   especializado: Snowflake, rapido: Zap, completo: Layers,
@@ -40,7 +43,11 @@ const TITULO_SECAO = "font-display text-2xl font-bold leading-tight tracking-tig
 const SIZES_METADE = "(min-width: 1024px) 560px, 100vw";
 const SIZES_LARGO = "(min-width: 1024px) 640px, 100vw";
 
+const temProvaSocial = () => PROVA_SOCIAL.depoimentos.length + PROVA_SOCIAL.numeros.length + PROVA_SOCIAL.logos.length > 0;
+
 export default function HomeDeVendas() {
+  // As seções alternam o fundo (cinza/branco); sem a prova social, Planos e FAQ trocam de cor
+  const cinza = temProvaSocial();
   return (
     <div className="bg-white">
       <Cabecalho />
@@ -52,8 +59,8 @@ export default function HomeDeVendas() {
         <Origem />
         <ComoFunciona />
         <ProvaSocial />
-        <Planos />
-        <Faq />
+        <Planos cinza={cinza} />
+        <Faq cinza={!cinza} />
         <CtaFinal />
       </main>
       <Rodape />
@@ -78,7 +85,7 @@ function Hero() {
 
         <div className="relative px-[4%] pb-[6%]">
           <Notebook print={PRINTS.dashboard} sizes="(min-width: 1024px) 600px, 92vw" prioridade />
-          <Celular print={PRINTS.appTecnico} sizes="(min-width: 1024px) 140px, 22vw" prioridade compacto className="absolute bottom-0 right-0 w-[23%]" />
+          <Celular print={PRINTS.appTecnico} sizes="(min-width: 1024px) 140px, 22vw" prioridade className="absolute bottom-0 right-0 w-[23%]" />
         </div>
       </div>
     </section>
@@ -153,11 +160,11 @@ function BlocoModulo({ modulo, invertido }: { modulo: Modulo; invertido: boolean
         <div>
           <div className={cn("relative", printCelular && "pb-[5%] pr-[5%]")}>
             <Janela print={print} sizes={sizes} />
-            {printCelular && <Celular print={printCelular} sizes="(min-width: 1024px) 130px, 24vw" compacto className="absolute bottom-0 right-0 w-[24%]" />}
+            {printCelular && <Celular print={printCelular} sizes="(min-width: 1024px) 130px, 24vw" className="absolute bottom-0 right-0 w-[24%]" />}
           </div>
           {printAbaixo && <Janela print={printAbaixo} sizes={sizes} className="ml-[10%] mt-4" />}
           {extras && (
-            <div className="mt-4 grid grid-cols-3 gap-3 sm:gap-4">
+            <div className={cn("mt-4 grid gap-3 sm:gap-4", extras.length === 2 ? "grid-cols-2" : "grid-cols-3")}>
               {extras.map((e) => <Miniatura key={e.arquivo} print={e} sizes="(min-width: 1024px) 200px, 30vw" />)}
             </div>
           )}
@@ -191,14 +198,18 @@ function PorQue() {
   );
 }
 
-/** Por que o Frivo existe: a origem (texto + foto real ao lado) e o depoimento do fundador em destaque. */
+/**
+ * Por que o Frivo existe: a origem e o depoimento do fundador em destaque. A foto real da equipe entra
+ * ao lado do texto quando o arquivo existir; sem ela, o texto ocupa a linha (nada de espaço reservado).
+ */
 function Origem() {
   const { depoimento } = ORIGEM;
+  const comFoto = !!localizarPrint(ORIGEM.foto.arquivo);
   return (
     <section id="por-que-existe" className="scroll-mt-16" data-secao="por-que-existe">
       <div className={cn(CAIXA, "py-14 sm:py-20")}>
-        <div className="grid items-center gap-8 lg:grid-cols-[1.1fr_0.9fr] lg:gap-14">
-          <div>
+        <div className={cn("grid items-center gap-8 lg:gap-14", comFoto && "lg:grid-cols-[1.1fr_0.9fr]")}>
+          <div className={cn(!comFoto && "max-w-3xl")}>
             <p className="text-sm font-semibold text-acento">Por que o Frivo existe</p>
             <h2 className={cn(TITULO_SECAO, "mt-2")}>{ORIGEM.titulo}</h2>
             <div className="mt-5 space-y-4 text-base leading-relaxed text-ink-muted">
@@ -249,71 +260,51 @@ function ComoFunciona() {
 }
 
 /**
- * Prova social. Só entra dado REAL (PROVA_SOCIAL, em conteudo.ts): enquanto as listas estão vazias, a
- * seção mostra os espaços reservados — nada de número ou depoimento inventado.
+ * Prova social. Só entra dado REAL (PROVA_SOCIAL, em conteudo.ts) — nada de número ou depoimento
+ * inventado. Com as listas vazias, a seção não aparece.
  */
 function ProvaSocial() {
+  if (!temProvaSocial()) return null;
   const { depoimentos, numeros, logos } = PROVA_SOCIAL;
-  const vazia = depoimentos.length + numeros.length + logos.length === 0;
-  const reservado = "flex items-center justify-center rounded-card border border-dashed border-surface-border bg-surface-page text-center text-sm text-ink-muted";
   return (
-    <section data-secao="prova-social" {...(vazia ? { "data-prova-social-pendente": true } : {})}>
+    <section data-secao="prova-social">
       <div className={cn(CAIXA, "py-14 sm:py-20")}>
-        {vazia ? (
-          <>
-            <p className="label-uppercase text-center">Espaço reservado · prova social</p>
-            <div className="mt-6 grid gap-4 lg:grid-cols-[1.4fr_1fr]">
-              <div className={cn(reservado, "min-h-[160px] p-6")} data-reservado="depoimento">Depoimento de cliente</div>
-              <div className="grid grid-cols-3 gap-4">
-                {[1, 2, 3].map((n) => <div key={n} className={cn(reservado, "min-h-[96px] p-3")} data-reservado="numero">Número real {n}</div>)}
+        {numeros.length > 0 && (
+          <dl className="grid gap-4 text-center sm:grid-cols-3">
+            {numeros.map((n) => (
+              <div key={n.rotulo} className="rounded-card border border-surface-border bg-white p-6">
+                <dd className="font-display text-3xl font-bold tabular-nums text-ink">{n.valor}</dd>
+                <dt className="mt-1 text-sm text-ink-muted">{n.rotulo}</dt>
               </div>
-            </div>
-            <div className="mt-4 grid grid-cols-3 gap-4 sm:grid-cols-5">
-              {[1, 2, 3, 4, 5].map((n) => (
-                <div key={n} className={cn(reservado, "h-14 text-xs", n > 3 && "hidden sm:flex")} data-reservado="logo">Logo {n}</div>
-              ))}
-            </div>
-          </>
-        ) : (
-          <>
-            {numeros.length > 0 && (
-              <dl className="grid gap-4 text-center sm:grid-cols-3">
-                {numeros.map((n) => (
-                  <div key={n.rotulo} className="rounded-card border border-surface-border bg-white p-6">
-                    <dd className="font-display text-3xl font-bold tabular-nums text-ink">{n.valor}</dd>
-                    <dt className="mt-1 text-sm text-ink-muted">{n.rotulo}</dt>
-                  </div>
-                ))}
-              </dl>
-            )}
-            {depoimentos.length > 0 && (
-              <div className="mt-6 grid gap-4 md:grid-cols-2">
-                {depoimentos.map((d) => (
-                  <figure key={d.nome} className="rounded-card border border-surface-border bg-white p-6">
-                    <Quote className="h-5 w-5 text-acento" aria-hidden />
-                    <blockquote className="mt-3 text-base leading-relaxed text-ink">{d.texto}</blockquote>
-                    <figcaption className="mt-4 text-sm text-ink-muted"><span className="font-semibold text-ink">{d.nome}</span> · {d.empresa}</figcaption>
-                  </figure>
-                ))}
-              </div>
-            )}
-            {logos.length > 0 && (
-              <ul className="mt-8 flex flex-wrap items-center justify-center gap-x-10 gap-y-4">
-                {logos.map((l) => (
-                  <li key={l.nome}><Image src={l.src} alt={l.nome} width={120} height={40} className="h-8 w-auto object-contain" /></li>
-                ))}
-              </ul>
-            )}
-          </>
+            ))}
+          </dl>
+        )}
+        {depoimentos.length > 0 && (
+          <div className="mt-6 grid gap-4 md:grid-cols-2">
+            {depoimentos.map((d) => (
+              <figure key={d.nome} className="rounded-card border border-surface-border bg-white p-6">
+                <Quote className="h-5 w-5 text-acento" aria-hidden />
+                <blockquote className="mt-3 text-base leading-relaxed text-ink">{d.texto}</blockquote>
+                <figcaption className="mt-4 text-sm text-ink-muted"><span className="font-semibold text-ink">{d.nome}</span> · {d.empresa}</figcaption>
+              </figure>
+            ))}
+          </div>
+        )}
+        {logos.length > 0 && (
+          <ul className="mt-8 flex flex-wrap items-center justify-center gap-x-10 gap-y-4">
+            {logos.map((l) => (
+              <li key={l.nome}><Image src={l.src} alt={l.nome} width={120} height={40} className="h-8 w-auto object-contain" /></li>
+            ))}
+          </ul>
         )}
       </div>
     </section>
   );
 }
 
-function Planos() {
+function Planos({ cinza }: { cinza: boolean }) {
   return (
-    <section id="planos" className="scroll-mt-16 bg-surface-page" data-secao="planos">
+    <section id="planos" className={cn("scroll-mt-16", cinza && "bg-surface-page")} data-secao="planos">
       <div className={cn(CAIXA, "py-14 sm:py-20")}>
         <div className="mx-auto max-w-2xl rounded-card border border-surface-border bg-white p-6 text-center shadow-card sm:p-10">
           <h2 className={TITULO_SECAO}>{PLANOS.titulo}</h2>
@@ -331,9 +322,9 @@ function Planos() {
   );
 }
 
-function Faq() {
+function Faq({ cinza }: { cinza: boolean }) {
   return (
-    <section id="faq" className="scroll-mt-16" data-secao="faq">
+    <section id="faq" className={cn("scroll-mt-16", cinza && "bg-surface-page")} data-secao="faq">
       <div className="mx-auto max-w-3xl px-4 py-14 sm:px-6 sm:py-20">
         <h2 className={cn(TITULO_SECAO, "text-center")}>Perguntas frequentes</h2>
         <div className="mt-8">

@@ -1,10 +1,9 @@
 import Link from "next/link";
 import { FrivoLogo } from "@/components/layout/frivo-logo";
+import { contatoDeVendas } from "@/components/marketing/conteudo";
 
-// Rodapé das páginas públicas institucionais (Privacidade · FAQ · Termos).
-// Contato fica como PLACEHOLDER até a empresa informar — preserve os colchetes.
-const CONTATO_WHATSAPP = "[número]";
-const CONTATO_EMAIL = "[e-mail]";
+// Rodapé das páginas públicas institucionais (Privacidade · FAQ · Termos · Teste grátis).
+// O contato é o mesmo da home de vendas: e-mail sempre; WhatsApp só com número configurado.
 
 const paginas = [
   { href: "/privacidade", rotulo: "Privacidade" },
@@ -13,6 +12,7 @@ const paginas = [
 ];
 
 export function InstitucionalRodape() {
+  const contato = contatoDeVendas();
   const ano = new Date().getFullYear();
   return (
     <footer className="mt-16 border-t border-surface-border bg-white">
@@ -40,12 +40,14 @@ export function InstitucionalRodape() {
 
           <div className="flex flex-col gap-1">
             <span className="label-uppercase mb-1">Contato</span>
-            <span className="inline-flex min-h-[44px] items-center text-sm text-ink-muted">
-              WhatsApp {CONTATO_WHATSAPP}
-            </span>
-            <span className="inline-flex min-h-[44px] items-center text-sm text-ink-muted">
-              E-mail {CONTATO_EMAIL}
-            </span>
+            {contato.linkWhatsapp && (
+              <a href={contato.linkWhatsapp} target="_blank" rel="noopener noreferrer" className="inline-flex min-h-[44px] items-center text-sm text-ink hover:text-acento">
+                WhatsApp {contato.whatsapp}
+              </a>
+            )}
+            <a href={contato.linkEmail} className="inline-flex min-h-[44px] items-center break-all text-sm text-ink hover:text-acento">
+              {contato.email}
+            </a>
           </div>
         </div>
 
