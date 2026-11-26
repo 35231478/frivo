@@ -113,6 +113,7 @@ export const SUGESTOES: Record<string, DefSugestao> = {
           { numero: { contains: q, mode: "insensitive" } },
           { descricao: { contains: q, mode: "insensitive" } },
           { cliente: { nome: { contains: q, mode: "insensitive" } } },
+          { cliente: { nomeFantasia: { contains: q, mode: "insensitive" } } },
         ],
       },
       select: { id: true, numero: true, cliente: { select: { nome: true, nomeFantasia: true } } },

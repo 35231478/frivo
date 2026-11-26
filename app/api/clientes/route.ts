@@ -64,6 +64,8 @@ export async function GET(req: NextRequest) {
       ...(busca && {
         OR: [
           { nome: { contains: busca, mode: "insensitive" } },
+          // o seletor mostra o fantasia: buscar por ele também precisa achar
+          { nomeFantasia: { contains: busca, mode: "insensitive" } },
           { cpfCnpj: { contains: busca } },
         ],
       }),

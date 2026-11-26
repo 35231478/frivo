@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { validarDocumentoDataUrl, validarFotos } from "@/lib/anexos-server";
 import { veiculoSchema } from "@/lib/validations";
+import { respostaRefEmpresa, validarRefEmpresa } from "@/lib/ref-empresa";
 import { organizarFotosVeiculo } from "@/lib/veiculo-fotos";
 import { exigirPermissao } from "@/lib/permissoes-server";
 import { pode } from "@/lib/permissoes";
@@ -50,6 +51,11 @@ export async function PUT(req: NextRequest, { params }: Params) {
   }
 
   const { documentos, responsavelId, equipeId, proximaRevisaoData, seguroVencimento, fotos: fotosBrutas, fotosRotulos: rotulosBrutos, ...rest } = parsed.data;
+  // Responsável e equipe precisam ser da empresa (antes, um id de outra empresa era gravado)
+  try {
+    await validarRefEmpresa("tecnico", responsavelId, empresaId, "Responsável");
+    await validarRefEmpresa("equipe", equipeId, empresaId, "Equipe");
+  } catch (e) { const r = respostaRefEmpresa(e); if (r) return r; throw e; }
   // Fotos e documentos: tipo decidido pelos BYTES; grava o data URL normalizado
   const fotosValidadas = validarFotos(fotosBrutas);
   if (!fotosValidadas.ok) return NextResponse.json({ erro: fotosValidadas.erro }, { status: 400 });

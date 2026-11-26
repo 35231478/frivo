@@ -75,7 +75,8 @@ export function ContaPagarAcoes({ conta, menu }: { conta: Conta; menu?: boolean 
                 {podeMexer && !conta.recorrenciaId && conta.status !== "CANCELADO" && (
                   <ItemMenu icone={Repeat} onClick={() => { f(); setModal("recorrente"); }} id="tornar-recorrente">Repetir lançamento</ItemMenu>
                 )}
-                {podeMexer && conta.status !== "CANCELADO" && (
+                {/* Paga não cancela (o servidor também recusa): o dinheiro já saiu */}
+                {podeMexer && !finalizada && (
                   <>
                     <SeparadorMenu />
                     <ItemMenu icone={Ban} onClick={() => { f(); cancelar(); }} perigo id="cancelar">Cancelar conta</ItemMenu>
@@ -97,7 +98,7 @@ export function ContaPagarAcoes({ conta, menu }: { conta: Conta; menu?: boolean 
         {podeMexer && !conta.recorrenciaId && conta.status !== "CANCELADO" && (
           <button type="button" title="Repetir lançamento" aria-label="Repetir o lançamento desta conta" onClick={() => setModal("recorrente")} data-tornar-recorrente className="p-1.5 rounded text-ink-muted hover:bg-surface-alt"><Repeat className="w-4 h-4" /></button>
         )}
-        {podeMexer && conta.status !== "CANCELADO" && (
+        {podeMexer && !finalizada && (
           <button type="button" title="Cancelar conta" aria-label="Cancelar conta" onClick={cancelar} data-cancelar-conta className="p-1.5 rounded text-atrasado hover:bg-atrasado-claro"><Ban className="w-4 h-4" /></button>
         )}
       </div>

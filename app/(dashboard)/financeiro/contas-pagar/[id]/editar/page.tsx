@@ -6,6 +6,7 @@ import { pode } from "@/lib/permissoes";
 import { prisma } from "@/lib/prisma";
 import { PageHeader } from "@/components/ui/page-header";
 import { ContaPagarForm } from "@/components/financeiro/conta-pagar-form";
+import { motivoNaoEditarContaPagar } from "@/lib/cadastros/regras-arquivar";
 
 export const metadata: Metadata = { title: "Editar conta a pagar" };
 
@@ -20,6 +21,8 @@ export default async function EditarContaPagarPage({ params }: { params: Promise
 
   const conta = await prisma.contaPagar.findFirst({ where: { id, empresaId } });
   if (!conta) notFound();
+  // Paga ou cancelada está encerrada (a rota recusa a gravação): volta para a ficha da conta
+  if (motivoNaoEditarContaPagar(conta)) redirect(`/financeiro/contas-pagar/${id}`);
 
   const initialData = {
     ...conta,

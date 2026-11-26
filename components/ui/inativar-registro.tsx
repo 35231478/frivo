@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import { Ban, Loader2, RotateCcw, AlertTriangle, Info } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -8,6 +9,7 @@ import { Modal } from "@/components/ui/modal";
 import { toast } from "@/components/ui/avisos";
 import { usePermissoes } from "@/components/providers/permissoes-provider";
 import type { Acao } from "@/lib/permissoes";
+import { textoInativar as textoPadraoInativar, textoReativar as textoPadraoReativar } from "@/lib/cadastros/regras-arquivar";
 
 /**
  * Botão "Inativar / Reativar" com confirmação, para cadastros com soft-delete
@@ -91,7 +93,8 @@ export function InativarRegistro({
 
   const bloqueado = !!impacto?.bloqueio;
 
-  const art = feminino ? "A" : "O", fim = feminino ? "a" : "o";
+  // O texto padrão é o mesmo de todo lugar que inativa (lib/cadastros/regras-arquivar)
+  const padrao = (ativo ? textoPadraoInativar : textoPadraoReativar)(entidade, nome, feminino ? "f" : "m");
   return (
     <>
       {variante === "icone" ? (
@@ -114,12 +117,15 @@ export function InativarRegistro({
         </button>
       )}
 
-      <Modal aberto={aberto} onFechar={() => setAberto(false)} titulo={`${rotulo} ${entidade} ${nome}?`} tamanho="sm">
+      {/* Pelo portal, no <body>: dentro de um cabeçalho com desfoque (backdrop-blur, como o da ficha do
+          cliente) o "fixed" do modal ficaria preso ao cabeçalho e cortado pela barra do topo */}
+      {aberto && typeof document !== "undefined" && createPortal(
+      <Modal aberto={aberto} onFechar={() => setAberto(false)} titulo={rotulo === (ativo ? "Inativar" : "Reativar") ? padrao.titulo : `${rotulo} ${entidade} ${nome}?`} tamanho="sm">
         <div className="space-y-4" onClick={(e) => e.stopPropagation()}>
           <p className="text-sm text-ink">
             {ativo
-              ? (textoInativar ?? `Tem certeza? ${art} ${entidade} sai das listas e seletores; nada é apagado e pode ser reativad${fim} depois.`)
-              : (textoReativar ?? `${feminino ? "A" : "O"} ${entidade} volta a aparecer nas listas e nos seletores.`)}
+              ? (textoInativar ?? padrao.mensagem)
+              : (textoReativar ?? padrao.mensagem)}
           </p>
 
           {checando && <p className="flex items-center gap-2 text-sm text-ink-muted"><Loader2 className="w-4 h-4 animate-spin" /> Verificando vínculos…</p>}
@@ -178,7 +184,8 @@ export function InativarRegistro({
             </button>
           </div>
         </div>
-      </Modal>
+      </Modal>,
+      document.body)}
     </>
   );
 }

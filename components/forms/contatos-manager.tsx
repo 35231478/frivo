@@ -1,6 +1,7 @@
 "use client";
 
 import { confirmar } from "@/components/ui/avisos";
+import { textoInativar } from "@/lib/cadastros/regras-arquivar";
 import { useState, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -9,7 +10,7 @@ import { WhatsAppInput } from "@/components/ui/whatsapp-input";
 import { PhoneInput } from "@/components/ui/phone-input";
 import type { ContatoCliente } from "@prisma/client";
 import type { ContatoSeguro } from "@/lib/contato-cliente";
-import { Plus, Pencil, Trash2, X, Check, UserCircle, ChevronDown, ChevronRight, Star, Phone, Mail } from "lucide-react";
+import { Plus, Pencil, Ban, X, Check, UserCircle, ChevronDown, ChevronRight, Star, Phone, Mail } from "lucide-react";
 import { comparaNatural } from "@/lib/utils";
 
 /** Contato como vem da API: sem hash/senha do portal. */
@@ -111,7 +112,9 @@ export function ContatosManager({ clienteId, contatosIniciais, sugestao, prefill
   }
 
   async function remover(id: string) {
-    if (!(await confirmar({ mensagem: "Excluir este contato?", perigo: true, confirmarTexto: "Excluir" }))) return;
+    // Inativa (não apaga): o mesmo texto de todo lugar que inativa. Ainda não há reativação pela tela.
+    const t = textoInativar("contato", contatos.find((c) => c.id === id)?.nome, "m", false);
+    if (!(await confirmar({ titulo: t.titulo, mensagem: t.mensagem, perigo: true, confirmarTexto: t.confirmar, cancelarTexto: "Voltar" }))) return;
     try {
       const res = await fetch(`/api/clientes/${clienteId}/contatos/${id}`, { method: "DELETE" });
       if (!res.ok) { const e = await res.json(); setErro(e.erro ?? "Erro."); return; }
@@ -190,7 +193,7 @@ export function ContatosManager({ clienteId, contatosIniciais, sugestao, prefill
                 </div>
                 <div className="flex items-center gap-2 pt-1 flex-wrap">
                   <Button type="button" variant="secondary" onClick={() => abrirEditar(c)} className="text-xs h-7 px-2.5"><Pencil className="w-3 h-3" /> Editar</Button>
-                  <Button type="button" variant="ghost" onClick={() => remover(c.id)} className="text-xs h-7 px-2.5 text-atrasado hover:text-atrasado-texto"><Trash2 className="w-3 h-3" /> Excluir</Button>
+                  <Button type="button" variant="ghost" onClick={() => remover(c.id)} className="text-xs h-7 px-2.5 text-atrasado hover:text-atrasado-texto" data-inativar-contato><Ban className="w-3 h-3" /> Inativar</Button>
                 </div>
               </div>
             )}

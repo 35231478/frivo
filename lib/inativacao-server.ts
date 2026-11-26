@@ -2,6 +2,7 @@ import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { formatarData, formatarMoeda } from "@/lib/utils";
 import { orcamentoJaFaturado } from "@/lib/faturamento-os";
+import { avisosInativarCliente } from "@/lib/cadastros/regras-arquivar";
 
 /**
  * Regras de inativação (soft-delete) de Orçamentos, Colaboradores, Equipes e Veículos.
@@ -229,4 +230,31 @@ export function anotarInativacao(observacoes: string | null, usuario: string, mo
 export function lerMotivo(body: unknown): string {
   const m = (body as any)?.motivo;
   return typeof m === "string" ? m.trim().slice(0, 500) : "";
+}
+
+/* ───────── Cliente (inativar = ativo false; nunca bloqueia, só avisa) ───────── */
+export async function impactoCliente(id: string, empresaId: string): Promise<Impacto | null> {
+  const c = await prisma.cliente.findFirst({
+    where: { id, empresaId },
+    select: {
+      contratos: { where: { status: "ATIVO" }, select: { numero: true }, orderBy: { numero: "asc" } },
+      ordensServico: { where: { status: { notIn: ["CONCLUIDA", "CANCELADA"] } }, select: { numero: true, chamadoNumero: true }, orderBy: { criadoEm: "desc" } },
+      _count: { select: {
+        orcamentos: { where: { status: { in: ["RASCUNHO", "ENVIADO", "APROVADO"] } } },
+        contasReceber: { where: { status: { in: ["PREVISTO", "A_RECEBER", "ATRASADO"] } } },
+        pmocs: { where: { ativo: true } },
+      } },
+    },
+  });
+  if (!c) return null;
+  return {
+    bloqueio: null,
+    avisos: avisosInativarCliente({
+      contratosAtivos: c.contratos.map((x) => x.numero),
+      osAbertas: c.ordensServico.map((o) => o.chamadoNumero ?? o.numero),
+      orcamentosAbertos: c._count.orcamentos,
+      contasAbertas: c._count.contasReceber,
+      pmocsAtivos: c._count.pmocs,
+    }),
+  };
 }
