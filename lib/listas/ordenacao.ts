@@ -8,7 +8,6 @@ export const ORDEM_CLIENTES: MapaOrdem = {
   nome: (d) => ({ nome: d }),
   documento: (d) => ({ cpfCnpj: d }),
   segmento: (d) => ({ segmento: { sort: d, nulls: "last" } }),
-  satisfacao: (d) => ({ satisfacao: { sort: d, nulls: "last" } }),
   unidades: (d) => ({ unidades: { _count: d } }),
   os: (d) => ({ ordensServico: { _count: d } }),
 };

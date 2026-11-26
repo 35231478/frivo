@@ -97,7 +97,8 @@ describe("3. clientes: Segmento e Satisfação fora do padrão", () => {
   it("as duas colunas nascem escondidas (oculta) e continuam no menu Colunas", () => {
     const pagina = fonte("app/(dashboard)/clientes/page.tsx");
     expect(pagina).toContain('{ id: "segmento", titulo: "Segmento", largura: 140, ordenar: "segmento", classe: "truncate", oculta: true }');
-    expect(pagina).toContain('{ id: "satisfacao", titulo: "Satisfação", largura: 100, ordenar: "satisfacao", oculta: true }');
+    // (leva 3) a Satisfação passou a ser a média do aceite das OS: calculada, sem ordenar pela coluna
+    expect(pagina).toContain('{ id: "satisfacao", titulo: "Satisfação", largura: 110, oculta: true }');
     // sem preferência salva, a regra da tabela esconde exatamente as duas
     const ocultas = ocultasEfetivas(PREFERENCIA_VAZIA, [{ id: "nome" }, { id: "segmento", oculta: true }, { id: "satisfacao", oculta: true }, { id: "os" }] as any);
     expect([...ocultas].sort()).toEqual(["satisfacao", "segmento"]);

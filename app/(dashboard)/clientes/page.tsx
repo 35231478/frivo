@@ -21,6 +21,8 @@ import { janela, lerOrdem, lerPaginacao, ordemPrisma, paginaValida } from "@/lib
 import { ORDEM_CLIENTES, ORDEM_PADRAO_CLIENTES } from "@/lib/listas/ordenacao";
 import { BuscaUrl, ConteudoUrl, FiltroCheckUrl, FiltroSelectUrl, LimparBuscaUrl, ListaUrl, PaginacaoUrl, TabelaProUrl } from "@/components/listagem/lista-url";
 import { PLANILHA } from "@/lib/planilha";
+import { satisfacaoDosClientes } from "@/lib/clientes/satisfacao-server";
+import { SatisfacaoCelula } from "@/components/clientes/satisfacao-cliente";
 
 export const metadata: Metadata = { title: "Clientes" };
 
@@ -73,17 +75,9 @@ export default async function ClientesPage({
     clientes = total ? await prisma.cliente.findMany({ where, include: incluir, orderBy, ...janela(pagina, porPagina) }) : [];
     statusFinanceiroMap = await calcularStatusFinanceiroEmLote(empresaId, clientes.map((c) => c.id));
   }
+  // Satisfação = média das notas do aceite das OS de cada cliente (lib/clientes/satisfacao), só da página
+  const satisfacao = await satisfacaoDosClientes(empresaId, clientes.map((c) => c.id));
 
-  function estrelas(n: number | null) {
-    if (!n) return null;
-    return (
-      <span className="inline-flex items-center gap-0.5" title={`${n} de 5`}>
-        {Array.from({ length: 5 }, (_, i) => (
-          <Star key={i} className={cn("w-3 h-3", i < n ? "text-atencao-texto fill-atencao" : "text-surface-border")} />
-        ))}
-      </span>
-    );
-  }
 
   return (
     <SelecaoMassaProvider entidade="clientes" idsPagina={clientes.map((c) => c.id)} total={total}>
@@ -162,10 +156,10 @@ export default async function ClientesPage({
             { id: "nome", titulo: "Nome", ordenar: "nome", obrigatoria: true, minimo: 220 },
             { id: "documento", titulo: "CPF/CNPJ", largura: 152, ordenar: "documento" },
             // Fora do padrão (continuam em "Colunas"): o Segmento saiu do formulário do cliente e só chega pela
-            // importação de planilha; a Satisfação é digitada à mão na aba Relacionamento — não é a nota que o
-            // cliente dá no aceite da OS. Na prática, as duas ficavam vazias em quase toda a lista.
+            // importação de planilha. A Satisfação é a média das notas do aceite das OS (calculada, por isso sem
+            // ordenar pela coluna); o campo de estrelas digitado à mão saiu da tela.
             { id: "segmento", titulo: "Segmento", largura: 140, ordenar: "segmento", classe: "truncate", oculta: true },
-            { id: "satisfacao", titulo: "Satisfação", largura: 100, ordenar: "satisfacao", oculta: true },
+            { id: "satisfacao", titulo: "Satisfação", largura: 110, oculta: true },
             { id: "unidades", titulo: "Endereços", largura: 116, alinhar: "centro", ordenar: "unidades" },
             { id: "os", titulo: "OS", largura: 60, alinhar: "centro", ordenar: "os" },
             { id: "status", titulo: "Status financeiro", largura: 148 },
@@ -193,7 +187,7 @@ export default async function ClientesPage({
                 ),
                 documento: <span className={cn(PLANILHA.apagado, "whitespace-nowrap tabular-nums")}>{formatarCpfCnpj(c.cpfCnpj)}</span>,
                 segmento: c.segmento ? <span className={PLANILHA.apagado}>{LABELS_SEGMENTO[c.segmento] ?? c.segmento}</span> : <span className="text-ink-subtle">—</span>,
-                satisfacao: estrelas(c.satisfacao) ?? <span className="text-ink-subtle">—</span>,
+                satisfacao: <SatisfacaoCelula resumo={satisfacao.get(c.id)} />,
                 unidades: <span className={cn(PLANILHA.apagado, "tabular-nums")}>{c._count.unidades}</span>,
                 os: <span className={cn(PLANILHA.apagado, "tabular-nums")}>{c._count.ordensServico}</span>,
                 status: <span className={cn("text-[10px] font-semibold px-2.5 py-0.5 rounded-full whitespace-nowrap", COR_STATUS_FINANCEIRO_CALC[sf])}>{LABELS_STATUS_FINANCEIRO_CALC[sf]}</span>,

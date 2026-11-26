@@ -16,5 +16,5 @@ export default async function ClienteFichaPage({ params, searchParams }: { param
   const session = await auth();
   const ficha = await carregarFichaCliente(id, session!.user!.empresaId);
   if (!ficha) notFound();
-  return <ClienteForm consulta abaInicial={aba} initialData={ficha.dados} statusFinanceiroCalc={ficha.status} totalProximos30Dias={ficha.totalProximos30Dias} perdas12m={ficha.perdas12m} />;
+  return <ClienteForm consulta abaInicial={aba} initialData={ficha.dados} statusFinanceiroCalc={ficha.status} totalProximos30Dias={ficha.totalProximos30Dias} perdas12m={ficha.perdas12m} satisfacaoAceite={ficha.satisfacao} />;
 }
