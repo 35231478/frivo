@@ -220,7 +220,8 @@ export function Header({ session, avatarUrl }: HeaderProps) {
 
       {/* Breadcrumb */}
       <nav className="hidden sm:flex items-center gap-1.5 text-sm min-w-0">
-        <Link href="/dashboard" className="text-ink-muted hover:text-primary-600 transition-colors">
+        {/* O nome da empresa não quebra em duas linhas (em ~1200 px virava "Clima / Total") */}
+        <Link href="/dashboard" className="text-ink-muted hover:text-primary-600 transition-colors whitespace-nowrap truncate max-w-[14rem] shrink-0" data-trilha-empresa>
           {usuario.empresaNome}
         </Link>
         {breadcrumb.map((item, idx) => {

@@ -264,7 +264,7 @@ describe("abas consolidadas, o painel de Atividades e O que falta", () => {
       atividade("cancelada", { status: "CANCELADA", dataAgendada: "2026-10-01T12:00:00Z" }),
     ] }));
     const painel = $("[data-painel-atividades]")!;
-    expect(texto("[data-resumo-painel]")).toBe("· 1 de 3 concluídas");
+    expect(texto("[data-resumo-painel]")).toBe("1 de 3 concluídas"); // segunda linha do título (sem o "·")
     // o botão está no topo, antes da lista; o rodapé não tem outro
     expect($$("[data-nova-atividade]")).toHaveLength(1);
     const cabecalho = painel.querySelector("h2")!;
@@ -313,7 +313,7 @@ describe("abas consolidadas, o painel de Atividades e O que falta", () => {
     expect([selo("ontem").textContent, selo("andamento").textContent, selo("sem-avisos").textContent]).toEqual(["Agendada", "Em andamento", "Agendada"]);
     expect(selo("andamento").getAttribute("data-tom")).toBe("atencao");
     // o resumo do título não muda: deslocamento não é concluída
-    expect(texto("[data-resumo-painel]")).toBe("· 5 atividades");
+    expect(texto("[data-resumo-painel]")).toBe("5 atividades");
     // ao abrir a atividade, o seletor de status do escritório continua com os quatro status gravados (deslocamento não é opção)
     await clicar($("[data-atividade='desloc'] [data-abrir-atividade]"));
     const opcoes = [...$("[data-atividade='desloc'] select")!.querySelectorAll("option")].map((o) => o.textContent);

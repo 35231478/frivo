@@ -143,10 +143,13 @@ export function OsDetalhe({ os: initialOs, abaInicial, verCusto = false }: {
       {/* Serviços adicionais pedidos na visita: decisão de cobrança à vista em qualquer aba */}
       <OsAdicionais osId={os.id} adicionais={os.servicosAdicionais ?? []} />
 
-      {/* DUAS COLUNAS no desktop largo: as abas à esquerda, o painel de Atividades sempre visível à direita.
-          Em telas estreitas o painel desce e vira uma seção empilhada, abaixo das abas. */}
-      <div className="space-y-5 xl:space-y-0 xl:grid xl:grid-cols-[minmax(0,1fr)_24rem] xl:gap-5 xl:items-start" data-colunas-os>
-        <div className="bg-white rounded-card border border-surface-border shadow-card min-w-0">
+      {/* DUAS COLUNAS quando há espaço de verdade: as abas à esquerda, o painel de Atividades sempre visível à
+          direita. Quem decide é a largura DISPONÍVEL (container query em app/globals.css › .os-central), não a da
+          tela: com o menu lateral aberto, 1280–1366 px empilham (abas e, embaixo, o painel); com o menu recolhido
+          ou numa tela larga, o painel vai para o lado. Nunca espreme as abas. */}
+      <div className="os-central">
+      <div className="os-colunas" data-colunas-os>
+        <div className="os-abas bg-white rounded-card border border-surface-border shadow-card min-w-0">
           <Tabs tabs={tabs} active={aba} onChange={irPara}>
             {(ativa) => (
               <div className="px-4 pb-5 sm:px-6 sm:pb-6">
@@ -202,6 +205,7 @@ export function OsDetalhe({ os: initialOs, abaInicial, verCusto = false }: {
         {/* O painel: a mesma lista de atividades de antes (criar, editar, excluir, status, executar, equipamentos,
             formulário) e o plano de visitas da OS em campanha — agora sempre à vista */}
         <PainelAtividades ref={painelRef} os={os} destacado={painelDestacado} onMudou={() => router.refresh()} />
+      </div>
       </div>
     </div>
   );
