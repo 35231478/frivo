@@ -5,8 +5,8 @@ Anotações do Zé: (1) duas opções por orçamento na hora de imprimir/enviar 
 impressão; (2) o número da OS no PDF vira **link público** para o cliente (sem login: nunca URL interna); (3) custo
 nunca aparece; multiempresa.
 
-> 🔵 **Banco pendente**: `prisma/sql/2027-01-27_orcamento_opcoes_documento.sql` (4 colunas boolean, aditivo e
-> idempotente). **Aplicar antes de subir o código** — o Prisma passa a ler as colunas.
+> 🔵 **Banco — APLICADO na produção (Neon) pelo Zé** e conferido: `prisma/sql/2027-01-27_orcamento_opcoes_documento.sql`
+> (4 colunas boolean `NOT NULL DEFAULT false`, aditivo e idempotente).
 
 ## Levantamento — o que existia
 
@@ -36,7 +36,7 @@ nunca aparece; multiempresa.
 |---|---|
 | Materiais desligado | só a linha do serviço (como antes) |
 | Materiais ligado | materiais **inclusos** no serviço, com quantidade; peça de **venda à parte** continua só na tabela Produtos (não repete) |
-| + valores | `preço de venda/un · preço × quantidade` |
+| + valores | `preço/un · total`, na **mesma base de preço do serviço**: na versão do cliente com ISS, o mesmo fator do serviço (ex.: 440 → 462 ⇒ ×1,05); na versão interna (ISS em linha própria), o preço cadastrado. A soma exibida é exatamente Σ preço × qtd × fator (repartida sem perder centavo) |
 | Valores sem materiais | ignorado (servidor, tela e documento) |
 | Orçamento aprovado, convertido ou cancelado | opções travadas (409) — o documento fica como o cliente aprovou |
 | Permissão | Orçamentos › editar |
@@ -45,20 +45,18 @@ nunca aparece; multiempresa.
 
 1. Opções na **tela do orçamento** (junto do enviar/PDF), não no Editar: o Editar só existe em rascunho, e a escolha é "na hora de imprimir/enviar".
 2. Só materiais **inclusos** dentro do serviço; os de venda à parte já são linhas cobradas em Produtos.
-3. O valor mostrado é o **preço de venda cadastrado no material** (sem o ISS embutido que a versão do cliente aplica ao preço do serviço) — é informativo; o total do orçamento não muda.
+3. **ISS (resposta do Zé)**: na versão do cliente, o material leva o **mesmo fator do serviço** (valor do serviço no documento ÷ valor gravado), para o cliente ver preços coerentes entre si. O total do orçamento não muda.
 4. Link da OS = **relatório GERAL** existente (reuso, sem banco novo). Sem ele, texto.
-5. Travado depois de aprovado/cancelado.
+5. **Travado depois de aprovado/convertido/cancelado (confirmado pelo Zé)**: o documento fica como o cliente aprovou; a reimpressão sai igual.
 
-## Perguntas (não chutei)
+## Possível leva futura
 
-- **ISS nos valores dos materiais**: na versão do cliente o ISS vem embutido no preço do serviço; os materiais mostram o preço de venda **sem** ISS. Prefere embutir o mesmo fator?
-- **Link da OS antes da conclusão**: hoje só há link quando a OS tem a versão do cliente (gerada ao concluir). Se quiser link também para OS em andamento, o mínimo é um **token público na OS** (1 coluna, 🔵) e uma página pública enxuta (status, datas, serviços) — fica para uma leva própria.
-- **Travar depois de aprovado**: ok, ou deve continuar livre para reimpressões?
+- **Link da OS antes de concluída** (o Zé decidiu: não agora). Hoje o número fica em texto até a OS ter a versão do cliente. O mínimo seria um token público na própria OS (1 coluna, 🔵) e uma página pública enxuta (status, datas, serviços).
 
 ## Testes
 
-- `orcamento-leva-d.test.ts` (puros): opções, materiais (inclusos, ordem, preço, custo nunca), link da OS (escopo GERAL, multiempresa, token inválido, nunca interno), travas.
-- `orcamento-leva-d-pg.test.ts` (PostgreSQL real): o SQL 3× (aditivo, idempotente, igual ao Prisma); a **página de impressão renderizada no servidor** (padrão, materiais, valores, sem custo, OS com/sem link, outra empresa fora); rota (401/403/400/404/409); padrão da empresa copiado no orçamento novo.
+- `orcamento-leva-d.test.ts` (puros): opções, materiais (inclusos, ordem, preço, custo nunca), ISS (fator do serviço, soma exibida exata, centavo que sobra), link da OS (escopo GERAL, multiempresa, token inválido, nunca interno), travas.
+- `orcamento-leva-d-pg.test.ts` (PostgreSQL real): o SQL 3× (aditivo, idempotente, igual ao Prisma); a **página de impressão renderizada no servidor** (padrão, materiais, valores, ISS 5% com a soma exibida batendo, sem custo, OS com/sem link, outra empresa fora); rota (401/403/400/404/409); padrão da empresa copiado no orçamento novo.
 - `orcamento-leva-d-ui.test.ts` (DOM real): switches da tela e de Configurações, documento (materiais dentro da linha do serviço, valores, versão interna igual, OS link).
 - **PDF real** (Playwright `page.pdf` + `pdftotext` + anotações com pdf-lib): sem/com materiais, com valores, sem custo, link clicável `http(s)://…/relatorio/os/<token>`.
 - Ajustes intencionais em testes antigos: a trava da leva B "o documento não lê materiais nem custo" passou a "nunca lê custo" (agora lê materiais, sem custo); a tela de Configurações manda os dois padrões novos no PUT; uma asserção da leva B que às vezes batia num id aleatório (`/45/`) passou a olhar só o número solto.
