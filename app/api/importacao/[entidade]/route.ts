@@ -1,12 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { ErroPlanilha, lerPlanilha } from "@/lib/folha/planilha";
-import { IMPORTACOES } from "@/lib/importacao/entidades";
+import { defPara } from "@/lib/importacao/entidades";
 import { analisar, ErroColunas, ErroImportacao, lerLigacoes, MAX_BYTES_IMPORTACAO } from "@/lib/importacao/motor";
 import { carregarContexto, gravarImportacao } from "@/lib/importacao/servidor";
 import { exigirImportacao, type Ctx } from "@/lib/importacao/rotas";
 
 /**
- * Importação em massa por planilha (clientes, unidades, contatos, fornecedores, serviços, produtos) — motor único.
+ * Importação em massa por planilha (clientes, unidades, contatos, equipamentos, fornecedores, serviços, produtos, estoque, colaboradores, veículos) — motor único.
  * - etapa=previa: analisa e devolve o que vai acontecer (nada é gravado);
  * - etapa=confirmar: analisa o arquivo DE NOVO e grava as linhas válidas em lotes.
  * - ligacoes (opcional, JSON): o de-para escolhido na tela (coluna do modelo → coluna da planilha),
@@ -19,7 +19,7 @@ export const maxDuration = 60;
 export async function POST(req: NextRequest, ctx: Ctx) {
   const g = await exigirImportacao(ctx);
   if (!g.ok) return g.resposta;
-  const def = IMPORTACOES[g.entidade];
+  const def = defPara(g.entidade, g.permitido, g.papel);
 
   const form = await req.formData().catch(() => null);
   const arquivo = form?.get("arquivo");
@@ -48,6 +48,6 @@ export async function POST(req: NextRequest, ctx: Ctx) {
   if (analise.resumo.criar + analise.resumo.atualizar === 0)
     return NextResponse.json({ erro: "Nenhuma linha válida para gravar: corrija a planilha e envie de novo." }, { status: 400 });
 
-  const r = await gravarImportacao(g.entidade, analise, g.empresaId);
+  const r = await gravarImportacao(g.entidade, analise, g.empresaId, { usuarioId: g.usuarioId });
   return NextResponse.json({ ok: true, criados: r.criados, atualizados: r.atualizados, comErro: r.erros.length, erros: r.erros, observacoes: r.observacoes, avisos: r.avisos });
 }

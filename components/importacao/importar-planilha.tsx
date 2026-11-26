@@ -1,6 +1,7 @@
 "use client";
 
 import { useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { AlertCircle, CheckCircle2, Download, FileSpreadsheet, FileUp, Link2, Loader2, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dica } from "@/components/ui/dica";
@@ -8,8 +9,8 @@ import { Drawer } from "@/components/ui/drawer";
 import { cn } from "@/lib/utils";
 import { usePermissoes } from "@/components/providers/permissoes-provider";
 import { useModulos } from "@/components/providers/modulos-provider";
-import { familiaDe, IMPORTACOES, MODULO_DA_IMPORTACAO, REQUISITO_FAMILIA, type EntidadeImportacao } from "@/lib/importacao/entidades";
-import type { Analise, LigacaoColunas, Ligacoes, LinhaAnalisada, StatusLinha } from "@/lib/importacao/motor";
+import { defPara, familiaDe, IMPORTACOES, MODULO_DA_IMPORTACAO, REQUISITO_FAMILIA, type EntidadeImportacao } from "@/lib/importacao/entidades";
+import type { Analise, ColunaImportacao, LigacaoColunas, Ligacoes, LinhaAnalisada, StatusLinha } from "@/lib/importacao/motor";
 
 /**
  * Importação em massa por planilha — o MESMO componente nas listas de clientes, fornecedores,
@@ -30,9 +31,16 @@ const STATUS: Record<StatusLinha, { rotulo: string; cls: string }> = {
   erro: { rotulo: "Erro", cls: "bg-atrasado-claro text-atrasado-texto border-atrasado/20" },
 };
 
-export function ImportarPlanilha({ entidade, onConcluido, className }: { entidade: EntidadeImportacao; onConcluido?: () => void; className?: string }) {
+export function ImportarPlanilha({ entidade, onConcluido, className, rotulo }: {
+  entidade: EntidadeImportacao; onConcluido?: () => void; className?: string;
+  /** Texto do botão quando há mais de um na mesma tela (ex.: Implantação); padrão "Importar planilha" */
+  rotulo?: string;
+}) {
   const [aberto, setAberto] = useState(false);
   const { pode } = usePermissoes();
+  const roteador = useRouter();
+  // Sem callback (ex.: lista montada no servidor), a página recarrega os dados ao concluir
+  const concluido = onConcluido ?? (() => roteador.refresh());
   const modulos = useModulos();
   // Família (clientes → unidades → contatos → equipamentos): só as planilhas que a pessoa pode
   // importar e cujo módulo a empresa tem ligado
@@ -41,15 +49,15 @@ export function ImportarPlanilha({ entidade, onConcluido, className }: { entidad
   const [atual, setAtual] = useState<EntidadeImportacao>(entidade);
   return (
     <>
-      <Button type="button" variant="secondary" onClick={() => setAberto(true)} className={cn("shrink-0", className)} data-acao="importar-planilha">
-        <FileUp className="w-4 h-4" /> <span className="sm:hidden">Importar</span><span className="hidden sm:inline">Importar planilha</span>
+      <Button type="button" variant="secondary" onClick={() => setAberto(true)} className={cn("shrink-0", className)} data-acao="importar-planilha" data-importar={entidade}>
+        <FileUp className="w-4 h-4" /> {rotulo ?? <><span className="sm:hidden">Importar</span><span className="hidden sm:inline">Importar planilha</span></>}
       </Button>
       <Drawer aberto={aberto} onFechar={() => setAberto(false)} titulo={familia.length > 1 ? "Importar por planilha" : `Importar ${IMPORTACOES[entidade].plural} por planilha`}>
         {aberto && (
           <div className="space-y-4">
             {familia.length > 1 && <EscolherPlanilha familia={familia} atual={atual} onEscolher={setAtual} />}
             {/* key: trocar de planilha recomeça o assistente do zero */}
-            <Assistente key={atual} entidade={atual} onConcluido={onConcluido} />
+            <Assistente key={atual} entidade={atual} onConcluido={concluido} />
           </div>
         )}
       </Drawer>
@@ -89,7 +97,9 @@ async function baixarErros(entidade: EntidadeImportacao, erros: LinhaErro[], tip
 }
 
 function Assistente({ entidade, onConcluido }: { entidade: EntidadeImportacao; onConcluido?: () => void }) {
-  const def = IMPORTACOES[entidade];
+  const { pode, role } = usePermissoes();
+  // O modelo DESTA pessoa: coluna restrita (custo) some para quem não tem a permissão
+  const def = defPara(entidade, (m, a) => pode(m, a), role);
   const inputRef = useRef<HTMLInputElement>(null);
   const [arquivo, setArquivo] = useState<File | null>(null);
   const [analise, setAnalise] = useState<(Omit<Analise, "linhas"> & { linhas: LinhaPrevia[] }) | null>(null);
@@ -177,18 +187,19 @@ function Assistente({ entidade, onConcluido }: { entidade: EntidadeImportacao; o
             <Download className="w-4 h-4" /> Modelo CSV
           </a>
         </div>
-        {familiaDe("clientes").includes(entidade) && entidade !== "clientes" && (
+        {(def.baixar || (familiaDe("clientes").includes(entidade) && entidade !== "clientes")) && (
           <a href={`/api/importacao/${entidade}/exportar`} className="text-xs font-medium text-primary-700 hover:underline inline-flex items-center gap-1" data-acao="baixar-cadastrados">
-            <Download className="w-3.5 h-3.5" /> Baixar {def.plural} já cadastrad{def.feminino ? "as" : "os"} (para editar em massa)
+            <Download className="w-3.5 h-3.5" /> {def.baixar ?? <>Baixar {def.plural} já cadastrad{def.feminino ? "as" : "os"} (para editar em massa)</>}
           </a>
         )}
-        <p className="text-xs text-ink-muted flex items-center gap-1" data-dica-exportar>
+        {/* Onde o "baixar" mora no próprio assistente (def.baixar), a dica de usar o botão da lista não vale */}
+        {!def.baixar && <p className="text-xs text-ink-muted flex items-center gap-1" data-dica-exportar>
           Edição em massa de cadastros existentes
           <Dica rotulo="Edição em massa" lado="direita" texto={<>
             Use <strong>Baixar planilha</strong> na lista: o arquivo vem no mesmo formato, com o <strong>id_sistema</strong>
             {def.colunas.some((c) => c.chave === "codigo") ? " e o código" : ""} de cada {def.singular}. Edite e envie aqui: o registro é <strong>atualizado</strong>, sem duplicar.
           </>} />
-        </p>
+        </p>}
       </section>
 
       {/* 2. Envio */}
@@ -211,7 +222,7 @@ function Assistente({ entidade, onConcluido }: { entidade: EntidadeImportacao; o
 
       {/* Ligar colunas (planilha de outro sistema) */}
       {ligar && etapa !== "feito" && (
-        <LigarColunas key={JSON.stringify(ligar.ligadas)} entidade={entidade} ligar={ligar} ocupado={etapa === "analisando"}
+        <LigarColunas key={JSON.stringify(ligar.ligadas)} colunas={def.colunas} ligar={ligar} ocupado={etapa === "analisando"}
           onAplicar={aplicarLigacao} onCancelar={analise ? () => setLigar(null) : undefined} />
       )}
 
@@ -336,12 +347,11 @@ function Assistente({ entidade, onConcluido }: { entidade: EntidadeImportacao; o
  * Ligar colunas: cada coluna do modelo ← uma coluna da planilha (ou "não importar"). Uma coluna da
  * planilha só liga a uma do modelo (escolher de novo tira da anterior). Aplicar refaz a prévia.
  */
-function LigarColunas({ entidade, ligar, ocupado, onAplicar, onCancelar }: {
-  entidade: EntidadeImportacao; ligar: LigacaoColunas; ocupado: boolean; onAplicar: (l: Ligacoes) => void; onCancelar?: () => void;
+function LigarColunas({ colunas, ligar, ocupado, onAplicar, onCancelar }: {
+  colunas: ColunaImportacao[]; ligar: LigacaoColunas; ocupado: boolean; onAplicar: (l: Ligacoes) => void; onCancelar?: () => void;
 }) {
-  const def = IMPORTACOES[entidade];
   const [valores, setValores] = useState<Record<string, string | null>>(() => ({ ...ligar.ligadas }));
-  const faltando = def.colunas.filter((c) => c.obrig && !valores[c.chave]);
+  const faltando = colunas.filter((c) => c.obrig && !valores[c.chave]);
   function trocar(chave: string, cab: string | null) {
     setValores((v) => {
       const novo = { ...v };
@@ -360,7 +370,7 @@ function LigarColunas({ entidade, ligar, ocupado, onAplicar, onCancelar }: {
         <p className="text-sm text-atencao-texto">A planilha não tem {ligar.faltando.length > 1 ? "as colunas" : "a coluna"} {ligar.faltando.map((t, i) => <span key={t}>{i > 0 && ", "}<strong>{t}</strong></span>)} com esse nome. Escolha de qual coluna dela vem cada informação.</p>
       )}
       <div className="divide-y divide-surface-border border border-surface-border rounded-lg">
-        {def.colunas.filter((c) => c.chave !== "id_sistema" || ligar.cabecalho.includes(valores[c.chave] ?? "")).map((c) => (
+        {colunas.filter((c) => c.chave !== "id_sistema" || ligar.cabecalho.includes(valores[c.chave] ?? "")).map((c) => (
           <label key={c.chave} className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-3 px-3 py-2">
             <span className="sm:w-44 shrink-0 text-sm text-ink">
               {c.titulo}{c.obrig && <span className="text-atrasado"> *</span>}

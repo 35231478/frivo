@@ -1,9 +1,8 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { pode, type Acao, type Permissoes } from "@/lib/permissoes";
-import { ehEntidadeImportacao, IMPORTACOES, type EntidadeImportacao } from "@/lib/importacao/entidades";
-import { PERMISSOES_IMPORTACAO, temRequisito } from "@/lib/importacao/servidor";
-import { MODULO_DA_IMPORTACAO, PERMISSOES_EXPORTACAO } from "@/lib/importacao/entidades";
+import { ehEntidadeImportacao, IMPORTACOES, MODULO_DA_IMPORTACAO, PERMISSOES_EXPORTACAO, PERMISSOES_IMPORTACAO, type EntidadeImportacao } from "@/lib/importacao/entidades";
+import { temRequisito } from "@/lib/importacao/servidor";
 import { MSG_MODULO_DESLIGADO } from "@/lib/modulos/catalogo";
 import { temModulo } from "@/lib/modulos/servidor";
 
@@ -21,7 +20,7 @@ export type Ctx = { params: Promise<{ entidade: string }> };
  * A empresa vem SEMPRE da sessão — nada da planilha decide empresa.
  */
 export async function exigirImportacao(ctx: Ctx): Promise<
-  | { ok: true; entidade: EntidadeImportacao; empresaId: string; podeAtualizar: boolean; permitido: (m: string, a: Acao) => boolean }
+  | { ok: true; entidade: EntidadeImportacao; empresaId: string; usuarioId: string | null; papel?: string; podeAtualizar: boolean; permitido: (m: string, a: Acao) => boolean }
   | { ok: false; resposta: NextResponse }
 > {
   const { entidade } = await ctx.params;
@@ -36,14 +35,14 @@ export async function exigirImportacao(ctx: Ctx): Promise<
   const desligado = await moduloDesligado(entidade, u.empresaId);
   if (desligado) return { ok: false, resposta: desligado };
   return {
-    ok: true, entidade, empresaId: u.empresaId, podeAtualizar: temRequisito(req.editar, permissoes, u.role),
+    ok: true, entidade, empresaId: u.empresaId, usuarioId: u.id ?? null, papel: u.role ?? undefined, podeAtualizar: temRequisito(req.editar, permissoes, u.role),
     permitido: (m, a) => pode(permissoes, m, a, u.role),
   };
 }
 
 /** Baixar a planilha: sessão + cadastro + permissão de VER o módulo da lista. Empresa sempre da sessão. */
 export async function exigirExportacao(ctx: Ctx): Promise<
-  | { ok: true; entidade: EntidadeImportacao; empresaId: string }
+  | { ok: true; entidade: EntidadeImportacao; empresaId: string; papel?: string; permitido: (m: string, a: Acao) => boolean }
   | { ok: false; resposta: NextResponse }
 > {
   const { entidade } = await ctx.params;
@@ -55,7 +54,8 @@ export async function exigirExportacao(ctx: Ctx): Promise<
     return { ok: false, resposta: NextResponse.json({ erro: `Sem permissão para baixar a planilha de ${IMPORTACOES[entidade].plural}.` }, { status: 403 }) };
   const desligado = await moduloDesligado(entidade, u.empresaId);
   if (desligado) return { ok: false, resposta: desligado };
-  return { ok: true, entidade, empresaId: u.empresaId };
+  const permissoes = (u.permissoes ?? {}) as Permissoes;
+  return { ok: true, entidade, empresaId: u.empresaId, papel: u.role ?? undefined, permitido: (m, a) => pode(permissoes, m, a, u.role) };
 }
 
 export const XLSX = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";

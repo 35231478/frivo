@@ -1,6 +1,6 @@
 import { NextRequest } from "next/server";
 import { gerarCsv, gerarXlsx } from "@/lib/folha/planilha";
-import { IMPORTACOES } from "@/lib/importacao/entidades";
+import { defPara } from "@/lib/importacao/entidades";
 import { linhasModelo } from "@/lib/importacao/motor";
 import { carregarContexto } from "@/lib/importacao/servidor";
 import { anexo, exigirImportacao, XLSX, type Ctx } from "@/lib/importacao/rotas";
@@ -9,7 +9,7 @@ import { anexo, exigirImportacao, XLSX, type Ctx } from "@/lib/importacao/rotas"
 export async function GET(req: NextRequest, ctx: Ctx) {
   const g = await exigirImportacao(ctx);
   if (!g.ok) return g.resposta;
-  const def = IMPORTACOES[g.entidade];
+  const def = defPara(g.entidade, g.permitido, g.papel);
   const { refs } = await carregarContexto(g.entidade, g.empresaId, false);
   const { cabecalho, exemplo, instrucoes } = linhasModelo(def, refs);
   if (req.nextUrl.searchParams.get("formato") === "csv") return anexo(gerarCsv([cabecalho, exemplo]), "text/csv; charset=utf-8", `modelo-${def.entidade}.csv`);

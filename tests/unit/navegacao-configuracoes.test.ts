@@ -64,7 +64,9 @@ describe("estrutura: 3 abas com cartões; cada item tem id, tela e a rota antiga
     expect(sub("conta")).toEqual([
       // "Módulos" entrou na Loja de Módulos (fase 1): é o que a EMPRESA usa do Frivo — decisão da
       // empresa, não permissão de usuário —, atrás de "Configurações › Gerenciar"
-      ["Empresa", ["Dados da empresa", "Preferências", "Numeração de documentos", "Módulos"]],
+      // "Implantação" (levas 3 e 4 da implantação) abre o grupo: o passo a passo de quem está começando,
+      // atrás da mesma permissão dos Módulos (Configurações › Gerenciar)
+      ["Empresa", ["Implantação", "Dados da empresa", "Preferências", "Numeração de documentos", "Módulos"]],
       // "Admissão digital" entrou aqui na leva da admissão: é configuração de pessoas (contrato,
       // documentos pedidos e orientações do link), atrás da permissão "Admissão digital › gerenciar"
       // "Modelos de documento" entrou ao lado da Admissão digital: também é configuração de pessoas
