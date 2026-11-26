@@ -1,15 +1,12 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Tabs } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
-import { OsAtividades } from "@/components/os/os-atividades";
-import { OsVisitas } from "@/components/os/os-visitas";
 import { OsOrcamento } from "@/components/os/os-orcamento";
 import { OsFinanceiro } from "@/components/os/os-financeiro";
 import { OsOrcamentosVinculados } from "@/components/os/os-orcamentos-vinculados";
-import { OsPrazos } from "@/components/os/os-prazos";
 import { OsRelatorios } from "@/components/os/os-relatorios";
 import { ComprasSecao } from "@/components/compras/compras-secao";
 import { OsSeparacao, materiaisDaOs } from "@/components/os/os-separacao";
@@ -21,30 +18,20 @@ import { OsAdicionais } from "@/components/os/os-adicionais";
 import { OsAceite } from "@/components/os/os-aceite";
 import { CabecalhoOs } from "@/components/os/central/cabecalho-os";
 import { ResumoOs } from "@/components/os/central/resumo-os";
+import { PainelAtividades } from "@/components/os/central/painel-atividades";
 import { usePermissoes } from "@/components/providers/permissoes-provider";
 import { centralDaOs } from "@/lib/os/central";
 import { situacaoDaOs } from "@/lib/edicao-contexto";
+import { ABAS_OS, abaValida, destinoDaAba, type AbaOs } from "@/lib/os/abas";
 import { AlertTriangle, FileBarChart, Send } from "lucide-react";
 import { BotaoFaturar } from "@/components/faturamento/botao-faturar";
 
-/** As 6 abas da central (antes 11). As antigas continuam abrindo pelo link: viram a aba que as absorveu. */
-export const ABAS_OS = ["resumo", "atividades", "comercial", "materiais", "financeiro", "relatorios"] as const;
-export type AbaOs = (typeof ABAS_OS)[number];
-const ABA_ANTIGA: Record<string, AbaOs> = {
-  geral: "resumo", historico: "resumo",
-  prazos: "atividades", formularios: "atividades",
-  orcamentos: "comercial", orcamento: "comercial",
-  compras: "materiais",
-  anexos: "relatorios",
-};
-export function abaValida(aba: string | null | undefined): AbaOs {
-  if (!aba) return "resumo";
-  if ((ABAS_OS as readonly string[]).includes(aba)) return aba as AbaOs;
-  return ABA_ANTIGA[aba] ?? "resumo";
-}
+// As abas e o destino dos links antigos moram em lib/os/abas (regra pura); ficam exportados daqui por compatibilidade
+export { ABAS_OS, abaValida };
+export type { AbaOs };
 
-/** Muda quando uma atividade nasce, some, vira visita ou troca de dia */
-const chaveDasAtividades = (ativs: any[]) => (ativs ?? []).map((a) => `${a.id}:${a.planoVisitasId ?? ""}:${a.dataAgendada ?? ""}`).join("|");
+/** Quanto tempo o painel fica destacado depois de a tela rolar até ele */
+const DESTAQUE_MS = 1600;
 
 export function OsDetalhe({ os: initialOs, abaInicial }: { os: any; abaInicial?: string }) {
   const router = useRouter();
@@ -65,8 +52,25 @@ export function OsDetalhe({ os: initialOs, abaInicial }: { os: any; abaInicial?:
   const temEstoque = useModulos().tem("estoque");
   const central = useMemo(() => centralDaOs({ ...os, prazosSla: os.prazos ?? [], materiais: materiaisOs, exigirPrestacaoMaterial: !!os.exigirPrestacaoMaterial }), [os, materiaisOs]);
 
+  // O painel de Atividades: a tela rola até ele e o destaca quando algo aponta para lá
+  const painelRef = useRef<HTMLElement>(null);
+  const [painelDestacado, setPainelDestacado] = useState(false);
+  const destaqueTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  function irAoPainel() {
+    painelRef.current?.scrollIntoView?.({ behavior: "smooth", block: "start" });
+    painelRef.current?.focus?.({ preventScroll: true });
+    setPainelDestacado(true);
+    if (destaqueTimer.current) clearTimeout(destaqueTimer.current);
+    destaqueTimer.current = setTimeout(() => setPainelDestacado(false), DESTAQUE_MS);
+  }
+  useEffect(() => () => { if (destaqueTimer.current) clearTimeout(destaqueTimer.current); }, []);
+  // Link antigo (?aba=atividades, ?aba=formularios): abre o Resumo e já rola até o painel
+  useEffect(() => { if (destinoDaAba(abaInicial, true).painel) irAoPainel(); }, [abaInicial]);
+
   function irPara(id: string) {
-    const nova = abaValida(id);
+    const destino = destinoDaAba(id);
+    if (destino.painel) { irAoPainel(); return; }
+    const nova = destino.aba ?? "resumo";
     setAba(nova);
     // A aba fica no link (dá para mandar "?aba=financeiro" para alguém) sem recarregar a página
     try { window.history.replaceState(null, "", nova === "resumo" ? window.location.pathname : `?aba=${nova}`); } catch { /* sem history */ }
@@ -84,7 +88,6 @@ export function OsDetalhe({ os: initialOs, abaInicial }: { os: any; abaInicial?:
 
   const tabs = [
     { id: "resumo", label: "Resumo", badge: central.falta.length },
-    { id: "atividades", label: "Atividades", badge: central.atividades.total },
     { id: "comercial", label: "Comercial", badge: (os.orcamentos?.length ?? 0) + os.itensOrcamento.length },
     { id: "materiais", label: "Materiais & Compras", badge: (temEstoque ? separacao.aSeparar + separacao.aDevolver : 0) + separacao.consumoPendente },
     { id: "financeiro", label: "Financeiro", badge: os.medicoes.length },
@@ -136,71 +139,65 @@ export function OsDetalhe({ os: initialOs, abaInicial }: { os: any; abaInicial?:
       {/* Serviços adicionais pedidos na visita: decisão de cobrança à vista em qualquer aba */}
       <OsAdicionais osId={os.id} adicionais={os.servicosAdicionais ?? []} />
 
-      <div className="bg-white rounded-card border border-surface-border shadow-card">
-        <Tabs tabs={tabs} active={aba} onChange={irPara}>
-          {(ativa) => (
-            <div className="px-4 pb-5 sm:px-6 sm:pb-6">
-              {ativa === "resumo" && <ResumoOs os={os} central={central} onAba={irPara} onAtualizado={(d) => setOs((prev: any) => ({ ...prev, ...d }))} />}
+      {/* DUAS COLUNAS no desktop largo: as abas à esquerda, o painel de Atividades sempre visível à direita.
+          Em telas estreitas o painel desce e vira uma seção empilhada, abaixo das abas. */}
+      <div className="space-y-5 xl:space-y-0 xl:grid xl:grid-cols-[minmax(0,1fr)_24rem] xl:gap-5 xl:items-start" data-colunas-os>
+        <div className="bg-white rounded-card border border-surface-border shadow-card min-w-0">
+          <Tabs tabs={tabs} active={aba} onChange={irPara}>
+            {(ativa) => (
+              <div className="px-4 pb-5 sm:px-6 sm:pb-6">
+                {ativa === "resumo" && <ResumoOs os={os} central={central} onAba={irPara} onAtualizado={(d) => setOs((prev: any) => ({ ...prev, ...d }))} />}
 
-              {ativa === "atividades" && (
-                <div className="space-y-6">
-                  {/* Atividades + execução/equipamentos (Etapa 1) + formulário respondido de cada uma */}
-                  {/* OS em campanha: visitas diárias (cada visita é uma atividade) e o progresso somado */}
-                  <OsVisitas osId={os.id} onMudou={() => router.refresh()} />
-                  {/* A lista remonta quando as visitas mudam de dia ou de quantidade (ela guarda as atividades em estado próprio) */}
-                  <OsAtividades key={chaveDasAtividades(os.atividades)} osId={os.id} atividades={os.atividades} clienteId={os.cliente.id} unidadeId={os.unidadeId} onMudou={() => router.refresh()} />
-                  {/* Antiga aba "Prazos": as etapas com prazo (por modelo) continuam aqui, junto das atividades */}
-                  <div className="border-t border-surface-linha pt-6" data-secao-sla>
-                    <OsPrazos osId={os.id} />
+                {ativa === "comercial" && (
+                  <div className="space-y-6">
+                    <section data-secao-orcamentos>
+                      <h3 className="section-title mb-3">Orçamentos do comercial</h3>
+                      <OsOrcamentosVinculados osId={os.id} clienteId={os.cliente.id} numeroOs={os.chamadoNumero ?? os.numero} vinculados={os.orcamentos ?? []} />
+                    </section>
+                    <section data-secao-itens>
+                      <h3 className="section-title mb-3">Itens da OS</h3>
+                      <OsOrcamento osId={os.id} itens={os.itensOrcamento} clienteId={os.cliente.id}
+                        situacao={situacaoDaOs({ aceite: os.aceite, faturada: !!os.fatura, notaEmitida: !!os.notaEmitida })} />
+                    </section>
                   </div>
-                </div>
-              )}
+                )}
 
-              {ativa === "comercial" && (
-                <div className="space-y-6">
-                  <section data-secao-orcamentos>
-                    <h3 className="section-title mb-3">Orçamentos do comercial</h3>
-                    <OsOrcamentosVinculados osId={os.id} clienteId={os.cliente.id} numeroOs={os.chamadoNumero ?? os.numero} vinculados={os.orcamentos ?? []} />
-                  </section>
-                  <section data-secao-itens>
-                    <h3 className="section-title mb-3">Itens da OS</h3>
-                    <OsOrcamento osId={os.id} itens={os.itensOrcamento} clienteId={os.cliente.id}
-                      situacao={situacaoDaOs({ aceite: os.aceite, faturada: !!os.fatura, notaEmitida: !!os.notaEmitida })} />
-                  </section>
-                </div>
-              )}
-
-              {ativa === "materiais" && (
-                <div className="space-y-6">
-                  {/* E4.1: o que já foi separado (parcial/total), por quem, e o gancho da prestação de contas */}
-                  <OsSeparacao
-                    osId={os.id} materiais={materiaisOs} resumo={separacao} podeSeparar={pode("estoque", "separar")} temEstoque={temEstoque}
-                    podeConsumir={pode("ordens", "editar") || pode("ordens", "concluir")} finalizada={os.status === "CONCLUIDA" || os.status === "CANCELADA" || !!os.fatura}
-                    cancelada={os.status === "CANCELADA"} exigirPrestacao={!!os.exigirPrestacaoMaterial} onMudou={() => router.refresh()}
-                  />
-                  <div className="border-t border-surface-linha pt-6" data-secao-compras>
-                    <ComprasSecao ordemServicoId={os.id} />
+                {ativa === "materiais" && (
+                  <div className="space-y-6">
+                    {/* E4.1: o que já foi separado (parcial/total), por quem, e o gancho da prestação de contas */}
+                    <OsSeparacao
+                      osId={os.id} materiais={materiaisOs} resumo={separacao} podeSeparar={pode("estoque", "separar")} temEstoque={temEstoque}
+                      podeConsumir={pode("ordens", "editar") || pode("ordens", "concluir")} finalizada={os.status === "CONCLUIDA" || os.status === "CANCELADA" || !!os.fatura}
+                      cancelada={os.status === "CANCELADA"} exigirPrestacao={!!os.exigirPrestacaoMaterial} onMudou={() => router.refresh()}
+                    />
+                    <div className="border-t border-surface-linha pt-6" data-secao-compras>
+                      <ComprasSecao ordemServicoId={os.id} />
+                    </div>
                   </div>
-                </div>
-              )}
+                )}
 
-              {ativa === "financeiro" && (
-                <OsFinanceiro osId={os.id} temContrato={!!os.contrato} concluida={os.status === "CONCLUIDA"} fatura={os.fatura ?? null} faturamento={os.faturamento ?? null} medicoes={os.medicoes} itensOrcamento={os.itensOrcamento} contasReceber={os.contasReceber ?? []} abrirNfse={abrirNfse} onAbriuNfse={() => setAbrirNfse(false)} />
-              )}
+                {ativa === "financeiro" && (
+                  <OsFinanceiro osId={os.id} temContrato={!!os.contrato} concluida={os.status === "CONCLUIDA"} fatura={os.fatura ?? null} faturamento={os.faturamento ?? null} medicoes={os.medicoes} itensOrcamento={os.itensOrcamento} contasReceber={os.contasReceber ?? []} abrirNfse={abrirNfse} onAbriuNfse={() => setAbrirNfse(false)} />
+                )}
 
-              {ativa === "relatorios" && (
-                <div className="space-y-8">
-                  <section data-secao-relatorios><OsRelatorios osId={os.id} /></section>
-                  {/* Fotos & anexos em LARGURA TOTAL, embaixo dos relatórios: por equipamento + Geral + Documentos */}
-                  <section data-secao-anexos className="border-t border-surface-linha pt-6">
-                    <OsFotosAnexos osId={os.id} galeria={os.galeria ?? { equipamentos: [], fotos: [], documentos: [] }}
-                      onMudou={(galeria) => setOs((prev: any) => ({ ...prev, galeria }))} />
-                  </section>
-                </div>
-              )}
-            </div>
-          )}
-        </Tabs>
+                {ativa === "relatorios" && (
+                  <div className="space-y-8">
+                    <section data-secao-relatorios><OsRelatorios osId={os.id} /></section>
+                    {/* Fotos & anexos em LARGURA TOTAL, embaixo dos relatórios: por equipamento + Geral + Documentos */}
+                    <section data-secao-anexos className="border-t border-surface-linha pt-6">
+                      <OsFotosAnexos osId={os.id} galeria={os.galeria ?? { equipamentos: [], fotos: [], documentos: [] }}
+                        onMudou={(galeria) => setOs((prev: any) => ({ ...prev, galeria }))} />
+                    </section>
+                  </div>
+                )}
+              </div>
+            )}
+          </Tabs>
+        </div>
+
+        {/* O painel: a mesma lista de atividades de antes (criar, editar, excluir, status, executar, equipamentos,
+            formulário) e o plano de visitas da OS em campanha — agora sempre à vista */}
+        <PainelAtividades ref={painelRef} os={os} destacado={painelDestacado} onMudou={() => router.refresh()} />
       </div>
     </div>
   );

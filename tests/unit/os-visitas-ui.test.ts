@@ -362,6 +362,8 @@ describe("OS › visitas: no resto da OS", () => {
     const at = (id: string, dataAgendada: string, planoVisitasId: string | null, status = "AGENDADA") => ({ id, titulo: id, status, dataAgendada, planoVisitasId, equipamentos: [], tecnicosEquipe: [] });
     const atividades = [at("b", "2026-11-13T15:00:00Z", "p1"), at("a", "2026-11-12T15:00:00Z", "p1", "CONCLUIDA"), at("avulsa", "2026-11-30T15:00:00Z", null), at("c", "2026-11-16T15:00:00Z", "p1")];
     await montar(createElement(PermissoesProvider, { role: "OPERADOR", permissoes: permissoesTotais(), children: createElement(OsAtividades, { osId: "os1", atividades }) }));
-    expect($$("[data-chip-visita]").map((c) => texto(c))).toEqual(["Visita 2 de 3", "Visita 1 de 3", "Visita 3 de 3"]);
+    // o painel lista na ordem do calendário (pela data agendada): as visitas saem 1, 2, 3; a avulsa de 30/11 no fim, sem chip
+    expect($$("[data-atividade]").map((c) => c.getAttribute("data-atividade"))).toEqual(["a", "b", "c", "avulsa"]);
+    expect($$("[data-chip-visita]").map((c) => texto(c))).toEqual(["Visita 1 de 3", "Visita 2 de 3", "Visita 3 de 3"]);
   });
 });

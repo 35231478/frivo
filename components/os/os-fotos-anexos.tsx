@@ -358,7 +358,7 @@ function ModalEnviarFoto({ osId, equipamentos, referenciaInicial, onFechar, onEn
             {equipamentos.map((e) => <option key={e.id} value={e.id}>{e.titulo}{e.detalhe ? ` — ${e.detalhe}` : ""}</option>)}
             <option value={REFERENCIA_GERAL}>Geral da OS (não é de um equipamento)</option>
           </Select>
-          {!equipamentos.length && <span className="block text-xs text-ink-muted">Esta OS ainda não tem equipamento vinculado: use “Geral da OS” ou vincule o equipamento na aba Atividades.</span>}
+          {!equipamentos.length && <span className="block text-xs text-ink-muted">Sem equipamento vinculado: use “Geral da OS” ou vincule um no painel de Atividades.</span>}
         </label>
 
         <label className="block space-y-1.5">

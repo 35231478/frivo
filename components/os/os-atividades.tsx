@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, type ReactNode } from "react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -21,13 +21,26 @@ import { ConcluirSemEquipamento } from "@/components/os/concluir-sem-equipamento
 import { atividadeEncerrada, chaveDiaCivil, situacaoPrazo, textoPrazo } from "@/lib/os/prazos";
 import { InputDataHora, MSG_HORA_INVALIDA } from "@/components/ui/input-data-hora";
 import { numerarVisitas } from "@/lib/os/visitas";
+import { observacaoCurta, ordenarParaPainel } from "@/lib/os/painel-atividades";
+import { StatusPill, type TomStatus } from "@/components/ui/status-pill";
 
+/** O estado da atividade: o mesmo rótulo e o mesmo tom em toda a OS (lista, plano de visitas, calendário) */
+const STATUS_LABELS: Record<string, string> = { AGENDADA: "Agendada", EM_ANDAMENTO: "Em andamento", CONCLUIDA: "Concluída", CANCELADA: "Cancelada" };
+const TOM_STATUS: Record<string, TomStatus> = { AGENDADA: "acento", EM_ANDAMENTO: "atencao", CONCLUIDA: "ok", CANCELADA: "atrasado" };
 
-const STATUS_LABELS: Record<string, string> = { AGENDADA: "Agendada", EM_ANDAMENTO: "Em Andamento", CONCLUIDA: "Concluída", CANCELADA: "Cancelada" };
-const STATUS_COR: Record<string, string> = { AGENDADA: "bg-acento-claro text-acento", EM_ANDAMENTO: "bg-atencao-claro text-atencao-texto", CONCLUIDA: "bg-ok-claro text-ok-texto", CANCELADA: "bg-atrasado-claro text-atrasado-texto" };
+/** O máximo de atividades que uma OS comporta pela lista (o plano de visitas tem o limite próprio) */
+export const ATIVIDADES_MAX = 20;
 
-/** `onMudou`: avisa a central da OS (cabeçalho/Resumo) que algo mudou — o status automático pode ter andado. */
-export function OsAtividades({ osId, atividades: iniciais, clienteId, unidadeId, onMudou }: { osId: string; atividades: any[]; clienteId?: string; unidadeId?: string | null; onMudou?: () => void }) {
+/**
+ * `onMudou`: avisa a central da OS (cabeçalho/Resumo) que algo mudou — o status automático pode ter andado.
+ * `novaNoTopo` + `cabecalho`: no painel, o título vem de fora e o botão "Nova atividade" fica no topo
+ * (o formulário abre logo abaixo dele); sem isso, o botão fica no rodapé da lista, como sempre.
+ * `antesDaLista`: o que vai entre o cabeçalho e a lista (o plano de visitas da OS em campanha).
+ */
+export function OsAtividades({ osId, atividades: iniciais, clienteId, unidadeId, onMudou, novaNoTopo, cabecalho, antesDaLista }: {
+  osId: string; atividades: any[]; clienteId?: string; unidadeId?: string | null; onMudou?: () => void;
+  novaNoTopo?: boolean; cabecalho?: (botaoNova: ReactNode) => ReactNode; antesDaLista?: ReactNode;
+}) {
   const [atividades, setAtividades] = useState(iniciais);
   const [expandido, setExpandido] = useState<Set<string>>(new Set());
   const [mostraForm, setMostraForm] = useState(false);
@@ -58,6 +71,9 @@ export function OsAtividades({ osId, atividades: iniciais, clienteId, unidadeId,
   // Data escolhida sem hora válida (nova atividade / edição): não salva enquanto não corrigir
   const [horaRuimNova, setHoraRuimNova] = useState<string | null>(null);
   const [horaRuimEdicao, setHoraRuimEdicao] = useState<string | null>(null);
+  // A ordem do painel: pela data agendada (o "dia da OS" de relance), sem data no fim, canceladas por último
+  const lista = ordenarParaPainel(atividades);
+  const podeCriar = podeEditar && atividades.length < ATIVIDADES_MAX;
 
   function abrirEdicao(a: any) {
     setErroModal("");
@@ -157,8 +173,67 @@ export function OsAtividades({ osId, atividades: iniciais, clienteId, unidadeId,
     }
   }
 
+  const formularioNova = mostraForm && (
+    <div className="border border-frivo-200 bg-frivo-50/30 rounded-lg p-4 space-y-4" data-form-nova-atividade>
+      <div className="flex items-center justify-between">
+        <h4 className="text-sm font-semibold text-frivo-800">Nova atividade</h4>
+        <button type="button" onClick={() => setMostraForm(false)} aria-label="Fechar" className="text-ink-muted hover:text-ink"><X className="w-4 h-4" /></button>
+      </div>
+      <FormField label="Título" required>
+        <Input value={form.titulo} onChange={(e) => setForm((f) => ({ ...f, titulo: e.target.value }))} placeholder="Descrição breve da atividade" />
+      </FormField>
+      <FormField label="Tipo de OS">
+        {/* UX-8 (Y3): tipo novo nasce aqui mesmo, sem abandonar a atividade */}
+        <SelectCadastroRapido
+          value={form.tipoOsId} onChange={(v) => setForm((f) => ({ ...f, tipoOsId: v }))}
+          opcoes={tiposOs.filter((t) => t.ativo).map((t) => ({ value: t.id, label: t.nome }))}
+          entidade={TIPO_OS.entidade} placeholder="Selecione"
+          campos={TIPO_OS.campos} campoBusca="nome" permissao={TIPO_OS.permissao} linkCadastroCompleto={TIPO_OS.link}
+          criar={async (v) => {
+            const t = await TIPO_OS.criar(v);
+            setTiposOs((l: any[]) => [...l, { id: t.id, nome: t.nome, ativo: true }]);
+            return { value: t.id, label: t.nome };
+          }}
+          edicao={TIPO_OS.edicao(tiposOs, (t) => setTiposOs((l: any[]) => l.map((x) => (x.id === t.id ? { ...x, ...t } : x))))}
+        />
+      </FormField>
+      <FormField label="Quem executa" required>
+        <SeletorExecucao opcoes={opcoesExecucao} tipoOsId={form.tipoOsId} valor={tecnicosNova} onChange={(v) => { setTecnicosNova(v); if (temExecutor(v)) setErroForm((e) => (e === MSG_SEM_EXECUTOR_TELA ? "" : e)); }} erro={faltaExecutor} />
+      </FormField>
+      <FormGrid>
+        <FormField label="Data/hora agendada">
+          <InputDataHora value={form.dataAgendada} onChange={(iso) => setForm((f) => ({ ...f, dataAgendada: iso }))} aria-label="Data/hora agendada"
+            onProblema={(p) => { setHoraRuimNova(p); if (!p) setErroForm((e) => (e === MSG_HORA_INVALIDA ? "" : e)); }} />
+        </FormField>
+        <FormField label="Prazo da atividade" hint="Até quando deve estar pronta">
+          <InputData value={form.prazo} onChange={(iso) => setForm((f) => ({ ...f, prazo: iso }))} aria-label="Prazo da atividade" />
+        </FormField>
+        <FormField label="Duração estimada (min)">
+          <Input type="number" value={form.duracaoMin} onChange={(e) => setForm((f) => ({ ...f, duracaoMin: e.target.value }))} placeholder="120" />
+        </FormField>
+      </FormGrid>
+      <FormField label="Observação">
+        <Textarea value={form.observacao} onChange={(e) => setForm((f) => ({ ...f, observacao: e.target.value }))} rows={2} />
+      </FormField>
+      {erroForm && <ErroModal texto={erroForm} />}
+      <div className="flex justify-end gap-2">
+        <Button type="button" variant="secondary" onClick={() => setMostraForm(false)}>Cancelar</Button>
+        <Button type="button" loading={salvando} onClick={criarAtividade}><Check className="w-4 h-4" /> Adicionar</Button>
+      </div>
+    </div>
+  );
+  const botaoNova = podeCriar && !mostraForm && (
+    novaNoTopo
+      ? <Button type="button" variant="secondary" size="sm" onClick={() => setMostraForm(true)} data-nova-atividade className="shrink-0"><Plus className="w-4 h-4" /> Nova atividade</Button>
+      : <Button type="button" variant="secondary" onClick={() => setMostraForm(true)} data-nova-atividade className="w-full justify-center border-dashed"><Plus className="w-4 h-4" /> Nova atividade</Button>
+  );
+
   return (
-    <div className="space-y-3">
+    <div className={cn(cabecalho ? "" : "space-y-3")} data-lista-atividades>
+      {cabecalho?.(botaoNova)}
+      <div className={cn("space-y-3", cabecalho && "p-4")}>
+      {novaNoTopo && formularioNova}
+      {antesDaLista}
       {erroStatus && (
         <div role="alert" className="bg-atrasado-claro border border-atrasado/20 text-atrasado-texto text-sm rounded-lg px-3 py-2 space-y-2" data-erro-status-atividade>
           <p className="flex items-start gap-2"><X className="w-4 h-4 shrink-0 mt-0.5" /> {erroStatus}</p>
@@ -179,10 +254,11 @@ export function OsAtividades({ osId, atividades: iniciais, clienteId, unidadeId,
         </div>
       )}
 
-      {atividades.map((a) => {
+      {lista.map((a) => {
         const aberto = expandido.has(a.id);
+        const obs = observacaoCurta(a.observacao);
         return (
-          <div key={a.id} className="border border-surface-border rounded-lg overflow-hidden">
+          <div key={a.id} className="border border-surface-border rounded-lg overflow-hidden" data-atividade={a.id} data-status-atividade={a.status}>
             <button type="button" onClick={() => toggleExpand(a.id)} data-abrir-atividade={a.id} aria-expanded={aberto}
               className="flex items-center justify-between w-full p-3 text-left hover:bg-surface-page transition-colors">
               <div className="flex items-center gap-3 min-w-0">
@@ -191,7 +267,7 @@ export function OsAtividades({ osId, atividades: iniciais, clienteId, unidadeId,
                   <div className="flex items-center gap-2 flex-wrap">
                     <span className="text-sm font-medium text-ink">{a.titulo}</span>
                     {a.tipoOs && <span className="inline-flex items-center gap-1 text-[10px] font-medium text-ink-muted bg-surface-page border border-surface-border px-1.5 py-0.5 rounded-full"><span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: a.tipoOs.cor }} aria-hidden />{a.tipoOs.nome}</span>}
-                    <span className={cn("text-[10px] font-medium px-1.5 py-0.5 rounded-full", STATUS_COR[a.status])}>{STATUS_LABELS[a.status]}</span>
+                    <StatusPill tom={TOM_STATUS[a.status] ?? "previsto"} tamanho="sm" data-selo-atividade={a.status}>{STATUS_LABELS[a.status]}</StatusPill>
                     {visitas.get(a.id) && (
                       <span data-chip-visita className="text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-surface-page border border-surface-border text-ink-muted">
                         Visita {visitas.get(a.id)!.numero} de {visitas.get(a.id)!.total}
@@ -200,12 +276,14 @@ export function OsAtividades({ osId, atividades: iniciais, clienteId, unidadeId,
                     <ChipPrazo a={a} />
                     {a.resumo && <span data-formulario-respondido className="text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-acento-claro text-acento">Formulário respondido</span>}
                   </div>
-                  <div className="flex items-center gap-3 text-xs text-ink-muted mt-0.5">
+                  <div className="flex items-center flex-wrap gap-x-3 gap-y-0.5 text-xs text-ink-muted mt-0.5">
                     <TecnicosAtividade a={a} />
                     {a.veiculo && <span className="flex items-center gap-1 shrink-0" data-veiculo-atividade><Car className="w-3 h-3" />{a.veiculo.placa}</span>}
-                    {a.dataAgendada && <span>{formatarDataHora(a.dataAgendada)}</span>}
-                    {a.duracaoMin && <span>{a.duracaoMin} min</span>}
+                    {a.dataAgendada && <span className="whitespace-nowrap">{formatarDataHora(a.dataAgendada)}</span>}
+                    {a.duracaoMin && <span className="whitespace-nowrap">{a.duracaoMin} min</span>}
                   </div>
+                  {/* A observação em uma linha curta (a inteira aparece ao abrir) */}
+                  {obs && !aberto && <p className="text-xs text-ink-muted truncate mt-0.5" data-observacao-curta title={a.observacao}>{obs}</p>}
                 </div>
               </div>
               {aberto ? <ChevronDown className="w-4 h-4 text-ink-muted" /> : <ChevronRight className="w-4 h-4 text-ink-muted" />}
@@ -260,61 +338,10 @@ export function OsAtividades({ osId, atividades: iniciais, clienteId, unidadeId,
         );
       })}
 
-      {mostraForm && (
-        <div className="border border-frivo-200 bg-frivo-50/30 rounded-lg p-4 space-y-4">
-          <div className="flex items-center justify-between">
-            <h4 className="text-sm font-semibold text-frivo-800">Nova atividade</h4>
-            <button type="button" onClick={() => setMostraForm(false)} className="text-ink-muted hover:text-ink"><X className="w-4 h-4" /></button>
-          </div>
-          <FormField label="Título" required>
-            <Input value={form.titulo} onChange={(e) => setForm((f) => ({ ...f, titulo: e.target.value }))} placeholder="Descrição breve da atividade" />
-          </FormField>
-          <FormField label="Tipo de OS">
-            {/* UX-8 (Y3): tipo novo nasce aqui mesmo, sem abandonar a atividade */}
-            <SelectCadastroRapido
-              value={form.tipoOsId} onChange={(v) => setForm((f) => ({ ...f, tipoOsId: v }))}
-              opcoes={tiposOs.filter((t) => t.ativo).map((t) => ({ value: t.id, label: t.nome }))}
-              entidade={TIPO_OS.entidade} placeholder="Selecione"
-              campos={TIPO_OS.campos} campoBusca="nome" permissao={TIPO_OS.permissao} linkCadastroCompleto={TIPO_OS.link}
-              criar={async (v) => {
-                const t = await TIPO_OS.criar(v);
-                setTiposOs((l: any[]) => [...l, { id: t.id, nome: t.nome, ativo: true }]);
-                return { value: t.id, label: t.nome };
-              }}
-              edicao={TIPO_OS.edicao(tiposOs, (t) => setTiposOs((l: any[]) => l.map((x) => (x.id === t.id ? { ...x, ...t } : x))))}
-            />
-          </FormField>
-          <FormField label="Quem executa" required>
-            <SeletorExecucao opcoes={opcoesExecucao} tipoOsId={form.tipoOsId} valor={tecnicosNova} onChange={(v) => { setTecnicosNova(v); if (temExecutor(v)) setErroForm((e) => (e === MSG_SEM_EXECUTOR_TELA ? "" : e)); }} erro={faltaExecutor} />
-          </FormField>
-          <FormGrid>
-            <FormField label="Data/hora agendada">
-              <InputDataHora value={form.dataAgendada} onChange={(iso) => setForm((f) => ({ ...f, dataAgendada: iso }))} aria-label="Data/hora agendada"
-                onProblema={(p) => { setHoraRuimNova(p); if (!p) setErroForm((e) => (e === MSG_HORA_INVALIDA ? "" : e)); }} />
-            </FormField>
-            <FormField label="Prazo da atividade" hint="Até quando deve estar pronta">
-              <InputData value={form.prazo} onChange={(iso) => setForm((f) => ({ ...f, prazo: iso }))} aria-label="Prazo da atividade" />
-            </FormField>
-            <FormField label="Duração estimada (min)">
-              <Input type="number" value={form.duracaoMin} onChange={(e) => setForm((f) => ({ ...f, duracaoMin: e.target.value }))} placeholder="120" />
-            </FormField>
-          </FormGrid>
-          <FormField label="Observação">
-            <Textarea value={form.observacao} onChange={(e) => setForm((f) => ({ ...f, observacao: e.target.value }))} rows={2} />
-          </FormField>
-          {erroForm && <ErroModal texto={erroForm} />}
-          <div className="flex justify-end gap-2">
-            <Button type="button" variant="secondary" onClick={() => setMostraForm(false)}>Cancelar</Button>
-            <Button type="button" loading={salvando} onClick={criarAtividade}><Check className="w-4 h-4" /> Adicionar</Button>
-          </div>
-        </div>
-      )}
+      {!novaNoTopo && formularioNova}
+      {!novaNoTopo && botaoNova}
 
-      {!mostraForm && podeEditar && atividades.length < 20 && (
-        <Button type="button" variant="secondary" onClick={() => setMostraForm(true)} className="w-full justify-center border-dashed">
-          <Plus className="w-4 h-4" /> Nova atividade
-        </Button>
-      )}
+      </div>
 
       {/* ── Editar atividade ── */}
       <Modal aberto={!!editando} onFechar={() => setEditando(null)} titulo="Editar atividade">

@@ -174,9 +174,10 @@ describe("central da OS (números-chave, pagamento, o que falta)", () => {
 });
 
 describe("abas da central", () => {
-  it("são 6; os links antigos (?aba=prazos, formularios, orcamentos…) abrem a aba que as absorveu", () => {
-    expect(ABAS_OS).toEqual(["resumo", "atividades", "comercial", "materiais", "financeiro", "relatorios"]);
-    expect([undefined, "geral", "historico", "prazos", "formularios", "orcamentos", "orcamento", "compras", "anexos", "financeiro", "xyz"].map(abaValida))
-      .toEqual(["resumo", "resumo", "resumo", "atividades", "atividades", "comercial", "comercial", "materiais", "relatorios", "financeiro", "resumo"]);
+  it("são 5 (Atividades virou painel); os links antigos (?aba=prazos, formularios, orcamentos…) abrem a aba que as absorveu", () => {
+    expect(ABAS_OS).toEqual(["resumo", "comercial", "materiais", "financeiro", "relatorios"]);
+    // atividades/formulários abrem o Resumo (e rolam até o painel — lib/os/abas); prazos (etapas com prazo) mora no Resumo
+    expect([undefined, "geral", "historico", "prazos", "formularios", "atividades", "orcamentos", "orcamento", "compras", "anexos", "financeiro", "xyz"].map(abaValida))
+      .toEqual(["resumo", "resumo", "resumo", "resumo", "resumo", "resumo", "comercial", "comercial", "materiais", "relatorios", "financeiro", "resumo"]);
   });
 });

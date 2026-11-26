@@ -3,8 +3,8 @@
  * Central da OS — a tela de detalhe num DOM de verdade:
  *  - cabeçalho: status automático (pelos fatos), barra Aberta→…→Faturada, cliente/local, previsão
  *    no DIA certo (fuso de Brasília), números-chave (atividades, equipamentos, valor, pagamento);
- *  - 6 abas (antes 11), links antigos (?aba=prazos/orcamentos/…) caem na aba que as absorveu, e o
- *    SLA vive dentro de Atividades; "O que falta" leva à aba onde se resolve;
+ *  - 5 abas (Atividades virou um PAINEL sempre visível ao lado), links antigos (?aba=prazos/orcamentos/…)
+ *    caem na aba que as absorveu, as etapas com prazo vivem no Resumo; "O que falta" leva à aba (ou ao painel) onde se resolve;
  *  - ajuste manual discreto (sem Cancelar, Concluir só com permissão), aviso quando diverge dos
  *    fatos com quem/quando e "Voltar ao automático"; sem permissão de editar, nada disso aparece;
  *  - prazo da atividade: chip de atraso, edição em dd/mm/aaaa que vai como AAAA-MM-DD.
@@ -47,6 +47,9 @@ beforeEach(() => {
   }));
 });
 afterEach(() => { act(() => root?.unmount()); caixa?.remove(); vi.unstubAllGlobals(); vi.useRealTimers(); });
+// o painel rola até si com scrollIntoView (o happy-dom não tem): um espião
+const rolagens: string[] = [];
+beforeEach(() => { rolagens.length = 0; (HTMLElement.prototype as any).scrollIntoView = function () { rolagens.push(this.getAttribute("data-painel-atividades") !== null ? "painel" : "outro"); }; });
 
 async function montar(os: any, abaInicial?: string, permissoes: Permissoes = permissoesTotais()) {
   const [{ OsDetalhe }, { PermissoesProvider }] = await Promise.all([import("@/components/os/os-detalhe"), import("@/components/providers/permissoes-provider")]);
@@ -206,21 +209,29 @@ describe("cabeçalho-resumo da OS", () => {
   });
 });
 
-describe("abas consolidadas e O que falta", () => {
-  it("6 abas; Resumo abre por padrão com o que falta (inclui SLA atrasado) e cada item leva à aba certa", async () => {
+describe("abas consolidadas, o painel de Atividades e O que falta", () => {
+  it("5 abas e o painel sempre à vista; Resumo abre por padrão com o que falta (inclui etapa atrasada) e cada item leva à aba certa", async () => {
     const replace = vi.spyOn(window.history, "replaceState");
     await montar(fixture());
-    expect($$("[data-aba]").map((b) => b.getAttribute("data-aba"))).toEqual(["resumo", "atividades", "comercial", "materiais", "financeiro", "relatorios"]);
+    expect($$("[data-aba]").map((b) => b.getAttribute("data-aba"))).toEqual(["resumo", "comercial", "materiais", "financeiro", "relatorios"]);
     expect(abaAtiva()).toBe("resumo");
+    // o painel está na tela desde o começo, com a lista inteira, sem trocar de aba
+    expect($("[data-painel-atividades]")).toBeTruthy();
+    expect($$("[data-painel-atividades] [data-abrir-atividade]")).toHaveLength(3);
     expect($$("[data-pendencia-os]").map((b) => b.getAttribute("data-pendencia-os"))).toEqual(["atividade-atrasada", "os-atrasada", "sla-atrasado"]);
     // Prazos no Resumo: previsão da OS + atividade com prazo próprio
     expect($$("[data-cartao='prazos'] [data-linha-prazo]").map((l) => l.getAttribute("data-linha-prazo"))).toEqual(["ATRASADO", "ATRASADO"]);
-    expect(texto("[data-ver-etapas]")).toContain("Etapas com prazo: 1 em andamento (1 atrasada)"); // eram "SLA"
+    // as etapas com prazo (antiga aba Prazos) moram no Resumo, com a gestão de antes
+    expect($("[data-resumo-os] [data-secao-sla]")).toBeTruthy();
+    expect(chamadas.some((c) => c.metodo === "GET" && c.url === "/api/ordens/os1/prazos")).toBe(true);
     await clicar($("[data-pendencia-os='sla-atrasado']"));
-    expect(abaAtiva()).toBe("atividades");
-    expect($("[data-secao-sla]")).toBeTruthy(); // a antiga aba Prazos vive aqui
-    expect(chamadas.some((c) => c.metodo === "GET" && c.url === "/api/ordens/os1/prazos")).toBe(true); // com a gestão de SLA de antes
-    expect(replace).toHaveBeenLastCalledWith(null, "", "?aba=atividades");
+    expect(abaAtiva()).toBe("resumo");
+    expect(replace).toHaveBeenLastCalledWith(null, "", window.location.pathname);
+    // a pendência de atividade leva ao PAINEL: a aba não muda, a tela rola e o painel ganha destaque
+    await clicar($("[data-pendencia-os='atividade-atrasada']"));
+    expect(abaAtiva()).toBe("resumo");
+    expect(rolagens).toEqual(["painel"]);
+    expect($("[data-painel-atividades]")!.hasAttribute("data-destacado")).toBe(true);
     await clicar($("[data-numero='pagamento']"));
     expect(abaAtiva()).toBe("financeiro");
     await clicar($("[data-numero='valor']"));
@@ -231,17 +242,77 @@ describe("abas consolidadas e O que falta", () => {
     expect(replace).toHaveBeenLastCalledWith(null, "", window.location.pathname);
   });
 
-  it("links antigos: ?aba=prazos → Atividades; ?aba=orcamentos → Comercial; ?aba=anexos → Relatórios & Anexos; ?aba=historico → Resumo", async () => {
-    for (const [antiga, nova, secao] of [["prazos", "atividades", "[data-secao-sla]"], ["orcamentos", "comercial", "[data-secao-itens]"], ["anexos", "relatorios", "[data-secao-anexos]"], ["historico", "resumo", "[data-cartao='historico']"]]) {
+  it("links antigos: ?aba=prazos → Resumo (etapas); ?aba=orcamentos → Comercial; ?aba=anexos → Relatórios & Anexos; ?aba=historico → Resumo; ?aba=atividades → Resumo + rola até o painel", async () => {
+    for (const [antiga, nova, secao] of [["prazos", "resumo", "[data-secao-sla]"], ["orcamentos", "comercial", "[data-secao-itens]"], ["anexos", "relatorios", "[data-secao-anexos]"], ["historico", "resumo", "[data-cartao='historico']"]]) {
       await montar(fixture(), antiga);
       expect(abaAtiva()).toBe(nova);
       expect($(secao)).toBeTruthy();
+      expect(rolagens, antiga).toEqual([]);
       act(() => root.unmount()); caixa.remove();
     }
+    await montar(fixture(), "atividades");
+    expect(abaAtiva()).toBe("resumo");
+    expect(rolagens).toEqual(["painel"]);
+    expect($("[data-painel-atividades]")!.hasAttribute("data-destacado")).toBe(true);
   });
 
-  it("Atividades: chip de atraso no fuso certo e o formulário respondido marcado no cartão", async () => {
-    await montar(fixture(), "atividades");
+  it("o painel: título com o resumo, 'Nova atividade' no topo (abre o formulário logo abaixo), cada atividade com selo, data, quem executa e a observação curta, na ordem do calendário", async () => {
+    await montar(fixture({ atividades: [
+      atividade("depois", { status: "AGENDADA", dataAgendada: "2026-11-05T17:00:00Z", observacao: "Levar a escada grande.\nE o kit de filtros." }),
+      atividade("sem-data", { status: "AGENDADA", dataAgendada: null }),
+      atividade("antes", { status: "CONCLUIDA", dataAgendada: "2026-10-28T12:00:00Z" }),
+      atividade("cancelada", { status: "CANCELADA", dataAgendada: "2026-10-01T12:00:00Z" }),
+    ] }));
+    const painel = $("[data-painel-atividades]")!;
+    expect(texto("[data-resumo-painel]")).toBe("· 1 de 3 concluídas");
+    // o botão está no topo, antes da lista; o rodapé não tem outro
+    expect($$("[data-nova-atividade]")).toHaveLength(1);
+    const cabecalho = painel.querySelector("h2")!;
+    expect(cabecalho.compareDocumentPosition($("[data-nova-atividade]")!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect($("[data-nova-atividade]")!.compareDocumentPosition($("[data-abrir-atividade]")!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    // a ordem do calendário: concluída de 28/10, agendada de 05/11, sem data, cancelada por último
+    expect($$("[data-atividade]").map((c) => c.getAttribute("data-atividade"))).toEqual(["antes", "depois", "sem-data", "cancelada"]);
+    // cada linha: selo do estado (tom do sistema de design), data/hora em Brasília, quem executa, observação curta
+    const linha = $("[data-atividade='depois']")!;
+    expect(linha.querySelector("[data-selo-atividade]")!.textContent).toBe("Agendada");
+    expect(linha.querySelector("[data-selo-atividade]")!.getAttribute("data-tom")).toBe("acento");
+    expect($("[data-atividade='antes'] [data-selo-atividade]")!.getAttribute("data-tom")).toBe("ok");
+    expect($("[data-atividade='cancelada'] [data-selo-atividade]")!.getAttribute("data-tom")).toBe("atrasado");
+    expect(linha.textContent).toContain("05/11/2026 às 14:00");
+    expect(linha.querySelector("[data-tecnicos-atividade]")!.textContent).toContain("João Silva");
+    expect(linha.querySelector("[data-observacao-curta]")!.textContent).toBe("Levar a escada grande."); // só a primeira linha
+    expect($("[data-atividade='sem-data'] [data-observacao-curta]")).toBeNull();
+    // abrindo a atividade a observação inteira aparece e a curta some
+    await clicar(linha.querySelector("[data-abrir-atividade]"));
+    expect(linha.querySelector("[data-observacao-curta]")).toBeNull();
+    expect(linha.textContent).toContain("E o kit de filtros.");
+    // Nova atividade: o formulário abre no topo do painel
+    await clicar($("[data-nova-atividade]"));
+    expect($("[data-form-nova-atividade]")).toBeTruthy();
+    expect($("[data-nova-atividade]")).toBeNull();
+    expect($("[data-form-nova-atividade]")!.compareDocumentPosition($("[data-abrir-atividade]")!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it("o painel respeita a permissão: quem só visualiza vê a lista, sem 'Nova atividade' nem editar/excluir", async () => {
+    const { montarPermissoes } = await import("@/lib/permissoes");
+    await montar(fixture(), undefined, montarPermissoes({ ordens: ["visualizar"] }));
+    expect($$("[data-painel-atividades] [data-abrir-atividade]")).toHaveLength(3);
+    expect($("[data-nova-atividade]")).toBeNull();
+    await clicar($("[data-atividade='a2'] [data-abrir-atividade]"));
+    expect($("button[title='Editar atividade']")).toBeNull();
+    expect($("button[title='Excluir atividade']")).toBeNull();
+  });
+
+  it("os números-chave do cabeçalho (Atividades, Equipamentos) levam ao painel, sem trocar de aba", async () => {
+    await montar(fixture(), "financeiro");
+    await clicar($("[data-numero='atividades']"));
+    expect(abaAtiva()).toBe("financeiro");
+    expect(rolagens).toEqual(["painel"]);
+    expect($("[data-painel-atividades]")!.hasAttribute("data-destacado")).toBe(true);
+  });
+
+  it("Atividades no painel: chip de atraso no fuso certo e o formulário respondido marcado no cartão", async () => {
+    await montar(fixture());
     expect($$("[data-prazo-atividade]").map((c) => [c.getAttribute("data-prazo-atividade"), c.textContent])).toEqual([["ATRASADO", "Atrasada 3 dias"]]);
     expect($$("[data-formulario-respondido]")).toHaveLength(1);
   });
@@ -330,7 +401,7 @@ describe("status: ajuste manual discreto, aviso de divergência e volta ao autom
 describe("prazo da atividade", () => {
   it("editar mostra o prazo em dd/mm/aaaa e envia AAAA-MM-DD; a central é avisada (refresh)", async () => {
     respostas["PUT /api/ordens/os1/atividades/a2"] = { status: 200, corpo: { prazo: "2026-11-04T00:00:00.000Z" } };
-    await montar(fixture(), "atividades");
+    await montar(fixture()); // a lista está no painel, em qualquer aba
     const cartoes = $$("[data-prazo-atividade]");
     expect(cartoes).toHaveLength(1);
     // abre o cartão da a2 e clica em editar
