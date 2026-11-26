@@ -46,9 +46,6 @@ export interface LigacaoColunas {
   faltando: string[];
 }
 
-/** Teto de colunas e de tamanho de um cabeçalho no mapa enviado pela tela (o resto é recusado). */
-export const MAX_LIGACOES = 80;
-
 /**
  * Lê o mapa de ligações que veio da tela (JSON): só colunas DESTE modelo, valores texto curto ou
  * null. Qualquer coisa fora disso → ErroImportacao (nunca adivinha).
@@ -58,8 +55,8 @@ export function lerLigacoes(bruto: unknown, colunas: ColunaImportacao[]): Ligaco
   let v: unknown = bruto;
   if (typeof bruto === "string") { try { v = JSON.parse(bruto); } catch { throw new ErroImportacao("Ligação de colunas inválida."); } }
   if (!v || typeof v !== "object" || Array.isArray(v)) throw new ErroImportacao("Ligação de colunas inválida.");
+  // Só as colunas do modelo (um mapa enorme já tem chave de fora e é recusado na 1ª)
   const entradas = Object.entries(v as Record<string, unknown>);
-  if (entradas.length > MAX_LIGACOES) throw new ErroImportacao("Ligação de colunas inválida.");
   const chaves = new Set(colunas.map((c) => c.chave));
   const saida: Ligacoes = {};
   for (const [k, x] of entradas) {

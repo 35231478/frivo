@@ -326,6 +326,25 @@ describe.skipIf(!URL_PG)("Implantação, leva 1 — clientes completos (PostgreS
     expect(u.json).toMatchObject({ criados: 0, atualizados: 1, comErro: 0 });
   });
 
+  it("e-mail de contato antigo gravado com maiúsculas ainda casa (não duplica)", async () => {
+    await prisma.contatoCliente.create({ data: { id: "k-velho", empresaId: "e1", clienteId: "c-ok", nome: "Carla Dias", email: "Carla@RedeBoa.com.br" } });
+    const r = await confirmar("contatos", csv([["cnpj_cpf", "nome", "email", "cargo"], [CNPJ_OK, "Carla D.", "carla@redeboa.com.br", "compras"]]));
+    expect(r.json).toMatchObject({ criados: 0, atualizados: 1, comErro: 0 });
+    expect(await prisma.contatoCliente.findUnique({ where: { id: "k-velho" } })).toMatchObject({ cargo: "Compras", nome: "Carla D." });
+  });
+
+  it("a gravação confere o cliente de novo na empresa (se ele sumiu ou é de outra empresa, a linha vira erro)", async () => {
+    const { gravarImportacao } = await import("@/lib/importacao/servidor");
+    const linha = (n: number, clienteId: string) => ({ linha: n, status: "criar", rotulo: "X", erros: [], valores: {}, dados: { clienteId, nome: "Xavier" } });
+    for (const e of ["contatos", "unidades"] as const) {
+      const r = await gravarImportacao(e, { linhas: [linha(2, "c-B"), linha(3, "nao-existe")], resumo: { total: 2, criar: 2, atualizar: 0, erros: 0 }, colunasIgnoradas: [], colunas: { cabecalho: [], ligadas: {}, faltando: [] } } as any, "e1");
+      expect(r.criados).toBe(0);
+      expect(r.erros.map((x) => x.erros.join())).toEqual(["O cliente desta linha não foi encontrado na sua empresa.", "O cliente desta linha não foi encontrado na sua empresa."]);
+    }
+    expect(await prisma.contatoCliente.count({ where: { nome: "Xavier" } })).toBe(0);
+    expect(await prisma.unidade.count({ where: { nome: "Xavier" } })).toBe(0);
+  });
+
   /* ───────── Permissão, modelo, multiempresa ───────── */
   it("unidade e contato pedem Clientes › Editar (criar cliente não basta); baixar pede ver clientes", async () => {
     logar(montarPermissoes({ clientes: ["visualizar", "criar"] }));

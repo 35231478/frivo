@@ -14,7 +14,7 @@ import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { montarPermissoes, permissoesTotais, type Permissoes } from "@/lib/permissoes";
-import { analisar, descreverChave, ErroColunas, ErroImportacao, lerLigacoes, ligacaoColunas, mapearCabecalho, MAX_LIGACOES, type ContextoImportacao, type LinhaAnalisada } from "@/lib/importacao/motor";
+import { analisar, descreverChave, ErroColunas, ErroImportacao, lerLigacoes, ligacaoColunas, mapearCabecalho, type ContextoImportacao, type LinhaAnalisada } from "@/lib/importacao/motor";
 import { familiaDe, IMPORTACOES } from "@/lib/importacao/entidades";
 
 (globalThis as any).IS_REACT_ACT_ENVIRONMENT = true;
@@ -87,8 +87,8 @@ describe("ligar colunas (motor)", () => {
     for (const ruim of ["{x", "[]", '"nome"', "12", { empresa_id: "A" }, { nome: 1 }, { nome: "x".repeat(201) }, { nome: {} }])
       expect(() => lerLigacoes(ruim, COLS)).toThrow(/Ligação de colunas inválida/);
     expect(() => lerLigacoes({ empresa_id: "A" }, COLS)).toThrow(/“empresa_id” não é uma coluna do modelo/);
-    const muitas = Object.fromEntries(Array.from({ length: MAX_LIGACOES + 1 }, (_, i) => [`c${i}`, null]));
-    expect(() => lerLigacoes(muitas, COLS)).toThrow(/inválida/);
+    const muitas = Object.fromEntries(Array.from({ length: 500 }, (_, i) => [`c${i}`, null]));
+    expect(() => lerLigacoes(muitas, COLS)).toThrow(/“c0” não é uma coluna do modelo/);
   });
 
   it("descreverChave: chave de dentro do cliente não mostra o id do cliente", () => {

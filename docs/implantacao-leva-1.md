@@ -52,7 +52,7 @@ Em todas as planilhas:
 - A mesma ligação vai na prévia e na confirmação; um arquivo novo começa sem ligação.
 - Com a planilha já aceita, "Conferir como as colunas foram ligadas" reabre o painel.
 - No servidor:
-  - o mapa só aceita colunas do modelo, com texto de até 200 caracteres ou "não importar", e no máximo 80 entradas;
+  - o mapa só aceita colunas do modelo, com texto de até 200 caracteres ou "não importar";
   - o resto é recusado com "Ligação de colunas inválida".
 
 ## Decisões
@@ -69,12 +69,17 @@ Em todas as planilhas:
   - ligar colunas: a escolha da pessoa vence o automático, "não importar", coluna usada uma vez, validação do mapa, erro com o cabeçalho;
   - unidades e contatos: cliente da empresa, id de outro cliente, principal, chaves, um principal por cliente;
   - tela com o diálogo de verdade: família por permissão, texto de cada planilha, ligar colunas do começo ao fim, mapa na prévia e na confirmação, arquivo novo sem ligação, observações.
-- **PostgreSQL real** (`implantacao-1-pg.test.ts`, 12):
+- **PostgreSQL real** (`implantacao-1-pg.test.ts`, 14):
   - "Principal" com o endereço, só em quem não tem unidade, e reimportar não duplica;
   - **cliente e unidade na mesma transação**: com um gatilho que recusa a unidade, o cliente também não fica;
   - planilha de outro sistema: o 400 traz o cabeçalho e, ligadas as colunas, grava;
   - unidades: troca da principal, erros linha a linha, ida e volta;
   - contatos: casa pelo e-mail e pelo nome, sem acesso ao portal;
   - permissão e multiempresa;
-  - o update vazio.
+  - o update vazio;
+  - e-mail antigo gravado com maiúsculas;
+  - a gravação conferindo o cliente de novo na empresa.
+- **Mutação:** 47 de 47 mortos. Na 1ª rodada sobraram 3:
+  - o teto de 80 ligações era código morto, porque um mapa maior já é recusado pela coluna de fora; saiu;
+  - o e-mail antigo com maiúsculas e a reconferência do cliente na gravação ganharam prova e agora morrem.
 - **As provas antigas da importação** (`leva-importacao.test.ts`, 37) continuam passando sem mudança.
