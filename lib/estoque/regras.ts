@@ -45,12 +45,38 @@ export function calcularMovimento(op: Operacao, saldoAtual: number, valor: numbe
   }
 }
 
-export type Situacao = "negativo" | "abaixo" | "ok";
-/** Saldo negativo é permitido (não bloqueia) mas é destacado; "abaixo" = saldo ≤ estoque mínimo. */
+/**
+ * A situação do saldo, da mais grave para a mais branda — a mesma em toda tela que mostra estoque:
+ *  - "negativo": saldo < 0 (permitido, não bloqueia, mas é inconsistência a conferir);
+ *  - "zerado":   saldo 0 — SEM ESTOQUE, tenha ou não mínimo cadastrado. Antes, saldo 0 sem mínimo
+ *                aparecia como "OK", o que escondia justamente o produto que acabou;
+ *  - "abaixo":   saldo > 0 e ≤ estoque mínimo (no mínimo ou abaixo: hora de repor);
+ *  - "ok":       com saldo (acima do mínimo, ou sem mínimo cadastrado).
+ */
+export type Situacao = "negativo" | "zerado" | "abaixo" | "ok";
+export const SITUACOES_ESTOQUE: readonly Situacao[] = ["negativo", "zerado", "abaixo", "ok"];
+export const ROTULO_SITUACAO_ESTOQUE: Record<Situacao, string> = {
+  negativo: "Saldo negativo", zerado: "Sem estoque", abaixo: "Abaixo do mínimo", ok: "Em estoque",
+};
 export function situacaoEstoque(saldo: number, minimo: number | null | undefined): Situacao {
-  if (saldo < 0) return "negativo";
-  if (minimo != null && saldo <= minimo) return "abaixo";
+  const s = arred(saldo); // o saldo é decimal de até 3 casas: 0,0000001 de sobra de conta é zero
+  if (s < 0) return "negativo";
+  if (s === 0) return "zerado";
+  if (minimo != null && s <= minimo) return "abaixo";
   return "ok";
+}
+
+/**
+ * O aviso do topo da lista: uma frase por situação que pede atenção, da mais grave para a mais branda,
+ * cada uma levando ao filtro dela. Sem nada a avisar, lista vazia (o aviso não aparece).
+ */
+export function avisosEstoque(a: { semEstoque: number; abaixo: number; negativo: number }) {
+  const produtos = (n: number) => `${n} ${n === 1 ? "produto" : "produtos"}`;
+  return ([
+    ["negativo", a.negativo, `${produtos(a.negativo)} com saldo negativo`],
+    ["zerado", a.semEstoque, `${produtos(a.semEstoque)} sem estoque`],
+    ["abaixo", a.abaixo, `${produtos(a.abaixo)} abaixo do mínimo`],
+  ] as const).filter(([, n]) => n > 0).map(([situacao, , texto]) => ({ situacao, texto, href: `/estoque?situacao=${situacao}` }));
 }
 
 /** 1234.5 → "1.234,5" (até 3 casas, sem zeros sobrando) */
