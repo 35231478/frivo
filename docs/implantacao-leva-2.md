@@ -85,7 +85,7 @@ Nenhum arquivo de Clientes, Orçamentos ou sino foi tocado. A lista de equipamen
   - unidade, chaves, série repetida e série de outro cliente;
   - avisos e possíveis duplicados, iguais entre linhas e o resumo;
   - na tela: avisos, filtro, resultado e download dos avisos; família por módulo e permissão.
-- **PostgreSQL real** (`implantacao-2-pg.test.ts`, 8):
+- **PostgreSQL real** (`implantacao-2-pg.test.ts`, 10):
   - cria na unidade certa com tudo normalizado, e um tipo personalizado só, mesmo com 2 linhas;
   - chaves (série com espaço/hífen, TAG, id; mudar de unidade);
   - série repetida, série de outro cliente, id de outra empresa;
@@ -93,3 +93,8 @@ Nenhum arquivo de Clientes, Orçamentos ou sino foi tocado. A lista de equipamen
   - ida e volta; permissão; módulo desligado;
   - planilha de outro sistema com colunas ligadas;
   - a gravação conferindo a unidade no cliente e na empresa.
+  - possíveis duplicados só entre os ativos, em ordem alfabética;
+  - cada tipo uma vez na lista de opções.
+- **Mutação:** 36 de 37 mortos.
+  - 1 é equivalente: resolver os tipos em paralelo não duplica nada, porque eles já chegam sem repetição (um por tipo, não um por linha).
+  - Na 1ª rodada sobraram mais 3, que ganharam prova e morrem: parecidos inativos, a ordem dos parecidos e o tipo repetido na lista.

@@ -281,6 +281,28 @@ describe.skipIf(!URL_PG)("Implantação, leva 2 — equipamentos (PostgreSQL rea
     expect(await prisma.equipamento.findFirst({ where: { numeroSerie: "GR-77" } })).toMatchObject({ unidadeId: "u2p", marca: "Gree", capacidade: "12.000 BTU/h", fluido: "R32", tensao: "220V", localizacao: "Caixa" });
   });
 
+  it("possíveis duplicados: só os ATIVOS, em ordem alfabética (seja qual for a ordem do banco)", async () => {
+    await prisma.equipamento.createMany({ data: [
+      { id: "p-b", empresaId: "e1", unidadeId: "u2p", tipo: "OUTRO", marca: "Gree", modelo: "GW", capacidade: "9.000 BTU/h", localizacao: "Sala B" },
+      { id: "p-a", empresaId: "e1", unidadeId: "u2p", tipo: "OUTRO", marca: "Gree", modelo: "GW", capacidade: "9.000 BTU/h", localizacao: "Sala A" },
+      { id: "p-inativo", empresaId: "e1", unidadeId: "u2p", tipo: "OUTRO", marca: "Gree", modelo: "GW", capacidade: "9.000 BTU/h", localizacao: "Sala Velha", ativo: false },
+    ] });
+    const p = await previa(csv([CAB, [CNPJ_B, "", "", "Gree", "GW", "9000", "", "", "Sala C", "", "", ""]]));
+    expect(linhaDa(p, 2).avisos.find((a: string) => a.startsWith("Possível duplicado"))).toBe("Possível duplicado — já cadastrado nesta unidade: Gree GW 9.000 BTU/h (Sala A), sem série; Gree GW 9.000 BTU/h (Sala B), sem série.");
+  });
+
+  it("tipos da planilha: cada rótulo uma vez — o personalizado que representa um tipo do sistema toma o lugar dele; inativo fica de fora", async () => {
+    const { carregarContexto } = await import("@/lib/importacao/servidor");
+    const { refs } = await carregarContexto("equipamentos", "e1", true);
+    const rotulos = refs.tipo.map((t) => t.rotulo);
+    expect(new Set(rotulos).size).toBe(rotulos.length);
+    expect(rotulos.filter((r) => r === "Split Hi-Wall (parede)")).toHaveLength(1);
+    expect(refs.tipo.find((t) => t.rotulo === "Split Hi-Wall (parede)")!.valor).toBe("c:t-split");
+    expect(rotulos).toContain("Cortina de ar");
+    expect(rotulos).not.toContain("Tipo antigo");
+    expect(rotulos).toContain("Piso-Teto");
+  });
+
   it("a gravação confere a unidade de novo no cliente e na empresa", async () => {
     const { gravarImportacao } = await import("@/lib/importacao/servidor");
     const linha = (n: number, unidadeId: string) => ({ linha: n, status: "criar", rotulo: "X", erros: [], valores: {}, dados: { clienteId: "c1", unidadeId, marca: "Z", modelo: "Z", tipoRef: "e:OUTRO" } });
