@@ -20,7 +20,8 @@ const plural = (n: number, um: string, varios: string) => `${n} ${n === 1 ? um :
 /**
  * "Renovar": cria o plano da próxima vigência, em rascunho, já com os equipamentos ativos e o
  * cronograma. O diálogo propõe as datas, deixa mudar e mostra o que vai e o que não vai (a ART não
- * vai). Exige pmoc.editar.
+ * vai). Exige pmoc.CRIAR: renovar cria um plano novo — a mesma permissão da cópia e do "Novo PMOC"
+ * (antes pedia "editar", e quem só edita criava planos por aqui).
  */
 export function PmocRenovar({ pmocId }: { pmocId: string }) {
   const router = useRouter();
@@ -36,7 +37,7 @@ export function PmocRenovar({ pmocId }: { pmocId: string }) {
     () => (previa && datasOk ? planejarRenovacao({ pmoc: previa.pmoc, equipamentos: previa.equipamentos, itens: previa.itens }, form) : null),
     [previa, datasOk, form],
   );
-  if (!pode("pmoc", "editar")) return null;
+  if (!pode("pmoc", "criar")) return null;
 
   async function abrir() {
     setErro(""); setPrevia(null); setAberto(true);
