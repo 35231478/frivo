@@ -204,7 +204,7 @@ describe("ficha do cliente em consulta", () => {
     expect(linha("comercial")[0].valor).toBe("VIP (inativa: valem os preços do catálogo)");
     expect(linha("cobranca")).toEqual([
       { rotulo: "E-mails de cobrança", valor: "fin@x.com, b@x.com" },
-      { rotulo: "Preferências", valor: "Boleto único mensal · Exige pedido de compra antes da NF" },
+      { rotulo: "Preferências", valor: "Boleto único mensal · Exige pedido do cliente para faturar" },
     ]);
   });
 

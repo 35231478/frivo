@@ -55,7 +55,7 @@ describe("Cobrança e faturamento no cadastro de cliente", () => {
     expect(c).toContain("E-mails de cobrança");
     expect(c).toContain("WhatsApp de cobrança");
     expect(c).toContain("Boleto único mensal");
-    expect(c).toContain("Exige pedido de compra antes da NF");
+    expect(c).toContain("Exige pedido do cliente"); // Leva PC-1: o seletor de 3 opções (Não | Para faturar | Para executar e faturar)
     expect(c).toContain("Agrupa adicionais na fatura");
     expect($("[data-emails-input] input[type='email']")).toBeTruthy();
     expect($('input[name="whatsappFaturamento"]')).toBeTruthy();

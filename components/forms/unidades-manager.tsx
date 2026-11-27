@@ -15,6 +15,7 @@ import { EnderecoAutocomplete, type EnderecoSelecionado } from "@/components/ui/
 import { haversine, formatarDistancia } from "@/lib/geo";
 import type { Unidade } from "@prisma/client";
 import { Plus, Pencil, X, Check, ChevronDown, Navigation, Smartphone, Search } from "lucide-react";
+import { MODOS_PEDIDO, ROTULO_HERDA, ROTULO_MODO_PEDIDO } from "@/lib/pedido-cliente/regra";
 import { cn, comparaNatural } from "@/lib/utils";
 
 const ESTADOS_BR = [
@@ -36,12 +37,14 @@ interface UnidadeFormData {
   longitude: number | null;
   telefone: string;
   observacoes: string;
+  /** Pedido do cliente nesta unidade; "" = como o cliente */
+  exigePedido: string;
 }
 
 const emptyForm: UnidadeFormData = {
   nome: "", principal: false, logradouro: "", numero: "", complemento: "",
   bairro: "", cidade: "", estado: "", cep: "",
-  latitude: null, longitude: null, telefone: "", observacoes: "",
+  latitude: null, longitude: null, telefone: "", observacoes: "", exigePedido: "",
 };
 
 interface EnderecoCliente {
@@ -140,7 +143,7 @@ export function UnidadesManager({ clienteId, unidadesIniciais, inativosIniciais 
       complemento: u.complemento ?? "", bairro: u.bairro ?? "",
       cidade: u.cidade ?? "", estado: u.estado ?? "", cep: u.cep ?? "",
       latitude: u.latitude, longitude: u.longitude,
-      telefone: u.telefone ?? "", observacoes: u.observacoes ?? "",
+      telefone: u.telefone ?? "", observacoes: u.observacoes ?? "", exigePedido: (u as { exigePedido?: string | null }).exigePedido ?? "",
     });
     setEditando(u.id);
     setExpandido((prev) => { const n = new Set(prev); n.add(u.id); return n; });
@@ -299,6 +302,12 @@ export function UnidadesManager({ clienteId, unidadesIniciais, inativosIniciais 
         </FormField>
         <FormField label="Observações">
           <Textarea value={form.observacoes} onChange={(e) => updateField("observacoes", e.target.value)} rows={2} />
+        </FormField>
+        <FormField label="Exige pedido do cliente" dica="Uma unidade pode ter a regra dela (ex.: uma filial que paga com o pedido de compra dela). Sem escolher, vale a do cliente.">
+          <Select value={form.exigePedido} onChange={(e) => updateField("exigePedido", e.target.value)} aria-label="Exige pedido do cliente nesta unidade" data-unidade-pedido className="max-w-[300px]">
+            <option value="">{ROTULO_HERDA}</option>
+            {MODOS_PEDIDO.map((m) => <option key={m} value={m}>{ROTULO_MODO_PEDIDO[m]}</option>)}
+          </Select>
         </FormField>
 
         {form.logradouro && form.cidade && form.estado && (
