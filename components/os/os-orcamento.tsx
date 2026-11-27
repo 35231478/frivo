@@ -162,8 +162,9 @@ export function OsOrcamento({ osId, itens: iniciais, clienteId = null, situacao 
         { nome: "quantidade", label: "Quantidade", obrigatorio: true, colunas: 3, inputMode: "decimal" },
         // Linha com total digitado à mão: o preço é esse total (muda em "Materiais e peças")
         ...(i.valorManual && comMateriais ? [] : [{ nome: "valorUnitario", label: comMateriais ? "Unit. base (R$)" : "Valor unitário (R$)", obrigatorio: true, colunas: 3 as const, inputMode: "decimal" as const }]),
-        // Preço que veio da tabela do cliente: mudar pede o motivo (vai para o histórico); sem a permissão, o servidor recusa
-        ...(podeAlterarPrecoTabela ? [{ nome: "motivoPrecoTabela", label: "Motivo (se alterar preço de tabela)", maxLength: 300 }] : []),
+        // Preço que veio da tabela do cliente: mudar pede o motivo (vai para o histórico); sem a permissão, o servidor recusa.
+        // Sem o campo de preço (total digitado à mão), não há preço a mudar aqui: sem motivo (como no orçamento)
+        ...(podeAlterarPrecoTabela && !(i.valorManual && comMateriais) ? [{ nome: "motivoPrecoTabela", label: "Motivo (se alterar preço de tabela)", maxLength: 300 }] : []),
       ],
       valores: () => ({ descricao: i.descricao, quantidade: numeroParaCampo(num(i.quantidade)), valorUnitario: numeroParaCampo(unitarioParaEdicao(i), 2), motivoPrecoTabela: "" }),
       async salvar(id, valores, alterados) {
