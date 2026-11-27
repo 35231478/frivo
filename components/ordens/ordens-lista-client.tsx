@@ -1,5 +1,6 @@
 "use client";
 
+import { FILTRO_SEM_TECNICO } from "@/lib/os/sem-tecnico";
 import { ALERTAS_ATENDIMENTO, ROTULO_FILTRO_ATENDIMENTO } from "@/lib/atendimento/prazo";
 import { useEffect, useMemo, useState, useTransition } from "react";
 import { CampoBusca, Paginacao, sugerirPorUrl } from "@/components/listagem/listagem-ui";
@@ -44,7 +45,7 @@ const CLASSE_PRIORIDADE: Record<string, string> = {
 };
 
 /** Os filtros do painel "Mais filtros" (o período e a busca ficam fora) */
-const PARAMS_FILTROS_OS = ["status", "prioridade", "prazo", "atendimento", "origem", "clienteId", "responsavelId", "tipoOsId", "contratoId", "numero"];
+const PARAMS_FILTROS_OS = ["status", "prioridade", "prazo", "atendimento", "origem", "clienteId", "responsavelId", "tecnico", "tipoOsId", "contratoId", "numero"];
 
 /** Princípio 7: o que a lista mostra fica no ⓘ do título, não num parágrafo acima da tabela. */
 const AJUDA = "Todas as OS do período escolhido: o período olha o dia agendado, a data prevista, o prazo ou a abertura. A coluna Status mostra o estágio da OS (o mesmo da barra de andamento) e avisa quando ela vence hoje ou atrasou. Prevista é o dia marcado para o serviço; o prazo de conclusão (coluna escondida por padrão, em Colunas) é um compromisso à parte e, quando a OS não tem um próprio, vale a data prevista. A linha inteira abre a OS. OS canceladas ficam fora até o filtro de status pedir.";
@@ -229,6 +230,13 @@ export function OrdensListaClient({ ordens, total, pagina, porPagina, opcoes, pe
           ) },
           { id: "clienteId", label: "Cliente", params: ["clienteId"], render: () => <BuscaSelect value={get("clienteId")} onChange={(v) => setParams({ clienteId: v || null })} options={opcoes.clientes} placeholder="Todos" /> },
           { id: "responsavelId", label: "Técnico responsável", params: ["responsavelId"], render: () => <BuscaSelect value={get("responsavelId")} onChange={(v) => setParams({ responsavelId: v || null })} options={opcoes.usuarios} placeholder="Todos" /> },
+          // Sem técnico (painel de pendências): OS em aberto que alguém precisa atribuir (lib/os/sem-tecnico.ts)
+          { id: "tecnico", label: "Atribuição", params: ["tecnico"], render: () => (
+            <select value={get("tecnico")} onChange={(e) => setParams({ tecnico: e.target.value || null })} className={inputFiltro(get("tecnico"))} aria-label="Atribuição">
+              <option value="">Todas</option>
+              <option value={FILTRO_SEM_TECNICO}>Sem técnico</option>
+            </select>
+          ) },
           { id: "tipoOsId", label: "Tipo de OS", params: ["tipoOsId"], render: () => (
             <select value={get("tipoOsId")} onChange={(e) => setParams({ tipoOsId: e.target.value || null })} className={inputFiltro(get("tipoOsId"))} aria-label="Tipo de OS">
               <option value="">Todos</option>
