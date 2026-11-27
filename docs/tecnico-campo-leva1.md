@@ -179,5 +179,16 @@ WhatsApp** (botões grandes, 1 toque cada) → **Detalhes** (recolhido).
 
 ## Testes (PR 2)
 
-- `app-campo-leva1-pr2` (19, regra pura), `app-campo-leva1-pr2-ui` (16, tela), `app-campo-leva1-pr2-pg` (8,
+- `app-campo-leva1-pr2` (19, regra pura), `app-campo-leva1-pr2-ui` (17, tela), `app-campo-leva1-pr2-pg` (9,
   PostgreSQL real), `sql-app-atividade-esquecida` (5).
+- **Mutação: 41 de 41 mortos.** Os 2 sobreviventes da 1ª rodada ganharam prova: atividade que começou ontem à noite e
+  ainda está abaixo do limite (o sino conta, porque virou o dia) e retrato antigo no aparelho com contatos (a tela
+  esconde ligar/WhatsApp quando a empresa desligou "Exibir contatos do cliente").
+- Suíte inteira (PR 1 + PR 2): 529 arquivos, 7.950 testes, todos verdes (com o PostgreSQL). Typecheck limpo. Build
+  de produção ok.
+
+## Prints (PR 2)
+
+`depois-20…24` (iPhone 13, Pixel 7, desktop): faixa no Meu dia, topo da OS com a faixa, botões de 1 toque,
+"Detalhes" aberto, concluir com término sugerido e "outro horário" fora do intervalo. `depois-25` e `depois-26`:
+o campo de horas em Equipes › App do colaborador e o sino do gestor. ANTES do topo: `antes-02/03-*`.
