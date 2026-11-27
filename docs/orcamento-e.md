@@ -124,7 +124,8 @@ Não apaga nada: sem `DROP`, `DELETE` ou `TRUNCATE` (testado). O resultado é ig
   - `orcamento-materiais-ui`: o documento mostra a lista dentro do serviço;
   - `orcamento-construtor-ui`: a observação embaixo da descrição;
   - `estoque-e31-ui`, `estoque-e32-ui`, `leva-estoque-e31` e `orcamento-materiais-ui`: rótulos Material e Peça;
-  - `leva-importacao`: a coluna `uso` na planilha de erros;
+  - `leva-importacao` e `codigos-exportacao`: a coluna `uso` na planilha (as linhas de teste passam a ser montadas pela chave da coluna, porque a planilha é lida pelo título);
+  - `listas-ui` e `codigos-exportacao-ui`: a coluna Uso na lista de produtos (ordenável, e no cartão do celular);
   - `composicao-servico-pg`, `orcamento-materiais-pg`, `os-materiais-pg` e `padronizacao-leva2-pg`: os produtos de teste da categoria Peças ganham `uso: PECA`, como o SQL deixaria, porque agora o Uso do produto manda.
 
 ## Prints (desktop e celular, dados fictícios)
