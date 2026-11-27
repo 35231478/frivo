@@ -12,8 +12,8 @@ Frivo é SaaS e cada empresa cobra do seu jeito, então a regra não pode ficar 
 Termos fixos em todo o sistema: **Material** e **Peça**. A regra decide só a **cobrança**. No estoque, na
 separação e no custo (lucro e margem), o Material continua sendo Material.
 
-> 🔵 **Banco — NÃO aplicado.** O SQL está em `prisma/sql/2027-02-07_cobranca_materiais.sql`. Ele é aditivo e
-> idempotente; o Zé aplica no Neon antes do merge. Ver "O SQL" abaixo.
+> 🔵 **Banco — aplicado pelo Zé** (no merge do [#273](https://github.com/35231478/frivo/pull/273)). O SQL está em
+> `prisma/sql/2027-02-07_cobranca_materiais.sql`. Ele é aditivo e idempotente. Ver "O SQL" abaixo.
 
 ## Levantamento — onde a cobrança do material era decidida
 
@@ -53,7 +53,15 @@ separação e no custo (lucro e margem), o Material continua sendo Material.
 6. **Faturamento**: lê as linhas gravadas. No à parte, o material vai como linha de **PRODUTO**, sem custo e sem baixa de estoque, igual à Peça.
 7. **Implantação**: a etapa de configuração ganhou o item **"Como você cobra materiais?"**. Ele mostra a escolha atual e leva a Configurações › Orçamento. Há sempre uma escolha (o padrão é Incluso), então o item não trava a etapa.
 
-## O SQL (🔵 não aplicado)
+## Decisões do Zé (respostas às perguntas do #273)
+
+1. **Nota fiscal do material à parte**: nada fiscal agora. Quando vier a NF-e de produto (modelo 55, que está no
+   backlog), o material cobrado à parte segue a Peça.
+2. **Exceção "este material vai incluso" numa empresa à parte**: não entra agora. Só se um cliente pedir.
+3. **OS sem orçamento** (regra fixada no 1º item com materiais; OS que já tinham materiais = Incluso): sem resposta
+   registrada; segue como está.
+
+## O SQL (🔵 aplicado)
 
 `prisma/sql/2027-02-07_cobranca_materiais.sql` é aditivo e idempotente: pode rodar mais de uma vez sem mudar nada.
 
