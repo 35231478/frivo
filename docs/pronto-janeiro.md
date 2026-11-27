@@ -65,3 +65,15 @@ item executado, adicional "Cobrar", sem itens) e dentro da central; a aba Financ
 atalho, de contrato, não concluída e sem permissão; o seletor com todos escolhidos e sem nenhum cadastrado; a
 hora selecionada ao entrar (e o campo vazio); as iniciais. Contra o código antigo, 13 dos 16 falham. Os 3 que
 passam nos dois são guardas de regressão.
+
+**Suíte inteira:** 8231 passam. Falham só 2, de `tests/unit/app-campo-leva1-pr2-pg.test.ts` (app de campo).
+Eles dependem do relógio: rodando entre 00:00 e ~03:30 (Brasília), o "término informado" de horas antes cai
+no dia anterior e a mensagem ganha a data. Falham igual no `master` nessa hora; não são desta leva e o
+arquivo é da outra nuvem, então não mexi. Proposta: fixar o relógio no teste (`vi.setSystemTime` ao meio-dia).
+
+## Prints (dados fictícios)
+
+- Percurso: `docs/prints/pronto-janeiro/percurso/` (primeiro login, acesso ao app sem perfil, perfil de
+  técnico, aprovação no link, OS gerada, conclusão no app, a aba Financeiro sem saída, a fatura gerada).
+- Depois, desktop e celular: `docs/prints/pronto-janeiro/depois/` (o que falta, aviso "nada a faturar", o
+  atalho para a aba Comercial, "todos os colaboradores já estão na atividade" e as iniciais no app).
