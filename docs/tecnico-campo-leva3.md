@@ -98,6 +98,20 @@ pedidas, 6 medições, 1 foto antes e 1 depois por equipamento), no master, ante
 | `lib/dashboard/dados.ts`, `components/dashboard/blocos.tsx` | Card do painel |
 | `lib/execucao/*`, `prisma/schema.prisma` | Gravação da faixa, ΔT no servidor, colunas |
 
+### Testes (PR A)
+
+- `app-campo-leva3-faixas` (22, regra pura), `app-campo-leva3-faixas-ui` (7, tela: app e escritório),
+  `app-campo-leva3-faixas-pg` (11, PostgreSQL real), `sql-checklist-faixas` (4, o SQL rodado 2× e comparado com o Prisma).
+- **3 testes antigos atualizados de propósito** (`execucao-os-regras`): o plano de gravação de um item de medição agora
+  leva a grandeza e a faixa (vazias). Os campos novos só aparecem onde fazem sentido: o relatório sem faixa e o item
+  OK/Atenção continuam iguais.
+- **Mutação: 57 mutantes, 57 mortos.** Na 1ª rodada sobraram 5, e cada um virou prova:
+  - "Não se aplica" não guarda faixa na resposta;
+  - desfazer o "Não se aplica" de uma leitura refaz o ΔT (fica vazio);
+  - no aparelho, um ΔT "digitado" sem as leituras não marca o equipamento como atendido;
+  - o item que já pede observação nunca ganha um segundo campo;
+  - o painel conta equipamentos (duas leituras fora no mesmo equipamento = 1).
+
 ### Prints (PR A)
 
 `docs/prints/tecnico-campo-leva3/`: `antes-01…05` (app: equipamento, medições, conclusão; iPhone 13, Pixel 7, desktop),
