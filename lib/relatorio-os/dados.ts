@@ -127,7 +127,7 @@ type Atividade = {
     id?: string; valor?: { toNumber(): number } | number | null; unidade?: string | null; audio?: boolean;
     faixaMin?: { toNumber(): number } | number | null; faixaMax?: { toNumber(): number } | number | null; foraDaFaixa?: boolean;
   }[];
-  fotosAtendimento?: { id: string; equipamentoId: string; url: string; momento?: "ANTES" | "DEPOIS" | null; item?: { texto: string } | null }[];
+  fotosAtendimento?: { id: string; equipamentoId: string; url: string; momento?: "ANTES" | "DEPOIS" | null; legenda?: string | null; item?: { texto: string } | null }[];
   servicosAdicionais?: AdicionalEntrada[];
   /** "Fotos do serviço" tiradas no app NESTA atividade (galeria da OS, com legenda); do escritório não vem */
   anexosOs?: FotoServicoEntrada[];
@@ -135,7 +135,7 @@ type Atividade = {
 type FotoServicoEntrada = { conteudo: string; legenda: string | null; equipamentoId: string | null; equipamento?: Equip | null };
 type AdicionalEntrada = {
   id: string; descricao: string; statusCobranca: "A_AVALIAR" | "COBRAR" | "NAO_COBRAR"; criadoPor?: { nome: string } | null;
-  equipamento: Equip | null; fotos: { url: string }[];
+  equipamento: Equip | null; fotos: { url: string; legenda?: string | null }[];
 };
 export interface OsParaRelatorio {
   numero: string; status: string; descricao: string; observacoes: string | null;
@@ -206,8 +206,9 @@ const STATUS_VALIDOS: StatusItem[] = ["OK", "ATENCAO", "NAO_SE_APLICA"];
 const numero = (v: { toNumber(): number } | number | null | undefined) => (v === null || v === undefined ? null : typeof v === "number" ? v : v.toNumber());
 /** Antes do serviço → fotos dos itens/gerais → depois do serviço */
 const ORDEM_MOMENTO = { ANTES: 0, NENHUM: 1, DEPOIS: 2 } as const;
-const legendaFoto = (f: { momento?: "ANTES" | "DEPOIS" | null; item?: { texto: string } | null }) =>
-  f.momento === "ANTES" ? "Antes do serviço" : f.momento === "DEPOIS" ? "Depois do serviço" : f.item?.texto ?? "Foto do equipamento";
+/** A legenda escrita na aba Relatórios vence; sem ela, a do sistema */
+const legendaFoto = (f: { legenda?: string | null; momento?: "ANTES" | "DEPOIS" | null; item?: { texto: string } | null }) =>
+  f.legenda?.trim() ? f.legenda.trim() : f.momento === "ANTES" ? "Antes do serviço" : f.momento === "DEPOIS" ? "Depois do serviço" : f.item?.texto ?? "Foto do equipamento";
 
 /** Os serviços adicionais das atividades (menos as canceladas), com o equipamento e as fotos de cada um. */
 export function adicionaisDe(ativs: Atividade[]): AdicionalRelatorio[] {
@@ -216,7 +217,7 @@ export function adicionaisDe(ativs: Atividade[]): AdicionalRelatorio[] {
     return {
       id: s.id, descricao: s.descricao, atividade: a.titulo, statusCobranca: s.statusCobranca, criadoPor: s.criadoPor?.nome ?? null,
       equipamento: eq ? [eq.titulo, eq.tag && `TAG ${eq.tag}`].filter(Boolean).join(" · ") : null,
-      fotos: s.fotos.map((f, i) => ({ url: f.url, legenda: `Adicional — foto ${i + 1}` })),
+      fotos: s.fotos.map((f, i) => ({ url: f.url, legenda: f.legenda?.trim() || `Adicional — foto ${i + 1}` })),
     };
   }));
 }
@@ -409,12 +410,12 @@ const SELECT_EQUIP = {
 } as const;
 const CAMPO = { select: { label: true, tipo: true, ordem: true } } as const;
 export const SELECT_CHECKLIST = { select: { id: true, equipamentoId: true, status: true, observacao: true, textoItem: true, valor: true, unidade: true, faixaMin: true, faixaMax: true, foraDaFaixa: true, item: { select: { ordem: true } } } } as const;
-export const SELECT_FOTOS = { orderBy: { criadoEm: "asc" }, select: { id: true, equipamentoId: true, url: true, momento: true, item: { select: { texto: true } } } } as const;
+export const SELECT_FOTOS = { orderBy: { criadoEm: "asc" }, select: { id: true, equipamentoId: true, url: true, momento: true, legenda: true, item: { select: { texto: true } } } } as const;
 export const SELECT_ADICIONAIS = {
   orderBy: { criadoEm: "asc" },
   select: {
     id: true, descricao: true, statusCobranca: true, criadoPor: { select: { nome: true } },
-    equipamento: { select: SELECT_EQUIP }, fotos: { orderBy: { criadoEm: "asc" }, select: { url: true } },
+    equipamento: { select: SELECT_EQUIP }, fotos: { orderBy: { criadoEm: "asc" }, select: { url: true, legenda: true } },
   },
 } as const;
 

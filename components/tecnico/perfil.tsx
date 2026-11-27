@@ -19,7 +19,7 @@ const ROTULO_OPERACAO: Record<string, string> = {
   foto: "Foto", fotoRemover: "Foto retirada", equipamento: "Equipamento atendido/observação", formulario: "Formulário",
   vincular: "Equipamento vinculado", scan: "QR Code lido", adicional: "Serviço extra", adicionalRemover: "Serviço extra retirado",
   adicionalFoto: "Foto do serviço extra", adicionalFotoRemover: "Foto do serviço extra retirada",
-  fotoOs: "Foto do serviço", fotoOsRemover: "Foto do serviço retirada", concluir: "Conclusão da atividade",
+  fotoOs: "Foto do serviço", fotoOsRemover: "Foto do serviço retirada", fotoOsLegenda: "Legenda da foto do serviço", concluir: "Conclusão da atividade",
   material: "Material usado", materialRemover: "Material excluído", comentario: "Comentário", despesa: "Despesa de campo", aceite: "Aceite do cliente",
 };
 

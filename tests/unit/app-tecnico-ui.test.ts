@@ -582,6 +582,18 @@ describe("execução guiada", () => {
     expect(ops.at(-1)).toMatchObject({ tipo: "fotoOsRemover", dados: { clientId: f1.dados.clientId } });
     expect(confirmar).toHaveBeenCalledTimes(2);
     confirmar.mockRestore();
+
+    // Leva F: corrigir a legenda (com a OS aberta): abre com a atual; legenda curta não grava; a nova vai pela fila
+    await clicar($("[data-foto-servico] [data-legenda-editar-abrir]"));
+    expect($<HTMLInputElement>("[data-legenda-editar]")!.value).toBe("Quadro elétrico");
+    await digitar($("[data-legenda-editar]"), "x");
+    await clicar($("[data-legenda-salvar]"));
+    expect((await fila()).at(-1)!.tipo).toBe("fotoOsRemover");
+    await digitar($("[data-legenda-editar]"), "Quadro elétrico do 2º andar");
+    await clicar($("[data-legenda-salvar]"));
+    await esperarAte(() => ($("[data-foto-servico]")?.textContent ?? "").includes("Quadro elétrico do 2º andar"), "legenda nova");
+    expect($("[data-legenda-editar]")).toBeNull();
+    expect((await fila()).at(-1)).toMatchObject({ tipo: "fotoOsLegenda", atividadeId: "aA", dados: { clientId: f2.dados.clientId, legenda: "Quadro elétrico do 2º andar" } });
   });
 });
 

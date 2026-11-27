@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
-  Camera, Download, Eye, FileText, ImagePlus, LayoutGrid, Loader2, Paperclip, Trash2, Upload, Wrench, AlertTriangle,
+  Camera, Download, Eye, FileText, ImagePlus, LayoutGrid, Loader2, Paperclip, Pencil, Trash2, Upload, Wrench, AlertTriangle,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Modal } from "@/components/ui/modal";
@@ -55,6 +55,7 @@ export function OsFotosAnexos({ osId, galeria: inicial, onMudou }: { osId: strin
   const podeEditar = pode("ordens", "editar");
   const [galeria, setGaleria] = useState<Galeria>(inicial);
   const [enviarFoto, setEnviarFoto] = useState<{ referencia: string } | null>(null);
+  const [legendaDe, setLegendaDe] = useState<FotoGaleria | null>(null);
   const [lightbox, setLightbox] = useState<{ secao: string; indice: number } | null>(null);
   const [enviandoDoc, setEnviandoDoc] = useState(false);
   const inputDoc = useRef<HTMLInputElement>(null);
@@ -143,6 +144,7 @@ export function OsFotosAnexos({ osId, galeria: inicial, onMudou }: { osId: strin
             onAbrir={(indice) => setLightbox({ secao: s.chave, indice })}
             onAdicionar={() => setEnviarFoto({ referencia: s.chave })}
             onExcluir={excluirFoto}
+            onEditarLegenda={setLegendaDe}
           />
         ))}
       </div>
@@ -185,6 +187,10 @@ export function OsFotosAnexos({ osId, galeria: inicial, onMudou }: { osId: strin
         )}
       </section>
 
+      {legendaDe && (
+        <ModalLegenda osId={osId} foto={legendaDe} onFechar={() => setLegendaDe(null)}
+          onSalva={(legenda) => { setGaleria((g) => ({ ...g, fotos: g.fotos.map((x) => (x.chave === legendaDe.chave ? { ...x, legenda, semReferencia: false } : x)) })); setLegendaDe(null); }} />
+      )}
       {enviarFoto && (
         <ModalEnviarFoto
           osId={osId} equipamentos={galeria.equipamentos} referenciaInicial={enviarFoto.referencia}
@@ -216,8 +222,9 @@ export function OsFotosAnexos({ osId, galeria: inicial, onMudou }: { osId: strin
   );
 }
 
-function SecaoFotos({ secao: s, podeEditar, onAbrir, onAdicionar, onExcluir }: {
+function SecaoFotos({ secao: s, podeEditar, onAbrir, onAdicionar, onExcluir, onEditarLegenda }: {
   secao: SecaoGaleria; podeEditar: boolean; onAbrir: (i: number) => void; onAdicionar: () => void; onExcluir: (f: FotoGaleria) => void;
+  onEditarLegenda: (f: FotoGaleria) => void;
 }) {
   const Icone = s.geral ? LayoutGrid : Wrench;
   const idTitulo = `secao-fotos-${s.chave}`;
@@ -260,6 +267,13 @@ function SecaoFotos({ secao: s, podeEditar, onAbrir, onAdicionar, onExcluir }: {
                   {f.atividade && <p className="text-xs text-ink-muted truncate" title={f.atividade.titulo}>{f.atividade.titulo}</p>}
                   <p className="text-[11px] text-ink-subtle truncate" title={quemQuando(f)}>{quemQuando(f)}</p>
                 </div>
+                {podeEditar && (
+                  // A legenda se corrige sempre (é o texto do relatório); fica no histórico da OS, com a de antes
+                  <button type="button" onClick={() => onEditarLegenda(f)} title="Editar legenda" aria-label={`Editar legenda: ${f.legenda}`} data-editar-legenda
+                    className="absolute right-9 top-1.5 rounded-full bg-white/90 p-1.5 text-ink-muted shadow-sm hover:text-acento hover:bg-white">
+                    <Pencil className="w-3.5 h-3.5" aria-hidden="true" />
+                  </button>
+                )}
                 {podeEditar && (
                   <button
                     type="button" onClick={() => !trava && onExcluir(f)} disabled={!!trava} title={trava ?? "Excluir foto"}
@@ -378,6 +392,55 @@ function ModalEnviarFoto({ osId, equipamentos, referenciaInicial, onFechar, onEn
         <div className="flex flex-col-reverse sm:flex-row sm:justify-end gap-2">
           <Button variant="secondary" onClick={onFechar}>Cancelar</Button>
           <Button onClick={enviar} loading={enviando} disabled={lendo} data-enviar-foto>Adicionar foto</Button>
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
+/** Editar a legenda de uma foto da galeria (qualquer origem). O servidor confere a permissão e grava no histórico. */
+function ModalLegenda({ osId, foto, onFechar, onSalva }: { osId: string; foto: FotoGaleria; onFechar: () => void; onSalva: (legenda: string) => void }) {
+  const [legenda, setLegenda] = useState(foto.semReferencia ? "" : foto.legenda);
+  const [tentou, setTentou] = useState(false);
+  const [salvando, setSalvando] = useState(false);
+  const [erro, setErro] = useState<string | null>(null);
+  const valida = limparLegenda(legenda);
+
+  async function salvar() {
+    setTentou(true);
+    if (!valida) return;
+    if (valida === foto.legenda) { onFechar(); return; }
+    setSalvando(true); setErro(null);
+    const res = await fetch(`/api/ordens/${osId}/fotos/${foto.id}?origem=${foto.origem}`, {
+      method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ legenda: valida }),
+    }).catch(() => null);
+    const data = await res?.json().catch(() => ({}));
+    setSalvando(false);
+    if (!res?.ok) { setErro(data?.erro ?? "Não foi possível salvar a legenda."); return; }
+    onSalva(data.legenda);
+    toast("Legenda atualizada.");
+  }
+
+  return (
+    <Modal aberto titulo="Editar legenda" onFechar={onFechar}>
+      <div className="space-y-4" data-modal-legenda>
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src={foto.src} alt="" className="w-full max-h-48 object-contain rounded-lg border border-surface-border bg-surface-page" />
+        <label className="block space-y-1.5">
+          <span className="text-sm font-medium text-ink">Legenda <span className="text-atrasado" aria-hidden="true">*</span></span>
+          <Input value={legenda} onChange={(e) => setLegenda(e.target.value)} maxLength={LEGENDA_MAX} required aria-required="true" autoFocus
+            error={tentou && !valida} data-legenda-nova onKeyDown={(e) => { if (e.key === "Enter") salvar(); }} />
+          <span className="block text-xs text-ink-muted text-right tabular-nums">{legenda.length}/{LEGENDA_MAX}</span>
+        </label>
+        {(erro || (tentou && !valida)) && (
+          <div role="alert" className="flex items-start gap-2 text-sm text-atrasado-texto bg-atrasado-claro border border-atrasado/20 rounded-lg px-3 py-2" data-erro-legenda>
+            <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" aria-hidden="true" />
+            <span>{erro ?? MSG_LEGENDA}</span>
+          </div>
+        )}
+        <div className="flex flex-col-reverse sm:flex-row sm:justify-end gap-2">
+          <Button variant="secondary" onClick={onFechar}>Cancelar</Button>
+          <Button onClick={salvar} loading={salvando} data-salvar-legenda>Salvar legenda</Button>
         </div>
       </div>
     </Modal>

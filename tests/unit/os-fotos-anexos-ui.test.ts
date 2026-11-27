@@ -286,6 +286,48 @@ describe("permissão", () => {
     expect($("[data-adicionar-documento]")).toBeNull();
     expect($("[data-adicionar-foto-secao]")).toBeNull();
     expect($("[data-excluir-foto]")).toBeNull();
+    expect($("[data-editar-legenda]")).toBeNull();
     expect($('button[aria-label="Excluir laudo-art.pdf"]')).toBeNull();
+  });
+});
+
+describe("editar a legenda (Leva F)", () => {
+  const lapis = (chave: string) => $(`[data-foto="${chave}"] [data-editar-legenda]`);
+  it("em toda foto (também de atividade concluída); abre com a legenda atual e salva pela rota da origem; a galeria mostra a nova", async () => {
+    respostas["PATCH /api/ordens/os1/fotos/f2?origem=EXECUCAO"] = { status: 200, corpo: { legenda: "Filtros lavados e secos" } };
+    const onMudou = await montar();
+    expect($$("[data-editar-legenda]")).toHaveLength(4);
+    expect(lapis("EXECUCAO:f2")?.getAttribute("title")).toBe("Editar legenda");
+    await clicar(lapis("EXECUCAO:f2"));
+    const campo = $<HTMLInputElement>("[data-legenda-nova]")!;
+    expect(campo.value).toBe("Checklist: Limpeza dos filtros");
+    await digitar(campo, "  Filtros lavados   e secos ");
+    await clicar($("[data-salvar-legenda]"));
+    expect(chamadas.map((c) => [c.metodo, c.url, c.corpo && JSON.parse(c.corpo)])).toEqual([["PATCH", "/api/ordens/os1/fotos/f2?origem=EXECUCAO", { legenda: "Filtros lavados e secos" }]]);
+    expect($("[data-modal-legenda]")).toBeNull();
+    expect(txt($('[data-foto="EXECUCAO:f2"] [data-legenda]'))).toBe("Filtros lavados e secos");
+    expect(avisos.toast).toHaveBeenCalledWith("Legenda atualizada.");
+    expect(onMudou).toHaveBeenCalled();
+  });
+  it("anexo antigo sem legenda abre vazio; legenda inválida não chama o servidor; o erro do servidor aparece no modal", async () => {
+    respostas["PATCH /api/ordens/os1/fotos/an1?origem=ANEXO"] = { status: 403, corpo: { erro: "Sem permissão para editar a OS." } };
+    await montar();
+    await clicar(lapis("ANEXO:an0"));
+    expect($<HTMLInputElement>("[data-legenda-nova]")!.value).toBe("");
+    await clicar($("[data-salvar-legenda]"));
+    expect(chamadas).toEqual([]);
+    expect(txt($("[data-erro-legenda]"))).toBe("Escreva uma legenda para a foto (de 2 a 200 caracteres).");
+    await clicar([...document.querySelectorAll("[data-modal-legenda] button")].find((b) => txt(b) === "Cancelar") ?? null);
+    await clicar(lapis("ANEXO:an1"));
+    await digitar($("[data-legenda-nova]"), "Fachada da loja");
+    await clicar($("[data-salvar-legenda]"));
+    expect(txt($("[data-erro-legenda]"))).toBe("Sem permissão para editar a OS.");
+    expect(txt($('[data-foto="ANEXO:an1"] [data-legenda]'))).toBe("Fachada do prédio");
+  });
+  it("a mesma legenda: fecha sem chamar o servidor", async () => {
+    await montar();
+    await clicar(lapis("ANEXO:an1"));
+    await clicar($("[data-salvar-legenda]"));
+    expect([chamadas, $("[data-modal-legenda]")]).toEqual([[], null]);
   });
 });

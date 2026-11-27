@@ -24,7 +24,7 @@ const lerEmpresa = (id: string) => prisma.empresa.findUnique({ where: { id }, se
  * qualquer outra consulta. Agora o usuário e a empresa (a do token) saem juntos; o perfil, só se houver,
  * pelo id. Se a empresa do token não for a do cadastro, vale a do cadastro (busca de novo). Mesmo formato.
  */
-const lerUsuario = cache(async (usuarioId: string, empresaIdDoToken: string | null) => {
+export const lerUsuario = cache(async (usuarioId: string, empresaIdDoToken: string | null) => {
   try {
     const [u, empresaDoToken] = await Promise.all([
       prisma.usuario.findUnique({

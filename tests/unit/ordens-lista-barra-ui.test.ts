@@ -73,6 +73,17 @@ describe("lista de OS: barra enxuta", () => {
     expect(nav.push).toHaveBeenCalledWith("/ordens/os1");
   });
 
+  it("só a lista (Leva F): sem a escolha Tabela/Cards; no desktop a tabela, no celular os cartões compactos; o link antigo ?view=cards abre a lista", async () => {
+    await montar("view=cards", [OS1]);
+    expect($('button[title="Cards"]')).toBeNull();
+    expect($('button[title="Tabela"]')).toBeNull();
+    expect($("table[data-tabela-planilha]")).not.toBeNull();
+    const cartoes = $("[data-cartoes]")!;
+    expect(cartoes.className.split(/\s+/)).toContain("md:hidden");
+    expect(cartoes.className).not.toMatch(/lg:grid-cols-3/);
+    expect($('tr[data-linha="os1"] td[data-celula="numero"] a')!.getAttribute("href")).toBe("/ordens/os1");
+  });
+
   it("coluna Status: o ESTÁGIO da OS (o mesmo selo do andamento e as cores do calendário) e, ao lado, só o que pede ação", async () => {
     const os = (id: string, extra: Record<string, unknown>) => ({ ...OS1, id, numero: `OS-${id}`, ...extra });
     await montar("", [

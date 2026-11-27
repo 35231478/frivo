@@ -247,6 +247,12 @@ export function aplicar(r: RetratoAtividade, x: ExecucaoTela, op: OperacaoFila):
     case "fotoOsRemover":
       return { ...x, fotosServico: (x.fotosServico ?? []).filter((f) => !((op.dados.clientId && f.clientId === op.dados.clientId) || (op.dados.id && f.id === op.dados.id))) };
 
+    case "fotoOsLegenda":
+      return {
+        ...x,
+        fotosServico: (x.fotosServico ?? []).map((f) => ((op.dados.clientId && f.clientId === op.dados.clientId) || (op.dados.id && f.id === op.dados.id) ? { ...f, legenda: limpar(op.dados.legenda) } : f)),
+      };
+
     case "adicionalFotoRemover":
       return {
         ...x,

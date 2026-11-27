@@ -5,7 +5,7 @@
 import { prisma } from "@/lib/prisma";
 import { apresentarEquipamento, SELECT_EQUIP_EXECUCAO, STATUS_BLOQUEADOS } from "@/lib/execucao/dados";
 import {
-  ehImagem, legendaAdicional, legendaExecucao,
+  ehImagem, LEGENDA_ANEXO_SEM, legendaAdicional, legendaExecucao,
   type DocumentoGaleria, type EquipamentoGaleria, type FotoGaleria, type Galeria,
 } from "@/lib/os/galeria";
 
@@ -45,7 +45,7 @@ export function fotoDeAnexo(osId: string, a: {
   id: string; legenda: string | null; equipamentoId: string | null; criadoEm: Date;
   atividade: { id: string; titulo: string; status: string } | null; criadoPor: { nome: string } | null;
 }): FotoGaleria {
-  const legenda = a.legenda ?? "Foto enviada (sem legenda)";
+  const legenda = a.legenda ?? LEGENDA_ANEXO_SEM;
   const src = `/api/ordens/${osId}/anexos/${a.id}`;
   return {
     chave: `ANEXO:${a.id}`, origem: "ANEXO", id: a.id, src: `${src}?inline=1`, baixar: src, legenda,
@@ -76,11 +76,11 @@ export async function carregarGaleria(empresaId: string, osId: string): Promise<
     equipamentosDaOs(empresaId, osId),
     prisma.fotoAtendimento.findMany({
       where: { empresaId, atividade: { ordemServicoId: osId } },
-      select: { id: true, equipamentoId: true, momento: true, criadoEm: true, item: { select: { texto: true } }, atividade: SELECT_ATIVIDADE, criadoPor: SELECT_AUTOR },
+      select: { id: true, equipamentoId: true, momento: true, legenda: true, criadoEm: true, item: { select: { texto: true } }, atividade: SELECT_ATIVIDADE, criadoPor: SELECT_AUTOR },
     }),
     prisma.servicoAdicionalFoto.findMany({
       where: { empresaId, servico: { ordemServicoId: osId } },
-      select: { id: true, criadoEm: true, criadoPor: SELECT_AUTOR, servico: { select: { descricao: true, equipamentoId: true, atividade: SELECT_ATIVIDADE } } },
+      select: { id: true, legenda: true, criadoEm: true, criadoPor: SELECT_AUTOR, servico: { select: { descricao: true, equipamentoId: true, atividade: SELECT_ATIVIDADE } } },
     }),
     prisma.osAnexo.findMany({ where: { ordemServicoId: osId, ordemServico: { empresaId } }, select: SELECT_ANEXO_GALERIA }),
   ]);
@@ -101,7 +101,7 @@ export async function carregarGaleria(empresaId: string, osId: string): Promise<
     ...execucao.map((f): FotoGaleria => {
       const momento = f.momento ?? null;
       const item = f.item?.texto ?? null;
-      const legenda = legendaExecucao({ momento, item });
+      const legenda = f.legenda ?? legendaExecucao({ momento, item });
       const src = `/api/fotos-atendimento/${f.id}`;
       return {
         chave: `EXECUCAO:${f.id}`, origem: "EXECUCAO", id: f.id, src, baixar: src, legenda, equipamentoId: f.equipamentoId,
@@ -111,7 +111,7 @@ export async function carregarGaleria(empresaId: string, osId: string): Promise<
     ...adicionais.map((f): FotoGaleria => {
       const src = `/api/servicos-adicionais/fotos/${f.id}`;
       return {
-        chave: `ADICIONAL:${f.id}`, origem: "ADICIONAL", id: f.id, src, baixar: src, legenda: legendaAdicional(f.servico.descricao),
+        chave: `ADICIONAL:${f.id}`, origem: "ADICIONAL", id: f.id, src, baixar: src, legenda: f.legenda ?? legendaAdicional(f.servico.descricao),
         equipamentoId: f.servico.equipamentoId, atividade: atividadeInfo(f.servico.atividade), item: null, momento: null,
         enviadoPor: f.criadoPor?.nome ?? null, enviadoEm: f.criadoEm.toISOString(),
       };
