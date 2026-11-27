@@ -64,7 +64,7 @@ describe.skipIf(!URL_PG)("app de campo, leva 2 (PR B): despesas de campo (Postgr
     ({ prisma } = await import("@/lib/prisma"));
     await Promise.all([
       "tecnico/sync", "tecnico/despesas", "tecnico/despesas/[id]/foto", "despesas-campo", "despesas-campo/[id]/foto", "despesas-campo/[id]/aprovar",
-      "despesas-campo/[id]/recusar", "despesas-campo/categorias", "ordens/[id]/despesas-campo", "alertas",
+      "despesas-campo/[id]/recusar", "despesas-campo/categorias", "ordens/[id]/despesas-campo", "alertas", "configuracoes",
     ].map((r) => import(/* @vite-ignore */ `@/app/api/${r}/route`)));
     await prisma.empresa.createMany({ data: [{ id: "e1", nome: "Clima Total", cnpj: "12.345.678/0001-90", email: "e@x.com" }, { id: "e2", nome: "Outra", cnpj: "98.765.432/0001-10", email: "o@x.com" }] });
     await prisma.configuracao.create({ data: { empresaId: "e1" } });
@@ -257,6 +257,10 @@ describe.skipIf(!URL_PG)("app de campo, leva 2 (PR B): despesas de campo (Postgr
       await aprovar(await idDe("d12"), { vencimento: HOJE, categoriaId: "cfEst" });
       expect((await prisma.contaPagar.findFirst({ where: { despesaCampo: { clientId: "d12" } } })).categoriaId).toBe("cfEst");
       expect((await chamar("despesas-campo/categorias", "GET")).json.efetivas.ALIMENTACAO).toBe("cfV");
+      // A tela geral de Configurações manda a configuração inteira de volta: não sobrescreve o mapa (rota própria)
+      const cfg = (await chamar("configuracoes", "GET")).json;
+      expect((await chamar("configuracoes", "PUT", {}, { ...cfg, despesasCampoCategorias: {} })).status).toBe(200);
+      expect((await chamar("despesas-campo/categorias", "GET")).json.mapa).toEqual({ ALIMENTACAO: "cfV" });
       // A de mesmo nome (sem diferença de maiúsculas): ESTACIONAMENTO
       comoTecnico();
       await sync([despesa(SEM_OS, "d13", { categoria: "ESTACIONAMENTO", valor: 7 })]);
