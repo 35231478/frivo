@@ -404,3 +404,38 @@ export async function travaIniciarOs(empresaId: string, osId: string): Promise<s
   const o = await prisma.ordemServico.findFirst({ where: { id: osId, empresaId }, select: SELECT_PEDIDO_OS });
   return o ? travaIniciar(situacaoDaOs(o)) : null;
 }
+
+/** A etiqueta de cada linha (lista de OS, cabeçalho): null = o cliente não exige (nada aparece) */
+export interface PedidoDaLinha { aguardando: boolean; pedido: { id: string; numero: string } | null; liberadoMotivo: string | null }
+
+/** As etiquetas das OS; vazio quando a empresa não tem nenhum cliente que exige pedido */
+export async function pedidoDasOs(empresaId: string, ids: string[]): Promise<Map<string, PedidoDaLinha>> {
+  if (!ids.length || !(await usaPedidoCliente(empresaId))) return new Map();
+  const oss = await prisma.ordemServico.findMany({
+    where: { id: { in: ids }, empresaId },
+    select: { ...SELECT_PEDIDO_OS, pedidoLiberadoMotivo: true, pedidoCliente: { select: { id: true, numero: true } } },
+  });
+  const r = new Map<string, PedidoDaLinha>();
+  for (const o of oss) {
+    const s = situacaoDaOs(o);
+    if (s.modo === "NAO" && !o.pedidoCliente) continue;
+    r.set(o.id, { aguardando: aguardandoPedido(s), pedido: o.pedidoCliente, liberadoMotivo: o.pedidoLiberadoEm ? o.pedidoLiberadoMotivo : null });
+  }
+  return r;
+}
+
+/** As etiquetas dos orçamentos (mesma regra) */
+export async function pedidoDosOrcamentos(empresaId: string, ids: string[]): Promise<Map<string, PedidoDaLinha>> {
+  if (!ids.length || !(await usaPedidoCliente(empresaId))) return new Map();
+  const orcs = await prisma.orcamento.findMany({
+    where: { id: { in: ids }, empresaId },
+    select: { ...SELECT_PEDIDO_ORCAMENTO, pedidoLiberadoMotivo: true, pedidoCliente: { select: { id: true, numero: true } } },
+  });
+  const r = new Map<string, PedidoDaLinha>();
+  for (const o of orcs) {
+    const s = situacaoDoOrcamento(o);
+    if (s.modo === "NAO" && !o.pedidoCliente) continue;
+    r.set(o.id, { aguardando: aguardandoPedido(s), pedido: o.pedidoCliente, liberadoMotivo: o.pedidoLiberadoEm ? o.pedidoLiberadoMotivo : null });
+  }
+  return r;
+}

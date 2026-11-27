@@ -15,7 +15,7 @@ export async function TelaOrcamento() {
     select: {
       orcamentoValidadeDias: true, orcamentoGarantiaServico: true, orcamentoGarantiaPecas: true,
       orcamentoNaoIncluso: true, orcamentoNormas: true,
-      orcamentoMostrarMateriais: true, orcamentoCobrancaMateriais: true,
+      orcamentoMostrarMateriais: true, orcamentoCobrancaMateriais: true, pedidoClienteDiasAlerta: true,
     },
   });
   return (
