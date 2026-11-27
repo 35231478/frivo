@@ -29,7 +29,11 @@ const ICONE: Record<AcaoItem, React.ComponentType<{ className?: string }>> = { i
 const fmt = (n: number) => n.toLocaleString("pt-BR");
 
 /** `aoConcluir`: listas carregadas no cliente recarregam por aqui (padrão: router.refresh()). */
-export function BarraAcoesMassa({ aoConcluir }: { aoConcluir?: () => void } = {}) {
+export function BarraAcoesMassa({ aoConcluir, extra }: {
+  aoConcluir?: () => void;
+  /** Uma ação própria da lista, ao lado das outras (ex.: "Informar pedido do cliente", components/pedido-cliente) */
+  extra?: React.ReactNode;
+} = {}) {
   const sel = useSelecaoMassa();
   const { permissoes, role, pode } = usePermissoes();
   const temQr = useModulos().tem("qrcodes");
@@ -119,7 +123,8 @@ export function BarraAcoesMassa({ aoConcluir }: { aoConcluir?: () => void } = {}
                   </button>
                 );
               })}
-              {!exportar && acoes.length === 0 && <span className="text-xs text-ink-muted">Seu perfil não tem ações em massa nesta lista.</span>}
+              {extra}
+              {!exportar && acoes.length === 0 && !extra && <span className="text-xs text-ink-muted">Seu perfil não tem ações em massa nesta lista.</span>}
             </div>
           </div>
         </div>

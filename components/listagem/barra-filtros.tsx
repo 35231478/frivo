@@ -20,6 +20,22 @@ export interface FiltroDef {
 }
 
 /**
+ * Um FILTRO RÁPIDO: um botão que liga/desliga um filtro de uso diário, com a contagem e o total em R$ do que ele
+ * mostra (ex.: "Aguardando pedido · 4 · R$ 12.300,00"). Some quando não há nada e ele não está ligado.
+ */
+export interface FiltroRapido {
+  param: string;
+  valor: string;
+  rotulo: string;
+  quantidade: number;
+  /** Total em R$ do que o filtro mostra (sem: só a contagem) */
+  total?: number | null;
+  /** O porquê (tooltip) */
+  dica?: string;
+}
+const reaisCurto = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" }).replace(/\s/g, " ");
+
+/**
  * A barra enxuta das telas de lista (padrão da casa, estilo Conta Azul):
  *   Vencimento                 Pesquisar no período selecionado
  *   [‹ | Novembro de 2026 ⌄ | ›]   [Pesquisar…]   [Mais filtros ⌄] [extras]
@@ -29,7 +45,7 @@ export interface FiltroDef {
  * Um filtro com valor na URL aparece sozinho (já marcado). "Limpar filtros" zera todos e a busca; o
  * período fica (é navegação, não filtro). No celular tudo empilha.
  */
-export function BarraFiltros({ periodo, busca, filtros = [], paramBusca = "q", navegar, extras, className, compacto = false }: {
+export function BarraFiltros({ periodo, busca, filtros = [], paramBusca = "q", navegar, extras, className, compacto = false, rapidos = [] }: {
   /** O seletor de período (BarraPeriodo) — opcional nas listas sem período */
   periodo?: ReactNode;
   /** O campo de busca (BuscaUrl / CampoBusca) */
@@ -44,6 +60,8 @@ export function BarraFiltros({ periodo, busca, filtros = [], paramBusca = "q", n
   className?: string;
   /** Faixa enxuta, sem o card branco: tudo numa linha e "Limpar filtros" discreto ao lado (estilo Conta Azul) */
   compacto?: boolean;
+  /** Filtros rápidos (botões liga/desliga com contagem e total), ao lado de "Mais filtros" */
+  rapidos?: FiltroRapido[];
 }) {
   const sp = useSearchParams();
   const [menu, setMenu] = useState(false);
@@ -59,7 +77,8 @@ export function BarraFiltros({ periodo, busca, filtros = [], paramBusca = "q", n
   }, [menu]);
 
   const ativo = (f: FiltroDef) => f.params.some((k) => (sp.get(k) ?? "") !== "");
-  const ativos = filtros.filter(ativo).length;
+  const rapidoLigado = (f: FiltroRapido) => sp.get(f.param) === f.valor;
+  const ativos = filtros.filter(ativo).length + rapidos.filter(rapidoLigado).length;
   const temBusca = (sp.get(paramBusca) ?? "") !== "";
   // Visíveis: os com valor na URL + os escolhidos no menu (na ordem do menu)
   const visiveis = filtros.filter((f) => ativo(f) || escolhidos.includes(f.id));
@@ -73,7 +92,7 @@ export function BarraFiltros({ periodo, busca, filtros = [], paramBusca = "q", n
   };
   const limpar = () => {
     setEscolhidos([]);
-    navegar(Object.fromEntries([...filtros.flatMap((f) => f.params), paramBusca].map((k) => [k, null])));
+    navegar(Object.fromEntries([...filtros.flatMap((f) => f.params), ...rapidos.map((f) => f.param), paramBusca].map((k) => [k, null])));
   };
 
   const botaoLimpar = (
@@ -98,6 +117,19 @@ export function BarraFiltros({ periodo, busca, filtros = [], paramBusca = "q", n
           </label>
         ) : <div className="flex-1 min-w-0" />}
         <div className="flex items-center gap-2 flex-wrap">
+          {rapidos.filter((f) => f.quantidade > 0 || rapidoLigado(f)).map((f) => {
+            const ligado = rapidoLigado(f);
+            return (
+              <button key={f.param} type="button" aria-pressed={ligado} title={f.dica} data-filtro-rapido={f.param} data-ligado={ligado || undefined}
+                onClick={() => navegar({ [f.param]: ligado ? null : f.valor, pagina: null })}
+                className={cn("inline-flex items-center gap-1.5 h-9 px-3 rounded-lg text-sm font-semibold border transition-colors tabular-nums",
+                  ligado ? "bg-atencao-claro border-atencao/40 text-atencao-texto" : "bg-white border-surface-border text-ink hover:bg-surface-alt")}>
+                {f.rotulo}
+                <span className="font-bold" data-filtro-rapido-qtd>{f.quantidade}</span>
+                {f.total != null && <span className="font-normal text-ink-muted" data-filtro-rapido-total>· {reaisCurto(f.total)}</span>}
+              </button>
+            );
+          })}
           {filtros.length > 0 && (
             <div ref={ref} className="relative">
               <button
