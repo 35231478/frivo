@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { PerfilClient } from "@/components/perfil/perfil-client";
+import { pushLigado } from "@/lib/push/config";
 
 export const metadata: Metadata = { title: "Meu perfil" };
 
@@ -27,6 +28,7 @@ export default async function PerfilPage() {
         perfilNome: (u as any).perfilNome ?? null,
         cargo: ROLE_LABELS[u.role] ?? u.role,
       }}
+      notificacoes={pushLigado()}
     />
   );
 }

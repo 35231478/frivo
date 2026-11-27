@@ -10,6 +10,7 @@ import { PerfilClient } from "@/components/perfil/perfil-client";
 import { rotuloSync } from "@/components/tecnico/indicador-sync";
 import { irPara, useTecnico } from "@/components/tecnico/contexto";
 import { PreferenciaRota } from "@/components/tecnico/rota";
+import { NotificacoesAparelho } from "@/components/push/notificacoes-aparelho";
 import type { OperacaoFila } from "@/lib/tecnico/offline/tipos";
 import { horaBR } from "@/lib/fuso";
 
@@ -97,6 +98,9 @@ export function PerfilTecnico({ perfilInicial }: { perfilInicial: React.Componen
           </div>
         )}
       </section>
+
+      {/* Notificações com o app fechado (leva push; o bloco mora em components/push) */}
+      <NotificacoesAparelho modo="app" />
 
       {config.lancarDespesas && (
         <button type="button" onClick={() => irPara({ ver: "despesas" })} data-minhas-despesas

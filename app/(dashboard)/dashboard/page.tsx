@@ -79,7 +79,8 @@ export default async function DashboardPage() {
         <div>
           <h1 className="page-title">{primeiroNome ? `${saudacao}, ${primeiroNome}` : "Dashboard"}</h1>
           <p className="page-subtitle first-letter:uppercase">
-            {DIAS[semana]}, {dia} de {MESES[mes]} · {user.empresaNome}
+            {/* O nome vem da sessão (nome fantasia no login): empresa nova ainda sem ele não deixa o "·" pendurado */}
+            {DIAS[semana]}, {dia} de {MESES[mes]}{user.empresaNome ? ` · ${user.empresaNome}` : ""}
           </p>
         </div>
         {todos.length > 0 && (

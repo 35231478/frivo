@@ -35,7 +35,10 @@ export interface OsCentralEntrada {
     /** Conta PARCELADA traz as parcelas: a situação é a delas */
     contasReceber?: { status: string; dataVencimento: Date | string | null; valor?: unknown; parcelas?: { status: string; dataVencimento: Date | string | null }[] }[];
   }[];
-  itensOrcamento: { valorTotal: unknown }[];
+  /** `executado` ausente = desconhecido (o "que falta" não muda); false em todos = nada a faturar ainda */
+  itensOrcamento: { valorTotal: unknown; executado?: boolean }[];
+  /** OS de contrato fatura pela medição do contrato; a avulsa, pelo "Faturar" da própria OS */
+  contratoId?: string | null;
   orcamentos: { orcamentoId?: string; orcamento: { status: string; totalGeral: unknown } }[];
   /** Orçamento que GEROU a OS: os itens dele já estão em itensOrcamento (não somar o total de novo) */
   orcamentoOrigemId?: string | null;
@@ -54,6 +57,20 @@ export const ROTULO_PAGAMENTO: Record<SituacaoPagamento, string> = {
 };
 
 export interface Pendencia { chave: string; texto: string; aba: string; nivel: "alerta" | "acao" }
+
+/**
+ * O passo de faturar da OS concluída, no vocabulário de cada caso: a de contrato entra numa medição;
+ * a avulsa tem "Faturar" — e, se nenhum item foi marcado como executado (nem há adicional "Cobrar"),
+ * não há o que faturar ainda: o passo leva à aba Comercial, onde os itens são marcados.
+ */
+export function pendenciaFaturar(os: Pick<OsCentralEntrada, "contratoId" | "itensOrcamento" | "servicosAdicionais">): Pendencia {
+  if (os.contratoId) return { chave: "faturar", texto: "Gerar a medição para faturar a OS", aba: "financeiro", nivel: "acao" };
+  const itens = os.itensOrcamento;
+  const nadaExecutado = itens.length > 0 && itens.every((i) => i.executado === false)
+    && !(os.servicosAdicionais ?? []).some((a) => a.statusCobranca === "COBRAR");
+  if (nadaExecutado) return { chave: "faturar", texto: "Marcar os itens executados para faturar a OS", aba: "comercial", nivel: "acao" };
+  return { chave: "faturar", texto: "Faturar a OS", aba: "financeiro", nivel: "acao" };
+}
 
 const num = (v: unknown) => Number(v ?? 0) || 0;
 
@@ -139,7 +156,7 @@ export function centralDaOs(os: OsCentralEntrada, agora: Date = new Date()) {
       chave: "devolucao-material", aba: "materiais", nivel: os.exigirPrestacaoMaterial ? "alerta" : "acao",
       texto: `Devolver a sobra de ${aDev} ${aDev > 1 ? "materiais" : "material"} ao estoque${os.exigirPrestacaoMaterial ? " — a OS não fatura sem isso" : ""}`,
     });
-    if (status.exibido === "CONCLUIDA") falta.push({ chave: "faturar", texto: "Gerar a medição para faturar a OS", aba: "financeiro", nivel: "acao" });
+    if (status.exibido === "CONCLUIDA") falta.push(pendenciaFaturar(os));
     // Aceite do cliente: fica "a fazer" enquanto a OS está concluída (ou já faturada) sem a confirmação — não trava nada
     if (estadoDoAceite(os.status, os.aceite) === "AGUARDANDO") falta.push({ chave: "aceite", texto: "Aguardando a confirmação do cliente (aceite do serviço)", aba: "resumo", nivel: "acao" });
     if (pagamento === "VENCIDO") falta.push({ chave: "cobranca-vencida", texto: "Cobrança vencida — acompanhar o recebimento", aba: "financeiro", nivel: "alerta" });

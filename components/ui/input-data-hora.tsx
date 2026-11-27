@@ -38,6 +38,17 @@ export const MSG_HORA_INVALIDA = "Informe um horário válido (hh:mm) para salva
  * que não existe, o campo fica em vermelho, NADA é entregue (não cai em 08:00 escondido nem deixa
  * valendo a hora anterior) e `onProblema` avisa o formulário, que não salva enquanto não corrigir.
  */
+/**
+ * Hora já preenchida (ex.: o 08:00 sugerido ao escolher o dia): ao entrar no campo, o texto fica
+ * selecionado e o que se digita SUBSTITUI a hora — sem isso o clique punha o cursor no fim e os
+ * dígitos se somavam ao 08:00 ("1400" virava 08:01). Depois do clique (o mouseup desfaria a seleção).
+ */
+export function selecionarAoFocar(e: React.FocusEvent<HTMLInputElement>) {
+  const el = e.currentTarget;
+  if (!el.value) return;
+  setTimeout(() => { if (document.activeElement === el) el.select(); }, 0);
+}
+
 export function InputDataHora({ value, onChange, onProblema, id, className, disabled, horaPadrao = "08:00", "aria-label": ariaLabel }: {
   /** Instante ISO (ex.: "2026-10-30T17:00:00.000Z") ou "" */
   value: string;
@@ -97,6 +108,7 @@ export function InputDataHora({ value, onChange, onProblema, id, className, disa
         <input
           type="text" inputMode="numeric" autoComplete="off" placeholder="hh:mm" disabled={disabled}
           aria-label={ariaLabel ? `${ariaLabel} — hora` : "Hora"} aria-invalid={horaInvalida || undefined} data-input-hora
+          onFocus={selecionarAoFocar}
           value={hora}
           onChange={(e) => { const h = mascararHora(e.target.value); setHora(h); setSaiu(false); emitir(dia, h); }}
           onBlur={() => {

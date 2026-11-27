@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Clock } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { completarHora, horaValida, mascararHora } from "@/components/ui/input-data-hora";
+import { completarHora, horaValida, mascararHora, selecionarAoFocar } from "@/components/ui/input-data-hora";
 
 export { completarHora };
 
@@ -45,6 +45,7 @@ export function InputHora({ value, onChange, id, className, disabled, invalido =
       <input
         id={id} type="text" inputMode="numeric" autoComplete="off" placeholder={placeholder} disabled={disabled}
         aria-label={ariaLabel} aria-invalid={invalida || undefined} data-input-hora
+        onFocus={selecionarAoFocar}
         value={texto}
         onChange={(e) => {
           const h = mascararHora(e.target.value);
