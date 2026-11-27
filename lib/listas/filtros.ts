@@ -473,9 +473,18 @@ const STATUS_NOTA_COMPRA = ["IMPORTADA", "CONCILIADA", "LANCADA"];
  * Lista de notas de compra: a situação (Importada, Conciliada, Lançada) e a busca no número, no
  * fornecedor (nome como veio na nota), no CNPJ e na chave de acesso (só os dígitos digitados).
  */
-export function whereNotasCompra(empresaId: string, sp: SP) {
+/** A data do período da lista de notas: a emissão (padrão) ou a entrada (o lançamento no estoque, `?data=entrada`) */
+export const campoDataNota = (sp: SP) => (sp.data === "entrada" ? "lancadaEm" : "dataEmissao") as "lancadaEm" | "dataEmissao";
+
+/** O período da lista de notas (o seletor da casa): por padrão TODO o período, como a lista de OS — nota esperando conciliação não some */
+export const periodoNotas = (sp: SP, agora = new Date()) => lerPeriodo(sp, agora, { permitirTodos: true, padrao: "todos" });
+
+export function whereNotasCompra(empresaId: string, sp: SP, agora = new Date()) {
   const where: any = { empresaId };
   if (sp.status && STATUS_NOTA_COMPRA.includes(sp.status)) where.status = sp.status;
+  // Período (instantes de Brasília) pela emissão ou pela entrada; a nota não lançada não tem entrada
+  const per = periodoNotas(sp, agora);
+  if (per.gte || per.lt) where[campoDataNota(sp)] = { ...(per.gte && { gte: per.gte }), ...(per.lt && { lt: per.lt }) };
   const q = sp.q?.trim();
   if (q) {
     const c = { contains: q, mode: "insensitive" };

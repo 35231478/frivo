@@ -1,14 +1,15 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent as PointerEventReact, type ReactNode } from "react";
-import { ArrowDown, ArrowUp, ArrowUpDown, Check, RotateCcw, Settings2 } from "lucide-react";
+import { ArrowDown, ArrowUp, ArrowUpDown, Check, GripVertical, RotateCcw, Settings2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { cliqueAbreLinha, destinoDoClique, teclaAbreLinha } from "@/lib/listagem/abrir-linha";
 import { PLANILHA } from "@/lib/planilha";
 import { useLinhasSelecionadas } from "@/components/listagem/selecao-linhas";
 import {
-  ajustarPreferencia, chaveTabela, LARGURA_MIN, lerPreferenciaTabela, ocultasEfetivas, PREFERENCIA_VAZIA, type PreferenciaTabela,
+  ajustarPreferencia, chaveTabela, LARGURA_MIN, lerPreferenciaTabela, moverColuna, ocultasEfetivas, ordenarColunas, PREFERENCIA_VAZIA,
+  preferenciaVazia, type PreferenciaTabela,
 } from "@/lib/preferencias";
 
 /**
@@ -17,10 +18,12 @@ import {
  *
  * - Colunas declaradas (id, título, alinhamento, largura, mínima, obrigatória, escondida por padrão).
  * - Cabeçalho com a borda arrastável (ponteiro; respeita a mínima; duplo clique volta ao padrão).
- * - Menu "Colunas": mostrar/esconder (as obrigatórias ficam travadas) e "Restaurar padrão".
+ * - Menu "Colunas": mostrar/esconder (as obrigatórias ficam travadas), REORDENAR (arrastar a alça com o
+ *   mouse ou o dedo, ou as setas ↑ ↓ do teclado na alça) e "Restaurar padrão" (larguras, colunas e ordem).
+ *   As colunas fixas (checkbox, ações) não se movem.
  * - Estilo PLANILHA único (lib/planilha): 13px em tudo, cabeçalho 10px maiúsculo, R$ à direita com
  *   números tabulares, código com a mesma fonte em todas as telas, nome só em peso.
- * - Preferência POR USUÁRIO (larguras + colunas) pela rota /api/preferencias/tabela:<tela>, com o
+ * - Preferência POR USUÁRIO (larguras + colunas + ordem) pela rota /api/preferencias/tabela:<tela>, com o
  *   localStorage como reserva enquanto carrega ou se a API falhar.
  * - No celular não há tabela: a tela passa os seus cartões em `cartoes`.
  *
@@ -69,6 +72,11 @@ export interface LinhaPro {
   titulos?: Record<string, string | undefined>;
   /** O registro que a linha inteira abre (sem ele a linha é só leitura; quem não tem permissão não recebe) */
   href?: string;
+  /**
+   * O que abrir a linha faz nesta aba, no lugar de ir ao `href` (ex.: a visualização rápida numa gaveta).
+   * Ctrl/⌘ + clique e o botão do meio continuam abrindo o `href` em nova aba.
+   */
+  aoAbrir?: () => void;
 }
 
 export interface OrdenacaoPro { ativa: string | null; dir: "asc" | "desc"; onOrdenar: (k: string) => void }
@@ -144,7 +152,7 @@ export function usePreferenciaTabela(tela: string, colunas: ColunaPro[]) {
 
   return { pref, gravar };
 }
-const preferenciaVaziaLocal = (p: PreferenciaTabela) => Object.keys(p.larguras).length === 0 && p.ocultas === undefined;
+const preferenciaVaziaLocal = preferenciaVazia;
 
 /**
  * O roteador do App Router, ou nada fora dele (testes de componente montam a tabela sem o Next em
@@ -179,8 +187,11 @@ export function TabelaPro({ tela, colunas, linhas, ordenacao, cartoes, barra, qu
     return () => { document.removeEventListener("mousedown", onDoc); document.removeEventListener("keydown", onKey); };
   }, [menu]);
 
+  // A ordem do usuário (as fixas não se movem); durante o arraste no menu, a ordem prevista
+  const [arrasteColuna, setArrasteColuna] = useState<{ id: string; ordem: string[] } | null>(null);
+  const ordenadas = useMemo(() => ordenarColunas(colunas, arrasteColuna?.ordem ?? pref.ordem), [colunas, pref.ordem, arrasteColuna]);
   const ocultas = useMemo(() => ocultasEfetivas(pref, colunas), [pref, colunas]);
-  const visiveis = useMemo(() => colunas.filter((c) => c.fixa || !ocultas.has(c.id)), [colunas, ocultas]);
+  const visiveis = useMemo(() => ordenadas.filter((c) => c.fixa || !ocultas.has(c.id)), [ordenadas, ocultas]);
   const largura = (c: ColunaPro): number | undefined => {
     if (arrastando?.id === c.id) return arrastando.px;
     return pref.larguras[c.id] ?? c.largura;
@@ -217,9 +228,68 @@ export function TabelaPro({ tela, colunas, linhas, ordenacao, cartoes, barra, qu
     if (prox.has(c.id)) prox.delete(c.id); else prox.add(c.id);
     gravar({ ...pref, ocultas: colunas.filter((x) => prox.has(x.id)).map((x) => x.id) });
   };
-  const restaurar = () => { gravar(PREFERENCIA_VAZIA); setMenu(false); };
-  const personalizada = Object.keys(pref.larguras).length > 0 || pref.ocultas !== undefined;
-  const noMenu = colunas.filter((c) => !c.fixa);
+  const restaurar = () => { gravar(PREFERENCIA_VAZIA); setMenu(false); setAviso("Colunas restauradas ao padrão."); };
+  const personalizada = !preferenciaVazia(pref);
+  const noMenu = ordenadas.filter((c) => !c.fixa);
+
+  // ── Reordenar no menu: teclado (setas na alça) e arrastar (mouse ou dedo) ──
+  const [aviso, setAviso] = useState("");
+  const itensMenu = useRef(new Map<string, HTMLElement>());
+  const focarAlca = useRef<string | null>(null);
+  useEffect(() => {
+    if (!focarAlca.current) return;
+    (itensMenu.current.get(focarAlca.current)?.querySelector("[data-mover-coluna]") as HTMLElement | null)?.focus();
+    focarAlca.current = null;
+  });
+  const reordenar = (id: string, para: number) => {
+    const ids = noMenu.map((c) => c.id);
+    const ordem = moverColuna(ids, id, para);
+    if (ordem === ids) return;
+    focarAlca.current = id;
+    gravar({ ...pref, ordem });
+    const c = colunas.find((x) => x.id === id);
+    setAviso(`${c?.titulo ?? id}: posição ${ordem.indexOf(id) + 1} de ${ordem.length}.`);
+  };
+  const teclaAlca = (c: ColunaPro) => (e: React.KeyboardEvent<HTMLButtonElement>) => {
+    const i = noMenu.findIndex((x) => x.id === c.id);
+    const alvo = e.key === "ArrowUp" ? i - 1 : e.key === "ArrowDown" ? i + 1 : e.key === "Home" ? 0 : e.key === "End" ? noMenu.length - 1 : null;
+    if (alvo === null) return;
+    e.preventDefault();
+    reordenar(c.id, alvo);
+  };
+  /** Onde o ponteiro está na lista do menu: o índice do item sob ele (pelo meio de cada um) */
+  const indiceSob = (y: number, ids: string[]) => {
+    let i = 0;
+    for (const id of ids) {
+      const r = itensMenu.current.get(id)?.getBoundingClientRect();
+      if (r && y > r.top + r.height / 2) i++;
+    }
+    return i;
+  };
+  const arrastarAlca = (c: ColunaPro) => (e: PointerEventReact<HTMLButtonElement>) => {
+    if (e.pointerType === "mouse" && e.button !== 0) return;
+    e.preventDefault();
+    const alvo = e.currentTarget;
+    alvo.setPointerCapture?.(e.pointerId);
+    const inicial = noMenu.map((x) => x.id);
+    let ordem = inicial;
+    setArrasteColuna({ id: c.id, ordem });
+    const mover = (ev: PointerEvent) => {
+      const semEle = inicial.filter((x) => x !== c.id);
+      const para = indiceSob(ev.clientY, semEle);
+      ordem = moverColuna(inicial, c.id, para);
+      setArrasteColuna({ id: c.id, ordem });
+    };
+    const soltar = () => {
+      alvo.removeEventListener("pointermove", mover); alvo.removeEventListener("pointerup", soltar); alvo.removeEventListener("pointercancel", soltar);
+      setArrasteColuna(null);
+      if (ordem.some((id, i) => id !== inicial[i])) {
+        gravar({ ...pref, ordem });
+        setAviso(`${c.titulo}: posição ${ordem.indexOf(c.id) + 1} de ${ordem.length}.`);
+      }
+    };
+    alvo.addEventListener("pointermove", mover); alvo.addEventListener("pointerup", soltar); alvo.addEventListener("pointercancel", soltar);
+  };
 
   const esconder = quebra === "sm" ? "sm:hidden" : "md:hidden";
   const mostrar = quebra === "sm" ? "hidden sm:block" : "hidden md:block";
@@ -246,19 +316,31 @@ export function TabelaPro({ tela, colunas, linhas, ordenacao, cartoes, barra, qu
                   const visivel = !ocultas.has(c.id);
                   const travada = !!c.obrigatoria;
                   return (
-                    <button
-                      key={c.id} type="button" role="menuitemcheckbox" aria-checked={visivel} disabled={travada}
-                      onClick={() => alternar(c)} data-coluna-opcao={c.id}
-                      className={cn("w-full flex items-center justify-between gap-2 px-3 py-2 text-sm text-left hover:bg-surface-alt disabled:cursor-default disabled:hover:bg-transparent",
-                        visivel ? "text-ink" : "text-ink-muted")}
-                      title={travada ? "Esta coluna não pode ser escondida" : undefined}
-                    >
-                      <span className="truncate">{c.titulo}</span>
-                      <span className={cn("w-4 h-4 rounded border flex items-center justify-center shrink-0",
-                        visivel ? "bg-primary-500 border-primary-500 text-white" : "border-surface-border bg-white", travada && "opacity-50")} aria-hidden>
-                        {visivel && <Check className="w-3 h-3" />}
-                      </span>
-                    </button>
+                    <div key={c.id} role="none" data-item-coluna={c.id}
+                      ref={(el) => { if (el) itensMenu.current.set(c.id, el); else itensMenu.current.delete(c.id); }}
+                      className={cn("flex items-center", arrasteColuna?.id === c.id && "bg-primary-50 ring-1 ring-primary-200")}>
+                      <button
+                        type="button" role="menuitem" data-mover-coluna={c.id} aria-label={`Mover a coluna ${c.titulo}`}
+                        title="Arraste para mudar a ordem (no teclado: setas ↑ ↓)"
+                        onKeyDown={teclaAlca(c)} onPointerDown={arrastarAlca(c)}
+                        className="pl-2 pr-1 py-2 text-ink-subtle hover:text-ink cursor-grab active:cursor-grabbing touch-none select-none rounded focus-visible:outline-2 focus-visible:outline-primary-500"
+                      >
+                        <GripVertical className="w-3.5 h-3.5" aria-hidden />
+                      </button>
+                      <button
+                        type="button" role="menuitemcheckbox" aria-checked={visivel} disabled={travada}
+                        onClick={() => alternar(c)} data-coluna-opcao={c.id}
+                        className={cn("flex-1 min-w-0 flex items-center justify-between gap-2 pl-1 pr-3 py-2 text-sm text-left hover:bg-surface-alt disabled:cursor-default disabled:hover:bg-transparent",
+                          visivel ? "text-ink" : "text-ink-muted")}
+                        title={travada ? "Esta coluna não pode ser escondida" : undefined}
+                      >
+                        <span className="truncate">{c.titulo}</span>
+                        <span className={cn("w-4 h-4 rounded border flex items-center justify-center shrink-0",
+                          visivel ? "bg-primary-500 border-primary-500 text-white" : "border-surface-border bg-white", travada && "opacity-50")} aria-hidden>
+                          {visivel && <Check className="w-3 h-3" />}
+                        </span>
+                      </button>
+                    </div>
                   );
                 })}
                 <div className="border-t border-surface-border mt-1 pt-1">
@@ -269,6 +351,8 @@ export function TabelaPro({ tela, colunas, linhas, ordenacao, cartoes, barra, qu
                 </div>
               </div>
             )}
+            {/* O que mudou na ordem, para o leitor de tela */}
+            <span className="sr-only" aria-live="polite" data-aviso-colunas>{aviso}</span>
           </div>
         </div>
         <div className="overflow-x-auto">
@@ -323,6 +407,7 @@ export function TabelaPro({ tela, colunas, linhas, ordenacao, cartoes, barra, qu
                   onClick={l.href ? (e) => {
                     const destino = destinoDoClique(e);
                     if (destino === "nenhum" || !cliqueAbreLinha(e.target as Element, e.currentTarget, window.getSelection()?.toString())) return;
+                    if (destino === "mesma-aba" && l.aoAbrir) { l.aoAbrir(); return; }
                     abrirRegistro(l.href!, destino, roteador);
                   } : undefined}
                   onAuxClick={l.href ? (e) => {
@@ -333,7 +418,9 @@ export function TabelaPro({ tela, colunas, linhas, ordenacao, cartoes, barra, qu
                   onKeyDown={l.href ? (e) => {
                     if (!teclaAbreLinha(e)) return;
                     e.preventDefault();
-                    abrirRegistro(l.href!, e.ctrlKey || e.metaKey ? "nova-aba" : "mesma-aba", roteador);
+                    const novaAba = e.ctrlKey || e.metaKey;
+                    if (!novaAba && l.aoAbrir) { l.aoAbrir(); return; }
+                    abrirRegistro(l.href!, novaAba ? "nova-aba" : "mesma-aba", roteador);
                   } : undefined}
                   {...l.atributos}>
                   {visiveis.map((c) => (
