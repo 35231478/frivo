@@ -10,7 +10,7 @@ import {
   CadastroRapidoModal, usePodeCriar, type CampoRapido, type EntidadeCadastro, type PermissaoCriar,
 } from "@/components/ui/select-cadastro-rapido";
 import { round2, totalDoItem, totalDoUnitario, unitarioDoTotal } from "@/lib/orcamentos/calculo";
-import { valorDaLinha, type MaterialOrcamento } from "@/lib/orcamentos/materiais";
+import { valorDaLinha, type CobrancaMateriais, type MaterialOrcamento } from "@/lib/orcamentos/materiais";
 
 export interface ItemTabela {
   id: string;            // uuid local
@@ -29,7 +29,8 @@ export interface ItemTabela {
   /** E3.3: o total digitado na mão vale (não segue base + ajuste) */
   valorManual?: boolean;
   /** E3.3 (produto): peça derivada de um material de serviço — linha só de leitura, recomposta das linhas de serviço */
-  derivada?: { deServico: string };
+  /** Linha derivada dos materiais de um serviço (só leitura). `material`: é um Material cobrado à parte ("Orçamento E2") */
+  derivada?: { deServico: string; material?: boolean };
   /** Só na peça derivada: o custo copiado no material (vem só para quem tem "Ver custo e margem"; não é gravado) */
   custoUnit?: number | null;
 }
@@ -89,6 +90,8 @@ interface ItensTabelaProps {
   infoLinha?: (it: ItemTabela, totalDaLinha: number) => React.ReactNode;
   /** E3.3: avisa quem adicionou um item do catálogo (para materializar a composição do serviço) */
   onAdicionadoDoCatalogo?: (it: ItemTabela, c: CatalogoItem) => void;
+  /** "Orçamento E2": regra de cobrança dos materiais do orçamento (o total da linha de serviço depende dela) */
+  regraMateriais?: CobrancaMateriais | null;
 }
 
 function novoId() {
@@ -199,7 +202,7 @@ function ObservacaoItem({ valor, onChange, descricao }: { valor: string; onChang
 const COLUNAS = "grid grid-cols-3 sm:grid-cols-[minmax(0,1fr)_4.5rem_7.25rem_7.25rem_2rem] gap-x-2 sm:gap-x-3";
 const rotuloCelular = "block sm:sr-only text-[11px] font-semibold uppercase tracking-wider text-ink-muted mb-0.5";
 
-export function ItensTabela({ titulo, dica, labelAdicionar, catalogo, itens, onChange, tabela, cadastro, totalEditavel = false, extraLinha, infoLinha, onAdicionadoDoCatalogo }: ItensTabelaProps) {
+export function ItensTabela({ titulo, dica, labelAdicionar, catalogo, itens, onChange, tabela, cadastro, totalEditavel = false, extraLinha, infoLinha, onAdicionadoDoCatalogo, regraMateriais }: ItensTabelaProps) {
   function atualizar(id: string, patch: Partial<ItemTabela>) {
     onChange(itens.map((it) => (it.id === id ? { ...it, ...patch } : it)));
   }
@@ -255,7 +258,7 @@ export function ItensTabela({ titulo, dica, labelAdicionar, catalogo, itens, onC
   }
 
   // Mesmo cálculo do servidor (lib/orcamentos/calculo.ts; com materiais, lib/orcamentos/materiais.ts)
-  const totalLinha = (it: ItemTabela) => (comMateriais(it) ? valorDaLinha(it).valorTotal : totalEditavel ? totalDoItem(it) : totalDoUnitario(it.quantidade, it.valorUnitario));
+  const totalLinha = (it: ItemTabela) => (comMateriais(it) ? valorDaLinha(it, regraMateriais).valorTotal : totalEditavel ? totalDoItem(it) : totalDoUnitario(it.quantidade, it.valorUnitario));
   const subtotal = round2(itens.reduce((acc, it) => acc + totalLinha(it), 0));
 
   return (
@@ -302,8 +305,8 @@ export function ItensTabela({ titulo, dica, labelAdicionar, catalogo, itens, onC
                     className="basis-full sm:basis-auto flex-1 min-w-0 w-full bg-transparent text-ink font-medium sm:font-normal focus:outline-none focus:bg-primary-50/30 rounded px-1 py-1 sm:py-0.5"
                   />
                   {derivada && (
-                    <span className="inline-flex items-center shrink-0 whitespace-nowrap text-[10px] leading-none font-semibold px-1.5 py-1 rounded bg-acento-claro text-acento" title={`Peça dos materiais do serviço “${it.derivada!.deServico}”: edite lá`} data-peca-de={it.derivada!.deServico}>
-                      Peça · {it.derivada!.deServico}
+                    <span className="inline-flex items-center shrink-0 whitespace-nowrap text-[10px] leading-none font-semibold px-1.5 py-1 rounded bg-acento-claro text-acento" title={`${it.derivada!.material ? "Material" : "Peça"} dos materiais do serviço “${it.derivada!.deServico}”: edite lá`} data-peca-de={it.derivada!.deServico} data-derivada-uso={it.derivada!.material ? "MATERIAL" : "PECA"}>
+                      {it.derivada!.material ? "Material" : "Peça"} · {it.derivada!.deServico}
                     </span>
                   )}
                   {comMateriais(it) && it.valorManual && (

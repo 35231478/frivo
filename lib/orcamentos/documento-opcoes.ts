@@ -49,12 +49,15 @@ const round = (v: number, casas: number) => { const f = 10 ** casas; return Math
 /**
  * Os materiais de UM serviço no documento: só com "Mostrar materiais" ligado; só os MATERIAIS (incluso no serviço),
  * com quantidade e descrição, na ordem do orçamento. Peça não entra aqui (é linha própria, com valor).
+ * "Orçamento E2": com a regra "Cobrado à parte" o Material também é linha própria, com valor — então a lista dentro
+ * do serviço fica vazia (não repete o que já está nos produtos).
  */
 export function materiaisNoDocumento(
   materiais: readonly MaterialOrcamentoEntrada[] | null | undefined,
   opcoes: OpcoesDocumentoOrcamento,
+  regra?: string | null,
 ): MaterialDocumento[] {
-  if (!opcoes.mostrarMateriais) return [];
+  if (!opcoes.mostrarMateriais || regra === "A_PARTE") return [];
   return [...(materiais ?? [])]
     .filter((m) => m.comportamento === "INCLUSO_NO_SERVICO" && num(m.quantidade) > 0 && !!m.descricao?.trim())
     .sort((a, b) => (a.ordem ?? 0) - (b.ordem ?? 0))

@@ -4,7 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { osDaEmpresa } from "@/lib/os-server";
 import { respostaRefEmpresa } from "@/lib/ref-empresa";
 import { itemOsSchema } from "@/lib/validations";
-import { criarItemOs, fixarCustosDosMateriaisOs, INCLUIR_ITEM_OS, prepararItemOsConferido } from "@/lib/os/materiais-server";
+import { criarItemOs, fixarCustosDosMateriaisOs, INCLUIR_ITEM_OS, prepararItemOsConferido, regraDaOs } from "@/lib/os/materiais-server";
 import { usuarioVeCustoDeCompra } from "@/lib/estoque/custo-acesso";
 import { semCustoNosItensOs } from "@/lib/os/custo";
 import { travaDasLinhasDaOs } from "@/lib/os/trava-edicao-server";
@@ -33,7 +33,9 @@ export async function POST(req: NextRequest, { params }: Params) {
   // Custo na OS: o custo dos materiais é decidido aqui (último custo de compra), nunca o que veio do navegador
   await fixarCustosDosMateriaisOs(empresaId, null, parsed.data.materiais);
   let prep;
-  try { prep = await prepararItemOsConferido(empresaId, parsed.data); } catch (e) { const r = respostaRefEmpresa(e); if (r) return r; throw e; }
+  // "Orçamento E2": a regra de cobrança dos materiais da OS (fixada aqui se ainda não tinha e o item tem materiais)
+  const regra = await regraDaOs(id, empresaId, !!parsed.data.materiais?.length);
+  try { prep = await prepararItemOsConferido(empresaId, parsed.data, regra); } catch (e) { const r = respostaRefEmpresa(e); if (r) return r; throw e; }
   const criado = await prisma.$transaction(async (tx) => {
     const item = await criarItemOs(tx, id, prep);
     await tx.osHistorico.create({

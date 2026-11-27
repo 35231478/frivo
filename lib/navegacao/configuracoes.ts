@@ -63,7 +63,7 @@ export const SECOES_CONFIGURACOES: SecaoConfig[] = [
       {
         titulo: "Comercial",
         itens: [
-          { id: "orcamento", href: "/configuracoes/orcamento", icone: FileSignature, label: "Orçamentos e propostas", dica: "Validade, garantias, não incluso e normas do orçamento novo" },
+          { id: "orcamento", href: "/configuracoes/orcamento", icone: FileSignature, label: "Orçamentos e propostas", dica: "Validade, garantias, materiais, não incluso e normas do orçamento novo" },
         ],
       },
       {

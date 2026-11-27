@@ -9,7 +9,7 @@ import { LABEL_COMPORTAMENTO } from "@/lib/estoque/categoria";
 import type { ItemCadastro } from "@/lib/cadastros/opcoes";
 import { formatarQtd } from "@/lib/estoque/regras";
 import {
-  ajusteDosMateriais, diferencaDoMaterial, ehPeca, LABEL_ORIGEM, resumoMateriais, trocarUso, valorDaLinha, type MaterialOrcamento,
+  ajusteDosMateriais, cobradoAParte, diferencaDoMaterial, ehPeca, LABEL_ORIGEM, resumoMateriais, trocarUso, valorDaLinha, type CobrancaMateriais, type MaterialOrcamento,
 } from "@/lib/orcamentos/materiais";
 import { CampoNumero } from "@/components/orcamento/itens-tabela";
 import { Disponivel } from "@/components/orcamento/estoque-margem";
@@ -41,8 +41,10 @@ export interface LinhaComMateriais {
  * no ⓘ ao lado de "Materiais e peças" (economiza a linha em cada serviço do orçamento).
  */
 const DICA_MATERIAIS = "Só para a equipe. Cópia da composição do serviço feita na hora de orçar (mudar o cadastro depois não altera este orçamento). MATERIAL vai dentro do serviço: o cliente vê a lista, sem valor, e o serviço se ajusta pela diferença do padrão ((quantidade − padrão) × venda: exceder soma, usar menos abate, avulso entra inteiro). PEÇA vai em linha própria, com valor, cobrada à parte. Material ou Peça se troca aqui, só neste orçamento (ex.: gás cobrado por kg). O custo é só interno (margem); não entra no preço. Sem baixa de estoque aqui.";
+// "Orçamento E2": a mesma ajuda para a empresa que cobra os materiais à parte
+const DICA_MATERIAIS_A_PARTE = "Só para a equipe. Cópia da composição do serviço feita na hora de orçar (mudar o cadastro depois não altera este orçamento). Esta empresa cobra os materiais à parte: MATERIAL e PEÇA vão em linha própria, com valor, e o serviço fica na base. Material ou Peça se troca aqui, só neste orçamento. O custo é só interno (margem); não entra no preço. Sem baixa de estoque aqui.";
 
-export function MateriaisLinha({ item, clienteId, catalogoProdutos, onChange, somenteLeitura = false, buscarAvulso, verCusto = true, situacao }: {
+export function MateriaisLinha({ item, clienteId, catalogoProdutos, onChange, somenteLeitura = false, buscarAvulso, verCusto = true, situacao, regra }: {
   item: LinhaComMateriais;
   clienteId: string | null;
   catalogoProdutos: ItemCadastro[];
@@ -55,13 +57,15 @@ export function MateriaisLinha({ item, clienteId, catalogoProdutos, onChange, so
   verCusto?: boolean;
   /** Disponível em estoque por produto (só com o módulo Estoque ligado) */
   situacao?: Record<string, SituacaoProduto>;
+  /** "Orçamento E2": regra de cobrança dos materiais (A_PARTE: o Material também vai em linha própria, com valor) */
+  regra?: CobrancaMateriais | null;
 }) {
   const [aberto, setAberto] = useState(true);
   const [carregando, setCarregando] = useState(false);
   const [erro, setErro] = useState("");
   const ms = item.materiais ?? [];
-  const v = valorDaLinha(item);
-  const r = resumoMateriais(ms);
+  const v = valorDaLinha(item, regra);
+  const r = resumoMateriais(ms, regra);
 
   const mudar = (id: string, patch: Partial<MaterialOrcamento>) => onChange({ materiais: ms.map((m) => (m.id === id ? { ...m, ...patch } : m)) });
   const tirar = (m: MaterialOrcamento) => {
@@ -86,11 +90,11 @@ export function MateriaisLinha({ item, clienteId, catalogoProdutos, onChange, so
           <button type="button" onClick={() => setAberto((a) => !a)} className="inline-flex items-center gap-1.5 text-xs font-semibold text-ink text-left" aria-expanded={aberto} data-abrir-materiais>
             <Boxes className="w-3.5 h-3.5 text-ink-muted" aria-hidden /> Materiais e peças ({ms.length})
           </button>
-          <Dica rotulo="Materiais e peças" texto={DICA_MATERIAIS} />
+          <Dica rotulo="Materiais e peças" texto={regra === "A_PARTE" ? DICA_MATERIAIS_A_PARTE : DICA_MATERIAIS} />
         </span>
         <span className="text-[11px] text-ink-muted tabular-nums">
           Ajuste no serviço: <strong className={cn(r.ajuste > 0 && "text-ink", r.ajuste < 0 && "text-ok-texto")} data-ajuste={r.ajuste}>{sinal(r.ajuste)}</strong>
-          {r.quantasPecas > 0 && <> · Peças à parte: <strong data-pecas={r.pecas}>{formatarMoeda(r.pecas)}</strong></>}
+          {r.quantasPecas > 0 && <> · {regra === "A_PARTE" ? "À parte" : "Peças à parte"}: <strong data-pecas={r.pecas}>{formatarMoeda(r.pecas)}</strong></>}
         </span>
       </div>
       {aberto && (
@@ -101,7 +105,9 @@ export function MateriaisLinha({ item, clienteId, catalogoProdutos, onChange, so
             {ms.map((m) => {
               const peca = ehPeca(m);
               const naoUsado = m.quantidade <= 0 && m.quantidadePadrao > 0;
-              const dif = diferencaDoMaterial(m);
+              const dif = diferencaDoMaterial(m, regra);
+              // Vai em linha própria (com valor): a Peça sempre; o Material quando a empresa cobra à parte
+              const aParte = cobradoAParte(m, regra);
               return (
                 <div key={m.id} className={cn("grid grid-cols-2 sm:grid-cols-[minmax(0,1.4fr)_auto_5rem_5rem_6.5rem_6.5rem_2rem] gap-x-2 gap-y-1 items-center rounded-md bg-white border border-surface-border px-2 py-1.5 text-xs", naoUsado && "opacity-70")}
                   data-material={m.produtoId ?? ""} data-comportamento-material={m.comportamento} data-nao-usado={naoUsado ? "true" : undefined}>
@@ -133,9 +139,9 @@ export function MateriaisLinha({ item, clienteId, catalogoProdutos, onChange, so
                     <CampoNumero valor={m.valorVendaUnit} casas={2} onValor={(p) => mudar(m.id!, { valorVendaUnit: Math.max(0, p) })} aria-label={`Valor de venda de ${m.descricao}`} data-venda-material className="!bg-white !border-surface-border !py-0.5 text-xs" disabled={somenteLeitura} />
                   </label>
                   <div className="text-right">
-                    <span className="block text-[10px] text-ink-subtle">{peca ? "À parte" : "No serviço"}</span>
-                    <span className={cn("tabular-nums font-semibold", !peca && dif < 0 && "text-ok-texto")} data-diferenca={peca ? undefined : dif}>
-                      {peca ? formatarMoeda(m.quantidade * m.valorVendaUnit) : sinal(dif)}
+                    <span className="block text-[10px] text-ink-subtle">{aParte ? "À parte" : "No serviço"}</span>
+                    <span className={cn("tabular-nums font-semibold", !aParte && dif < 0 && "text-ok-texto")} data-diferenca={aParte ? undefined : dif} data-a-parte={aParte ? "true" : undefined}>
+                      {aParte ? formatarMoeda(m.quantidade * m.valorVendaUnit) : sinal(dif)}
                     </span>
                     {verCusto && (
                       <span className="block text-[10px] text-ink-subtle" data-custo-material>
@@ -165,7 +171,7 @@ export function MateriaisLinha({ item, clienteId, catalogoProdutos, onChange, so
 
           <div className="rounded-md bg-white border border-surface-border px-3 py-2 text-xs space-y-1" data-resumo-materiais>
             <div className="flex flex-wrap justify-between gap-x-4 gap-y-0.5">
-              <span className="text-ink-muted">Serviço: base {formatarMoeda(v.valorBase ?? 0)} {sinal(ajusteDosMateriais(ms)).startsWith("−") ? "−" : "+"} materiais {formatarMoeda(Math.abs(r.ajuste))}</span>
+              <span className="text-ink-muted">Serviço: base {formatarMoeda(v.valorBase ?? 0)} {sinal(ajusteDosMateriais(ms, regra)).startsWith("−") ? "−" : "+"} materiais {formatarMoeda(Math.abs(r.ajuste))}</span>
               <span className="tabular-nums">= <strong data-total-linha={v.valorTotal}>{formatarMoeda(v.valorManual ? Math.max(0, (v.valorBase ?? 0) + r.ajuste) : v.valorTotal)}</strong></span>
             </div>
             {v.valorManual && (
@@ -174,7 +180,7 @@ export function MateriaisLinha({ item, clienteId, catalogoProdutos, onChange, so
                 {!somenteLeitura && <button type="button" onClick={() => onChange({ valorManual: false, valorTotal: undefined })} className="inline-flex items-center gap-1 font-semibold text-primary-600 hover:text-primary-700" data-recalcular><RotateCcw className="w-3 h-3" /> Recalcular</button>}
               </div>
             )}
-            {r.quantasPecas > 0 && <p className="text-ink-muted"><Package className="inline w-3 h-3 mr-1" aria-hidden />{r.quantasPecas} {r.quantasPecas === 1 ? "peça vai" : "peças vão"} como linha de produto, cobrada à parte: <strong className="tabular-nums">{formatarMoeda(r.pecas)}</strong></p>}
+            {r.quantasPecas > 0 && <p className="text-ink-muted" data-resumo-a-parte={r.quantasPecas}><Package className="inline w-3 h-3 mr-1" aria-hidden />{r.quantasPecas} {regra === "A_PARTE" ? (r.quantasPecas === 1 ? "item vai" : "itens vão") : (r.quantasPecas === 1 ? "peça vai" : "peças vão")} como linha de produto, cobrada à parte: <strong className="tabular-nums">{formatarMoeda(r.pecas)}</strong></p>}
             {verCusto && <p className="flex items-center gap-1 text-ink-subtle" data-custo-interno={r.custoTotal}>
               <span>Custo interno: {formatarMoeda(r.custoTotal)}{r.semCusto > 0 ? ` · ${r.semCusto} sem custo` : ""}</span>
               <Dica rotulo="Custo interno" texto="Último custo de compra dos materiais. Só para a margem: não entra no preço nem aparece para o cliente." />
