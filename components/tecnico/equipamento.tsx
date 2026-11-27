@@ -4,8 +4,10 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { AlertTriangle, ArrowLeft, ArrowRight, Camera, Check, CheckCheck, ChevronLeft, ChevronRight, CircleSlash, ClipboardList, Ruler } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Modal } from "@/components/ui/modal";
+import { Dica } from "@/components/ui/dica";
 import { CampoFormulario } from "@/components/os/execucao-equipamento";
 import { BotaoFoto, Miniatura, ObservacaoVoz, type MarcaFoto } from "@/components/tecnico/captura";
+import { BotaoCamera, CameraSequencia, cameraAoVivoDisponivel, type PassoFoto } from "@/components/tecnico/camera-sequencia";
 import { irPara } from "@/components/tecnico/contexto";
 import { MateriaisUsados } from "@/components/tecnico/materiais";
 import { SeloGarantia } from "@/components/tecnico/garantia";
@@ -92,9 +94,46 @@ export function TelaEquipamento({ x, e, registrar, endereco, qr }: Props) {
 
   /** Operação deste equipamento (a forma de cada tipo é conferida pelo servidor e pelo estado local). */
   const op = (o: { tipo: NovaOperacao["tipo"] } & Record<string, unknown>) => ({ ...o, atividadeId, equipamentoId }) as NovaOperacao;
-  const responder = (itemId: string, dados: Record<string, unknown>) => registrar([op({ tipo: "resposta", itemId, dados })]);
+  // A última gravação de resposta: "Concluir" espera por ela (o número digitado grava ao sair do campo)
+  const gravacao = useRef<Promise<unknown>>(Promise.resolve());
+  const ultimaResposta = useRef<{ itemId: string; valor: unknown } | null>(null);
+  const ultimo = useRef(e);
+  ultimo.current = e;
+  const responder = (itemId: string, dados: Record<string, unknown>) => {
+    const p = registrar([op({ tipo: "resposta", itemId, dados })]);
+    gravacao.current = p;
+    ultimaResposta.current = "valor" in dados ? { itemId, valor: dados.valor ?? null } : null;
+    return p;
+  };
   const foto = (dataUrl: string, extra: { itemId?: string | null; momento?: "ANTES" | "DEPOIS" | null }) =>
     registrar([op({ tipo: "foto", dados: { dataUrl, clientId: novoClientId(), ...extra } })]);
+  /**
+   * A câmera segue sozinha pelas fotos que faltam depois deste item: as PEDIDAS seguintes (na ordem do checklist)
+   * e, sem foto "depois" ainda, a do equipamento pronto. "Pular" passa uma; o X fecha.
+   */
+  const passosDesde = (it: ItemTela): PassoFoto[] => {
+    const passo = (q: ItemTela): PassoFoto => ({ chave: q.id, rotulo: q.texto, onFoto: (d) => foto(d, { itemId: q.id }) });
+    const depois = e.itens.slice(e.itens.indexOf(it) + 1).filter((q) => q.ativo && q.pedirFoto && !fotosDe(q.id, null).length && e.respostas[q.id]?.status !== "NAO_SE_APLICA");
+    const fotoDepois: PassoFoto[] = fotosDe(null, "DEPOIS").length ? [] : [{ chave: "depois", rotulo: "Foto depois do serviço", onFoto: (d) => foto(d, { momento: "DEPOIS" }) }];
+    return [passo(it), ...depois.map(passo), ...fotoDepois];
+  };
+  /**
+   * Fotos feitas: a tela já desce até a primeira medição vazia (o próximo passo fica sob o dedão). Só rola: o
+   * teclado não abre sozinho fora de um toque no iPhone, e um campo focado sem teclado confunde.
+   */
+  const rolarAteMedicaoVazia = () => window.setTimeout(() => {
+    const campo = [...document.querySelectorAll<HTMLInputElement>("input[data-campo-medicao]:not(:disabled)")].find((c) => !c.value.trim());
+    campo?.closest("[data-medicao]")?.scrollIntoView?.({ block: "center", behavior: "smooth" });
+  }, 50);
+  // TUDO OK com fotos PEDIDAS faltando: a câmera já abre nelas (são obrigatórias para concluir); o X fecha
+  const [sequencia, setSequencia] = useState<PassoFoto[] | null>(null);
+  async function tudoOk() {
+    await registrar([op({ tipo: "tudoOk" })]);
+    const primeira = e.itens.find((q) => q.ativo && q.pedirFoto && !fotosDe(q.id, null).length && e.respostas[q.id]?.status !== "NAO_SE_APLICA");
+    if (!primeira) return;
+    if (cameraAoVivoDisponivel()) setSequencia(passosDesde(primeira));
+    else document.querySelector(`[data-item="${primeira.id}"]`)?.scrollIntoView?.({ block: "center", behavior: "smooth" });
+  }
   const tirarFoto = (f: FotoTela) => registrar([{ tipo: "fotoRemover", atividadeId, dados: f.clientId ? { clientId: f.clientId } : { id: f.id! } }]);
 
   function tocarStatus(item: ItemTela, s: StatusItem) {
@@ -104,6 +143,14 @@ export function TelaEquipamento({ x, e, registrar, endereco, qr }: Props) {
   }
 
   async function concluirEquipamento() {
+    // Digitou a última medição e tocou direto aqui: grava o número antes de conferir o que falta
+    const ativo = document.activeElement;
+    if (ativo instanceof HTMLInputElement && ativo.matches("[data-campo-medicao]")) ativo.blur();
+    await gravacao.current.catch(() => undefined);
+    // A tela relê o aparelho logo depois da gravação: espera a última resposta aparecer nela (até 0,5 s)
+    const chegou = () => { const u = ultimaResposta.current; return !u || JSON.stringify(ultimo.current.respostas[u.itemId]?.valor ?? null) === JSON.stringify(u.valor); };
+    for (let i = 0; i < 20 && !chegou(); i++) await new Promise((ok) => window.setTimeout(ok, 25));
+    const e = ultimo.current;
     if (!e.completo) {
       setMostrarFaltas(true);
       topo.current?.scrollIntoView({ behavior: "smooth" });
@@ -111,28 +158,33 @@ export function TelaEquipamento({ x, e, registrar, endereco, qr }: Props) {
     }
     if (!e.feito) await registrar([op({ tipo: "equipamento", dados: { feito: true } })]);
     const prox = proximoEquipamento(x, equipamentoId);
-    irPara(prox ? { ver: "os", a: atividadeId, e: prox } : { ver: "os", a: atividadeId }, true);
+    // O último: volta à OS já na confirmação da conclusão (quando a atividade pode ser concluída)
+    irPara(prox ? { ver: "os", a: atividadeId, e: prox } : { ver: "os", a: atividadeId, fim: true }, true);
   }
 
   return (
     <div className="space-y-4 pb-32" data-vista="equipamento" data-equipamento={equipamentoId}>
-      <div ref={topo} />
-      <button type="button" onClick={() => irPara({ ver: "os", a: atividadeId })} className="inline-flex items-center gap-1.5 text-sm font-semibold text-primary-700 py-1 touch-target">
-        <ArrowLeft className="w-4 h-4" /> Equipamentos da OS
-      </button>
-
-      <header className="bg-white rounded-card border border-surface-border p-4 space-y-2">
-        <div className="flex items-center justify-between gap-2 -mt-1">
-          <p className="text-xs font-semibold text-ink-muted" data-posicao-equipamento>Equipamento {posicao + 1} de {total}</p>
+      {/* Uma linha só para voltar, a posição e as setas: a tela fica curta e o TUDO OK sobe para o dedão */}
+      <div ref={topo} className="flex items-center justify-between gap-2 -mt-1">
+        <button type="button" onClick={() => irPara({ ver: "os", a: atividadeId })} className="inline-flex items-center gap-1.5 text-sm font-semibold text-primary-700 py-1 touch-target">
+          <ArrowLeft className="w-4 h-4" /> Equipamentos da OS
+        </button>
+        <div className="flex items-center gap-0.5 -mr-2">
           {total > 1 && (
-            <div className="flex items-center gap-1 -mr-2">
-              <button type="button" disabled={!anterior} onClick={() => anterior && pular(anterior)} aria-label="Equipamento anterior" data-nav-equipamento="anterior"
-                className="inline-flex items-center justify-center rounded-lg text-primary-700 active:bg-primary-50 disabled:text-ink-subtle disabled:opacity-40 touch-target"><ChevronLeft className="w-6 h-6" /></button>
-              <button type="button" disabled={!seguinte} onClick={() => seguinte && pular(seguinte)} aria-label="Próximo equipamento" data-nav-equipamento="proximo"
-                className="inline-flex items-center justify-center rounded-lg text-primary-700 active:bg-primary-50 disabled:text-ink-subtle disabled:opacity-40 touch-target"><ChevronRight className="w-6 h-6" /></button>
-            </div>
+            <button type="button" disabled={!anterior} onClick={() => anterior && pular(anterior)} aria-label="Equipamento anterior" data-nav-equipamento="anterior"
+              className="inline-flex items-center justify-center rounded-lg text-primary-700 active:bg-primary-50 disabled:text-ink-subtle disabled:opacity-40 touch-target"><ChevronLeft className="w-6 h-6" /></button>
+          )}
+          <p className="text-xs font-semibold text-ink-muted tabular-nums" data-posicao-equipamento aria-label={`Equipamento ${posicao + 1} de ${total}`}>
+            <span className="sr-only">Equipamento </span>{posicao + 1} de {total}
+          </p>
+          {total > 1 && (
+            <button type="button" disabled={!seguinte} onClick={() => seguinte && pular(seguinte)} aria-label="Próximo equipamento" data-nav-equipamento="proximo"
+              className="inline-flex items-center justify-center rounded-lg text-primary-700 active:bg-primary-50 disabled:text-ink-subtle disabled:opacity-40 touch-target"><ChevronRight className="w-6 h-6" /></button>
           )}
         </div>
+      </div>
+
+      <header className="bg-white rounded-card border border-surface-border p-4 space-y-2">
         <h1 className="text-xl font-bold text-ink leading-tight">{e.equipamento.titulo}</h1>
         <p className="text-sm text-ink-muted">
           {[e.equipamento.tipo?.nome, e.equipamento.tag && `TAG ${e.equipamento.tag}`, e.equipamento.local, qr].filter(Boolean).join(" · ")}
@@ -144,11 +196,9 @@ export function TelaEquipamento({ x, e, registrar, endereco, qr }: Props) {
             <div className={cn("h-full rounded-full transition-all", e.completo ? "bg-success-500" : "bg-primary-500")} style={{ width: `${ativos.length ? (feitos / ativos.length) * 100 : 0}%` }} />
           </div>
           <span className="text-xs font-semibold text-ink-muted" data-progresso>{feitos} de {ativos.length}</span>
+          {/* G11: o número sozinho não diz O QUE está sendo contado (na dica: a tela fica curta, o TUDO OK sob o dedão) */}
+          <Dica rotulo="Progresso" texto="Itens do checklist e medições respondidos. Fotos e observações pedidas contam à parte." lado="direita" />
         </div>
-        {/* G11: o número sozinho não diz O QUE está sendo contado */}
-        <p className="text-[11px] text-ink-muted" data-progresso-legenda>
-          Itens do checklist e medições respondidos. Fotos e observações pedidas contam à parte.
-        </p>
       </header>
 
       {so && <p className="rounded-card bg-success-50 border border-success-200 p-3 text-sm text-success-800">Atividade concluída: só leitura.</p>}
@@ -168,18 +218,18 @@ export function TelaEquipamento({ x, e, registrar, endereco, qr }: Props) {
         </div>
       )}
 
-      <Secao titulo="Fotos ANTES do serviço" Icone={Camera} contagem={fotosDe(null, "ANTES").length} chave="antes">
+      <Secao titulo="Fotos ANTES" Icone={Camera} contagem={fotosDe(null, "ANTES").length} chave="antes"
+        acao={!so && <BotaoCamera rotulo="Foto antes" titulo={e.equipamento.titulo} marca={marca} passos={() => [{ chave: "antes", rotulo: "Foto antes do serviço", onFoto: (d) => foto(d, { momento: "ANTES" }) }]} />}>
         <Fotos fotos={fotosDe(null, "ANTES")} onRemover={so ? undefined : tirarFoto} />
-        {!so && <BotaoFoto rotulo="Foto antes" marca={marca} onFoto={(d) => foto(d, { momento: "ANTES" })} />}
       </Secao>
 
       {ativos.length > 0 && !so && (
-        <button type="button" onClick={() => registrar([op({ tipo: "tudoOk" })])} disabled={!semResposta} data-tudo-ok
+        <button type="button" onClick={tudoOk} disabled={!semResposta} data-tudo-ok
+          aria-label={semResposta ? `TUDO OK: marca OK os ${semResposta} itens ainda sem resposta` : undefined}
           className="w-full rounded-card bg-success-600 text-white py-5 text-lg font-extrabold tracking-wide shadow-card active:bg-success-700 disabled:bg-success-200 disabled:text-success-700 inline-flex items-center justify-center gap-2 touch-target">
           <CheckCheck className="w-6 h-6" /> {semResposta ? "TUDO OK" : "Tudo respondido"}
         </button>
       )}
-      {ativos.length > 0 && !so && semResposta > 0 && <p className="-mt-2 text-center text-xs text-ink-muted">Marca OK os {semResposta} itens ainda sem resposta. Depois é só ajustar o que não está OK.</p>}
 
       <Secao titulo="Checklist" Icone={ClipboardList}>
         {!e.itens.length && <p className="text-sm text-ink-muted">Este tipo de equipamento ainda não tem checklist. Registre as fotos e a observação.</p>}
@@ -194,7 +244,7 @@ export function TelaEquipamento({ x, e, registrar, endereco, qr }: Props) {
                 <div className="flex flex-wrap items-center gap-2">
                   <Fotos fotos={fotosDe(it.id, null)} onRemover={so ? undefined : tirarFoto} />
                   {/* Y9: depois de anexar, o rótulo confirma — o técnico não reabre "ver o que falta" à toa */}
-                  {!so && <BotaoFoto rotulo={fotosDe(it.id, null).length ? `Foto registrada (${fotosDe(it.id, null).length})` : it.pedirFoto ? "Foto (pedida)" : "Foto"} marca={marca} onFoto={(d) => foto(d, { itemId: it.id })} />}
+                  {!so && <BotaoCamera rotulo={fotosDe(it.id, null).length ? `Foto registrada (${fotosDe(it.id, null).length})` : it.pedirFoto ? "Foto (pedida)" : "Foto"} titulo={e.equipamento.titulo} marca={marca} passos={() => passosDesde(it)} aoCompletar={rolarAteMedicaoVazia} />}
                 </div>
               )}
               {it.pedirObservacao && e.respostas[it.id]?.status !== "ATENCAO" && e.respostas[it.id]?.status !== "NAO_SE_APLICA" && (
@@ -223,9 +273,9 @@ export function TelaEquipamento({ x, e, registrar, endereco, qr }: Props) {
           onSalvar={(t) => registrar([op({ tipo: "equipamento", dados: { observacao: t } })])} />
       </Secao>
 
-      <Secao titulo="Fotos DEPOIS do serviço" Icone={Camera} contagem={fotosDe(null, "DEPOIS").length} chave="depois">
+      <Secao titulo="Fotos DEPOIS" Icone={Camera} contagem={fotosDe(null, "DEPOIS").length} chave="depois"
+        acao={!so && <BotaoCamera rotulo="Foto depois" titulo={e.equipamento.titulo} marca={marca} passos={() => [{ chave: "depois", rotulo: "Foto depois do serviço", onFoto: (d) => foto(d, { momento: "DEPOIS" }) }]} />}>
         <Fotos fotos={fotosDe(null, "DEPOIS")} onRemover={so ? undefined : tirarFoto} />
-        {!so && <BotaoFoto rotulo="Foto depois" marca={marca} onFoto={(d) => foto(d, { momento: "DEPOIS" })} />}
       </Secao>
 
       <MateriaisUsados x={x} registrar={registrar} equipamentoId={equipamentoId} />
@@ -256,6 +306,8 @@ export function TelaEquipamento({ x, e, registrar, endereco, qr }: Props) {
         </div>
       )}
 
+      {sequencia && <CameraSequencia passos={sequencia} titulo={e.equipamento.titulo} marca={marca} onFechar={(completou) => { setSequencia(null); if (completou) rolarAteMedicaoVazia(); }} />}
+
       {atencao && (
         <ModalAtencao item={atencao} r={e.respostas[atencao.id]} fotos={fotosDe(atencao.id, null)} marca={marca}
           onFechar={() => setAtencao(null)}
@@ -273,7 +325,8 @@ export function TelaEquipamento({ x, e, registrar, endereco, qr }: Props) {
                 await registrar([op({ tipo: "equipamento", dados: { feito: false } })]);
                 setNaoAtendido(false);
                 const prox = proximoEquipamento(x, equipamentoId);
-                irPara(prox ? { ver: "os", a: atividadeId, e: prox } : { ver: "os", a: atividadeId }, true);
+                // O último: volta à OS já na confirmação da conclusão (quando a atividade pode ser concluída)
+    irPara(prox ? { ver: "os", a: atividadeId, e: prox } : { ver: "os", a: atividadeId, fim: true }, true);
               }}>Marcar como não atendido</button>
           </div>
         </Modal>
@@ -282,13 +335,19 @@ export function TelaEquipamento({ x, e, registrar, endereco, qr }: Props) {
   );
 }
 
-function Secao({ titulo, Icone, children, contagem, chave }: { titulo: string; Icone: typeof Camera; children: React.ReactNode; /** Quantas fotos a seção já tem */ contagem?: number; chave?: string }) {
+function Secao({ titulo, Icone, children, contagem, chave, acao }: {
+  titulo: string; Icone: typeof Camera; children?: React.ReactNode; /** Quantas fotos a seção já tem */ contagem?: number; chave?: string;
+  /** O botão da seção na mesma linha do título (tela mais curta: o próximo passo sobe) */ acao?: React.ReactNode;
+}) {
   return (
     <section className="space-y-2" data-secao={chave}>
-      <h2 className="text-sm font-bold text-ink flex items-center gap-1.5">
-        <Icone className="w-4 h-4 text-ink-muted" /> {titulo}
-        {!!contagem && <span className="text-xs font-semibold rounded-full bg-surface-linha text-ink px-2 py-0.5" data-contagem-fotos>{contagem}</span>}
-      </h2>
+      <div className="flex items-center gap-2">
+        <h2 className="text-sm font-bold text-ink flex items-center gap-1.5 min-w-0">
+          <Icone className="w-4 h-4 text-ink-muted shrink-0" /> {titulo}
+          {!!contagem && <span className="text-xs font-semibold rounded-full bg-surface-linha text-ink px-2 py-0.5" data-contagem-fotos>{contagem}</span>}
+        </h2>
+        {acao && <div className="ml-auto shrink-0">{acao}</div>}
+      </div>
       {children}
     </section>
   );
@@ -333,6 +392,18 @@ function ItemChips({ item, r, so, onStatus, onEditarAtencao }: {
   );
 }
 
+/** O próximo campo de medição da tela (pula o ΔT calculado e o "Não se aplica"); null = era o último */
+export function proximaMedicao(atual: HTMLInputElement): HTMLInputElement | null {
+  const campos = [...document.querySelectorAll<HTMLInputElement>("input[data-campo-medicao]:not(:disabled)")];
+  return campos[campos.indexOf(atual) + 1] ?? null;
+}
+function irParaProximaMedicao(atual: HTMLInputElement) {
+  const prox = proximaMedicao(atual);
+  if (!prox) { atual.blur(); return; }
+  prox.focus();
+  prox.scrollIntoView?.({ block: "center", behavior: "smooth" });
+}
+
 function ItemMedicao({ item, r, so, onResponder, audio, onAudio }: {
   item: ItemTela; r?: RespostaTela; so: boolean; onResponder: (d: Record<string, unknown>) => void; audio?: string | null; onAudio?: (a: string | null) => void;
 }) {
@@ -350,6 +421,8 @@ function ItemMedicao({ item, r, so, onResponder, audio, onAudio }: {
   const situacao = na ? null : avaliarFaixa(Number.isNaN(digitado) ? null : digitado, faixa);
   const aviso = avisoFaixa(situacao, faixa, unidade);
   const obs = (r?.observacao ?? "").trim();
+  // O valor gravado mudou (sincronizou, N/A…): o campo acompanha — mas nunca enquanto o técnico digita
+  useEffect(() => { if (!focado) { setTexto(atual); setErro(null); } }, [atual]); // eslint-disable-line react-hooks/exhaustive-deps
   // ΔT: calculado das leituras do equipamento — só mostra
   if (ehCalculada(grandeza)) {
     const [a, b] = GRANDEZA[grandeza!].calculo!;
@@ -368,8 +441,6 @@ function ItemMedicao({ item, r, so, onResponder, audio, onAudio }: {
       </div>
     );
   }
-  // O valor gravado mudou (sincronizou, N/A…): o campo acompanha — mas nunca enquanto o técnico digita
-  useEffect(() => { if (!focado) { setTexto(atual); setErro(null); } }, [atual]); // eslint-disable-line react-hooks/exhaustive-deps
 
   function gravar() {
     setFocado(false);
@@ -384,9 +455,12 @@ function ItemMedicao({ item, r, so, onResponder, audio, onAudio }: {
     <div className="space-y-2" data-medicao>
       <p className="text-[15px] font-semibold text-ink leading-snug inline-flex items-center gap-1.5"><Ruler className="w-4 h-4 text-primary-600" /> {item.texto}</p>
       <div className="flex gap-2">
-        <input type="text" inputMode="decimal" enterKeyHint="done" autoComplete="off" disabled={so || na} value={na ? "" : texto} placeholder={na ? "Não se aplica" : "0,0"}
-          aria-label={`${item.texto} (${unidade})`} onFocus={() => setFocado(true)}
-          onChange={(ev) => { setTexto(ev.target.value); setErro(null); }} onBlur={gravar} onKeyDown={(ev) => { if (ev.key === "Enter") (ev.target as HTMLInputElement).blur(); }}
+        {/* "Próximo" no teclado: grava e já vai para a próxima medição (sem rolar nem tocar no campo) */}
+        <input type="text" inputMode="decimal" enterKeyHint="next" autoComplete="off" disabled={so || na} value={na ? "" : texto} placeholder={na ? "Não se aplica" : "0,0"}
+          aria-label={`${item.texto} (${unidade})`} data-campo-medicao
+          onFocus={(ev) => { setFocado(true); ev.currentTarget.enterKeyHint = proximaMedicao(ev.currentTarget) ? "next" : "done"; }}
+          onChange={(ev) => { setTexto(ev.target.value); setErro(null); }} onBlur={gravar}
+          onKeyDown={(ev) => { if (ev.key !== "Enter") return; ev.preventDefault(); irParaProximaMedicao(ev.currentTarget); }}
           className="min-w-0 flex-1 rounded-card border-2 border-surface-border px-3 py-3 text-xl font-bold text-ink focus:outline-none focus:border-primary-500 disabled:bg-surface-alt" />
         <select aria-label="Unidade" disabled={so || na} value={unidade} onChange={(ev) => onResponder(r?.valor !== null && r?.valor !== undefined ? { valor: r.valor, unidade: ev.target.value } : { unidade: ev.target.value })}
           className="w-24 rounded-card border-2 border-surface-border bg-white px-2 text-base font-semibold text-ink">

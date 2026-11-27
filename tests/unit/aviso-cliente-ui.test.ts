@@ -409,7 +409,8 @@ describe("'Cheguei': registra a chegada, avisa o cliente e ENTRA na OS", () => {
     await abrirMeuDia();
     await clicar(botao("CHEGOU"));
     await esperarAte(() => vista() === "os", "entrou na OS");
-    expect(window.location.search).toBe("?ver=os&a=aA");
+    // App-campo 3 (PR C): o "Cheguei" pede à OS que siga para o 1º equipamento a fazer (a OS decide; aqui o roteador do teste só abre a OS)
+    expect(window.location.search).toBe("?ver=os&a=aA&primeiro=1");
     await esperarAte(() => registro("CHEGOU")?.dataset.avisoFeito === "ENVIADO", "chegada confirmada");
     expect(enviadas.map((o) => [o.tipo, o.dados?.evento])).toEqual([["avisoCliente", "CHEGOU"]]); // nenhum "iniciar", nenhum "A caminho"
     expect($("[data-status]")!.getAttribute("data-status")).toBe("AGENDADA");
@@ -657,7 +658,8 @@ describe("OS marcada para OUTRO dia (Agenda): o toque avisaria o cliente — con
     await clicar(botao("CHEGOU", "aD"));
     await clicar($("[data-confirmar-sim]"));
     await esperarAte(() => vista() === "os", "entrou na OS");
-    expect(window.location.search).toBe("?ver=os&a=aD");
+    // App-campo 3 (PR C): o "Cheguei" pede à OS que siga para o 1º equipamento a fazer (a OS decide; aqui o roteador do teste só abre a OS)
+    expect(window.location.search).toBe("?ver=os&a=aD&primeiro=1");
     expect(avisosEnviados().map((o) => o.atividadeId)).toEqual(["aD"]);
   });
 

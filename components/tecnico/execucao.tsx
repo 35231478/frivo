@@ -27,7 +27,7 @@ import { ConcluirSemEquipamento } from "@/components/os/concluir-sem-equipamento
 import { srcFoto, TelaEquipamento } from "@/components/tecnico/equipamento";
 import { CartaoAtividade, ROTULO_STATUS_ATIVIDADE, SeloPrazo } from "@/components/tecnico/meu-dia";
 import { guardadoDoRetrato, podeEntrar } from "@/lib/tecnico/chegada";
-import { adicionalAvaliado, equipamentoDoQr } from "@/lib/tecnico/offline/estado";
+import { adicionalAvaliado, equipamentoDoQr, proximoEquipamento } from "@/lib/tecnico/offline/estado";
 import { novoClientId } from "@/lib/tecnico/offline/motor";
 import { textoFaltas } from "@/lib/execucao/pendencias";
 import { LEGENDA_MAX, limparLegenda, REFERENCIA_GERAL } from "@/lib/os/galeria";
@@ -54,11 +54,22 @@ export function situacao(e: EquipamentoTela) {
 }
 
 /** A OS no app: local, equipamentos (com o que falta), serviço extra e a conclusão (com a trava da Etapa 1). */
-export function VistaOs({ atividadeId, equipamentoId, camera, incluir }: {
+export function VistaOs({ atividadeId, equipamentoId, camera, incluir, fim, primeiro }: {
   atividadeId: string; equipamentoId?: string | null; /** Abre já na câmera rápida (atalho do Meu dia) */ camera?: boolean;
   /** QR lido no Meu dia: equipamento da unidade fora desta atividade — pergunta se inclui */ incluir?: string | null;
+  /** Acabou de concluir o último equipamento: abre já a confirmação da conclusão */ fim?: boolean;
+  /** Acabou de chegar ("Cheguei"): segue para o primeiro equipamento a fazer */ primeiro?: boolean;
 }) {
   const { retrato, tela, fila, aEnviar, registrar, carregando } = useAtividade(atividadeId);
+  // Equipamento no centro: depois do "Cheguei", a OS vai direto ao primeiro equipamento a fazer. A OS fica no
+  // histórico (o "voltar" do celular volta a ela); sem equipamento a fazer, fica na OS.
+  const pronta = !!tela && podeEntrar(tela.atividade.status, tela.avisos);
+  useEffect(() => {
+    if (!primeiro || !tela || !pronta) return;
+    const id = proximoEquipamento(tela, null);
+    irPara({ ver: "os", a: atividadeId }, true);
+    if (id) irPara({ ver: "os", a: atividadeId, e: id });
+  }, [primeiro, pronta]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (carregando) return <div className="flex justify-center py-16"><Loader2 className="w-6 h-6 animate-spin text-ink-subtle" /></div>;
   if (!retrato || !tela) {
@@ -87,7 +98,7 @@ export function VistaOs({ atividadeId, equipamentoId, camera, incluir }: {
   const e = equipamentoId ? tela.equipamentos.find((q) => q.equipamento.id === equipamentoId) : null;
   if (e) return <TelaEquipamento x={tela} e={e} registrar={registrar} endereco={retrato.cartao.endereco}
     qr={retrato.equipamentosUnidade.find((u) => u.id === e.equipamento.id)?.qr?.codigo ?? null} />;
-  return <ResumoOs r={retrato} x={tela} fila={fila} aEnviar={aEnviar} registrar={registrar} camera={camera} incluir={incluir} />;
+  return <ResumoOs r={retrato} x={tela} fila={fila} aEnviar={aEnviar} registrar={registrar} camera={camera} incluir={incluir} fim={fim} />;
 }
 
 function Voltar() {
@@ -98,7 +109,7 @@ function Voltar() {
   );
 }
 
-function ResumoOs({ r, x, fila, aEnviar, registrar, camera, incluir }: { r: RetratoAtividade; x: ExecucaoTela; fila: OperacaoFila[]; aEnviar: number; registrar: (ops: NovaOperacao[]) => Promise<void>; camera?: boolean; incluir?: string | null }) {
+function ResumoOs({ r, x, fila, aEnviar, registrar, camera, incluir, fim }: { r: RetratoAtividade; x: ExecucaoTela; fila: OperacaoFila[]; aEnviar: number; registrar: (ops: NovaOperacao[]) => Promise<void>; camera?: boolean; incluir?: string | null; fim?: boolean }) {
   const c = r.cartao;
   const atividadeId = x.atividade.id;
   const { motor, config } = useTecnico();
@@ -127,6 +138,13 @@ function ResumoOs({ r, x, fila, aEnviar, registrar, camera, incluir }: { r: Retr
     setCameraAberta(true);
     irPara({ ver: "os", a: atividadeId }, true);
   }, [camera, so, atividadeId]);
+  // Concluiu o último equipamento (…&fim=1): com todos atendidos, a confirmação já abre; o atalho sai do endereço
+  useEffect(() => {
+    if (!fim) return;
+    irPara({ ver: "os", a: atividadeId }, true);
+    // Só com TODOS atendidos: com algum de fora, concluir é decisão do técnico (o botão de sempre)
+    if (!so && x.conclusao.ok && !x.conclusao.naoAtendidos && !aConferir) setConcluir(true);
+  }, [fim]); // eslint-disable-line react-hooks/exhaustive-deps
   // Atividade encerrada e nada a conferir: não sobra nada da câmera rápida no aparelho
   useEffect(() => { if (so && !aConferir && rapida.salvos.length) void guardaRapida?.limpar(atividadeId); }, [so, aConferir, rapida.salvos.length, guardaRapida, atividadeId]);
   async function fecharCamera() {
