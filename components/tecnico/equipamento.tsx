@@ -325,8 +325,7 @@ export function TelaEquipamento({ x, e, registrar, endereco, qr }: Props) {
                 await registrar([op({ tipo: "equipamento", dados: { feito: false } })]);
                 setNaoAtendido(false);
                 const prox = proximoEquipamento(x, equipamentoId);
-                // O último: volta à OS já na confirmação da conclusão (quando a atividade pode ser concluída)
-    irPara(prox ? { ver: "os", a: atividadeId, e: prox } : { ver: "os", a: atividadeId, fim: true }, true);
+                irPara(prox ? { ver: "os", a: atividadeId, e: prox } : { ver: "os", a: atividadeId }, true);
               }}>Marcar como não atendido</button>
           </div>
         </Modal>
