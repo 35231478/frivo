@@ -24,12 +24,17 @@ export function mensagemErroLogin(code: string | undefined): string {
   return "E-mail ou senha inválidos.";
 }
 
+/** O login depois de o técnico entrar em outro aparelho (lib/sessao-ativa › motivoDoEncerramento) */
+export const MSG_OUTRO_APARELHO = "Sua sessão foi encerrada porque esta conta entrou em outro aparelho.";
+
 export function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const callbackUrl = destinoPosLogin(searchParams.get("callbackUrl"));
   // Vindo de /sessao-encerrada: o acesso foi encerrado (usuário/empresa inativados ou sessão inválida)
   const sessaoEncerrada = searchParams.get("sessao") === "encerrada";
+  // App de campo com "apenas um dispositivo ativo": entrou em outro aparelho e este caiu (só dentro do aviso acima)
+  const outroAparelho = searchParams.get("motivo") === "outro-aparelho";
   // Vindo de /definir-senha (convite): senha criada, é só entrar
   const senhaDefinida = searchParams.get("senha") === "definida";
   const [mostrarSenha, setMostrarSenha] = useState(false);
@@ -75,7 +80,7 @@ export function LoginForm() {
       {sessaoEncerrada && !erro && (
         <div className="bg-atencao-claro border border-atencao/20 text-atencao-texto text-sm rounded-lg px-3 py-2.5 flex items-center gap-2" role="status">
           <AlertCircle className="w-4 h-4 shrink-0" />
-          Sua sessão foi encerrada. Entre novamente para continuar.
+          {outroAparelho ? MSG_OUTRO_APARELHO : "Sua sessão foi encerrada. Entre novamente para continuar."}
         </div>
       )}
 

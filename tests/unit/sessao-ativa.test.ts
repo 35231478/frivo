@@ -84,20 +84,23 @@ describe("sessão de usuário inativado", () => {
   });
 });
 
-describe("apenas um dispositivo ativo (Configuracao.appUmDispositivo)", () => {
+describe("apenas um dispositivo ativo (Configuracao.appUmDispositivo) — só no app de campo", () => {
+  // O técnico em modo técnico: o token tem o técnico ligado (como o login grava)
+  const TECNICO = { role: "TECNICO", tecnicoId: "t1" };
   beforeEach(() => {
-    // Empresa com "um dispositivo" ligado e o nonce do login atual gravado no usuário
+    // Empresa com "um dispositivo" ligado e o nonce do login atual gravado no usuário (técnico)
     db.t.empresa[0].configuracao = { appUmDispositivo: true };
+    db.t.usuario[0].role = "TECNICO";
     db.t.usuario[0].sessaoAtiva = "nonce-A";
   });
 
   it("o aparelho com o nonce atual segue conectado", async () => {
-    const { sessao } = await lerSessao(await cookieDeSessao({ sa: "nonce-A" }));
+    const { sessao } = await lerSessao(await cookieDeSessao({ ...TECNICO, sa: "nonce-A" }));
     expect(sessao?.user?.id).toBe("u1");
   });
 
   it("entrar em outro aparelho (novo nonce) desconecta o anterior na requisição seguinte", async () => {
-    const anterior = await cookieDeSessao({ sa: "nonce-A" });
+    const anterior = await cookieDeSessao({ ...TECNICO, sa: "nonce-A" });
     expect((await lerSessao(anterior)).sessao?.user?.id).toBe("u1");
 
     db.t.usuario[0].sessaoAtiva = "nonce-B"; // login num novo aparelho regravou o nonce
@@ -109,13 +112,32 @@ describe("apenas um dispositivo ativo (Configuracao.appUmDispositivo)", () => {
 
   it("com a trava DESLIGADA, dois aparelhos convivem (nonce diferente não derruba)", async () => {
     db.t.empresa[0].configuracao = { appUmDispositivo: false };
-    const { sessao } = await lerSessao(await cookieDeSessao({ sa: "nonce-ANTIGO" }));
+    const { sessao } = await lerSessao(await cookieDeSessao({ ...TECNICO, sa: "nonce-ANTIGO" }));
     expect(sessao?.user?.id).toBe("u1");
   });
 
   it("empresa sem configuração não trava ninguém", async () => {
     delete db.t.empresa[0].configuracao;
-    const { sessao } = await lerSessao(await cookieDeSessao({ sa: "qualquer" }));
+    const { sessao } = await lerSessao(await cookieDeSessao({ ...TECNICO, sa: "qualquer" }));
+    expect(sessao?.user?.id).toBe("u1");
+  });
+
+  it("administrador e escritório (notebook + celular): nonce velho NÃO derruba, com a trava ligada", async () => {
+    for (const role of ["ADMIN", "OPERADOR"]) {
+      db.t.usuario[0].role = role;
+      const { sessao } = await lerSessao(await cookieDeSessao({ role, tecnicoId: null, sa: "nonce-DO-NOTEBOOK" }));
+      expect(sessao?.user?.id, role).toBe("u1");
+    }
+  });
+
+  it("técnico sem o técnico ligado no token (sessão de antes do vínculo): não trava", async () => {
+    const { sessao } = await lerSessao(await cookieDeSessao({ role: "TECNICO", tecnicoId: null, sa: "nonce-VELHO" }));
+    expect(sessao?.user?.id).toBe("u1");
+  });
+
+  it("administrador com o técnico ligado (não está em modo técnico): não trava", async () => {
+    db.t.usuario[0].role = "ADMIN";
+    const { sessao } = await lerSessao(await cookieDeSessao({ role: "ADMIN", tecnicoId: "t1", sa: "nonce-VELHO" }));
     expect(sessao?.user?.id).toBe("u1");
   });
 });
@@ -126,11 +148,12 @@ describe("/sessao-encerrada", () => {
     const req = new NextRequest("http://localhost/sessao-encerrada", {
       headers: { cookie: "authjs.session-token=a; __Secure-authjs.session-token.0=b; frivo.portal-session-token=c; outro=d" },
     });
-    const res = GET(req);
+    const res = await GET(req);
     expect(res.status).toBe(307);
     expect(res.headers.get("location")).toBe("http://localhost/login?sessao=encerrada");
+    // cada pedaço e o nome base do cookie em pedaços; o do portal e os outros ficam
     const apagados = res.cookies.getAll().map((c) => c.name).sort();
-    expect(apagados).toEqual(["__Secure-authjs.session-token.0", "authjs.session-token"]);
+    expect(apagados).toEqual(["__Secure-authjs.session-token", "__Secure-authjs.session-token.0", "authjs.session-token"]);
   });
 
   it("é rota pública no middleware (senão o cookie velho faria /login ↔ /dashboard em loop)", async () => {

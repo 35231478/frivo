@@ -3,6 +3,7 @@ import type { JWT } from "next-auth/jwt";
 import { prisma } from "@/lib/prisma";
 import { impressaoDaSenha } from "@/lib/acesso/impressao-senha";
 import { acessoAtual, acessoMudou } from "@/lib/acesso/acesso-atual";
+import { emModoTecnico } from "@/lib/tecnico/modo";
 
 /**
  * Sessão (JWT) x cadastro atual: o token é assinado no login e valeria até expirar, mesmo com o
@@ -44,18 +45,46 @@ export async function conferirTokenAtivo(token: JWT | null, acabouDeEntrar: bool
   if (!id) return null;
   const u = await lerUsuario(id);
   if (u === null) return token;
-  if (u === "removido" || !u.ativo || !u.empresa.ativo) return null;
-  // "Apenas um dispositivo ativo" (por empresa): o nonce do token tem de bater com o do cadastro.
-  // Entrar em outro aparelho regrava o nonce; este token (nonce velho) é encerrado aqui.
-  if (u.empresa.configuracao?.appUmDispositivo && u.sessaoAtiva && token.sa !== u.sessaoAtiva) return null;
+  if (u === "removido" || motivoDoEncerramento(u, token)) return null;
   const atual = impressaoDaSenha(u.senha ?? "");
-  if (typeof token.fs === "string" && token.fs !== atual) return null;
   // Papel e permissões são os do cadastro de AGORA, não os do login: conceder ou retirar acesso vale
   // na requisição seguinte, sem pedir que ninguém saia e entre. `acessoMudou` marca que o token que
   // CHEGOU (o cookie) estava diferente — o navegador então pede /api/auth/session, que regrava o
   // cookie com o acesso novo, e o portão do middleware (que só lê o cookie) passa a concordar.
   const acesso = acessoAtual(u);
   return { ...token, fs: atual, ...acesso, acessoMudou: acessoMudou(token, acesso) };
+}
+
+type Cadastro = Exclude<Awaited<ReturnType<typeof lerUsuario>>, null>;
+
+/** Por que esta sessão acabou (null = segue valendo). `outro-aparelho` vira a mensagem do login. */
+export type MotivoDoEncerramento = "inativo" | "outro-aparelho" | "senha";
+
+/**
+ * A regra de encerrar, num lugar só: o callback `jwt` (conferirTokenAtivo) e /sessao-encerrada (que
+ * escolhe a mensagem do login) usam a mesma.
+ *
+ * "Apenas um dispositivo ativo" (Configuracao.appUmDispositivo) vale só para o APP DE CAMPO: o token
+ * com técnico ligado e a pessoa em modo técnico (lib/tecnico/modo). Quem usa o escritório (notebook e
+ * celular, administrador) nunca cai por ter entrado em outro aparelho. Entrar em outro aparelho regrava
+ * o nonce (lib/auth); o técnico com o nonce velho é encerrado aqui.
+ */
+export function motivoDoEncerramento(u: Cadastro, token: JWT): MotivoDoEncerramento | null {
+  if (u === "removido" || !u.ativo || !u.empresa.ativo) return "inativo";
+  const acesso = acessoAtual(u);
+  const tecnicoId = typeof token.tecnicoId === "string" && token.tecnicoId ? token.tecnicoId : null;
+  const appDeCampo = !!tecnicoId && emModoTecnico({ role: acesso.role, permissoes: acesso.permissoes, tecnicoId });
+  if (appDeCampo && u.empresa.configuracao?.appUmDispositivo && u.sessaoAtiva && token.sa !== u.sessaoAtiva) return "outro-aparelho";
+  if (typeof token.fs === "string" && token.fs !== impressaoDaSenha(u.senha ?? "")) return "senha";
+  return null;
+}
+
+/** /sessao-encerrada: o motivo de o servidor ter recusado este token (null = sem como saber ou ainda vale). */
+export async function motivoDoToken(token: JWT | null): Promise<MotivoDoEncerramento | null> {
+  const id = typeof token?.id === "string" ? token.id : null;
+  if (!token || !id) return null;
+  const u = await lerUsuario(id);
+  return u === null ? null : motivoDoEncerramento(u, token);
 }
 
 /** Cookies da sessão do painel (com prefixo seguro e em pedaços). Não toca no cookie do portal. */

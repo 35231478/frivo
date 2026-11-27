@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 import type { NextFetchEvent, NextRequest } from "next/server";
 import { authConfig } from "@/auth.config";
 import { destinoSemPermissao, portaoBarra } from "@/lib/permissoes";
-import { semCookieDaSessao } from "@/lib/acesso/cookie-sessao";
+import { apagarCookiesDaSessao, loginAposEncerrar, semCookieDaSessao } from "@/lib/acesso/cookie-sessao";
 import { ROTA_TECNICO, destinoModoTecnico, emModoTecnico } from "@/lib/tecnico/modo";
 
 // Instância leve do Auth.js (sem provider/bcrypt/Prisma) — apenas lê e verifica o
@@ -63,7 +63,8 @@ const portao = auth(function middleware(req: NextRequest & { auth: any }) {
     return NextResponse.redirect(loginUrl);
   }
 
-  // Quem já está logado não vê o login nem a home de vendas: vai direto para o trabalho
+  // Quem já está logado não vê o login nem a home de vendas: vai direto para o trabalho (o login aberto
+  // por /sessao-encerrada nem chega aqui: ver o export abaixo)
   if (req.auth && (pathname === "/login" || pathname === "/")) {
     return NextResponse.redirect(new URL(emModoTecnico(req.auth.user) ? ROTA_TECNICO : "/dashboard", req.url));
   }
@@ -94,6 +95,15 @@ const portao = auth(function middleware(req: NextRequest & { auth: any }) {
 // O middleware LÊ a sessão, mas não regrava o cookie dela: uma resposta que saiu com o cookie antigo
 // gravaria o acesso antigo por cima do novo (lib/acesso/cookie-sessao › semCookieDaSessao).
 export default async function middleware(req: NextRequest, ev: NextFetchEvent) {
+  // BLINDAGEM ANTI-LOOP: o login aberto por /sessao-encerrada (?sessao=encerrada) aparece SEMPRE, mesmo
+  // com um cookie que o JWT ainda dá como válido — o servidor já o recusou, e mandar para /dashboard
+  // fecharia o ciclo (/dashboard → /sessao-encerrada → /login → /dashboard…, ERR_TOO_MANY_REDIRECTS).
+  // E apaga de novo todos os pedaços do cookie da sessão, com os atributos do Auth.js (Secure no __Secure-).
+  if (loginAposEncerrar(req.nextUrl)) {
+    const res = NextResponse.next();
+    apagarCookiesDaSessao(res, req.cookies.getAll().map((c) => c.name));
+    return res;
+  }
   const res = await portao(req as any, ev as any);
   return res ? semCookieDaSessao(res) : res;
 }
