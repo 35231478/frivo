@@ -9,8 +9,9 @@ import path from "node:path";
 import { problemaSenha } from "@/lib/acesso/senha";
 import { LIMITES } from "@/lib/acesso/limite";
 import {
-  ALFABETO_SENHA, ROTA_INICIO_PORTAL, ROTA_TROCA_PORTAL, TAMANHO_SENHA_PROVISORIA, destinoDoPortal, gerarSenhaProvisoria, mensagemDoAcesso, trocaPendentePortal,
+  ALFABETO_SENHA, ROTA_INICIO_PORTAL, ROTA_TROCA_PORTAL, TAMANHO_SENHA_PROVISORIA, destinoDoPortal, mensagemDoAcesso, trocaPendentePortal,
 } from "@/lib/portal/senha-provisoria";
+import { gerarSenhaProvisoria } from "@/lib/portal/gerar-senha";
 import { COOKIE_PORTAL, apagarCookiePortal, atributosCookiePortal } from "@/lib/portal/sessao-cookie-portal";
 
 const RAIZ = path.resolve(__dirname, "../..");

@@ -4,7 +4,7 @@ import { auth } from "@/lib/auth";
 import { pode } from "@/lib/permissoes";
 import { prisma } from "@/lib/prisma";
 import { acessoPortalSchema } from "@/lib/validations";
-import { gerarSenhaProvisoria } from "@/lib/portal/senha-provisoria";
+import { gerarSenhaProvisoria } from "@/lib/portal/gerar-senha";
 
 type Params = { params: Promise<{ id: string; contatoId: string }> };
 
