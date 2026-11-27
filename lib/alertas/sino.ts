@@ -38,6 +38,8 @@ export interface EscopoDoSino {
   aceites: boolean;
   /** Nota baixa do aceite: só o escritório (quem gere a OS), nunca o técnico */
   notaBaixa: boolean;
+  /** Comentário novo do campo na OS (conversa interna): só o escritório, para quem vê OS */
+  comentariosCampo: boolean;
   /** Atividade esquecida em andamento (passou do limite da empresa, ou começou em outro dia): só o escritório */
   atividadesEsquecidas: boolean;
   /** Uso em campo deixou produto com saldo negativo (app do técnico): quem vê o Estoque, nunca o técnico */
@@ -66,6 +68,7 @@ export function escopoDoSino({ permissoes, role, restrito }: QuemPergunta): Esco
     notaBaixa: daEmpresa && verOrdens,
     estoqueNegativoCampo: daEmpresa && p("estoque", "visualizar"),
     atividadesEsquecidas: daEmpresa && verOrdens,
+    comentariosCampo: daEmpresa && verOrdens,
     nfDosMeusPedidos: true,
   };
 }

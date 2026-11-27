@@ -9,6 +9,7 @@ import { irPara, useTecnico } from "@/components/tecnico/contexto";
 import { estadoDaAtividade } from "@/lib/tecnico/offline/estado";
 import { destinoDoQr, MSG_FICHA_SEM_SINAL, type AtividadeDoDia, type DestinoQr, type FichaEquipamento } from "@/lib/tecnico/qr-campo";
 import { toqueLeve } from "@/lib/haptico";
+import { SeloGarantia } from "@/components/tecnico/garantia";
 
 /** Para onde o QR lido leva, com as OS do dia guardadas no aparelho (funciona sem sinal). */
 export function useDestinoQr() {
@@ -107,6 +108,7 @@ function Ficha({ f }: { f: FichaEquipamento }) {
         <h1 className="text-xl font-bold text-ink leading-tight">{q.titulo}</h1>
         <p className="text-sm text-ink-muted">{[q.fabricante, q.tag && `TAG ${q.tag}`, q.numeroSerie && `Série ${q.numeroSerie}`].filter(Boolean).join(" · ")}</p>
         {(q.cliente || q.unidade || q.local) && <p className="text-sm text-ink" data-ficha-local>{[q.cliente, q.unidade, q.local].filter(Boolean).join(" · ")}</p>}
+        <SeloGarantia fim={q.garantiaAte} />
         {!q.ativo && <p className="text-xs font-semibold rounded-full px-2 py-0.5 bg-surface-linha text-ink-muted inline-block">Inativo</p>}
         <p className="text-xs text-ink-muted pt-1" data-fora-das-os>Fora das suas OS de hoje.</p>
       </header>
