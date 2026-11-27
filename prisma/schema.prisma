@@ -757,7 +757,8 @@ model Configuracao {
   /// Normas atendidas que já vêm marcadas (lib/orcamentos/normas.ts); vazio = bloco desligado
   orcamentoNormas          String[] @default([]) @map("orcamento_normas")
   /// Leva D — padrão das opções do documento do cliente, copiado para cada orçamento novo
-  orcamentoMostrarMateriais        Boolean @default(false) @map("orcamento_mostrar_materiais")
+  orcamentoMostrarMateriais        Boolean @default(true) @map("orcamento_mostrar_materiais")
+  /// "Orçamento E": deixou de ser usada (o documento não mostra valor de material); a coluna fica
   orcamentoMostrarValoresMateriais Boolean @default(false) @map("orcamento_mostrar_valores_materiais")
 
   /// Checklist de veículo obrigatório no app (o "porteiro"): nos dias escolhidos, o colaborador com veículo padrão só
@@ -1842,8 +1843,12 @@ model Produto {
   /// Entra na tela Estoque e nos alertas? Falso = produto que não se controla (serviço embalado,
   /// item sob encomenda…); o razão continua aceitando lançamentos (ex.: entrada pela NF de compra).
   controlaEstoque    Boolean  @default(true) @map("controla_estoque")
-  /// Categoria (E3.1): de onde vem o comportamento de faturamento. Opcional: sem ela, "incluso no serviço".
+  /// Categoria (E3.1). Desde "Orçamento E" o comportamento no orçamento vem do USO abaixo; a categoria só
+  /// sugere o Uso de um produto novo.
   categoriaProdutoId String?  @map("categoria_produto_id")
+  /// "Orçamento E": MATERIAL = consumo, vai dentro do serviço (sem valor para o cliente); PECA = vendida à parte,
+  /// em linha própria com valor. O orçamento pode trocar o Uso de um item só naquele orçamento.
+  uso                UsoProduto @default(MATERIAL)
   ativo              Boolean  @default(true)
   criadoEm           DateTime @default(now()) @map("criado_em")
 
@@ -3032,7 +3037,8 @@ model Orcamento {
   valorIss             Decimal      @default(0) @map("valor_iss") @db.Decimal(12, 2)
   /// Leva D — documento do cliente (link, impressão/PDF): materiais inclusos dentro de cada serviço e, só com
   /// eles, o preço de venda de cada material. Nunca o custo. Nasce com o padrão da empresa (configuracoes).
-  mostrarMateriais        Boolean      @default(false) @map("mostrar_materiais")
+  mostrarMateriais        Boolean      @default(true) @map("mostrar_materiais")
+  /// "Orçamento E": deixou de ser usada (o documento não mostra valor de material); a coluna fica
   mostrarValoresMateriais Boolean      @default(false) @map("mostrar_valores_materiais")
 
   tokenPublico      String    @unique @map("token_publico")
@@ -3575,6 +3581,12 @@ model CategoriaFinanceira {
 /// padrão aprendido na nota de compra.
 /// Como o produto entra na cobrança (Estoque E3.1): VENDA_A_PARTE = peça de reposição (cobra separado e
 /// baixa estoque); INCLUSO_NO_SERVICO = material de instalação/consumo (embutido no valor, só baixa estoque).
+/// "Orçamento E" — o Uso do produto: Material (incluso no serviço) ou Peça (vendida à parte)
+enum UsoProduto {
+  MATERIAL
+  PECA
+}
+
 enum ComportamentoFaturamento {
   VENDA_A_PARTE
   INCLUSO_NO_SERVICO
