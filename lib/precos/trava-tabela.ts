@@ -71,7 +71,8 @@ export function conferirPrecoDeTabela(alteracoes: readonly AlteracaoPrecoTabela[
   return { ok: true, motivo: motivo.slice(0, MOTIVO_MAX) };
 }
 
-const reais = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+/** "R$ 150,00" com espaço comum (a trilha é texto puro: busca e cópia sem o espaço não separável do Intl) */
+const reais = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" }).replace(/\s/g, " ");
 
 /** A linha da trilha: "Preço de tabela alterado: Limpeza (R$ 150,00 → R$ 120,00). Motivo: …" */
 export function textoDaTrilha(alteracoes: readonly AlteracaoPrecoTabela[], motivo: string): string {
