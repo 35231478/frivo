@@ -101,9 +101,33 @@ As três usam o mesmo motor das outras: prévia, erros linha a linha, **ligar co
 
 ## Testes
 
-- **Puros + tela** (`implantacao-3.test.ts`, 28): estoque, colaboradores e veículos linha a linha; placa; a coluna de custo por permissão e papel; etapas, módulos, progresso e destaque; a tela de Implantação (contagens, atalhos por permissão e módulo, modelo, 100%); o destaque do painel; o assistente com o custo só para quem pode.
-- **PostgreSQL real** (`implantacao-3-pg.test.ts`, 13): as rotas e o Prisma de verdade — entrada com custo e ajuste sem custo, reimportar sem lançar, produto com movimentação, custo por permissão e papel, ida e volta das três planilhas, CPF e placa repetidos, permissões e módulos desligados, contagens da Implantação por empresa.
-- **SQL pendente:** rodado 3× num esquema vazio, aditivo, não apaga marcações e cria a coluna igual à do Prisma.
+- **Puros + tela** (`implantacao-3.test.ts`, 32):
+  - estoque, colaboradores e veículos linha a linha; placa;
+  - a coluna de custo por permissão e papel;
+  - telefone vazio = aviso; cargo novo, ativo e inativo;
+  - etapas, módulos, progresso, "não se aplica" (conta, reabre, nunca é a próxima) e o destaque;
+  - a tela de Implantação: contagens, atalhos por permissão e módulo, modelo, 100%, marcar e reabrir;
+  - o destaque do painel; o assistente com o custo só para quem pode.
+- **PostgreSQL real** (`implantacao-3-pg.test.ts`, 17): as rotas e o Prisma de verdade.
+  - **Estoque:** entrada com custo e ajuste sem custo, reimportar sem lançar, produto com movimentação, custo por permissão e papel.
+  - **Ida e volta** das três planilhas; CPF e placa repetidos.
+  - **Colaborador sem telefone** gravado com aviso; **cargo novo** criado uma vez (grafias diferentes e o recém-criado por outra importação).
+  - **"Não se aplica":** rota, permissão e multiempresa; lixo na coluna é ignorado.
+  - **O SQL pendente:** 3×, aditivo, igual ao Prisma.
+  - **Permissões e módulos desligados;** contagens da Implantação por empresa.
+- **Achados pelas provas (corrigidos nesta leva):**
+  - **ida e volta:** CPF ou placa gravados de dois jeitos davam erro mesmo com o `id_sistema`;
+  - **suíte inteira:** com a coluna nova, a **tela geral de Configurações deixaria de salvar** (ela manda a configuração inteira e a rota recusa campo desconhecido). Agora ela ignora a marcação, que tem rota própria, como já faz com o checklist diário e o horário comercial.
 - **Testes antigos ajustados (mudança intencional):**
   - `navegacao-configuracoes.test.ts`: o grupo Empresa ganhou o cartão Implantação;
   - `codigos-exportacao.test.ts`: a tabela de "baixar planilha" ganhou estoque, colaboradores e veículos.
+- **Mutação:** **78 de 78 mortos.**
+  - 1ª rodada: 56/56.
+  - Decisões do Zé: 2 mutantes do telefone saíram (a regra mudou) e entraram 23, mais 1 da correção da tela geral.
+  - Desses, 4 sobreviveram na 1ª vez e ganharam prova: cargo por grafia, cargo recém-criado, próxima etapa e lixo na coluna.
+- **Navegador real (Playwright):** **21/21**, no desktop e no celular, com o SQL aplicado **só no banco local de prints** (fictício).
+  - colaboradores pela Implantação: ligar colunas; sem telefone e cargo novo com aviso; "Cargo criado" no resultado;
+  - veículos e estoque pelas listas;
+  - "não se aplica" leva a 100% e tira o destaque do painel; reabrir devolve;
+  - celular sem rolagem horizontal.
+- **Suíte inteira:** **523 arquivos, 7864 testes, 0 falhas** · **typecheck:** 0 erros · **build:** ok (o aviso `MissingSecret` do Auth.js é o de sempre: o build roda sem segredo)
