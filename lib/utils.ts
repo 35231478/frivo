@@ -61,7 +61,8 @@ export function sanitizarNumero(valor: string | null | undefined): string {
 
 // Iniciais a partir do nome (1 ou 2 letras maiúsculas)
 export function iniciais(nome: string | null | undefined): string {
-  const partes = (nome ?? "").trim().split(/\s+/).filter(Boolean);
+  // Só palavras com letra ou número, sem a pontuação da frente: "Diego Silva (apelido)" → "DA", não "D("
+  const partes = (nome ?? "").trim().split(/\s+/).map((p) => p.replace(/^[^\p{L}\p{N}]+/u, "")).filter(Boolean);
   if (partes.length === 0) return "?";
   if (partes.length === 1) return partes[0].slice(0, 2).toUpperCase();
   return (partes[0][0] + partes[partes.length - 1][0]).toUpperCase();
