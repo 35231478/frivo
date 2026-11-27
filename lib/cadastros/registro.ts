@@ -353,7 +353,8 @@ export const CADASTROS: Record<EntidadeCadastro, DefCadastro> = {
       },
       { key: "controlaEstoque", label: "Controla estoque", tipo: "booleano", ajuda: "Desmarcado, o produto sai da tela Estoque e dos alertas (item sob encomenda, serviço embalado…). O histórico de movimentações fica." },
       {
-        key: "uso", label: "Uso", tipo: "select", opcoes: OPCOES_USO,
+        // 1ª opção vazia: produto NOVO segue a categoria (Peças de reposição = Peça; o resto = Material) se ninguém escolher
+        key: "uso", label: "Uso", tipo: "select", opcoes: [{ value: "", label: "Pela categoria (sugestão)" }, ...OPCOES_USO],
         ajuda: "Material vai dentro do serviço, sem valor para o cliente. Peça é vendida à parte, em linha própria. No orçamento dá para trocar só naquele orçamento.",
       },
     ],

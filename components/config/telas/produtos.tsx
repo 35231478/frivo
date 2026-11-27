@@ -10,7 +10,7 @@ export function TelaProdutos() {
     <div>
       <PageHeader title="Produtos" description="Peças e materiais usados nos serviços" backHref="/configuracoes" />
       <div className="bg-white rounded-card border border-surface-border p-4 sm:p-6">
-        {/* Categoria (E3.1): nome + comportamento de faturamento; sem categoria = incluso no serviço (padrão) */}
+        {/* Categoria (E3.1): só o nome; Material × Peça é a coluna Uso ("Orçamento E") */}
         <CadastroPadrao entidade="produtos" celula={(col, p) => (col === "categoriaProduto" ? <CategoriaDoProduto produto={{ categoriaProduto: p.categoriaProduto }} /> : undefined)} />
       </div>
     </div>

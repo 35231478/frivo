@@ -1,5 +1,5 @@
 import { cn } from "@/lib/utils";
-import { comportamentoDoProduto, LABEL_COMPORTAMENTO, type Comportamento } from "@/lib/estoque/categoria";
+import { LABEL_COMPORTAMENTO, type Comportamento } from "@/lib/estoque/categoria";
 
 const COR: Record<Comportamento, string> = {
   VENDA_A_PARTE: "bg-acento-claro text-acento",
@@ -16,13 +16,12 @@ export function PilulaComportamento({ comportamento, className }: { comportament
 }
 
 /**
- * Categoria do produto na lista: o nome + a pílula do comportamento. Sem categoria: "Sem categoria"
- * apagado, com a pílula "Incluso no serviço" (o padrão) marcada como padrão — o que o orçamento vai
- * sinalizar quando a E3.3 chegar.
+ * Categoria do produto na lista: só o nome (sem categoria: "Sem categoria" apagado). "Orçamento E": quem diz se é
+ * Material ou Peça é a coluna Uso (o Uso do produto manda); a categoria só sugere o Uso de um produto novo — por isso
+ * a pílula do comportamento não aparece mais aqui (mostrava "Material" ao lado de um produto de Uso "Peça").
  */
 export function CategoriaDoProduto({ produto }: { produto: { categoriaProduto?: { nome: string; comportamento: string; ativo?: boolean | null } | null } }) {
   const c = produto.categoriaProduto;
-  const comportamento = comportamentoDoProduto(produto);
   return (
     <span className="inline-flex flex-wrap items-center gap-1.5 min-w-0" data-categoria-produto={c ? "sim" : "nao"}>
       {c ? (
@@ -30,9 +29,6 @@ export function CategoriaDoProduto({ produto }: { produto: { categoriaProduto?: 
       ) : (
         <span className="text-ink-subtle italic">Sem categoria</span>
       )}
-      {" "}
-      <PilulaComportamento comportamento={comportamento} className={cn(!c && "opacity-70")} />
-      {!c && <>{" "}<span className="text-[10px] text-ink-subtle">(padrão)</span></>}
     </span>
   );
 }

@@ -78,10 +78,12 @@ describe("trocar o Uso só neste orçamento", () => {
 
 describe("cadastro do produto: campo e coluna Uso", () => {
   const def = CADASTROS.produtos;
-  it("o formulário tem o campo Uso com as duas opções; a lista tem a coluna Uso com os rótulos", () => {
+  it("o formulário tem o campo Uso (vazio = a categoria sugere, depois Material e Peça); a lista tem a coluna Uso com os rótulos", () => {
     const campo = def.campos.find((c: any) => c.key === "uso") as any;
     expect(campo).toBeTruthy();
-    expect(campo.opcoes.map((o: any) => o.value)).toEqual(["MATERIAL", "PECA"]);
+    // a 1ª opção é o padrão do formulário novo: vazia, para o servidor usar a sugestão da categoria
+    expect(campo.opcoes.map((o: any) => o.value)).toEqual(["", "MATERIAL", "PECA"]);
+    expect(campo.opcoes[0].label).toBe("Pela categoria (sugestão)");
     const coluna = def.colunas.find((c: any) => c.key === "uso") as any;
     expect(coluna.label).toBe("Uso");
     expect(coluna.rotulos).toEqual({ MATERIAL: "Material", PECA: "Peça" });

@@ -29,7 +29,8 @@ Termos únicos em todo o sistema: **Material** e **Peça**. Eles substituem "Inc
 
 - **Campo "Uso"** no cadastro do produto, com as opções **Material** (consumo, vai incluso no serviço) e **Peça** (vendida à parte).
 - **O Uso do produto manda.** A categoria só **sugere** o Uso de um produto **novo** cadastrado sem Uso: Peças de reposição vira Peça; Materiais, ou nenhuma categoria, vira Material. Trocar a categoria depois não muda o Uso.
-- **Lista de produtos**: nova coluna "Uso".
+- **Formulário do produto**: a 1ª opção do campo é **"Pela categoria (sugestão)"**. Um produto novo salvo assim recebe o Uso que a categoria sugere; quem quiser escolhe Material ou Peça. Um produto existente abre com o Uso dele.
+- **Lista de produtos**: nova coluna "Uso". A coluna "Categoria" passou a mostrar **só o nome**. A pílula que ficava ao lado ("Material (padrão)") contradizia o Uso: aparecia "Material" num produto de Uso "Peça".
 - **Lista do estoque**: coluna "Uso" e filtro **Uso** em "Mais filtros" (Material e Peça, Material, Peça). Um valor estranho na URL é tratado como sem filtro.
 - **Planilha de produtos da Implantação** (etapa "Estoque inicial"):
   - nova coluna `uso`, que aceita "Material" ou "Peça", sem acento ou minúsculo, e sinônimos como "consumo" e "insumo";
@@ -125,3 +126,22 @@ Não apaga nada: sem `DROP`, `DELETE` ou `TRUNCATE` (testado). O resultado é ig
   - `estoque-e31-ui`, `estoque-e32-ui`, `leva-estoque-e31` e `orcamento-materiais-ui`: rótulos Material e Peça;
   - `leva-importacao`: a coluna `uso` na planilha de erros;
   - `composicao-servico-pg`, `orcamento-materiais-pg`, `os-materiais-pg` e `padronizacao-leva2-pg`: os produtos de teste da categoria Peças ganham `uso: PECA`, como o SQL deixaria, porque agora o Uso do produto manda.
+
+## Prints (desktop e celular, dados fictícios)
+
+Pasta `docs/prints/orcamento-e/`, nos sufixos `-desktop` e `-celular`.
+
+| Print | O que mostra |
+|---|---|
+| `01-construtor-{antes,depois}` | Construtor do orçamento. Depois: sem a coluna "Observação" no meio |
+| `02-documento-{antes,depois}` | Documento na tela do orçamento e bloco "Documento do cliente" só com "Mostrar materiais" |
+| `03-config-orcamento-{antes,depois}` | Configurações › Orçamentos. Depois: sem "Mostrar valores dos produtos/materiais" |
+| `04-estoque-lista-{antes,depois}` | Lista do estoque. Depois: coluna "Uso" |
+| `05-construtor-servico-{antes,depois}` | Serviço com materiais. Depois: observação logo abaixo da descrição e botão Material ⇄ Peça em cada material |
+| `06-documento-servico-{antes,depois}` | O serviço no documento. Depois: observação discreta e "Materiais inclusos" dentro do serviço, sem valor |
+| `07-estoque-filtro-peca` | Estoque filtrado por Uso = Peça |
+| `08-produtos-coluna-uso` | Lista de produtos com a coluna Uso, e a Categoria só com o nome |
+| `09-produto-campo-uso` | Novo produto: campo Uso com "Pela categoria (sugestão)" |
+| `10-trocar-uso-antes-do-clique` | Painel de materiais antes de trocar |
+| `11-trocar-uso-virou-peca` | O material trocado para Peça só neste orçamento |
+| `12-peca-em-linha-propria` | A peça na tabela de produtos, com valor (custo, lucro e margem só com a permissão) |
