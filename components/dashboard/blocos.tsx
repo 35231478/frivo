@@ -34,7 +34,7 @@ export function BlocoOperacional({ d }: { d: DadosBloco["operacional"] }) {
         <Kpi rotulo="OS abertas" valor={d.abertas} icone={ClipboardList} tom="info" href="/ordens"
           detalhe={d.emAndamento ? plural(d.emAndamento, "em andamento", "em andamento") : "nenhuma em andamento"} />
         <Kpi rotulo="Agendadas hoje" valor={d.agendadasHoje} icone={CalendarClock} tom="info" href="/calendario?view=semanal" detalhe="com atividade hoje" />
-        <Kpi rotulo="Atrasadas" valor={d.atrasadas} icone={AlertTriangle} tom={d.atrasadas ? "critico" : "ok"} href="/ordens?prazo=atrasadas"
+        <Kpi rotulo="Atrasadas" valor={d.atrasadas} icone={AlertTriangle} tom={d.atrasadas ? "critico" : "ok"} href="/ordens?prazo=atrasadas&periodo=todos"
           detalhe={d.atrasadas ? "prazo vencido" : "nenhuma atrasada"} />
         <Kpi rotulo="Concluídas no mês" valor={d.concluidasMes} icone={CheckCircle2} tom="ok" href="/ordens?status=CONCLUIDA" />
       </GradeKpi>

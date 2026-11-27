@@ -150,7 +150,7 @@ describe.skipIf(!URL_PG)("acabamentos do go-live (PostgreSQL real)", () => {
     expect(r.json.aceitesConfirmados, "só a OS em que ele tem atividade").toBe(1);
     expect(r.json.aceiteConfirmadoOsId).toBe("osCarlos");
     const numeros = Object.entries(r.json).filter(([, v]) => typeof v === "number" && v > 0).map(([k]) => k).sort();
-    expect(numeros).toEqual(["aceitesConfirmados", "total"]);
+    expect(numeros).toEqual(["aceitesConfirmados", "total", "totalGeral"]);
     expect(r.json.total).toBe(1);
   });
 

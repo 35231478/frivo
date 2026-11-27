@@ -15,18 +15,33 @@ import { emModoTecnico } from "@/lib/tecnico/modo";
  * só um cadastro inativo, removido ou com outra senha encerra a sessão. `cache`: layout e página
  * chamam `auth()` na mesma renderização — uma consulta só por requisição (fora do React, não memoriza).
  */
-const lerUsuario = cache(async (usuarioId: string) => {
+const EMPRESA_DA_SESSAO = { ativo: true, configuracao: { select: { appUmDispositivo: true } } } as const;
+const lerEmpresa = (id: string) => prisma.empresa.findUnique({ where: { id }, select: EMPRESA_DA_SESSAO });
+
+/**
+ * O cadastro de agora, em idas PARALELAS ao banco (roda em TODA página e API): antes, o usuário com o perfil
+ * e a empresa (com a configuração) aninhados eram buscados um depois do outro — 3 idas em fila antes de
+ * qualquer outra consulta. Agora o usuário e a empresa (a do token) saem juntos; o perfil, só se houver,
+ * pelo id. Se a empresa do token não for a do cadastro, vale a do cadastro (busca de novo). Mesmo formato.
+ */
+const lerUsuario = cache(async (usuarioId: string, empresaIdDoToken: string | null) => {
   try {
-    const u = await prisma.usuario.findUnique({
-      where: { id: usuarioId },
-      select: {
-        ativo: true, senha: true, sessaoAtiva: true, trocarSenha: true,
-        // O ACESSO de agora (lib/acesso/acesso-atual): papel e perfil, na mesma consulta
-        role: true, perfilAcesso: { select: { nome: true, ativo: true, permissoes: true } },
-        empresa: { select: { ativo: true, configuracao: { select: { appUmDispositivo: true } } } },
-      },
-    });
-    return u ?? "removido";
+    const [u, empresaDoToken] = await Promise.all([
+      prisma.usuario.findUnique({
+        where: { id: usuarioId },
+        select: { ativo: true, senha: true, sessaoAtiva: true, trocarSenha: true, role: true, empresaId: true, perfilAcessoId: true },
+      }),
+      empresaIdDoToken ? lerEmpresa(empresaIdDoToken) : Promise.resolve(null),
+    ]);
+    if (!u) return "removido" as const;
+    const [empresa, perfilAcesso] = await Promise.all([
+      u.empresaId === empresaIdDoToken && empresaDoToken ? empresaDoToken : lerEmpresa(u.empresaId),
+      // O ACESSO de agora (lib/acesso/acesso-atual): papel e perfil
+      u.perfilAcessoId ? prisma.perfilAcesso.findUnique({ where: { id: u.perfilAcessoId }, select: { nome: true, ativo: true, permissoes: true } }) : null,
+    ]);
+    if (!empresa) return "removido" as const;
+    const { empresaId: _e, perfilAcessoId: _p, ...cadastro } = u;
+    return { ...cadastro, perfilAcesso, empresa };
   } catch (e) {
     console.error("[sessao] não foi possível conferir o usuário", e);
     return null;
@@ -43,7 +58,7 @@ export async function conferirTokenAtivo(token: JWT | null, acabouDeEntrar: bool
   if (!token || acabouDeEntrar) return token; // no login o authorize já exigiu usuário/empresa ativos
   const id = typeof token.id === "string" ? token.id : null;
   if (!id) return null;
-  const u = await lerUsuario(id);
+  const u = await lerUsuario(id, typeof token.empresaId === "string" ? token.empresaId : null);
   if (u === null) return token;
   if (u === "removido" || motivoDoEncerramento(u, token)) return null;
   const atual = impressaoDaSenha(u.senha ?? "");
@@ -85,7 +100,7 @@ export function motivoDoEncerramento(u: Cadastro, token: JWT): MotivoDoEncerrame
 export async function motivoDoToken(token: JWT | null): Promise<MotivoDoEncerramento | null> {
   const id = typeof token?.id === "string" ? token.id : null;
   if (!token || !id) return null;
-  const u = await lerUsuario(id);
+  const u = await lerUsuario(id, typeof token?.empresaId === "string" ? token.empresaId : null);
   return u === null ? null : motivoDoEncerramento(u, token);
 }
 

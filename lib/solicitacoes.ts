@@ -12,7 +12,7 @@
 export const SOLICITACAO_PENDENTE = { origem: "PORTAL_CLIENTE", status: "AGUARDANDO_ATENDIMENTO" } as const;
 
 /** Link da tela completa (lista de OS filtrada nas solicitações pendentes). */
-export const URL_SOLICITACOES = "/ordens?origem=PORTAL_CLIENTE&status=AGUARDANDO_ATENDIMENTO";
+export const URL_SOLICITACOES = "/ordens?origem=PORTAL_CLIENTE&status=AGUARDANDO_ATENDIMENTO&periodo=todos";
 
 /**
  * O chamado via QR Code guarda o contato do solicitante no fim da descrição

@@ -8,6 +8,7 @@
  */
 import { prisma } from "@/lib/prisma";
 import { DIAS_USO_CAMPO_SINO, type EscopoDoSino } from "@/lib/alertas/sino";
+import { totalDoSino } from "@/lib/alertas/lidos";
 import { contarAtividadesEsquecidas } from "@/lib/execucao/andamento-server";
 import { contarComentariosNovos } from "@/lib/execucao/comentarios";
 import { contarDespesasPendentes } from "@/lib/execucao/despesas";
@@ -63,19 +64,25 @@ export async function contarSino({ empresaId, usuarioId, escopo: e, filtroTecnic
 
   // Orçamentos vencendo: o prazo do aviso "vence em X dias" da empresa (o mesmo da lista ?validade=vencendo)
   const verVencendo = e.orcamentosVencendo && temOrcamentos;
-  const whereVencendo = verVencendo ? whereOrcamentos(empresaId, { validade: FILTRO_VENCENDO }, agora, await diasOrcamentoVencendo(empresaId)) : null;
+  // O prazo do aviso vem junto com as outras contagens (antes era esperado sozinho, uma ida ao banco a mais em fila)
+  const contarVencendo = async (): Promise<readonly [number, { id: string } | null]> => {
+    const where = whereOrcamentos(empresaId, { validade: FILTRO_VENCENDO }, agora, await diasOrcamentoVencendo(empresaId));
+    return Promise.all([prisma.orcamento.count({ where }), prisma.orcamento.findFirst({ where, orderBy: { validadeEm: "asc" }, select: { id: true } })]);
+  };
   const whereSemTecnico = { empresaId, ...whereOsSemTecnico() };
+  const whereRespondidos = { empresaId, status: { in: ["APROVADO" as const, "REPROVADO" as const] }, respostaVistaEm: null };
 
-  const [prazosBrutos, veiculosBrutos, boletosPagos, orcamentosRespondidos, leadsSite, nfsDoPedido, nfse, faturamentoContratos, reajustesContrato, separacoesPendentes, devolucoesPendentes, pmoc, aceites, admissoes, estoqueNegativoCampo, esquecidas, comentarios, despesasCampo, semTecnico, vencendo, contasPagarHoje, contasReceberHoje] = await Promise.all([
+  const [prazosBrutos, veiculosBrutos, boletosPagos, respondidos, leadsSite, nfsDoPedido, nfse, faturamentoContratos, reajustesContrato, separacoesPendentes, devolucoesPendentes, pmoc, aceites, admissoes, estoqueNegativoCampo, esquecidas, comentarios, despesasCampo, semTecnico, vencendo, contasPagarHoje, contasReceberHoje] = await Promise.all([
     e.prazos || e.comprasPendentes ? contarAlertasPrazos(empresaId) : Promise.resolve(null),
     e.veiculos && temFrota ? contarAlertasVeiculos(empresaId) : Promise.resolve(null),
     e.boletos
       ? prisma.contaReceber.count({ where: { empresaId, boletoStatus: "PAGO", dataRecebimento: { gte: inicioHoje } } })
       : Promise.resolve(0),
     // Cliente aprovou/recusou pelo link e ninguém abriu o orçamento ainda (lib/orcamentos/ciclo)
+    // (o mais recente vai no link quando é um só: abrir o orçamento é o que dá a resposta por vista)
     e.orcamentos
-      ? prisma.orcamento.count({ where: { empresaId, status: { in: ["APROVADO", "REPROVADO"] }, respostaVistaEm: null } })
-      : Promise.resolve(0),
+      ? Promise.all([prisma.orcamento.count({ where: whereRespondidos }), prisma.orcamento.findFirst({ where: whereRespondidos, orderBy: { atualizadoEm: "desc" }, select: { id: true } })])
+      : Promise.resolve([0, null] as const),
     // Novos leads do site (calculadora de BTU) nas últimas 24h — o sino não deixa o lead passar
     // despercebido (destino: /leads-site). Mesma permissão de ver orçamentos.
     e.orcamentos
@@ -120,8 +127,8 @@ export async function contarSino({ empresaId, usuarioId, escopo: e, filtroTecnic
       ? Promise.all([prisma.ordemServico.count({ where: whereSemTecnico }), prisma.ordemServico.findFirst({ where: whereSemTecnico, orderBy: { criadoEm: "asc" }, select: { id: true } })])
       : Promise.resolve([0, null] as const),
     // Orçamentos enviados que vencem até o prazo do aviso: o que vence antes vai no link quando é um só
-    whereVencendo
-      ? Promise.all([prisma.orcamento.count({ where: whereVencendo }), prisma.orcamento.findFirst({ where: whereVencendo, orderBy: { validadeEm: "asc" }, select: { id: true } })])
+    verVencendo
+      ? contarVencendo()
       : Promise.resolve([0, null] as const),
     // Contas do dia (só o painel): a mesma conta da lista com "Vence hoje" e período "Hoje"
     e.contasPagarHoje && temFinanceiro ? prisma.contaPagar.count({ where: whereListaPagar(empresaId, SP_CONTAS_HOJE, periodoHoje, agora) }) : Promise.resolve(0),
@@ -141,16 +148,14 @@ export async function contarSino({ empresaId, usuarioId, escopo: e, filtroTecnic
   const veiculos = veiculosBrutos ?? SEM_VEICULOS;
   const [osSemTecnico, osSemTecnicoMaisAntiga] = semTecnico;
   const [orcamentosVencendo, orcamentoVencendoPrimeiro] = vencendo;
+  const [orcamentosRespondidos, orcamentoRespondidoMaisRecente] = respondidos;
 
-  const totalPrazos = prazos.prazosVencidos + prazos.etapasVencendoHoje + prazos.atendimentosAtraso + prazos.chamadosPortal + prazos.pedidosPendentes
-    + prazos.atendimentoVencendo + prazos.atendimentoEstourado;
-  const totalVeiculos = veiculos.checklistPendente + veiculos.checklistsComAlertas + veiculos.checklistNaoVaiUsar + veiculos.documentosVencendo + veiculos.veiculosManutencao;
-
-  return {
+  const contagem = {
     ...prazos,
     ...veiculos,
     boletosPagos,
     orcamentosRespondidos,
+    orcamentoRespondidoId: orcamentoRespondidoMaisRecente?.id ?? null,
     leadsSite,
     nfPedidos: nfsDoPedido.length,
     nfPedidoId: nfsDoPedido[0]?.id ?? null,
@@ -170,10 +175,10 @@ export async function contarSino({ empresaId, usuarioId, escopo: e, filtroTecnic
     osSemTecnicoId: osSemTecnicoMaisAntiga?.id ?? null,
     orcamentosVencendo,
     orcamentoVencendoId: orcamentoVencendoPrimeiro?.id ?? null,
-    // O número do sino: as contas do dia ficam fora (são rotina de todo dia; o painel as mostra)
-    total: totalPrazos + totalVeiculos + boletosPagos + orcamentosRespondidos + leadsSite + nfsDoPedido.length + nfse.nfseAutorizadas + nfse.nfseRejeitadas + nfse.nfseAguardando + faturamentoContratos + reajustesContrato + separacoesPendentes + devolucoesPendentes + pmoc.pmocsVencendo + pmoc.pmocsExpirados + aceites.aceitesRessalva + aceites.aceitesConfirmados + aceites.avaliacoesBaixas + admissoes.admissoesAssinadas + estoqueNegativoCampo + esquecidas.atividadesEsquecidas + comentarios.comentariosCampo + despesasCampo + osSemTecnico + orcamentosVencendo,
-    foraDoNumero: { contasPagarHoje, contasReceberHoje },
   };
+  // O total do sino (lidos ou não): os avisos de lib/alertas/lidos › AVISOS_DO_NUMERO; as contas do dia
+  // ficam fora (são rotina de todo dia; o painel as mostra)
+  return { ...contagem, total: totalDoSino(contagem), foraDoNumero: { contasPagarHoje, contasReceberHoje } };
 }
 
 export type ContagemSino = Awaited<ReturnType<typeof contarSino>>;

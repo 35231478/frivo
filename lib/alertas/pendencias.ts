@@ -10,6 +10,7 @@
  * a lista já filtrada. As contas do dia não entram no número do sino (são rotina de todo dia).
  */
 import type { EscopoDoSino } from "@/lib/alertas/sino";
+import { ehAvisoDoNumero, type AvisoDoNumero } from "@/lib/alertas/lidos";
 import { FILTRO_SEM_TECNICO } from "@/lib/os/sem-tecnico";
 import { FILTRO_VENCENDO } from "@/lib/orcamentos/ciclo";
 
@@ -68,11 +69,11 @@ export const PENDENCIAS = {
   osSemTecnico: {
     area: "operacao", rotulo: "OS sem técnico", tom: "atencao", icone: "semTecnico", escopo: "osSemTecnico",
     valor: (d) => d.osSemTecnico,
-    href: (d) => umOuLista(d.osSemTecnico, d.osSemTecnicoId, (id) => `/ordens/${id}`, `/ordens?tecnico=${FILTRO_SEM_TECNICO}`),
+    href: (d) => umOuLista(d.osSemTecnico, d.osSemTecnicoId, (id) => `/ordens/${id}`, `/ordens?tecnico=${FILTRO_SEM_TECNICO}&periodo=todos`),
   },
   osAtrasadas: {
     area: "operacao", rotulo: "OS atrasadas", tom: "atrasado", icone: "atrasada", escopo: "prazos",
-    valor: (d) => d.atendimentosAtraso, href: () => "/ordens?prazo=atrasadas",
+    valor: (d) => d.atendimentosAtraso, href: () => "/ordens?prazo=atrasadas&periodo=todos",
   },
   atividadesEsquecidas: {
     area: "operacao", rotulo: "Atividades esquecidas em andamento", tom: "atencao", icone: "esquecida", escopo: "atividadesEsquecidas",
@@ -120,6 +121,9 @@ export function itemPendencia(id: IdPendencia, d: DadosPendencias): ItemPendenci
   // Campo que não veio (resposta de uma versão anterior, no meio de um deploy) conta como zero
   return { id, rotulo: def.rotulo, valor: Number(def.valor(d)) || 0, href: def.href(d), tom: def.tom, icone: def.icone };
 }
+
+/** O aviso do número do sino que o item é (a marca de lido, lib/alertas/lidos); as contas do dia não estão no número */
+export const avisoDoItem = (id: IdPendencia): AvisoDoNumero | null => (id === "osAtrasadas" ? "atendimentosAtraso" : ehAvisoDoNumero(id) ? id : null);
 
 export interface AreaComPendencias { area: AreaPendencia; rotulo: string; itens: ItemPendencia[] }
 

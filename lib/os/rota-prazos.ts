@@ -5,7 +5,7 @@
  *  - sem filtro: a lista de OS já filtrada nas ATRASADAS — o que se procura por "prazos".
  */
 export function destinoDePrazos(sp: Record<string, string | undefined>): string {
-  if (!sp.status && !sp.templateId) return "/ordens?prazo=atrasadas";
+  if (!sp.status && !sp.templateId) return "/ordens?prazo=atrasadas&periodo=todos";
   const antigos = new URLSearchParams();
   for (const k of ["status", "templateId", "pagina", "por"]) if (sp[k]) antigos.set(k, sp[k]!);
   return `/ordens/etapas?${antigos.toString()}`;

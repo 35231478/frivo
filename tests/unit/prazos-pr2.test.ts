@@ -193,8 +193,8 @@ describe("Tipo de OS — o prazo padrão no cadastro", () => {
 describe("Menu e vocabulário", () => {
   it("\"Prazos e SLA\" saiu do menu; o endereço antigo leva às OS atrasadas — ou, com o filtro da tela antiga, às etapas com prazo", () => {
     expect(fonte("components/layout/sidebar.tsx")).not.toMatch(/"\/prazos"|Prazos e SLA/);
-    expect(destinoDePrazos({})).toBe("/ordens?prazo=atrasadas");
-    expect(destinoDePrazos({ pagina: "2" })).toBe("/ordens?prazo=atrasadas"); // página sozinha não é filtro da tela antiga
+    expect(destinoDePrazos({})).toBe("/ordens?prazo=atrasadas&periodo=todos");
+    expect(destinoDePrazos({ pagina: "2" })).toBe("/ordens?prazo=atrasadas&periodo=todos"); // página sozinha não é filtro da tela antiga
     expect(destinoDePrazos({ status: "ATRASADO" })).toBe("/ordens/etapas?status=ATRASADO");
     expect(destinoDePrazos({ status: "ATIVO", templateId: "t1", pagina: "3", lixo: "x" })).toBe("/ordens/etapas?status=ATIVO&templateId=t1&pagina=3");
     expect(fonte("app/(dashboard)/prazos/page.tsx")).toContain("redirect(destinoDePrazos(await searchParams));");
@@ -208,8 +208,8 @@ describe("Menu e vocabulário", () => {
     // o sino lê o rótulo e o destino do catálogo do painel de pendências (lib/alertas/pendencias)
     expect(fonte("components/layout/header.tsx")).toContain('doPainel("osAtrasadas", true)');
     expect(fonte("lib/alertas/pendencias.ts")).toContain('rotulo: "OS atrasadas", tom: "atrasado"');
-    expect(fonte("lib/alertas/pendencias.ts")).toContain('href: () => "/ordens?prazo=atrasadas"');
-    expect(fonte("components/dashboard/blocos.tsx")).toContain('href="/ordens?prazo=atrasadas"');
+    expect(fonte("lib/alertas/pendencias.ts")).toContain('href: () => "/ordens?prazo=atrasadas&periodo=todos"');
+    expect(fonte("components/dashboard/blocos.tsx")).toContain('href="/ordens?prazo=atrasadas&periodo=todos"');
   });
 
   it("os \"modelos de prazo\" viraram \"Etapas com prazo\" em Configurações, na OS e nas mensagens do cadastro", () => {

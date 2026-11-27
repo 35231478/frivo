@@ -1,126 +1,21 @@
 import type { Metadata } from "next";
 import { auth } from "@/lib/auth";
-import { prisma } from "@/lib/prisma";
-import { periodoOrdens } from "@/lib/listas/filtros";
-import { whereOrdensDaLista } from "@/lib/listas/filtros-server";
-import { periodoTela } from "@/lib/periodo";
-import { janela, lerPaginacao, paginaValida } from "@/lib/listagem";
+import { carregarListaOs, type SPOrdens } from "@/lib/os/lista-server";
 import { OrdensListaClient } from "@/components/ordens/ordens-lista-client";
 import { SelecaoMassaProvider } from "@/components/acoes-massa/selecao";
 import { BarraAcoesMassa } from "@/components/acoes-massa/barra";
-import { comparaNatural } from "@/lib/utils";
-import { atrasoJustificado, prazoEfetivo, rotuloMotivoAtraso, situacaoPrazoExecucao, temPrazoProprio } from "@/lib/os/prazo-execucao";
-import { textoPrazo } from "@/lib/os/prazos";
-import { resumoStatus } from "@/lib/os/status";
 
 export const metadata: Metadata = { title: "Ordens de serviço" };
 
-type SP = {
-  busca?: string; status?: string; prioridade?: string; origem?: string;
-  clienteId?: string; responsavelId?: string; tipoOsId?: string; contratoId?: string;
-  numero?: string; prazo?: string; dataInicio?: string; dataFim?: string; data?: string; periodo?: string; ref?: string; mes?: string; de?: string; ate?: string;
-  sort?: string; dir?: string; pagina?: string; por?: string;
-};
-
-const SORT_MAP: Record<string, (dir: "asc" | "desc") => any> = {
-  numero: (dir) => ({ numero: dir }),
-  cliente: (dir) => ({ cliente: { nome: dir } }),
-  criadoEm: (dir) => ({ criadoEm: dir }),
-  previsaoConclusao: (dir) => ({ previsaoConclusao: dir }),
-  status: (dir) => ({ status: dir }),
-  prioridade: (dir) => ({ prioridade: dir }),
-};
-
-export default async function OrdensPage({ searchParams }: { searchParams: Promise<SP> }) {
+/** A lista de OS: o carregamento (duas ondas de consultas em paralelo) está em lib/os/lista-server. */
+export default async function OrdensPage({ searchParams }: { searchParams: Promise<SPOrdens> }) {
   const sp = await searchParams;
   const session = await auth();
-  const empresaId = session!.user!.empresaId;
-
-  const sort = sp.sort && SORT_MAP[sp.sort] ? sp.sort : "criadoEm";
-  const dir: "asc" | "desc" = sp.dir === "asc" ? "asc" : "desc";
-
-  const agora = new Date();
-  const where = await whereOrdensDaLista(empresaId, sp, agora);
-  const periodo = periodoTela(periodoOrdens(sp, agora));
-  const { pagina: paginaPedida, porPagina } = lerPaginacao(sp);
-  const total = await prisma.ordemServico.count({ where });
-  const pagina = paginaValida(paginaPedida, porPagina, total);
-
-  const [ordens, clientes, usuarios, tiposOs, contratos] = await Promise.all([
-    prisma.ordemServico.findMany({
-      where,
-      include: {
-        cliente: { select: { id: true, nome: true, nomeFantasia: true, logo: true } },
-        unidade: { select: { nome: true } },
-        responsavel: { select: { nome: true } },
-        atividades: { select: {
-          status: true, dataAgendada: true,
-          tecnico: { select: { id: true, nome: true, avatar: true } },
-          tecnicosEquipe: { select: { tecnico: { select: { id: true, nome: true, avatar: true } } } },
-        } },
-        // "Faturada" é a OS concluída que já entrou numa medição (o mesmo estágio da central da OS)
-        medicaoItens: { select: { medicao: { select: { status: true } } } },
-      },
-      // `id` no fim: desempate estável (a paginação não repete nem pula OS)
-      orderBy: [SORT_MAP[sort](dir), { id: "asc" }],
-      ...janela(pagina, porPagina),
-    }),
-    prisma.cliente.findMany({ where: { empresaId, ativo: true }, select: { id: true, nome: true, nomeFantasia: true }, orderBy: { nome: "asc" } }),
-    prisma.usuario.findMany({ where: { empresaId, ativo: true }, select: { id: true, nome: true }, orderBy: { nome: "asc" } }),
-    prisma.tipoOs.findMany({ where: { empresaId, ativo: true }, select: { id: true, nome: true }, orderBy: { nome: "asc" } }),
-    prisma.contrato.findMany({ where: { empresaId }, select: { id: true, numero: true }, orderBy: { numero: "asc" } }),
-  ]);
-
-  const ordensView = ordens.map((o) => {
-    // Técnicos das atividades, deduplicados por id e ordenados por nome (pt-BR)
-    const tecnicos = Array.from(
-      // responsáveis + membros das equipes das atividades
-      new Map(o.atividades.flatMap((a) => [a.tecnico, ...a.tecnicosEquipe.map((t) => t.tecnico)]).filter(Boolean).map((t) => [t!.id, t!])).values(),
-    ).sort((a, b) => comparaNatural(a.nome, b.nome));
-    const situacao = situacaoPrazoExecucao(o, agora);
-
-    return {
-      id: o.id,
-      numero: o.numero,
-      chamadoNumero: o.chamadoNumero,
-      origem: o.origem,
-      cliente: o.cliente.nomeFantasia ?? o.cliente.nome,
-      clienteLogo: o.cliente.logo ?? null,
-      unidade: o.unidade?.nome ?? null,
-      responsavel: o.responsavel?.nome ?? null,
-      atividades: o.atividades.length,
-      tecnicos: tecnicos.map((t) => ({ id: t.id, nome: t.nome, avatar: t.avatar ?? null })),
-      status: o.status,
-      // O ESTÁGIO (o mesmo da barra de andamento da OS): Aberta › Agendada › Em execução › Concluída › Faturada, ou Cancelada
-      estagio: resumoStatus({ status: o.status, statusManual: o.statusManual, previsaoConclusao: o.previsaoConclusao, atividades: o.atividades, medicoes: o.medicaoItens.map((m) => m.medicao) }).exibido,
-      prioridade: o.prioridade,
-      criadoEm: o.criadoEm.toISOString(),
-      previsaoConclusao: o.previsaoConclusao ? o.previsaoConclusao.toISOString() : null,
-      // O PRAZO de execução (o próprio ou, sem ele, o dia previsto) e a situação dele hoje — a regra única
-      prazo: prazoEfetivo(o)?.toISOString() ?? null,
-      // Prazo digitado (ou do tipo de OS) — sem ele, o prazo que vale É a data prevista, e a coluna diz isso
-      prazoProprio: temPrazoProprio(o),
-      prazoSituacao: situacao.situacao,
-      prazoTexto: textoPrazo(situacao, true),
-      atrasoJustificado: atrasoJustificado(o) ? rotuloMotivoAtraso(o.atrasoJustificadoMotivo) || "Justificado" : null,
-    };
-  });
+  const { total, pagina, porPagina, periodo, linhas, opcoes } = await carregarListaOs(session!.user!.empresaId, sp);
 
   return (
-    <SelecaoMassaProvider entidade="ordens" idsPagina={ordens.map((o) => o.id)} total={total}>
-    <OrdensListaClient
-      ordens={ordensView}
-      total={total}
-      pagina={pagina}
-      porPagina={porPagina}
-      periodo={periodo}
-      opcoes={{
-        clientes: clientes.map((c) => ({ value: c.id, label: c.nomeFantasia ?? c.nome })),
-        usuarios: usuarios.map((u) => ({ value: u.id, label: u.nome })),
-        tiposOs: tiposOs.map((t) => ({ value: t.id, label: t.nome })),
-        contratos: contratos.map((c) => ({ value: c.id, label: c.numero })),
-      }}
-    />
+    <SelecaoMassaProvider entidade="ordens" idsPagina={linhas.map((o) => o.id)} total={total}>
+    <OrdensListaClient ordens={linhas} total={total} pagina={pagina} porPagina={porPagina} periodo={periodo} opcoes={opcoes} />
     <BarraAcoesMassa />
     </SelecaoMassaProvider>
   );
