@@ -28,7 +28,7 @@ interface MedicaoResumo { id: string; numero: string; status: string; valorTotal
  * liberada) e abre a emissão da NFS-e. OS de contrato: entra numa medição oficial ("Gerar medição").
  * A antiga "medição interna" (OsMedicao) saiu: nunca virava conta a receber.
  */
-export function OsFinanceiro({ osId, temContrato, concluida, fatura, faturamento, medicoes: iniciais, itensOrcamento, contasReceber = [], abrirNfse, onAbriuNfse }: {
+export function OsFinanceiro({ osId, temContrato, concluida, fatura, faturamento, medicoes: iniciais, itensOrcamento, contasReceber = [], abrirNfse, onAbriuNfse, onAba }: {
   osId: string; temContrato?: boolean; medicoes: MedicaoResumo[]; itensOrcamento: any[];
   /** Faturar só com a OS concluída */
   concluida?: boolean;
@@ -40,6 +40,8 @@ export function OsFinanceiro({ osId, temContrato, concluida, fatura, faturamento
   contasReceber?: ContaVinculada[];
   /** Botão "Emitir NFS-e" do cabeçalho: abre a emissão ao chegar na aba */
   abrirNfse?: boolean; onAbriuNfse?: () => void;
+  /** Leva a outra aba da OS (ex.: Comercial, onde os itens são marcados como executados) */
+  onAba?: (aba: string) => void;
 }) {
   const router = useRouter();
   const { pode } = usePermissoes();
@@ -50,6 +52,10 @@ export function OsFinanceiro({ osId, temContrato, concluida, fatura, faturamento
   const totalOrcamento = itensOrcamento.reduce((acc: number, i: any) => acc + Number(i.valorTotal), 0);
   const totalExecutado = itensOrcamento.filter((i: any) => i.executado).reduce((acc: number, i: any) => acc + Number(i.valorTotal), 0);
   const totalMedido = medicoes.filter((m) => m.status !== "CANCELADA").reduce((acc, m) => acc + Number(m.valorTotal), 0);
+  // OS avulsa concluída sem nada a faturar (nenhum item executado): o "Faturar" não aparece — diz o porquê e
+  // onde resolver, em vez de deixar só "ainda não foi faturada" sem saída
+  const nadaAFaturar = !temContrato && !!concluida && !fatura && !!faturamento && faturamento.saldo <= 0
+    && faturamento.faturas.length === 0 && pode("financeiro", "medicoes");
 
   async function gerarMedicao() {
     setErro(""); setGerando(true);
@@ -132,8 +138,19 @@ export function OsFinanceiro({ osId, temContrato, concluida, fatura, faturamento
         </Button>
       ) : fatura || faturamento?.faturas.length || (concluida && pode("financeiro", "medicoes")) ? (
         <div className="border-t border-surface-linha pt-5">
-          <BotaoFaturar url={`/api/ordens/${osId}/faturar`} origem="OS" fatura={fatura ?? null} faturamento={faturamento ?? null}
-            podeFaturar={!!concluida && pode("financeiro", "medicoes")} podeVer={pode("financeiro", "visualizar")} />
+          {nadaAFaturar ? (
+            <p className="text-sm text-ink-muted" data-nada-a-faturar>
+              Nada a faturar ainda: nenhum item desta OS está marcado como executado.{" "}
+              {onAba ? (
+                <button type="button" onClick={() => onAba("comercial")} className="font-semibold text-primary-600 hover:underline" data-ir-comercial>
+                  Marcar os itens executados (aba Comercial)
+                </button>
+              ) : "Marque os itens executados na aba Comercial."}
+            </p>
+          ) : (
+            <BotaoFaturar url={`/api/ordens/${osId}/faturar`} origem="OS" fatura={fatura ?? null} faturamento={faturamento ?? null}
+              podeFaturar={!!concluida && pode("financeiro", "medicoes")} podeVer={pode("financeiro", "visualizar")} />
+          )}
         </div>
       ) : pode("financeiro", "medicoes") && (
         <p className="text-xs text-ink-muted" data-faturar-depois>Conclua a OS para faturar.</p>

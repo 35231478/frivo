@@ -139,6 +139,8 @@ export function SeletorTecnicos({ tecnicos, equipes, tipoOsId, valor, onChange, 
 
       <SelectCadastroRapido
         value="" onChange={adicionar} opcoes={opcoesAdicionar} icone={<UserPlus className="w-4 h-4" />}
+        // Lista vazia porque todos os aptos já estão na atividade: não é "nenhum cadastrado"
+        textoVazio={valor.tecnicoIds.length && tecnicos.some((t) => valor.tecnicoIds.includes(t.id)) ? (tipoOsId ? "Todos os colaboradores com competência neste tipo de OS já estão na atividade" : "Todos os colaboradores já estão na atividade") : undefined}
         entidade={TECNICO.entidade} contexto={tipoOsId ? "com competência neste tipo de OS" : undefined}
         placeholder={valor.tecnicoIds.length ? "Adicionar outro colaborador…" : equipes.length ? "…ou escolha colaboradores" : "Selecione o colaborador"}
         carregando={carregando} campos={TECNICO.campos} campoBusca="nome" permissao={TECNICO.permissao} linkCadastroCompleto={TECNICO.link}

@@ -155,6 +155,8 @@ interface Props {
   icone?: React.ReactNode;
   /** Editar o item selecionado sem sair da tela (o lápis ao lado do seletor). */
   edicao?: EdicaoDoSelecionado;
+  /** Lista vazia porque tudo já foi escolhido (não porque não há cadastro): troca o "Nenhum X cadastrado" */
+  textoVazio?: string;
 }
 
 const UFS = ["AC", "AL", "AP", "AM", "BA", "CE", "DF", "ES", "GO", "MA", "MT", "MS", "MG", "PA", "PB", "PR", "PE", "PI", "RJ", "RN", "RS", "RO", "RR", "SC", "SP", "SE", "TO"];
@@ -164,7 +166,7 @@ const inputCls =
 
 export function SelectCadastroRapido({
   value, onChange, opcoes, entidade, campos, criar, permissao, linkCadastroCompleto, contexto,
-  placeholder, disabled, textoDesabilitado, carregando, erro, campoBusca, className, valoresIniciais, icone, edicao,
+  placeholder, disabled, textoDesabilitado, carregando, erro, campoBusca, className, valoresIniciais, icone, edicao, textoVazio,
 }: Props) {
   const podeCriar = usePodeCriar(permissao);
   const podeEditar = usePodeCriar(edicao?.permissao) && !!edicao;
@@ -201,7 +203,7 @@ export function SelectCadastroRapido({
     return (
       <div className={cn("rounded-lg border border-dashed px-3 py-2.5 text-sm flex items-center justify-between gap-3 flex-wrap",
         erro ? "border-atrasado/40 bg-atrasado-claro/60" : "border-surface-border bg-surface-page", className)}>
-        <span className="text-ink-muted">{nenhum} {entidade.singular} {cadastrado}{contexto ? ` ${contexto}` : ""}</span>
+        <span className="text-ink-muted" data-vazio-seletor>{textoVazio ?? `${nenhum} ${entidade.singular} ${cadastrado}${contexto ? ` ${contexto}` : ""}`}</span>
         {podeCriar && (
           <button type="button" onClick={abrirCadastro} className="inline-flex items-center gap-1 font-semibold text-primary-600 hover:text-primary-700">
             <Plus className="w-4 h-4" /> Cadastrar agora
