@@ -139,7 +139,7 @@ describe.skipIf(!URL_PG)("app de campo, leva 3 (PR A): faixa esperada (PostgreSQ
       await sync([resp("iSuc", { observacao: "Pressão baixa: possível falta de gás." })]);
       expect(await r("iSuc")).toMatchObject({ fora: true, observacao: "Pressão baixa: possível falta de gás." });
       await sync([resp("iSuc", { status: "NAO_SE_APLICA" })]);
-      expect(await r("iSuc")).toMatchObject({ valor: null, fora: false, status: "NAO_SE_APLICA" });
+      expect(await r("iSuc")).toMatchObject({ valor: null, fora: false, status: "NAO_SE_APLICA", faixaMin: null, faixaMax: null });
       await sync([resp("iCor", { valor: 99 })]);
       expect(await r("iCor")).toMatchObject({ faixaMin: null, faixaMax: null, fora: false });
       await sync([resp("iSuc", { valor: 95 })]); // volta fora para os destaques
