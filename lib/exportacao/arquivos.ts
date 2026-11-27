@@ -171,6 +171,13 @@ export function nomeDoZip(empresa: string, parte: Parte, quando: Date): string {
   return `frivo-dados-${slug}${parte === "tudo" ? "" : `-${parte}`}-${chaveDiaBR(quando)}.zip`;
 }
 
+/** A ⓘ da tela "Exportar dados" (texto de ajuda: mora aqui, não inline na tela). */
+export const DICA_EXPORTAR =
+  "Gera um .zip com uma planilha por cadastro (clientes, unidades, contatos, equipamentos, produtos e estoque, colaboradores, veículos, " +
+  "contratos, PMOC), as OS e os orçamentos com os itens, e as contas a receber e a pagar, mais um LEIA-ME. As planilhas abrem no Excel " +
+  "(CSV com ponto e vírgula) e os cadastros saem com as mesmas colunas da Implantação, para restaurar em outra empresa. Ficam de fora: " +
+  "fotos, anexos, senhas, salários e documentos pessoais. Cada exportação fica registrada com quem baixou e quando.";
+
 /** Só o administrador da empresa exporta (o servidor confere; a tela só esconde). */
 export const podeExportar = (role: unknown) => role === "ADMIN" || role === "SUPER_ADMIN";
 
