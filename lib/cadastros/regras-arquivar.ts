@@ -4,6 +4,7 @@
  * apaga; o que nunca saiu do rascunho pode ser excluído. Tudo aqui é puro (sem banco), para ser testado
  * e reaproveitado pela tela.
  */
+import { formatarMoeda } from "@/lib/utils";
 
 /* ───────── Medição (fatura): excluir de verdade só o rascunho que não gerou nada ───────── */
 
@@ -67,11 +68,12 @@ export function motivoNaoInativarModeloChecklist(modeloId: string, cfg: ConfigCh
   return null;
 }
 
-/* ───────── Colaborador: a opção "Inativo" do status ───────── */
+/* ───────── Colaborador e veículo: a opção "Inativo" do status ───────── */
 
 /**
- * Inativar colaborador exige "Equipes › Excluir" (como o botão Inativar). No formulário, quem só edita
- * não vê a opção, a não ser que ele já esteja inativo (o valor atual precisa continuar visível).
+ * Inativar exige a permissão de excluir do módulo ("Equipes › Excluir" para colaborador, "Veículos ›
+ * Excluir" para veículo), como o botão Inativar. No formulário, quem só edita não vê a opção, a não ser
+ * que o registro já esteja inativo (o valor atual precisa continuar visível).
  */
 export function mostrarOpcaoInativo(podeInativar: boolean, statusAtual: string | null | undefined): boolean {
   return podeInativar || statusAtual === "INATIVO";
@@ -146,4 +148,135 @@ export function avisosInativarCliente(u: UsoCliente): string[] {
   if (u.contasAbertas) a.push(`Tem ${pl(u.contasAbertas, "conta a receber em aberto", "contas a receber em aberto")}: a cobrança continua.`);
   if (u.pmocsAtivos) a.push(`Tem ${pl(u.pmocsAtivos, "PMOC ativo", "PMOCs ativos")}.`);
   return a;
+}
+
+/* ───────── Endereço (unidade): o que bloqueia e o que continua andando naquele local ───────── */
+
+export interface UsoEndereco {
+  principal: boolean;
+  equipamentosAtivos: number;
+  /** contratos ATIVOS que incluem este local */
+  contratosAtivos: string[];
+  /** PMOC ativos deste local (nome) */
+  pmocsAtivos: string[];
+  /** OS em aberto neste local (número) */
+  osAbertas: string[];
+}
+
+/**
+ * Bloqueia só o que deixaria um dado sem lugar: o principal (o cliente ficaria sem endereço padrão) e
+ * os equipamentos ativos (ficariam num local que some dos seletores).
+ */
+export function bloqueioInativarEndereco(u: Pick<UsoEndereco, "principal" | "equipamentosAtivos">): string | null {
+  if (u.principal) return "Endereço principal não pode ser inativado: marque outro endereço como principal antes.";
+  if (u.equipamentosAtivos > 0) {
+    const qtd = pl(u.equipamentosAtivos, "equipamento ativo", "equipamentos ativos");
+    return `Tem ${qtd} neste endereço: mova ou inative os equipamentos antes.`;
+  }
+  return null;
+}
+
+/** O que segue valendo naquele local: avisa, não bloqueia (a pessoa decide se encerra antes). */
+export function avisosInativarEndereco(u: Pick<UsoEndereco, "contratosAtivos" | "pmocsAtivos" | "osAbertas">): string[] {
+  const a: string[] = [];
+  const ct = u.contratosAtivos, pm = u.pmocsAtivos, os = u.osAbertas;
+  if (ct.length) {
+    const qtd = pl(ct.length, "contrato ativo", "contratos ativos"), segue = ct.length === 1 ? "continua" : "continuam";
+    a.push(`Está em ${qtd} (${ate3(ct)}): ${segue} atendendo este local até ser alterado.`);
+  }
+  if (pm.length) {
+    const qtd = pl(pm.length, "PMOC ativo", "PMOCs ativos"), segue = pm.length === 1 ? "continua" : "continuam";
+    a.push(`Tem ${qtd} (${ate3(pm)}): ${segue} valendo até ser inativado.`);
+  }
+  if (os.length) {
+    const segue = os.length === 1 ? "segue" : "seguem";
+    a.push(`Tem ${pl(os.length, "OS em aberto", "OS em aberto")} (${ate3(os)}): ${segue} normalmente.`);
+  }
+  return a;
+}
+
+/* ───────── Contato do cliente: inativar nunca bloqueia ───────── */
+
+export interface UsoContato { principal: boolean; temAcessoPortal: boolean }
+
+/** O login do portal só aceita contato ativo (lib/auth-portal): inativar corta o acesso na hora. */
+export function avisosInativarContato(c: UsoContato): string[] {
+  const a: string[] = [];
+  if (c.temAcessoPortal) a.push("Tem acesso ao Portal do Cliente: o acesso fica bloqueado enquanto estiver inativo.");
+  if (c.principal) a.push("É o contato principal: escolha outro contato principal depois.");
+  return a;
+}
+
+/* ───────── Contrato: cancelar tem permissão própria; sair de Ativo mostra o que é cancelado junto ───────── */
+
+/**
+ * Cancelar o contrato exige "Contratos › Excluir" (como cancelar OS e orçamento); as outras trocas de
+ * status (suspender, encerrar, renovar, reativar) seguem com "Contratos › Editar".
+ */
+export function acaoDoStatusContrato(novo: string): "editar" | "excluir" {
+  return novo === "CANCELADO" ? "excluir" : "editar";
+}
+
+export interface SaidaContrato {
+  /** OS agendadas e intocadas que a saída de Ativo cancela */
+  osACancelar: string[];
+  /** previsões de cobrança em aberto que são canceladas */
+  previsoes: number;
+  valorPrevisoes: number;
+  /** OS do contrato que já andaram: seguem */
+  osSeguem: string[];
+}
+
+/** O que acontece ao sair de Ativo (lib/financeiro-server › encerrarFinanceiroDoContrato), dito antes. */
+export function avisosSaidaContrato(s: SaidaContrato): string[] {
+  const a: string[] = [];
+  const os = s.osACancelar, seguem = s.osSeguem;
+  if (os.length) {
+    const um = os.length === 1, qtd = pl(os.length, "OS agendada", "OS agendadas");
+    const comecou = um ? "ainda não começou" : "ainda não começaram", sai = um ? "sai" : "saem";
+    a.push(`Cancela ${qtd} que ${comecou} (${ate3(os)}): ${sai} da agenda.`);
+  }
+  if (s.previsoes > 0) {
+    const qtd = pl(s.previsoes, "previsão de cobrança", "previsões de cobrança"), valor = formatarMoeda(s.valorPrevisoes);
+    a.push(`Cancela ${qtd} em aberto (${valor}): o que já foi faturado ou recebido não muda.`);
+  }
+  if (seguem.length) {
+    const qtd = pl(seguem.length, "OS já em andamento", "OS já em andamento");
+    a.push(`Tem ${qtd} (${ate3(seguem)}): ${seguem.length === 1 ? "segue" : "seguem"} normalmente.`);
+  }
+  return a;
+}
+
+/* ───────── Modelos de checklist e de formulário: o uso aparece antes de inativar ───────── */
+
+/** O que já foi feito com o modelo continua no histórico; o aviso diz quanto. */
+export function avisosInativarModeloChecklist(preenchimentos: number): string[] {
+  if (preenchimentos <= 0) return [];
+  const vezes = pl(preenchimentos, "vez", "vezes");
+  return [`Já foi preenchido ${vezes}: os preenchimentos continuam no histórico.`];
+}
+
+export function avisosInativarFormulario(vinculos: number): string[] {
+  if (vinculos <= 0) return [];
+  const qtd = pl(vinculos, "combinação", "combinações");
+  return [`Em uso em ${qtd} de equipamento e tipo de OS: sai das próximas OS; as respostas já dadas ficam.`];
+}
+
+/* ───────── Nota de compra: descartar só a importada por engano, antes de lançar ───────── */
+
+export interface NotaDescarte {
+  status: string;
+  /** contas a pagar ligadas (só existem depois de lançar) */
+  contasPagar: number;
+}
+
+/**
+ * Descartar APAGA a nota (com os itens e a conciliação) e deixa o registro em NotaCompraDescarte. Vale
+ * só antes de lançar: a lançada já virou entrada no estoque e conta a pagar, e o caminho é o estorno.
+ */
+export function motivoNaoDescartarNota(n: NotaDescarte): string | null {
+  if (n.status === "LANCADA" || n.contasPagar > 0) {
+    return "Nota já lançada não se descarta: o estorno é pela conta a pagar e pelo ajuste de estoque.";
+  }
+  return null;
 }

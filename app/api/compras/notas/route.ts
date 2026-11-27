@@ -1,15 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
 import { exigirPermissao } from "@/lib/permissoes-server";
-import { lerPaginacao, paramsDe } from "@/lib/listagem";
+import { lerPaginacao } from "@/lib/listagem";
 import { ErroNota, importarNota, listarNotas } from "@/lib/compras/notas";
 import { TAMANHO_MAX_XML } from "@/lib/compras/nfe";
 
-/** GET /api/compras/notas — notas de compra da empresa (Estoque › visualizar) */
+/** GET /api/compras/notas — notas de compra da empresa, com busca (`q`) e situação (`status`). Estoque › visualizar */
 export async function GET(req: NextRequest) {
   const guard = await exigirPermissao("estoque", "visualizar");
   if (guard.erro) return guard.resposta;
-  const { pagina, porPagina } = lerPaginacao(paramsDe(req.nextUrl.searchParams));
-  return NextResponse.json(await listarNotas(guard.session.user!.empresaId, { pagina, porPagina }));
+  const sp = Object.fromEntries(req.nextUrl.searchParams.entries());
+  const { pagina, porPagina } = lerPaginacao(sp);
+  return NextResponse.json(await listarNotas(guard.session.user!.empresaId, { pagina, porPagina }, sp));
 }
 
 /**

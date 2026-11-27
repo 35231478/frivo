@@ -24,12 +24,15 @@ export async function carregarFichaCliente(id: string, empresaId: string) {
   });
   if (!cliente) return null;
 
-  const [{ status, totalProximos30Dias }, perdas12m, satisfacao] = await Promise.all([
+  const [{ status, totalProximos30Dias }, perdas12m, satisfacao, unidadesInativas, contatosInativos] = await Promise.all([
     calcularStatusFinanceiroDetalhado(id, empresaId),
     perdasRecentesDoCliente(id, empresaId),
     satisfacaoDosClientes(empresaId, [id]),
+    // Os inativos vão à parte: a seção "Inativos" da edição reativa por aqui (o resto do sistema só vê os ativos)
+    prisma.unidade.findMany({ where: { clienteId: id, empresaId, ativo: false }, orderBy: { nome: "asc" } }),
+    prisma.contatoCliente.findMany({ where: { clienteId: id, empresaId, ativo: false }, orderBy: { nome: "asc" } }),
   ]);
   // Contatos vão para o client sem hash/senha do portal
-  const dados = { ...cliente, contatosCliente: cliente.contatosCliente.map(contatoSeguro) };
+  const dados = { ...cliente, contatosCliente: cliente.contatosCliente.map(contatoSeguro), unidadesInativas, contatosInativos: contatosInativos.map(contatoSeguro) };
   return { dados, status, totalProximos30Dias, perdas12m, satisfacao: satisfacao.get(id) ?? SEM_AVALIACAO };
 }

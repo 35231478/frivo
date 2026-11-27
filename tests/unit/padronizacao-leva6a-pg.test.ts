@@ -178,7 +178,8 @@ describe.skipIf(!URL_PG)("Leva 6A — Contratos (PostgreSQL real)", () => {
   });
 
   it("o contrato de outra empresa não existe para quem pergunta (404, e nada muda)", async () => {
-    como(montarPermissoes({ contratos: ["editar"] }));
+    // cancelar pede Contratos › Excluir (leva 5 de cadastros): com ela, a outra empresa segue invisível
+    como(montarPermissoes({ contratos: ["editar", "excluir"] }));
     const r = await mudarStatus("ctE2", { status: "CANCELADO" });
     expect(r.status).toBe(404);
     expect((await prisma.contrato.findUnique({ where: { id: "ctE2" } })).status).toBe("ATIVO");

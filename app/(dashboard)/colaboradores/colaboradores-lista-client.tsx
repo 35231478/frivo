@@ -340,11 +340,15 @@ function Cards({ massa, itens, podeGerenciar }: { massa: boolean; itens: Colabor
             </div>
           </div>
           <div className="flex items-center gap-1.5 flex-wrap"><Equipes c={c} /><DocSelo c={c} /></div>
-          <p className="mt-auto text-xs text-ink-muted truncate flex items-center gap-1.5 pt-2 border-t border-surface-border/70">
+          <p className="mt-auto text-xs text-ink-muted truncate flex items-center gap-1.5 pt-2 pr-8 border-t border-surface-border/70">
             <Phone className="w-3.5 h-3.5 shrink-0" /> {formatarTelefone(c.telefone)}
             <span className="ml-auto inline-flex items-center gap-1 text-ink-subtle"><Users className="w-3.5 h-3.5" />{c.atividades} ativ.</span>
           </p>
         </Caixa>
+        {/* Fora do link (o modal não navega ao fechar): o mesmo Inativar/Reativar da lista */}
+        <span className="absolute bottom-2 right-2" data-acoes-cartao={c.id}>
+          <InativarRegistro url={`/api/tecnicos/${c.id}`} modulo="equipes" acaoReativar="gerenciar" ativo={c.ativo} nome={c.nome} entidade="colaborador" />
+        </span>
         </div>
       ))}
     </div>

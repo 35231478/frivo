@@ -17,12 +17,13 @@ import { chaveEmBlocos, COR_STATUS_NOTA, LABEL_STATUS_NOTA } from "@/lib/compras
 import { ConciliacaoNota, type ItemConciliacao } from "@/components/compras/conciliacao-nota";
 import type { FinanceiroNota } from "@/components/compras/financeiro-nota";
 import { PedidoDaNota, type SugestaoPedidoTela } from "@/components/compras/pedido-da-nota";
+import { DescartarNota } from "@/components/compras/descartar-nota";
 import { sugestoesDaNota, vinculosDaNota } from "@/lib/compras/conciliacao-server";
 import { PEDIDO_ABERTO_PARA_NF, type Avaliacao } from "@/lib/compras/conciliacao";
 
 export const metadata: Metadata = { title: "Nota de compra" };
 
-const AJUDA = "A nota do fornecedor, item a item. Conciliar é dizer qual produto do cadastro é cada item (ou criar o produto na hora); lançar faz a entrada no estoque e cria a conta a pagar, as duas com esta nota como referência. Depois de lançada, a nota não se apaga: corrigir é pela conta a pagar e por ajuste de estoque.";
+const AJUDA = "A nota do fornecedor, item a item. Conciliar é dizer qual produto do cadastro é cada item (ou criar o produto na hora); lançar faz a entrada no estoque e cria a conta a pagar, as duas com esta nota como referência. Antes de lançar, a nota importada por engano pode ser descartada. Depois de lançada, a nota não se apaga: corrigir é pela conta a pagar e por ajuste de estoque.";
 
 const diaBr = (d: Date) => formatarData(d); // dia de Brasília
 /** "19/10/2026 às 22:15" no horário de Brasília (o mesmo do aviso de nota repetida) */
@@ -63,9 +64,11 @@ export default async function NotaCompraPage({ params, searchParams }: { params:
               <p className="text-xs text-ink-muted">CNPJ {formatarCpfCnpj(nota.emitenteCnpj)} · emitida em {diaBr(nota.dataEmissao)}</p>
             </div>
           </div>
-          <div className="text-right">
+          <div className="text-right space-y-2">
             <p className="text-xl font-bold tabular-nums text-ink">{formatarMoeda(Number(nota.valorTotal))}</p>
             <span className={cn("text-[11px] font-semibold px-2.5 py-1 rounded-full", COR_STATUS_NOTA[nota.status])} data-status-nota={nota.status}>{LABEL_STATUS_NOTA[nota.status]}</span>
+            {/* Importada por engano: descarta (a lançada segue pelo estorno) */}
+            {!lancada && gerencia && <div><DescartarNota id={nota.id} numero={nota.numero} serie={nota.serie} voltarPara={doFinanceiro ? "/estoque/notas?de=contas-pagar" : "/estoque/notas"} /></div>}
           </div>
         </div>
         <p className="mt-3 text-[11px] text-ink-muted">Chave de acesso <span className="font-mono text-ink break-all">{chaveEmBlocos(nota.chaveAcesso)}</span></p>

@@ -1,7 +1,7 @@
 "use client";
 
-import { confirmar } from "@/components/ui/avisos";
-import { textoInativar } from "@/lib/cadastros/regras-arquivar";
+import { InativarRegistro } from "@/components/ui/inativar-registro";
+import { SecaoInativos } from "@/components/forms/secao-inativos";
 import { useState, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -10,7 +10,7 @@ import { WhatsAppInput } from "@/components/ui/whatsapp-input";
 import { PhoneInput } from "@/components/ui/phone-input";
 import type { ContatoCliente } from "@prisma/client";
 import type { ContatoSeguro } from "@/lib/contato-cliente";
-import { Plus, Pencil, Ban, X, Check, UserCircle, ChevronDown, ChevronRight, Star, Phone, Mail } from "lucide-react";
+import { Plus, Pencil, X, Check, UserCircle, ChevronDown, ChevronRight, Star, Phone, Mail } from "lucide-react";
 import { comparaNatural } from "@/lib/utils";
 
 /** Contato como vem da API: sem hash/senha do portal. */
@@ -33,13 +33,16 @@ const emptyForm: ContatoFormData = {
 interface ContatosManagerProps {
   clienteId: string;
   contatosIniciais: Contato[];
+  /** Contatos inativados: a seção "Inativos" reativa por aqui */
+  inativosIniciais?: Contato[];
   /** Sugestão (e-mail/telefone) da consulta de CNPJ; o nonce abre "Novo contato" já preenchido. */
   sugestao?: { nome?: string; email?: string; telefone?: string } | null;
   prefillNonce?: number;
 }
 
-export function ContatosManager({ clienteId, contatosIniciais, sugestao, prefillNonce }: ContatosManagerProps) {
+export function ContatosManager({ clienteId, contatosIniciais, inativosIniciais = [], sugestao, prefillNonce }: ContatosManagerProps) {
   const [contatos, setContatos] = useState<Contato[]>(contatosIniciais);
+  const [inativos, setInativos] = useState<Contato[]>(inativosIniciais);
   const [editando, setEditando] = useState<string | "novo" | null>(null);
   const [expandido, setExpandido] = useState<Set<string>>(new Set());
   const [form, setForm] = useState<ContatoFormData>(emptyForm);
@@ -111,15 +114,15 @@ export function ContatosManager({ clienteId, contatosIniciais, sugestao, prefill
     } catch { setErro("Erro de conexão."); } finally { setSalvando(false); }
   }
 
-  async function remover(id: string) {
-    // Inativa (não apaga): o mesmo texto de todo lugar que inativa. Ainda não há reativação pela tela.
-    const t = textoInativar("contato", contatos.find((c) => c.id === id)?.nome, "m", false);
-    if (!(await confirmar({ titulo: t.titulo, mensagem: t.mensagem, perigo: true, confirmarTexto: t.confirmar, cancelarTexto: "Voltar" }))) return;
-    try {
-      const res = await fetch(`/api/clientes/${clienteId}/contatos/${id}`, { method: "DELETE" });
-      if (!res.ok) { const e = await res.json(); setErro(e.erro ?? "Erro."); return; }
-      setContatos((prev) => prev.filter((c) => c.id !== id));
-    } catch { setErro("Erro de conexão."); }
+  // Inativar e reativar pelo botão padrão dos cadastros (InativarRegistro): o mesmo texto e o impacto
+  // (GET …/contatos/[id]/impacto: acesso ao portal e contato principal).
+  function inativado(c: Contato) {
+    setContatos((prev) => prev.filter((x) => x.id !== c.id));
+    setInativos((prev) => [...prev, { ...c, ativo: false }].sort((a, b) => comparaNatural(a.nome, b.nome)));
+  }
+  function reativado(c: Contato, dados?: Contato) {
+    setInativos((prev) => prev.filter((x) => x.id !== c.id));
+    setContatos((prev) => [...prev, { ...c, ...dados, ativo: true }]);
   }
 
   function renderForm() {
@@ -193,7 +196,10 @@ export function ContatosManager({ clienteId, contatosIniciais, sugestao, prefill
                 </div>
                 <div className="flex items-center gap-2 pt-1 flex-wrap">
                   <Button type="button" variant="secondary" onClick={() => abrirEditar(c)} className="text-xs h-7 px-2.5"><Pencil className="w-3 h-3" /> Editar</Button>
-                  <Button type="button" variant="ghost" onClick={() => remover(c.id)} className="text-xs h-7 px-2.5 text-atrasado hover:text-atrasado-texto" data-inativar-contato><Ban className="w-3 h-3" /> Inativar</Button>
+                  <InativarRegistro url={`/api/clientes/${clienteId}/contatos/${c.id}`} modulo="clientes" acaoInativar="editar" acaoReativar="editar"
+                    ativo nome={c.nome} entidade="contato" variante="botao" comMotivo={false}
+                    className="text-xs h-7 px-2.5 py-0 gap-1 border-transparent bg-transparent [&_svg]:w-3 [&_svg]:h-3"
+                    aoConcluir={() => inativado(c)} />
                 </div>
               </div>
             )}
@@ -202,6 +208,12 @@ export function ContatosManager({ clienteId, contatosIniciais, sugestao, prefill
       })}
 
       {editando === "novo" && renderForm()}
+
+      <SecaoInativos itens={inativos} detalhe={(c) => c.cargo || c.email}
+        acao={(c) => (
+          <InativarRegistro url={`/api/clientes/${clienteId}/contatos/${c.id}`} modulo="clientes" acaoInativar="editar" acaoReativar="editar"
+            ativo={false} nome={c.nome} entidade="contato" aoConcluir={(_, dados) => reativado(c, dados)} />
+        )} />
 
       {!editando && (
         <Button type="button" variant="secondary" onClick={abrirNovo} className="w-full justify-center border-dashed mt-2">

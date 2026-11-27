@@ -161,6 +161,8 @@ export function whereContratos(empresaId: string, sp: SP, agora = new Date()) {
   else if (sp.status === "INATIVO") where.status = { in: ["SUSPENSO", "ENCERRADO", "CANCELADO"] };
   else if (sp.status === "VENCIDO") { where.status = { notIn: ["ENCERRADO", "CANCELADO"] }; where.dataFim = { lt: hoje }; }
   else if (sp.status === "VENCENDO") { where.status = "ATIVO"; where.dataFim = { gte: hoje, lte: em30 }; }
+  // Cancelado fora da lista padrão (como em OS e orçamentos): o status "Cancelado" ou "Mostrar cancelados" traz
+  else if (!mostrarCancelados(sp)) where.status = { not: "CANCELADO" };
   return where;
 }
 
@@ -431,14 +433,16 @@ const STATUS_PEDIDO_FILTRO: Record<string, string[]> = {
 
 /**
  * Lista central de Compras: status (os legados junto do equivalente), comprador, origem (OS,
- * orçamento, avulso), "abertos" (nem concluído nem cancelado) e a busca no número, nos itens, no
- * fornecedor, na OS/orçamento de origem e no motivo.
+ * orçamento, avulso), "abertos" (nem concluído nem cancelado), "Mostrar cancelados" (oculto por
+ * padrão) e a busca no número, nos itens, no fornecedor, na OS/orçamento de origem e no motivo.
  */
 export function wherePedidosCompra(empresaId: string, sp: SP) {
   const where: any = { empresaId };
   const and: any[] = [];
   if (sp.status && STATUS_PEDIDO_FILTRO[sp.status]) where.status = { in: STATUS_PEDIDO_FILTRO[sp.status] };
   else if (sp.abertos === "1") where.status = { in: ["SOLICITADO", "COTANDO", "COMPRADO", "PARCIAL"] };
+  // Cancelado fora da lista padrão: o status "Cancelado" ou "Mostrar cancelados" traz de volta
+  else if (!mostrarCancelados(sp)) where.status = { not: "CANCELADO" };
   if (sp.compradorId) where.compradorId = sp.compradorId;
   if (sp.origem === "OS") and.push({ OR: [{ ordemServicoId: { not: null } }, { orcamento: { ordensServico: { some: {} } } }] });
   else if (sp.origem === "ORCAMENTO") and.push({ ordemServicoId: null, orcamentoId: { not: null }, orcamento: { ordensServico: { none: {} } } });
@@ -455,5 +459,47 @@ export function wherePedidosCompra(empresaId: string, sp: SP) {
     ] });
   }
   if (and.length) where.AND = and;
+  return where;
+}
+
+const STATUS_NOTA_COMPRA = ["IMPORTADA", "CONCILIADA", "LANCADA"];
+
+/**
+ * Lista de notas de compra: a situação (Importada, Conciliada, Lançada) e a busca no número, no
+ * fornecedor (nome como veio na nota), no CNPJ e na chave de acesso (só os dígitos digitados).
+ */
+export function whereNotasCompra(empresaId: string, sp: SP) {
+  const where: any = { empresaId };
+  if (sp.status && STATUS_NOTA_COMPRA.includes(sp.status)) where.status = sp.status;
+  const q = sp.q?.trim();
+  if (q) {
+    const c = { contains: q, mode: "insensitive" };
+    const digitos = q.replace(/\D/g, "");
+    where.OR = [
+      { numero: c }, { emitenteNome: c }, { fornecedor: { nome: c } },
+      ...(digitos.length >= 3 ? [{ emitenteCnpj: { contains: digitos } }, { chaveAcesso: { contains: digitos } }] : []),
+    ];
+  }
+  return where;
+}
+
+/**
+ * Lista de medições: status, cliente, tipo, período (pela criação) e a busca. A cancelada fica fora da
+ * lista padrão (como em contas e orçamentos): o status "Cancelada" ou "Mostrar canceladas" a traz.
+ */
+export function whereMedicoes(empresaId: string, sp: SP, periodo: { gte?: Date | null; lt?: Date | null } = {}) {
+  const where: any = { empresaId };
+  if (sp.status) where.status = sp.status;
+  else if (!mostrarCancelados(sp)) where.status = { not: "CANCELADA" };
+  if (sp.clienteId) where.clienteId = sp.clienteId;
+  if (sp.tipo) where.tipo = sp.tipo;
+  if (periodo.gte || periodo.lt) where.criadoEm = { ...(periodo.gte && { gte: periodo.gte }), ...(periodo.lt && { lt: periodo.lt }) };
+  if (sp.busca) {
+    where.OR = [
+      { numero: { contains: sp.busca, mode: "insensitive" } },
+      { descricao: { contains: sp.busca, mode: "insensitive" } },
+      { cliente: { nome: { contains: sp.busca, mode: "insensitive" } } },
+    ];
+  }
   return where;
 }

@@ -316,11 +316,15 @@ function Cards({ massa, itens }: { massa: boolean; itens: VeiculoLinha[] }) {
               <p data-detalhes className="text-xs text-ink-muted truncate">{[anoTexto(v), v.combustivel, v.cor].filter(Boolean).join(" · ") || "—"}</p>
             </div>
             <Avisos v={v} />
-            <p className="text-xs text-ink-muted truncate flex items-center gap-1.5 pt-2 border-t border-surface-border/70">
+            <p className="text-xs text-ink-muted truncate flex items-center gap-1.5 pt-2 pr-8 border-t border-surface-border/70">
               {v.equipe ? <><Users className="w-3.5 h-3.5 shrink-0" />{v.equipe.nome}</> : <><UserCog className="w-3.5 h-3.5 shrink-0" />{v.responsavel ?? "Sem responsável"}</>}
             </p>
           </div>
         </Link>
+        {/* Fora do link (o modal não navega ao fechar): o mesmo Inativar/Reativar da lista */}
+        <span className="absolute bottom-2 right-2" data-acoes-cartao={v.id}>
+          <InativarRegistro url={`/api/veiculos/${v.id}`} modulo="veiculos" acaoReativar="gerenciar" ativo={v.status !== "INATIVO"} nome={v.placa} entidade="veículo" />
+        </span>
         </div>
       ))}
     </div>

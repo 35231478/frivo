@@ -516,6 +516,7 @@ model Empresa {
   kitsMaterial           KitMaterial[]
   movimentacoesEstoque   MovimentacaoEstoque[]
   notasCompra            NotaCompra[]
+  notasCompraDescartes   NotaCompraDescarte[]
   deParasProduto         DeParaProdutoFornecedor[]
   orcamentos             Orcamento[]
   orcamentoAnexos        OrcamentoAnexo[]
@@ -918,6 +919,7 @@ model Usuario {
   osMateriaisConsumidos  OsMaterial[]              @relation("OsMaterialConsumidoPor")
   osMateriaisDevolvidos  OsMaterial[]              @relation("OsMaterialDevolvidoPor")
   notasCompra            NotaCompra[]
+  notasCompraDescartadas NotaCompraDescarte[]
   modulosAlterados       EmpresaModulo[]           @relation("ModuloAlteradoPor")
   checklistRespostas     ChecklistResposta[]
   fotosAtendimento       FotoAtendimento[]
@@ -4518,6 +4520,34 @@ model NotaCompra {
   @@index([categoriaId])
   @@index([centroCustoId])
   @@map("notas_compra")
+}
+
+/// Nota de compra DESCARTADA (importada por engano e ainda não lançada): a nota sai do banco com os
+/// itens, e fica aqui o registro de qual era, quem descartou, quando e por quê. A lançada não se
+/// descarta (o estorno é pela conta a pagar e pelo ajuste de estoque).
+model NotaCompraDescarte {
+  id           String   @id @default(cuid())
+  empresaId    String   @map("empresa_id")
+  /// A nota como era (a linha dela não existe mais)
+  notaId       String   @map("nota_id")
+  chaveAcesso  String   @map("chave_acesso")
+  numero       String
+  serie        String
+  emitenteNome String   @map("emitente_nome")
+  emitenteCnpj String   @map("emitente_cnpj")
+  valorTotal   Decimal  @map("valor_total") @db.Decimal(12, 2)
+  dataEmissao  DateTime @map("data_emissao")
+  /// IMPORTADA ou CONCILIADA no momento do descarte
+  statusNaHora String   @map("status_na_hora")
+  motivo       String?
+  usuarioId    String?  @map("usuario_id")
+  descartadoEm DateTime @default(now()) @map("descartado_em")
+
+  empresa Empresa  @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  usuario Usuario? @relation(fields: [usuarioId], references: [id], onDelete: SetNull)
+
+  @@index([empresaId, descartadoEm])
+  @@map("notas_compra_descartes")
 }
 
 /// Item da NF (det/prod). `produtoId` é preenchido na conciliação (de-para).
