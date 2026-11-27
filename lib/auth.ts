@@ -88,6 +88,8 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
           fs: impressaoDaSenha(usuario.senha),
           tecnicoId: tecnico?.id ?? null,
           sessaoAtiva,
+          // Senha definida por outra pessoa (1º admin, acesso ao app): só a tela de troca abre até trocar
+          trocarSenha: usuario.trocarSenha === true,
         };
       },
     }),

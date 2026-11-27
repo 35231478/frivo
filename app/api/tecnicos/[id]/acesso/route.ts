@@ -88,7 +88,8 @@ export async function PUT(req: NextRequest, { params }: Params) {
     }
     await prisma.usuario.update({
       where: { id: usuario.id },
-      data: { ativo: true, ...(senha ? { senha: await bcrypt.hash(senha, 12) } : {}) },
+      // Senha redefinida pelo gestor: o técnico troca no próximo login (só reativar não muda nada)
+      data: { ativo: true, ...(senha ? { senha: await bcrypt.hash(senha, 12), trocarSenha: true } : {}) },
     });
     return NextResponse.json(estado(email, await usuarioLigado(empresaId, email)));
   }
@@ -102,7 +103,8 @@ export async function PUT(req: NextRequest, { params }: Params) {
   });
   if (!perfil) return NextResponse.json({ erro: "Nenhum perfil de Técnico encontrado. Crie um em Configurações › Perfis de acesso." }, { status: 400 });
   await prisma.usuario.create({
-    data: { empresaId, nome: tecnico.nome, email, role: "TECNICO", perfilAcessoId: perfil.id, ativo: true, senha: await bcrypt.hash(senha, 12) },
+    // Senha inicial definida pelo gestor: o técnico troca no 1º login
+    data: { empresaId, nome: tecnico.nome, email, role: "TECNICO", perfilAcessoId: perfil.id, ativo: true, senha: await bcrypt.hash(senha, 12), trocarSenha: true },
   });
   return NextResponse.json(estado(email, await usuarioLigado(empresaId, email)));
 }

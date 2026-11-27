@@ -125,8 +125,9 @@ describe.skipIf(!URL_PG)("Pronto pra janeiro 2 (PostgreSQL real)", () => {
 
       const admin = await prisma.usuario.findFirst({ where: { empresaId: id } });
       expect(admin).toMatchObject({ nome: "Beatriz Fictícia", email: "beatriz@horizonte.ficticio", role: "ADMIN", ativo: true, perfilAcessoId: por("Administrador").id });
-      // Senha inicial guardada com hash (o administrador troca em Meu perfil › Senha)
+      // Senha inicial guardada com hash e marcada para troca no 1º acesso (é do super admin, não dele)
       expect(admin.senha).not.toBe(NOVA.admin.senha);
+      expect(admin.trocarSenha).toBe(true);
       expect(await bcrypt.compare(NOVA.admin.senha, admin.senha)).toBe(true);
 
       // A lista mínima mostra a nova empresa, sem nada de dentro dela além do nº de usuários

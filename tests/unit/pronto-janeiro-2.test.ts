@@ -126,7 +126,7 @@ describe("Nova empresa (tela do super admin)", () => {
     await digitar("[data-campo='adminSenha']", "Horizonte@2027");
   }
 
-  it("cria e mostra o login para entregar ao administrador (com a troca de senha em Meu perfil › Senha)", async () => {
+  it("cria e mostra o login para entregar ao administrador (com a troca obrigatória da senha no 1º acesso)", async () => {
     respostas["POST /api/admin/empresas"] = () => [201, { ok: true, empresaId: "eN", adminEmail: "beatriz@horizonte.ficticio", perfis: 5, tiposOs: 6 }];
     respostas["GET /api/admin/empresas"] = () => [200, { empresas: [{ id: "eN", nome: "Climatização Horizonte Ltda (fictícia)", nomeFantasia: null, cnpj: "11.222.333/0001-81", ativo: true, criadoEm: new Date().toISOString(), usuarios: 1 }] }];
     const { EmpresasAdmin } = await import("@/components/admin/empresas-admin");
@@ -138,7 +138,8 @@ describe("Nova empresa (tela do super admin)", () => {
     expect(post.corpo).toMatchObject({ razaoSocial: "Climatização Horizonte Ltda (fictícia)", cnpj: "11.222.333/0001-81", admin: { nome: "Beatriz Fictícia", email: "beatriz@horizonte.ficticio", senha: "Horizonte@2027" } });
     const aviso = $("[data-empresa-criada]")!.textContent!.replace(/\s+/g, " ");
     expect(aviso).toContain("beatriz@horizonte.ficticio");
-    expect(aviso).toContain("Meu perfil › Senha");
+    // "Troca de senha no 1º acesso": o aviso diz que o sistema pede a troca (antes mandava ir a Meu perfil › Senha)
+    expect(aviso).toContain("No primeiro acesso, o sistema pede que ele crie a própria senha.");
     // A senha nunca aparece na tela depois de criar
     expect(texto()).not.toContain("Horizonte@2027");
     expect($("[data-lista-empresas]")!.textContent).toContain("Climatização Horizonte Ltda (fictícia)");

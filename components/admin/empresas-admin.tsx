@@ -25,8 +25,8 @@ export function mascararCnpj(v: string): string {
 
 /**
  * Área de Empresas do dono do Frivo: a lista mínima e "Nova empresa". A empresa nasce pronta para
- * usar (perfis, tipos de OS, configuração) e com o 1º administrador, que troca a senha inicial no
- * primeiro acesso (Meu perfil › Senha).
+ * usar (perfis, tipos de OS, configuração) e com o 1º administrador. A senha inicial é do super
+ * admin: no 1º login o sistema só abre a tela de troca (lib/acesso/troca-obrigatoria).
  */
 export function EmpresasAdmin({ inicial }: { inicial: EmpresaDaLista[] }) {
   const [empresas, setEmpresas] = useState(inicial);
@@ -70,7 +70,7 @@ export function EmpresasAdmin({ inicial }: { inicial: EmpresaDaLista[] }) {
           <CheckCircle2 className="w-4 h-4 mt-0.5 shrink-0" aria-hidden />
           <div>
             <p><strong>{criada.nome}</strong> criada com {criada.perfis} perfis de acesso e {criada.tiposOs} tipos de OS.</p>
-            <p className="mt-1">Entregue ao administrador o login <strong>{criada.adminEmail}</strong> e a senha inicial. No primeiro acesso, ele troca a senha em <strong>Meu perfil › Senha</strong>.</p>
+            <p className="mt-1">Entregue ao administrador o login <strong>{criada.adminEmail}</strong> e a senha inicial. No primeiro acesso, o sistema pede que ele crie a própria senha.</p>
           </div>
         </div>
       )}
@@ -122,7 +122,7 @@ export function EmpresasAdmin({ inicial }: { inicial: EmpresaDaLista[] }) {
               <FormField label="Nome" required><Input value={f.adminNome} onChange={muda("adminNome")} data-campo="adminNome" /></FormField>
               <FormField label="E-mail de login" required hint="Não pode ser login de outro usuário do Frivo."><Input type="email" value={f.adminEmail} onChange={muda("adminEmail")} autoComplete="off" data-campo="adminEmail" /></FormField>
             </div>
-            <FormField label="Senha inicial" required hint="Entregue ao administrador; ele troca no primeiro acesso, em Meu perfil › Senha.">
+            <FormField label="Senha inicial" required hint="Entregue ao administrador. No primeiro acesso, ele é obrigado a trocar.">
               <Input type="password" value={f.adminSenha} onChange={muda("adminSenha")} autoComplete="new-password" data-campo="adminSenha" />
             </FormField>
             <div className="flex flex-wrap gap-x-4 gap-y-1 -mt-1">

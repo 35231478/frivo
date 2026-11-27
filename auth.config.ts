@@ -31,6 +31,7 @@ export const authConfig = {
         token.fs = (user as any).fs; // impressão da senha: trocou a senha, as outras sessões caem (lib/sessao-ativa)
         token.tecnicoId = (user as any).tecnicoId ?? null; // técnico ligado ao usuário (modo técnico: lib/tecnico/modo)
         token.sa = (user as any).sessaoAtiva ?? null; // nonce do dispositivo ("apenas um dispositivo ativo")
+        token.trocarSenha = (user as any).trocarSenha === true; // senha definida por outra pessoa: só a troca abre
       }
       if (sessaoCurtaVencida(token)) return null; // sem "Manter conectado": 1 dia desde o login
       // Atualização disparada por update() no client (perfil: nome/e-mail).
@@ -52,6 +53,8 @@ export const authConfig = {
       // O cookie desta requisição trazia um acesso diferente do cadastro (lib/acesso/acesso-atual):
       // o layout pede ao navegador que regrave o cookie (components/acesso/sincronizar-acesso)
       (session.user as any).acessoMudou = token.acessoMudou === true;
+      // Troca de senha no 1º acesso pendente: o middleware só deixa abrir a tela de troca
+      (session.user as any).trocarSenha = token.trocarSenha === true;
       return session;
     },
   },

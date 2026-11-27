@@ -92,7 +92,8 @@ export async function verificarTokenConvite(token: string, agora = Date.now()): 
 export async function definirSenhaPorConvite(token: string, senha: string) {
   const v = await verificarTokenConvite(token);
   if (!v.ok) return v;
-  await prisma.usuario.update({ where: { id: v.usuario.id }, data: { senha: await bcrypt.hash(senha, 12) } });
+  // A própria pessoa definiu a senha (convite ou "Esqueci minha senha"): nada a trocar depois
+  await prisma.usuario.update({ where: { id: v.usuario.id }, data: { senha: await bcrypt.hash(senha, 12), trocarSenha: false } });
   await limparTentativas("LOGIN", { email: v.usuario.email });
   return v;
 }

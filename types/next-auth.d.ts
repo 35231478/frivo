@@ -18,6 +18,8 @@ declare module "next-auth" {
       tecnicoId?: string | null;
       /** O cookie desta requisição trazia papel/permissões diferentes do cadastro atual */
       acessoMudou?: boolean;
+      /** Senha definida por outra pessoa: só a tela de troca abre até trocar (lib/acesso/troca-obrigatoria) */
+      trocarSenha?: boolean;
     };
   }
 
@@ -38,6 +40,8 @@ declare module "next-auth" {
     tecnicoId?: string | null;
     /** Nonce do dispositivo ativo ("apenas um dispositivo ativo"): novo login desconecta o anterior */
     sessaoAtiva?: string | null;
+    /** Senha definida por outra pessoa e ainda não trocada (usuarios.trocar_senha) */
+    trocarSenha?: boolean;
   }
 }
 
@@ -58,5 +62,7 @@ declare module "next-auth/jwt" {
     tecnicoId?: string | null;
     /** Nonce do dispositivo ("apenas um dispositivo ativo"): não bate com o do banco → sessão encerrada */
     sa?: string | null;
+    /** Troca de senha pendente (lib/acesso/troca-obrigatoria) */
+    trocarSenha?: boolean;
   }
 }
