@@ -16,6 +16,7 @@ import { validarDataUrl } from "@/lib/anexos-server";
 import { chaveHojeBR, diaCivilDeChave, chaveDiaCivil } from "@/lib/fuso";
 import { proximoNumeroContaPagar } from "@/lib/financeiro-server";
 import { tecnicoDoUsuario } from "@/lib/tecnico/escopo";
+import { agendarPush, notificarDespesa, URL_DESPESAS_APP, URL_DESPESAS_ESCRITORIO } from "@/lib/push/eventos";
 import type { Ator, ContextoExecucao } from "@/lib/execucao/contexto";
 import {
   categoriaFinanceiraDe, dataDespesaValida, descricaoReembolso, lerMapa, MSG_DESPESAS_DESLIGADAS, MSG_JA_DECIDIDA, MSG_SEM_COLABORADOR, NOME_CATEGORIA,
@@ -59,6 +60,11 @@ export async function lancarDespesa(ator: Ator, d: DadosDespesa, ctx: ContextoEx
       },
       select: { id: true },
     });
+    // Push "Despesa para aprovar": o escritório que aprova (Financeiro › Fluxo de caixa), menos quem lançou
+    agendarPush(() => notificarDespesa({
+      empresaId: ator.empresaId, despesaId: criada.id, situacao: "ENVIADA", autorUsuarioId: ator.usuarioId,
+      descricao: (d.descricao ?? "").trim() || NOME_CATEGORIA[d.categoria], valor: d.valor, url: URL_DESPESAS_ESCRITORIO,
+    }));
     return { ok: true, status: 201, dados: { id: criada.id } };
   } catch (e) {
     if ((e as { code?: string })?.code === "P2002") {
@@ -139,12 +145,17 @@ async function mapaDaEmpresa(empresaId: string, db: Prisma.TransactionClient | t
 export async function aprovarDespesa(empresaId: string, id: string, usuarioId: string, op: { vencimento?: string; categoriaId?: string } = {}): Promise<Resultado<{ contaPagarId: string | null }>> {
   const d = await prisma.despesaCampo.findFirst({
     where: { id, empresaId },
-    select: { id: true, status: true, pagamento: true, categoria: true, valor: true, data: true, descricao: true, tecnicoId: true, tecnico: { select: { nome: true } }, ordemServico: { select: { numero: true, chamadoNumero: true } } },
+    select: { id: true, status: true, pagamento: true, categoria: true, valor: true, data: true, descricao: true, tecnicoId: true, usuarioId: true, tecnico: { select: { nome: true } }, ordemServico: { select: { numero: true, chamadoNumero: true } } },
   });
   if (!d) return erro(404, "Despesa não encontrada.");
   if (d.status !== "PENDENTE") return erro(409, MSG_JA_DECIDIDA);
   const doBolso = d.pagamento === "PROPRIO";
   if (doBolso && !op.vencimento) return erro(400, "Informe o vencimento do reembolso.");
+  // Push "Despesa aprovada" para quem lançou, depois da resposta (relê a situação: transação desfeita não avisa)
+  agendarPush(() => notificarDespesa({
+    empresaId, despesaId: id, situacao: "APROVADA", autorUsuarioId: d.usuarioId,
+    descricao: d.descricao || NOME_CATEGORIA[d.categoria as CategoriaDespesa], valor: Number(d.valor), url: URL_DESPESAS_APP,
+  }));
   return prisma.$transaction(async (tx) => {
     // Trava: só a primeira aprovação passa (dois cliques ou duas pessoas ao mesmo tempo não geram duas contas)
     const { count } = await tx.despesaCampo.updateMany({ where: { id, empresaId, status: "PENDENTE" }, data: { status: "APROVADA", decididoPorId: usuarioId, decididoEm: new Date() } });
@@ -170,10 +181,15 @@ export async function aprovarDespesa(empresaId: string, id: string, usuarioId: s
 }
 
 export async function recusarDespesa(empresaId: string, id: string, usuarioId: string, motivo: string): Promise<Resultado<{ recusada: true }>> {
-  const d = await prisma.despesaCampo.findFirst({ where: { id, empresaId }, select: { status: true } });
+  const d = await prisma.despesaCampo.findFirst({ where: { id, empresaId }, select: { status: true, usuarioId: true, categoria: true, descricao: true, valor: true } });
   if (!d) return erro(404, "Despesa não encontrada.");
   const { count } = await prisma.despesaCampo.updateMany({ where: { id, empresaId, status: "PENDENTE" }, data: { status: "RECUSADA", motivoRecusa: motivo.trim(), decididoPorId: usuarioId, decididoEm: new Date() } });
   if (!count) return erro(409, MSG_JA_DECIDIDA);
+  // Push "Despesa recusada" (com o motivo) para quem lançou, depois da resposta
+  agendarPush(() => notificarDespesa({
+    empresaId, despesaId: id, situacao: "RECUSADA", autorUsuarioId: d.usuarioId, motivo: motivo.trim(),
+    descricao: d.descricao || NOME_CATEGORIA[d.categoria as CategoriaDespesa], valor: Number(d.valor), url: URL_DESPESAS_APP,
+  }));
   return { ok: true, status: 200, dados: { recusada: true } };
 }
 

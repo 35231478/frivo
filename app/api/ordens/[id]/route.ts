@@ -14,6 +14,7 @@ import { gerarRelatoriosDaOs } from "@/lib/relatorio-server";
 import { garantirAceite } from "@/lib/os/aceite-server";
 import { verificarConclusaoOs } from "@/lib/execucao/dados";
 import { sincronizarStatusOs } from "@/lib/os/sincronizar-status";
+import { agendarPush, notificarOsCancelada, notificarReagendamento } from "@/lib/push/eventos";
 import { estagioAutomatico, statusCorresponde } from "@/lib/os/status";
 import { lerPrazoDigitado } from "@/lib/os/prazo-execucao";
 import { diaCivilUTC, ehDiaCivil, instanteBR, partesBR } from "@/lib/fuso";
@@ -122,6 +123,8 @@ export async function PATCH(req: NextRequest, { params }: Params) {
     const ativ = await prisma.atividadeOs.findFirst({ where: { id: atividadeId, ordemServicoId: id } });
     if (!ativ) return NextResponse.json({ erro: "Atividade não encontrada." }, { status: 404 });
     await prisma.atividadeOs.update({ where: { id: atividadeId }, data: { dataAgendada: desloca(ativ.dataAgendada) } });
+    // Arrastou no calendário: os técnicos da atividade recebem o push "OS reagendada"
+    agendarPush(() => notificarReagendamento(empresaId, atividadeId, ativ.dataAgendada));
   } else {
     await prisma.ordemServico.update({ where: { id }, data: { previsaoConclusao: desloca(os.previsaoConclusao, true) } });
   }
@@ -233,6 +236,8 @@ export async function PUT(req: NextRequest, { params }: Params) {
     atualizado = await prisma.ordemServico.findUniqueOrThrow({ where: { id } });
   }
 
+  // Cancelada pela edição: os técnicos das atividades em aberto recebem o push (depois da resposta)
+  if (status === "CANCELADA" && existente.status !== "CANCELADA") agendarPush(() => notificarOsCancelada(empresaId, id));
   if (status && status !== existente.status) {
     await prisma.osHistorico.create({
       data: {

@@ -43,14 +43,22 @@ export async function andamentoParaRetrato(empresaId: string, atividadeId: strin
  * Sino do gestor: atividades EM ANDAMENTO há mais do limite da empresa, ou começadas antes de hoje (as antigas, sem
  * início gravado, pela hora agendada). Devolve a contagem e a OS da mais antiga (o link do aviso).
  */
-export async function contarAtividadesEsquecidas(empresaId: string, agora: Date = new Date()): Promise<{ atividadesEsquecidas: number; atividadeEsquecidaOsId: string | null }> {
+/**
+ * O filtro das atividades ESQUECIDAS em andamento (a mesma regra do sino e do push): passou do limite da empresa
+ * ou começou antes de hoje (as antigas, sem início gravado, pela hora agendada).
+ */
+export async function whereAtividadesEsquecidas(empresaId: string, agora: Date = new Date()): Promise<Prisma.AtividadeOsWhereInput> {
   const { limiteHoras: horas } = await andamentoDaEmpresa(empresaId);
   // Antes deste instante = passou do limite; antes do começo de hoje = outro dia (o mais tarde dos dois vale)
   const corte = new Date(Math.max(agora.getTime() - horas * 3_600_000, inicioHojeBR(agora).getTime()));
-  const where: Prisma.AtividadeOsWhereInput = {
+  return {
     empresaId, status: "EM_ANDAMENTO",
     OR: [{ iniciadaEm: { lt: corte } }, { iniciadaEm: null, dataAgendada: { lt: corte } }],
   };
+}
+
+export async function contarAtividadesEsquecidas(empresaId: string, agora: Date = new Date()): Promise<{ atividadesEsquecidas: number; atividadeEsquecidaOsId: string | null }> {
+  const where = await whereAtividadesEsquecidas(empresaId, agora);
   const [n, primeira] = await Promise.all([
     prisma.atividadeOs.count({ where }),
     prisma.atividadeOs.findFirst({ where, orderBy: [{ iniciadaEm: { sort: "asc", nulls: "first" } }, { dataAgendada: "asc" }], select: { ordemServicoId: true } }),

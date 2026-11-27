@@ -7,6 +7,7 @@ import { pode } from "@/lib/permissoes";
 import { respostaAcao, travaConclusao } from "@/lib/execucao/acoes";
 import { MSG_FORA_DO_ESCOPO, escopoDaSessao, filtroEscopo } from "@/lib/tecnico/escopo";
 import { ErroTecnicos, INCLUDE_TECNICOS_ATIVIDADE, gravarTecnicos, lerDefinicao, lerVeiculo, resolverTecnicos, resolverVeiculo } from "@/lib/atividade-tecnicos";
+import { agendarPush, notificarReagendamento } from "@/lib/push/eventos";
 import { sincronizarStatusOs } from "@/lib/os/sincronizar-status";
 import { chaveDiaCivil } from "@/lib/fuso";
 
@@ -88,6 +89,8 @@ export async function PUT(req: NextRequest, { params }: Params) {
   const atualizado = await prisma.$transaction(async (tx) => {
     if (Object.keys(data).length) await tx.atividadeOs.update({ where: { id: atividadeId }, data });
     if (tecnicos) await gravarTecnicos(tx, atividadeId, tecnicos);
+    // Data mudou: os técnicos da atividade recebem o push (depois da resposta; relê a data gravada)
+    if (data.dataAgendada !== undefined) agendarPush(() => notificarReagendamento(empresaId, atividadeId, existente.dataAgendada));
     return tx.atividadeOs.findUniqueOrThrow({
       where: { id: atividadeId },
       include: { tipoOs: { select: { id: true, nome: true, cor: true } }, ...INCLUDE_TECNICOS_ATIVIDADE, respostas: { include: { campo: true } } },

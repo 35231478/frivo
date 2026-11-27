@@ -8,6 +8,7 @@ import { calcularVencimento } from "@/lib/medicao-helpers";
 import { linhasMedicaoCompleta, rotuloMedicao } from "@/lib/faturamento/fatura";
 import { cancelarParcelas, reajustarParcelas, recebidoNoPeriodo, saldoDoAgregado } from "@/lib/financeiro/parcelas-server";
 import { proximoNumero } from "@/lib/numeracao-server";
+import { agendarPush, notificarOsCancelada } from "@/lib/push/eventos";
 import {
   type CobrancaContrato, competenciasDoContrato, detalheCancelamento, detalheReaberta, eventoDoContrato, mudancasDaCobranca,
   descricaoDaCobranca, passoCobranca, planoSincronizacao, valorMensalDe, vencimentoDaCompetencia,
@@ -672,9 +673,11 @@ export async function encerrarFinanceiroDoContrato(contratoId: string, motivo = 
     if (await cancelarPrevisaoDoContrato(c, motivo, usuarioId)) previsoesCanceladas++;
   }
 
-  const candidatas = await prisma.ordemServico.findMany({ where: osFuturasIntocadasDoContrato(contratoId, agora), select: { id: true } });
+  const candidatas = await prisma.ordemServico.findMany({ where: osFuturasIntocadasDoContrato(contratoId, agora), select: { id: true, empresaId: true } });
   for (const os of candidatas) {
     await prisma.ordemServico.update({ where: { id: os.id }, data: { status: "CANCELADA" } });
+    // OS futura que o contrato deixou de ter: os técnicos escalados recebem o push "OS cancelada"
+    agendarPush(() => notificarOsCancelada(os.empresaId, os.id, motivo));
     if (usuarioId) {
       await prisma.osHistorico.create({
         data: { ordemServicoId: os.id, usuarioId, acao: "OS cancelada", detalhes: motivo },

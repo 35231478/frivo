@@ -94,7 +94,11 @@ describe("app do técnico › Perfil › Meus dados › Segurança (o único lug
   beforeEach(() => {
     chamadas = [];
     responder = () => new Response(JSON.stringify({ ok: true }), { status: 200, headers: { "content-type": "application/json" } });
-    vi.stubGlobal("fetch", vi.fn(async (url: string, init: RequestInit) => { chamadas.push({ url, init }); return responder(); }));
+    // O bloco "Notificações" do Perfil (leva push) consulta /api/push/*: não é a troca de senha, fica fora da conta
+    vi.stubGlobal("fetch", vi.fn(async (url: string, init: RequestInit) => {
+      if (String(url).startsWith("/api/push/")) return new Response(JSON.stringify({ ligado: false, chave: null }), { status: 200, headers: { "content-type": "application/json" } });
+      chamadas.push({ url, init }); return responder();
+    }));
   });
   afterEach(() => { if (root) act(() => root.unmount()); caixa?.remove(); vi.unstubAllGlobals(); vi.restoreAllMocks(); });
 

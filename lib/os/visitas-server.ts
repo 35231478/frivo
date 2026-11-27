@@ -12,6 +12,7 @@ import { prisma } from "@/lib/prisma";
 import { chaveDiaBR, instanteBR, partesBR } from "@/lib/fuso";
 import { textoTecnicosAtividade } from "@/lib/atividade-equipe";
 import { ErroTecnicos, gravarTecnicos, resolverTecnicos, resolverVeiculo } from "@/lib/atividade-tecnicos";
+import { agendarPush, notificarReagendamento } from "@/lib/push/eventos";
 import { sincronizarStatusOs } from "@/lib/os/sincronizar-status";
 import { avisosDeHojePorAtividade } from "@/lib/execucao/aviso-cliente";
 import { estadoVisivelDaAtividade } from "@/lib/os/estado-atividade";
@@ -255,6 +256,11 @@ async function aplicar(tx: Prisma.TransactionClient, c: Contexto, plano: PlanoDe
     } else {
       if (atual.planoVisitasId !== o.planoId || atual.dataAgendada?.getTime() !== dataAgendada.getTime())
         await tx.atividadeOs.update({ where: { id: atual.id }, data: { planoVisitasId: o.planoId, dataAgendada } });
+      // Visita existente que mudou de dia: os técnicos dela recebem o push (depois da gravação; relê a data)
+      if (atual.dataAgendada?.getTime() !== dataAgendada.getTime()) {
+        const antes = atual.dataAgendada ?? null, atividadeId = atual.id;
+        agendarPush(() => notificarReagendamento(o.empresaId, atividadeId, antes));
+      }
       const tem = new Set(atual.equipamentos.map((e) => e.equipamentoId)), quer = new Set(v.equipamentoIds);
       const saem = [...tem].filter((e) => !quer.has(e)), entram = v.equipamentoIds.filter((e) => !tem.has(e));
       if (saem.length) await tx.atividadeEquipamento.deleteMany({ where: { atividadeId: atual.id, equipamentoId: { in: saem }, feito: false } });
