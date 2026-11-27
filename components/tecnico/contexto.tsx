@@ -17,6 +17,8 @@ export interface UsuarioApp {
   avatar?: string | null;
   /** O colaborador participa do Desempenho da empresa: o app mostra a vista "Desempenho" */
   desempenho?: boolean;
+  /** Módulo QR Codes da empresa (o "Ler QR do equipamento" do Meu dia). Ausente = ligado */
+  qrcodes?: boolean;
 }
 
 interface Contexto {
@@ -120,20 +122,26 @@ export type Vista =
   | { ver: "agenda" }
   | { ver: "perfil" }
   | { ver: "desempenho" }
-  | { ver: "os"; a: string; e?: string | null; /** Abre já na câmera rápida (atalho do Meu dia) */ cam?: boolean };
+  | { ver: "os"; a: string; e?: string | null; /** Abre já na câmera rápida (atalho do Meu dia) */ cam?: boolean;
+      /** QR lido no Meu dia: equipamento da unidade que o técnico pode incluir nesta atividade (pergunta antes) */ inc?: string | null }
+  /** Ficha do equipamento pelo QR lido (o que não está em nenhuma OS do técnico hoje) */
+  | { ver: "equipamento"; q: string };
 
 export function lerVista(search: string): Vista {
   const q = new URLSearchParams(search);
   const ver = q.get("ver");
   const a = q.get("a");
-  if (ver === "os" && a) return { ver: "os", a, e: q.get("e"), ...(q.get("cam") === "1" && { cam: true }) };
+  if (ver === "os" && a) return { ver: "os", a, e: q.get("e"), ...(q.get("cam") === "1" && { cam: true }), ...(q.get("inc") && { inc: q.get("inc") }) };
+  const qr = q.get("q");
+  if (ver === "equipamento" && qr) return { ver: "equipamento", q: qr };
   if (ver === "agenda" || ver === "perfil" || ver === "desempenho") return { ver };
   return { ver: "dia" };
 }
 
 export function urlDaVista(v: Vista): string {
   if (v.ver === "dia") return "/tecnico";
-  if (v.ver === "os") return `/tecnico?ver=os&a=${encodeURIComponent(v.a)}${v.e ? `&e=${encodeURIComponent(v.e)}` : ""}${v.cam ? "&cam=1" : ""}`;
+  if (v.ver === "os") return `/tecnico?ver=os&a=${encodeURIComponent(v.a)}${v.e ? `&e=${encodeURIComponent(v.e)}` : ""}${v.cam ? "&cam=1" : ""}${v.inc ? `&inc=${encodeURIComponent(v.inc)}` : ""}`;
+  if (v.ver === "equipamento") return `/tecnico?ver=equipamento&q=${encodeURIComponent(v.q)}`;
   return `/tecnico?ver=${v.ver}`;
 }
 

@@ -17,6 +17,7 @@ import { TabelaPro, type ColunaPro } from "@/components/listagem/tabela-pro";
 import { PLANILHA } from "@/lib/planilha";
 import { ChecklistSelo, DocumentoSelo, RevisaoSelo, VeiculoStatusSelo } from "@/components/veiculos/selos";
 import type { FiltrosVeiculos, OrdemVeiculos } from "@/lib/veiculo-listagem";
+import { ImportarPlanilha } from "@/components/importacao/importar-planilha";
 
 export type VeiculoLinha = {
   id: string;
@@ -84,6 +85,7 @@ export function VeiculosListaClient({ itens, total, filtros: f, tipos, resumo }:
         </div>
         <div className="flex items-center gap-2">
           <AlternarVisao visao={visao} onTrocar={trocarVisao} />
+          {podeGerenciar && <ImportarPlanilha entidade="veiculos" />}
           {podeGerenciar && (
             <Link href="/veiculos/novo" className="inline-flex items-center gap-2 bg-primary-500 hover:bg-primary-600 text-white px-4 py-2.5 rounded-lg text-sm font-semibold transition-all shadow-sm hover:shadow">
               <Plus className="w-4 h-4" /> <span className="hidden sm:inline">Novo veículo</span><span className="sm:hidden">Novo</span>

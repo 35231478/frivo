@@ -7,6 +7,7 @@ import { Modal } from "@/components/ui/modal";
 import { CampoFormulario } from "@/components/os/execucao-equipamento";
 import { BotaoFoto, Miniatura, ObservacaoVoz, type MarcaFoto } from "@/components/tecnico/captura";
 import { irPara } from "@/components/tecnico/contexto";
+import { MateriaisUsados } from "@/components/tecnico/materiais";
 import { novoClientId } from "@/lib/tecnico/offline/motor";
 import { proximoEquipamento } from "@/lib/tecnico/offline/estado";
 import { UNIDADES_SUGERIDAS } from "@/lib/checklist/tipo";
@@ -222,6 +223,8 @@ export function TelaEquipamento({ x, e, registrar, endereco, qr }: Props) {
         <Fotos fotos={fotosDe(null, "DEPOIS")} onRemover={so ? undefined : tirarFoto} />
         {!so && <BotaoFoto rotulo="Foto depois" marca={marca} onFoto={(d) => foto(d, { momento: "DEPOIS" })} />}
       </Secao>
+
+      <MateriaisUsados x={x} registrar={registrar} equipamentoId={equipamentoId} />
 
       {!so && (
         <div className="text-center">

@@ -12,6 +12,7 @@ import type { CartaoTela, OperacaoFila } from "@/lib/tecnico/offline/tipos";
 import { descricaoParaApp } from "@/lib/tecnico/cartao";
 import { guardadoDoRetrato, situacaoDoCartao, type EstadoCartao, type Guardado } from "@/lib/tecnico/chegada";
 import { toqueLeve } from "@/lib/haptico";
+import { BotaoQrEquipamento } from "@/components/tecnico/qr-equipamento";
 import { chaveDiaBR, diaCivilDeChave, diasAteDiaCivil, horaBR, partesBR } from "@/lib/fuso";
 import { prazoParaOTecnico } from "@/lib/os/prazo-execucao";
 
@@ -98,8 +99,10 @@ const diaMes = (dia: string) => dia.split("-").reverse().slice(0, 2).join("/");
  * "A caminho" é opcional e discreto: dá para tocar "Cheguei" direto. Depois de chegar (ou com a OS já
  * em andamento), o card abre a OS e ganha o atalho da Câmera — a foto é sempre no local.
  */
-export function CartaoAtividade({ c, fila, mostrarDia, proxima, guardado, listaEm }: {
+export function CartaoAtividade({ c, fila, mostrarDia, proxima, guardado, listaEm, depoisDeChegar }: {
   c: CartaoTela; fila: OperacaoFila[]; mostrarDia?: boolean; /** A primeira OS do dia ainda por concluir */ proxima?: boolean;
+  /** Veio do QR lido no Meu dia: depois do "Cheguei", abre direto no equipamento (ou pergunta se inclui) */
+  depoisDeChegar?: { e?: string | null; inc?: string | null };
   /** O retrato desta OS guardado no aparelho (o mesmo que a tela da OS usa) */ guardado?: Guardado | null;
   /** Quando a lista foi baixada */ listaEm?: number | null;
 }) {
@@ -133,7 +136,7 @@ export function CartaoAtividade({ c, fila, mostrarDia, proxima, guardado, listaE
     if (!(await confirmarOutroDia("Registrar a chegada agora?"))) return;
     toqueLeve();
     // Entrar na OS é local: o toque fica no aparelho e a OS abre, com ou sem sinal
-    if (await tocar("CHEGOU")) irPara({ ver: "os", a: c.atividadeId });
+    if (await tocar("CHEGOU")) irPara({ ver: "os", a: c.atividadeId, ...depoisDeChegar });
   }
   async function aCaminhoAgora() {
     if (!(await confirmarOutroDia("Avisar o cliente agora?"))) return;
@@ -304,7 +307,9 @@ export function MeuDia() {
     setAtualizando(false);
     // Deixa cada OS do dia pronta para abrir sem sinal
     if (!x.doAparelho && x.dados) void motor.prepararSemSinal([...x.dados.atividades, ...x.dados.anteriores].map((c) => c.atividadeId));
-  }, [motor, capturarPosicao]);
+    // …e o catálogo de materiais, para lançar o material usado sem sinal (só quem grava a execução)
+    if (!x.doAparelho && x.dados?.atividades.length && usuario.podeGravar) void motor.baixarLista("catalogo", "/api/tecnico/catalogo");
+  }, [motor, capturarPosicao, usuario.podeGravar]);
   useEffect(() => { void carregar(); }, [carregar]);
   // O sinal voltou, ou o técnico voltou para o app (saiu do mapa/telefone): a lista se atualiza sozinha
   useEffect(() => {
@@ -346,6 +351,9 @@ export function MeuDia() {
         </div>
       )}
       {d?.aviso && <p className="rounded-card bg-atencao-claro border border-atencao/20 p-4 text-sm text-atencao-texto" data-aviso>{d.aviso}</p>}
+
+      {/* Aponta a câmera para a etiqueta: abre o equipamento na OS de hoje, ou a ficha com o histórico */}
+      {d && d.tecnico && <BotaoQrEquipamento atividadeIds={[...d.anteriores, ...d.atividades].map((c) => c.atividadeId)} />}
 
       {/* O que carregar no veículo antes de sair: a soma dos materiais previstos das OS ainda por fazer */}
       {d && <OQueLevarDoDia cartoes={[...d.anteriores, ...d.atividades]} fila={fila} />}

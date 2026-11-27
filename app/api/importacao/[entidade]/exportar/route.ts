@@ -1,5 +1,5 @@
 import { gerarXlsx } from "@/lib/folha/planilha";
-import { IMPORTACOES } from "@/lib/importacao/entidades";
+import { defPara } from "@/lib/importacao/entidades";
 import { linhasExportacao, linhasModelo } from "@/lib/importacao/motor";
 import { carregarContexto, carregarExportacao } from "@/lib/importacao/servidor";
 import { anexo, exigirExportacao, XLSX, type Ctx } from "@/lib/importacao/rotas";
@@ -13,8 +13,12 @@ import { chaveDiaBR } from "@/lib/fuso";
 export async function GET(_: Request, ctx: Ctx) {
   const g = await exigirExportacao(ctx);
   if (!g.ok) return g.resposta;
-  const def = IMPORTACOES[g.entidade];
-  const [registros, { refs }] = await Promise.all([carregarExportacao(g.entidade, g.empresaId), carregarContexto(g.entidade, g.empresaId, false)]);
+  // As colunas restritas (custo) só saem para quem tem a permissão — nem são consultadas para os outros
+  const def = defPara(g.entidade, g.permitido, g.papel);
+  const [registros, { refs }] = await Promise.all([
+    carregarExportacao(g.entidade, g.empresaId, { verCusto: def.colunas.some((c) => c.chave === "custo_unitario") }),
+    carregarContexto(g.entidade, g.empresaId, false),
+  ]);
   const linhas = linhasExportacao(def, registros, refs);
   const { instrucoes } = linhasModelo(def, refs, { exportada: true });
   const larguras = def.colunas.map((c, i) => Math.min(60, Math.max(12, c.titulo.length + 4, ...linhas.slice(1, 200).map((l) => l[i].length + 2))));

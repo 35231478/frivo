@@ -30,6 +30,8 @@ export interface Movimentar {
   refId?: string | null;
   /** Sobrescreve a origem padrão da operação (ex.: ENTRADA vinda de inventário inicial) */
   origem?: OrigemMov;
+  /** De onde saiu/entrou (ex.: o veículo do técnico no uso em campo) — coluna local_id do razão */
+  localId?: string | null;
 }
 
 export interface Movimentado {
@@ -93,7 +95,7 @@ async function lancarNaTransacao(tx: Prisma.TransactionClient, m: Movimentar): P
       empresaId: m.empresaId, produtoId: m.produtoId, tipo, origem: m.origem ?? origem,
       quantidade: delta, saldoApos,
       custoUnitario: m.custoUnitario ?? null, refId: m.refId ?? null,
-      observacao: m.observacao?.trim() || null, usuarioId: m.usuarioId ?? null,
+      observacao: m.observacao?.trim() || null, usuarioId: m.usuarioId ?? null, localId: m.localId ?? null,
     },
     select: { id: true },
   });

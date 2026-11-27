@@ -11,6 +11,9 @@ import { cn } from "@/lib/utils";
 import { PersonalizarDashboard } from "@/components/dashboard/personalizar-dashboard";
 import { BlocoComErro } from "@/components/dashboard/ui";
 import { FrivoIA } from "@/components/ia/frivo-ia";
+import { DestaqueImplantacao } from "@/components/dashboard/destaque-implantacao";
+import { carregarImplantacao } from "@/lib/implantacao/servidor";
+import { destaqueNoPainel } from "@/lib/implantacao/etapas";
 import {
   BlocoAgenda, BlocoComercial, BlocoEquipamentos, BlocoFinanceiro, BlocoFrota, BlocoOperacional, BlocoOsDoDia,
   BlocoPmoc, BlocoPrazos, BlocoSolicitacoes,
@@ -60,6 +63,10 @@ export default async function DashboardPage() {
 
   // Só consulta o que vai aparecer; um bloco com erro não derruba a página
   const dados = await carregarBlocos(visiveis.map((b) => b.id), { empresaId: user.empresaId, podeVer });
+  // Implantação em destaque até 100% — só para quem configura a empresa (a mesma permissão do cartão em
+  // Configurações). Se a contagem falhar, o painel segue sem o destaque.
+  const podeConfigurar = podeVer("configuracoes", "gerenciar");
+  const implantacao = podeConfigurar ? await carregarImplantacao(user.empresaId).catch(() => null) : null;
 
   const { ano, mes, dia, hora } = partesBR();
   const saudacao = hora < 12 ? "Bom dia" : hora < 18 ? "Boa tarde" : "Boa noite";
@@ -82,6 +89,8 @@ export default async function DashboardPage() {
           />
         )}
       </div>
+
+      {destaqueNoPainel(podeConfigurar, implantacao?.progresso) && <DestaqueImplantacao progresso={implantacao!.progresso} />}
 
       {visiveis.length === 0 ? (
         <div className="bg-white rounded-card border border-dashed border-surface-border p-10 text-center">

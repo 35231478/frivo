@@ -9,6 +9,7 @@ import { AuthSessionProvider } from "@/components/providers/session-provider";
 import { PermissoesProvider } from "@/components/providers/permissoes-provider";
 import { AppTecnico } from "@/components/tecnico/app-tecnico";
 import { resumoPorteiro } from "@/lib/checklist-diario/servidor";
+import { temModulo } from "@/lib/modulos/servidor";
 
 export const metadata: Metadata = { title: "Meu dia" };
 
@@ -33,6 +34,7 @@ export default async function TecnicoPage() {
   // "Desempenho" só aparece no app para quem participa (o colaborador ligado a este login está num perfil)
   // Checklist de veículo obrigatório (o "porteiro"): só para quem faz checklist de veículo; o app decide o dia
   const porteiro = pode(u.permissoes, "veiculos", "checklist", u.role) ? await resumoPorteiro(u.empresaId, tecnico?.id).catch(() => null) : null;
+  const qrcodes = await temModulo(u.empresaId, "qrcodes");
   const noDesempenho = !!tecnico && (await prisma.desempenhoParticipante.count({ where: { tecnicoId: tecnico.id, empresaId: u.empresaId } })) > 0;
   // Foto de perfil: a de "Meus dados"; sem ela, a do cadastro do colaborador; sem nenhuma, o app mostra as iniciais
   const avatar = db?.avatar || colaborador?.avatar || null;
@@ -46,7 +48,7 @@ export default async function TecnicoPage() {
           usuario={{
             id: u.id, nome: u.name ?? "", email: u.email ?? "", empresaNome: u.empresaNome ?? "",
             podeGravar: pode(u.permissoes, "ordens", "editar", u.role) || pode(u.permissoes, "ordens", "concluir", u.role),
-            avatar, desempenho: noDesempenho,
+            avatar, desempenho: noDesempenho, qrcodes,
           }}
           perfilInicial={{
             nome: u.name ?? "", email: u.email ?? "", avatar: null /* vem do contexto do app (uma cópia só da foto na página) */, empresaNome: u.empresaNome ?? "",
