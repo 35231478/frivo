@@ -316,8 +316,9 @@ describe("escritório: Financeiro › Despesas de campo", () => {
   });
 
   it("quem só vê o Financeiro: vê a lista, o cupom e o filtro, sem aprovar, recusar nem categorias; a decidida mostra a conta de reembolso", async () => {
-    lista = [D({ status: "APROVADA", decididoPor: "Ana", decididoEm: "2026-11-11T13:00:00.000Z", contaPagar: { id: "cp1", numero: "CP-12", status: "PENDENTE" } })];
+    lista = [D({ status: "APROVADA", decididoPor: "Ana", decididoEm: "2026-11-11T13:00:00.000Z", contaPagar: { id: "cp1", numero: "CP-12", status: "PENDENTE" } }), D({ id: "d2" })];
     await montarEscritorio(false);
+    expect($("[data-despesa-campo=d2]")).not.toBeNull(); // pendente na lista, mas sem os botões
     expect($("[data-aprovar]")).toBeNull();
     expect($("[data-recusar]")).toBeNull();
     expect($("[data-abrir-mapa]")).toBeNull();
