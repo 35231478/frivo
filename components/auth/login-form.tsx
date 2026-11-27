@@ -25,7 +25,7 @@ export function mensagemErroLogin(code: string | undefined): string {
 }
 
 /** O login depois de o técnico entrar em outro aparelho (lib/sessao-ativa › motivoDoEncerramento) */
-export const MSG_OUTRO_APARELHO = "Sua sessão foi encerrada porque você entrou em outro aparelho.";
+export const MSG_OUTRO_APARELHO = "Sua sessão foi encerrada porque esta conta entrou em outro aparelho.";
 
 export function LoginForm() {
   const router = useRouter();

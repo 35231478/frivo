@@ -82,7 +82,7 @@ describe("login", () => {
   it("sessão encerrada: a mensagem do outro aparelho (app de campo) ou a de sempre", async () => {
     nav.sp = new URLSearchParams("sessao=encerrada&motivo=outro-aparelho");
     await montar(loginForm);
-    expect($('[role="status"]')?.textContent?.trim()).toBe("Sua sessão foi encerrada porque você entrou em outro aparelho.");
+    expect($('[role="status"]')?.textContent?.trim()).toBe("Sua sessão foi encerrada porque esta conta entrou em outro aparelho.");
     nav.sp = new URLSearchParams("sessao=encerrada");
     await montar(loginForm);
     expect($('[role="status"]')?.textContent?.trim()).toBe("Sua sessão foi encerrada. Entre novamente para continuar.");
