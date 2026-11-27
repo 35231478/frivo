@@ -171,12 +171,13 @@ export async function gerarRelatorioAtividadePdf(x: DadosRelatorioAtividadePdf):
   if (f.cortadas) d.paragrafo(`${f.cortadas} foto(s) não couberam neste PDF e estão no link do relatório.`, { tamanho: 8.5, cor: C.apoio, depois: 6 });
 
   // Assinaturas: técnico e, quando o cliente já confirmou, o cliente (com a assinatura colhida no local)
-  d.garantir(110);
-  d.y += 30;
-  const meia = (d.util - 30) / 2;
   const assinatura = x.aceite?.assinatura ? await embutirFoto(pdf, x.aceite.assinatura) : null;
+  // A assinatura salva é recortada (sem sobra em branco): reserva a altura dela acima da linha
+  d.garantir(assinatura ? 116 : 110);
+  d.y += assinatura ? 46 : 30;
+  const meia = (d.util - 30) / 2;
   if (assinatura) {
-    const esc = Math.min(meia / assinatura.width, 50 / assinatura.height);
+    const esc = Math.min(meia / assinatura.width, 42 / assinatura.height);
     d.pagina.drawImage(assinatura, { x: MARGEM + meia + 30 + (meia - assinatura.width * esc) / 2, y: d.altura - d.y - 4, width: assinatura.width * esc, height: assinatura.height * esc });
   }
   d.y += 8;

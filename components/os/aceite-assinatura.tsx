@@ -6,6 +6,7 @@ import { AlertCircle, CheckCircle2, Eraser } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { neutro } from "@/lib/ui/tokens";
 import { AvaliacaoDoCliente } from "@/components/os/avaliacao-cliente";
+import { exportarAssinatura, useAssinaturaPreservada } from "@/lib/assinatura-quadro";
 import { MSG_ASSINATURA, MSG_NOME, NOME_MAX, NOME_MIN, aceiteLocalSchema, type AceiteLocal } from "@/lib/os/aceite";
 
 /**
@@ -21,26 +22,31 @@ export function AssinaturaDoCliente({ resumo, aoConfirmar, aoCancelar, pedirAval
   pedirAvaliacao?: boolean;
 }) {
   const quadro = useRef<SignatureCanvas | null>(null);
+  // Girar o celular, abrir o teclado ou a janela mudar de tamanho não apaga nem distorce o traço
+  useAssinaturaPreservada(quadro);
   const [nome, setNome] = useState("");
   const [nota, setNota] = useState<number | null>(null);
   const [comentario, setComentario] = useState("");
   const [erro, setErro] = useState("");
   const [enviando, setEnviando] = useState(false);
 
+  // Dois toques rápidos em "Confirmar": um aceite só (o estado do React ainda não mudou no 2º toque)
+  const travado = useRef(false);
   async function confirmar() {
+    if (travado.current) return;
     setErro("");
     if (nome.trim().length < NOME_MIN) return setErro(MSG_NOME);
     if (!quadro.current || quadro.current.isEmpty()) return setErro(MSG_ASSINATURA);
     const dados = aceiteLocalSchema.safeParse({
-      nome, assinatura: quadro.current.getCanvas().toDataURL("image/png"),
+      nome, assinatura: exportarAssinatura(quadro.current),
       ...(pedirAvaliacao && { avaliacao: nota, avaliacaoComentario: nota ? comentario : null }),
     });
     if (!dados.success) return setErro(dados.error.issues[0]?.message ?? MSG_ASSINATURA);
-    setEnviando(true);
+    setEnviando(true); travado.current = true;
     try {
       const falha = await aoConfirmar(dados.data);
       if (falha) setErro(falha);
-    } catch { setErro("Não foi possível gravar a assinatura. Tente de novo."); } finally { setEnviando(false); }
+    } catch { setErro("Não foi possível gravar a assinatura. Tente de novo."); } finally { setEnviando(false); travado.current = false; }
   }
 
   return (
@@ -67,7 +73,7 @@ export function AssinaturaDoCliente({ resumo, aoConfirmar, aoCancelar, pedirAval
           </button>
         </div>
         <div className="bg-surface-alt border-2 border-dashed border-surface-border rounded-lg overflow-hidden touch-none">
-          <SignatureCanvas ref={quadro} penColor={neutro.texto} canvasProps={{ className: "w-full h-44 bg-white", "aria-label": "Quadro de assinatura" } as React.CanvasHTMLAttributes<HTMLCanvasElement>} />
+          <SignatureCanvas ref={quadro} clearOnResize={false} penColor={neutro.texto} canvasProps={{ className: "w-full h-44 bg-white", "aria-label": "Quadro de assinatura" } as React.CanvasHTMLAttributes<HTMLCanvasElement>} />
         </div>
         <p className="text-xs text-ink-subtle mt-1">Assine com o dedo, dentro do quadro.</p>
       </div>
