@@ -65,7 +65,7 @@ export default async function ContasReceberPage({
               email: true, telefone: true, celular: true, whatsappFaturamento: true, emailsFaturamento: true,
             },
           },
-          medicao: { select: { numero: true, avulsa: true } },
+          medicao: { select: { numero: true, avulsa: true, status: true } },
           orcamento: { select: { codigo: true } },
           contrato: { select: { numero: true } },
           notasFiscais: { select: { status: true } },
@@ -76,7 +76,7 @@ export default async function ContasReceberPage({
           lancamento: {
             select: {
               numero: true, medicaoId: true, orcamentoId: true, contratoId: true, _count: { select: { renegociadas: true } },
-              medicao: { select: { numero: true, avulsa: true } }, orcamento: { select: { codigo: true } }, contrato: { select: { numero: true } },
+              medicao: { select: { numero: true, avulsa: true, status: true } }, orcamento: { select: { codigo: true } }, contrato: { select: { numero: true } },
               notasFiscais: { select: { status: true } },
             },
           },
@@ -121,6 +121,8 @@ export default async function ContasReceberPage({
     boletoCodigoBarras: c.boletoCodigoBarras,
     observacao: c.observacao, centroCustoId: c.centroCustoId, contaBancariaId: c.contaBancariaId,
     medicaoId: o.medicaoId, orcamentoId: o.orcamentoId, contratoId: o.contratoId,
+    // A fatura desta conta espera o pedido do cliente (lib/pedido-cliente): a etiqueta na linha
+    aguardandoPedido: o.medicao?.status === "AGUARDANDO_PC",
     medicaoNumero: o.medicao?.numero ?? null, medicaoAvulsa: o.medicao?.avulsa ?? false, orcamentoCodigo: o.orcamento?.codigo ?? null, contratoNumero: o.contrato?.numero ?? null,
     notas: o.notasFiscais,
     };

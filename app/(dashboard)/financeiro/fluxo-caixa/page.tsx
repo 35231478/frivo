@@ -10,6 +10,8 @@ import { TrendingUp } from "lucide-react";
 import Link from "next/link";
 import { itensAFaturar } from "@/lib/financeiro/a-faturar";
 import { Dica } from "@/components/ui/dica";
+import { pedidoDosOrcamentos } from "@/lib/pedido-cliente/server";
+import { EtiquetaPedido } from "@/components/pedido-cliente/etiqueta-pedido";
 import { anoBR, chaveDiaCivil, diaDoMesCivil, mesBR } from "@/lib/fuso";
 
 export const metadata: Metadata = { title: "Fluxo de caixa" };
@@ -59,6 +61,7 @@ export default async function FluxoCaixaPage({
   const chaveMes = (a: number, m: number) => `${a}-${String(m).padStart(2, "0")}`;
   const aFaturarMes = aFaturarTodos.filter((i) => i.mes === chaveMes(ano, mes));
   const totalAFaturarMes = aFaturarMes.reduce((acc, i) => acc + i.valor, 0);
+  const pedidosAFaturar = await pedidoDosOrcamentos(empresaId, aFaturarMes.map((i) => i.orcamentoId));
 
   // Cards do mês
   const totalPrevistoMes = contasMes.reduce((acc, c) => acc + previstoDaConta(c), 0);
@@ -173,13 +176,15 @@ export default async function FluxoCaixaPage({
           </div>
           <div className="divide-y divide-surface-border border border-surface-border rounded-lg">
             {aFaturarMes.map((i) => (
-              <Link key={i.orcamentoId} href={`/orcamentos/${i.orcamentoId}`} className="flex items-center justify-between gap-3 px-3 py-2.5 hover:bg-surface-alt/60" data-item-a-faturar={i.orcamentoId}>
-                <div className="min-w-0">
+              <div key={i.orcamentoId} className="flex items-center justify-between gap-3 px-3 py-2.5 hover:bg-surface-alt/60" data-item-a-faturar={i.orcamentoId}>
+                <Link href={`/orcamentos/${i.orcamentoId}`} className="min-w-0 flex-1">
                   <p className="text-sm text-ink font-medium truncate">{i.clienteNome}</p>
                   <p className="text-xs text-ink-muted truncate">{i.codigo} · {i.nome} · {i.origemMes === "OS" ? `previsão da OS ${i.osNumero}` : "sem previsão de OS: mês corrente"}</p>
-                </div>
+                </Link>
+                {/* O cliente exige o pedido dele: a fatura espera (1 clique para informar) */}
+                <EtiquetaPedido situacao={pedidosAFaturar.get(i.orcamentoId)} alvo={{ orcamentoIds: [i.orcamentoId] }} />
                 <span className="font-semibold text-ink tabular-nums shrink-0">{formatarMoeda(i.valor)}</span>
-              </Link>
+              </div>
             ))}
           </div>
         </div>

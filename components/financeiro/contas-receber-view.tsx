@@ -28,6 +28,7 @@ import { TabelaPro, type ColunaPro } from "@/components/listagem/tabela-pro";
 import { CheckboxSelecao, CheckboxSelecaoPagina, SelecaoLinhasProvider, useSelecaoLinhas } from "@/components/listagem/selecao-linhas";
 import { PainelTotais, type LinhaTotal } from "@/components/listagem/painel-totais";
 import { CHAVES_RECEBER, totaisReceber } from "@/lib/listagem/totais-selecao";
+import { EtiquetaPedido } from "@/components/pedido-cliente/etiqueta-pedido";
 import { recebidaEmParte, saldoDaConta } from "@/lib/financeiro/parcelas";
 
 export interface ContaView {
@@ -44,6 +45,8 @@ export interface ContaView {
   observacao?: string | null; centroCustoId?: string | null; contaBancariaId?: string | null;
   medicaoId?: string | null; orcamentoId?: string | null; contratoId?: string | null;
   medicaoNumero?: string | null; orcamentoCodigo?: string | null; contratoNumero?: string | null; medicaoAvulsa?: boolean | null;
+  /** A fatura desta conta espera o pedido do cliente (etiqueta "Aguardando pedido" que abre a gaveta) */
+  aguardandoPedido?: boolean;
   notas?: { status: string }[];
   /** Baixa parcial: quanto já entrou (o saldo é valor − valorRecebido) */
   valorRecebido?: number;
@@ -257,6 +260,7 @@ function ContasReceberCorpo({
                     {recebidaEmParte(c) && <SeloParcial />}
                     <span className="text-xs text-ink-subtle">{c.dataVencimento ? `Vence ${formatarData(c.dataVencimento)}` : "Sem vencimento"}</span>
                     {origem && <span className="text-xs text-acento">{origem.rotulo}</span>}
+                    {c.aguardandoPedido && <span className="pill-atencao text-[11px] px-2" data-aguardando-pedido-conta>Aguardando pedido</span>}
                     {c.boletoStatus === "EMITIDO" && <Barcode className="w-3.5 h-3.5 text-ok-texto" aria-label="Boleto emitido" />}
                   </div>
                 </button>
@@ -299,6 +303,7 @@ function ContasReceberCorpo({
                       <div className="flex items-baseline gap-1.5 min-w-0">
                         <button type="button" onClick={() => setDetalheId(c.id)} title={c.descricao} className="min-w-0 text-left text-ink hover:text-primary-600 truncate" data-abrir-detalhes={c.id}>{c.descricao}</button>
                         {origem && <Link href={origem.href} title={origem.rotulo} className="shrink-0 max-w-[45%] truncate text-[11px] text-acento hover:underline" data-origem-conta>{origem.rotulo}</Link>}
+                        {c.aguardandoPedido && c.medicaoId && <EtiquetaPedido situacao={{ aguardando: true, pedido: null }} alvo={{ medicaoId: c.medicaoId }} />}
                       </div>
                     ),
                     categoria: <CategoriaBadge conta={c} categorias={categorias} linhaUnica />,
