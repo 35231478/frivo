@@ -98,7 +98,7 @@ export function PainelImplantacao({ etapas, progresso }: { etapas: Etapa[]; prog
                     <>
                       <span className={cn("w-1.5 h-1.5 rounded-full", ok ? "bg-success-600" : "bg-ink-subtle")} aria-hidden />
                       {it.rotulo}
-                      <strong className="tabular-nums">{typeof it.valor === "boolean" ? (it.valor ? "ok" : "falta") : it.valor.toLocaleString("pt-BR")}</strong>
+                      <strong className="tabular-nums">{it.texto ?? (typeof it.valor === "boolean" ? (it.valor ? "ok" : "falta") : it.valor.toLocaleString("pt-BR"))}</strong>
                     </>
                   );
                   const cls = "inline-flex items-center gap-1.5 rounded-full border border-surface-border bg-surface-alt/40 px-2.5 py-1 text-xs text-ink";

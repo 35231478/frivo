@@ -72,6 +72,8 @@ export default async function EditarOrcamentoPage({
   const cortarCusto = <S extends { materiais?: { custoUnit?: unknown }[] | null }>(servicos: S[]): S[] => (verCusto ? servicos : semCustoNosServicos(servicos));
   const inicial = {
     id: orcamento.id,
+    // "Orçamento E2": a regra de cobrança dos materiais com que o orçamento nasceu
+    cobrancaMateriais: orcamento.cobrancaMateriais,
     nome: orcamento.nome,
     codigo: orcamento.codigo,
     clienteId: orcamento.clienteId,

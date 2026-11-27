@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { regraDeCobranca } from "@/lib/orcamentos/materiais";
 import { notFound } from "next/navigation";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
@@ -117,7 +118,7 @@ export default async function OsDetalhePage({ params, searchParams }: { params: 
   const faturamentoOs = !os.contrato ? await faturamentoDaOs(os.id) : null;
   const faturamento = faturamentoOs && !faturamentoOs.outra ? { total: faturamentoOs.total, faturado: faturamentoOs.faturado, saldo: faturamentoOs.saldo, faturas: faturamentoOs.faturas } : null;
   // E4.2: a amarra da empresa (a central mostra "não conclui sem isso" quando ligada)
-  const cfg = await prisma.configuracao.findUnique({ where: { empresaId }, select: { osExigirPrestacaoMaterial: true } });
+  const cfg = await prisma.configuracao.findUnique({ where: { empresaId }, select: { osExigirPrestacaoMaterial: true, orcamentoCobrancaMateriais: true } });
 
   // PMOC (Etapa 2): a OS foi gerada pelo cronograma de um plano? Leitura à parte e tolerante: se as
   // tabelas do cronograma ainda não existirem no banco, a OS abre normalmente, só sem o atalho.
@@ -130,5 +131,7 @@ export default async function OsDetalhePage({ params, searchParams }: { params: 
   // Custo na OS: sem permissão de ver custo (lib/estoque/custo-acesso), o custo dos materiais NÃO vai ao navegador
   const verCusto = usuarioVeCustoDeCompra(u);
   const itensOrcamento = verCusto ? os.itensOrcamento : semCustoNosItensOs(os.itensOrcamento);
-  return <OsDetalhe verCusto={verCusto} os={{ ...os, itensOrcamento, medicoes: medicoesDaOs, galeria, contasReceber, fatura, faturamento, notaEmitida, pmoc, mesesFechadosDoAtraso, exigirPrestacaoMaterial: cfg?.osExigirPrestacaoMaterial ?? false }} abaInicial={aba} />;
+  return <OsDetalhe verCusto={verCusto} os={{ ...os, itensOrcamento, medicoes: medicoesDaOs, galeria, contasReceber, fatura, faturamento, notaEmitida, pmoc, mesesFechadosDoAtraso, exigirPrestacaoMaterial: cfg?.osExigirPrestacaoMaterial ?? false,
+    // "Orçamento E2": a regra de cobrança dos materiais da OS (a dela; sem ainda, a da empresa — fixada no 1º item com materiais)
+    regraMateriais: regraDeCobranca(os.cobrancaMateriais ?? cfg?.orcamentoCobrancaMateriais) }} abaInicial={aba} />;
 }
