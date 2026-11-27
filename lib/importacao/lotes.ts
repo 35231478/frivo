@@ -43,7 +43,9 @@ const ENTIDADE_DO_MODEL: Record<string, string> = Object.fromEntries(Object.entr
  * apagar junto) e alteração depois da importação.
  */
 async function motivosDeUso(db: Db, entidade: string, ids: string[], empresaId: string, apagando: Set<string>, loteEm: Date | null) {
-  const { relacoes, temAtualizadoEm } = relacoesDeUso(CADASTROS_DO_LOTE[entidade].model);
+  const { relacoes: todas, temAtualizadoEm } = relacoesDeUso(CADASTROS_DO_LOTE[entidade].model);
+  const ignorar = CADASTROS_DO_LOTE[entidade].ignorar ?? [];
+  const relacoes = todas.filter((r) => !ignorar.includes(r.campo));
   const excluidos = (tipo: string) => {
     const ent = ENTIDADE_DO_MODEL[tipo];
     return ent ? [...apagando].filter((k) => k.startsWith(`${ent}:`)).map((k) => k.slice(ent.length + 1)) : [];
@@ -84,6 +86,8 @@ const ROTULOS: Record<string, { select: Record<string, unknown>; texto: (r: Reco
   veiculos: { select: { placa: true, modelo: true }, texto: (r) => `${r.placa} — ${r.modelo}` },
   cargos: { select: { nome: true }, texto: (r) => r.nome },
   tiposEquipamento: { select: { nome: true }, texto: (r) => r.nome },
+  contratos: { select: { numero: true, cliente: { select: { nome: true } } }, texto: (r) => `${r.numero} — ${r.cliente?.nome ?? ""}` },
+  pmocs: { select: { nome: true, cliente: { select: { nome: true } } }, texto: (r) => `${r.nome} — ${r.cliente?.nome ?? ""}` },
 };
 
 export interface ItemDesfazer { entidade: string; id: string; rotulo: string; linha: number | null }

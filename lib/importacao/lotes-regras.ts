@@ -27,6 +27,12 @@ export interface CadastroDoLote {
   modulo?: string;
   /** O que falta, no motivo do "fica" ("você não tem permissão para …"); padrão: "excluir <plural>" */
   falta?: string;
+  /**
+   * Relações que a PRÓPRIA importação cria junto e que saem em cascata com o registro (ex.: as unidades cobertas
+   * pelo contrato, o histórico "importado suspenso"): não contam como uso. Uma edição pela tela depois disso
+   * marca o registro como "alterado depois desta importação" e ele fica.
+   */
+  ignorar?: string[];
 }
 
 export const CADASTROS_DO_LOTE: Record<string, CadastroDoLote> = {
@@ -41,6 +47,9 @@ export const CADASTROS_DO_LOTE: Record<string, CadastroDoLote> = {
   tiposEquipamento: { delegate: "tipoEquipamentoCustom", model: "TipoEquipamentoCustom", singular: "tipo de equipamento", plural: "tipos de equipamento", ordem: 3, permissao: [["configuracoes", "gerenciar"]], falta: "gerenciar as configurações" },
   clientes: { delegate: "cliente", model: "Cliente", singular: "cliente", plural: "clientes", ordem: 3, permissao: [["clientes", "excluir"]] },
   cargos: { delegate: "cargo", model: "Cargo", singular: "cargo", plural: "cargos", ordem: 3, permissao: [["configuracoes", "gerenciar"]], falta: "gerenciar as configurações" },
+  // Leva 6. Contrato: pela tela, "excluir" encerra (Contratos › Editar); aqui só sai o que o lote criou e ninguém usou
+  contratos: { delegate: "contrato", model: "Contrato", singular: "contrato", plural: "contratos", ordem: 1, permissao: [["contratos", "editar"]], modulo: "contratos", falta: "editar contratos", ignorar: ["unidades", "historicoStatus"] },
+  pmocs: { delegate: "pmoc", model: "Pmoc", singular: "plano PMOC", plural: "planos PMOC", ordem: 1, permissao: [["pmoc", "excluir"]], modulo: "pmoc", falta: "excluir planos PMOC", ignorar: ["equipamentos", "historico"] },
 };
 
 /** Tolerância entre o fim da gravação e o registro do lote (o lote é criado logo depois de gravar tudo) */
@@ -72,6 +81,9 @@ export const NOMES_VINCULO: Record<string, string> = {
   desempenhoFechamentoLinhas: "fechamentos de desempenho", admissoes: "admissão digital", documentosEmitidos: "documentos emitidos",
   documentacaoItens: "envios de documentação", dependentes: "dependentes", formTypeMappings: "formulários do tipo",
   checklistItens: "itens de checklist do tipo", materiaisCampo: "materiais usados em campo",
+  relatorios: "relatórios", reajustes: "reajustes", historicoStatus: "histórico de situação", recorrenciasLocais: "recorrências por local",
+  prazosAtendimento: "prazos de atendimento", execucoesFaturamento: "faturamentos do contrato", cronograma: "cronograma do PMOC",
+  execucoes: "execuções do PMOC", historico: "histórico", ocorrencias: "ocorrências do PMOC", avisos: "avisos enviados",
 };
 
 export const nomeVinculo = (campo: string) =>

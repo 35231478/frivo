@@ -380,9 +380,10 @@ describe("tela: Implantação", () => {
     // Estoque: produtos e saldos, cada um com o seu rótulo
     expect($$("[data-etapa='estoque'] [data-importar]").map((b) => `${b.dataset.importar}:${b.textContent!.trim()}`)).toEqual(["produtos:Importar produtos", "estoque:Importar saldos de estoque"]);
     expect($("[data-abrir-lista='veiculos']")!.getAttribute("href")).toBe("/veiculos");
-    // Contratos: ainda sem planilha (L6), só a lista e o aviso
-    expect($$("[data-etapa='contratos'] [data-importar]")).toHaveLength(0);
-    expect($("[data-etapa='contratos']")!.textContent).toMatch(/A planilha de contratos e PMOC vem na última leva/);
+    // Contratos e PMOC (leva 6): uma planilha de cada
+    expect($$("[data-etapa='contratos'] [data-importar]").map((b) => `${b.dataset.importar}:${b.textContent!.trim()}`)).toEqual(["contratos:Importar contratos", "pmocs:Importar planos PMOC"]);
+    // Leva 6: a etapa ganhou as planilhas de contratos e PMOC, com a nota de como entram (Suspenso / Rascunho)
+    expect($("[data-etapa='contratos'] [data-etapa-nota]")!.textContent).toMatch(/contrato ativo entra Suspenso e o PMOC entra em Rascunho/);
   });
 
   it("atalhos só com a permissão de importar e o módulo ligado", async () => {
