@@ -85,9 +85,16 @@ Orçamento agora também manda `orcamentoCobrancaMateriais`.
 
 ## Prints (dados fictícios)
 
-`docs/prints/orcamento-e2/`, desktop e celular, antes e depois:
+`docs/prints/orcamento-e2/`, desktop e celular. Cada tela tem três versões:
 
-- `01-config-materiais`: Configurações › Orçamento;
-- `02-construtor-materiais`: construtor;
-- `03-documento`: documento;
-- `04-implantacao`: Implantação.
+- `-antes`: o master de hoje;
+- `-depois-a-parte`: a empresa e o ORC-209 com "Cobrado à parte";
+- `-depois-incluso`: a empresa com "Incluso", no ORC-222.
+
+As telas:
+
+- `01-config-materiais`: Configurações › Orçamento, bloco Materiais;
+- `02-construtor-materiais`: o painel "Materiais e peças" no construtor;
+- `03-documento`: a tela do orçamento (no à parte, sem a opção "Mostrar materiais ao cliente");
+- `04-implantacao`: a etapa de configuração, com "Como você cobra materiais?";
+- `05-documento-itens` (só depois): a tabela de Serviços e Produtos do documento do cliente. No à parte, os materiais vão em Produtos com valor; no Incluso, ficam dentro do serviço, sem valor.
