@@ -7,8 +7,8 @@
  * fora do modo técnico. Sem as chaves VAPID, tudo isto vira nada (o envio não faz nada).
  *
  * Ligados: atribuição, reagendamento e cancelamento da OS, atividade esquecida (sino e agendador), aceite com
- * ressalva/comentário/nota baixa, chamado do portal, resposta de orçamento, saldo negativo em campo e comentário
- * na OS. PRONTO SEM CHAMADOR (as despesas nascem no PR "App-Campo 2 · PR B"): `notificarDespesa`.
+ * ressalva/comentário/nota baixa, chamado do portal, resposta de orçamento, saldo negativo em campo, comentário
+ * na OS e despesa de campo (enviada, aprovada, recusada).
  */
 import { after } from "next/server";
 import type { Prisma } from "@prisma/client";
@@ -190,11 +190,19 @@ export interface EventoDespesa {
   url: string;
 }
 
+/** Onde a despesa se vê: o escritório decide em Financeiro › Despesas de campo; o técnico acompanha no app */
+export const URL_DESPESAS_ESCRITORIO = "/financeiro/despesas-campo";
+export const URL_DESPESAS_APP = "/tecnico?ver=despesas";
+const STATUS_DA_SITUACAO: Record<SituacaoDespesa, string> = { ENVIADA: "PENDENTE", APROVADA: "APROVADA", RECUSADA: "RECUSADA" };
+
 /**
- * Despesa de campo — PRONTA, ainda sem chamador: as despesas nascem no PR "App-Campo 2 · PR B".
- * ENVIADA → o escritório que aprova (Financeiro › Fluxo de caixa), menos o autor; APROVADA/RECUSADA → o autor.
+ * Despesa de campo (lib/execucao/despesas: lançar, aprovar, recusar). ENVIADA → o escritório que aprova
+ * (Financeiro › Fluxo de caixa), menos o autor; APROVADA/RECUSADA → o autor. Relê a despesa: se a situação
+ * não é mais a do aviso (a aprovação foi desfeita, outra decisão veio antes), não avisa.
  */
 export async function notificarDespesa(e: EventoDespesa) {
+  const atual = await prisma.despesaCampo.findFirst({ where: { id: e.despesaId, empresaId: e.empresaId }, select: { status: true } });
+  if (!atual || atual.status !== STATUS_DA_SITUACAO[e.situacao]) return null;
   const chave = `despesa:${e.despesaId}:${e.situacao}`;
   if (e.situacao === "ENVIADA") {
     const autor = await prisma.usuario.findFirst({ where: { id: e.autorUsuarioId, empresaId: e.empresaId }, select: { nome: true } });

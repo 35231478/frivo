@@ -20,6 +20,7 @@ import { ConferenciaRapida } from "@/components/tecnico/conferencia-rapida";
 import { MateriaisUsados } from "@/components/tecnico/materiais";
 import { SeloGarantia } from "@/components/tecnico/garantia";
 import { ComentariosDaOs } from "@/components/tecnico/comentarios";
+import { BotaoLancarDespesa } from "@/components/tecnico/despesas";
 import { MSG_SEM_UNIDADE } from "@/lib/tecnico/cadastro-equipamento";
 import { ConcluirSemEquipamento } from "@/components/os/concluir-sem-equipamento";
 import { srcFoto, TelaEquipamento } from "@/components/tecnico/equipamento";
@@ -282,6 +283,8 @@ function ResumoOs({ r, x, fila, aEnviar, registrar, camera, incluir }: { r: Retr
       </section>
 
       <MateriaisUsados x={x} registrar={registrar} nomeEquipamento={(id) => x.equipamentos.find((e) => e.equipamento.id === id)?.equipamento.titulo ?? null} />
+
+      <BotaoLancarDespesa atividadeId={atividadeId} osNumero={x.os.numero} />
 
       <FotosServico x={x} so={so} onAdicionar={() => setFotoServico(true)} registrar={registrar} />
 

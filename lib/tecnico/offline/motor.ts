@@ -13,6 +13,7 @@
  */
 import { BancoTecnico } from "@/lib/tecnico/offline/banco";
 import type { NovaOperacao, OperacaoFila, RetratoAtividade } from "@/lib/tecnico/offline/tipos";
+import { SEM_OS } from "@/lib/tecnico/despesas";
 
 export type Situacao = "offline" | "sincronizando" | "pendente" | "sincronizado" | "erro" | "sessao";
 export interface EstadoSync {
@@ -199,7 +200,7 @@ export class MotorSync {
   }
 
   /** Baixa uma lista (Meu dia / Agenda), guarda no aparelho e devolve; sem sinal, devolve a guardada. */
-  async baixarLista<T>(chave: "meuDia" | "agenda" | "catalogo", url: string): Promise<{ dados: T | null; baixadoEm: number | null; doAparelho: boolean }> {
+  async baixarLista<T>(chave: "meuDia" | "agenda" | "catalogo" | "despesas", url: string): Promise<{ dados: T | null; baixadoEm: number | null; doAparelho: boolean }> {
     const guardada = await this.banco.ler<{ dados: T; baixadoEm: number }>(chave);
     if (!this.online()) this.publicar(); // o indicador já mostra "Offline"
     else {
@@ -291,8 +292,14 @@ export class MotorSync {
       this.falhas = 0; this.proximaTentativa = 0;
       this.estado = { ...this.estado, ultimoSync: this.agora() };
     }
-    // Retrato novo de cada atividade que subiu: a tela passa a mostrar o que o servidor gravou
-    for (const atividadeId of enviadas) await this.baixarRetrato(atividadeId);
+    // Retrato novo de cada atividade que subiu: a tela passa a mostrar o que o servidor gravou. Despesa fora de OS
+    // não tem retrato: baixa "Minhas despesas" e tira da fila o que já subiu antes de a lista ser pedida
+    for (const atividadeId of enviadas) {
+      if (atividadeId !== SEM_OS) { await this.baixarRetrato(atividadeId); continue; }
+      const pedidoEm = this.agora();
+      const r = await this.baixarLista("despesas", "/api/tecnico/despesas");
+      if (!r.doAparelho) await this.banco.limparEnviadas(SEM_OS, pedidoEm);
+    }
     await this.recontar(true);
     if (enviadas.size) { try { this.aoSincronizar?.(); } catch { /* idem */ } }
   }

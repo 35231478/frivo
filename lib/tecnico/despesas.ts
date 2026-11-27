@@ -1,0 +1,150 @@
+/**
+ * DESPESAS DE CAMPO — regras PURAS (aparelho, servidor e testes).
+ *
+ * O colaborador lança pelo app a despesa que teve em campo, com a FOTO DO CUPOM (obrigatória), com ou sem sinal (o
+ * `clientId` gerado no aparelho faz a reenviada não duplicar). O escritório decide em Financeiro › Despesas de campo:
+ *  - APROVAR "do próprio bolso": gera a conta a pagar de REEMBOLSO ao colaborador (favorecido = o colaborador), na
+ *    categoria financeira ligada à categoria da despesa;
+ *  - APROVAR "pela empresa" (cartão ou dinheiro da empresa): só registra — o custo fica na OS;
+ *  - RECUSAR: com o motivo, obrigatório (o colaborador vê no app).
+ * O técnico vê só as despesas DELE (nunca custo da OS).
+ */
+import { z } from "zod";
+import { arred } from "@/lib/estoque/regras";
+
+export const CATEGORIAS_DESPESA = [
+  { id: "COMBUSTIVEL", nome: "Combustível" },
+  { id: "PEDAGIO", nome: "Pedágio" },
+  { id: "ESTACIONAMENTO", nome: "Estacionamento" },
+  { id: "ALIMENTACAO", nome: "Alimentação" },
+  { id: "HOSPEDAGEM", nome: "Hospedagem" },
+  { id: "MATERIAL", nome: "Material comprado em campo" },
+  { id: "OUTROS", nome: "Outros" },
+] as const;
+export type CategoriaDespesa = (typeof CATEGORIAS_DESPESA)[number]["id"];
+export const NOME_CATEGORIA = Object.fromEntries(CATEGORIAS_DESPESA.map((c) => [c.id, c.nome])) as Record<CategoriaDespesa, string>;
+const IDS = CATEGORIAS_DESPESA.map((c) => c.id) as [CategoriaDespesa, ...CategoriaDespesa[]];
+
+export const PAGAMENTOS = { PROPRIO: "Do meu bolso", EMPRESA: "Cartão ou dinheiro da empresa" } as const;
+export type Pagamento = keyof typeof PAGAMENTOS;
+/** O mesmo, como o escritório lê */
+export const PAGAMENTO_ESCRITORIO: Record<Pagamento, string> = { PROPRIO: "Do bolso do colaborador", EMPRESA: "Pago pela empresa" };
+/** Vencimento sugerido do reembolso: daqui a 7 dias */
+export const DIAS_VENCIMENTO_REEMBOLSO = 7;
+
+export type StatusDespesa = "PENDENTE" | "APROVADA" | "RECUSADA";
+/** O que o colaborador lê no app (aprovada do bolso e já paga = reembolsada) */
+export type SituacaoDespesa = StatusDespesa | "REEMBOLSADA";
+export const ROTULO_SITUACAO: Record<SituacaoDespesa, string> = {
+  PENDENTE: "Aguardando aprovação", APROVADA: "Aprovada", RECUSADA: "Recusada", REEMBOLSADA: "Reembolsada",
+};
+export function situacaoDespesa(d: { status: string; pagamento: string; contaPaga?: boolean }): SituacaoDespesa {
+  if (d.status === "APROVADA" && d.pagamento === "PROPRIO" && d.contaPaga) return "REEMBOLSADA";
+  return (["PENDENTE", "APROVADA", "RECUSADA"].includes(d.status) ? d.status : "PENDENTE") as StatusDespesa;
+}
+
+export const VALOR_MAX = 100_000;
+/** Despesa mais antiga que isto não entra pelo app (o escritório lança à mão) */
+export const DIAS_MAX_ATRAS = 60;
+export const DESCRICAO_MAX = 200;
+const DIA = /^\d{4}-\d{2}-\d{2}$/;
+const temAteDuasCasas = (n: number) => Math.abs(n * 100 - Math.round(n * 100)) < 1e-6;
+
+/** O que a fila manda ao lançar. A foto vai junto (data URL já comprimida no aparelho). */
+export const despesaSchema = z.object({
+  clientId: z.string().min(1).max(64),
+  categoria: z.enum(IDS, { errorMap: () => ({ message: "Escolha a categoria." }) }),
+  valor: z.number({ invalid_type_error: "Informe o valor." })
+    .refine((n) => Number.isFinite(n) && n > 0, "O valor precisa ser maior que zero.")
+    .refine((n) => n <= VALOR_MAX, `No máximo R$ ${VALOR_MAX.toLocaleString("pt-BR")}.`)
+    .refine(temAteDuasCasas, "Use no máximo 2 casas decimais."),
+  /** O dia da despesa (Brasília), "AAAA-MM-DD" */
+  data: z.string().regex(DIA, "Data inválida."),
+  pagamento: z.enum(["PROPRIO", "EMPRESA"], { errorMap: () => ({ message: "Diga como foi paga." }) }),
+  descricao: z.string().trim().max(DESCRICAO_MAX).optional(),
+  foto: z.string().min(30, "Tire a foto do cupom.").startsWith("data:image/", "Tire a foto do cupom."),
+}).strict().refine((d) => d.categoria !== "OUTROS" || (d.descricao ?? "").trim().length >= 3, { message: "Em Outros, descreva a despesa.", path: ["descricao"] });
+export type DadosDespesa = z.infer<typeof despesaSchema>;
+
+/** O dia da despesa vale? Não pode ser no futuro nem mais antiga que DIAS_MAX_ATRAS (dias civis em Brasília). */
+export function dataDespesaValida(dia: string, hoje: string): string | null {
+  if (!DIA.test(dia) || Number.isNaN(Date.parse(`${dia}T12:00:00Z`))) return "Data inválida.";
+  if (dia > hoje) return "A data não pode ser no futuro.";
+  const dias = Math.round((Date.parse(`${hoje}T12:00:00Z`) - Date.parse(`${dia}T12:00:00Z`)) / 86_400_000);
+  if (dias > DIAS_MAX_ATRAS) return `Despesa com mais de ${DIAS_MAX_ATRAS} dias: fale com o escritório.`;
+  return null;
+}
+
+/** "R$ 1.234,50" → 1234.5; inválido → NaN */
+export function lerValor(t: string): number {
+  const s = t.replace(/R\$\s?/i, "").replace(/\s/g, "");
+  if (!s) return Number.NaN;
+  const normal = s.includes(",") ? s.replace(/\./g, "").replace(",", ".") : s;
+  return /^\d+(\.\d+)?$/.test(normal) ? arred(Number(normal)) : Number.NaN;
+}
+
+/* ───────── escritório ───────── */
+
+export const recusaSchema = z.object({ motivo: z.string().trim().min(3, "Diga o motivo da recusa.").max(300) }).strict();
+export const aprovacaoSchema = z.object({
+  /** Vencimento do reembolso (só "do próprio bolso"), "AAAA-MM-DD" */
+  vencimento: z.string().regex(DIA, "Informe o vencimento do reembolso.").optional(),
+  /** Troca a categoria financeira só nesta aprovação (sem mexer no padrão) */
+  categoriaId: z.string().min(1).max(64).optional(),
+}).strict();
+
+/** A categoria financeira ligada a cada categoria da despesa (o que a empresa configurou). */
+export type MapaCategorias = Partial<Record<CategoriaDespesa, string>>;
+export const mapaSchema = z.record(z.enum(IDS), z.string().min(1).max(64));
+
+/** Lê o JSON gravado (lixo vira vazio; chaves desconhecidas saem). */
+export function lerMapa(json: unknown): MapaCategorias {
+  if (!json || typeof json !== "object" || Array.isArray(json)) return {};
+  const m: MapaCategorias = {};
+  for (const c of IDS) { const v = (json as Record<string, unknown>)[c]; if (typeof v === "string" && v) m[c] = v; }
+  return m;
+}
+
+/**
+ * A categoria financeira do reembolso: a escolhida na aprovação; senão a do mapa; senão a de MESMO NOME (sem
+ * diferença de maiúsculas/acentos) entre as ativas; senão null (o servidor cria a de mesmo nome).
+ */
+export function categoriaFinanceiraDe(
+  categoria: CategoriaDespesa, op: { escolhida?: string | null; mapa: MapaCategorias; ativas: { id: string; nome: string }[] },
+): string | null {
+  const existe = (id?: string | null) => !!id && op.ativas.some((c) => c.id === id);
+  if (existe(op.escolhida)) return op.escolhida!;
+  if (existe(op.mapa[categoria])) return op.mapa[categoria]!;
+  const alvo = normal(NOME_CATEGORIA[categoria]);
+  return op.ativas.find((c) => normal(c.nome) === alvo)?.id ?? null;
+}
+const normal = (t: string) => t.normalize("NFD").replace(/[̀-ͯ]/g, "").toLocaleLowerCase("pt-BR").trim();
+
+/** A descrição da conta a pagar de reembolso */
+export function descricaoReembolso(d: { categoria: CategoriaDespesa; data: string; osNumero?: string | null; descricao?: string | null }): string {
+  const [a, m, dd] = d.data.split("-");
+  return [`Reembolso de despesa de campo: ${NOME_CATEGORIA[d.categoria]}`, `${dd}/${m}/${a}`, d.osNumero, (d.descricao ?? "").trim() || null].filter(Boolean).join(" · ").slice(0, 300);
+}
+
+/** Uma despesa como o app mostra (só as do próprio colaborador) */
+export interface DespesaTela {
+  id: string | null; clientId: string; categoria: CategoriaDespesa; valor: number; data: string; pagamento: Pagamento;
+  descricao: string | null; osNumero: string | null; situacao: SituacaoDespesa; motivoRecusa: string | null;
+  /** Gravada no aparelho, ainda não enviada (a foto é a local) */
+  pendente?: boolean; fotoLocal?: string;
+  /** O servidor recusou o envio (fica no aparelho, com o motivo, até o técnico ver na fila) */
+  erroEnvio?: string | null;
+}
+
+/** Resumo do topo da tela do escritório: o que espera decisão e quanto disso é reembolso */
+export function resumoDespesas(l: { status: string; pagamento: string; valor: number }[]) {
+  const pend = l.filter((d) => d.status === "PENDENTE");
+  const soma = (x: { valor: number }[]) => Math.round(x.reduce((t, d) => t + d.valor, 0) * 100) / 100;
+  return { pendentes: pend.length, totalPendente: soma(pend), aReembolsar: soma(pend.filter((d) => d.pagamento === "PROPRIO")) };
+}
+
+export const MSG_DESPESAS_DESLIGADAS = "Lançar despesas pelo app está desligado na empresa.";
+export const MSG_SEM_COLABORADOR = "Seu usuário não está ligado a um colaborador. Fale com o escritório.";
+export const MSG_JA_DECIDIDA = "Esta despesa já foi decidida.";
+/** Despesa lançada fora de uma OS: a fila agrupa por este id no lugar da atividade */
+export const SEM_OS = "sem-os";

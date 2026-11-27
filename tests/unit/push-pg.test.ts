@@ -5,7 +5,7 @@
  *  - aparelhos: inscrever, listar e revogar só os próprios; o navegador que recusa (410) é apagado;
  *  - preferência por tipo (só os tipos que a pessoa pode receber);
  *  - eventos: atribuição (só quem ENTROU, e só se continuou), reagendamento, cancelamento, esquecida
- *    (técnico e escritório, sem repetir), aceite, portal, orçamento, estoque, comentário (ligado) e despesa (pronta);
+ *    (técnico e escritório, sem repetir), aceite, portal, orçamento, estoque, comentário e despesa (ligados);
  *  - escopo: o técnico nunca recebe o que é da empresa inteira; outra empresa nunca recebe nada;
  *  - a rota do agendador só com o CRON_SECRET, e sem repetir.
  * Pula sem PG_TESTE_URL.
@@ -351,13 +351,44 @@ describe.skipIf(!URL_PG)("push (PostgreSQL real)", () => {
     expect(recebidos()).toEqual([]);
   });
 
-  it("despesa (pronta): enviada vai ao escritório que aprova; aprovada/recusada, a quem enviou", async () => {
-    const base = { empresaId: "e1", despesaId: "d1", autorUsuarioId: "uCarlos", descricao: "Pedágio", valor: 12.5, url: "/financeiro/despesas/d1" };
-    await ev.notificarDespesa({ ...base, situacao: "ENVIADA" });
+  it("despesa de campo (lib/execucao/despesas): lançada → o escritório que aprova; recusada/aprovada → quem lançou; o autor nunca recebe o próprio envio", async () => {
+    const { lancarDespesa, recusarDespesa, aprovarDespesa } = await import("@/lib/execucao/despesas");
+    const FOTO = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==";
+    const ator = { empresaId: "e1", usuarioId: "uCarlos", escopo: { restrito: true, tecnicoId: "tCarlos" } };
+    const lancar = (clientId: string, valor: number) => lancarDespesa(ator, { clientId, categoria: "PEDAGIO", valor, data: "2026-11-26", pagamento: "EMPRESA", descricao: "Pedágio Anhanguera", foto: FOTO }, null, "2026-11-27");
+    const r1 = await lancar("dp-1", 12.5);
+    expect(r1.status).toBe(201);
+    expect(h.enviados).toEqual([]); // só depois da resposta
+    await depoisDaResposta();
     expect(recebidos().sort()).toEqual([["admin", "Despesa para aprovar"], ["fin", "Despesa para aprovar"]]);
+    expect(h.enviados[0].msg.corpo.replace(/\u00a0/g, " ")).toBe("uCarlos · Pedágio Anhanguera · R$ 12,50");
+    expect(h.enviados[0].msg.url).toBe("/financeiro/despesas-campo");
+    // reenviar a mesma gravação do app: não avisa de novo
     limpar();
-    await ev.notificarDespesa({ ...base, situacao: "RECUSADA", motivo: "Sem nota fiscal" });
+    expect((await lancar("dp-1", 12.5)).status).toBe(200);
+    await depoisDaResposta();
+    expect(recebidos()).toEqual([]);
+
+    const id1 = (r1 as any).dados.id;
+    expect((await recusarDespesa("e1", id1, "uFin", "Sem nota fiscal")).status).toBe(200);
+    await depoisDaResposta();
     expect(recebidos().sort()).toEqual([["carlos-cel", "Despesa recusada"], ["carlos-tab", "Despesa recusada"]]);
+    expect([h.enviados[0].msg.corpo.replace(/\u00a0/g, " "), h.enviados[0].msg.url]).toEqual(["Pedágio Anhanguera · R$ 12,50 · Motivo: Sem nota fiscal", "/tecnico?ver=despesas"]);
+
+    limpar();
+    const r2 = await lancar("dp-2", 30);
+    await depoisDaResposta();
+    limpar();
+    expect((await aprovarDespesa("e1", (r2 as any).dados.id, "uAdmin")).status).toBe(200);
+    await depoisDaResposta();
+    expect(recebidos().sort()).toEqual([["carlos-cel", "Despesa aprovada"], ["carlos-tab", "Despesa aprovada"]]);
+
+    // o aviso relê a despesa: "enviada" de uma despesa já recusada não sai
+    limpar();
+    expect(await ev.notificarDespesa({ empresaId: "e1", despesaId: id1, situacao: "ENVIADA", autorUsuarioId: "uCarlos", url: "/financeiro/despesas-campo" })).toBeNull();
+    // e a de outra empresa não existe para a e1
+    expect(await ev.notificarDespesa({ empresaId: "e2", despesaId: id1, situacao: "RECUSADA", autorUsuarioId: "uCarlos", url: "/x" })).toBeNull();
+    expect(recebidos()).toEqual([]);
   });
 
   it("teste pela rota: só os aparelhos da própria pessoa; sem aparelho, 409", async () => {

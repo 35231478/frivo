@@ -129,6 +129,11 @@ export function AppColaboradorClient({ inicial }: { inicial: ConfigApp }) {
             dica="Ligado: o app soma os materiais lançados nas OS do dia, para carregar o veículo. É previsão: não baixa estoque."
             checked={cfg.oQueLevar} onChange={set("oQueLevar")}
           />
+          <ToggleSwitch
+            label="Lançar despesas pelo app"
+            dica="Ligado: o colaborador lança a despesa de campo com a foto do cupom, e o escritório aprova em Financeiro › Despesas de campo. Desligado: o botão some e nada é aceito."
+            checked={cfg.lancarDespesas} onChange={set("lancarDespesas")}
+          />
         </ToggleGroup>
       </section>
 

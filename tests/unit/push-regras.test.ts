@@ -43,8 +43,8 @@ describe("quem pode receber cada tipo", () => {
     expect(t).toContain("SOLICITACAO_PORTAL");
     expect(t).not.toContain("ORCAMENTO_RESPOSTA"); // o supervisor não vê orçamentos
   });
-  it("só a despesa está prevista (o evento nasce no PR B do app); o comentário já está ligado", () => {
-    expect(TIPOS_PUSH.filter((t) => ehPrevisto(t.id)).map((t) => t.id)).toEqual(["DESPESA"]);
+  it("nenhum tipo previsto: comentário e despesa já estão ligados", () => {
+    expect(TIPOS_PUSH.filter((t) => ehPrevisto(t.id)).map((t) => t.id)).toEqual([]);
   });
 });
 

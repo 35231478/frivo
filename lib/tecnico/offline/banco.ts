@@ -89,6 +89,15 @@ export class BancoTecnico {
     await fim(t);
   }
 
+  /** Tira da fila as operações de um grupo SEM retrato (ex.: despesa fora de OS) já confirmadas até `ate`. */
+  async limparEnviadas(atividadeId: string, ate: number): Promise<void> {
+    const t = this.db.transaction("fila", "readwrite");
+    const fila = t.objectStore("fila");
+    const ops: OperacaoFila[] = await req(fila.index("atividadeId").getAll(atividadeId));
+    for (const op of ops) if (op.estado === "enviada" && (op.enviadaEm ?? Infinity) <= ate) fila.delete(op.seq!);
+    await fim(t);
+  }
+
   /* ── dados soltos (Meu dia, Agenda, marcas) ── */
   async ler<T>(chave: string): Promise<T | null> {
     return (await req(this.db.transaction("dados").objectStore("dados").get(chave))) ?? null;

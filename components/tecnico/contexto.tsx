@@ -122,6 +122,8 @@ export type Vista =
   | { ver: "agenda" }
   | { ver: "perfil" }
   | { ver: "desempenho" }
+  /** Minhas despesas de campo (e o lançamento) */
+  | { ver: "despesas" }
   | { ver: "os"; a: string; e?: string | null; /** Abre já na câmera rápida (atalho do Meu dia) */ cam?: boolean;
       /** QR lido no Meu dia: equipamento da unidade que o técnico pode incluir nesta atividade (pergunta antes) */ inc?: string | null }
   /** Ficha do equipamento pelo QR lido (o que não está em nenhuma OS do técnico hoje) */
@@ -134,7 +136,7 @@ export function lerVista(search: string): Vista {
   if (ver === "os" && a) return { ver: "os", a, e: q.get("e"), ...(q.get("cam") === "1" && { cam: true }), ...(q.get("inc") && { inc: q.get("inc") }) };
   const qr = q.get("q");
   if (ver === "equipamento" && qr) return { ver: "equipamento", q: qr };
-  if (ver === "agenda" || ver === "perfil" || ver === "desempenho") return { ver };
+  if (ver === "agenda" || ver === "perfil" || ver === "desempenho" || ver === "despesas") return { ver };
   return { ver: "dia" };
 }
 

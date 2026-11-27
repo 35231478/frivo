@@ -55,8 +55,8 @@ export const TIPOS_PUSH: DefTipo[] = [
   { id: "ESTOQUE_NEGATIVO", rotulo: "Saldo negativo por uso em campo", dica: "O material lançado em campo deixou um produto com saldo negativo.", podeReceber: (q) => escritorio(q) && p(q, "estoque", "visualizar") },
 ];
 
-const PREVISTOS: TipoPush[] = ["DESPESA"];
-/** Tipos que já existem na lista, mas cujo evento ainda nasce em outra leva (as despesas de campo do app). */
+const PREVISTOS: TipoPush[] = [];
+/** Tipos que já existem na lista, mas cujo evento ainda nasce em outra leva (hoje, nenhum). */
 export const ehPrevisto = (t: TipoPush) => PREVISTOS.includes(t);
 
 /** Os tipos que esta pessoa pode receber (a tela de preferências mostra só estes). */

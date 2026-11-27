@@ -707,6 +707,10 @@ model Configuracao {
   appRastrearLocalizacao   Boolean @default(false) @map("app_rastrear_localizacao")
   /// Atividade esquecida em andamento: depois de quantas horas o app avisa o técnico e o sino avisa o gestor (1 a 24)
   appAlertaAndamentoHoras  Int     @default(4) @map("app_alerta_andamento_horas")
+  /// O colaborador lança despesas de campo pelo app (foto do cupom; o escritório aprova). Ligada por padrão
+  appLancarDespesas        Boolean @default(true) @map("app_lancar_despesas")
+  /// Despesas de campo: a categoria financeira de cada categoria fixa ({"COMBUSTIVEL": "<id>", …}). Vazio = a de mesmo nome
+  despesasCampoCategorias  Json?   @map("despesas_campo_categorias")
 
   // Notificações
   notifEmailAbrirOs       Boolean @default(false) @map("notif_email_abrir_os")
@@ -1153,6 +1157,7 @@ model Tecnico {
   @@index([empresaId, ativo])
   @@index([veiculoId])
   @@map("tecnicos")
+  despesasCampo         DespesaCampo[]
 }
 
 // ─────────────────────────────────────────────
@@ -2080,6 +2085,7 @@ model OrdemServico {
   materiaisCampo     AtividadeMaterial[]
   comentarios        OsComentario[]
   comentariosLidos   OsComentarioLeitura[]
+  despesasCampo      DespesaCampo[]
   anexos             OsAnexo[]
   historico          OsHistorico[]
   orcamentos         OrcamentoOs[]
@@ -2184,6 +2190,7 @@ model AtividadeOs {
   materiaisCampo       AtividadeMaterial[]
   /// Comentários feitos nesta atividade (técnico pelo app)
   comentarios          OsComentario[]
+  despesasCampo        DespesaCampo[]
   /// Ocorrências do PMOC detectadas nesta atividade
   pmocOcorrencias      PmocOcorrencia[]
   /// Aceites do cliente colhidos no local nesta atividade
@@ -2702,6 +2709,62 @@ model OsComentarioLeitura {
   @@id([usuarioId, ordemServicoId])
   @@index([ordemServicoId])
   @@map("os_comentarios_lidos")
+}
+
+/// DESPESA DE CAMPO lançada pelo colaborador no app (combustível, pedágio, estacionamento, alimentação…), com a foto do
+/// cupom. O escritório aprova ou recusa (motivo obrigatório) em Financeiro › Despesas de campo. Paga do próprio bolso:
+/// aprovar gera a conta a pagar de REEMBOLSO ao colaborador (`conta_pagar_id`). Paga pela empresa: aprovar só registra
+/// (o custo fica na OS). `client_id` (gerado no aparelho) faz a despesa reenviada pela fila offline não duplicar.
+model DespesaCampo {
+  id             String    @id @default(cuid())
+  empresaId      String    @map("empresa_id")
+  /// O colaborador (quem gastou)
+  tecnicoId      String    @map("tecnico_id")
+  /// O usuário do app que lançou
+  usuarioId      String    @map("usuario_id")
+  ordemServicoId String?   @map("ordem_servico_id")
+  atividadeId    String?   @map("atividade_id")
+  /// COMBUSTIVEL | PEDAGIO | ESTACIONAMENTO | ALIMENTACAO | HOSPEDAGEM | MATERIAL | OUTROS — TEXT: validação em lib/tecnico/despesas.ts
+  categoria      String
+  valor          Decimal   @db.Decimal(12, 2)
+  /// O dia da despesa (dia civil)
+  data           DateTime  @db.Date
+  descricao      String?
+  /// PROPRIO (do bolso: reembolso) | EMPRESA (cartão ou dinheiro da empresa)
+  pagamento      String
+  /// PENDENTE | APROVADA | RECUSADA
+  status         String    @default("PENDENTE")
+  motivoRecusa   String?   @map("motivo_recusa")
+  decididoPorId  String?   @map("decidido_por_id")
+  decididoEm     DateTime? @map("decidido_em")
+  /// A conta a pagar de reembolso (só PROPRIO aprovada)
+  contaPagarId   String?   @unique @map("conta_pagar_id")
+  clientId       String    @map("client_id")
+  criadoEm       DateTime  @default(now()) @map("criado_em")
+  atualizadoEm   DateTime  @updatedAt @map("atualizado_em")
+
+  tecnico      Tecnico           @relation(fields: [tecnicoId], references: [id], onDelete: Cascade)
+  ordemServico OrdemServico?     @relation(fields: [ordemServicoId], references: [id], onDelete: SetNull)
+  atividade    AtividadeOs?      @relation(fields: [atividadeId], references: [id], onDelete: SetNull)
+  contaPagar   ContaPagar?       @relation(fields: [contaPagarId], references: [id], onDelete: SetNull)
+  foto         DespesaCampoFoto?
+
+  @@unique([empresaId, clientId])
+  @@index([empresaId, status, data])
+  @@index([tecnicoId])
+  @@index([ordemServicoId])
+  @@map("despesas_campo")
+}
+
+/// A FOTO DO CUPOM (1-1), em tabela separada de propósito: a lista lê só a despesa e nunca arrasta a imagem.
+model DespesaCampoFoto {
+  despesaId String @id @map("despesa_id")
+  /// data URL (image/jpeg;base64), comprimida no aparelho
+  conteudo  String @db.Text
+
+  despesa DespesaCampo @relation(fields: [despesaId], references: [id], onDelete: Cascade)
+
+  @@map("despesas_campo_fotos")
 }
 
 model RespostaFormularioEquipamento {
@@ -3685,6 +3748,8 @@ model ContaPagar {
   recorrencia         ContaPagarRecorrencia? @relation(fields: [recorrenciaId], references: [id], onDelete: SetNull)
   tecnico             Tecnico?               @relation(fields: [tecnicoId], references: [id], onDelete: SetNull)
   pagamentos          PagamentoContaPagar[]
+  /// Reembolso de despesa de campo que gerou esta conta
+  despesaCampo        DespesaCampo?
 
   @@unique([numero, empresaId])
   /// Uma conta por competência da regra: é esta trava que impede a geração dobrada

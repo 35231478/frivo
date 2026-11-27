@@ -15,6 +15,7 @@ import { toqueLeve } from "@/lib/haptico";
 import { BotaoQrEquipamento } from "@/components/tecnico/qr-equipamento";
 import { AvisosDoDia, type DadosAndamento } from "@/components/tecnico/andamento";
 import { useComentariosNovos } from "@/components/tecnico/comentarios";
+import { BotaoLancarDespesa } from "@/components/tecnico/despesas";
 import { chaveDiaBR, diaCivilDeChave, diasAteDiaCivil, horaBR, partesBR } from "@/lib/fuso";
 import { prazoParaOTecnico } from "@/lib/os/prazo-execucao";
 
@@ -367,6 +368,8 @@ export function MeuDia() {
 
       {/* Aponta a câmera para a etiqueta: abre o equipamento na OS de hoje, ou a ficha com o histórico */}
       {d && d.tecnico && <BotaoQrEquipamento atividadeIds={[...d.anteriores, ...d.atividades].map((c) => c.atividadeId)} />}
+      {/* Despesa fora de OS (combustível, pedágio…): com a OS aberta, o botão de dentro dela já vincula */}
+      {d && d.tecnico && <BotaoLancarDespesa />}
 
       {/* O que carregar no veículo antes de sair: a soma dos materiais previstos das OS ainda por fazer */}
       {d && <OQueLevarDoDia cartoes={[...d.anteriores, ...d.atividades]} fila={fila} />}

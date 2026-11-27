@@ -55,7 +55,7 @@ Authorization: Bearer <CRON_SECRET>
 | Orçamento aprovado ou recusado | quem vê orçamentos | abre o orçamento |
 | Saldo negativo por uso em campo | quem vê o estoque | abre o estoque |
 | Comentário novo na OS (do app ou do escritório) | os técnicos da OS e o escritório, menos o autor | abre a OS |
-| Despesa de campo *(pronto, sem chamador)* | enviada: o escritório (Financeiro › Fluxo de caixa); aprovada ou recusada: quem enviou | abre a despesa |
+| Despesa de campo | lançada no app: o escritório que aprova (Financeiro › Fluxo de caixa); aprovada ou recusada: quem lançou | escritório: Despesas de campo; técnico: Minhas despesas |
 
 **Regras de quem recebe:**
 - O **técnico** (modo técnico) só recebe o que é dele, nunca a empresa inteira.
@@ -78,9 +78,10 @@ Authorization: Bearer <CRON_SECRET>
 | Rotas | `/api/push/*` e `/api/cron/push` |
 | Tela | `components/push/notificacoes-aparelho.tsx` |
 
-## Para quem mergear os PRs do app de campo
+## Comentários e despesas do app de campo
 
-- **Comentários na OS** (PR "App-Campo 2 · PR A", já no master): a chamada já está ligada nesta leva, em `lib/execucao/comentarios.ts`. Ela dispara só para comentário novo; o reenvio da mesma gravação não avisa de novo.
-- **Despesas de campo** (PR "App-Campo 2 · PR B"):
-  - ao enviar: `agendarPush(() => notificarDespesa({ empresaId, despesaId, situacao: "ENVIADA", autorUsuarioId, descricao, valor, url }))`;
-  - ao aprovar ou recusar: a mesma chamada, com `situacao: "APROVADA"` ou `"RECUSADA"` e, ao recusar, `motivo`.
+Os dois PRs do app entraram no master durante esta leva (#258, comentários; #259, despesas). As chamadas já estão ligadas:
+- **Comentário na OS:** em `lib/execucao/comentarios.ts`, nos caminhos do app e do escritório. Só comentário novo avisa; o reenvio da mesma gravação não.
+- **Despesa de campo:** em `lib/execucao/despesas.ts`, ao lançar, aprovar e recusar.
+  - O aviso relê a situação da despesa antes de sair: aprovação desfeita, ou decisão que outra pessoa tomou antes, não avisa.
+  - O lançamento reenviado pelo app não avisa de novo.
