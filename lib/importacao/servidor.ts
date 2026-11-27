@@ -216,43 +216,56 @@ export async function carregarContexto(
   return { existentes, refs, podeAtualizar, permitido, mapas };
 }
 
-/** Todos os registros DA EMPRESA para a planilha exportada (ativos e inativos), na ordem da lista */
-export async function carregarExportacao(entidade: EntidadeImportacao, empresaId: string, o: { verCusto?: boolean } = {}): Promise<Record<string, unknown>[]> {
+/** Uma página da exportação (o backup da empresa lê em lotes, por id, para não carregar tudo na memória). */
+export interface PaginaExportacao { depoisDe?: string | null; take: number }
+
+/**
+ * Registros DA EMPRESA para a planilha exportada (ativos e inativos). Sem `pagina`: todos, na ordem da lista
+ * (o download de um cadastro). Com `pagina`: um lote em ordem de id, depois de `depoisDe` (o backup da empresa,
+ * lib/exportacao) — os mesmos campos, então a mesma planilha.
+ */
+export async function carregarExportacao(entidade: EntidadeImportacao, empresaId: string, o: { verCusto?: boolean; pagina?: PaginaExportacao } = {}): Promise<Record<string, unknown>[]> {
+  const pg = o.pagina;
+  /** O filtro da empresa (sempre) + o "depois de" da página */
+  const onde = <T extends Record<string, unknown>>(extra?: T) => ({ empresaId, ...(extra ?? {}), ...(pg?.depoisDe ? { id: { gt: pg.depoisDe } } : {}) });
+  /** Na página, a ordem é por id (o cursor) */
+  const porId = { id: "asc" as const };
+  const take = pg?.take;
   switch (entidade) {
-    case "clientes": return prisma.cliente.findMany({ where: { empresaId }, orderBy: [{ nome: "asc" }, { id: "asc" }] });
+    case "clientes": return prisma.cliente.findMany({ where: onde(), orderBy: pg ? porId : [{ nome: "asc" }, { id: "asc" }], take });
     case "unidades": return prisma.unidade.findMany({
-      where: { empresaId }, include: { cliente: { select: { cpfCnpj: true, nome: true } } },
-      orderBy: [{ cliente: { nome: "asc" } }, { principal: "desc" }, { nome: "asc" }, { id: "asc" }],
+      where: onde(), include: { cliente: { select: { cpfCnpj: true, nome: true } } },
+      orderBy: pg ? porId : [{ cliente: { nome: "asc" } }, { principal: "desc" }, { nome: "asc" }, { id: "asc" }], take,
     });
     case "equipamentos": return prisma.equipamento.findMany({
-      where: { empresaId }, include: { unidade: { select: { nome: true, principal: true, cliente: { select: { cpfCnpj: true, nome: true } } } } },
-      orderBy: [{ unidade: { cliente: { nome: "asc" } } }, { unidade: { nome: "asc" } }, { marca: "asc" }, { id: "asc" }],
+      where: onde(), include: { unidade: { select: { nome: true, principal: true, cliente: { select: { cpfCnpj: true, nome: true } } } } },
+      orderBy: pg ? porId : [{ unidade: { cliente: { nome: "asc" } } }, { unidade: { nome: "asc" } }, { marca: "asc" }, { id: "asc" }], take,
     }) as unknown as Promise<Record<string, unknown>[]>;
     case "contatos": return prisma.contatoCliente.findMany({
-      where: { empresaId }, select: { id: true, nome: true, cargo: true, tipo: true, email: true, telefone: true, whatsapp: true, principal: true, cliente: { select: { cpfCnpj: true } } },
-      orderBy: [{ cliente: { nome: "asc" } }, { principal: "desc" }, { nome: "asc" }, { id: "asc" }],
+      where: onde(), select: { id: true, nome: true, cargo: true, tipo: true, email: true, telefone: true, whatsapp: true, principal: true, cliente: { select: { cpfCnpj: true } } },
+      orderBy: pg ? porId : [{ cliente: { nome: "asc" } }, { principal: "desc" }, { nome: "asc" }, { id: "asc" }], take,
     }) as unknown as Promise<Record<string, unknown>[]>;
-    case "fornecedores": return prisma.fornecedor.findMany({ where: { empresaId }, orderBy: [{ nome: "asc" }, { id: "asc" }] });
-    case "servicos": return prisma.servico.findMany({ where: { empresaId }, orderBy: [{ codigo: "asc" }, { nome: "asc" }, { id: "asc" }] });
-    case "produtos": return prisma.produto.findMany({ where: { empresaId }, orderBy: [{ codigo: "asc" }, { nome: "asc" }, { id: "asc" }] });
+    case "fornecedores": return prisma.fornecedor.findMany({ where: onde(), orderBy: pg ? porId : [{ nome: "asc" }, { id: "asc" }], take });
+    case "servicos": return prisma.servico.findMany({ where: onde(), orderBy: pg ? porId : [{ codigo: "asc" }, { nome: "asc" }, { id: "asc" }], take });
+    case "produtos": return prisma.produto.findMany({ where: onde(), orderBy: pg ? porId : [{ codigo: "asc" }, { nome: "asc" }, { id: "asc" }], take });
     case "estoque": {
       // Os produtos que controlam estoque (ativos), com o saldo; o último custo só para quem vê custo
       const ps = await prisma.produto.findMany({
-        where: { empresaId, controlaEstoque: true, ativo: true }, select: { id: true, codigo: true, nome: true, saldo: true },
-        orderBy: [{ codigo: "asc" }, { nome: "asc" }, { id: "asc" }],
+        where: onde({ controlaEstoque: true, ativo: true }), select: { id: true, codigo: true, nome: true, saldo: true },
+        orderBy: pg ? porId : [{ codigo: "asc" }, { nome: "asc" }, { id: "asc" }], take,
       });
       const custos = o.verCusto ? await ultimosCustos(empresaId, ps.map((p) => p.id)) : new Map<string, number>();
       return ps.map((p) => ({ ...p, saldo: arred(Number(p.saldo)), ultimoCusto: custos.get(p.id) ?? null }));
     }
     case "colaboradores": return prisma.tecnico.findMany({
-      where: { empresaId }, orderBy: [{ nome: "asc" }, { id: "asc" }],
+      where: onde(), orderBy: pg ? porId : [{ nome: "asc" }, { id: "asc" }], take,
       // Nunca salário, dados bancários ou documentos pessoais: só as colunas da planilha
       select: { id: true, nome: true, cpf: true, telefone: true, email: true, tipo: true, tipoEquipe: true, cargoId: true, crea: true, endereco: true, numero: true, complemento: true, bairro: true, cidade: true, estado: true, cep: true, observacoes: true },
     });
     case "contratos":
     case "pmocs": return [];
     case "veiculos": return prisma.veiculo.findMany({
-      where: { empresaId }, orderBy: [{ placa: "asc" }, { id: "asc" }],
+      where: onde(), orderBy: pg ? porId : [{ placa: "asc" }, { id: "asc" }], take,
       select: { id: true, placa: true, modelo: true, marca: true, ano: true, anoModelo: true, tipo: true, combustivel: true, cor: true, chassi: true, renavam: true, quilometragemAtual: true, observacoes: true, responsavel: { select: { cpf: true } } },
     }) as unknown as Promise<Record<string, unknown>[]>;
   }

@@ -30,6 +30,7 @@ import { TelaNumeracao } from "./numeracao";
 import { TelaPadronizacao } from "./padronizacao";
 import { TelaModulos } from "./modulos";
 import { TelaImplantacao } from "./implantacao";
+import { TelaExportarDados } from "./exportar-dados";
 
 /**
  * A tela COMPLETA de cada item de Configurações (as mesmas de antes, sem nada capado), pelo id
@@ -68,6 +69,7 @@ const TELAS: Record<string, () => ReactNode> = {
   padronizacao: () => <TelaPadronizacao />,
   modulos: () => <TelaModulos />,
   implantacao: () => <TelaImplantacao />,
+  "exportar-dados": () => <TelaExportarDados />,
 };
 
 export const temTelaConfig = (id: string) => id in TELAS;
