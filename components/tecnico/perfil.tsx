@@ -3,12 +3,12 @@
 import { confirmar } from "@/components/ui/avisos";
 import { useEffect, useState } from "react";
 import { signOut } from "next-auth/react";
-import { AlertTriangle, Car, ChevronDown, LogOut, RefreshCw, Trash2 } from "lucide-react";
+import { AlertTriangle, Car, ChevronDown, LogOut, Receipt, RefreshCw, Trash2 } from "lucide-react";
 import { AvatarTecnico } from "@/components/ui/avatar-tecnico";
 import { cn } from "@/lib/utils";
 import { PerfilClient } from "@/components/perfil/perfil-client";
 import { rotuloSync } from "@/components/tecnico/indicador-sync";
-import { useTecnico } from "@/components/tecnico/contexto";
+import { irPara, useTecnico } from "@/components/tecnico/contexto";
 import { PreferenciaRota } from "@/components/tecnico/rota";
 import type { OperacaoFila } from "@/lib/tecnico/offline/tipos";
 import { horaBR } from "@/lib/fuso";
@@ -19,6 +19,7 @@ const ROTULO_OPERACAO: Record<string, string> = {
   vincular: "Equipamento vinculado", scan: "QR Code lido", adicional: "Serviço extra", adicionalRemover: "Serviço extra retirado",
   adicionalFoto: "Foto do serviço extra", adicionalFotoRemover: "Foto do serviço extra retirada",
   fotoOs: "Foto do serviço", fotoOsRemover: "Foto do serviço retirada", concluir: "Conclusão da atividade",
+  material: "Material usado", materialRemover: "Material excluído", comentario: "Comentário", despesa: "Despesa de campo", aceite: "Aceite do cliente",
 };
 
 /**
@@ -96,6 +97,13 @@ export function PerfilTecnico({ perfilInicial }: { perfilInicial: React.Componen
           </div>
         )}
       </section>
+
+      {config.lancarDespesas && (
+        <button type="button" onClick={() => irPara({ ver: "despesas" })} data-minhas-despesas
+          className="w-full flex items-center gap-3 bg-white rounded-card border border-surface-border p-4 font-semibold text-ink touch-target">
+          <Receipt className="w-5 h-5 text-ink-muted" /> Minhas despesas
+        </button>
+      )}
 
       <a href="/veiculos/checklist" className="flex items-center gap-3 bg-white rounded-card border border-surface-border p-4 font-semibold text-ink touch-target">
         <Car className="w-5 h-5 text-ink-muted" /> Checklist do veículo

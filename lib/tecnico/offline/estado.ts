@@ -216,6 +216,10 @@ export function aplicar(r: RetratoAtividade, x: ExecucaoTela, op: OperacaoFila):
     case "comentario":
       return { ...x, comentarios: aplicarComentario(x.comentarios ?? [], op.dados, op.em ?? op.criadoEm) };
 
+    case "despesa":
+      // A despesa não muda a execução: aparece em "Minhas despesas" (lida da fila e do servidor)
+      return x;
+
     case "fotoOsRemover":
       return { ...x, fotosServico: (x.fotosServico ?? []).filter((f) => !((op.dados.clientId && f.clientId === op.dados.clientId) || (op.dados.id && f.id === op.dados.id))) };
 
