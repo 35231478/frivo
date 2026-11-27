@@ -954,6 +954,7 @@ const chaveNumeroContrato = (t: string) => `num:${t.trim().toUpperCase()}`;
 
 const contratos: DefImportacao = {
   entidade: "contratos", singular: "contrato", plural: "contratos", chaveDescricao: "número do contrato",
+  soCadastra: "A planilha só cadastra contratos novos: um contrato que já existe (mesmo número) vira erro na prévia. Para alterar um contrato, use a tela dele.",
   avisoPrevia: `${AVISO_CONTRATO_SUSPENSO} A planilha só cadastra contratos novos: para alterar um contrato que já existe, use a tela.`,
   colunas: [
     { chave: "numero", titulo: "numero", ajuda: "Número do contrato (vazio = o próximo da numeração da empresa)", exemplo: "CT-2026-001", apelidos: ["numero_contrato", "contrato", "n_contrato", "nº_contrato"] },
@@ -1027,6 +1028,7 @@ const contratos: DefImportacao = {
  */
 const pmocs: DefImportacao = {
   entidade: "pmocs", singular: "plano PMOC", plural: "planos PMOC", chaveDescricao: "nome do plano na unidade",
+  soCadastra: "A planilha só cadastra planos novos: o mesmo nome na mesma unidade vira erro na prévia. Para alterar um plano, use a tela do PMOC.",
   avisoPrevia: "Cada plano entra como RASCUNHO: não gera cronograma, OS nem aviso ao cliente até alguém revisar e publicar pela tela.",
   colunas: [
     { chave: "cnpj_cpf", titulo: "cnpj_cpf", obrig: true, ajuda: "CNPJ/CPF do cliente (já cadastrado)", exemplo: "11.222.333/0001-81", apelidos: ["cnpj", "cpf", "documento", "cliente_cnpj"] },

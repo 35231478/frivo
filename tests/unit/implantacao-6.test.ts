@@ -169,6 +169,22 @@ async function render(permissoes: Permissoes, desligados: string[] = []) {
   await act(async () => { root!.render(createElement(MProv, { desligados }, createElement(PProv, { permissoes, role: "OPERADOR" }, createElement(PainelImplantacao, { etapas, progresso: progresso(etapas) })))); });
 }
 
+describe("tela: assistente de contratos e PMOC", () => {
+  it("diz que só cadastra (nada de 'existentes são atualizados') e não oferece a edição em massa", async () => {
+    const { ImportarPlanilha } = await import("@/components/importacao/importar-planilha");
+    for (const [ent, texto] of [["contratos", /só cadastra contratos novos/], ["pmocs", /só cadastra planos novos/]] as const) {
+      caixa = document.createElement("div"); document.body.appendChild(caixa); root = createRoot(caixa);
+      await act(async () => { root!.render(createElement(MProv, { desligados: [] }, createElement(PProv, { permissoes: permissoesTotais(), role: "OPERADOR" }, createElement(ImportarPlanilha, { entidade: ent, rotulo: "Importar" })))); });
+      await act(async () => { ($("[data-acao='importar-planilha']") as HTMLButtonElement).click(); });
+      expect($("[data-so-cadastra]")!.textContent).toMatch(texto);
+      expect(document.body.textContent).not.toMatch(/existentes \(mesmo/);
+      expect($("[data-dica-exportar]")).toBeNull();
+      expect($("[data-acao='baixar-cadastrados']")).toBeNull();
+      act(() => root?.unmount()); caixa.remove(); document.body.innerHTML = "";
+    }
+  });
+});
+
 describe("tela: etapa Contratos e PMOC", () => {
   it("as duas planilhas, os modelos e a nota de como entram (Suspenso / Rascunho)", async () => {
     await render(permissoesTotais());

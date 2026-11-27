@@ -182,6 +182,13 @@ describe.skipIf(!URL_PG)("Implantação, leva 6 — contratos e PMOC por planilh
     // Fim antes do início
     const r2 = await importar("contratos", csv([CABEC_CT, ["", CNPJ_A, "preventiva", "", "01/02/2026", "31/01/2026", "", "", "", "", ""]]), "previa");
     expect(errosDe(r2)[2]).toMatch(/data_fim: antes da data de início/);
+    // A gravação confere de novo: unidade que não é do cliente (dados adulterados ou trocados depois da análise) não entra
+    const { gravarImportacao } = await import("@/lib/importacao/servidor");
+    const linha = { linha: 2, status: "criar", rotulo: "x", erros: [], valores: {}, dados: { clienteId: "cA", tipo: "INSTALACAO", situacao: "ATIVO", dataInicio: "2026-02-01", periodicidade: "MENSAL", unidadeIds: ["uB"] } };
+    const g = await gravarImportacao("contratos", { linhas: [linha], resumo: { total: 1, criar: 1, atualizar: 0, erros: 0, avisos: 0 }, colunasIgnoradas: [], colunas: { cabecalho: [], ligadas: {}, faltando: [] } } as any, "e1");
+    expect(g.criados).toBe(0);
+    expect(g.erros[0].erros).toEqual(["unidades: uma das unidades não é mais deste cliente. Gere a prévia de novo."]);
+    expect(await prisma.contrato.count({ where: { tipo: "INSTALACAO", numero: { not: "CT-2026-001" } } })).toBe(0);
   });
 
   it("PMOC: entra em RASCUNHO, sem cronograma; equipamentos pela série (do cliente, ativos); validade padrão 12 meses; nome repetido na unidade é erro", async () => {
