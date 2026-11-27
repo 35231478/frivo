@@ -39,6 +39,7 @@ export async function gerarOsDoOrcamento(p: { empresaId: string; usuarioId: stri
     where: { id: orcamentoId, empresaId },
     select: {
       id: true, codigo: true, nome: true, descricao: true, status: true, tipo: true, clienteId: true, unidadeId: true, cobrancaMateriais: true,
+      pedidoClienteId: true, pedidoLiberadoEm: true, pedidoLiberadoPorId: true, pedidoLiberadoMotivo: true,
       // E3.3b: o snapshot dos materiais e a peça derivada (materialId) vão para a OS, com os mesmos valores
       servicos: { select: { id: true, descricao: true, quantidade: true, valorUnitario: true, valorTotal: true, ordem: true, servicoId: true, valorBase: true, ajusteMateriais: true, valorManual: true, materiais: { orderBy: { ordem: "asc" } } } },
       produtos: { select: { descricao: true, quantidade: true, valorUnitario: true, valorTotal: true, ordem: true, produtoId: true, materialId: true } },
@@ -61,6 +62,8 @@ export async function gerarOsDoOrcamento(p: { empresaId: string; usuarioId: stri
         const criada = await tx.ordemServico.create({
           data: {
             empresaId, numero, clienteId: orc.clienteId, unidadeId: orc.unidadeId, orcamentoOrigemId: orc.id,
+            // O pedido do cliente (ou a liberação sem ele) do orçamento vale para a OS gerada dele (lib/pedido-cliente)
+            pedidoClienteId: orc.pedidoClienteId, pedidoLiberadoEm: orc.pedidoLiberadoEm, pedidoLiberadoPorId: orc.pedidoLiberadoPorId, pedidoLiberadoMotivo: orc.pedidoLiberadoMotivo,
             responsavelId: usuarioId, criadoPorId: usuarioId, status: "ABERTA", descricao: descricaoDaOs(orc),
             // "Orçamento E2": a OS segue a regra de cobrança dos materiais com que o orçamento nasceu
             cobrancaMateriais: orc.cobrancaMateriais,

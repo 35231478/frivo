@@ -17,6 +17,7 @@ import { sincronizarStatusOs } from "@/lib/os/sincronizar-status";
 import { agendarPush, notificarOsCancelada, notificarReagendamento } from "@/lib/push/eventos";
 import { estagioAutomatico, statusCorresponde } from "@/lib/os/status";
 import { lerPrazoDigitado } from "@/lib/os/prazo-execucao";
+import { travaIniciarOs } from "@/lib/pedido-cliente/server";
 import { diaCivilUTC, ehDiaCivil, instanteBR, partesBR } from "@/lib/fuso";
 
 type Params = { params: Promise<{ id: string }> };
@@ -224,6 +225,11 @@ export async function PUT(req: NextRequest, { params }: Params) {
   if (previsaoConclusao !== undefined) data.previsaoConclusao = previsaoConclusao ? new Date(previsaoConclusao) : null;
   if (prazoDigitado !== undefined) data.prazoExecucao = prazoDigitado;
 
+  // Começar pela OS: o cliente que exige o pedido dele antes da execução trava aqui também (lib/pedido-cliente)
+  if (status === "EM_ANDAMENTO" && existente.status !== "EM_ANDAMENTO") {
+    const semPedido = await travaIniciarOs(empresaId, id);
+    if (semPedido) return NextResponse.json({ erro: semPedido }, { status: 409 });
+  }
   if (status === "EM_ANDAMENTO" && !existente.dataInicio) data.dataInicio = new Date();
   if (status === "CONCLUIDA" && !existente.dataConclusao) data.dataConclusao = new Date();
 

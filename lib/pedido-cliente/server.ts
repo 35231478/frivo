@@ -398,3 +398,9 @@ export async function situacaoDaFaturaAprovada(medicaoId: string): Promise<{ sta
   const numeros = [...new Set(linhas.map((i) => i.ordemServico?.pedidoCliente?.numero ?? i.orcamento?.pedidoCliente?.numero).filter(Boolean))] as string[];
   return { status: esperando ? "AGUARDANDO_PC" : "PC_RECEBIDO", pcNumero: esperando ? null : numeros.join(", ") || null };
 }
+
+/** O início pela OS (o status manual "Em andamento" no escritório): a mesma trava do início da atividade */
+export async function travaIniciarOs(empresaId: string, osId: string): Promise<string | null> {
+  const o = await prisma.ordemServico.findFirst({ where: { id: osId, empresaId }, select: SELECT_PEDIDO_OS });
+  return o ? travaIniciar(situacaoDaOs(o)) : null;
+}
