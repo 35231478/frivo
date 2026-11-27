@@ -112,8 +112,6 @@ export interface ExecucaoTela {
   conclusao: ResultadoConclusao;
   /** Saída da exigência de equipamento (tipo, recorrente, justificada); ausente em retratos antigos */
   dispensaEquipamento?: DispensaEquipamento | null;
-  /** O cliente exige o pedido dele antes da execução e ele não veio (lib/pedido-cliente); ausente em retratos antigos */
-  aguardandoPedido?: string | null;
   /** "A caminho" / "Cheguei" registrados hoje nesta atividade; ausente em retratos antigos */
   avisos?: AvisosTela;
   /** Aceite do cliente colhido NESTE aparelho (ainda na fila ou já enviado) */
