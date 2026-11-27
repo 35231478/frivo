@@ -11,7 +11,7 @@
 import { describe, expect, it, vi } from "vitest";
 import {
   alteracoesDePrecoDeTabela, chaveCatalogo, conferirPrecoDeTabela, itensComPrecoDeTabelaAlterado, marcarItensDaTabela, MOTIVO_MAX,
-  PERMISSAO_PRECO_TABELA, textoDaTrilha,
+  PERMISSAO_PRECO_TABELA, textoDaTrilha, type ItemDaTela,
 } from "@/lib/precos/trava-tabela";
 import { ACOES_LABEL, montarPermissoes, pode, SECOES, permissoesTotais } from "@/lib/permissoes";
 import { alternarTodos, escolhidos, estadoDeTodos, filtrarCatalogo } from "@/lib/tabela-preco-selecao";
@@ -66,7 +66,7 @@ describe("preço de tabela travado — o que é alteração", () => {
   });
 
   it("na tela: marca só os itens da tabela, trava sem a permissão e guarda o valor gravado", () => {
-    const itens = [{ catalogoId: "s1", valorUnitario: 120 }, { catalogoId: "s9", valorUnitario: 5 }, { catalogoId: null, valorUnitario: 1 }];
+    const itens: ItemDaTela[] = [{ catalogoId: "s1", valorUnitario: 120 }, { catalogoId: "s9", valorUnitario: 5 }, { catalogoId: null, valorUnitario: 1 }];
     const tab = { s1: { valorFinal: 150 } };
     const sem = marcarItensDaTabela(itens, tab, false);
     expect(sem[0]).toEqual({ catalogoId: "s1", valorUnitario: 120, origemPreco: "contrato", valorTabela: 150, bloqueado: true, valorGravado: 120 });
