@@ -10,6 +10,7 @@ import type { AvisoClienteRetrato, AvisosTela } from "@/lib/tecnico/aviso-client
 import type { AceiteRetrato } from "@/lib/os/aceite";
 import type { MaterialPrevisto } from "@/lib/tecnico/o-que-levar";
 import type { MaterialTela } from "@/lib/tecnico/materiais";
+import type { ComentarioTela } from "@/lib/tecnico/comentarios";
 import type { Jornada } from "@/lib/atendimento/prazo";
 
 export type { Operacao };
@@ -50,6 +51,8 @@ export interface AndamentoRetrato {
 export interface EquipamentoInfo {
   id: string; titulo: string; descricao: string; fabricante: string; tag: string | null; numeroSerie: string | null;
   local: string | null; unidade: string | null; ativo: boolean; tipo: { id: string; nome: string } | null;
+  /** Fim da garantia (ISO); null = sem garantia cadastrada; ausente em retratos antigos */
+  garantiaAte?: string | null;
 }
 export interface EquipamentoUnidade extends EquipamentoInfo {
   tipoEquipamentoId: string | null;
@@ -113,6 +116,8 @@ export interface ExecucaoTela {
   aceiteLocal?: { nome: string; em: string };
   /** Materiais usados em campo (sem valores); ausente em retratos antigos */
   materiais?: MaterialTela[];
+  /** Comentários da OS (conversa interna com o escritório); ausente em retratos antigos */
+  comentarios?: ComentarioTela[];
 }
 
 /** O que o servidor manda (e o aparelho guarda) de uma atividade */

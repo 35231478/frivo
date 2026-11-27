@@ -55,7 +55,7 @@ export async function GET(req: NextRequest) {
   const ficha: FichaEquipamento = {
     equipamento: {
       id: base.id, titulo: base.titulo, fabricante: base.fabricante, tag: base.tag, numeroSerie: base.numeroSerie, local: base.local, ativo: base.ativo,
-      tipo: base.tipo?.nome ?? null,
+      tipo: base.tipo?.nome ?? null, garantiaAte: base.garantiaAte,
       // "Exibir dados do cliente" desligado: nem o cliente nem a unidade saem do servidor
       unidade: config.exibirDadosCliente ? base.unidade : null,
       cliente: config.exibirDadosCliente ? ((cli?.nomeFantasia || cli?.nome) ?? null) : null,

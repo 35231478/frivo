@@ -19,7 +19,7 @@ export const STATUS_BLOQUEADOS = ["CONCLUIDA", "CANCELADA"];
 
 export const SELECT_EQUIP_EXECUCAO = {
   id: true, nome: true, tipo: true, marca: true, modelo: true, capacidade: true, localizacao: true, setor: true,
-  patrimonio: true, numeroSerie: true, ativo: true, tipoEquipamentoId: true,
+  patrimonio: true, numeroSerie: true, ativo: true, tipoEquipamentoId: true, garantiaAte: true,
   tipoEquipamento: { select: { id: true, nome: true } }, unidade: { select: { nome: true, clienteId: true } },
 } as const;
 
@@ -27,6 +27,8 @@ type EquipBanco = {
   id: string; nome: string | null; tipo: string; marca: string; modelo: string; capacidade: string | null;
   localizacao: string | null; setor: string | null; patrimonio: string | null; numeroSerie: string | null; ativo: boolean;
   tipoEquipamentoId: string | null; tipoEquipamento: { id: string; nome: string } | null; unidade: { nome: string; clienteId: string } | null;
+  /** Fim da garantia do equipamento (cadastro); ausente nos selects antigos */
+  garantiaAte?: Date | null;
 };
 
 /** Como o equipamento aparece na execução (o mesmo critério do relatório da OS). */
@@ -43,6 +45,8 @@ export function apresentarEquipamento(e: EquipBanco) {
     unidade: e.unidade?.nome ?? null,
     ativo: e.ativo,
     tipo: e.tipoEquipamento,
+    /** Até quando o equipamento está em garantia (o app mostra "Em garantia até …"); null = sem garantia cadastrada */
+    garantiaAte: e.garantiaAte ? e.garantiaAte.toISOString() : null,
   };
 }
 

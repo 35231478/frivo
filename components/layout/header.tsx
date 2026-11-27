@@ -46,6 +46,9 @@ interface Alertas {
   /** Atividades esquecidas em andamento (app do técnico) e a OS da mais antiga */
   atividadesEsquecidas?: number;
   atividadeEsquecidaOsId?: string | null;
+  /** OS com comentário novo do campo (app do técnico) e a mais recente */
+  comentariosCampo?: number;
+  comentarioCampoOsId?: string | null;
   /** Aceite do cliente: confirmações (com ressalva à parte) que ninguém do escritório viu, e a OS da mais recente */
   aceitesRessalva?: number;
   aceiteRessalvaOsId?: string | null;
@@ -316,6 +319,7 @@ export function Header({ session, avatarUrl }: HeaderProps) {
                   {podeVer("pmoc") && (alertas?.pmocsVencendo ?? 0) > 0 && <AlertaItem href="/pmoc?status=VENCENDO" icone={ShieldAlert} cor="text-atencao" label="PMOC perto de expirar" valor={alertas?.pmocsVencendo ?? 0} onClick={() => setSinoAberto(false)} />}
                   {podeVer("estoque", "separar") && (alertas?.separacoesPendentes ?? 0) > 0 && <AlertaItem href="/estoque/separacao" icone={PackageOpen} cor="text-acento" label="OS com material a separar" valor={alertas?.separacoesPendentes ?? 0} onClick={() => setSinoAberto(false)} />}
                   {podeVer("estoque", "separar") && (alertas?.devolucoesPendentes ?? 0) > 0 && <AlertaItem href="/estoque/devolucao" icone={PackageMinus} cor="text-atencao" label="OS com material a devolver" valor={alertas?.devolucoesPendentes ?? 0} onClick={() => setSinoAberto(false)} />}
+                  {podeVer("ordens") && (alertas?.comentariosCampo ?? 0) > 0 && <AlertaItem href={`${hrefOs(alertas?.comentarioCampoOsId)}#comentarios`} icone={MessageSquareReply} cor="text-acento" label="Comentários novos do campo" valor={alertas?.comentariosCampo ?? 0} onClick={() => setSinoAberto(false)} />}
                   {podeVer("ordens") && (alertas?.atividadesEsquecidas ?? 0) > 0 && <AlertaItem href={hrefOs(alertas?.atividadeEsquecidaOsId)} icone={Timer} cor="text-atencao" label="Atividades esquecidas em andamento" valor={alertas?.atividadesEsquecidas ?? 0} onClick={() => setSinoAberto(false)} />}
                   {podeVer("estoque") && (alertas?.estoqueNegativoCampo ?? 0) > 0 && <AlertaItem href="/estoque?situacao=negativo" icone={PackageMinus} cor="text-atrasado" label="Saldo negativo por uso em campo" valor={alertas?.estoqueNegativoCampo ?? 0} onClick={() => setSinoAberto(false)} />}
                   {(alertas?.nfPedidos ?? 0) > 0 && <AlertaItem href={`/compras/pedidos/${alertas?.nfPedidoId ?? ""}`} icone={PackageCheck} cor="text-ok" label="NF chegou nos seus pedidos" valor={alertas?.nfPedidos ?? 0} onClick={() => setSinoAberto(false)} />}
