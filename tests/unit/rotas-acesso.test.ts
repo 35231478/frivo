@@ -57,22 +57,24 @@ describe("contatos e acesso ao portal (C2)", () => {
     expect(corpo[0]).not.toHaveProperty("senhaProvisoria");
   });
 
-  it("definir senha grava só o hash e devolve a senha só nesta resposta", async () => {
+  // Portal: senha provisória segura — a equipe não digita mais senha; o sistema gera, mostra uma vez e marca a troca
+  it("liberar o acesso GERA a senha: grava só o hash, marca a troca no 1º acesso e devolve a senha só nesta resposta", async () => {
     logar("ADMIN", permissoesTotais());
     db.contatoCliente.findFirst.mockResolvedValueOnce({ ...contatoNoBanco, senha: null }).mockResolvedValueOnce(null);
     db.contatoCliente.update.mockImplementation(async ({ data }: any) => ({ id: "c1", email: data.email, permissoes: {}, senha: data.senha, acessoConcedidoEm: new Date() }));
     const { PUT } = await import("@/app/api/clientes/[id]/contatos/[contatoId]/acesso-portal/route");
     const r = await PUT(
-      json("http://localhost/x", "PUT", { email: "ana@cliente.com", senha: "SenhaNova9", permissoes: {} }),
+      json("http://localhost/x", "PUT", { email: "ana@cliente.com", senha: "SenhaDaEquipe9", permissoes: {} }), // a senha digitada é ignorada
       params({ id: "cli1", contatoId: "c1" }),
     );
     expect(r.status).toBe(200);
     const gravado = db.contatoCliente.update.mock.calls[0][0].data;
     expect(gravado.senhaProvisoria).toBeNull();
-    expect(gravado.senha).not.toBe("SenhaNova9");
-    expect(await bcrypt.compare("SenhaNova9", gravado.senha)).toBe(true);
+    expect(gravado.trocarSenha).toBe(true);
+    expect(await bcrypt.compare("SenhaDaEquipe9", gravado.senha)).toBe(false);
     const corpo = await r.json();
-    expect(corpo.senhaProvisoria).toBe("SenhaNova9");
+    expect(corpo.senhaProvisoria).toMatch(/^[A-Za-z0-9]{12}$/);
+    expect(await bcrypt.compare(corpo.senhaProvisoria, gravado.senha)).toBe(true);
     expect(JSON.stringify(corpo)).not.toContain(gravado.senha);
   });
 
@@ -84,8 +86,9 @@ describe("contatos e acesso ao portal (C2)", () => {
     const r = await POST(json("http://localhost/x", "POST"), params({ id: "cli1", contatoId: "c1" }));
     const corpo = await r.json();
     const gravado = db.contatoCliente.update.mock.calls[0][0].data;
-    expect(corpo.senhaProvisoria).toMatch(/^[A-Za-z0-9]{10}$/);
+    expect(corpo.senhaProvisoria).toMatch(/^[A-Za-z0-9]{12}$/);
     expect(gravado.senhaProvisoria).toBeNull();
+    expect(gravado.trocarSenha).toBe(true); // a nova provisória volta a pedir a troca
     expect(await bcrypt.compare(corpo.senhaProvisoria, gravado.senha)).toBe(true);
   });
 
@@ -94,6 +97,6 @@ describe("contatos e acesso ao portal (C2)", () => {
     db.contatoCliente.findFirst.mockResolvedValue(contatoNoBanco);
     const { DELETE } = await import("@/app/api/clientes/[id]/contatos/[contatoId]/acesso-portal/route");
     await DELETE(json("http://localhost/x", "DELETE"), params({ id: "cli1", contatoId: "c1" }));
-    expect(db.contatoCliente.update.mock.calls[0][0].data).toEqual({ senha: null, senhaProvisoria: null });
+    expect(db.contatoCliente.update.mock.calls[0][0].data).toEqual({ senha: null, senhaProvisoria: null, trocarSenha: false });
   });
 });

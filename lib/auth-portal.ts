@@ -6,6 +6,7 @@ import { portalLoginSchema } from "@/lib/validations";
 import { apagarTentativas, conferirBloqueio, HASH_FICTICIO, ipDaRequisicao, limparTentativas, registrarTentativa } from "@/lib/acesso/limite";
 import { impressaoDaSenha } from "@/lib/acesso/impressao-senha";
 import { conferirTokenPortal } from "@/lib/sessao-portal";
+import { COOKIE_PORTAL, atributosCookiePortal } from "@/lib/portal/sessao-cookie-portal";
 
 /** Muitas senhas erradas: o formulário recebe o código (com os minutos que faltam), não o motivo. */
 class AcessoBloqueado extends CredentialsSignin {
@@ -31,10 +32,8 @@ export const {
   basePath: "/api/portal-auth",
   pages: { signIn: "/portal/login", error: "/portal/login" },
   cookies: {
-    sessionToken: {
-      name: "frivo.portal-session-token",
-      options: { httpOnly: true, sameSite: "lax", path: "/", secure: process.env.NODE_ENV === "production" },
-    },
+    // Nome e atributos num lugar só (lib/portal/sessao-cookie-portal): quem regrava ou apaga usa os mesmos
+    sessionToken: { name: COOKIE_PORTAL, options: atributosCookiePortal(COOKIE_PORTAL) },
   },
   providers: [
     Credentials({
@@ -83,6 +82,8 @@ export const {
           empresaId: contato.cliente.empresaId,
           permissoes: (contato.permissoes as Record<string, boolean> | null) ?? {},
           fs: impressaoDaSenha(contato.senha),
+          // Senha vinda da equipe e ainda não trocada: o portal só abre a tela de troca
+          trocarSenha: contato.trocarSenha === true,
         } as any;
       },
     }),
@@ -96,6 +97,7 @@ export const {
         token.empresaId = (user as any).empresaId;
         token.permissoes = (user as any).permissoes;
         token.fs = (user as any).fs;
+        token.trocarSenha = (user as any).trocarSenha === true;
       }
       // Revogar acesso, inativar contato/cliente, desligar o portal ou trocar a senha
       // derrubam a sessão na leitura seguinte; permissões são relidas do banco.
@@ -107,6 +109,7 @@ export const {
       (session.user as any).clienteNome = token.clienteNome;
       (session.user as any).empresaId = token.empresaId;
       (session.user as any).permissoes = token.permissoes;
+      (session.user as any).trocarSenha = token.trocarSenha === true;
       return session;
     },
   },
@@ -121,13 +124,20 @@ export interface PortalSession {
     clienteNome: string;
     empresaId: string;
     permissoes: Record<string, boolean>;
+    /** A senha veio da equipe e ainda não foi trocada (só a tela de troca abre) */
+    trocarSenha?: boolean;
   };
 }
 
-/** Lê a sessão do portal de forma tipada. */
-export async function getPortalSession(): Promise<PortalSession | null> {
-  const s = await portalAuth();
-  return (s as unknown as PortalSession) ?? null;
+/**
+ * Lê a sessão do portal de forma tipada. Com a troca de senha pendente, é como se não houvesse sessão:
+ * nenhuma página, API, chamado pelo QR ou confirmação de aceite funciona com a senha que a empresa gerou.
+ * `comTroca`: a sessão COMO ESTÁ, inclusive com a troca pendente — só o login, a tela de troca, a rota da
+ * troca e o guarda das páginas usam (são eles que decidem para onde a pessoa vai).
+ */
+export async function getPortalSession(op: { comTroca?: boolean } = {}): Promise<PortalSession | null> {
+  const s = ((await portalAuth()) as unknown as PortalSession) ?? null;
+  return !op.comTroca && s?.user?.trocarSenha ? null : s;
 }
 
 export function temPermissao(sessao: PortalSession | null, chave: string): boolean {

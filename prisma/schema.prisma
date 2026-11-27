@@ -1281,7 +1281,13 @@ model ContatoCliente {
 
   // Acesso ao Portal do Cliente
   senha             String?
-  senhaProvisoria   String?   @map("senha_provisoria") // texto legível p/ consulta do gestor
+  /// OBSOLETA: guardava a senha provisória em TEXTO legível. Nada mais a lê nem a grava com valor (só a
+  /// zera quando a senha muda). Limpeza para depois: zerar os valores antigos e remover a coluna
+  /// (docs/portal-senha-provisoria.md).
+  senhaProvisoria   String?   @map("senha_provisoria")
+  /// A senha veio da EQUIPE (provisória gerada ao liberar ou ao gerar nova) e o contato ainda não a trocou:
+  /// no portal, só a tela de troca abre. Limpa quando o próprio contato troca ou usa "Esqueci minha senha".
+  trocarSenha       Boolean   @default(false) @map("trocar_senha")
   acessoConcedidoEm DateTime? @map("acesso_concedido_em")
   ultimoAcesso      DateTime? @map("ultimo_acesso")
   permissoes        Json?

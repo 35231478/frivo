@@ -19,6 +19,7 @@ const lerContato = cache(async (contatoId: string) => {
       select: {
         ativo: true,
         senha: true,
+        trocarSenha: true,
         permissoes: true,
         cliente: { select: { ativo: true, portalAtivo: true, empresa: { select: { ativo: true } } } },
       },
@@ -45,5 +46,6 @@ export async function conferirTokenPortal(token: JWT | null, acabouDeEntrar: boo
   const atual = impressaoDaSenha(c.senha);
   if (typeof token.fs === "string" && token.fs !== atual) return null;
   // O campo `permissoes` do JWT é tipado para o painel; no portal ele guarda as chaves do contato
-  return { ...token, fs: atual, permissoes: permissoes as unknown as JWT["permissoes"] };
+  // A troca obrigatória segue o cadastro (gerou nova senha provisória → volta a pedir; trocou → libera)
+  return { ...token, fs: atual, trocarSenha: c.trocarSenha === true, permissoes: permissoes as unknown as JWT["permissoes"] };
 }

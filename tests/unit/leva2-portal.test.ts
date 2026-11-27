@@ -176,20 +176,19 @@ describe.skipIf(!URL_PG)("Leva 2 — portal e público (PostgreSQL real)", () =>
     await limparTentativas();
   });
 
-  it("S3/L25: conceder acesso com senha curta é 400 (mín. 8); com 8+ grava e o login funciona", async () => {
+  // Portal: senha provisória segura — a equipe não digita mais senha: o sistema gera uma forte (12 caracteres),
+  // que vale para entrar, e o 1º acesso pede a troca (tests/unit/portal-senha-provisoria*)
+  it("S3/L25: conceder acesso GERA a senha provisória (12 caracteres; a digitada é ignorada) e o login funciona com ela", async () => {
     comoAdmin();
     const contato = await prisma.contatoCliente.create({ data: { id: "ct3", empresaId: "e1", clienteId: "c1", nome: "Novo", email: "novo@cliente.com" } });
-    const curto = await chamar("clientes/[id]/contatos/[contatoId]/acesso-portal", "PUT", { id: "c1", contatoId: contato.id },
-      { email: "novo@cliente.com", senha: "1234", ativo: true, permissoes: {} });
-    expect(curto.status).toBe(400);
-    expect(curto.json.erro).toContain("8");
-
     const ok = await chamar("clientes/[id]/contatos/[contatoId]/acesso-portal", "PUT", { id: "c1", contatoId: contato.id },
-      { email: "novo@cliente.com", senha: "senha-nova-12", ativo: true, permissoes: { verOS: true } });
+      { email: "novo@cliente.com", senha: "1234", ativo: true, permissoes: { verOS: true } });
     expect(ok.status).toBe(200);
     expect(ok.json.temAcesso).toBe(true);
+    expect(ok.json.senhaProvisoria).toMatch(/^[A-Za-z0-9]{12}$/);
 
-    const login = await entrarPortal("novo@cliente.com", "senha-nova-12");
+    expect((await entrarPortal("novo@cliente.com", "1234")).ok).toBe(false);
+    const login = await entrarPortal("novo@cliente.com", ok.json.senhaProvisoria);
     expect(login.ok).toBe(true);
     await limparTentativas();
   });
