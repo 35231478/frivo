@@ -32,7 +32,7 @@ function useLista() {
 /** O estado da lista (navegar, busca…) para ilhas próprias da tela (ex.: período + cards de Orçamentos) */
 export function useListaUrl() { return useLista(); }
 
-export function ListaUrl({ chave, paramBusca = "q", qAtual, lembrarFiltros = false, children }: {
+export function ListaUrl({ chave, paramBusca = "q", qAtual, lembrarFiltros = true, children }: {
   chave: string; paramBusca?: string; qAtual: string; lembrarFiltros?: boolean; children: ReactNode;
 }) {
   const l = useListagemUrl({ chave, qAtual, paramBusca, lembrarFiltros });

@@ -109,7 +109,7 @@ describe("as regras novas como where", () => {
   it("filtros das listas: ?tecnico=sem e ?validade=vencendo entram no AND; outro valor é ignorado", () => {
     const agora = new Date("2027-03-10T15:00:00.000Z");
     expect(whereOrdens("e1", { tecnico: "sem" }, agora).AND).toContainEqual(whereOsSemTecnico());
-    expect(whereOrdens("e1", { tecnico: "x" }, agora).AND).toBeUndefined();
+    expect(whereOrdens("e1", { tecnico: "x", periodo: "todos" }, agora).AND).toBeUndefined();
     const hoje = new Date(Date.UTC(2027, 2, 10));
     expect(whereOrcamentos("e1", { validade: "vencendo" }, agora).AND).toContainEqual(whereOrcamentoVencendo(hoje, 3));
     expect(whereOrcamentos("e1", { validade: "vencendo" }, agora, 7).AND).toContainEqual(whereOrcamentoVencendo(hoje, 7));

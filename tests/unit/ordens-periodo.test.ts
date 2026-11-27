@@ -15,9 +15,12 @@ const faixaDe = (where: any) => {
 };
 
 describe("período da lista de OS", () => {
-  it("sem nada na URL: todo o período (como sempre foi) — nenhuma condição de data", () => {
-    expect(periodoOrdens({}, AGORA).tipo).toBe("todos");
-    expect(whereOrdens("e1", {}, AGORA).AND).toBeUndefined();
+  it("sem nada na URL: o MÊS ATUAL (o padrão pedido pelo Zé); 'todos' explícito: nenhuma condição de data", () => {
+    const p = periodoOrdens({}, AGORA);
+    expect([p.tipo, p.mes]).toEqual(["mes", "2026-11"]);
+    expect(faixaDe(whereOrdens("e1", {}, AGORA))!.abertura).toEqual({ gte: new Date("2026-11-01T03:00:00.000Z"), lt: new Date("2026-12-01T03:00:00.000Z") });
+    expect(periodoOrdens({ periodo: "todos" }, AGORA).tipo).toBe("todos");
+    expect(whereOrdens("e1", { periodo: "todos" }, AGORA).AND).toBeUndefined();
   });
   it("hoje: dia de Brasília nos instantes (agenda, previsão com hora, abertura) e dia civil na previsão", () => {
     const f = faixaDe(whereOrdens("e1", { periodo: "hoje" }, AGORA))!;

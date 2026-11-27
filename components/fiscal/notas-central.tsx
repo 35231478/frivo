@@ -47,7 +47,7 @@ function NotasCentralCorpo({ dados }: { dados: DadosCentral }) {
   const { selecionados } = useSelecaoLinhas();
   const selecionadas = useMemo(() => dados.notas.filter((n) => selecionados.has(n.id)), [dados.notas, selecionados]);
   const totaisSelecao = useMemo(() => totaisNotas(selecionadas), [selecionadas]);
-  const { busca, setBusca, navegar, pendente } = useListagemUrl({ chave: "notas-fiscais", qAtual: filtros.q, paramBusca: "q", lembrarFiltros: false });
+  const { busca, setBusca, navegar, pendente } = useListagemUrl({ chave: "notas-fiscais", qAtual: filtros.q, paramBusca: "q" });
   const [detalheId, setDetalheId] = useState<string | null>(null);
   const [consultando, setConsultando] = useState<string | null>(null);
   const [versaoDetalhe, setVersaoDetalhe] = useState(0);

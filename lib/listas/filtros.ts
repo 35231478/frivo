@@ -21,7 +21,7 @@ type SP = Record<string, string | undefined>;
 export const mostrarCancelados = (sp: SP) => sp.cancelados === "1" || sp.inativos === "1";
 
 /**
- * O período da lista de OS (seletor da tela): por padrão TODO o período. Links antigos continuam
+ * O período da lista de OS (seletor da tela): por padrão o MÊS ATUAL (o Zé pediu; antes era todo o período). Links antigos continuam
  * valendo: `?data=AAAA-MM-DD` (navegação por dia) vira "Hoje" navegado; `dataInicio`/`dataFim`
  * viram o período personalizado.
  */
@@ -29,7 +29,7 @@ export function periodoOrdens(sp: SP, agora = new Date()) {
   const semPeriodo = !sp.periodo && !sp.de && !sp.ate && !sp.mes;
   return lerPeriodo(
     { ...sp, ...(sp.data && semPeriodo ? { periodo: "hoje", ref: sp.data } : {}), de: sp.de ?? sp.dataInicio, ate: sp.ate ?? sp.dataFim },
-    agora, { permitirTodos: true, padrao: "todos" },
+    agora, { permitirTodos: true, padrao: "mes" },
   );
 }
 

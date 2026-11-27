@@ -19,7 +19,7 @@ type SP = {
   busca?: string; status?: string; prioridade?: string; origem?: string;
   clienteId?: string; responsavelId?: string; tipoOsId?: string; contratoId?: string;
   numero?: string; prazo?: string; dataInicio?: string; dataFim?: string; data?: string; periodo?: string; ref?: string; mes?: string; de?: string; ate?: string;
-  sort?: string; dir?: string; view?: string; pagina?: string; por?: string;
+  sort?: string; dir?: string; pagina?: string; por?: string;
 };
 
 const SORT_MAP: Record<string, (dir: "asc" | "desc") => any> = {

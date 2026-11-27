@@ -134,7 +134,7 @@ describe("período, busca e filtros (na URL)", () => {
     expect($("[data-todo-periodo]")).not.toBeNull(); // a central também aceita "Todo o período" (nota antiga)
   });
 
-  it("período personalizado: de/até → Aplicar (sai o mês); 'Este mês' limpa", async () => {
+  it("período personalizado: de/até → Aplicar (sai o mês); 'Este mês' tira o intervalo", async () => {
     nav.sp = "mes=2026-03";
     await tela();
     await clicar($("[data-periodo-menu]"));
@@ -154,7 +154,7 @@ describe("período, busca e filtros (na URL)", () => {
     expect(ultimaUrl()).toBe("/financeiro/notas-fiscais?de=2026-03-05&ate=2026-03-20");
     await clicar($("[data-periodo-menu]"));
     await clicar($("[data-periodo-opcao=mes]"));
-    expect(ultimaUrl()).toBe("/financeiro/notas-fiscais");
+    expect(ultimaUrl()).toMatch(/^\/financeiro\/notas-fiscais\?mes=\d{4}-\d{2}$/); // "Este mês" explícito na URL
   });
 
   it("intervalo ativo: mostra o rótulo e o menu já abre nos campos preenchidos", async () => {

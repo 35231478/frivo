@@ -1,14 +1,11 @@
 "use client";
 
-import { useEffect, useRef, useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { TAMANHO_PADRAO } from "@/lib/listagem";
-import { lerTamanhoPreferido } from "@/components/listagem/listagem-ui";
+import { useFiltrosLembrados } from "@/components/listagem/use-filtros-lembrados";
 
 export type Visao = "lista" | "cards";
 
-/** Parâmetros que não fazem parte do "filtro salvo" (o tamanho da página é uma preferência à parte). */
-const NAO_PERSISTIR = ["pagina", "por"];
 /** Espera depois da última tecla antes de buscar no servidor */
 export const DEBOUNCE_BUSCA_MS = 300;
 
@@ -22,7 +19,7 @@ function gravarStorage(chave: string, valor: string) {
 /**
  * Estado das listagens com filtro na URL (Equipamentos, Veículos…):
  * - a URL é a fonte da verdade (busca/paginação rodam no servidor);
- * - o último filtro usado é restaurado ao abrir a tela "limpa" (localStorage);
+ * - o último filtro usado volta ao abrir a tela "limpa" (useFiltrosLembrados: por usuário e empresa, no dia);
  * - visão lista/cards é preferência pessoal;
  * - itens por página: a preferência do usuário (lerTamanhoPreferido) vale ao abrir qualquer lista;
  * - busca ao vivo com debounce (sem Enter).
@@ -31,14 +28,13 @@ function gravarStorage(chave: string, valor: string) {
  */
 export function useListagemUrl({ chave, qAtual, paramBusca = "q", lembrarFiltros = true }: {
   chave: string; qAtual: string; paramBusca?: string;
-  /** Restaurar o último filtro ao abrir a tela "limpa" (Equipamentos, Veículos, Colaboradores) */
+  /** Restaurar o último filtro ao abrir a tela "limpa" (todas as listas; desligue só onde não faz sentido) */
   lembrarFiltros?: boolean;
 }) {
   const router = useRouter();
   const pathname = usePathname();
   const sp = useSearchParams();
   const [pendente, startTransition] = useTransition();
-  const chaveFiltros = `frivo:${chave}:filtros`;
   const chaveVisao = `frivo:${chave}:visao`;
 
   const [visao, setVisao] = useState<Visao>("lista");
@@ -50,36 +46,8 @@ export function useListagemUrl({ chave, qAtual, paramBusca = "q", lembrarFiltros
   }, [chaveVisao]);
   function trocarVisao(v: Visao) { setVisao(v); gravarStorage(chaveVisao, v); }
 
-  // Filtros persistentes: ao abrir a tela "limpa", restaura o último filtro usado
-  const restaurou = useRef(false);
-  const restaurando = useRef(false);
-  useEffect(() => {
-    if (restaurou.current) return;
-    restaurou.current = true;
-    let p = new URLSearchParams(sp.toString());
-    let mudou = false;
-    if (lembrarFiltros && sp.toString() === "") {
-      const salvo = lerStorage(chaveFiltros);
-      if (salvo) { p = new URLSearchParams(salvo); p.delete("por"); mudou = true; }
-    }
-    // Itens por página: a preferência lembrada (se a URL não disser outro)
-    const pref = lerTamanhoPreferido();
-    if (!p.has("por") && pref && pref !== TAMANHO_PADRAO) { p.set("por", String(pref)); mudou = true; }
-    if (mudou) {
-      restaurando.current = true;
-      router.replace(`${pathname}?${p}`, { scroll: false });
-    }
-  }, [sp, pathname, router, chaveFiltros, lembrarFiltros]);
-  useEffect(() => {
-    // Enquanto restaura, não sobrescreve o filtro salvo com a URL ainda vazia
-    if (restaurando.current) {
-      if (sp.toString() === "") return;
-      restaurando.current = false;
-    }
-    const p = new URLSearchParams(sp.toString());
-    NAO_PERSISTIR.forEach((k) => p.delete(k));
-    gravarStorage(chaveFiltros, p.toString());
-  }, [sp, chaveFiltros]);
+  // Filtros lembrados (por usuário e empresa, no dia) e os itens por página preferidos: o hook único
+  useFiltrosLembrados(chave, lembrarFiltros);
 
   /** Aplica mudanças na URL; por padrão volta para a página 1. */
   function navegar(mudancas: Record<string, string | null>, manterPagina = false) {
@@ -109,20 +77,4 @@ export function useListagemUrl({ chave, qAtual, paramBusca = "q", lembrarFiltros
   }
 
   return { visao, trocarVisao, busca, setBusca, navegar, limpar, pendente };
-}
-
-/**
- * Para listas que montam a URL por conta própria (OS, Contratos): ao abrir, aplica o tamanho de
- * página lembrado se a URL não disser outro.
- */
-export function useTamanhoPreferido(aplicar: (por: string) => void) {
-  const sp = useSearchParams();
-  const feito = useRef(false);
-  useEffect(() => {
-    if (feito.current) return;
-    feito.current = true;
-    const pref = lerTamanhoPreferido();
-    if (!sp.get("por") && pref && pref !== TAMANHO_PADRAO) aplicar(String(pref));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
 }

@@ -167,9 +167,13 @@ export function lerPeriodo(sp: ParamsUrl, agora = new Date(), o: { permitirTodos
 /** Os parâmetros do período zerados (base de qualquer troca) */
 export const PARAMS_PERIODO = { mes: null, de: null, ate: null, periodo: null, ref: null } as const;
 
-/** Mudanças na URL para ir a um atalho (o "de hoje"); `intervalo` é tratado pela tela (abre os campos). */
-export function urlDoAtalho(tipo: Exclude<TipoPeriodo, "intervalo">): Record<string, string | null> {
-  return { ...PARAMS_PERIODO, ...(tipo === "mes" ? {} : { periodo: tipo }) };
+/**
+ * Mudanças na URL para ir a um atalho (o "de hoje"); `intervalo` é tratado pela tela (abre os campos).
+ * "Este mês" vai EXPLÍCITO na URL (`mes=AAAA-MM`): numa tela cujo padrão é "Todo o período" (OS, notas,
+ * medições), a URL sem o mês voltava a ser "Todo o período" — escolher "Este mês" não mudava nada.
+ */
+export function urlDoAtalho(tipo: Exclude<TipoPeriodo, "intervalo">, agora = new Date()): Record<string, string | null> {
+  return { ...PARAMS_PERIODO, ...(tipo === "mes" ? { mes: mesAtual(agora) } : { periodo: tipo }) };
 }
 
 /**
@@ -181,8 +185,8 @@ export function urlVizinho(p: Periodo, delta: number, agora = new Date()): Recor
   const limpar = (ref: string | null, periodo: string) => ({ ...PARAMS_PERIODO, periodo, ref });
   switch (p.tipo) {
     case "mes": {
-      const m = mesVizinho(p.mes ?? mesAtual(agora), delta);
-      return { ...PARAMS_PERIODO, mes: m === mesAtual(agora) ? null : m };
+      // O mês sempre explícito (o mesmo motivo de urlDoAtalho): voltar ao mês atual pela seta não vira "Todo o período"
+      return { ...PARAMS_PERIODO, mes: mesVizinho(p.mes ?? mesAtual(agora), delta) };
     }
     case "hoje": {
       const dia = diaMais(p.dias!.de!, delta);

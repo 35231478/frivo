@@ -96,7 +96,7 @@ function ContasReceberCorpo({
   const { pode } = usePermissoes();
   const podeCobrar = pode("financeiro", "contasReceber");
   const { busca, setBusca, navegar, pendente } = useListagemUrl({
-    chave: "contas-receber", qAtual: filtros.q, paramBusca: "q", lembrarFiltros: false,
+    chave: "contas-receber", qAtual: filtros.q, paramBusca: "q",
   });
   const [detalheId, setDetalheId] = useState<string | null>(filtros.conta || null);
   const fecharDetalhe = () => { setDetalheId(null); if (filtros.conta) navegar({ conta: null }); };

@@ -75,7 +75,7 @@ function ContasPagarCorpo({
 }: PropsPagar) {
   const { selecionados, limpar } = useSelecaoLinhas();
   const { busca, setBusca, navegar, pendente } = useListagemUrl({
-    chave: "contas-pagar", qAtual: filtros.fornecedor, paramBusca: "fornecedor", lembrarFiltros: false,
+    chave: "contas-pagar", qAtual: filtros.fornecedor, paramBusca: "fornecedor",
   });
   const router = useRouter();
   // "Ações em lote" (dar como pago, alterar vencimento, cancelar): a mesma permissão das ações de uma conta

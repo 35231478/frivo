@@ -198,10 +198,10 @@ describe("lista de OS: barra enxuta", () => {
     expect(ultimaUrl()).toBe("/ordens?");
   });
 
-  it("por padrão todo o período (setas desligadas); T vai para hoje; ← › andam o dia; a barra tem a busca e 'Mais filtros' fechado", async () => {
+  it("por padrão o mês atual (setas ligadas); T vai para hoje; ← › andam o dia; a barra tem a busca e 'Mais filtros' fechado", async () => {
     await montar();
-    expect(txt($("[data-mes-rotulo]"))).toBe("Todo o período");
-    expect($<HTMLButtonElement>("[data-mes-anterior]")!.disabled).toBe(true);
+    expect(txt($("[data-mes-rotulo]"))).toBe("Novembro de 2026");
+    expect($<HTMLButtonElement>("[data-mes-anterior]")!.disabled).toBe(false);
     expect($<HTMLInputElement>("[data-busca]")!.placeholder).toBe("Pesquisar");
     expect(document.body.textContent).toContain("Pesquisar no período selecionado"); // o rótulo em cima do campo
     expect($("[data-painel-filtros]")).toBeNull();

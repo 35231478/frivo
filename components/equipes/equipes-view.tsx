@@ -34,7 +34,7 @@ export function EquipesView({ aba, q, grupos, colaboradores, perfis, contagens, 
   const podeGerenciar = pode("equipes", "gerenciar");
   const router = useRouter();
   const sp = useSearchParams();
-  const { busca, setBusca, navegar, pendente } = useListagemUrl({ chave: "equipes", qAtual: q, lembrarFiltros: false });
+  const { busca, setBusca, navegar, pendente } = useListagemUrl({ chave: "equipes", qAtual: q });
   const sugerir = useMemo(() => sugerirPorUrl(aba === "grupos" ? "/api/listas/sugestoes?lista=equipes" : "/api/listas/sugestoes?lista=colaboradores"), [aba]);
   const ordem = sp.get("ordem") ?? "nome";
   const dir = sp.get("dir") === "desc" ? "desc" : "asc";
