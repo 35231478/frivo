@@ -122,3 +122,14 @@ O X fica em **Configurações › Orçamentos e propostas › Pedido do cliente*
 | `cliente-cobranca-ui` | o seletor de 3 opções na ficha e o contato de compras |
 | `pedido-cliente-pg` (PostgreSQL real) | quem aguarda, travas (fatura, app, Cheguei, escritório), registrar (vários, outro cliente, outra empresa, anexo, histórico, alerta, corrigir), propagação orçamento ⇄ OS, liberação e permissões, fatura aprovada e Registrar PC, nº na nota, sino, lista de OS, painel, configuração |
 | `sql-pedido-cliente` (PostgreSQL real) | o SQL rodado duas vezes, igual ao Prisma, nenhuma linha muda |
+
+## Prints (dados fictícios)
+
+Em `docs/prints/pedido-cliente/`, `antes-*` e `depois-*`, desktop e celular:
+- `ficha-cliente`: o seletor de 3 opções e o contato de compras;
+- `os-cabecalho`, `orcamento`, `fatura`: a etiqueta no cabeçalho e o botão da fatura;
+- `lista-os`, `lista-orcamentos`, `lista-faturas`: a etiqueta nas linhas e o filtro rápido com contagem e R$;
+- `gaveta-pedido`: a gaveta aberta pela etiqueta, com o alerta de valor;
+- `massa-pedido`: três OS selecionadas e "Informar pedido do cliente";
+- `filtro-aguardando`: a lista de OS filtrada;
+- `pendencias`: a linha "Aguardando pedido do cliente" com o total.
