@@ -2,68 +2,20 @@
 
 import { useNomesDaTrilha } from "@/components/layout/nome-na-trilha";
 import { signOut } from "next-auth/react";
-import { Bell, ShieldAlert, ShieldX, ChevronRight, LogOut, Search, AlertTriangle, Clock, ShoppingCart, Timer, Headset, ClipboardCheck, FileWarning, Wrench, Menu, Barcode, MessageSquareReply, PackageCheck, FileCheck2, FileX2, Hourglass, CalendarX2, TrendingUp, PackageOpen, PackageMinus, Globe, BadgeCheck, MessageSquareWarning, StarOff, UserPlus, Receipt } from "lucide-react";
+import { Bell, ShieldX, ChevronRight, LogOut, Search, AlertTriangle, Clock, ShoppingCart, Headset, ClipboardCheck, FileWarning, Wrench, Menu, Barcode, MessageSquareReply, PackageCheck, FileCheck2, FileX2, Hourglass, CalendarX2, TrendingUp, PackageOpen, PackageMinus, Globe, BadgeCheck, MessageSquareWarning, StarOff, UserPlus } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { Session } from "next-auth";
 import { pode } from "@/lib/permissoes";
 import { EVENTO_SINO } from "@/lib/ui/sino";
+import type { ContagemSino } from "@/lib/alertas/sino-server";
+import { escopoDoItem, itemPendencia, type IdPendencia } from "@/lib/alertas/pendencias";
+import { escopoDoSino } from "@/lib/alertas/sino";
+import { COR_TOM, ICONE_PENDENCIA } from "@/components/alertas/icones-pendencia";
 
-interface Alertas {
-  prazosVencidos: number;
-  etapasVencendoHoje: number;
-  pedidosPendentes: number;
-  atendimentosAtraso: number;
-  chamadosPortal: number;
-  atendimentoVencendo: number;
-  atendimentoEstourado: number;
-  checklistPendente: number;
-  checklistsComAlertas: number;
-  /** Checklist obrigatório no app: "Hoje não vou usar o veículo" que o escritório ainda não viu */
-  checklistNaoVaiUsar?: number;
-  documentosVencendo: number;
-  veiculosManutencao: number;
-  boletosPagos: number;
-  orcamentosRespondidos: number;
-  leadsSite?: number;
-  pmocsVencendo?: number;
-  pmocsExpirados?: number;
-  nfPedidos: number;
-  nfPedidoId: string | null;
-  nfseAutorizadas?: number;
-  nfseAutorizadaMedicaoId?: string | null;
-  nfseRejeitadas?: number;
-  nfseRejeitadaMedicaoId?: string | null;
-  nfseAguardando?: number;
-  nfseAguardandoMedicaoId?: string | null;
-  faturamentoContratos?: number;
-  reajustesContrato?: number;
-  separacoesPendentes?: number;
-  devolucoesPendentes?: number;
-  /** Uso em campo (app do técnico) deixou produtos com saldo negativo */
-  estoqueNegativoCampo?: number;
-  /** Atividades esquecidas em andamento (app do técnico) e a OS da mais antiga */
-  atividadesEsquecidas?: number;
-  atividadeEsquecidaOsId?: string | null;
-  /** OS com comentário novo do campo (app do técnico) e a mais recente */
-  comentariosCampo?: number;
-  comentarioCampoOsId?: string | null;
-  /** Despesas de campo (app do técnico) esperando aprovação */
-  despesasCampo?: number;
-  /** Aceite do cliente: confirmações (com ressalva à parte) que ninguém do escritório viu, e a OS da mais recente */
-  aceitesRessalva?: number;
-  aceiteRessalvaOsId?: string | null;
-  aceitesConfirmados?: number;
-  aceiteConfirmadoOsId?: string | null;
-  /** Nota baixa no aceite (até 2 estrelas) que ninguém do escritório viu */
-  avaliacoesBaixas?: number;
-  avaliacaoBaixaOsId?: string | null;
-  /** Admissão digital: assinada e esperando ir para o contador */
-  admissoesAssinadas?: number;
-  admissaoAssinadaId?: string | null;
-  total: number;
-}
+/** A resposta de /api/alertas: a contagem do sino (lib/alertas/sino-server), sem as contas do dia (só o painel) */
+type Alertas = Omit<ContagemSino, "foraDoNumero">;
 
 interface HeaderProps {
   session: Session;
@@ -158,6 +110,7 @@ const ROTULOS_ROTA: Record<string, string> = {
   "formularios-por-tipo": "Formulários por tipo",
   portal: "Portal",
   "sem-permissao": "Sem permissão",
+  pendencias: "Pendências",
 };
 
 /** Segmento da URL que é o id de um registro (cuid ou hex), não uma palavra da rota */
@@ -193,6 +146,16 @@ export function Header({ session, avatarUrl }: HeaderProps) {
   const [alertas, setAlertas] = useState<Alertas | null>(null);
   const [sinoAberto, setSinoAberto] = useState(false);
   const sinoRef = useRef<HTMLDivElement>(null);
+  // Os itens que também estão no painel de pendências: rótulo, ícone e destino do catálogo (lib/alertas/pendencias).
+  // O servidor já zera o que a pessoa não pode ver; a tela confere de novo pela mesma regra (escopoDoSino).
+  // `sempre` mostra mesmo com 0.
+  const escopo = useMemo(() => escopoDoSino({ permissoes: usuario.permissoes, role: usuario.role, restrito: false }), [usuario.permissoes, usuario.role]);
+  const doPainel = (id: IdPendencia, sempre = false) => {
+    if (!alertas || !escopo[escopoDoItem(id)]) return null;
+    const i = itemPendencia(id, alertas);
+    if (!sempre && i.valor <= 0) return null;
+    return <AlertaItem href={i.href} icone={ICONE_PENDENCIA[i.icone]} cor={COR_TOM[i.tom]} label={i.rotulo} valor={i.valor} onClick={() => setSinoAberto(false)} />;
+  };
 
   // Carrega os alertas uma vez ao montar e revalida por polling (2 min).
   // Antes isso rodava a cada troca de rota ([pathname]), o que disparava ~16
@@ -301,12 +264,17 @@ export function Header({ session, avatarUrl }: HeaderProps) {
               <div className="px-4 py-3 border-b border-surface-border">
                 <p className="font-display text-sm font-semibold text-ink">Alertas</p>
               </div>
+              <Link href="/pendencias" onClick={() => setSinoAberto(false)} data-sino-pendencias
+                className="flex items-center justify-between px-4 py-2.5 text-sm font-medium text-acento hover:bg-surface-alt border-b border-surface-border transition-colors">
+                Ver pendências de hoje <ChevronRight className="w-4 h-4" aria-hidden />
+              </Link>
               {total === 0 ? (
                 <p className="text-sm text-ink-muted text-center py-6">Nenhum alerta no momento.</p>
               ) : (
                 <div className="divide-y divide-surface-linha">
                   {podeVer("orcamentos") && (alertas?.leadsSite ?? 0) > 0 && <AlertaItem href="/leads-site" icone={Globe} cor="text-primary-600" label="Novos leads do site" valor={alertas?.leadsSite ?? 0} onClick={() => setSinoAberto(false)} />}
                   {podeVer("orcamentos") && <AlertaItem href="/orcamentos?resposta=nova&periodo=todos" icone={MessageSquareReply} cor="text-acento" label="Respostas de orçamentos" valor={alertas?.orcamentosRespondidos ?? 0} onClick={() => setSinoAberto(false)} />}
+                  {doPainel("orcamentosVencendo")}
                   {/* Aceite do cliente: confirmou pelo link (ou assinou com o técnico) e ninguém abriu a OS ainda; a ressalva primeiro */}
                   {podeVer("ordens") && (alertas?.avaliacoesBaixas ?? 0) > 0 && <AlertaItem href={hrefOs(alertas?.avaliacaoBaixaOsId)} icone={StarOff} cor="text-atrasado" label="Avaliações baixas do cliente" valor={alertas?.avaliacoesBaixas ?? 0} onClick={() => setSinoAberto(false)} />}
                   {podeVer("ordens") && (alertas?.aceitesRessalva ?? 0) > 0 && <AlertaItem href={hrefOs(alertas?.aceiteRessalvaOsId)} icone={MessageSquareWarning} cor="text-atencao" label="Ressalvas de clientes" valor={alertas?.aceitesRessalva ?? 0} onClick={() => setSinoAberto(false)} />}
@@ -319,19 +287,20 @@ export function Header({ session, avatarUrl }: HeaderProps) {
                   {podeVer("financeiro", "medicoes") && (alertas?.faturamentoContratos ?? 0) > 0 && <AlertaItem href="/financeiro/faturamento-contratos?atencao=1" icone={CalendarX2} cor="text-atrasado" label="Faturamento de contrato parado" valor={alertas?.faturamentoContratos ?? 0} onClick={() => setSinoAberto(false)} />}
                   {podeVer("contratos", "editar") && (alertas?.reajustesContrato ?? 0) > 0 && <AlertaItem href="/contratos/reajustes" icone={TrendingUp} cor="text-atencao" label="Reajustes a aplicar" valor={alertas?.reajustesContrato ?? 0} onClick={() => setSinoAberto(false)} />}
                   {podeVer("pmoc") && (alertas?.pmocsExpirados ?? 0) > 0 && <AlertaItem href="/pmoc?status=EXPIRADO" icone={ShieldX} cor="text-atrasado" label="PMOC expirados" valor={alertas?.pmocsExpirados ?? 0} onClick={() => setSinoAberto(false)} />}
-                  {podeVer("pmoc") && (alertas?.pmocsVencendo ?? 0) > 0 && <AlertaItem href="/pmoc?status=VENCENDO" icone={ShieldAlert} cor="text-atencao" label="PMOC perto de expirar" valor={alertas?.pmocsVencendo ?? 0} onClick={() => setSinoAberto(false)} />}
+                  {doPainel("pmocsVencendo")}
                   {podeVer("estoque", "separar") && (alertas?.separacoesPendentes ?? 0) > 0 && <AlertaItem href="/estoque/separacao" icone={PackageOpen} cor="text-acento" label="OS com material a separar" valor={alertas?.separacoesPendentes ?? 0} onClick={() => setSinoAberto(false)} />}
                   {podeVer("estoque", "separar") && (alertas?.devolucoesPendentes ?? 0) > 0 && <AlertaItem href="/estoque/devolucao" icone={PackageMinus} cor="text-atencao" label="OS com material a devolver" valor={alertas?.devolucoesPendentes ?? 0} onClick={() => setSinoAberto(false)} />}
-                  {podeVer("financeiro", "fluxoCaixa") && (alertas?.despesasCampo ?? 0) > 0 && <AlertaItem href="/financeiro/despesas-campo" icone={Receipt} cor="text-atencao" label="Despesas de campo a aprovar" valor={alertas?.despesasCampo ?? 0} onClick={() => setSinoAberto(false)} />}
-                  {podeVer("ordens") && (alertas?.comentariosCampo ?? 0) > 0 && <AlertaItem href={`${hrefOs(alertas?.comentarioCampoOsId)}#comentarios`} icone={MessageSquareReply} cor="text-acento" label="Comentários novos do campo" valor={alertas?.comentariosCampo ?? 0} onClick={() => setSinoAberto(false)} />}
-                  {podeVer("ordens") && (alertas?.atividadesEsquecidas ?? 0) > 0 && <AlertaItem href={hrefOs(alertas?.atividadeEsquecidaOsId)} icone={Timer} cor="text-atencao" label="Atividades esquecidas em andamento" valor={alertas?.atividadesEsquecidas ?? 0} onClick={() => setSinoAberto(false)} />}
-                  {podeVer("estoque") && (alertas?.estoqueNegativoCampo ?? 0) > 0 && <AlertaItem href="/estoque?situacao=negativo" icone={PackageMinus} cor="text-atrasado" label="Saldo negativo por uso em campo" valor={alertas?.estoqueNegativoCampo ?? 0} onClick={() => setSinoAberto(false)} />}
+                  {doPainel("despesasCampo")}
+                  {doPainel("comentariosCampo")}
+                  {doPainel("atividadesEsquecidas")}
+                  {doPainel("estoqueNegativoCampo")}
                   {(alertas?.nfPedidos ?? 0) > 0 && <AlertaItem href={`/compras/pedidos/${alertas?.nfPedidoId ?? ""}`} icone={PackageCheck} cor="text-ok" label="NF chegou nos seus pedidos" valor={alertas?.nfPedidos ?? 0} onClick={() => setSinoAberto(false)} />}
                   {podeVer("ordens") && <AlertaItem href="/ordens/etapas?status=ATRASADO" icone={AlertTriangle} cor="text-atrasado" label="Etapas com prazo vencidas" valor={alertas?.prazosVencidos ?? 0} onClick={() => setSinoAberto(false)} />}
                   {podeVer("ordens") && <AlertaItem href="/ordens/etapas?status=ATIVO" icone={Clock} cor="text-atencao" label="Etapas vencendo hoje" valor={alertas?.etapasVencendoHoje ?? 0} onClick={() => setSinoAberto(false)} />}
                   {podeVer("compras") && <AlertaItem href="/compras/pedidos" icone={ShoppingCart} cor="text-atencao" label="Compras pendentes" valor={alertas?.pedidosPendentes ?? 0} onClick={() => setSinoAberto(false)} />}
                   {podeVer("ordens") && <AlertaItem href="/ordens?origem=PORTAL_CLIENTE" icone={Headset} cor="text-acento" label="Chamados do portal" valor={alertas?.chamadosPortal ?? 0} onClick={() => setSinoAberto(false)} />}
-                  {podeVer("ordens") && <AlertaItem href="/ordens?prazo=atrasadas" icone={Timer} cor="text-atrasado" label="OS atrasadas" valor={alertas?.atendimentosAtraso ?? 0} onClick={() => setSinoAberto(false)} />}
+                  {doPainel("osSemTecnico")}
+                  {doPainel("osAtrasadas", true)}
                   {/* Prazo de ATENDIMENTO do contrato (comparecer / resolver) — não é o prazo de execução da OS. Só aparece quando há o que ver */}
                   {podeVer("ordens") && (alertas?.atendimentoEstourado ?? 0) > 0 && <AlertaItem href="/ordens?atendimento=estourado" icone={Headset} cor="text-atrasado" label="Prazo de atendimento estourado" valor={alertas?.atendimentoEstourado ?? 0} onClick={() => setSinoAberto(false)} />}
                   {podeVer("ordens") && (alertas?.atendimentoVencendo ?? 0) > 0 && <AlertaItem href="/ordens?atendimento=vencendo" icone={Headset} cor="text-atencao" label="Prazo de atendimento vencendo" valor={alertas?.atendimentoVencendo ?? 0} onClick={() => setSinoAberto(false)} />}

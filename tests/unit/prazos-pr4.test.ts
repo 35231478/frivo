@@ -400,8 +400,9 @@ describe("Prazo de atendimento — ninguém calcula nem grava por fora da regra 
   it("o sino e a lista de OS contam pelas mesmas funções; a régua de quem vê é a das OS", () => {
     expect(comTexto(/\bcontarAtendimento\(/, [SERVIDOR])).toEqual(["lib/prazo-server.ts"]);
     expect(comTexto(/\bidsPorAtendimento\(/, [SERVIDOR])).toEqual(["lib/listas/filtros-server.ts"]);
-    const alertas = fonte("app/api/alertas/route.ts");
-    expect(alertas).toMatch(/verOrdens/);
+    // a contagem do sino mora em lib/alertas/sino-server (a rota e o painel de pendências chamam contarSino)
+    expect(fonte("app/api/alertas/route.ts")).toContain("contarSino(");
+    expect(fonte("lib/alertas/sino-server.ts")).toMatch(/verOrdens/);
   });
 
   it("vocabulário: \"prazo de atendimento\" e \"prazo de execução\" têm cada um o seu nome nas telas — e \"SLA\" não aparece para o usuário", () => {

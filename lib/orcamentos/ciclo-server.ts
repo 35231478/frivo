@@ -8,7 +8,7 @@ import { enviarEmailInterno } from "@/lib/email";
 import { montarEmailHtml } from "@/lib/email-templates";
 import { formatarData, formatarMoeda } from "@/lib/utils";
 import { numeroFormalOrcamento } from "@/lib/orcamentos/proposta";
-import { ehRobo } from "@/lib/orcamentos/ciclo";
+import { DIAS_ORCAMENTO_VENCENDO_PADRAO, ehRobo } from "@/lib/orcamentos/ciclo";
 
 type Cliente = Prisma.TransactionClient | typeof prisma;
 
@@ -103,4 +103,10 @@ export async function avisarResponsavel(orcamentoId: string, resposta: "APROVADO
   } catch {
     return { ok: false, erro: "Falha ao avisar o responsável." };
   }
+}
+
+/** Os dias do aviso "vence em X dias" da empresa (configuração dos lembretes de e-mail; sem ela, o padrão) */
+export async function diasOrcamentoVencendo(empresaId: string): Promise<number> {
+  const cfg = await prisma.emailConfig.findUnique({ where: { empresaId }, select: { diasLembreteOrcamentoVencendo: true } });
+  return cfg?.diasLembreteOrcamentoVencendo ?? DIAS_ORCAMENTO_VENCENDO_PADRAO;
 }

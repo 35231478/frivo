@@ -15,7 +15,7 @@ import {
   Wrench, Calculator, Wallet, Receipt, TrendingUp, FileBarChart, ShoppingCart, CalendarDays, QrCode, MapPinned,
   Truck, UsersRound, BadgeDollarSign, ClipboardCheck, Smartphone, FolderOutput, UserCog, Upload, Landmark, Globe, Coins,
   PanelLeftClose, PanelLeftOpen, MoreVertical, LogOut, Package, FileBadge,
-  CalendarClock, PackageOpen, PackageMinus, Trophy, UserPlus, Timer, ReceiptText,
+  CalendarClock, PackageOpen, PackageMinus, Trophy, UserPlus, Timer, ReceiptText, ListChecks,
 } from "lucide-react";
 
 type Icone = React.ComponentType<{ className?: string }>;
@@ -59,6 +59,8 @@ const OPERACIONAL: Secao[] = [
     titulo: "Início",
     entries: [
       { href: "/dashboard", icone: LayoutDashboard, label: "Dashboard" },
+      // O que precisa de ação hoje (os números do sino; cada item pela permissão): lib/alertas/pendencias
+      { href: "/pendencias", icone: ListChecks, label: "Pendências" },
       { href: "/clientes", icone: Users, label: "Clientes" },
     ],
   },

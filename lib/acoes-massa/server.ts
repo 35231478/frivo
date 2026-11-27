@@ -5,6 +5,8 @@ import { lerFiltrosVeiculos, montarWhereVeiculos } from "@/lib/veiculo-listagem"
 import { LABELS_FUNCAO, lerFiltrosColaboradores, montarWhereColaboradores } from "@/lib/colaborador-listagem";
 import { whereClientes, whereContratos, whereOrcamentos } from "@/lib/listas/filtros";
 import { whereOrdensDaLista } from "@/lib/listas/filtros-server";
+import { FILTRO_VENCENDO } from "@/lib/orcamentos/ciclo";
+import { diasOrcamentoVencendo } from "@/lib/orcamentos/ciclo-server";
 import { prazoEfetivo } from "@/lib/os/prazo-execucao";
 import { calcularStatusFinanceiroEmLote } from "@/lib/status-financeiro";
 import { MAX_SELECAO, type AcaoItem, type Entidade } from "@/lib/acoes-massa/acoes";
@@ -118,7 +120,9 @@ export async function idsDoFiltro(entidade: Entidade, filtro: string, empresaId:
       return { ids: ids.slice(0, MAX_SELECAO), total: ids.length };
     }
     case "orcamentos": {
-      const where = whereOrcamentos(empresaId, sp);
+      // "Vencendo" usa o prazo do aviso da empresa, como a lista e o painel de pendências
+      const dias = sp.validade === FILTRO_VENCENDO ? await diasOrcamentoVencendo(empresaId) : undefined;
+      const where = whereOrcamentos(empresaId, sp, new Date(), dias);
       return pegar(prisma.orcamento.findMany({ where, select: { id: true }, orderBy: { criadoEm: "desc" }, take }), prisma.orcamento.count({ where }));
     }
     case "contratos": {

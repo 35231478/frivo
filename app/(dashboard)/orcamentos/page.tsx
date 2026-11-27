@@ -10,7 +10,8 @@ import { PLANILHA, valorSemMoeda } from "@/lib/planilha";
 import { PeriodoCardsOrcamentos, VerTodoPeriodo, type ResumoOrcamentos } from "@/components/orcamento/orcamentos-periodo";
 import { PainelTotaisOrcamentos } from "@/components/orcamento/painel-totais-orcamentos";
 import { cn, formatarData, formatarMoeda, LABELS_TIPO_ORCAMENTO, CLASSE_TIPO_ORCAMENTO } from "@/lib/utils";
-import { LABELS_ETAPA, bloqueioEnvio, dataDaEtapa, etapaCiclo } from "@/lib/orcamentos/ciclo";
+import { FILTRO_VENCENDO, LABELS_ETAPA, bloqueioEnvio, dataDaEtapa, etapaCiclo } from "@/lib/orcamentos/ciclo";
+import { diasOrcamentoVencendo } from "@/lib/orcamentos/ciclo-server";
 import { AcoesLinhaOrcamento } from "@/components/orcamento/acoes-linha-orcamento";
 import { pode } from "@/lib/permissoes";
 import { PilulaEtapa } from "@/components/orcamento/ciclo-orcamento";
@@ -48,7 +49,9 @@ export default async function OrcamentosPage({
   // Período (padrão da casa) pela DATA DE CRIAÇÃO: mês com ‹ ›, intervalo ou todo o período — na URL.
   // As datas antigas do painel (dataInicio/dataFim) viraram o período.
   const periodo = lerPeriodo(sp, agora, { permitirTodos: true });
-  const where = whereListaOrcamentos(empresaId, sp, periodo, agora);
+  // "Vencendo" (painel de pendências): o prazo do aviso "vence em X dias" da empresa
+  const diasVencendo = sp.validade === FILTRO_VENCENDO ? await diasOrcamentoVencendo(empresaId) : null;
+  const where = whereListaOrcamentos(empresaId, sp, periodo, agora, diasVencendo ?? undefined);
   // Cards de funil: só o período (busca e demais filtros mexem só na lista)
   const noPeriodo = condPeriodoCriacao(periodo);
   const soma = (c: string) => prisma.orcamento.aggregate({
@@ -105,7 +108,7 @@ export default async function OrcamentosPage({
 
       {/* Período (pela criação) + cards de funil do período, clicáveis como filtro — padrão da casa */}
       <PeriodoCardsOrcamentos
-        periodo={periodoTela(periodo)} resumo={resumo} card={card} resposta={resposta}
+        periodo={periodoTela(periodo)} resumo={resumo} card={card} resposta={resposta} diasVencendo={diasVencendo}
         opcoes={{
           tipos: Object.entries(LABELS_TIPO_ORCAMENTO).map(([value, label]) => ({ value, label })),
           status: Object.entries(LABELS_ETAPA).map(([value, label]) => ({ value, label })),

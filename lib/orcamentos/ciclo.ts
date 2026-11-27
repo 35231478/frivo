@@ -160,6 +160,21 @@ export function whereEtapa(etapa: string, hoje: Date): Record<string, unknown> |
   }
 }
 
+/** O prazo do aviso "vence em X dias" sem configuração de lembretes na empresa (o padrão de EmailConfig) */
+export const DIAS_ORCAMENTO_VENCENDO_PADRAO = 3;
+
+/** O valor do filtro na URL da lista de orçamentos (`?validade=vencendo`) */
+export const FILTRO_VENCENDO = "vencendo";
+
+/**
+ * Orçamento VENCENDO (painel de pendências, sino e `?validade=vencendo`): enviado, ainda sem resposta,
+ * com a validade de hoje até `dias` à frente (dia civil; o que vence hoje ainda vale hoje). O prazo é o
+ * mesmo do lembrete de e-mail "vence em X dias" (EmailConfig.diasLembreteOrcamentoVencendo).
+ */
+export function whereOrcamentoVencendo(hoje: Date, dias: number) {
+  return { status: "ENVIADO" as const, validadeEm: { gte: hoje, lte: new Date(hoje.getTime() + dias * 86_400_000) } };
+}
+
 /**
  * Transições que a EQUIPE pode fazer pelo PUT `{ status }` (destino ← origens). Aprovar é só do
  * cliente pelo link (com assinatura); Convertida, só pela conversão; Rascunho volta pelo "Reabrir".
