@@ -205,7 +205,7 @@ export function OsOrcamento({ osId, itens: iniciais, clienteId = null, situacao 
                     <span className="inline-flex items-center gap-1">
                       <span className="inline-flex items-center gap-0.5 text-[10px] font-medium text-ok-texto bg-ok-claro px-1.5 py-0.5 rounded-full"><CheckCircle className="w-3 h-3" /> Executado</span>
                       {/* Desmarcar: corrige o "executado" (inclusive o marcado ao concluir a última atividade no app). Registro fechado não desmarca */}
-                      {podeEditar && !motivo && (
+                      {podeEditar && !fechada && (
                         <button type="button" onClick={() => marcarExecutado(i.id, false)} className="text-[10px] text-ink-muted hover:text-atrasado underline-offset-2 hover:underline" data-desmarcar-executado>Desmarcar</button>
                       )}
                     </span>

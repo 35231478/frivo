@@ -3,7 +3,7 @@
  * PostgreSQL real (schema descartável via `prisma db push`), pela MESMA fila de sincronização do app.
  * Só o Resend é de mentira (o resto — configuração criptografada, modelos, destinatários, log — é real):
  *  - com sinal: o cliente recebe o e-mail curto, o horário fica na atividade e no histórico da OS, e o
- *    atendimento NÃO começa por causa do aviso;
+ *    "A caminho" NÃO começa o atendimento; "Cheguei" começa (atividade Em andamento — "Pronto pra janeiro 2", G);
  *  - idempotente: tocar de novo (outra operação, a mesma reenviada, dois aparelhos juntos) não avisa de novo;
  *  - tempo real: o que subiu tarde da fila registra o horário do toque e NÃO avisa; dentro da janela, avisa;
  *    relógio errado no aparelho não engana;
@@ -163,6 +163,8 @@ describe.skipIf(!URL_PG)("Aviso ao cliente: a caminho / cheguei (PostgreSQL real
     expect(resend.enviados.map((e) => e.subject)).toEqual(["Técnico a caminho — Clima Total", "Técnico no local — Clima Total"]);
     expect(resend.enviados[1].html).toContain("nosso técnico chegou ao local.");
     expect((await registros(a)).map((x: any) => x.evento)).toEqual(["A_CAMINHO", "CHEGOU"]);
+    // Chegou = começou (G): a atividade Agendada passa a Em andamento no servidor
+    expect((await prisma.atividadeOs.findUnique({ where: { id: a } })).status).toBe("EM_ANDAMENTO");
   });
 
   it("OS aberta por um contato: quem abriu o chamado recebe; o contato de Ordens e as cópias vão em cópia", async () => {

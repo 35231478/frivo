@@ -108,8 +108,11 @@ describe.skipIf(!URL_PG)("Loja de Módulos — Equipamentos + QR Codes (PostgreS
       id: `os${n}`, empresaId: "e1", numero: `OS-${1000 + n}`, clienteId: "c1", unidadeId: "u1",
       criadoPorId: "uAdmin", descricao: "Manutenção preventiva", status: "EM_ANDAMENTO",
     } });
+    // Tipo de OS que EXIGE equipamento: desde "Pronto pra janeiro 2" (decisão E), atividade sem tipo de OS
+    // não exige equipamento — a trava que esta prova olha só existe quando o tipo pede
+    await prisma.tipoOs.upsert({ where: { id: "tpPrev" }, update: {}, create: { id: "tpPrev", empresaId: "e1", nome: "Manutenção Preventiva", exigeEquipamento: true } });
     const atv = await prisma.atividadeOs.create({ data: {
-      id: `atv${n}`, empresaId: "e1", ordemServicoId: os.id, titulo: "Visita", status: "EM_ANDAMENTO",
+      id: `atv${n}`, empresaId: "e1", ordemServicoId: os.id, titulo: "Visita", status: "EM_ANDAMENTO", tipoOsId: "tpPrev",
     } });
     if (o.comVinculo) await prisma.atividadeEquipamento.create({ data: { atividadeId: atv.id, equipamentoId: "eq1", feito: true, feitoEm: new Date() } });
     return { osId: os.id, atividadeId: atv.id };
@@ -284,7 +287,7 @@ describe.skipIf(!URL_PG)("Loja de Módulos — Equipamentos + QR Codes (PostgreS
 
     it("CONCLUIR a atividade não trava por falta de equipamento: a saída MODULO entra no lugar", async () => {
       const { osId, atividadeId } = await criarOs();
-      const atividade = { tipoOs: null };
+      const atividade = { tipoOs: { nome: "Manutenção Preventiva", exigeEquipamento: true } };
       const os = { origem: "MANUAL", semEquipamentoMotivo: null };
 
       // com o módulo ligado, a trava vale (é a regra de sempre)
