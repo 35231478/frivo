@@ -371,7 +371,7 @@ describe.skipIf(!URL_PG)("Exportar dados da empresa — PostgreSQL real", () => 
       if (chamadasNoPrimeiroPedacoDoArquivo === null && espia.mock.calls.length > 0) chamadasNoPrimeiroPedacoDoArquivo = espia.mock.calls.length;
     }
     const ms = Date.now() - t0;
-    const chamadas = espia.mock.calls.map((c) => c[0]);
+    const chamadas = espia.mock.calls.map((c) => c[0] as { take: number; where: { empresaId: string } });
     espia.mockRestore();
 
     // Em lotes: nenhuma consulta pede mais que LOTE, todas filtram a empresa e andam pelo cursor
