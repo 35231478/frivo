@@ -582,6 +582,7 @@ model Empresa {
   documentacaoEnvios DocumentacaoEnvio[]
   modulos            EmpresaModulo[]
   anotacoesInternas  AnotacaoInterna[]
+  importacaoLotes    ImportacaoLote[]
 
   @@map("empresas")
 }
@@ -965,6 +966,9 @@ model Usuario {
   documentosAnexados  ColaboradorDocumento[] @relation("DocumentoColaboradorCriadoPor")
   documentosExcluidos ColaboradorDocumento[] @relation("DocumentoColaboradorExcluidoPor")
   anotacoesInternas   AnotacaoInterna[]
+
+  importacoesFeitas   ImportacaoLote[] @relation("LoteImportadoPor")
+  importacoesDesfeitas ImportacaoLote[] @relation("LoteDesfeitoPor")
 
   @@unique([email, empresaId])
   @@index([empresaId, ativo])
@@ -5755,4 +5759,61 @@ model AnotacaoPrint {
   anotacao AnotacaoInterna @relation(fields: [anotacaoId], references: [id], onDelete: Cascade)
 
   @@map("anotacao_prints")
+}
+
+/// Implantação, leva 5: cada importação por planilha confirmada vira um LOTE (quem, quando, arquivo, contagens), com os
+/// registros que criou e atualizou. "Desfazer lote" apaga só o que o lote CRIOU e ainda não foi usado; o que ele só
+/// ATUALIZOU nunca é desfeito. SQL: prisma/sql/2027-01-30_importacao_lotes.sql
+enum AcaoLoteItem {
+  CRIADO
+  ATUALIZADO
+}
+
+model ImportacaoLote {
+  id            String    @id @default(cuid())
+  empresaId     String    @map("empresa_id")
+  usuarioId     String?   @map("usuario_id")
+  /// A planilha (lib/importacao/entidades: clientes, unidades, contatos, equipamentos, estoque…)
+  entidade      String
+  /// Nome do arquivo enviado
+  arquivo       String
+  criados       Int       @default(0)
+  atualizados   Int       @default(0)
+  comErro       Int       @default(0) @map("com_erro")
+  avisos        Int       @default(0)
+  criadoEm      DateTime  @default(now()) @map("criado_em")
+  /// Último "desfazer" (pode ser parcial: o que estava em uso ficou)
+  desfeitoEm    DateTime? @map("desfeito_em")
+  desfeitoPorId String?   @map("desfeito_por_id")
+  /// Quantos registros os "desfazer" apagaram, somados
+  apagados      Int       @default(0)
+
+  empresa     Empresa              @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  usuario     Usuario?             @relation("LoteImportadoPor", fields: [usuarioId], references: [id], onDelete: SetNull)
+  desfeitoPor Usuario?             @relation("LoteDesfeitoPor", fields: [desfeitoPorId], references: [id], onDelete: SetNull)
+  itens       ImportacaoLoteItem[]
+
+  @@index([empresaId, criadoEm])
+  @@map("importacao_lotes")
+}
+
+/// Um registro que o lote criou ou atualizou. `entidade` = o cadastro do registro (pode ser outro que o do lote: a
+/// planilha de clientes cria a unidade "Principal"; a de colaboradores, os cargos; a de equipamentos, os tipos).
+model ImportacaoLoteItem {
+  id         String       @id @default(cuid())
+  loteId     String       @map("lote_id")
+  empresaId  String       @map("empresa_id")
+  entidade   String
+  registroId String       @map("registro_id")
+  acao       AcaoLoteItem
+  /// Linha da planilha (vazia nos que a gravação criou por conta própria, como a unidade "Principal")
+  linha      Int?
+  /// Apagado por um "desfazer"
+  desfeitoEm DateTime?    @map("desfeito_em")
+
+  lote ImportacaoLote @relation(fields: [loteId], references: [id], onDelete: Cascade)
+
+  @@index([loteId])
+  @@index([empresaId, entidade, registroId])
+  @@map("importacao_lote_itens")
 }
