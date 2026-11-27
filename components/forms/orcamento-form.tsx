@@ -604,7 +604,7 @@ export function OrcamentoForm({
             <Tags className="w-3.5 h-3.5" /> Tabela: {tabelaPreco.nome}
           </span>
           <span className="text-xs text-ink-muted" data-trava-tabela>
-            {podeAlterarPrecoTabela ? "Alterar o preço da tabela pede motivo" : "Preços da tabela travados"}
+            {podeAlterarPrecoTabela ? "Mudar o preço da tabela pede motivo" : "Preços da tabela travados"}
           </span>
         </div>
       )}
@@ -779,7 +779,7 @@ export function OrcamentoForm({
         <div className="card-padded" data-motivo-preco-tabela>
           <FormField
             label="Motivo da alteração do preço de tabela" required
-            hint={`Preço diferente da tabela do cliente: ${precosDeTabelaAlterados.map((i) => i.descricao).join(", ")}. Fica no histórico.`}
+            hint={`Fora da tabela: ${precosDeTabelaAlterados.map((i) => i.descricao).join(", ")}`}
           >
             <Input value={motivoPrecoTabela} onChange={(e) => setMotivoPrecoTabela(e.target.value)} maxLength={300} placeholder="Ex.: desconto negociado com o cliente" />
           </FormField>

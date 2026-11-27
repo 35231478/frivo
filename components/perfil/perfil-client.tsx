@@ -215,7 +215,7 @@ export function PerfilClient({ initial, onAvatar, emailSomenteLeitura = false, n
         <button
           type="button" onClick={() => fotoRef.current?.click()} data-trocar-foto
           className="relative shrink-0 w-16 h-16 rounded-full group focus:outline-none focus-visible:ring-2 focus-visible:ring-acento"
-          aria-label="Alterar foto de perfil" title="Alterar foto"
+          aria-label="Trocar foto de perfil" title="Trocar foto"
         >
           {foto ? (
             // eslint-disable-next-line @next/next/no-img-element
@@ -264,7 +264,7 @@ export function PerfilClient({ initial, onAvatar, emailSomenteLeitura = false, n
                     <span className="w-12 h-12 rounded-full bg-acento-claro flex items-center justify-center text-acento-hover text-sm font-bold">{iniciais}</span>
                   )}
                   <Button type="button" variant="secondary" size="sm" onClick={() => fotoRef.current?.click()} data-alterar-foto>
-                    <Camera className="w-4 h-4" /> {foto ? "Alterar foto" : "Enviar foto"}
+                    <Camera className="w-4 h-4" /> {foto ? "Trocar foto" : "Enviar foto"}
                   </Button>
                   <span className="text-xs text-ink-muted">{preview ? "Foto nova: salve para confirmar." : "JPG ou PNG, até 2 MB."}</span>
                 </div>
