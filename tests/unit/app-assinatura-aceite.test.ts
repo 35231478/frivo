@@ -59,6 +59,15 @@ describe("redesenhar ao mudar o tamanho do quadro", () => {
     expect(depois.y1).toBeLessThanOrEqual(RETRATO.altura);
   });
 
+  it("quadro mais BAIXO (a altura é que não cabe): encolhe pela altura, na mesma escala nos dois eixos", () => {
+    const alta: PontoTraco[][] = [[p(100, 10), p(160, 250)], [p(120, 40), p(150, 230)]]; // 60 × 240, num quadro de 466 × 260
+    const antes = caixa(alta), depois = caixa(escalarTracos(alta, { largura: 466, altura: 260 }, PAISAGEM));
+    perto(depois.y1 - depois.y0, PAISAGEM.altura - 2 * MARGEM_ASSINATURA);
+    perto((depois.x1 - depois.x0) / (antes.x1 - antes.x0), (depois.y1 - depois.y0) / (antes.y1 - antes.y0));
+    expect(depois.y0).toBeGreaterThanOrEqual(MARGEM_ASSINATURA - 1e-9);
+    expect(depois.y1).toBeLessThanOrEqual(PAISAGEM.altura - MARGEM_ASSINATURA + 1e-9);
+  });
+
   it("assinatura no canto: depois de mudar, continua inteira dentro do quadro", () => {
     const canto: PontoTraco[][] = [[p(400, 20), p(460, 60)]];
     const depois = caixa(escalarTracos(canto, PAISAGEM, RETRATO));
