@@ -259,6 +259,8 @@ describe.skipIf(!URL_PG)("painel de pendências (PostgreSQL real)", () => {
       escritorio();
       const antes = await ler();
       expect(antes.osSemTecnico).toBe(4);
+      // a resposta de orçamento ainda não vista (o7, aprovado pelo cliente): uma só, o link abre o orçamento
+      expect([antes.orcamentosRespondidos, antes.orcamentoRespondidoId]).toEqual([1, "o7"]);
       expect([antes.total, antes.totalGeral, antes.lidos]).toEqual([antes.totalGeral, antes.totalGeral, []]);
       // o toque: grava o lido do aviso (com a assinatura que a tela mostrava) e o número cai 4
       expect((await tocar({ campo: "osSemTecnico", assinatura: assinaturaDoAviso(antes, "osSemTecnico") })).status).toBe(200);

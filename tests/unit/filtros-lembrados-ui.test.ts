@@ -25,7 +25,7 @@ vi.mock("next/navigation", () => ({
 
 const CHAVE = "frivo:filtros:e1:u1:ordens";
 /** A lista (o mesmo componente o tempo todo: trocar a URL não remonta, como no app) */
-let Lista: () => null;
+let Lista: () => React.ReactElement;
 let root: Root | undefined;
 beforeEach(() => {
   vi.useFakeTimers({ toFake: ["Date"] });
@@ -39,7 +39,7 @@ async function abrir(qs = "", ids: { usuarioId?: string; empresaId?: string } = 
   nav.qs = qs;
   const { useFiltrosLembrados } = await import("@/components/listagem/use-filtros-lembrados");
   const { PermissoesProvider } = await import("@/components/providers/permissoes-provider");
-  Lista ??= () => { useFiltrosLembrados("ordens"); return null; };
+  Lista ??= () => { useFiltrosLembrados("ordens"); return createElement("span", { "data-lista": "" }); };
   if (root) act(() => root!.unmount());
   root = createRoot(document.body.appendChild(document.createElement("div")));
   await act(async () => { root!.render(createElement(PermissoesProvider, { role: "ADMIN", permissoes: permissoesTotais(), ...ids } as any, createElement(Lista))); });
@@ -110,11 +110,16 @@ describe("filtros lembrados (hook único das listas)", () => {
   });
 
   it("navegador sem armazenamento (modo privado, bloqueado): a lista abre no padrão, sem erro", async () => {
-    vi.spyOn(Storage.prototype, "getItem").mockImplementation(() => { throw new Error("SecurityError"); });
-    vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => { throw new Error("QuotaExceededError"); });
+    // como o Safari em modo privado / site bloqueado: tocar no localStorage lança
+    const original = Object.getOwnPropertyDescriptor(window, "localStorage")!;
+    Object.defineProperty(window, "localStorage", { configurable: true, get: () => { throw new DOMException("bloqueado", "SecurityError"); } });
+    try {
     await abrir();
+    expect(document.querySelector("[data-lista]")).not.toBeNull(); // a tela continua de pé
     await mudarUrl("status=ABERTA");
+    expect(document.querySelector("[data-lista]")).not.toBeNull();
     expect(nav.replace).not.toHaveBeenCalled();
+    } finally { Object.defineProperty(window, "localStorage", original); }
   });
 });
 

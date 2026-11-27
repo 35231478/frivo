@@ -53,7 +53,7 @@ async function acharFoto(empresaId: string, osId: string, p: PedidoLegenda): Pro
     };
   }
   const a = await prisma.osAnexo.findFirst({
-    where: { ...qual, ...daAtividade, ordemServicoId: osId, ordemServico: { empresaId }, tipo: { startsWith: "image/" } },
+    where: { ...qual, ...daAtividade, ordemServicoId: osId, tipo: { startsWith: "image/" } },
     select: { id: true, atividadeId: true, legenda: true, nome: true },
   });
   return a && {

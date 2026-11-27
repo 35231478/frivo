@@ -109,6 +109,7 @@ describe.skipIf(!URL_PG)("legenda editável das fotos da OS (PostgreSQL real)", 
       anexo("anEscr", "osA", null, "Fachada", { criadoPorId: "uA" }),                         // do escritório
       anexo("anOsB", "osB", "b1", "Quadro elétrico", { criadoPorId: "uT" }),                  // OS concluída
       anexo("anOutra", "osX", null, "Da outra empresa"),
+      anexo("anPdf", "osA", null, "Laudo", { nome: "laudo.pdf", tipo: "application/pdf", equipamentoId: null }), // documento, não foto
     ] });
   }, 120_000);
 
@@ -159,6 +160,7 @@ describe.skipIf(!URL_PG)("legenda editável das fotos da OS (PostgreSQL real)", 
     expect((await legenda("anEscr", "EXECUCAO", "Fachada da loja")).status).toBe(404); // a origem não é a da foto
     expect((await legenda("anOsB", "ANEXO", "Fachada da loja")).status).toBe(404);     // a foto é de outra OS
     expect((await legenda("anOutra", "ANEXO", "Fachada da loja", "osX")).status).toBe(404);
+    expect((await legenda("anPdf", "ANEXO", "Laudo da ART")).status).toBe(404); // documento não tem legenda de foto
     comoEscritorio(permissoesTotais(), "uB", "e2");
     expect((await legenda("anEscr", "ANEXO", "Fachada da loja")).status).toBe(404);
     expect(await prisma.osAnexo.findUnique({ where: { id: "anEscr" } })).toMatchObject({ legenda: "Fachada" });
@@ -190,6 +192,15 @@ describe.skipIf(!URL_PG)("legenda editável das fotos da OS (PostgreSQL real)", 
     // a operação malformada (legenda grande demais) nem entra
     r = await sync([opLegenda("a1", { id: "anApp", legenda: "x".repeat(201) })]);
     expect(r.json.resultados[0]).toMatchObject({ ok: false, status: 400 });
+  });
+
+  it("técnico com OS › Editar pela rota do escritório: a mesma regra do app (só a dele, OS aberta, nunca a do escritório)", async () => {
+    sessao.atual = { user: { id: "uT", name: "João", email: "uT@x.com", empresaId: "e1", role: "TECNICO", permissoes: permissoesTotais(), tecnicoId: "t1" } };
+    expect((await legenda("anPedro", "ANEXO", "Outra legenda")).status).toBe(403);
+    expect(await legenda("anEscr", "ANEXO", "Outra legenda")).toEqual({ status: 403, json: { erro: "Esta foto foi enviada pelo escritório." } });
+    expect(await legenda("anOsB", "ANEXO", "Outra legenda", "osB")).toEqual({ status: 403, json: { erro: MSG_LEGENDA_OS_ENCERRADA } });
+    expect((await legenda("fAntes", "EXECUCAO", "Evaporadora suja, antes")).status).toBe(200);
+    expect((await prisma.osAnexo.findUnique({ where: { id: "anPedro" } })).legenda).toBe("Placa da condensadora");
   });
 
   it("a regra no servidor: sem OS › Editar e fora do modo técnico, recusa com o motivo", async () => {

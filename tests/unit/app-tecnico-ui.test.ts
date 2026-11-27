@@ -595,6 +595,15 @@ describe("execução guiada", () => {
     expect($("[data-legenda-editar]")).toBeNull();
     expect((await fila()).at(-1)).toMatchObject({ tipo: "fotoOsLegenda", atividadeId: "aA", dados: { clientId: f2.dados.clientId, legenda: "Quadro elétrico do 2º andar" } });
   });
+
+  it("foto do serviço com a OS já encerrada (Leva F): a legenda não se edita mais no app (só o escritório)", async () => {
+    const comFoto = (status: string) => (r: RetratoAtividade) => ({ ...r, execucao: { ...r.execucao, os: { ...r.execucao.os, status }, fotosServico: [{ id: "f0", clientId: null, equipamentoId: null, legenda: "Fachada" }] } }) as RetratoAtividade;
+    ajustarRetrato = comFoto("CONCLUIDA");
+    await motor.baixarRetrato("aA");
+    await abrirOs("aA");
+    await esperarAte(() => $$("[data-foto-servico]").length === 1, "foto do serviço");
+    expect($("[data-foto-servico] [data-legenda-editar-abrir]")).toBeNull();
+  });
 });
 
 /* ═════════════════════════ execução guiada — lapidada (Etapa 2b) ═════════════════════════ */
