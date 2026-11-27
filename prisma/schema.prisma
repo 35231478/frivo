@@ -584,6 +584,7 @@ model Empresa {
   modulos            EmpresaModulo[]
   anotacoesInternas  AnotacaoInterna[]
   importacaoLotes    ImportacaoLote[]
+  exportacoesDados   ExportacaoDados[]
 
   @@map("empresas")
 }
@@ -5999,4 +6000,27 @@ model ImportacaoLoteItem {
   @@index([loteId])
   @@index([empresaId, entidade, registroId])
   @@map("importacao_lote_itens")
+}
+
+/// "Exportar dados da empresa" (backup portátil): cada exportação fica registrada — quem, quando, qual parte e
+/// se terminou. O usuário fica gravado pelo id e pelo nome da hora (sem chave estrangeira): a trilha não some se o
+/// usuário for removido depois. Gravada ANTES de gerar o arquivo; sem o registro, não há exportação.
+model ExportacaoDados {
+  id          String    @id @default(cuid())
+  empresaId   String    @map("empresa_id")
+  usuarioId   String    @map("usuario_id")
+  usuarioNome String    @map("usuario_nome")
+  /// "tudo", "cadastros", "operacao" ou "financeiro" (lib/exportacao/arquivos)
+  parte       String
+  criadoEm    DateTime  @default(now()) @map("criado_em")
+  /// Preenchido quando o zip terminou de ser gerado; nulo = interrompida (conexão caiu, tempo esgotado ou erro)
+  concluidaEm DateTime? @map("concluida_em")
+  arquivos    Int?
+  linhas      Int?
+  erro        String?
+
+  empresa Empresa @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+
+  @@index([empresaId, criadoEm])
+  @@map("exportacoes_dados")
 }

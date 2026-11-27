@@ -1,7 +1,7 @@
 import {
   Boxes, Building2, CalendarClock, Clock, Cog, FileBadge, FileSignature, FileSpreadsheet, Headset, IdCard, Landmark, ListChecks, Mail, Package, Printer, QrCode, ScrollText, ShieldCheck, Tags,
   Target, Thermometer, UserCog, Wallet, Wrench, type LucideIcon,
-  Hash, CaseSensitive, UserPlus, Blocks, Rocket,
+  Hash, CaseSensitive, UserPlus, Blocks, Rocket, DatabaseBackup,
 } from "lucide-react";
 import { moduloDaRota, pode, podeEntrarNoModulo, type Acao, type Permissoes } from "@/lib/permissoes";
 
@@ -25,6 +25,8 @@ export interface ItemConfig {
   /** Permissão quando não é a do módulo da rota antiga: módulo e ação (padrão: visualizar) — ex.: Financeiro › Fiscal */
   modulo?: string;
   acao?: Acao;
+  /** Só o administrador da empresa vê (e o servidor confere de novo): ex.: Exportar dados */
+  soAdmin?: boolean;
 }
 
 export interface SubgrupoConfig { titulo: string; itens: ItemConfig[] }
@@ -120,6 +122,8 @@ export const SECOES_CONFIGURACOES: SecaoConfig[] = [
           // Loja de Módulos: a EMPRESA liga e desliga o que usa (acima do RBAC do usuário).
           // Mexer exige "Configurações › Gerenciar" — a mesma de quem cuida dos perfis de acesso.
           { id: "modulos", href: "/configuracoes", modulo: "configuracoes", acao: "gerenciar", icone: Blocks, label: "Módulos", dica: "O que esta empresa usa do Frivo: ligar e desligar módulos" },
+          // Backup portátil: só o administrador (a rota confere o papel no banco antes de gerar)
+          { id: "exportar-dados", href: "/configuracoes", soAdmin: true, icone: DatabaseBackup, label: "Exportar dados", dica: "Cópia dos dados da empresa em planilhas (.zip), para guardar ou levar" },
         ],
       },
       {
@@ -181,6 +185,7 @@ export function hrefSecaoConfig(id: string) {
 
 /** O perfil pode abrir este item? (permissão do módulo da rota antiga, ou o módulo/ação próprios do item) */
 export function podeVerItemConfig(i: ItemConfig, permissoes: Permissoes | null | undefined, role?: string) {
+  if (i.soAdmin && role !== "ADMIN" && role !== "SUPER_ADMIN") return false;
   const m = i.modulo ?? moduloDaRota(i.href.split("#")[0]);
   if (!m) return true;
   // Sem ação própria, vale a regra do portão: "visualizar", ou alguma ação do módulo que não tem "visualizar"
