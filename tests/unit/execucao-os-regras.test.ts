@@ -170,12 +170,13 @@ describe("editar o checklist do tipo", () => {
     expect(planejarChecklist(comMed, lista)).toEqual({ ok: true, plano: { atualizar: [], criar: [], inativar: [] } });
     // unidade muda (e espaços somem)
     const r1 = planejarChecklist(comMed, [...lista.slice(0, 3), it_({ ...lista[3], unidade: " bar " })]);
-    expect(r1.ok && r1.plano.atualizar).toEqual([{ id: "m1", texto: "Pressão de sucção", pedirFoto: false, pedirObservacao: false, ordem: 4, tipoResposta: "MEDICAO", unidade: "bar" }]);
+    // (leva app-campo 3: a medição leva também a grandeza e a faixa esperada, vazias aqui)
+    expect(r1.ok && r1.plano.atualizar).toEqual([{ id: "m1", texto: "Pressão de sucção", pedirFoto: false, pedirObservacao: false, ordem: 4, tipoResposta: "MEDICAO", unidade: "bar", grandeza: null, valorMin: null, valorMax: null }]);
     // OK/Atenção → medição: cria um novo e inativa o antigo
     const r2 = planejarChecklist(comMed, [it_({ id: "i1", texto: "Limpeza dos filtros", pedirFoto: true }), it_({ id: "i2", texto: "Corrente do compressor", tipoResposta: "MEDICAO", unidade: "A" }), lista[2], lista[3]]);
     expect(r2).toEqual({ ok: true, plano: {
       atualizar: [],
-      criar: [{ texto: "Corrente do compressor", pedirFoto: false, pedirObservacao: false, ordem: 2, tipoResposta: "MEDICAO", unidade: "A" }],
+      criar: [{ texto: "Corrente do compressor", pedirFoto: false, pedirObservacao: false, ordem: 2, tipoResposta: "MEDICAO", unidade: "A", grandeza: null, valorMin: null, valorMax: null }],
       inativar: ["i2"],
     } });
     // item comum não guarda unidade

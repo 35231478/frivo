@@ -269,7 +269,7 @@ export function blocosAtendidos(ativs: Atividade[], unidade: string | null, prin
 
   const blocos: BlocoEquipamento[] = [...equips.values()].filter((x) => x.atividades.size).map(({ e, atividades }) => {
     const checklist: GrupoChecklist[] = [], fotos: FotoRelatorio[] = [], checklistTipo: ChecklistTipoRelatorio[] = [], observacoes: string[] = [];
-    const resumoChecklist = { ok: 0, atencao: 0, naoSeAplica: 0, medicoes: 0, foraDaFaixa: 0 };
+    const resumoChecklist: BlocoEquipamento["resumoChecklist"] = { ok: 0, atencao: 0, naoSeAplica: 0, medicoes: 0 };
     for (const a of ativs.filter((x) => atividades.has(x.id))) {
       const itens: ItemChecklistTipo[] = (a.checklistRespostas ?? [])
         .filter((r) => r.equipamentoId === e.id && (r.status || (r.observacao ?? "").trim() || numero(r.valor) !== null || r.audio))
@@ -279,7 +279,8 @@ export function blocosAtendidos(ativs: Atividade[], unidade: string | null, prin
           const [min, max] = [numero(r.faixaMin), numero(r.faixaMax)];
           return {
             texto: r.textoItem, status: STATUS_VALIDOS.includes(r.status as StatusItem) ? (r.status as StatusItem) : null, observacao: (r.observacao ?? "").trim() || null,
-            medicao: valor === null ? null : { valor, unidade: r.unidade ?? null, faixa: min === null && max === null ? null : { min, max }, fora: !!r.foraDaFaixa },
+            // A faixa (e se ficou fora) só quando havia faixa no momento da resposta
+            medicao: valor === null ? null : { valor, unidade: r.unidade ?? null, ...((min !== null || max !== null) && { faixa: { min, max }, fora: !!r.foraDaFaixa }) },
             audio: !!r.audio,
           };
         });
@@ -288,7 +289,7 @@ export function blocosAtendidos(ativs: Atividade[], unidade: string | null, prin
         else if (it.status === "ATENCAO") resumoChecklist.atencao++;
         else if (it.status === "NAO_SE_APLICA") resumoChecklist.naoSeAplica++;
         else if (it.medicao) resumoChecklist.medicoes++;
-        if (it.medicao?.fora) resumoChecklist.foraDaFaixa++;
+        if (it.medicao?.fora) resumoChecklist.foraDaFaixa = (resumoChecklist.foraDaFaixa ?? 0) + 1;
       }
       if (itens.length) checklistTipo.push({ atividade: a.titulo, itens });
       fotos.push(...(a.fotosAtendimento ?? []).filter((f) => f.equipamentoId === e.id)

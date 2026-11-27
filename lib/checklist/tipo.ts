@@ -46,7 +46,8 @@ export interface ItemChecklistAtual {
 
 type ValoresItem = {
   texto: string; pedirFoto: boolean; pedirObservacao: boolean; ordem: number; tipoResposta: TipoRespostaItem; unidade: string | null;
-  grandeza: Grandeza | null; valorMin: number | null; valorMax: number | null;
+  /** Só nos itens de medição */
+  grandeza?: Grandeza | null; valorMin?: number | null; valorMax?: number | null;
 };
 export interface PlanoChecklist {
   atualizar: ({ id: string } & ValoresItem)[];
@@ -78,7 +79,7 @@ export function planejarChecklist(atuais: ItemChecklistAtual[], itens: ItemCheck
     // Grandeza e faixa só valem para medição
     const valores: ValoresItem = {
       texto, pedirFoto: it.pedirFoto, pedirObservacao: it.pedirObservacao, ordem, tipoResposta: it.tipoResposta, unidade,
-      grandeza: medicao ? it.grandeza ?? null : null, valorMin: medicao ? it.valorMin ?? null : null, valorMax: medicao ? it.valorMax ?? null : null,
+      ...(medicao && { grandeza: it.grandeza ?? null, valorMin: it.valorMin ?? null, valorMax: it.valorMax ?? null }),
     };
     if (it.id) {
       const atual = porId.get(it.id);
@@ -87,8 +88,8 @@ export function planejarChecklist(atuais: ItemChecklistAtual[], itens: ItemCheck
       if (atual.tipoResposta !== it.tipoResposta) { plano.criar.push(valores); continue; }
       usados.add(it.id);
       const mudou = atual.texto !== texto || atual.pedirFoto !== it.pedirFoto || atual.pedirObservacao !== it.pedirObservacao || atual.ordem !== ordem
-        || (atual.unidade ?? null) !== unidade || (atual.grandeza ?? null) !== valores.grandeza
-        || (atual.valorMin ?? null) !== valores.valorMin || (atual.valorMax ?? null) !== valores.valorMax;
+        || (atual.unidade ?? null) !== unidade || (atual.grandeza ?? null) !== (valores.grandeza ?? null)
+        || (atual.valorMin ?? null) !== (valores.valorMin ?? null) || (atual.valorMax ?? null) !== (valores.valorMax ?? null);
       if (mudou) plano.atualizar.push({ id: it.id, ...valores });
     } else {
       plano.criar.push(valores);

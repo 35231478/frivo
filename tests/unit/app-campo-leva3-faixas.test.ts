@@ -192,7 +192,7 @@ describe("a tela do tipo: o que vai e o que muda", () => {
     expect(p({ valorMax: null }).atualizar).toMatchObject([{ id: "i1", valorMax: null }]);
     expect(p({ grandeza: null }).atualizar).toMatchObject([{ id: "i1", grandeza: null }]);
     const r = planejarChecklist([], checklistSchema.parse({ itens: [{ texto: "Filtro", tipoResposta: "OK_ATENCAO_NA", valorMin: 1, valorMax: 2, grandeza: "SUCCAO" }] }).itens);
-    expect(r.ok && r.plano.criar[0]).toMatchObject({ grandeza: null, valorMin: null, valorMax: null, unidade: null });
+    expect(r.ok && r.plano.criar[0]).toEqual({ texto: "Filtro", pedirFoto: false, pedirObservacao: false, ordem: 1, tipoResposta: "OK_ATENCAO_NA", unidade: null });
   });
 });
 

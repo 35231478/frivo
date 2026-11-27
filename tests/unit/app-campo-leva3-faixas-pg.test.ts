@@ -196,12 +196,12 @@ describe.skipIf(!URL_PG)("app de campo, leva 3 (PR A): faixa esperada (PostgreSQ
       const { blocosAtendidos, SELECT_CHECKLIST } = await import("@/lib/relatorio-os/dados");
       const at = await prisma.atividadeOs.findUnique({ where: { id: "a1" }, select: { id: true, titulo: true, checklistRespostas: SELECT_CHECKLIST, equipamentos: { select: { feito: true, observacao: true, equipamento: { include: { tipoEquipamento: true } } } } } });
       const { blocos } = blocosAtendidos([{ ...at, status: "EM_ANDAMENTO", respostas: [], respostasEquipamento: [], fotosAtendimento: [] }] as any, "Matriz") as any;
-      const b1 = blocos.find((b) => b.id === "eq1");
+      const b1 = blocos.find((b: any) => b.id === "eq1");
       const suc = b1.checklistTipo[0].itens.find((i: any) => i.texto === "Pressão de sucção");
       expect(suc.medicao).toEqual({ valor: 95, unidade: "psi", faixa: { min: 115, max: 140 }, fora: true });
       expect(b1.resumoChecklist.foraDaFaixa).toBe(1);
       const ret = b1.checklistTipo[0].itens.find((i: any) => i.texto === "Temperatura de retorno");
-      expect(ret.medicao).toMatchObject({ faixa: null, fora: false });
+      expect(ret.medicao).toEqual({ valor: 75.2, unidade: "°F" }); // sem faixa no momento: nada de faixa nem de "fora"
     });
     it("o painel: equipamentos distintos nos últimos 30 dias, o equipamento desativado e a outra empresa fora; as 3 mais recentes com a OS", async () => {
       const { medicoesForaDaFaixa } = await import("@/lib/dashboard/dados");
