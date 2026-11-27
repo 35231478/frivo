@@ -72,7 +72,8 @@ const configuracaoSchema = z.object({
   orcamentoNaoIncluso: z.string().max(4000, "\"Não incluso\" muito longo").nullable().optional()
     .transform((v) => (v === undefined ? undefined : linhasNaoIncluso(v).join("\n") || null)),
   orcamentoNormas: z.array(z.string().max(40)).max(20).optional().transform((v) => (v === undefined ? undefined : normasValidas(v))),
-  // Leva D: padrão das opções do documento do cliente (materiais dentro do serviço; valores só com materiais)
+  // Leva D: padrão de "mostrar materiais" no documento do cliente. "Orçamento E": o antigo "mostrar valores dos
+  // materiais" ainda é aceito (tela velha aberta) e ignorado — não muda mais nada (a coluna fica no banco)
   orcamentoMostrarMateriais: z.boolean().optional(),
   orcamentoMostrarValoresMateriais: z.boolean().optional(),
 }).strict();
@@ -132,12 +133,7 @@ export async function PUT(req: NextRequest) {
     return NextResponse.json({ erro: msg ?? "Dados inválidos", detalhes: parsed.error.flatten() }, { status: 400 });
   }
   const dados = parsed.data;
-  // Valores só valem com materiais: desligar materiais desliga valores; ligar valores sozinho não pega
-  if (dados.orcamentoMostrarMateriais === false) dados.orcamentoMostrarValoresMateriais = false;
-  else if (dados.orcamentoMostrarValoresMateriais === true && dados.orcamentoMostrarMateriais === undefined) {
-    const atual = await prisma.configuracao.findUnique({ where: { empresaId }, select: { orcamentoMostrarMateriais: true } });
-    if (!atual?.orcamentoMostrarMateriais) dados.orcamentoMostrarValoresMateriais = false;
-  }
+  delete dados.orcamentoMostrarValoresMateriais;
 
   const config = await prisma.configuracao.upsert({
     where: { empresaId },

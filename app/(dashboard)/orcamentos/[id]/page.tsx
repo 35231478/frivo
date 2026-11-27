@@ -129,7 +129,7 @@ export default async function OrcamentoDetalhePage({
           <div className="mt-4">
             <OpcoesDocumento
               orcamentoId={orcamento.id}
-              inicial={{ mostrarMateriais: orcamento.mostrarMateriais, mostrarValoresMateriais: orcamento.mostrarValoresMateriais }}
+              inicial={{ mostrarMateriais: orcamento.mostrarMateriais }}
               podeEditar={pode(u.permissoes, "orcamentos", "editar", u.role)}
               travado={motivoOpcoesTravadas(orcamento.status)}
             />

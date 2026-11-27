@@ -1,14 +1,15 @@
 "use client";
 
 import { useState } from "react";
-import { Boxes, Package, RotateCcw, Trash2, Undo2 } from "lucide-react";
+import { ArrowLeftRight, Boxes, Package, RotateCcw, Trash2, Undo2 } from "lucide-react";
 import { Dica } from "@/components/ui/dica";
 import { SeletorCadastro } from "@/components/cadastros/seletor-cadastro";
 import { PilulaComportamento } from "@/components/estoque/categoria-produto";
+import { LABEL_COMPORTAMENTO } from "@/lib/estoque/categoria";
 import type { ItemCadastro } from "@/lib/cadastros/opcoes";
 import { formatarQtd } from "@/lib/estoque/regras";
 import {
-  ajusteDosMateriais, diferencaDoMaterial, ehPeca, LABEL_ORIGEM, resumoMateriais, valorDaLinha, type MaterialOrcamento,
+  ajusteDosMateriais, diferencaDoMaterial, ehPeca, LABEL_ORIGEM, resumoMateriais, trocarUso, valorDaLinha, type MaterialOrcamento,
 } from "@/lib/orcamentos/materiais";
 import { CampoNumero } from "@/components/orcamento/itens-tabela";
 import { Disponivel } from "@/components/orcamento/estoque-margem";
@@ -39,7 +40,7 @@ export interface LinhaComMateriais {
  * O que a orientação "Interno: o cliente vê só a linha do serviço…" dizia em uma linha inteira, agora
  * no ⓘ ao lado de "Materiais e peças" (economiza a linha em cada serviço do orçamento).
  */
-const DICA_MATERIAIS = "Só para a equipe: o cliente vê apenas a linha do serviço (já ajustada) e as peças como produtos. Cópia da composição do serviço feita na hora de orçar (mudar o cadastro depois não altera este orçamento). Material INCLUSO ajusta o valor do serviço pela diferença do padrão: (quantidade − padrão) × venda — exceder soma, usar menos abate, avulso entra inteiro. PEÇA (venda à parte) vira uma linha de produto cobrada à parte. O custo é só interno (margem); não entra no preço. Sem baixa de estoque aqui.";
+const DICA_MATERIAIS = "Só para a equipe. Cópia da composição do serviço feita na hora de orçar (mudar o cadastro depois não altera este orçamento). MATERIAL vai dentro do serviço: o cliente vê a lista, sem valor, e o serviço se ajusta pela diferença do padrão ((quantidade − padrão) × venda: exceder soma, usar menos abate, avulso entra inteiro). PEÇA vai em linha própria, com valor, cobrada à parte. Material ou Peça se troca aqui, só neste orçamento (ex.: gás cobrado por kg). O custo é só interno (margem); não entra no preço. Sem baixa de estoque aqui.";
 
 export function MateriaisLinha({ item, clienteId, catalogoProdutos, onChange, somenteLeitura = false, buscarAvulso, verCusto = true, situacao }: {
   item: LinhaComMateriais;
@@ -110,7 +111,15 @@ export function MateriaisLinha({ item, clienteId, catalogoProdutos, onChange, so
                     <span className="text-[10px] text-ink-subtle">{LABEL_ORIGEM[m.origem]}{m.origem === "KIT" && m.kitNome ? ` ${m.kitNome}` : ""}</span>
                     {naoUsado && <span className="text-[10px] font-semibold bg-surface-alt text-ink-muted px-1.5 py-0.5 rounded">não usado</span>}
                   </div>
-                  <PilulaComportamento comportamento={m.comportamento} />
+                  {somenteLeitura ? <PilulaComportamento comportamento={m.comportamento} /> : (
+                    <button type="button" onClick={() => mudar(m.id!, trocarUso(m))} data-trocar-uso
+                      className="inline-flex items-center gap-1 rounded-full border border-surface-border bg-white px-2 py-0.5 text-[10px] font-semibold text-ink-muted hover:border-primary-300 hover:text-primary-700 whitespace-nowrap justify-self-start"
+                      aria-label={`${m.descricao}: ${LABEL_COMPORTAMENTO[m.comportamento]}. Trocar para ${peca ? "Material" : "Peça"} só neste orçamento`}
+                      title={`Trocar para ${peca ? "Material" : "Peça"} só neste orçamento (o cadastro não muda)`}>
+                      <span data-comportamento={m.comportamento}>{LABEL_COMPORTAMENTO[m.comportamento]}</span>
+                      <ArrowLeftRight className="w-3 h-3" aria-hidden />
+                    </button>
+                  )}
                   <label className="block">
                     <span className="block text-[10px] text-ink-subtle">Padrão</span>
                     <span className="tabular-nums text-ink-muted" data-qtd-padrao={m.quantidadePadrao}>{formatarQtd(m.quantidadePadrao)} {m.unidade}</span>

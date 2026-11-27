@@ -17,9 +17,8 @@ export interface PadroesOrcamentoTela {
   orcamentoGarantiaPecas: string | null;
   orcamentoNaoIncluso: string | null;
   orcamentoNormas: string[];
-  /** Leva D: padrão das opções do documento do cliente */
+  /** Leva D: padrão de "mostrar materiais" no documento do cliente */
   orcamentoMostrarMateriais?: boolean;
-  orcamentoMostrarValoresMateriais?: boolean;
 }
 
 /**
@@ -33,8 +32,7 @@ export function OrcamentoPadroesClient({ inicial, podeEditar }: { inicial: Padro
   const [garantiaPecas, setGarantiaPecas] = useState(inicial.orcamentoGarantiaPecas ?? "");
   const [naoIncluso, setNaoIncluso] = useState(inicial.orcamentoNaoIncluso ?? "");
   const [normas, setNormas] = useState<string[]>(inicial.orcamentoNormas ?? []);
-  const [mostrarMateriais, setMostrarMateriais] = useState(!!inicial.orcamentoMostrarMateriais);
-  const [mostrarValores, setMostrarValores] = useState(!!inicial.orcamentoMostrarMateriais && !!inicial.orcamentoMostrarValoresMateriais);
+  const [mostrarMateriais, setMostrarMateriais] = useState(inicial.orcamentoMostrarMateriais !== false);
   const [salvando, setSalvando] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
   const mudou = <T,>(f: (v: T) => void) => (v: T) => { f(v); setMsg(null); };
@@ -52,7 +50,6 @@ export function OrcamentoPadroesClient({ inicial, podeEditar }: { inicial: Padro
           orcamentoNaoIncluso: naoIncluso,
           orcamentoNormas: normas,
           orcamentoMostrarMateriais: mostrarMateriais,
-          orcamentoMostrarValoresMateriais: mostrarMateriais && mostrarValores,
         }),
       });
       const j = await r.json().catch(() => ({}));
@@ -86,24 +83,14 @@ export function OrcamentoPadroesClient({ inicial, podeEditar }: { inicial: Padro
           <NaoInclusoCampo id="padrao-nao-incluso" valor={naoIncluso} onChange={mudou(setNaoIncluso)} />
         </FormSection>
 
-        <FormSection title="Documento do cliente" dica="O que cada novo orçamento já traz ligado no link, na impressão e no PDF. Em cada orçamento dá para mudar. Os valores mostrados são sempre o preço de venda; o custo nunca aparece.">
-          <div className="divide-y divide-surface-linha">
-            <div data-padrao-mostrar-materiais>
-              <ToggleSwitch
-                label="Mostrar materiais ao cliente"
-                description="Dentro de cada serviço, os materiais inclusos nele. Desligado: o cliente vê só a linha do serviço."
-                checked={mostrarMateriais} disabled={!podeEditar}
-                onChange={(v) => { mudou(setMostrarMateriais)(v); if (!v) setMostrarValores(false); }}
-              />
-            </div>
-            <div data-padrao-mostrar-valores>
-              <ToggleSwitch
-                label="Mostrar valores dos produtos/materiais"
-                description={mostrarMateriais ? "O preço de venda de cada material." : "Ligue “Mostrar materiais” primeiro."}
-                checked={mostrarMateriais && mostrarValores} disabled={!podeEditar || !mostrarMateriais}
-                onChange={mudou(setMostrarValores)}
-              />
-            </div>
+        <FormSection title="Documento do cliente" dica="O que cada novo orçamento já traz ligado no link, na impressão e no PDF. Em cada orçamento dá para mudar. Material vai incluso no serviço, sem valor; peça sai em linha própria, com valor.">
+          <div data-padrao-mostrar-materiais>
+            <ToggleSwitch
+              label="Mostrar materiais ao cliente"
+              description="Dentro de cada serviço, a lista dos materiais inclusos nele, sem valor. Desligado: o cliente vê só a linha do serviço."
+              checked={mostrarMateriais} disabled={!podeEditar}
+              onChange={mudou(setMostrarMateriais)}
+            />
           </div>
         </FormSection>
 

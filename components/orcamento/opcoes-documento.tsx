@@ -1,11 +1,11 @@
 "use client";
 
 /**
- * Orçamento, leva D — "Documento do cliente": as duas opções da impressão/envio DESTE orçamento, junto dos botões de
- * enviar e Gerar PDF. Valem igual no link do cliente, na impressão e no PDF (e no documento desta tela).
- *  - Mostrar materiais ao cliente: dentro de cada serviço, os materiais inclusos nele.
- *  - Mostrar valores dos produtos/materiais: o preço de venda de cada material (só com a primeira ligada).
- * O custo nunca vai ao documento. Sem Orçamentos › editar, ou com o orçamento aprovado/cancelado: só leitura (com o
+ * Orçamento, leva D — "Documento do cliente": a opção da impressão/envio DESTE orçamento, junto dos botões de
+ * enviar e Gerar PDF. Vale igual no link do cliente, na impressão e no PDF (e no documento desta tela).
+ *  - Mostrar materiais ao cliente: dentro de cada serviço, os materiais dele, sem valor (ligada por padrão).
+ * "Orçamento E": o botão de mostrar o valor dos materiais saiu (material vai embutido no serviço; peça tem linha
+ * própria). O custo nunca vai ao documento. Sem Orçamentos › editar, ou com o orçamento aprovado/cancelado: só leitura (com o
  * motivo). Salvou: toast e a página recarrega o documento.
  */
 import { useState } from "react";
@@ -18,7 +18,7 @@ import { opcoesDoDocumento, type OpcoesDocumentoOrcamento } from "@/lib/orcament
 
 export function OpcoesDocumento({ orcamentoId, inicial, podeEditar, travado }: {
   orcamentoId: string;
-  inicial: { mostrarMateriais: boolean; mostrarValoresMateriais: boolean };
+  inicial: { mostrarMateriais: boolean };
   /** Orçamentos › editar */
   podeEditar: boolean;
   /** Motivo do cadeado (aprovado, cancelado); null = dá para mudar */
@@ -52,27 +52,16 @@ export function OpcoesDocumento({ orcamentoId, inicial, podeEditar, travado }: {
     <section className="border-t border-surface-linha pt-3" aria-label="Documento do cliente" data-opcoes-documento>
       <h3 className="flex items-center gap-1 text-xs font-semibold uppercase tracking-wide text-ink-muted">
         Documento do cliente
-        <Dica rotulo="Documento do cliente" texto="O que o cliente vê no link, na impressão e no PDF deste orçamento. Desligado, o cliente vê só a linha de cada serviço. Os valores mostrados são sempre o preço de venda; o custo nunca aparece. O padrão para os orçamentos novos fica em Configurações › Orçamentos." />
+        <Dica rotulo="Documento do cliente" texto="O que o cliente vê no link, na impressão e no PDF deste orçamento. Os materiais aparecem dentro de cada serviço, sem valor (vão embutidos no preço do serviço); as peças têm linha própria, com valor. Desligado, o cliente vê só a linha de cada serviço. O custo nunca aparece. O padrão para os orçamentos novos fica em Configurações › Orçamentos." />
       </h3>
-      <div className="grid grid-cols-1 md:grid-cols-2 md:gap-x-6 divide-y md:divide-y-0 divide-surface-linha">
-        <div data-opcao-mostrar-materiais>
-          <ToggleSwitch
-            label="Mostrar materiais ao cliente"
-            description="Dentro de cada serviço, os materiais inclusos nele."
-            checked={op.mostrarMateriais}
-            disabled={bloqueado}
-            onChange={(v) => salvar({ mostrarMateriais: v, mostrarValoresMateriais: v ? op.mostrarValoresMateriais : false })}
-          />
-        </div>
-        <div data-opcao-mostrar-valores>
-          <ToggleSwitch
-            label="Mostrar valores dos produtos/materiais"
-            description={op.mostrarMateriais ? "O preço de venda de cada material." : "Ligue “Mostrar materiais” primeiro."}
-            checked={op.mostrarValoresMateriais}
-            disabled={bloqueado || !op.mostrarMateriais}
-            onChange={(v) => salvar({ mostrarMateriais: op.mostrarMateriais, mostrarValoresMateriais: v })}
-          />
-        </div>
+      <div className="md:max-w-md" data-opcao-mostrar-materiais>
+        <ToggleSwitch
+          label="Mostrar materiais ao cliente"
+          description="Dentro de cada serviço, os materiais dele, sem valor."
+          checked={op.mostrarMateriais}
+          disabled={bloqueado}
+          onChange={(v) => salvar({ mostrarMateriais: v })}
+        />
       </div>
       {(travado || !podeEditar) && (
         <p className="flex items-center gap-1.5 text-xs text-ink-muted" data-opcoes-travadas>

@@ -231,8 +231,9 @@ describe("Configurações › Orçamentos e propostas", () => {
     expect(put).toEqual({
       orcamentoValidadeDias: "20", orcamentoGarantiaServico: "90 dias", orcamentoGarantiaPecas: "6 meses",
       orcamentoNaoIncluso: "Remoção e descarte do equipamento antigo", orcamentoNormas: ["PMOC"],
-      // Orçamento, leva D: a tela também guarda o padrão das opções do documento do cliente (aqui, intocadas = desligadas)
-      orcamentoMostrarMateriais: false, orcamentoMostrarValoresMateriais: false,
+      // Orçamento, leva D: a tela também guarda o padrão de "mostrar materiais" (aqui, intocado = ligado, o padrão
+      // desde o "Orçamento E"; a opção de valores dos materiais saiu da tela)
+      orcamentoMostrarMateriais: true,
     });
     // Leva 3 da padronização: a confirmação do salvar é o toast (não mais a caixa verde na tela)
     expect([...document.querySelectorAll("[data-toast='sucesso']")].map((t) => t.textContent?.trim())).toEqual(["Padrões salvos. Valem para os próximos orçamentos."]);

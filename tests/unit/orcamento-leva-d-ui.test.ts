@@ -1,11 +1,12 @@
 // @vitest-environment happy-dom
 /**
- * Orçamento, leva D — as opções do documento do cliente, num DOM de verdade (API simulada):
- *  - tela do orçamento: "Mostrar materiais ao cliente" e "Mostrar valores…" desligados por padrão; valores travado
- *    enquanto materiais está desligado; ligar grava (PUT) e recarrega o documento; desligar materiais desliga valores;
- *    erro do servidor volta o switch e avisa; sem Orçamentos › editar ou aprovado: travado, com o motivo;
- *  - o documento: materiais recuados DENTRO do serviço, com/sem valores; o número da OS como link público;
- *  - Configurações › Orçamentos: o padrão da empresa (valores só com materiais) vai no PUT.
+ * Orçamento, leva D (revista no "Orçamento E — Material × Peça") — a opção do documento do cliente, num DOM de
+ * verdade (API simulada):
+ *  - tela do orçamento: só "Mostrar materiais ao cliente", LIGADO por padrão (o botão de valores saiu); mudar grava
+ *    (PUT) e recarrega o documento; erro do servidor volta o switch e avisa; sem Orçamentos › editar ou aprovado: travado;
+ *  - o documento: materiais recuados DENTRO do serviço, SEM valor nem custo (nem em registro antigo com "valores"
+ *    ligado); o número da OS como link público;
+ *  - Configurações › Orçamentos: o padrão da empresa (ligado) vai no PUT, sem o campo antigo.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act, createElement } from "react";
@@ -48,51 +49,42 @@ async function montar(el: any) {
 }
 async function opcoes(props: Partial<{ inicial: any; podeEditar: boolean; travado: string | null }> = {}) {
   const { OpcoesDocumento } = await import("@/components/orcamento/opcoes-documento");
-  await montar(createElement(OpcoesDocumento, { orcamentoId: "o1", inicial: { mostrarMateriais: false, mostrarValoresMateriais: false }, podeEditar: true, travado: null, ...props }));
+  await montar(createElement(OpcoesDocumento, { orcamentoId: "o1", inicial: { mostrarMateriais: true }, podeEditar: true, travado: null, ...props }));
 }
 const clicar = async (onde: string) => { await act(async () => { sw(onde).click(); }); await esperar(); };
 
-describe("Documento do cliente — as duas opções na tela do orçamento", () => {
-  it("padrão desligado; valores travado até ligar materiais; ligar grava, avisa e recarrega o documento", async () => {
+describe("Documento do cliente — a opção na tela do orçamento", () => {
+  it("só a opção de materiais (o botão de valores saiu); desligar grava, avisa e recarrega o documento", async () => {
     await opcoes();
-    expect(ligado("[data-opcao-mostrar-materiais]")).toBe(false);
-    expect(ligado("[data-opcao-mostrar-valores]")).toBe(false);
-    expect(sw("[data-opcao-mostrar-valores]").disabled).toBe(true);
-    expect($("[data-opcao-mostrar-valores]")!.textContent).toContain("Ligue “Mostrar materiais” primeiro.");
+    expect(ligado("[data-opcao-mostrar-materiais]")).toBe(true);
+    expect($("[data-opcao-mostrar-valores]")).toBeNull();
+    expect(document.querySelectorAll("[data-opcoes-documento] [role=switch]")).toHaveLength(1);
+    expect($("[data-opcoes-documento]")!.textContent).not.toMatch(/valores? dos/i);
     await clicar("[data-opcao-mostrar-materiais]");
-    expect(puts).toEqual([{ url: "/api/orcamentos/o1/opcoes-documento", corpo: { mostrarMateriais: true, mostrarValoresMateriais: false } }]);
+    expect(puts).toEqual([{ url: "/api/orcamentos/o1/opcoes-documento", corpo: { mostrarMateriais: false } }]);
     expect(avisos.toast).toHaveBeenCalledWith("Documento do cliente atualizado.");
     expect(nav.refresh).toHaveBeenCalledTimes(1);
-    expect(sw("[data-opcao-mostrar-valores]").disabled).toBe(false);
-    await clicar("[data-opcao-mostrar-valores]");
-    expect(puts[1].corpo).toEqual({ mostrarMateriais: true, mostrarValoresMateriais: true });
-    expect(ligado("[data-opcao-mostrar-valores]")).toBe(true);
-  });
-
-  it("desligar materiais desliga valores junto (um PUT só, coerente)", async () => {
-    await opcoes({ inicial: { mostrarMateriais: true, mostrarValoresMateriais: true } });
-    expect(ligado("[data-opcao-mostrar-valores]")).toBe(true);
+    expect(ligado("[data-opcao-mostrar-materiais]")).toBe(false);
     await clicar("[data-opcao-mostrar-materiais]");
-    expect(puts).toEqual([{ url: "/api/orcamentos/o1/opcoes-documento", corpo: { mostrarMateriais: false, mostrarValoresMateriais: false } }]);
-    expect(ligado("[data-opcao-mostrar-valores]")).toBe(false);
+    expect(puts[1].corpo).toEqual({ mostrarMateriais: true });
   });
 
-  it("valores gravado sem materiais (dado antigo/incoerente) aparece desligado", async () => {
-    await opcoes({ inicial: { mostrarMateriais: false, mostrarValoresMateriais: true } });
-    expect(ligado("[data-opcao-mostrar-valores]")).toBe(false);
+  it("orçamento antigo gravado desligado aparece desligado", async () => {
+    await opcoes({ inicial: { mostrarMateriais: false } });
+    expect(ligado("[data-opcao-mostrar-materiais]")).toBe(false);
   });
 
   it("erro do servidor: o switch volta e a mensagem aparece; nada recarrega", async () => {
     resposta = { status: 409, corpo: { erro: "Orçamento aprovado: o documento fica como o cliente aprovou." } };
     await opcoes();
     await clicar("[data-opcao-mostrar-materiais]");
-    expect(ligado("[data-opcao-mostrar-materiais]")).toBe(false);
+    expect(ligado("[data-opcao-mostrar-materiais]")).toBe(true);
     expect(avisos.toast).toHaveBeenCalledWith("Orçamento aprovado: o documento fica como o cliente aprovou.", "erro");
     expect(nav.refresh).not.toHaveBeenCalled();
   });
 
   it("aprovado/cancelado ou sem permissão de editar: travado, com o motivo, sem PUT", async () => {
-    await opcoes({ travado: "Orçamento aprovado: o documento fica como o cliente aprovou.", inicial: { mostrarMateriais: true, mostrarValoresMateriais: false } });
+    await opcoes({ travado: "Orçamento aprovado: o documento fica como o cliente aprovou.", inicial: { mostrarMateriais: true } });
     expect(sw("[data-opcao-mostrar-materiais]").disabled).toBe(true);
     expect($("[data-opcoes-travadas]")!.textContent).toContain("Orçamento aprovado");
     await clicar("[data-opcao-mostrar-materiais]");
@@ -132,59 +124,48 @@ describe("O documento — materiais dentro do serviço e a OS como link", () => 
   const t = (el: Element | null) => (el?.textContent ?? "").replace(/\s+/g, " ").trim();
 
   it("desligado: só a linha do serviço", async () => {
-    const d = await html({});
+    const d = await html({ mostrarMateriais: false });
     expect(d.querySelector("[data-materiais-servico]")).toBeNull();
     expect(t(d.querySelector("[data-linha-item]"))).toContain("Limpeza de split");
   });
 
-  it("materiais: dentro da linha do serviço (mesma célula), só os inclusos, sem preço", async () => {
+  it("padrão (nada gravado) = ligado: a lista de materiais aparece dentro do serviço", async () => {
+    const d = await html({});
+    expect([...d.querySelectorAll("[data-linha-item] [data-materiais-servico] [data-material-documento]")].map(t)).toEqual(["Filtro G4 · 2 un"]);
+  });
+
+  it("materiais: dentro da linha do serviço (mesma célula), só os materiais, SEM valor nem custo", async () => {
     const d = await html({ mostrarMateriais: true });
     const bloco = d.querySelector("[data-linha-item] [data-materiais-servico]");
     expect(bloco).toBeTruthy();
     expect([...bloco!.querySelectorAll("[data-material-documento]")].map(t)).toEqual(["Filtro G4 · 2 un"]);
-    expect(bloco!.querySelector("[data-valor-material]")).toBeNull();
+    expect(t(bloco)).not.toMatch(/R\$|89,90|179,80|38,50/);
+    expect(d.innerHTML).not.toMatch(/data-valor-material|38,50|38\.5|custo/i);
   });
 
-  it("com valores: preço de venda unitário e total; custo nunca", async () => {
-    const d = await html({ mostrarMateriais: true, mostrarValoresMateriais: true });
-    expect(t(d.querySelector("[data-valor-material]"))).toBe("R$ 89,90/un · R$ 179,80");
-    expect(d.innerHTML).not.toMatch(/38,50|38\.5|custo/i);
-  });
-
-  it("ISS 5% (versão do cliente): os materiais vêm na mesma base do serviço e a soma exibida bate", async () => {
-    const d = await html({ mostrarMateriais: true, mostrarValoresMateriais: true, issAliquota: 5, totalGeral: 462,
-      servicos: [{ ...BASE.servicos[0], materiais: [...BASE.servicos[0].materiais, { descricao: "Fita", unidade: "rl", quantidade: 2, valorVendaUnit: 12.5, comportamento: "INCLUSO_NO_SERVICO", ordem: 2 }] }] });
-    // o serviço: 440 → 462 (ISS embutido, fator 1,05)
-    expect(t(d.querySelector("[data-linha-item] [data-total-item]"))).toBe("462,00");
-    const valores = [...d.querySelectorAll("[data-valor-material]")].map(t);
-    expect(valores).toEqual(["R$ 94,40/un · R$ 188,79", "R$ 13,13/rl · R$ 26,25"]);
-    const reais = (x: string) => Number(x.split("· R$ ")[1].replace(/\./g, "").replace(",", "."));
-    // a soma do que o cliente lê = Σ preço × qtd × 1,05 (179,80 + 25,00 = 204,80 → 215,04)
-    expect(Math.round(valores.map(reais).reduce((a, b) => a + b, 0) * 100) / 100).toBe(215.04);
-    // a versão interna (ISS em linha própria) mostra o preço cadastrado
-    const interna = await html({ mostrarMateriais: true, mostrarValoresMateriais: true, issAliquota: 5, totalGeral: 462 }, "interna");
-    expect(t(interna.querySelector("[data-valor-material]"))).toBe("R$ 89,90/un · R$ 179,80");
+  it("registro antigo com 'valores dos materiais' ligado: o valor não aparece mais", async () => {
+    for (const versao of ["cliente", "interna"] as const) {
+      const d = await html({ mostrarMateriais: true, mostrarValoresMateriais: true, issAliquota: 5, totalGeral: 462 }, versao);
+      expect(d.querySelector("[data-materiais-servico]")).toBeTruthy();
+      expect(t(d.querySelector("[data-materiais-servico]"))).not.toMatch(/R\$/);
+    }
   });
 
   it("materiais só dentro de SERVIÇOS: uma linha de produto nunca ganha o bloco, mesmo que venha com materiais", async () => {
-    const d = await html({ mostrarMateriais: true, mostrarValoresMateriais: true,
+    const d = await html({ mostrarMateriais: true,
       produtos: [{ descricao: "Capacitor", quantidade: 1, valorUnitario: 30, valorTotal: 30, materiais: BASE.servicos[0].materiais }], totalProdutos: 30, totalGeral: 470 });
     expect(d.querySelectorAll("[data-materiais-servico]")).toHaveLength(1);
     expect(d.querySelector("[data-grupo-documento='produtos'] [data-materiais-servico]")).toBeNull();
   });
 
-  it("valores sem materiais: nada (a regra vale no documento, não só na tela)", async () => {
-    const d = await html({ mostrarMateriais: false, mostrarValoresMateriais: true });
-    expect(d.querySelector("[data-materiais-servico]")).toBeNull();
-  });
-
   it("os três iguais: a versão interna mostra o mesmo bloco", async () => {
-    const d = await html({ mostrarMateriais: true, mostrarValoresMateriais: true }, "interna");
-    expect(t(d.querySelector("[data-valor-material]"))).toBe("R$ 89,90/un · R$ 179,80");
+    const cliente = await html({ mostrarMateriais: true });
+    const interna = await html({ mostrarMateriais: true }, "interna");
+    expect(t(interna.querySelector("[data-materiais-servico]"))).toBe(t(cliente.querySelector("[data-materiais-servico]")));
   });
 
   it("OS: com a versão do cliente é link público (nova aba); sem ela, texto", async () => {
-    const d = await html({});
+    const d = await html({ mostrarMateriais: false });
     const links = [...d.querySelectorAll("[data-os-documento] a")] as HTMLAnchorElement[];
     expect(links.map((a) => [a.textContent, a.getAttribute("href"), a.getAttribute("target")])).toEqual([["OS-8901", "/relatorio/os/5ff6ddb2-d03c-4865-b40a-1d433ddcc5d0", "_blank"]]);
     expect(t(d.querySelector("[data-os-documento] dd"))).toBe("OS-8901, OS-8902");
@@ -199,22 +180,22 @@ describe("Configurações › Orçamentos — o padrão da empresa", () => {
   }
   const salvar = async () => { await act(async () => { $("[data-salvar-padroes-orcamento]")!.click(); }); await esperar(); };
 
-  it("valores travado até ligar materiais; os dois vão no PUT", async () => {
+  it("padrão ligado; só a opção de materiais (o botão de valores saiu); vai no PUT", async () => {
     await tela();
-    expect(sw("[data-padrao-mostrar-valores]").disabled).toBe(true);
-    await clicar("[data-padrao-mostrar-materiais]");
-    await clicar("[data-padrao-mostrar-valores]");
+    expect(ligado("[data-padrao-mostrar-materiais]")).toBe(true);
+    expect($("[data-padrao-mostrar-valores]")).toBeNull();
     await salvar();
-    expect(puts[0].corpo).toMatchObject({ orcamentoMostrarMateriais: true, orcamentoMostrarValoresMateriais: true });
+    expect(puts[0].corpo).toMatchObject({ orcamentoMostrarMateriais: true });
+    expect(puts[0].corpo).not.toHaveProperty("orcamentoMostrarValoresMateriais");
   });
 
-  it("desligar materiais desliga valores", async () => {
-    await tela({ orcamentoMostrarMateriais: true, orcamentoMostrarValoresMateriais: true });
-    expect(ligado("[data-padrao-mostrar-valores]")).toBe(true);
+  it("desligar vai no PUT; empresa antiga com o padrão desligado aparece desligada", async () => {
+    await tela({ orcamentoMostrarMateriais: false });
+    expect(ligado("[data-padrao-mostrar-materiais]")).toBe(false);
     await clicar("[data-padrao-mostrar-materiais]");
-    expect(ligado("[data-padrao-mostrar-valores]")).toBe(false);
+    await clicar("[data-padrao-mostrar-materiais]");
     await salvar();
-    expect(puts[0].corpo).toMatchObject({ orcamentoMostrarMateriais: false, orcamentoMostrarValoresMateriais: false });
+    expect(puts[0].corpo).toMatchObject({ orcamentoMostrarMateriais: false });
   });
 
   it("sem Configurações › gerenciar: só leitura", async () => {

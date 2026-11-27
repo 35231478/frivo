@@ -8,13 +8,14 @@ import {
 
 type Params = { params: Promise<{ id: string }> };
 
-const corpo = z.object({ mostrarMateriais: z.boolean(), mostrarValoresMateriais: z.boolean() }).strict();
+// "Orçamento E": só "mostrar materiais". O antigo "mostrarValoresMateriais" ainda é aceito (tela velha aberta) e ignorado
+const corpo = z.object({ mostrarMateriais: z.boolean(), mostrarValoresMateriais: z.boolean().optional() }).strict();
 
 /**
- * PUT /api/orcamentos/[id]/opcoes-documento — Orçamento, leva D: "Mostrar materiais ao cliente" e "Mostrar valores
- * dos produtos/materiais" DESTE orçamento (link do cliente, impressão e PDF). Quem edita orçamento (Orçamentos ›
- * editar), só da empresa da sessão (outra empresa = 404). Valores só com materiais ligado. Aprovado, convertido ou
- * cancelado: 409 (o documento fica como foi aprovado). Só o preço de venda — o custo nunca vai ao documento.
+ * PUT /api/orcamentos/[id]/opcoes-documento — Orçamento, leva D: "Mostrar materiais ao cliente" DESTE orçamento
+ * (link do cliente, impressão e PDF), sem valor de material ("Orçamento E"). Quem edita orçamento (Orçamentos ›
+ * editar), só da empresa da sessão (outra empresa = 404). Aprovado, convertido ou cancelado: 409 (o documento fica
+ * como foi aprovado). O custo nunca vai ao documento.
  */
 export async function PUT(req: NextRequest, { params }: Params) {
   const guard = await exigirPermissao("orcamentos", "editar");

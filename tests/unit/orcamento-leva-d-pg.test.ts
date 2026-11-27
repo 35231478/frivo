@@ -2,13 +2,12 @@
  * Orçamento, leva D — impressão do orçamento, com as rotas e páginas reais e o Prisma real num PostgreSQL real:
  *  - o SQL pendente (prisma/sql/2027-01-27_orcamento_opcoes_documento.sql): aditivo, idempotente (3×), não mexe no
  *    que existe, colunas iguais às que o Prisma espera;
- *  - PUT /api/orcamentos/[id]/opcoes-documento: 401/403/400/404 (outra empresa)/409 (aprovado, cancelado); valores
- *    só com materiais;
- *  - padrão da empresa (Configurações › Orçamentos) copiado para o orçamento NOVO; PUT /api/configuracoes não deixa
- *    "valores" ligado sem "materiais";
- *  - a PÁGINA DE IMPRESSÃO (= o PDF) renderizada de verdade no servidor: padrão sem materiais; com a opção, os
- *    materiais inclusos dentro do serviço; com valores, o preço de venda; NUNCA o custo; o número da OS vira link
- *    para a versão do cliente da OS (só da mesma empresa); sem ela, só texto.
+ *  - PUT /api/orcamentos/[id]/opcoes-documento: 401/403/400/404 (outra empresa)/409 (aprovado, cancelado);
+ *  - padrão da empresa (Configurações › Orçamentos) copiado para o orçamento NOVO;
+ *  - a PÁGINA DE IMPRESSÃO (= o PDF) renderizada de verdade no servidor: os materiais inclusos dentro do serviço;
+ *    NUNCA o custo; o número da OS vira link para a versão do cliente da OS (só da mesma empresa); sem ela, só texto.
+ * Revisto no "Orçamento E — Material × Peça": "mostrar materiais" nasce LIGADO e a opção "valores dos materiais"
+ * saiu (o campo antigo ainda é aceito e ignorado; nem um registro antigo com ela ligada mostra valor).
  *   PG_TESTE_URL="postgresql://root@localhost/postgres?host=/var/run/postgresql" npx vitest run tests/unit/orcamento-leva-d-pg
  */
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
@@ -134,8 +133,14 @@ describe.skipIf(!URL_PG)("Orçamento, leva D — impressão do orçamento (Postg
     psql(["-c", `UPDATE "configuracoes" SET "orcamento_mostrar_materiais" = true`], SQL_SCHEMA);
     psql(["-f", ARQUIVO], SQL_SCHEMA);
     expect(psql(["-c", `SELECT "orcamento_mostrar_materiais" FROM "configuracoes"`], SQL_SCHEMA)).toBe("t");
-    // idênticas ao schema.prisma (aplicado por db push no esquema do teste)
-    expect(colunas(SQL_SCHEMA)).toBe(colunas(SCHEMA));
+    // idênticas ao schema.prisma (aplicado por db push no esquema do teste), menos o PADRÃO das duas colunas de
+    // "mostrar materiais", que o "Orçamento E" muda para ligado no SQL dele (tests/unit/sql-produto-uso.test.ts)
+    expect(colunas(SCHEMA).split("\n")).toEqual([
+      "configuracoes.orcamento_mostrar_materiais boolean NO true",
+      "configuracoes.orcamento_mostrar_valores_materiais boolean NO false",
+      "orcamentos.mostrar_materiais boolean NO true",
+      "orcamentos.mostrar_valores_materiais boolean NO false",
+    ]);
     expect(colunas(SQL_SCHEMA).split("\n")).toEqual([
       "configuracoes.orcamento_mostrar_materiais boolean NO false",
       "configuracoes.orcamento_mostrar_valores_materiais boolean NO false",
@@ -148,12 +153,12 @@ describe.skipIf(!URL_PG)("Orçamento, leva D — impressão do orçamento (Postg
     expect(sql.match(/ADD COLUMN IF NOT EXISTS/g)).toHaveLength(4);
   });
 
-  it("padrão: o orçamento nasce desligado e a impressão mostra só a linha do serviço; o número da OS já é link (versão do cliente)", async () => {
-    expect(await gravado()).toEqual({ mostrarMateriais: false, mostrarValoresMateriais: false });
+  it("padrão (Orçamento E): o orçamento nasce com materiais LIGADO; na impressão, dentro do serviço e sem valor; o número da OS já é link (versão do cliente)", async () => {
+    expect(await gravado()).toEqual({ mostrarMateriais: true, mostrarValoresMateriais: false });
     const html = await impressao();
     expect(html).toContain("Limpeza de split");
-    expect(html).not.toContain("data-materiais-servico");
-    expect(html).not.toMatch(/Fita isolante/);
+    expect(materiaisDoHtml(html)).toBe("Materiais inclusos Filtro G4 · 2 un Fita isolante · 1 rolo");
+    expect(html).not.toContain("data-valor-material");
     // OS: a da empresa com versão do cliente = link público; sem ela = texto; a de outra empresa nem aparece
     expect(html).toContain(`href="/relatorio/os/${TK_REL}"`);
     expect(html).toMatch(/data-link-os[^>]*>OS-8901<\/a>/);
@@ -167,101 +172,89 @@ describe.skipIf(!URL_PG)("Orçamento, leva D — impressão do orçamento (Postg
 
   it("PUT opções: 401, 403 sem editar orçamento, 400 corpo inválido, 404 de outra empresa", async () => {
     sessao.atual = null;
-    expect((await opcoes({ mostrarMateriais: true, mostrarValoresMateriais: false })).status).toBe(401);
+    expect((await opcoes({ mostrarMateriais: false })).status).toBe(401);
     logar(montarPermissoes({ orcamentos: ["visualizar"] }));
-    expect((await opcoes({ mostrarMateriais: true, mostrarValoresMateriais: false })).status).toBe(403);
+    expect((await opcoes({ mostrarMateriais: false })).status).toBe(403);
     VENDEDOR();
-    expect((await opcoes({ mostrarMateriais: "sim", mostrarValoresMateriais: false })).status).toBe(400);
-    expect((await opcoes({ mostrarMateriais: true })).status).toBe(400);
-    expect((await opcoes({ mostrarMateriais: true, mostrarValoresMateriais: false, custo: true })).status).toBe(400);
+    expect((await opcoes({ mostrarMateriais: "sim" })).status).toBe(400);
+    expect((await opcoes({})).status).toBe(400);
+    expect((await opcoes({ mostrarMateriais: false, custo: true })).status).toBe(400);
     ADMIN("e2");
-    expect((await opcoes({ mostrarMateriais: true, mostrarValoresMateriais: true })).status).toBe(404);
-    expect(await gravado()).toEqual({ mostrarMateriais: false, mostrarValoresMateriais: false });
+    expect((await opcoes({ mostrarMateriais: false })).status).toBe(404);
+    expect(await gravado()).toEqual({ mostrarMateriais: true, mostrarValoresMateriais: false });
   });
 
-  it("materiais ligados: dentro do serviço, só os inclusos, sem valor; valores sozinhos não pegam", async () => {
+  it("desligar e ligar de novo grava; o antigo 'valores' ainda é aceito (tela velha aberta) e ignorado", async () => {
     VENDEDOR();
     const r = await opcoes({ mostrarMateriais: false, mostrarValoresMateriais: true });
-    expect(r.json).toEqual({ ok: true, mostrarMateriais: false, mostrarValoresMateriais: false });
-    expect((await opcoes({ mostrarMateriais: true, mostrarValoresMateriais: false })).status).toBe(200);
-    expect(await gravado()).toEqual({ mostrarMateriais: true, mostrarValoresMateriais: false });
-    const html = await impressao();
-    const mats = materiaisDoHtml(html);
-    expect(mats).toBe("Materiais inclusos Filtro G4 · 2 un Fita isolante · 1 rolo");
-    expect(html).not.toContain("data-valor-material");
-  });
-
-  it("com valores: o preço de venda de cada material (unitário e total) — e o custo em lugar nenhum", async () => {
-    VENDEDOR();
+    expect(r.status).toBe(200);
+    expect(r.json).toEqual({ ok: true, mostrarMateriais: false });
+    expect(await gravado()).toEqual({ mostrarMateriais: false, mostrarValoresMateriais: false });
+    expect(await impressao()).not.toContain("data-materiais-servico");
     expect((await opcoes({ mostrarMateriais: true, mostrarValoresMateriais: true })).status).toBe(200);
-    const html = await impressao();
-    const mats = materiaisDoHtml(html);
-    expect(mats).toMatch(/Filtro G4 · 2 un R\$\s89,90\/un · R\$\s179,80/);
-    expect(mats).toMatch(/Fita isolante · 1 rolo R\$\s12,50\/rolo · R\$\s12,50/);
-    // o custo gravado no material (38,50 / 6,90 do último custo; 1234 que o navegador tentou mandar) não sai
-    const gravados = await prisma.orcamentoMaterial.findMany({ where: { orcamentoId: orc }, select: { custoUnit: true } });
-    expect(gravados.map((m: any) => Number(m.custoUnit)).sort()).toEqual([38.5, 6.9]);
-    expect(html).not.toMatch(/38,50|6,90|1\.234|1234|custoUnit|custo_unit/);
-    expect(html.replace(/<[^>]+>/g, " ")).not.toMatch(/\bcusto\b/i);
-    // o total do orçamento não muda por mostrar materiais
-    expect(html).toContain("R$ 799,60");
+    expect(await gravado()).toEqual({ mostrarMateriais: true, mostrarValoresMateriais: false });
   });
 
-  it("ISS 5% (versão do cliente, a impressão): materiais na mesma base do serviço; a soma exibida bate; o total não muda", async () => {
-    await prisma.orcamento.update({ where: { id: orc }, data: { issAliquota: 5 } });
+  it("registro antigo com 'valores' ligado no banco: o valor do material não aparece mais; o custo em lugar nenhum; ISS e total intactos", async () => {
+    await prisma.orcamento.update({ where: { id: orc }, data: { mostrarValoresMateriais: true } });
     try {
-      const html = await impressao();
-      const valores = [...html.matchAll(/data-valor-material[^>]*>([\s\S]*?)<\/span>/g)].map((m) => m[1].replace(/<[^>]+>/g, "").replace(/\s+/g, " ").trim());
-      const totais = valores.map((v) => Number(v.split("· R$")[1].replace(/\./g, "").replace(",", ".").trim()));
-      // serviço 440 → 462 (fator 1,05); materiais 179,80 + 12,50 = 192,30 → × 1,05 = 201,92
+      let html = await impressao();
+      expect(materiaisDoHtml(html)).toBe("Materiais inclusos Filtro G4 · 2 un Fita isolante · 1 rolo");
+      expect(html).not.toContain("data-valor-material");
+      // o custo gravado no material (38,50 / 6,90 do último custo; 1234 que o navegador tentou mandar) não sai
+      const gravados = await prisma.orcamentoMaterial.findMany({ where: { orcamentoId: orc }, select: { custoUnit: true } });
+      expect(gravados.map((m: any) => Number(m.custoUnit)).sort()).toEqual([38.5, 6.9]);
+      expect(html).not.toMatch(/38,50|6,90|1\.234|1234|custoUnit|custo_unit/);
+      expect(html.replace(/<[^>]+>/g, " ")).not.toMatch(/\bcusto\b/i);
+      // o total do orçamento não muda por mostrar materiais
+      expect(html).toMatch(/R\$\s799,60/);
+      // ISS 5% (versão do cliente): o serviço 440 → 462; materiais continuam sem valor; total 462 + 359,60
+      await prisma.orcamento.update({ where: { id: orc }, data: { issAliquota: 5 } });
+      html = await impressao();
       expect(html).toMatch(/data-total-item[^>]*>462,00</);
-      expect(Math.round(totais.reduce((a, b) => a + b, 0) * 100) / 100).toBe(201.92);
-      expect(valores[0]).toMatch(/^R\$\s94,40\/un · R\$\s188,79$/);
-      expect(html).not.toMatch(/179,80|38,50|6,90/);
-      // total geral: 462 + 359,60 = 821,60 — igual com ou sem materiais
-      expect(html).toContain("R$ 821,60");
-      VENDEDOR();
-      expect((await opcoes({ mostrarMateriais: false, mostrarValoresMateriais: false })).status).toBe(200);
-      expect(await impressao()).toContain("R$ 821,60");
-      expect((await opcoes({ mostrarMateriais: true, mostrarValoresMateriais: true })).status).toBe(200);
+      expect(materiaisDoHtml(html)).not.toMatch(/R\$/);
+      expect(html).toMatch(/R\$\s821,60/);
     } finally {
-      await prisma.orcamento.update({ where: { id: orc }, data: { issAliquota: 0 } });
+      await prisma.orcamento.update({ where: { id: orc }, data: { issAliquota: 0, mostrarValoresMateriais: false } });
     }
   });
 
   it("aprovado ou cancelado: 409 com o motivo, nada muda", async () => {
     VENDEDOR();
     await prisma.orcamento.update({ where: { id: orc }, data: { status: "APROVADO" } });
-    const r = await opcoes({ mostrarMateriais: false, mostrarValoresMateriais: false });
+    const r = await opcoes({ mostrarMateriais: false });
     expect(r.status).toBe(409);
     expect(r.json.erro).toMatch(/aprovado/i);
     await prisma.orcamento.update({ where: { id: orc }, data: { status: "CANCELADO" } });
-    expect((await opcoes({ mostrarMateriais: false, mostrarValoresMateriais: false })).status).toBe(409);
-    expect(await gravado()).toEqual({ mostrarMateriais: true, mostrarValoresMateriais: true });
+    expect((await opcoes({ mostrarMateriais: false })).status).toBe(409);
+    expect(await gravado()).toEqual({ mostrarMateriais: true, mostrarValoresMateriais: false });
     await prisma.orcamento.update({ where: { id: orc }, data: { status: "ENVIADO" } });
-    expect((await opcoes({ mostrarMateriais: false, mostrarValoresMateriais: false })).status).toBe(200);
+    expect((await opcoes({ mostrarMateriais: false })).status).toBe(200);
   });
 
-  it("padrão da empresa (Configurações › Orçamentos): o orçamento NOVO herda; valores sem materiais não pegam; outra empresa não é afetada", async () => {
+  it("padrão da empresa (Configurações › Orçamentos): ligado por padrão; o orçamento NOVO herda; 'valores' é ignorado; outra empresa não é afetada", async () => {
     ADMIN();
-    // valores sozinho (materiais desligado no banco): não liga
+    const cfg = () => prisma.configuracao.findUnique({ where: { empresaId: "e1" }, select: { orcamentoMostrarMateriais: true, orcamentoMostrarValoresMateriais: true } });
+    // o campo antigo sozinho: aceito (200) e ignorado
     expect((await chamar("configuracoes", "PUT", { orcamentoMostrarValoresMateriais: true })).status).toBe(200);
-    expect(await prisma.configuracao.findUnique({ where: { empresaId: "e1" }, select: { orcamentoMostrarMateriais: true, orcamentoMostrarValoresMateriais: true } }))
-      .toEqual({ orcamentoMostrarMateriais: false, orcamentoMostrarValoresMateriais: false });
-    expect((await chamar("configuracoes", "PUT", { orcamentoMostrarMateriais: true, orcamentoMostrarValoresMateriais: true })).status).toBe(200);
-    const novo = await chamar("orcamentos", "POST", { clienteId: "c1", servicos: [{ descricao: "Visita", quantidade: 1, valorUnitario: 150 }], produtos: [] });
+    expect(await cfg()).toEqual({ orcamentoMostrarMateriais: true, orcamentoMostrarValoresMateriais: false });
+    const criar = () => chamar("orcamentos", "POST", { clienteId: "c1", servicos: [{ descricao: "Visita", quantidade: 1, valorUnitario: 150 }], produtos: [] });
+    // desligado na empresa: o novo nasce desligado
+    expect((await chamar("configuracoes", "PUT", { orcamentoMostrarMateriais: false })).status).toBe(200);
+    const novo = await criar();
     expect(novo.status).toBe(201);
-    expect(await gravado(novo.json.id)).toEqual({ mostrarMateriais: true, mostrarValoresMateriais: true });
-    // desligar materiais desliga valores junto
-    expect((await chamar("configuracoes", "PUT", { orcamentoMostrarMateriais: false, orcamentoMostrarValoresMateriais: true })).status).toBe(200);
-    expect(await prisma.configuracao.findUnique({ where: { empresaId: "e1" }, select: { orcamentoMostrarMateriais: true, orcamentoMostrarValoresMateriais: true } }))
-      .toEqual({ orcamentoMostrarMateriais: false, orcamentoMostrarValoresMateriais: false });
+    expect(await gravado(novo.json.id)).toEqual({ mostrarMateriais: false, mostrarValoresMateriais: false });
+    // ligado de novo (com o campo antigo junto, ignorado)
+    expect((await chamar("configuracoes", "PUT", { orcamentoMostrarMateriais: true, orcamentoMostrarValoresMateriais: true })).status).toBe(200);
+    expect(await cfg()).toEqual({ orcamentoMostrarMateriais: true, orcamentoMostrarValoresMateriais: false });
+    const novo2 = await criar();
+    expect(await gravado(novo2.json.id)).toEqual({ mostrarMateriais: true, mostrarValoresMateriais: false });
     // mudar o padrão não mexe nos orçamentos que já existem
-    expect(await gravado(novo.json.id)).toEqual({ mostrarMateriais: true, mostrarValoresMateriais: true });
-    // multiempresa: a empresa 2 continua no padrão desligado
+    expect(await gravado(novo.json.id)).toEqual({ mostrarMateriais: false, mostrarValoresMateriais: false });
+    // multiempresa: a empresa 2 (sem configuração gravada) fica no padrão ligado
     ADMIN("e2");
     const deOutra = await chamar("orcamentos", "POST", { clienteId: "c2", servicos: [{ descricao: "Visita", quantidade: 1, valorUnitario: 150 }], produtos: [] });
     expect(deOutra.status).toBe(201);
-    expect(await gravado(deOutra.json.id)).toEqual({ mostrarMateriais: false, mostrarValoresMateriais: false });
+    expect(await gravado(deOutra.json.id)).toEqual({ mostrarMateriais: true, mostrarValoresMateriais: false });
   });
 });

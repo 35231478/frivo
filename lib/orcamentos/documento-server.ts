@@ -6,7 +6,7 @@ import { prisma } from "@/lib/prisma";
 
 /** Material do serviço no documento do cliente: sem o custo (custoUnit fica de fora de propósito). */
 export const SELECT_MATERIAL_DOCUMENTO = {
-  descricao: true, unidade: true, quantidade: true, valorVendaUnit: true, comportamento: true, ordem: true,
+  descricao: true, unidade: true, quantidade: true, comportamento: true, ordem: true,
 } satisfies Prisma.OrcamentoMaterialSelect;
 
 /** A "versão do cliente" da OS: o relatório GERAL (link público com token), o mais recente. */
@@ -28,8 +28,8 @@ export const INCLUDE_DOCUMENTO_ORCAMENTO = {
   contatoCliente: { select: { nome: true, cargo: true, email: true, telefone: true, whatsapp: true } },
   anexos: { select: SELECT_ANEXO_ORCAMENTO },
   // O nome ATUAL do catálogo: o documento separa "Nome — descrição cadastrada" em nome + descrição discreta.
-  // Leva D: os materiais de cada serviço, só o que o cliente pode ver (descrição, quantidade, preço de venda) —
-  // NUNCA o custo. Aparecem no documento só com a opção "Mostrar materiais" (lib/orcamentos/documento-opcoes).
+  // Os materiais de cada serviço, só o que o cliente pode ver (descrição e quantidade) — nunca valor nem custo
+  // ("Orçamento E"). Aparecem no documento com a opção "Mostrar materiais" (lib/orcamentos/documento-opcoes).
   servicos: {
     orderBy: { ordem: "asc" },
     include: { servico: { select: { nome: true } }, materiais: { orderBy: { ordem: "asc" }, select: SELECT_MATERIAL_DOCUMENTO } },
