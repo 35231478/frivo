@@ -165,6 +165,11 @@ Sem SQL. O token do relatório já existe em toda atividade.
 
 - `app-campo-leva3-relatorio` (20, regra pura e o PDF lido de volta), `app-campo-leva3-relatorio-ui` (12, tela:
   app e página pública), `app-campo-leva3-relatorio-pg` (7, PostgreSQL real: retrato, página, rota do PDF, novo link).
+- **Mutação: 40 mutantes, 40 mortos ou removidos.** Na 1ª rodada sobraram 3:
+  - o aceite "pelo link" (sem assinatura) virou prova no PostgreSQL;
+  - duas checagens eram redundantes (foto que não é data URL; atividade sem token, que o banco não deixa existir)
+    e saíram do código.
+- Suíte completa: 557 arquivos, 8302 testes, verde. Typecheck e build de produção ok.
 
 ### Prints (PR B)
 
