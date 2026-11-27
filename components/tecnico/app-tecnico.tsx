@@ -71,11 +71,12 @@ function Casca({ perfilInicial, resumoPorteiro }: { perfilInicial: PerfilInicial
   }, []);
 
   return (
-    <div className="min-h-screen bg-surface-page">
+    // campo-sol: contraste de leitura no sol (texto de apoio, alertas e botões principais ≥ 7:1), só no app do técnico
+    <div className="min-h-screen bg-surface-page campo-sol">
       <Avisos />
       <header className="sticky top-0 z-30 bg-white border-b border-surface-border safe-top">
         <div className="flex items-center justify-between gap-2 px-4 h-14 max-w-2xl mx-auto">
-          <button type="button" onClick={() => irPara({ ver: "dia" })} className="inline-flex items-center gap-2 rounded-lg font-display font-bold text-ink min-w-0">
+          <button type="button" onClick={() => irPara({ ver: "dia" })} className="inline-flex items-center gap-2 rounded-lg font-display font-bold text-ink min-w-0 touch-target">
             <FrivoMark size={28} /> <span className="truncate">Frivo <span className="font-sans font-medium text-ink-muted">· Técnico</span></span>
           </button>
           <div className="flex items-center gap-1 shrink-0">
@@ -129,7 +130,7 @@ function Conteudo({ vista, perfilInicial }: { vista: Vista; perfilInicial: Perfi
     case "agenda": return <Agenda />;
     case "perfil": return <PerfilTecnico perfilInicial={perfilInicial} />;
     case "desempenho": return <DesempenhoTecnico />;
-    case "os": return <VistaOs key={vista.a} atividadeId={vista.a} equipamentoId={vista.e} camera={vista.cam} incluir={vista.inc} />;
+    case "os": return <VistaOs key={vista.a} atividadeId={vista.a} equipamentoId={vista.e} camera={vista.cam} incluir={vista.inc} fim={vista.fim} primeiro={vista.primeiro} />;
     case "equipamento": return <VistaFichaEquipamento key={vista.q} valor={vista.q} />;
     case "despesas": return <VistaDespesas />;
     default: return <MeuDia />;

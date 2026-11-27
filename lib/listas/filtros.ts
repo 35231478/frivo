@@ -6,9 +6,10 @@
 
 import { variantesDocumento } from "@/lib/listagem";
 import { hojeDiaCivil, inicioMesDiaCivil, periodoDiaCivil, periodoInstanteBR } from "@/lib/fuso";
-import { whereEtapa } from "@/lib/orcamentos/ciclo";
+import { DIAS_ORCAMENTO_VENCENDO_PADRAO, FILTRO_VENCENDO, whereEtapa, whereOrcamentoVencendo } from "@/lib/orcamentos/ciclo";
 import { faixaDiaCivil, lerPeriodo, type Periodo } from "@/lib/periodo";
 import { wherePrazo } from "@/lib/os/prazo-execucao";
+import { FILTRO_SEM_TECNICO, whereOsSemTecnico } from "@/lib/os/sem-tecnico";
 
 type SP = Record<string, string | undefined>;
 
@@ -71,6 +72,8 @@ export function whereOrdens(empresaId: string, sp: SP, agora = new Date(), idsAt
   // Entra num AND: não disputa o `status` nem o `OR` da busca.
   const prazo = wherePrazo(sp.prazo, agora);
   if (prazo) e.push(prazo);
+  // Sem técnico (painel de pendências): a regra única de lib/os/sem-tecnico.ts
+  if (sp.tecnico === FILTRO_SEM_TECNICO) e.push(whereOsSemTecnico());
   if (idsAtendimento) e.push({ id: { in: idsAtendimento } });
   if (e.length) where.AND = e;
   if (sp.busca) {
@@ -107,7 +110,7 @@ export function whereClientes(empresaId: string, sp: SP) {
 /** Status gravado antigo na URL → etapa do ciclo (links antigos continuam funcionando) */
 const ETAPA_DO_STATUS: Record<string, string> = { REPROVADO: "RECUSADO", CONVERTIDA: "CONVERTIDO" };
 
-export function whereOrcamentos(empresaId: string, sp: SP, agora = new Date()) {
+export function whereOrcamentos(empresaId: string, sp: SP, agora = new Date(), diasVencendo = DIAS_ORCAMENTO_VENCENDO_PADRAO) {
   const where: any = { empresaId };
   const e: any[] = [];
   // Filtro pela etapa do ciclo (Visualizado/Vencido dependem das datas: lib/orcamentos/ciclo.ts)
@@ -118,6 +121,8 @@ export function whereOrcamentos(empresaId: string, sp: SP, agora = new Date()) {
   else if (!mostrarCancelados(sp)) where.status = { not: "CANCELADO" };
   // Sino: respostas do cliente (aprovou/recusou) que ninguém abriu ainda
   if (sp.resposta === "nova") e.push({ status: { in: ["APROVADO", "REPROVADO"] }, respostaVistaEm: null });
+  // Painel de pendências: enviados que vencem até o prazo do aviso da empresa (lib/orcamentos/ciclo.ts)
+  if (sp.validade === FILTRO_VENCENDO) e.push(whereOrcamentoVencendo(hojeDiaCivil(agora), diasVencendo));
   if (e.length) where.AND = e;
   if (sp.tipo) where.tipo = sp.tipo;
   if (sp.clienteId) where.clienteId = sp.clienteId;
@@ -340,8 +345,8 @@ export function condPeriodoCriacao(p: Periodo) {
  * where da LISTA de Orçamentos: os filtros da URL (whereOrcamentos, sem as datas antigas do painel —
  * o período faz esse papel) + o período pela data de criação + o card de funil clicado.
  */
-export function whereListaOrcamentos(empresaId: string, sp: SP, periodo: Periodo, agora = new Date()) {
-  const base = whereOrcamentos(empresaId, { ...sp, dataInicio: undefined, dataFim: undefined }, agora);
+export function whereListaOrcamentos(empresaId: string, sp: SP, periodo: Periodo, agora = new Date(), diasVencendo = DIAS_ORCAMENTO_VENCENDO_PADRAO) {
+  const base = whereOrcamentos(empresaId, { ...sp, dataInicio: undefined, dataFim: undefined }, agora, diasVencendo);
   const and: object[] = [...(base.AND ?? [])];
   const per = condPeriodoCriacao(periodo);
   if (per) and.push(per);

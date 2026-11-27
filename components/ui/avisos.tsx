@@ -107,7 +107,7 @@ export function Avisos() {
               className={cn("pointer-events-auto flex items-start gap-2 max-w-sm text-sm font-medium rounded-card px-4 py-3 shadow-card-hover animate-in fade-in slide-in-from-top-2", COR[t.tipo])}>
               <Icone className="w-4 h-4 shrink-0 mt-0.5" />
               <span className="whitespace-pre-wrap">{t.mensagem}</span>
-              <button type="button" aria-label="Fechar" className="opacity-70 hover:opacity-100 shrink-0"
+              <button type="button" aria-label="Fechar" className="opacity-70 hover:opacity-100 shrink-0 relative before:absolute before:-inset-[14px] before:content-['']"
                 onClick={() => { estado.toasts = estado.toasts.filter((x) => x.id !== t.id); avisar(); }}>
                 <X className="w-4 h-4" />
               </button>

@@ -1,6 +1,6 @@
 # App do técnico — leva app-campo 3
 
-Três PRs: **A** faixa esperada nas medições (este), **B** relatório PDF e WhatsApp, **C** velocidade e uso com uma mão.
+Três PRs: **A** faixa esperada nas medições, **B** relatório PDF e WhatsApp, **C** velocidade e uso com uma mão.
 
 ## Levantamento (antes de codar)
 
@@ -118,3 +118,155 @@ pedidas, 6 medições, 1 foto antes e 1 depois por equipamento), no master, ante
 `antes-10…13` (escritório: checklist do tipo, OS, relatório, painel); `depois-10…16` (escritório: faixas sugeridas
 R-22 e R-410A, tipo com faixas, OS, execução, relatório, painel) e `depois-20…23` (app: esperado, fora do esperado,
 observação em 1 toque, ΔT calculado; nos 3 aparelhos). Dados e fotos fictícios.
+
+## PR B: relatório da atividade em PDF e envio ao cliente pelo WhatsApp
+
+### No app
+
+- Atividade concluída: **"Enviar relatório pelo WhatsApp"** (1 toque). Abre o WhatsApp com a mensagem pronta
+  ("Olá! Segue o relatório da visita técnica da Polar Climatização (OS-1301): <link>") para o número do cliente
+  (o mesmo do aviso "a caminho"; sem número, o WhatsApp abre para escolher o contato). A mensagem não leva o nome
+  do cliente.
+- **Um botão principal por vez:** com a confirmação do cliente pendente, ela é a principal e o WhatsApp fica com
+  contorno; depois da assinatura (mesmo ainda na fila do aparelho), o WhatsApp vira o principal — e o relatório
+  já sai com a assinatura.
+- **Espera a sincronização:** com qualquer gravação desta OS ainda no aparelho, o botão vira "Relatório sai quando
+  sincronizar" (desligado) e o PDF some; o cliente nunca abre um relatório incompleto. Voltou o sinal, o botão
+  aparece sozinho.
+- **"Ver relatório (PDF)"** ao lado (secundário). Alvos de toque ≥ 44 px.
+- O link vem no retrato da atividade (só da atividade do técnico; fora do escopo, 403 sem link). "Gerar novo link"
+  no escritório troca o token: o link e o PDF antigos passam a dar 404 e o app recebe o novo na próxima atualização.
+
+### O relatório (página pública e PDF)
+
+- **PDF no servidor** (`/relatorio/atividade/<id>/pdf?t=<token>`, pdf-lib, a mesma maquinaria do PMOC): capa,
+  equipamentos atendidos com o checklist (medições com "esperado" e **"FORA DO ESPERADO"**, ΔT como "delta T"),
+  fotos antes/depois e do checklist, serviço extra, fotos do serviço, **materiais usados** (sem valores),
+  execução e **assinaturas** (técnico e cliente, com a imagem quando assinou no local).
+- Mesmo segredo da página: sem o token certo (ou com o de outra atividade), a mesma 404. Sem cache, sem índice.
+- Fotos com teto de 3,5 MB dentro do PDF (a resposta da Vercel vai até 4,5 MB); passou, as seguintes ficam de
+  fora e o PDF avisa que estão no link.
+- **Página pública:** ganhou os materiais usados, a assinatura do cliente e, no rodapé, **"Baixar PDF"**
+  (principal) e "Imprimir" (secundário).
+
+### Mudança compartilhada (fora do app do técnico)
+
+| Arquivo | Por quê |
+|---|---|
+| `app/(publico)/relatorio/atividade/[id]/page.tsx` | A janela de impressão abria sozinha; agora só com `?imprimir=1` (o cliente que abre pelo WhatsApp não quer a impressão). No lugar, "Baixar PDF" e "Imprimir". O link "Ver relatório" do escritório abre a página sem imprimir. |
+| `components/relatorio/atividade-documento.tsx`, `lib/relatorio-server.ts` | Materiais usados e assinatura do cliente na página |
+| `components/relatorio/acoes-relatorio-atividade.tsx` (novo) | Os dois botões do rodapé |
+
+### 🟢 Banco (PR B)
+
+Sem SQL. O token do relatório já existe em toda atividade.
+
+### Testes (PR B)
+
+- `app-campo-leva3-relatorio` (20, regra pura e o PDF lido de volta), `app-campo-leva3-relatorio-ui` (12, tela:
+  app e página pública), `app-campo-leva3-relatorio-pg` (7, PostgreSQL real: retrato, página, rota do PDF, novo link).
+- **Mutação: 40 mutantes, 40 mortos ou removidos.** Na 1ª rodada sobraram 3:
+  - o aceite "pelo link" (sem assinatura) virou prova no PostgreSQL;
+  - duas checagens eram redundantes (foto que não é data URL; atividade sem token, que o banco não deixa existir)
+    e saíram do código.
+- Suíte completa: 557 arquivos, 8302 testes, verde. Typecheck e build de produção ok.
+
+### Prints (PR B)
+
+`depois-30…36` (iPhone 13, Pixel 7, desktop): concluída com a confirmação pendente (WhatsApp secundário), cliente
+assina, relatório pronto (WhatsApp principal), sem sinal ("Relatório sai quando sincronizar"), de volta ao sinal,
+página pública com materiais e com a assinatura. `depois-37…38`: páginas do PDF (medições com o fora do esperado;
+fotos, materiais e assinaturas). Dados e fotos fictícios.
+
+## PR C: velocidade e uso com uma mão
+
+### Resultado: "Cheguei → concluir", preventiva de 3 splits
+
+Mesmo roteiro, mesmo custo por ação e **o mesmo checklist da base** (6 medições digitadas; o superaquecimento e o ΔT
+do PR A ficam desligados só durante a medição, para comparar igual com igual). Banco local, dados fictícios.
+
+| Aparelho | Toques | Caracteres | Rolagens | Fotos | Tempo padrão | Com a espera do app |
+|---|---|---|---|---|---|---|
+| iPhone 13 — antes | 64 | 54 | 21 | 12 | 142,5 s | 158,0 s |
+| iPhone 13 — depois | **41** (−36%) | 54 | 4 | 12 | **101,3 s** (−29%) | **102,5 s** (−35%) |
+| Pixel 7 — antes | 64 | 54 | 26 | 12 | 146,5 s | 153,9 s |
+| Pixel 7 — depois | **41** (−36%) | 54 | 4 | 12 | **101,3 s** (−31%) | **102,4 s** (−33%) |
+
+- **Toques: −36% nos dois** (meta: ≤ 44). **Tempo padrão: −29% no iPhone e −31% no Pixel**; somando a espera real do
+  app, −35% e −33%. O tempo padrão do iPhone fica 0,6 ponto abaixo da meta de 30%: as 12 fotos (30 s no custo fixo)
+  e os 54 caracteres não mudam; o que caiu foi toque e rolagem.
+- A espera do app varia com o servidor de desenvolvimento (a 1ª rodada depois de compilar chegou a 26 s); vale a
+  rodada com o servidor aquecido, igual à base.
+- As 4 rolagens que sobram: 1 até o "Cheguei" no Meu dia (há uma OS esquecida no topo) e 3 do roteiro no "Concluir"
+  fixo do rodapé (ele fica 8 px dentro da margem que o roteiro reserva para a barra de baixo; a base contou igual).
+- Arquivos: `docs/prints/tecnico-campo-leva3/medicao-depois-*.json` (cada toque e rolagem, na ordem).
+
+### O que mudou no fluxo
+
+| Antes (por equipamento) | Toques | Depois | Toques |
+|---|---|---|---|
+| Foto antes: câmera do sistema (abrir, disparar, "Usar foto") | 3 | Câmera do app: abrir, disparar | 2 |
+| TUDO OK | 1 | TUDO OK | 1 |
+| 2 fotos pedidas, câmera do sistema | 6 | A câmera **já abre** nas pedidas e segue: 2 disparos | 2 |
+| 6 medições (tocar em cada campo, rolando) | 6 | 1º campo + "Próximo" no teclado (sem rolar) | 6 |
+| Foto depois (lá embaixo) | 3 | Vem na mesma sequência das pedidas: 1 disparo | 1 |
+| Concluir equipamento | 1 | Concluir e ir ao próximo | 1 |
+| | **20** | | **13** |
+
+Na atividade: o "Cheguei" já abre o 1º equipamento (−1 toque); concluir o último abre a confirmação da conclusão
+(−1 toque).
+
+- **Câmera do app** (ao vivo): 1 toque abre, 1 toque fotografa, sem a tela "Usar foto". Mostra o que fotografar
+  ("Limpeza dos filtros de ar", "2 de 3") e o equipamento. "Pular" passa uma; o X fecha. A foto passa pelo mesmo
+  caminho de sempre (redução e marca d'água conforme as permissões).
+  - **Galeria** só quando a empresa deixa ("Foto somente pela câmera" desligado).
+  - **Câmera bloqueada ou sem câmera:** a câmera do celular assume na hora (a foto entra no mesmo passo) e o app
+    lembra nesta sessão (não pede de novo). Navegador sem câmera ao vivo: o botão de sempre, sem passo a mais.
+- **TUDO OK com foto pedida faltando:** a câmera abre nas pedidas (são obrigatórias para concluir) e segue até a foto
+  depois. Terminou a sequência, a tela desce até a 1ª medição vazia. Sem pedida faltando, o TUDO OK só marca.
+- **"Próximo" no teclado:** grava a medição e vai à seguinte (pula o ΔT calculado e o "Não se aplica"); na última, o
+  teclado mostra "OK" e fecha.
+- **Concluir logo depois de digitar a última medição:** o botão grava o número e espera ele chegar antes de conferir
+  (antes acusaria "Falta 1" à toa; com a nova ordem, esse é o caminho comum).
+- **"Cheguei":** a OS segue para o 1º equipamento a fazer (a OS fica no histórico: o "voltar" do celular volta a ela).
+  Sem equipamento a fazer, fica na OS.
+- **Último equipamento:** volta à OS com a confirmação da conclusão aberta, **só com todos atendidos** (com algum não
+  atendido, concluir é decisão do técnico, no botão de sempre).
+- **Tela do equipamento mais curta** (o TUDO OK sob o dedão, sem rolar): voltar, posição e setas numa linha; "Foto
+  antes"/"Foto depois" na linha do título; as duas frases explicativas viraram dica (ⓘ).
+
+### Alvos de toque e contraste para sol
+
+Auditoria automática (Playwright, iPhone 13) nas telas do fluxo: Meu dia, equipamento, câmera, sequência, medições, OS
+e conclusão. Conta alvos com menos de 44 px (inclusive a área invisível) e texto abaixo de 7:1 (WCAG AAA).
+
+| | Antes | Depois |
+|---|---|---|
+| Alvos < 44 px (distintos) | 7 (logo, dicas ⓘ, fechar do aviso e do modal) | **0** |
+| Texto abaixo de 4,5:1 (falha WCAG) | 0 | 0 |
+| Trechos de texto abaixo de 7:1 | 161 (o texto de apoio era a maioria) | **0** |
+
+- **`campo-sol`** (só no app do técnico, uma classe na raiz): a mesma paleta, um tom mais escura onde se lê na rua.
+  Texto de apoio 5,6–6:1 → 8:1; alertas (atenção, atrasado, ok) → ≥ 7,4:1; botões principais com texto branco
+  (Cheguei, TUDO OK, Concluir, Atenção) → ≥ 7,6:1; links em acento → 8,5:1.
+- **Ícones pequenos** ganharam área de toque invisível de 44 px sem mudar o desenho.
+
+### Mudanças fora do app do técnico (PR C)
+
+| Arquivo | O que muda |
+|---|---|
+| `app/globals.css` | Regras `.campo-sol …` (só valem dentro do app do técnico) |
+| `components/ui/dica.tsx`, `components/ui/avisos.tsx`, `components/ui/modal.tsx` | Área de toque invisível de 44 px no ⓘ, no fechar do aviso e no fechar do modal (vale para o sistema todo; o desenho não muda) |
+
+### Testes (PR C)
+
+- `app-campo-leva3-velocidade-ui` (18, tela com o banco do aparelho e o motor reais), `app-campo-leva3-velocidade`
+  (8, contraste calculado das cores e alvos).
+- **4 testes antigos atualizados de propósito:** `aviso-cliente-ui` (2: o "Cheguei" pede à OS o 1º equipamento,
+  `&primeiro=1`) e `app-tecnico-ui` (2: a legenda do progresso virou dica; o último equipamento volta com `&fim=1`).
+- **Mutação: 34 mutantes, 34 mortos.** Na 1ª rodada sobraram 4, e cada um virou prova: câmera em uso por outro app
+  não fica lembrada como recusada; o X da sequência não desce a tela; a foto depois já tirada não se repete; o fim da
+  sequência desce até a 1ª medição ainda vazia.
+- Suíte completa: 559 arquivos, 8326 testes, verde (antes das 3 provas acima, que passam). Typecheck e build ok.
+- Achado no caminho: com a nova ordem, "Concluir" logo depois de digitar a última medição conferia o equipamento antes
+  de o número chegar e acusava "Falta 1". Corrigido e provado.

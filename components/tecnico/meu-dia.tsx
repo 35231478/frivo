@@ -140,8 +140,9 @@ export function CartaoAtividade({ c, fila, mostrarDia, proxima, guardado, listaE
   async function chegar() {
     if (!(await confirmarOutroDia("Registrar a chegada agora?"))) return;
     toqueLeve();
-    // Entrar na OS é local: o toque fica no aparelho e a OS abre, com ou sem sinal
-    if (await tocar("CHEGOU")) irPara({ ver: "os", a: c.atividadeId, ...depoisDeChegar });
+    // Entrar na OS é local: o toque fica no aparelho e a OS abre, com ou sem sinal. Sem destino do QR, a OS
+    // segue direto para o primeiro equipamento a fazer (equipamento no centro)
+    if (await tocar("CHEGOU")) irPara({ ver: "os", a: c.atividadeId, ...(depoisDeChegar?.e || depoisDeChegar?.inc ? depoisDeChegar : { primeiro: true }) });
   }
   async function aCaminhoAgora() {
     if (!(await confirmarOutroDia("Avisar o cliente agora?"))) return;

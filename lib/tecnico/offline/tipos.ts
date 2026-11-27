@@ -136,6 +136,8 @@ export interface RetratoAtividade {
   andamento?: AndamentoRetrato;
   /** WhatsApp do cliente para o toque de 1 botão no topo da OS; só com "Exibir contatos do cliente". Ausente em retratos antigos */
   whatsapp?: string | null;
+  /** O relatório da visita (link com token, e a empresa e a OS para a mensagem); ausente em retratos antigos */
+  relatorio?: RelatorioRetrato | null;
   /** Módulos da empresa que o app usa (campo-ponte); ausente em retratos antigos = tudo ligado */
   modulos?: { equipamentos: boolean; qrcodes: boolean };
   geradoEm: string;
@@ -157,3 +159,5 @@ export type OperacaoFila = Operacao & {
 /** Distribui o Omit pelos membros da união (o Omit comum junta tudo e perde o "tipo"). */
 export type SemControle<T> = T extends unknown ? Omit<T, "id" | "em"> : never;
 export type NovaOperacao = SemControle<Operacao>;
+
+export interface RelatorioRetrato { link: string; empresa: string; osNumero: string }

@@ -140,10 +140,13 @@ describe("c) sino: cada um recebe o que é dele", () => {
 
   it("a rota usa a regra (não há conferência de permissão solta) e soma a nota baixa no total", () => {
     const rota = fonte("app/api/alertas/route.ts");
+    // a contagem mora em lib/alertas/sino-server (a mesma do painel de pendências); a rota só monta o escopo
+    const contagem = fonte("lib/alertas/sino-server.ts");
     expect(rota).toContain("const e = escopoDoSino({ permissoes, role, restrito: escopoTecnico.restrito });");
-    expect(rota).not.toMatch(/\bpode\(/);
-    expect(rota).toContain("{ separarNotaBaixa: e.notaBaixa }");
-    expect(rota).toContain("aceites.avaliacoesBaixas");
+    expect(rota).toContain("contarSino({ empresaId, usuarioId: session.user!.id, escopo: e,");
+    expect(rota + contagem).not.toMatch(/\bpode\(/);
+    expect(contagem).toContain("{ separarNotaBaixa: e.notaBaixa }");
+    expect(contagem).toContain("aceites.avaliacoesBaixas");
   });
 });
 

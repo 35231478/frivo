@@ -125,7 +125,9 @@ export type Vista =
   /** Minhas despesas de campo (e o lançamento) */
   | { ver: "despesas" }
   | { ver: "os"; a: string; e?: string | null; /** Abre já na câmera rápida (atalho do Meu dia) */ cam?: boolean;
-      /** QR lido no Meu dia: equipamento da unidade que o técnico pode incluir nesta atividade (pergunta antes) */ inc?: string | null }
+      /** QR lido no Meu dia: equipamento da unidade que o técnico pode incluir nesta atividade (pergunta antes) */ inc?: string | null;
+      /** Concluiu o último equipamento: a OS abre já na confirmação da conclusão */ fim?: boolean;
+      /** Acabou de chegar: a OS segue para o primeiro equipamento a fazer */ primeiro?: boolean }
   /** Ficha do equipamento pelo QR lido (o que não está em nenhuma OS do técnico hoje) */
   | { ver: "equipamento"; q: string };
 
@@ -133,7 +135,7 @@ export function lerVista(search: string): Vista {
   const q = new URLSearchParams(search);
   const ver = q.get("ver");
   const a = q.get("a");
-  if (ver === "os" && a) return { ver: "os", a, e: q.get("e"), ...(q.get("cam") === "1" && { cam: true }), ...(q.get("inc") && { inc: q.get("inc") }) };
+  if (ver === "os" && a) return { ver: "os", a, e: q.get("e"), ...(q.get("cam") === "1" && { cam: true }), ...(q.get("inc") && { inc: q.get("inc") }), ...(q.get("fim") === "1" && { fim: true }), ...(q.get("primeiro") === "1" && { primeiro: true }) };
   const qr = q.get("q");
   if (ver === "equipamento" && qr) return { ver: "equipamento", q: qr };
   if (ver === "agenda" || ver === "perfil" || ver === "desempenho" || ver === "despesas") return { ver };
@@ -142,7 +144,7 @@ export function lerVista(search: string): Vista {
 
 export function urlDaVista(v: Vista): string {
   if (v.ver === "dia") return "/tecnico";
-  if (v.ver === "os") return `/tecnico?ver=os&a=${encodeURIComponent(v.a)}${v.e ? `&e=${encodeURIComponent(v.e)}` : ""}${v.cam ? "&cam=1" : ""}${v.inc ? `&inc=${encodeURIComponent(v.inc)}` : ""}`;
+  if (v.ver === "os") return `/tecnico?ver=os&a=${encodeURIComponent(v.a)}${v.e ? `&e=${encodeURIComponent(v.e)}` : ""}${v.cam ? "&cam=1" : ""}${v.inc ? `&inc=${encodeURIComponent(v.inc)}` : ""}${v.fim ? "&fim=1" : ""}${v.primeiro ? "&primeiro=1" : ""}`;
   if (v.ver === "equipamento") return `/tecnico?ver=equipamento&q=${encodeURIComponent(v.q)}`;
   return `/tecnico?ver=${v.ver}`;
 }

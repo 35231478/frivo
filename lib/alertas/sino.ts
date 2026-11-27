@@ -46,6 +46,14 @@ export interface EscopoDoSino {
   atividadesEsquecidas: boolean;
   /** Uso em campo deixou produto com saldo negativo (app do técnico): quem vê o Estoque, nunca o técnico */
   estoqueNegativoCampo: boolean;
+  /** OS em aberto sem técnico (lib/os/sem-tecnico): quem vê OS; entra no número do sino */
+  osSemTecnico: boolean;
+  /** Orçamento enviado que vence até o prazo do aviso (lib/orcamentos/ciclo): quem vê orçamentos; entra no número */
+  orcamentosVencendo: boolean;
+  /** Contas a pagar que vencem hoje: quem abre a lista (Financeiro › Visualizar); só no painel, fora do número */
+  contasPagarHoje: boolean;
+  /** Contas a receber que vencem hoje: quem abre a lista (Financeiro › Contas a receber); só no painel */
+  contasReceberHoje: boolean;
   /** NF chegou num pedido que a própria pessoa fez: sempre (é dela) */
   nfDosMeusPedidos: true;
 }
@@ -72,6 +80,10 @@ export function escopoDoSino({ permissoes, role, restrito }: QuemPergunta): Esco
     atividadesEsquecidas: daEmpresa && verOrdens,
     comentariosCampo: daEmpresa && verOrdens,
     despesasCampo: daEmpresa && p("financeiro", "fluxoCaixa"),
+    osSemTecnico: daEmpresa && verOrdens,
+    orcamentosVencendo: daEmpresa && p("orcamentos", "visualizar"),
+    contasPagarHoje: daEmpresa && p("financeiro", "visualizar"),
+    contasReceberHoje: daEmpresa && p("financeiro", "contasReceber"),
     nfDosMeusPedidos: true,
   };
 }
