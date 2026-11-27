@@ -23,7 +23,7 @@ import {
   type AvisoCliente, type AvisoClienteRetrato, type AvisosTela, type EventoAviso, type StatusAviso,
 } from "@/lib/tecnico/aviso-cliente";
 import type { ContextoExecucao } from "@/lib/execucao/contexto";
-import { iniciarAtividade, type ResultadoAcao } from "@/lib/execucao/acoes";
+import type { ResultadoAcao } from "@/lib/execucao/acoes";
 
 const ok = <T>(dados: T, status = 200): ResultadoAcao<T> => ({ ok: true, status, dados });
 const limpo = (v: string | null | undefined) => (v ?? "").trim();
@@ -137,7 +137,8 @@ export async function avisarCliente(ctx: ContextoExecucao, d: AvisoCliente, relo
   if (d.evento === "CHEGOU") await marcarComparecimento(prisma, atividade.ordemServico.id, registradoEm);
   // G (Pronto pra janeiro 2): chegou = começou. A atividade Agendada passa a Em andamento (hora do toque) e a OS
   // segue para Em execução pelo status automático — o ajuste manual de status da OS é respeitado (sincronizarStatusOs)
-  if (d.evento === "CHEGOU") await iniciarAtividade(ctx, relogio);
+  // import() tardio: acoes → sincronizar-status → aceite-server → este arquivo; importar acoes no topo fecharia o ciclo
+  if (d.evento === "CHEGOU") await (await import("@/lib/execucao/acoes")).iniciarAtividade(ctx, relogio);
 
   const [config, os, chegada] = await Promise.all([
     carregarConfigApp(empresaId),

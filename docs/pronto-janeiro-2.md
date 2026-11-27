@@ -67,8 +67,17 @@ A empresa de demonstração é "Refrigeração Nova Era Ltda (fictícia)".
     caber em 120.
   - `modulos-equip-pg.test.ts` (E): a prova de que o módulo desligado tira a trava precisa de uma atividade
     **com tipo que exige** equipamento. Sem tipo, a trava já não existe.
+  - `execucao-os-pg.test.ts` e `os-central-pg.test.ts` (E): as provas da trava de equipamento criavam atividade
+    **sem tipo**. Agora usam um tipo que exige equipamento (Manutenção Preventiva), com o técnico competente
+    nele. O que elas provam (a trava, a mensagem, o status automático) continua igual.
+  - `prazos-pr4-pg.test.ts` (G): depois do "Cheguei", a atividade está Em andamento (antes, Agendada). A hora
+    do comparecimento e os limites prometidos continuam os mesmos.
+  - `orcamento-acabamento-pg.test.ts` (H): o nome automático do orçamento novo vem inteiro.
   - `aviso-cliente-pg.test.ts` (G): o cabeçalho dizia que o aviso não começa o atendimento. Isso continua
     valendo para "A caminho", e o teste do "Cheguei" agora confere que a atividade começa.
+- **Ciclo de importação evitado**: o "Cheguei" chama o início da atividade por `import()` tardio. No topo,
+  fecharia o ciclo `acoes → sincronizar-status → aceite-server → aviso-cliente → acoes`, que travava a carga
+  dos testes do app do técnico.
 - **Um defeito pego pelos testes antes do PR**: o "Desmarcar" usava a trava da linha, que sempre existe em
   item executado. Por isso o botão nunca aparecia. Agora usa só a trava do registro fechado.
 

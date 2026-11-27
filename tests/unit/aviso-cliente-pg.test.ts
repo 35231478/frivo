@@ -465,7 +465,7 @@ describe.skipIf(!URL_PG)("Aviso ao cliente: a caminho / cheguei (PostgreSQL real
         expect(card(aCaminho).avisos).toEqual({ A_CAMINHO: { em: expect.any(String), status: "ENVIADO" } });
         expect(Object.keys(card(chegou).avisos).sort()).toEqual(["A_CAMINHO", "CHEGOU"]);
         expect(card(chegou).avisos.CHEGOU.status).toBe("ENVIADO");
-        expect(card(chegou).status).toBe("AGENDADA"); // chegar não começa o atendimento
+        expect(card(chegou).status).toBe("EM_ANDAMENTO"); // chegar é começar ("Pronto pra janeiro 2", G)
         expect(JSON.stringify(lista)).not.toMatch(/@hospital/); // o destinatário do aviso nunca vai
       }
     });
