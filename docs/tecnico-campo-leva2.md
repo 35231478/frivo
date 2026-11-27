@@ -64,6 +64,11 @@ depois da leitura.
   - "garantia sem situação": era equivalente, mas mostrou que uma data que não se lê viraria "Garantia vence em —".
     O selo agora só sai com data válida, e isso tem teste.
 
+- **Suíte completa: 538 arquivos, 8.070 testes, todos verdes.** Typecheck limpo e build de produção ok. Na 1ª rodada
+  caíram 24 testes de outras telas da OS: o card de comentários quebrava quando a resposta não trazia a lista (os testes
+  da OS simulam o `fetch`), e um teste de padronização fixa a linha do Resumo da OS. Corrigido: o card aguenta resposta
+  vazia ou erro de rede, e a linha do Resumo ficou como era (o card entra numa linha própria).
+
 ### Prints (PR A)
 
 `docs/prints/tecnico-campo-leva2/`: `antes-*` (app e escritório) e `depois-20…26` (iPhone 13, Pixel 7, desktop),
