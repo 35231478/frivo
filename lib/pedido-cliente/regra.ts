@@ -84,9 +84,12 @@ export const travaIniciar = (s: SituacaoPedido) => (s.modo === "EXECUTAR" && agu
 export function alertaValorPedido(valorPedido: number | null | undefined, totalLigado: number): string | null {
   if (valorPedido == null || !(valorPedido > 0) || !(totalLigado > 0)) return null;
   if (Math.round(valorPedido * 100) >= Math.round(totalLigado * 100)) return null;
-  const brl = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+  const brl = reais;
   return `O valor do pedido (${brl(valorPedido)}) é menor que o total das OS e orçamentos que ele cobre (${brl(totalLigado)}).`;
 }
+
+/** Valor em reais com espaço comum (o Intl usa um espaço que não quebra; fica igual na tela, no histórico e na nota) */
+export const reais = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" }).replace(/\s/g, " ");
 
 /** O texto do pedido na discriminação da NFS-e (e na descrição da fatura) */
 export function textoPedidoNaNota(numeros: (string | null | undefined)[]): string | null {

@@ -15,7 +15,7 @@ import { validarDataUrl } from "@/lib/anexos-server";
 import { chaveHojeBR } from "@/lib/fuso";
 import {
   aguardandoPedido, alertaValorPedido, inicioDaEspera, limparMotivo, limparNumeroPedido, modoEfetivo, MSG_MOTIVO, textoPedidoNaNota,
-  travaFaturar, travaIniciar, DIAS_ALERTA_PEDIDO_PADRAO, diasEsperando, type ModoPedido, type SituacaoPedido,
+  travaFaturar, travaIniciar, DIAS_ALERTA_PEDIDO_PADRAO, reais, diasEsperando, type ModoPedido, type SituacaoPedido,
 } from "@/lib/pedido-cliente/regra";
 
 /** A fatura já saiu: a OS/orçamento não espera mais pedido (inclusive a do jeito antigo, com o PC na própria fatura) */
@@ -239,7 +239,7 @@ export async function registrarPedido(
     const osAlvo = [...todasOs];
     if (osAlvo.length) await tx.ordemServico.updateMany({ where: { id: { in: osAlvo }, empresaId: quem.empresaId }, data: { pedidoClienteId: p.id } });
     if (orcFinais.length) await tx.orcamento.updateMany({ where: { id: { in: orcFinais }, empresaId: quem.empresaId }, data: { pedidoClienteId: p.id } });
-    const detalhe = `nº ${lido.numero}${lido.valor != null ? ` · ${lido.valor.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}` : ""}`;
+    const detalhe = `nº ${lido.numero}${lido.valor != null ? ` · ${reais(lido.valor)}` : ""}`;
     if (osAlvo.length) await tx.osHistorico.createMany({ data: osAlvo.map((id) => ({ ordemServicoId: id, usuarioId: quem.usuarioId, acao: "Pedido do cliente informado", detalhes: detalhe })) });
     if (orcFinais.length) await tx.orcamentoEvento.createMany({ data: orcFinais.map((id) => ({ empresaId: quem.empresaId, orcamentoId: id, tipo: "PEDIDO_CLIENTE", detalhe: `Pedido do cliente ${detalhe}`, usuarioId: quem.usuarioId })) });
     await avancarFaturas(tx, osAlvo, orcFinais, ligar.medicaoId ?? null);
