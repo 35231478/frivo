@@ -263,17 +263,19 @@ function SecaoFotos({ secao: s, podeEditar, onAbrir, onAdicionar, onExcluir, onE
                   <span className={cn(origem.classe, "absolute left-1.5 top-1.5 shadow-sm")}>{origem.rotulo}</span>
                 </button>
                 <div className="p-2 space-y-0.5 min-w-0">
-                  <p className="text-sm font-medium text-ink leading-snug line-clamp-2" title={f.legenda} data-legenda>{f.legenda}</p>
+                  <div className="flex items-start gap-1">
+                    <p className="flex-1 min-w-0 text-sm font-medium text-ink leading-snug line-clamp-2" title={f.legenda} data-legenda>{f.legenda}</p>
+                    {podeEditar && (
+                      // A legenda se corrige sempre (é o texto do relatório); fica no histórico da OS, com a de antes
+                      <button type="button" onClick={() => onEditarLegenda(f)} title="Editar legenda" aria-label={`Editar legenda: ${f.legenda}`} data-editar-legenda
+                        className="shrink-0 -mr-1 -mt-0.5 rounded-md p-1 text-ink-subtle hover:text-acento hover:bg-surface-alt">
+                        <Pencil className="w-3.5 h-3.5" aria-hidden="true" />
+                      </button>
+                    )}
+                  </div>
                   {f.atividade && <p className="text-xs text-ink-muted truncate" title={f.atividade.titulo}>{f.atividade.titulo}</p>}
                   <p className="text-[11px] text-ink-subtle truncate" title={quemQuando(f)}>{quemQuando(f)}</p>
                 </div>
-                {podeEditar && (
-                  // A legenda se corrige sempre (é o texto do relatório); fica no histórico da OS, com a de antes
-                  <button type="button" onClick={() => onEditarLegenda(f)} title="Editar legenda" aria-label={`Editar legenda: ${f.legenda}`} data-editar-legenda
-                    className="absolute right-9 top-1.5 rounded-full bg-white/90 p-1.5 text-ink-muted shadow-sm hover:text-acento hover:bg-white">
-                    <Pencil className="w-3.5 h-3.5" aria-hidden="true" />
-                  </button>
-                )}
                 {podeEditar && (
                   <button
                     type="button" onClick={() => !trava && onExcluir(f)} disabled={!!trava} title={trava ?? "Excluir foto"}
