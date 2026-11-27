@@ -14,7 +14,7 @@ export async function relatorioParaRetrato(empresaId: string, atividadeId: strin
       ordemServico: { select: { numero: true, chamadoNumero: true, empresa: { select: { nome: true, nomeFantasia: true } } } },
     },
   });
-  if (!a?.tokenRelatorio) return null;
+  if (!a) return null;
   const os = a.ordemServico;
   return {
     link: linkRelatorioAtividade({ id: a.id, tokenRelatorio: a.tokenRelatorio }),

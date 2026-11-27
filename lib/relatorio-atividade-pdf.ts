@@ -57,7 +57,6 @@ class Fotos {
   constructor(readonly doc: PDFDocument) {}
   async abrir(f: FotoRelatorio): Promise<PDFImage | null> {
     const tamanho = f.url.length * 0.75; // base64 → bytes
-    if (!f.url.startsWith("data:")) return null;
     if (this.usados + tamanho > MAX_BYTES_FOTOS) { this.cortadas++; return null; }
     const img = await embutirFoto(this.doc, f.url);
     if (img) this.usados += tamanho;

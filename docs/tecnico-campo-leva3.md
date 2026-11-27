@@ -1,6 +1,6 @@
 # App do técnico — leva app-campo 3
 
-Três PRs: **A** faixa esperada nas medições (este), **B** relatório PDF e WhatsApp, **C** velocidade e uso com uma mão.
+Três PRs: **A** faixa esperada nas medições, **B** relatório PDF e WhatsApp, **C** velocidade e uso com uma mão.
 
 ## Levantamento (antes de codar)
 
@@ -118,3 +118,57 @@ pedidas, 6 medições, 1 foto antes e 1 depois por equipamento), no master, ante
 `antes-10…13` (escritório: checklist do tipo, OS, relatório, painel); `depois-10…16` (escritório: faixas sugeridas
 R-22 e R-410A, tipo com faixas, OS, execução, relatório, painel) e `depois-20…23` (app: esperado, fora do esperado,
 observação em 1 toque, ΔT calculado; nos 3 aparelhos). Dados e fotos fictícios.
+
+## PR B: relatório da atividade em PDF e envio ao cliente pelo WhatsApp
+
+### No app
+
+- Atividade concluída: **"Enviar relatório pelo WhatsApp"** (1 toque). Abre o WhatsApp com a mensagem pronta
+  ("Olá! Segue o relatório da visita técnica da Polar Climatização (OS-1301): <link>") para o número do cliente
+  (o mesmo do aviso "a caminho"; sem número, o WhatsApp abre para escolher o contato). A mensagem não leva o nome
+  do cliente.
+- **Um botão principal por vez:** com a confirmação do cliente pendente, ela é a principal e o WhatsApp fica com
+  contorno; depois da assinatura (mesmo ainda na fila do aparelho), o WhatsApp vira o principal — e o relatório
+  já sai com a assinatura.
+- **Espera a sincronização:** com qualquer gravação desta OS ainda no aparelho, o botão vira "Relatório sai quando
+  sincronizar" (desligado) e o PDF some; o cliente nunca abre um relatório incompleto. Voltou o sinal, o botão
+  aparece sozinho.
+- **"Ver relatório (PDF)"** ao lado (secundário). Alvos de toque ≥ 44 px.
+- O link vem no retrato da atividade (só da atividade do técnico; fora do escopo, 403 sem link). "Gerar novo link"
+  no escritório troca o token: o link e o PDF antigos passam a dar 404 e o app recebe o novo na próxima atualização.
+
+### O relatório (página pública e PDF)
+
+- **PDF no servidor** (`/relatorio/atividade/<id>/pdf?t=<token>`, pdf-lib, a mesma maquinaria do PMOC): capa,
+  equipamentos atendidos com o checklist (medições com "esperado" e **"FORA DO ESPERADO"**, ΔT como "delta T"),
+  fotos antes/depois e do checklist, serviço extra, fotos do serviço, **materiais usados** (sem valores),
+  execução e **assinaturas** (técnico e cliente, com a imagem quando assinou no local).
+- Mesmo segredo da página: sem o token certo (ou com o de outra atividade), a mesma 404. Sem cache, sem índice.
+- Fotos com teto de 3,5 MB dentro do PDF (a resposta da Vercel vai até 4,5 MB); passou, as seguintes ficam de
+  fora e o PDF avisa que estão no link.
+- **Página pública:** ganhou os materiais usados, a assinatura do cliente e, no rodapé, **"Baixar PDF"**
+  (principal) e "Imprimir" (secundário).
+
+### Mudança compartilhada (fora do app do técnico)
+
+| Arquivo | Por quê |
+|---|---|
+| `app/(publico)/relatorio/atividade/[id]/page.tsx` | A janela de impressão abria sozinha; agora só com `?imprimir=1` (o cliente que abre pelo WhatsApp não quer a impressão). No lugar, "Baixar PDF" e "Imprimir". O link "Ver relatório" do escritório abre a página sem imprimir. |
+| `components/relatorio/atividade-documento.tsx`, `lib/relatorio-server.ts` | Materiais usados e assinatura do cliente na página |
+| `components/relatorio/acoes-relatorio-atividade.tsx` (novo) | Os dois botões do rodapé |
+
+### 🟢 Banco (PR B)
+
+Sem SQL. O token do relatório já existe em toda atividade.
+
+### Testes (PR B)
+
+- `app-campo-leva3-relatorio` (20, regra pura e o PDF lido de volta), `app-campo-leva3-relatorio-ui` (12, tela:
+  app e página pública), `app-campo-leva3-relatorio-pg` (7, PostgreSQL real: retrato, página, rota do PDF, novo link).
+
+### Prints (PR B)
+
+`depois-30…36` (iPhone 13, Pixel 7, desktop): concluída com a confirmação pendente (WhatsApp secundário), cliente
+assina, relatório pronto (WhatsApp principal), sem sinal ("Relatório sai quando sincronizar"), de volta ao sinal,
+página pública com materiais e com a assinatura. `depois-37…38`: páginas do PDF (medições com o fora do esperado;
+fotos, materiais e assinaturas). Dados e fotos fictícios.

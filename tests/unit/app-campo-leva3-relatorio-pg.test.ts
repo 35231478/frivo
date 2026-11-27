@@ -123,13 +123,17 @@ describe.skipIf(!URL_PG)("app de campo, leva 3 (PR B): relatório ao cliente (Po
       ]);
     });
 
-    it("aceite: pendente não aparece; confirmado no local traz nome, assinatura e quando", async () => {
+    it("aceite: pendente não aparece; confirmado no local traz nome, assinatura e quando; pelo link, sem assinatura", async () => {
       const { carregarAtividade } = await import("@/lib/relatorio-server");
       await prisma.osAceite.create({ data: { id: "ac1", empresaId: "e1", ordemServicoId: "os1", token: "tok-aceite-1", situacao: "PENDENTE" } });
       expect((await carregarAtividade("a1", await token("a1")))!.aceite).toBeNull();
       const quando = new Date("2026-11-27T15:00:00Z");
       await prisma.osAceite.update({ where: { id: "ac1" }, data: { situacao: "CONFIRMADO", metodo: "LOCAL", nome: "Carla Mendes", assinatura: dataUrl(PNG, "image/png"), confirmadoEm: quando, atividadeId: "a1" } });
       expect((await carregarAtividade("a1", await token("a1")))!.aceite).toEqual({ nome: "Carla Mendes", assinatura: dataUrl(PNG, "image/png"), confirmadoEm: quando, noLocal: true });
+      // Confirmou pelo link (portal/WhatsApp): sem assinatura desenhada e "confirmou pelo link"
+      await prisma.osAceite.update({ where: { id: "ac1" }, data: { metodo: "REMOTO", assinatura: null } });
+      expect((await carregarAtividade("a1", await token("a1")))!.aceite).toEqual({ nome: "Carla Mendes", assinatura: null, confirmadoEm: quando, noLocal: false });
+      await prisma.osAceite.update({ where: { id: "ac1" }, data: { metodo: "LOCAL", assinatura: dataUrl(PNG, "image/png") } });
     });
   });
 
