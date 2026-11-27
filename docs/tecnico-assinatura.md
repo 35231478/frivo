@@ -47,8 +47,8 @@ app do técnico e do "Colher assinatura" do escritório (`components/os/aceite-a
 
 ## Testes
 
-- `app-assinatura-aceite` (12, regra): mesmo tamanho não mexe; girar e voltar devolve igual; cabe mantém o
-  tamanho; não cabe encolhe na mesma escala e fica dentro do quadro; canto; formato novo; quadro escondido;
+- `app-assinatura-aceite` (13, regra): mesmo tamanho não mexe; girar e voltar devolve igual; cabe mantém o
+  tamanho; não cabe (pela largura ou pela altura) encolhe na mesma escala e fica dentro do quadro; canto; formato novo; quadro escondido;
   quando refazer; recorte com margem; o mesmo recorte em retrato e paisagem; proporção no PDF; `object-contain`
   na tela.
 - `app-assinatura-aceite-ui` (10, tela): girar com traço redesenha em escala; voltar devolve igual;
@@ -56,6 +56,10 @@ app do técnico e do "Colher assinatura" do escritório (`components/os/aceite-a
   não envia; confirmar depois de girar manda o recorte; dois toques mandam um aceite só.
 - **2 testes antigos atualizados:** o quadro falso de `os-aceite-ui` e `os-aceite-avaliacao-ui` ganhou
   `toData` (sem pontos, a imagem é o quadro inteiro, como antes).
+
+- **Mutação: 18 mutantes, 18 mortos.** O que sobrou na 1ª rodada (encolher ignorando a altura) virou a prova
+  do "quadro mais baixo".
+- Suíte completa (587 arquivos, 8616 testes), typecheck e build de produção: ok.
 
 ## Prints (fictícios)
 
