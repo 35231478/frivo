@@ -178,7 +178,7 @@ function ModalAprovar({ d, cats, onFechar, onFeito }: { d: DespesaEscritorio; ca
             <label className="block space-y-1">
               <span className="text-sm font-semibold text-ink">Categoria financeira</span>
               <Select value={categoriaId} onChange={(e) => setCategoriaId(e.target.value)} aria-label="Categoria financeira" data-categoria-financeira>
-                <option value="">{d.categoriaNome} (criar)</option>
+                <option value="">{d.categoriaNome} (nova)</option>
                 {cats?.ativas.map((c) => <option key={c.id} value={c.id}>{c.nome}</option>)}
               </Select>
             </label>
@@ -246,7 +246,7 @@ function ModalCategorias({ cats, onFechar, onSalvo }: { cats: Categorias; onFech
           <label key={c.id} className="grid grid-cols-1 sm:grid-cols-2 gap-1 sm:gap-3 sm:items-center">
             <span className="text-sm font-semibold text-ink">{c.nome}</span>
             <Select value={mapa[c.id]} onChange={(e) => setMapa((m) => ({ ...m, [c.id]: e.target.value }))} aria-label={`Categoria financeira de ${c.nome}`} data-mapa={c.id}>
-              <option value="">{c.nome} (criar ao aprovar)</option>
+              <option value="">{c.nome} (nova)</option>
               {cats.ativas.map((a) => <option key={a.id} value={a.id}>{a.nome}</option>)}
             </Select>
           </label>

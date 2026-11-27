@@ -111,6 +111,10 @@ describe.skipIf(!URL_PG)("app de campo, leva 2 (PR B): despesas de campo (Postgr
         ["d2", "t1", "uT", null, null, "PEDAGIO", 12.5, "EMPRESA", "PENDENTE", null],
       ]);
       expect(l[0].foto.conteudo).toBe(FOTO);
+      // Descrição só de espaços: fica vazia (não grava texto em branco)
+      expect((await sync([despesa(SEM_OS, "d0", { descricao: "   " })]))[0]).toMatchObject({ ok: true, status: 201 });
+      expect((await prisma.despesaCampo.findFirst({ where: { clientId: "d0" } })).descricao).toBeNull();
+      await prisma.despesaCampo.deleteMany({ where: { clientId: "d0" } });
     });
     it("da OS: liga à OS e à atividade (também com a atividade concluída); nunca na OS de outro técnico", async () => {
       comoTecnico();
@@ -255,6 +259,7 @@ describe.skipIf(!URL_PG)("app de campo, leva 2 (PR B): despesas de campo (Postgr
       expect((await recusar(id, { motivo: "  Cupom ilegível: tire outra foto.  " })).status).toBe(200);
       expect((await recusar(id, { motivo: "De novo" })).status).toBe(409);
       expect((await aprovar(id, { vencimento: HOJE })).status).toBe(409);
+      expect(await aprovar(id)).toMatchObject({ status: 409, json: { erro: "Esta despesa já foi decidida." } }); // não pede vencimento de quem já foi decidida
       expect(await prisma.contaPagar.count({ where: { tecnicoId: "t2" } })).toBe(0);
       comoTecnico("t2", "uT2", "maria@clima.com");
       expect((await minhas()).despesas).toEqual([expect.objectContaining({ clientId: "dM", situacao: "RECUSADA", motivoRecusa: "Cupom ilegível: tire outra foto." })]);
