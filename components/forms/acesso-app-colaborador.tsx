@@ -115,7 +115,7 @@ export function AcessoAppColaborador({ tecnicoId, emailSalvo, inicial }: Props) 
 
       <div className="flex items-center gap-2 text-xs text-ink-muted">
         <Info className="w-3.5 h-3.5 shrink-0" />
-        O técnico que esquecer a senha pode usar “Esqueci minha senha” na tela de login, ou o admin redefine aqui.
+        No primeiro acesso com a senha definida aqui, o técnico cria a própria senha. Esqueceu? “Esqueci minha senha” no login, ou redefina aqui.
       </div>
 
       <div className="flex justify-end">

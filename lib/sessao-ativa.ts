@@ -20,7 +20,7 @@ const lerUsuario = cache(async (usuarioId: string) => {
     const u = await prisma.usuario.findUnique({
       where: { id: usuarioId },
       select: {
-        ativo: true, senha: true, sessaoAtiva: true,
+        ativo: true, senha: true, sessaoAtiva: true, trocarSenha: true,
         // O ACESSO de agora (lib/acesso/acesso-atual): papel e perfil, na mesma consulta
         role: true, perfilAcesso: { select: { nome: true, ativo: true, permissoes: true } },
         empresa: { select: { ativo: true, configuracao: { select: { appUmDispositivo: true } } } },
@@ -52,7 +52,9 @@ export async function conferirTokenAtivo(token: JWT | null, acabouDeEntrar: bool
   // CHEGOU (o cookie) estava diferente — o navegador então pede /api/auth/session, que regrava o
   // cookie com o acesso novo, e o portão do middleware (que só lê o cookie) passa a concordar.
   const acesso = acessoAtual(u);
-  return { ...token, fs: atual, ...acesso, acessoMudou: acessoMudou(token, acesso) };
+  // A troca pendente também é a do cadastro de agora (a troca pela própria pessoa limpa; o cookie
+  // desta sessão é regravado na hora pela rota da troca, e as outras sessões caem pela senha nova)
+  return { ...token, fs: atual, ...acesso, acessoMudou: acessoMudou(token, acesso), trocarSenha: u.trocarSenha === true };
 }
 
 type Cadastro = Exclude<Awaited<ReturnType<typeof lerUsuario>>, null>;

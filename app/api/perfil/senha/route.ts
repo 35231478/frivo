@@ -55,9 +55,10 @@ export async function PATCH(req: NextRequest) {
   await limparTentativas("TROCA_SENHA", alvos);
 
   const hash = await bcrypt.hash(novaSenha, 12);
-  await prisma.usuario.update({ where: { id: userId }, data: { senha: hash } });
+  // A própria pessoa trocou: a troca obrigatória do 1º acesso (se havia) está feita
+  await prisma.usuario.update({ where: { id: userId }, data: { senha: hash, trocarSenha: false } });
 
   const res = NextResponse.json({ ok: true });
-  await regravarSessaoAtual(req, res, (t) => ({ ...t, fs: impressaoDaSenha(hash) }));
+  await regravarSessaoAtual(req, res, (t) => ({ ...t, fs: impressaoDaSenha(hash), trocarSenha: false }));
   return res;
 }

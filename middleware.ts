@@ -5,6 +5,7 @@ import { authConfig } from "@/auth.config";
 import { destinoSemPermissao, portaoBarra } from "@/lib/permissoes";
 import { apagarCookiesDaSessao, loginAposEncerrar, semCookieDaSessao } from "@/lib/acesso/cookie-sessao";
 import { ROTA_TECNICO, destinoModoTecnico, emModoTecnico } from "@/lib/tecnico/modo";
+import { MENSAGEM_TROCA_PENDENTE, decisaoDaTroca, trocaPendente } from "@/lib/acesso/troca-obrigatoria";
 
 // Instância leve do Auth.js (sem provider/bcrypt/Prisma) — apenas lê e verifica o
 // JWT da sessão. Isso mantém o bundle do middleware bem abaixo do limite do Edge.
@@ -67,6 +68,17 @@ const portao = auth(function middleware(req: NextRequest & { auth: any }) {
   // por /sessao-encerrada nem chega aqui: ver o export abaixo)
   if (req.auth && (pathname === "/login" || pathname === "/")) {
     return NextResponse.redirect(new URL(emModoTecnico(req.auth.user) ? ROTA_TECNICO : "/dashboard", req.url));
+  }
+
+  // Troca de senha no 1º acesso: com a senha definida por outra pessoa e ainda não trocada, só a tela
+  // de troca abre (e sair). Página → a tela de troca; API → 403, sem fazer nada (lib/acesso/troca-obrigatoria).
+  if (req.auth && !ehRotaPublica) {
+    const troca = decisaoDaTroca(pathname, req.auth.user);
+    if (troca?.tipo === "api") return NextResponse.json({ erro: MENSAGEM_TROCA_PENDENTE }, { status: 403 });
+    if (troca) return NextResponse.redirect(new URL(troca.destino, req.url));
+    // Troca pendente num caminho liberado (a tela ou a rota da troca): nada mais decide aqui. O modo
+    // técnico mandaria a tela de troca para o app, e o app de volta para a troca (ciclo).
+    if (trocaPendente(req.auth.user)) return NextResponse.next();
   }
 
   // Modo técnico: o técnico puro fica no app de campo (Meu dia · Agenda · Perfil); o resto do

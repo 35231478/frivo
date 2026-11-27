@@ -102,6 +102,8 @@ describe.skipIf(!URL_PG)("Acesso ao app do colaborador + trava do papel TECNICO 
     const u = await prisma.usuario.findFirst({ where: { empresaId: "e1", email: "joao@clima.com" } });
     expect([u.role, u.ativo, u.perfilAcessoId, u.nome]).toEqual(["TECNICO", true, "pTec", "João Silva"]);
     expect(await bcrypt.compare("tecnico-123", u.senha)).toBe(true); // entra com a senha definida
+    // "Troca de senha no 1º acesso": a senha é do gestor, então o técnico troca no 1º login
+    expect(u.trocarSenha).toBe(true);
 
     // Ligado ao colaborador pelo e-mail (sem coluna nova).
     const { tecnicoDoUsuario } = await import("@/lib/tecnico/escopo");
@@ -161,11 +163,15 @@ describe.skipIf(!URL_PG)("Acesso ao app do colaborador + trava do papel TECNICO 
 
   it("redefinir a senha troca o hash; bloquear o acesso inativa o login (sem apagar o colaborador); reativar reaproveita", async () => {
     comoAdmin();
-    // Redefinir senha.
+    // O técnico já trocou a senha (a própria): a marca da troca está limpa
+    await prisma.usuario.updateMany({ where: { empresaId: "e1", email: "joao@clima.com" }, data: { trocarSenha: false } });
+    // Redefinir senha (pelo gestor): volta a marcar a troca no próximo login
     expect((await acesso("t1", { acessoAtivo: true, senha: "nova-senha-9" })).status).toBe(200);
     let u = await prisma.usuario.findFirst({ where: { empresaId: "e1", email: "joao@clima.com" } });
     expect(await bcrypt.compare("nova-senha-9", u.senha)).toBe(true);
     expect(await bcrypt.compare("tecnico-123", u.senha)).toBe(false);
+    expect(u.trocarSenha).toBe(true);
+    await prisma.usuario.updateMany({ where: { empresaId: "e1", email: "joao@clima.com" }, data: { trocarSenha: false } });
 
     // Bloquear: inativa o login (o authorize do NextAuth só entra com ativo:true) — colaborador intacto.
     expect((await acesso("t1", { acessoAtivo: false })).json).toMatchObject({ temLogin: true, acessoAtivo: false });
@@ -176,8 +182,9 @@ describe.skipIf(!URL_PG)("Acesso ao app do colaborador + trava do papel TECNICO 
     // Reativar sem senha: reaproveita o login (não precisa redefinir).
     expect((await acesso("t1", { acessoAtivo: true })).json).toMatchObject({ acessoAtivo: true });
     expect((await prisma.usuario.findFirst({ where: { empresaId: "e1", email: "joao@clima.com" } })).ativo).toBe(true);
-    // A senha segue a última definida.
+    // A senha segue a última definida; só reativar não pede troca (ninguém definiu senha nova)
     u = await prisma.usuario.findFirst({ where: { empresaId: "e1", email: "joao@clima.com" } });
     expect(await bcrypt.compare("nova-senha-9", u.senha)).toBe(true);
+    expect(u.trocarSenha).toBe(false);
   });
 });

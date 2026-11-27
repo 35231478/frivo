@@ -1,8 +1,8 @@
 /**
  * "Nova empresa" (área do super admin): cria, numa transação só, tudo o que uma empresa precisa
  * para começar — a empresa, a configuração padrão, os 5 perfis de acesso, os 6 tipos de OS de
- * climatização e o PRIMEIRO ADMINISTRADOR (senha inicial definida pelo super admin; ele troca no
- * primeiro acesso em Meu perfil › Senha). Ou tudo, ou nada.
+ * climatização e o PRIMEIRO ADMINISTRADOR (senha inicial definida pelo super admin, marcada para
+ * troca: no 1º login o sistema só abre a tela de troca). Ou tudo, ou nada.
  *
  * Também serve para COMPLETAR o que falta numa empresa (`completarPadroesDaEmpresa`): perfis e tipos
  * de OS que já existem (mesmo nome) não são tocados; só entram os que faltam.
@@ -83,7 +83,8 @@ export async function criarEmpresa(d: NovaEmpresa): Promise<ResultadoNovaEmpresa
       const { perfis, tiposOs } = await completarPadroesDaEmpresa(tx, empresa.id);
       const perfilAdmin = await tx.perfilAcesso.findFirst({ where: { empresaId: empresa.id, tipo: "ADMINISTRADOR" }, select: { id: true } });
       await tx.usuario.create({
-        data: { empresaId: empresa.id, nome: d.admin.nome, email: d.admin.email, senha, role: "ADMIN", ativo: true, perfilAcessoId: perfilAdmin?.id ?? null },
+        // trocarSenha: a senha inicial é do super admin; no 1º login o sistema só abre a tela de troca
+        data: { empresaId: empresa.id, nome: d.admin.nome, email: d.admin.email, senha, trocarSenha: true, role: "ADMIN", ativo: true, perfilAcessoId: perfilAdmin?.id ?? null },
       });
       return { ok: true as const, empresaId: empresa.id, adminEmail: d.admin.email, perfis, tiposOs };
     });
