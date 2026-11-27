@@ -247,6 +247,44 @@ describe("câmera ao vivo no equipamento", () => {
     expect(getUserMedia).toHaveBeenCalledTimes(1);
   });
 
+  it("câmera em uso por outro app (erro passageiro): a do sistema assume, mas a próxima tenta a câmera do app de novo", async () => {
+    getUserMedia = vi.fn().mockRejectedValueOnce(erro("NotReadableError"));
+    await abrirEquipamento();
+    await clicar(botao("Foto antes"));
+    await esperarAte(() => camera()?.getAttribute("data-fase") === "sem-camera", "sem câmera");
+    expect(texto($("[data-sequencia-sem-camera] [role=alert]"))).toBe("A câmera está em uso por outro app.");
+    await clicar($("[data-fechar-camera]"));
+    act(() => root!.unmount()); root = null; caixa.remove();
+    await abrirEquipamento();
+    expect($("[data-secao=depois] [data-botao-camera]")).toBeTruthy();
+  });
+
+  it("a sequência pelo botão da foto pedida: o X fecha sem descer a tela; com a foto depois já tirada, ela não se repete", async () => {
+    await abrirEquipamento();
+    await clicar($("[data-secao=depois] [data-botao-camera]"));
+    await cameraPronta(); await disparar();
+    await esperarAte(() => !camera(), "foto depois tirada");
+    await clicar($("[data-item=iFiltro] [data-botao-camera]"));
+    await cameraPronta();
+    expect(texto($("[data-contagem-passo]"))).toBe("1 de 2"); // as duas pedidas; a depois já está feita
+    rolou = [];
+    await clicar($("[data-fechar-camera]"));
+    await esperar();
+    expect(rolou).toEqual([]);
+  });
+
+  it("fim da sequência desce até a 1ª medição AINDA VAZIA (pula a já preenchida)", async () => {
+    await abrirEquipamento();
+    await focar(campo("iSuc")); await valor(campo("iSuc"), "128"); await enter(campo("iSuc"));
+    (document.activeElement as HTMLElement)?.blur?.();
+    await clicar($("[data-tudo-ok]"));
+    await cameraPronta();
+    rolou = [];
+    for (let k = 0; k < 3; k++) await disparar();
+    await esperarAte(() => rolou.length > 0, "desceu");
+    expect(rolou.map((el) => el.closest("[data-item]")?.getAttribute("data-item"))).toEqual(["iDes"]);
+  });
+
   it("navegador sem câmera ao vivo: o botão de sempre (câmera do sistema), sem passo a mais", async () => {
     Object.defineProperty(window.navigator, "mediaDevices", { configurable: true, value: undefined });
     await abrirEquipamento();

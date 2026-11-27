@@ -177,3 +177,90 @@ Sem SQL. O token do relatório já existe em toda atividade.
 assina, relatório pronto (WhatsApp principal), sem sinal ("Relatório sai quando sincronizar"), de volta ao sinal,
 página pública com materiais e com a assinatura. `depois-37…38`: páginas do PDF (medições com o fora do esperado;
 fotos, materiais e assinaturas). Dados e fotos fictícios.
+
+## PR C: velocidade e uso com uma mão
+
+### Resultado: "Cheguei → concluir", preventiva de 3 splits
+
+Mesmo roteiro, mesmo custo por ação e **o mesmo checklist da base** (6 medições digitadas; o superaquecimento e o ΔT
+do PR A ficam desligados só durante a medição, para comparar igual com igual). Banco local, dados fictícios.
+
+| Aparelho | Toques | Caracteres | Rolagens | Fotos | Tempo padrão | Com a espera do app |
+|---|---|---|---|---|---|---|
+| iPhone 13 — antes | 64 | 54 | 21 | 12 | 142,5 s | 158,0 s |
+| iPhone 13 — depois | **41** (−36%) | 54 | 4 | 12 | **101,3 s** (−29%) | **102,5 s** (−35%) |
+| Pixel 7 — antes | 64 | 54 | 26 | 12 | 146,5 s | 153,9 s |
+| Pixel 7 — depois | **41** (−36%) | 54 | 4 | 12 | **101,3 s** (−31%) | **102,4 s** (−33%) |
+
+- **Toques: −36% nos dois** (meta: ≤ 44). **Tempo padrão: −29% no iPhone e −31% no Pixel**; somando a espera real do
+  app, −35% e −33%. O tempo padrão do iPhone fica 0,6 ponto abaixo da meta de 30%: as 12 fotos (30 s no custo fixo)
+  e os 54 caracteres não mudam; o que caiu foi toque e rolagem.
+- A espera do app varia com o servidor de desenvolvimento (a 1ª rodada depois de compilar chegou a 26 s); vale a
+  rodada com o servidor aquecido, igual à base.
+- As 4 rolagens que sobram: 1 até o "Cheguei" no Meu dia (há uma OS esquecida no topo) e 3 do roteiro no "Concluir"
+  fixo do rodapé (ele fica 8 px dentro da margem que o roteiro reserva para a barra de baixo; a base contou igual).
+- Arquivos: `docs/prints/tecnico-campo-leva3/medicao-depois-*.json` (cada toque e rolagem, na ordem).
+
+### O que mudou no fluxo
+
+| Antes (por equipamento) | Toques | Depois | Toques |
+|---|---|---|---|
+| Foto antes: câmera do sistema (abrir, disparar, "Usar foto") | 3 | Câmera do app: abrir, disparar | 2 |
+| TUDO OK | 1 | TUDO OK | 1 |
+| 2 fotos pedidas, câmera do sistema | 6 | A câmera **já abre** nas pedidas e segue: 2 disparos | 2 |
+| 6 medições (tocar em cada campo, rolando) | 6 | 1º campo + "Próximo" no teclado (sem rolar) | 6 |
+| Foto depois (lá embaixo) | 3 | Vem na mesma sequência das pedidas: 1 disparo | 1 |
+| Concluir equipamento | 1 | Concluir e ir ao próximo | 1 |
+| | **20** | | **13** |
+
+Na atividade: o "Cheguei" já abre o 1º equipamento (−1 toque); concluir o último abre a confirmação da conclusão
+(−1 toque).
+
+- **Câmera do app** (ao vivo): 1 toque abre, 1 toque fotografa, sem a tela "Usar foto". Mostra o que fotografar
+  ("Limpeza dos filtros de ar", "2 de 3") e o equipamento. "Pular" passa uma; o X fecha. A foto passa pelo mesmo
+  caminho de sempre (redução e marca d'água conforme as permissões).
+  - **Galeria** só quando a empresa deixa ("Foto somente pela câmera" desligado).
+  - **Câmera bloqueada ou sem câmera:** a câmera do celular assume na hora (a foto entra no mesmo passo) e o app
+    lembra nesta sessão (não pede de novo). Navegador sem câmera ao vivo: o botão de sempre, sem passo a mais.
+- **TUDO OK com foto pedida faltando:** a câmera abre nas pedidas (são obrigatórias para concluir) e segue até a foto
+  depois. Terminou a sequência, a tela desce até a 1ª medição vazia. Sem pedida faltando, o TUDO OK só marca.
+- **"Próximo" no teclado:** grava a medição e vai à seguinte (pula o ΔT calculado e o "Não se aplica"); na última, o
+  teclado mostra "OK" e fecha.
+- **Concluir logo depois de digitar a última medição:** o botão grava o número e espera ele chegar antes de conferir
+  (antes acusaria "Falta 1" à toa; com a nova ordem, esse é o caminho comum).
+- **"Cheguei":** a OS segue para o 1º equipamento a fazer (a OS fica no histórico: o "voltar" do celular volta a ela).
+  Sem equipamento a fazer, fica na OS.
+- **Último equipamento:** volta à OS com a confirmação da conclusão aberta, **só com todos atendidos** (com algum não
+  atendido, concluir é decisão do técnico, no botão de sempre).
+- **Tela do equipamento mais curta** (o TUDO OK sob o dedão, sem rolar): voltar, posição e setas numa linha; "Foto
+  antes"/"Foto depois" na linha do título; as duas frases explicativas viraram dica (ⓘ).
+
+### Alvos de toque e contraste para sol
+
+Auditoria automática (Playwright, iPhone 13) nas telas do fluxo: Meu dia, equipamento, câmera, sequência, medições, OS
+e conclusão. Conta alvos com menos de 44 px (inclusive a área invisível) e texto abaixo de 7:1 (WCAG AAA).
+
+| | Antes | Depois |
+|---|---|---|
+| Alvos < 44 px (distintos) | 7 (logo, dicas ⓘ, fechar do aviso e do modal) | **0** |
+| Texto abaixo de 4,5:1 (falha WCAG) | 0 | 0 |
+| Trechos de texto abaixo de 7:1 | 161 (o texto de apoio era a maioria) | **0** |
+
+- **`campo-sol`** (só no app do técnico, uma classe na raiz): a mesma paleta, um tom mais escura onde se lê na rua.
+  Texto de apoio 5,6–6:1 → 8:1; alertas (atenção, atrasado, ok) → ≥ 7,4:1; botões principais com texto branco
+  (Cheguei, TUDO OK, Concluir, Atenção) → ≥ 7,6:1; links em acento → 8,5:1.
+- **Ícones pequenos** ganharam área de toque invisível de 44 px sem mudar o desenho.
+
+### Mudanças fora do app do técnico (PR C)
+
+| Arquivo | O que muda |
+|---|---|
+| `app/globals.css` | Regras `.campo-sol …` (só valem dentro do app do técnico) |
+| `components/ui/dica.tsx`, `components/ui/avisos.tsx`, `components/ui/modal.tsx` | Área de toque invisível de 44 px no ⓘ, no fechar do aviso e no fechar do modal (vale para o sistema todo; o desenho não muda) |
+
+### Testes (PR C)
+
+- `app-campo-leva3-velocidade-ui` (15, tela com o banco do aparelho e o motor reais), `app-campo-leva3-velocidade`
+  (8, contraste calculado das cores e alvos).
+- **4 testes antigos atualizados de propósito:** `aviso-cliente-ui` (2: o "Cheguei" pede à OS o 1º equipamento,
+  `&primeiro=1`) e `app-tecnico-ui` (2: a legenda do progresso virou dica; o último equipamento volta com `&fim=1`).
