@@ -77,8 +77,8 @@ export const NOMES_VINCULO: Record<string, string> = {
 export const nomeVinculo = (campo: string) =>
   NOMES_VINCULO[campo] ?? campo.replace(/([A-Z])/g, " $1").toLowerCase().trim();
 
-/** "3 ordens de serviço" / "QR Code" */
-export const motivoVinculo = (campo: string, n: number | null) => (n == null ? nomeVinculo(campo) : `${n} ${nomeVinculo(campo)}`);
+/** "ordens de serviço: 3" / "QR Code" (o número depois do nome: sem errar o plural de "1") */
+export const motivoVinculo = (campo: string, n: number | null) => (n == null ? nomeVinculo(campo) : `${nomeVinculo(campo)}: ${n}`);
 
 /** Itens candidatos ao desfazer, na ordem de apagar (filhos antes dos pais; dentro do mesmo nível, como foram criados) */
 export function ordemDeApagar<T extends { entidade: string }>(itens: T[]): T[] {

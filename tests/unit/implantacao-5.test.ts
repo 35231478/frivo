@@ -58,12 +58,12 @@ describe("ordem de apagar e ponto fixo", () => {
     const chamadas: string[][] = [];
     const r = await pontoFixo(["unidades:U", "clientes:C", "clientes:D"], async (rest) => {
       chamadas.push([...rest].sort());
-      const m = new Map<string, string[]>([["unidades:U", ["1 ordens de serviço"]], ["clientes:D", []]]);
-      if (!rest.has("unidades:U")) m.set("clientes:C", ["1 unidades"]);
+      const m = new Map<string, string[]>([["unidades:U", ["ordens de serviço: 1"]], ["clientes:D", []]]);
+      if (!rest.has("unidades:U")) m.set("clientes:C", ["unidades: 1"]);
       return m;
     });
     expect([...r.apagar]).toEqual(["clientes:D"]);
-    expect(Object.fromEntries(r.ficam)).toEqual({ "unidades:U": ["1 ordens de serviço"], "clientes:C": ["1 unidades"] });
+    expect(Object.fromEntries(r.ficam)).toEqual({ "unidades:U": ["ordens de serviço: 1"], "clientes:C": ["unidades: 1"] });
     expect(chamadas).toEqual([["clientes:C", "clientes:D", "unidades:U"], ["clientes:C", "clientes:D"], ["clientes:D"]]);
   });
 
@@ -75,7 +75,7 @@ describe("ordem de apagar e ponto fixo", () => {
   });
 
   it("motivo do vínculo: nome conhecido, campo desconhecido em palavras, 1-1 sem número", () => {
-    expect(motivoVinculo("ordensServico", 2)).toBe("2 ordens de serviço");
+    expect(motivoVinculo("ordensServico", 2)).toBe("ordens de serviço: 2");
     expect(motivoVinculo("qrcode", null)).toBe("QR Code");
     expect(nomeVinculo("registrosDeAlgo")).toBe("registros de algo");
   });
@@ -93,8 +93,8 @@ describe("quem pode desfazer cada cadastro", () => {
     expect(podeDesfazerCadastro("tiposEquipamento", sem({ configuracoes: ["visualizar"] }))).toBe(false);
     expect(podeDesfazerCadastro("desconhecido", () => true)).toBe(false);
     // Produtos, serviços e fornecedores não têm "excluir": a mesma permissão de inativar
-    expect(CADASTROS_DO_LOTE.produtos.permissao.length).toBeGreaterThan(0);
-    expect(podeDesfazerCadastro("produtos", (m, a) => CADASTROS_DO_LOTE.produtos.permissao.some(([mm, aa]) => mm === m && aa === a))).toBe(true);
+    expect(CADASTROS_DO_LOTE.produtos.permissao!.length).toBeGreaterThan(0);
+    expect(podeDesfazerCadastro("produtos", (m, a) => CADASTROS_DO_LOTE.produtos.permissao!.some(([mm, aa]) => mm === m && aa === a))).toBe(true);
     expect(podeDesfazerCadastro("produtos", sem({ clientes: ["excluir"] }))).toBe(false);
   });
 
@@ -144,7 +144,7 @@ const PREVIA: PreviaDesfazer = {
     { entidade: "unidades", id: "u1", rotulo: "Principal — Clínica Alfa (fictícia)", linha: null },
     { entidade: "clientes", id: "c1", rotulo: "Clínica Alfa (fictícia)", linha: 2 },
   ],
-  ficam: [{ entidade: "clientes", id: "c2", rotulo: "Mercado Beta (fictício)", linha: 3, motivos: ["2 ordens de serviço", "1 orçamentos"] }],
+  ficam: [{ entidade: "clientes", id: "c2", rotulo: "Mercado Beta (fictício)", linha: 3, motivos: ["ordens de serviço: 2", "orçamentos: 1"] }],
   atualizados: [{ entidade: "clientes", id: "c3", rotulo: "Escola Gama (fictícia)", linha: 4 }],
   naoExistem: [],
 };
@@ -199,7 +199,7 @@ describe("tela: importações na Implantação", () => {
     expect($("[data-grupo='apagar']")!.textContent).toContain("1 unidade");
     expect($("[data-grupo='apagar'] [data-item-lote='Clínica Alfa (fictícia)']")!.textContent).toContain("linha 2");
     expect($("[data-grupo='apagar'] [data-item-lote='Principal — Clínica Alfa (fictícia)']")!.textContent).toContain("criado pela importação");
-    expect($("[data-grupo='ficam'] [data-item-lote='Mercado Beta (fictício)']")!.textContent).toContain("2 ordens de serviço; 1 orçamentos");
+    expect($("[data-grupo='ficam'] [data-item-lote='Mercado Beta (fictício)']")!.textContent).toContain("ordens de serviço: 2; orçamentos: 1");
     expect($("[data-grupo='atualizados']")!.textContent).toMatch(/Só atualizado por esta importação \(não é desfeito\) \(1\)/);
     expect($("[data-grupo='nao-existem']")).toBeNull();
     expect($("[data-previa-nota]")).toBeNull();

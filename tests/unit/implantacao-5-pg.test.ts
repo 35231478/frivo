@@ -150,7 +150,7 @@ describe.skipIf(!URL_PG)("Implantação, leva 5 — lotes e desfazer (PostgreSQL
     expect(rotulos(p.apagar)).toEqual(["clientes:Clínica Alfa (fictícia)", "unidades:Principal — Clínica Alfa (fictícia)"]);
     // Filhos antes dos pais
     expect(p.apagar.map((i: any) => i.entidade)).toEqual(["unidades", "clientes"]);
-    expect(motivosDe(p, "Mercado Beta (fictício)")).toBe("1 interações");
+    expect(motivosDe(p, "Mercado Beta (fictício)")).toBe("interações: 1");
     expect(motivosDe(p, "Escola Gama (fictícia)")).toMatch(/alterado depois desta importação/);
     expect(motivosDe(p, "Principal — Mercado Beta (fictício)")).toBe("é a unidade principal de um cliente que fica");
     expect(motivosDe(p, "Principal — Escola Gama (fictícia)")).toBe("é a unidade principal de um cliente que fica");
@@ -196,7 +196,7 @@ describe.skipIf(!URL_PG)("Implantação, leva 5 — lotes e desfazer (PostgreSQL
     await prisma.qrcode.create({ data: { empresaId: "e1", codigo: "QR-1", equipamentoId: pt1.id } });
     const p = (await previa(lote.id)).json;
     expect(motivosDe(p, "Midea MPT-60")).toBe("QR Code");
-    expect(motivosDe(p, "Piso-Teto")).toBe("1 equipamentos");
+    expect(motivosDe(p, "Piso-Teto")).toBe("equipamentos: 1");
     expect(rotulos(p.apagar)).toEqual(["equipamentos:Daikin FCQ", "equipamentos:Midea MPT-60", "tiposEquipamento:Cassete"]);
     expect(p.apagar.map((i: any) => i.entidade)).toEqual(["equipamentos", "equipamentos", "tiposEquipamento"]);
     await desfazer(lote.id);
@@ -215,8 +215,8 @@ describe.skipIf(!URL_PG)("Implantação, leva 5 — lotes e desfazer (PostgreSQL
     await importar("veiculos", csv([["placa", "modelo", "responsavel_cpf"], ["FRV1A23", "Fiorino", cpf("731004501")]], "veiculos.csv"));
     const lVeic = await loteMaisNovo();
     const p = (await previa(lColab.id)).json;
-    expect(motivosDe(p, "Rafael (fictício)")).toBe("1 veículos sob responsabilidade");
-    expect(motivosDe(p, "Encarregado")).toBe("1 colaboradores");
+    expect(motivosDe(p, "Rafael (fictício)")).toBe("veículos sob responsabilidade: 1");
+    expect(motivosDe(p, "Encarregado")).toBe("colaboradores: 1");
     expect((await desfazer(lColab.id)).json.apagados).toBe(0);
     // O mais novo primeiro: veículos, depois colaboradores
     expect((await desfazer(lVeic.id)).json.apagados).toBe(1);
@@ -281,7 +281,7 @@ describe.skipIf(!URL_PG)("Implantação, leva 5 — lotes e desfazer (PostgreSQL
     // entre a prévia e o clique, alguém registra uma interação com ela
     await prisma.interacaoCliente.create({ data: { empresaId: "e1", clienteId: a!.id, usuarioId: "u1", tipo: "EMAIL", descricao: "Chegou no meio" } });
     const r = await desfazerLote(lote.id, ctx);
-    expect(r!.ficam.find((f) => f.rotulo === "Clínica Alfa (fictícia)")?.motivos).toEqual(["1 interações"]);
+    expect(r!.ficam.find((f) => f.rotulo === "Clínica Alfa (fictícia)")?.motivos).toEqual(["interações: 1"]);
     expect(await prisma.cliente.count({ where: { id: a!.id } })).toBe(1);
     expect(await prisma.unidade.count({ where: { clienteId: a!.id, principal: true } })).toBe(1);
     expect(await prisma.interacaoCliente.count()).toBe(1);

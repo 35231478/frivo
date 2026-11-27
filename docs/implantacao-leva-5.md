@@ -94,7 +94,12 @@ Sem o SQL aplicado:
   - o uso que aparece entre a prévia e o clique;
   - o **tudo ou nada** (nada apagado e 409 pela rota);
   - o SQL rodado 3× e comparado com o schema do Prisma.
-- Mutação: `mutacao-implantacao5.py` (57 mutantes; o resultado está no PR).
+- **Mutação:** 57 mutantes, **57 mortos**. Cada um quebra uma regra (situação, ordem, ponto fixo, permissões, uso em cascata,
+  "alterado depois", Principal, prévia, desfazer, gravação do lote, rotas e tela). A 1ª rodada deixou 3 vivos, que viraram testes:
+  - o desfazer reconferindo com o módulo desligado;
+  - o tipo de equipamento que já existia não entra no lote;
+  - gravar sem arquivo não cria lote.
+- **Navegador real** (Playwright, banco local de prints com o SQL aplicado só nele): 14 conferências ok.
 
 ## Prints
 
