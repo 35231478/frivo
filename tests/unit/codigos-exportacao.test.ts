@@ -249,6 +249,8 @@ describe("exportação = mesmas colunas, lidas de volta (round-trip)", () => {
       // Implantação, leva 4: estoque pede ver o estoque; veículos, ver a frota; colaboradores (CPF, telefone
       // e endereço saindo do sistema) pede GERENCIAR a equipe, não só ver
       estoque: [["estoque", "visualizar"]], veiculos: [["veiculos", "visualizar"]], colaboradores: [["equipes", "gerenciar"]],
+      // Implantação, leva 6: contratos e PMOC (planilhas que só cadastram; não há "baixar os cadastrados")
+      contratos: [["contratos", "visualizar"]], pmocs: [["pmoc", "visualizar"]],
     });
   });
 });
