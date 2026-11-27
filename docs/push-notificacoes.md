@@ -17,7 +17,7 @@ Avisos no celular ou no computador mesmo com o Frivo fechado. O técnico recebe 
 2. **Colar no Vercel:** projeto › Settings › Environment Variables › ambiente **Production**. Crie uma variável para cada linha, com o nome e o valor.
    - A chave **privada** é segredo: só no Vercel, nunca em código, chat ou e-mail.
 3. **Fazer um novo deploy:** Deployments › último deploy › ⋯ › Redeploy. O servidor lê as chaves na hora, sem precisar recompilar, mas a variável nova só vale a partir de um deploy.
-4. **Rodar o SQL** `prisma/sql/2027-02-04_push_notificacoes.sql`, **antes** de subir esta versão.
+4. **Rodar o SQL** `prisma/sql/2027-02-05_push_notificacoes.sql`, **antes** de subir esta versão.
 5. **Testar:** Meu perfil › Notificações › "Ativar notificações neste aparelho" › "Enviar teste".
 
 **Não troque as chaves depois.** Trocar desinscreve todos os aparelhos, e cada pessoa precisaria ativar de novo.
