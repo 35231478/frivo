@@ -104,3 +104,77 @@ entrou numa medição válida. O técnico (modo técnico) não usa essas rotas, 
 
 `docs/prints/tecnico-campo-leva1/` — `antes-*` e `depois-*`, iPhone 13, Pixel 7 e desktop (Chromium com a tela e o
 agente de cada aparelho; o WebKit não está instalado neste ambiente). Empresa de demonstração, dados fictícios.
+
+---
+
+# PR 2: atividade esquecida em andamento e topo da OS
+
+## 3. Atividade esquecida em andamento
+
+| Quem | Quando | Onde |
+|---|---|---|
+| Técnico | Passou de **X horas** em andamento (por empresa, **padrão 4 h**) | Faixa no **Meu dia** (um toque abre a OS) e no topo da **OS** |
+| Técnico | O **expediente do dia acabou** (jornada de Configurações › Horário comercial; sem ela, seg a sex até 18h) | Idem |
+| Técnico | A atividade **começou em outro dia** | Idem |
+| Gestor | Em andamento há mais de X horas, ou desde outro dia | **Sino**: "Atividades esquecidas em andamento" (link para a OS da mais antiga) |
+
+- O aviso ao técnico é calculado **no aparelho**: funciona sem sinal (o "iniciar" ainda na fila já conta pela hora do toque).
+- **X horas**: Equipes › App do colaborador › "Atividade esquecida em andamento" (1 a 24 h). Fora disso, a tela
+  trava o salvar e o servidor recusa (400).
+- **Início gravado** (`atividades_os.iniciada_em`): a 1ª gravação no app, pela **hora do toque** (corrigida pelo
+  relógio do servidor, como o "Cheguei"). Reabrir pelo escritório recomeça. Atividades antigas, sem a coluna, usam
+  a hora agendada (o SQL não reescreve nada).
+- Push (app fechado) fica para a leva própria (chave VAPID), como combinado.
+
+### Concluir com tempo suspeito
+
+Tempo suspeito = passou do limite desde o início, ou virou o dia. No "Concluir atividade" aparece **"Horário de
+término"** com três opções, a primeira já marcada:
+
+1. **última gravação** (resposta, foto, equipamento, serviço extra, foto do serviço ou material — do servidor ou do
+   aparelho, a mais recente) — confirmar é 1 toque;
+2. **agora**;
+3. **outro horário** (no dia em que começou, se foi em outro dia), validado: precisa ficar entre o início e agora.
+
+- O servidor confere de novo (`terminoEm` na operação `concluir`): fora do intervalo = 422 "O horário de término
+  precisa ficar entre o início da atividade e agora." e a atividade continua aberta.
+- Vale como **data da conclusão** (relatório e Desempenho) e fica no **Histórico da OS**: "Horário de término
+  informado — Término informado pelo técnico: 16:20 (concluída no app às 18:05)".
+- Sem tempo suspeito, nada muda: tudo feito = **Concluir → Concluir atividade** (2 toques).
+
+## 4. Topo da OS: o que fazer
+
+Ordem nova do topo: número e tipo · status → cliente → prazo e prioridade alta → **Problema relatado** (chamado do
+cliente) ou **O que fazer** → equipamentos ("3 equipamentos · 1 atendido") → endereço → **Como chegar · Ligar ·
+WhatsApp** (botões grandes, 1 toque cada) → **Detalhes** (recolhido).
+
+- **Detalhes**: atividade, horário e duração, unidade, prioridade, origem (aberta pelo escritório, recorrente,
+  chamado do cliente), **aberta por**, visita N de M, orientação do escritório e os materiais previstos.
+- **WhatsApp**: o mesmo número do aviso ao cliente (contato que abriu o chamado → contato de Ordens → principal →
+  celular), só com "Exibir contatos do cliente"; desligado, o número nem sai do servidor.
+- Explicações que estavam na tela (câmera rápida, fotos do serviço) foram para a dica (ⓘ).
+
+## 🔵 Banco (PR 2) — duas colunas, aditivas
+
+**SQL gerado e NÃO aplicado:** `prisma/sql/2027-02-02_app_atividade_esquecida.sql`.
+
+- `atividades_os.iniciada_em` (`TIMESTAMP(3)`, opcional) e `configuracoes.app_alerta_andamento_horas`
+  (`INTEGER NOT NULL DEFAULT 4`). Nada é reescrito.
+- **Rodar ANTES do merge**:
+  `psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f prisma/sql/2027-02-02_app_atividade_esquecida.sql`
+
+## Mudanças fora do app do técnico (PR 2, mínimas)
+
+| Arquivo | Por quê |
+|---|---|
+| `lib/alertas/sino.ts`, `app/api/alertas/route.ts`, `components/layout/header.tsx` | Grupo "Atividades esquecidas em andamento" (quem vê OS, nunca o técnico) |
+| `app/api/ordens/[id]/atividades/[atividadeId]/route.ts` | Reabrir (voltar a Em andamento) recomeça o início |
+| `app/api/configuracoes/route.ts`, `components/equipes/app-colaborador-client.tsx`, `lib/tecnico/config-app.ts` | O limite de horas (Equipes › App do colaborador) |
+| `lib/execucao/acoes.ts` | `iniciarAtividade` grava o início; `concluirAtividade` aceita o término informado |
+| `lib/execucao/aviso-cliente.ts` | `whatsappDoCliente` (mesma resolução do aviso, para o botão do topo) |
+| `prisma/schema.prisma` | As duas colunas |
+
+## Testes (PR 2)
+
+- `app-campo-leva1-pr2` (19, regra pura), `app-campo-leva1-pr2-ui` (16, tela), `app-campo-leva1-pr2-pg` (8,
+  PostgreSQL real), `sql-app-atividade-esquecida` (5).
