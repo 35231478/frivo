@@ -31,7 +31,7 @@ vi.mock("react-signature-canvas", async () => {
   const React = await import("react");
   return {
     default: React.forwardRef((p: any, ref: any) => {
-      React.useImperativeHandle(ref, () => ({ isEmpty: () => quadro.vazio, clear: () => { quadro.limpou++; }, getCanvas: () => ({ toDataURL: () => ASSINATURA }) }));
+      React.useImperativeHandle(ref, () => ({ isEmpty: () => quadro.vazio, clear: () => { quadro.limpou++; }, getCanvas: () => ({ toDataURL: () => ASSINATURA }), toData: () => [] /* sem pontos: salva o quadro inteiro (o recorte é testado em app-assinatura-aceite) */ }));
       return React.createElement("canvas", { ...p.canvasProps });
     }),
   };
