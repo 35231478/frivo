@@ -9,6 +9,7 @@ import { linhasMedicaoCompleta, rotuloMedicao } from "@/lib/faturamento/fatura";
 import { cancelarParcelas, reajustarParcelas, recebidoNoPeriodo, saldoDoAgregado } from "@/lib/financeiro/parcelas-server";
 import { proximoNumero } from "@/lib/numeracao-server";
 import { agendarPush, notificarOsCancelada } from "@/lib/push/eventos";
+import { travaFaturarOs } from "@/lib/pedido-cliente/server";
 import {
   type CobrancaContrato, competenciasDoContrato, detalheCancelamento, detalheReaberta, eventoDoContrato, mudancasDaCobranca,
   descricaoDaCobranca, passoCobranca, planoSincronizacao, valorMensalDe, vencimentoDaCompetencia,
@@ -339,7 +340,11 @@ export async function criarMedicaoDeRelatorio(relatorioId: string) {
       return { medicao: null, nova: false };
     }
 
+    // Pedido do cliente (lib/pedido-cliente): a OS que ainda espera o pedido não deixa a fatura seguir para a nota —
+    // ela nasce "Aguardando pedido" (a NFS-e só sai de fatura liberada) e segue sozinha quando o pedido chegar
+    const semPedido = await travaFaturarOs(relatorio.empresaId, relatorio.ordemServicoId);
     const status =
+      semPedido && perfil !== "FATURA_UNICA" ? "AGUARDANDO_PC" :
       perfil === "COM_APROVACAO" ? "AGUARDANDO_PC" :
       perfil === "AUTOMATICO" ? "NF_EMITIDA" :
       perfil === "FATURA_UNICA" ? "RASCUNHO" :

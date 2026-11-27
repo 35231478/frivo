@@ -91,7 +91,7 @@ export function pendenciasEmitente(e: EmitenteEmissao, agora: Date = new Date())
   return p;
 }
 
-/** Medição em que a NF pode sair: aprovada (e com o pedido do cliente, se ele exige) */
+/** Medição em que a NF pode sair: aprovada (e com o pedido de compra, se o cliente exige) */
 export const STATUS_MEDICAO_EMITE = ["PC_RECEBIDO", "NF_EMITIDA", "BOLETO_GERADO", "PAGO"] as const;
 export interface MedicaoEmissao {
   id: string; numero: string; status: string;
@@ -104,7 +104,7 @@ export function pendenciasMedicao(m: MedicaoEmissao, rotuloStatus: string): Pend
   if (m.status === "CANCELADA") return [{ area: "medicao", texto: `A medição ${m.numero} está cancelada.`, link, rotuloLink: "Abrir a medição" }];
   if (m.nfManual) return [{ area: "medicao", texto: `A medição ${m.numero} já tem NF registrada à mão (nº ${m.nfManual}): não emitimos outra.`, link, rotuloLink: "Abrir a medição" }];
   if (!(STATUS_MEDICAO_EMITE as readonly string[]).includes(m.status)) {
-    return [{ area: "medicao", texto: `A medição ${m.numero} precisa estar aprovada (e com o pedido do cliente, se ele exige) antes da nota. Hoje está “${rotuloStatus}”.`, link, rotuloLink: "Abrir a medição" }];
+    return [{ area: "medicao", texto: `A medição ${m.numero} precisa estar aprovada (e com o pedido de compra, se o cliente exige) antes da nota. Hoje está “${rotuloStatus}”.`, link, rotuloLink: "Abrir a medição" }];
   }
   return [];
 }
@@ -206,8 +206,6 @@ export interface ContextoDiscriminacao {
   medicaoNumero: string; osNumeros?: string[];
   /** Referência pronta ("Fatura nº 2026-0012" no avulso); sem ela, "Medição MED-…" */
   referencia?: string;
-  /** O pedido do cliente ("Pedido do cliente nº 4500012345"), quando há: entra sozinho na referência */
-  pedidoCliente?: string | null;
 }
 
 /** Valor em reais com espaço comum (o Intl usa espaço sem quebra, que algumas prefeituras recusam) */
@@ -223,7 +221,7 @@ export function discriminacaoPadrao(g: Pick<GrupoNota, "itens">, ctx: ContextoDi
       ? `${item.descricao.trim()} — ${String(q).replace(".", ",")} x ${reais(unit)} = ${reais(item.valorTotal)}`
       : `${item.descricao.trim()} — ${reais(item.valorTotal)}`;
   });
-  const ref = [ctx.referencia ?? `Medição ${ctx.medicaoNumero}`, ...(ctx.osNumeros?.length ? [`OS ${ctx.osNumeros.join(", ")}`] : []), ...(ctx.pedidoCliente ? [ctx.pedidoCliente] : [])].join(" · ");
+  const ref = [ctx.referencia ?? `Medição ${ctx.medicaoNumero}`, ...(ctx.osNumeros?.length ? [`OS ${ctx.osNumeros.join(", ")}`] : [])].join(" · ");
   return [...bases, ...linhas, `Ref.: ${ref}`].join(" | ");
 }
 

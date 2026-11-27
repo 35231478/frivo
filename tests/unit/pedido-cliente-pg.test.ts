@@ -54,7 +54,7 @@ describe.skipIf(!URL_PG)("pedido do cliente (PostgreSQL real)", () => {
     (globalThis as any).prisma = undefined;
     ({ prisma } = await import("@/lib/prisma"));
     srv = await import("@/lib/pedido-cliente/server");
-    await Promise.all(["pedidos-cliente", "pedidos-cliente/[id]", "pedidos-cliente/[id]/anexo", "pedidos-cliente/liberar", "pedidos-cliente/alvos", "tecnico/sync", "ordens/[id]/atividades/[atividadeId]", "ordens/[id]/faturar", "medicoes/[id]/acao"]
+    await Promise.all(["configuracoes", "pedidos-cliente", "pedidos-cliente/[id]", "pedidos-cliente/[id]/anexo", "pedidos-cliente/liberar", "pedidos-cliente/alvos", "tecnico/sync", "ordens/[id]/atividades/[atividadeId]", "ordens/[id]/faturar", "medicoes/[id]/acao"]
       .map((r) => import(/* @vite-ignore */ `@/app/api/${r}/route`)));
 
     await prisma.empresa.createMany({ data: [
@@ -183,8 +183,9 @@ describe.skipIf(!URL_PG)("pedido do cliente (PostgreSQL real)", () => {
     expect(f.status).toBeLessThan(300);
     const fatura = await prisma.medicao.findFirst({ where: { itens: { some: { ordemServicoId: "oFat1" } }, avulsa: true } });
     expect(fatura).toMatchObject({ status: "PC_RECEBIDO", pcNumero: "4500012346" });
-    expect(await srv.textoPedidoDaMedicao(fatura.id)).toBe("Pedido do cliente nº 4500012346");
-    expect(await srv.travaNfseDaMedicao(fatura.id)).toBeNull();
+    // o número entra sozinho na discriminação da NFS-e (a referência da fatura)
+    const { referenciaNota } = await import("@/lib/faturamento/fatura");
+    expect(referenciaNota(fatura)).toMatch(/^Fatura nº .+ · Pedido do cliente nº 4500012346$/);
   });
 
   it("o orçamento leva a OS gerada dele (e vice-versa); a OS gerada depois herda o pedido", async () => {
@@ -228,13 +229,16 @@ describe.skipIf(!URL_PG)("pedido do cliente (PostgreSQL real)", () => {
     await prisma.medicaoItem.create({ data: { id: "miUni", medicaoId: m.id, ordemServicoId: "oUni", descricao: "x", quantidade: 1, valorUnitario: 250, valorTotal: 250 } });
     const { aprovarMedicao } = await import("@/lib/faturamento/aprovar-medicao-server");
     expect(await aprovarMedicao("mUni")).toEqual({ status: "AGUARDANDO_PC" });
-    expect(await srv.travaNfseDaMedicao("mUni")).toBe(MSG_TRAVA_FATURAR);
+    // "Aguardando PC" não está entre os status que emitem a NFS-e (a trava da nota é o status da fatura)
+    const { STATUS_MEDICAO_EMITE } = await import("@/lib/nfse/nota");
+    expect((STATUS_MEDICAO_EMITE as readonly string[]).includes("AGUARDANDO_PC")).toBe(false);
     comoAdmin();
     const r = await chamar("medicoes/[id]/acao", "POST", { id: "mUni" }, { acao: "REGISTRAR_PC", pcNumero: "OC-2026-889" });
     expect(r.json).toMatchObject({ ok: true, status: "PC_RECEBIDO" });
     expect(await prisma.medicao.findUnique({ where: { id: "mUni" } })).toMatchObject({ status: "PC_RECEBIDO", pcNumero: "OC-2026-889" });
     expect((await prisma.ordemServico.findUnique({ where: { id: "oUni" }, include: { pedidoCliente: true } })).pedidoCliente.numero).toBe("OC-2026-889");
-    expect(await srv.textoPedidoDaMedicao("mUni")).toBe("Pedido do cliente nº OC-2026-889");
+    const { referenciaNota } = await import("@/lib/faturamento/fatura");
+    expect(referenciaNota((await prisma.medicao.findUnique({ where: { id: "mUni" } })))).toBe("Medição MED-UNI · Pedido do cliente nº OC-2026-889");
     expect(await aguardando()).toEqual([]);
     // a fatura de OS que já tem pedido: aprovada segue direto, com o número
     const m2 = await prisma.medicao.create({ data: { id: "mFat2", empresaId: "e1", clienteId: "cFat", numero: "MED-F2", tokenPublico: "tk-f2", status: "AGUARDANDO_APROVACAO", valorTotal: 500 } });
@@ -254,6 +258,51 @@ describe.skipIf(!URL_PG)("pedido do cliente (PostgreSQL real)", () => {
     expect(await srv.contarPedidosAtrasados("e1", agora)).toEqual({ pedidosAtrasados: 2, pedidoAtrasadoOsId: "sFatVelha", diasAlertaPedido: 7 });
     await prisma.configuracao.update({ where: { empresaId: "e1" }, data: { pedidoClienteDiasAlerta: 20 } });
     expect((await srv.contarPedidosAtrasados("e1", agora)).pedidosAtrasados).toBe(1); // só a de 22 dias
+    await prisma.configuracao.update({ where: { empresaId: "e1" }, data: { pedidoClienteDiasAlerta: 7 } });
+  });
+
+  it("a lista de OS: o filtro ?pedido=aguardando, a etiqueta de cada linha e o resumo (quantas e R$)", async () => {
+    const { carregarListaOs } = await import("@/lib/os/lista-server");
+    const l = await carregarListaOs("e1", { periodo: "todos", pedido: "aguardando", sort: "numero", dir: "asc" }, DIA(27));
+    expect(l.linhas.map((o) => o.id)).toEqual(["sFatVelha", "sFatNova", "sFatAberta", "sExe"]);
+    expect(l.linhas.every((o) => o.pedidoCliente?.aguardando)).toBe(true);
+    expect(l.resumoPedido).toEqual({ quantidade: 4, total: 0 });
+    const todas = await carregarListaOs("e1", { periodo: "todos", sort: "numero", dir: "asc" }, DIA(27));
+    const por = Object.fromEntries(todas.linhas.map((o) => [o.id, o.pedidoCliente]));
+    expect(por.oNao).toBeNull();                                         // o cliente não exige: sem etiqueta
+    expect(por.oFat1).toMatchObject({ aguardando: false, pedido: { numero: "4500012346" } });
+    expect(por.oExe).toMatchObject({ aguardando: false, pedido: null, liberadoMotivo: "Atendimento emergencial autorizado pelo gerente" });
+    // a empresa sem nenhum cliente que exige: nem resumo nem etiqueta
+    const outra = await carregarListaOs("e2", { periodo: "todos" }, DIA(27));
+    expect([outra.resumoPedido, outra.linhas[0].pedidoCliente]).toEqual([null, null]);
+  });
+
+  it("o painel de pendências (N · R$) e o sino (só as atrasadas, no número); o técnico não recebe nada disso", async () => {
+    const sino = await import("@/lib/alertas/sino");
+    const { contarSino } = await import("@/lib/alertas/sino-server");
+    const pend = await import("@/lib/alertas/pendencias");
+    const escritorio = sino.escopoDoSino({ permissoes: permissoesTotais(), role: "ADMIN", restrito: false });
+    const c = await contarSino({ empresaId: "e1", usuarioId: "uA", escopo: escritorio, filtroTecnico: {}, agora: DIA(27) });
+    expect(c.foraDoNumero).toMatchObject({ pedidosAguardando: 4, pedidosAguardandoTotal: 0 });
+    expect([c.pedidosAtrasados, c.pedidoAtrasadoOsId, c.diasAlertaPedido]).toEqual([2, "sFatVelha", 7]);
+    expect(pend.itemPendencia("pedidosCliente", c)).toMatchObject({ rotulo: "Aguardando pedido do cliente", valor: 4, href: "/ordens?pedido=aguardando&periodo=todos&sort=criadoEm&dir=asc", detalhe: null });
+    // o total em R$ aparece quando há valor; as atrasadas entram no número do sino
+    await prisma.osItemOrcamento.create({ data: { id: "iS", ordemServicoId: "sFatVelha", descricao: "x", quantidade: 1, valorUnitario: 800, valorTotal: 800, executado: true } });
+    const c2 = await contarSino({ empresaId: "e1", usuarioId: "uA", escopo: escritorio, filtroTecnico: {}, agora: DIA(27) });
+    expect(pend.itemPendencia("pedidosCliente", c2).detalhe).toBe("R$ 800,00");
+    const { totalDoSino } = await import("@/lib/alertas/lidos");
+    expect(totalDoSino({ ...c2, pedidosAtrasados: 0 })).toBe(c2.total - 2);
+    const t = await contarSino({ empresaId: "e1", usuarioId: "uT", escopo: sino.escopoDoSino({ permissoes: PRESETS.TECNICO, role: "TECNICO", restrito: true }), filtroTecnico: {}, agora: DIA(27) });
+    expect([t.pedidosAtrasados, t.foraDoNumero.pedidosAguardando]).toEqual([0, 0]);
+  });
+
+  it("Configurações grava o prazo do aviso (1 a 90 dias)", async () => {
+    comoAdmin();
+    let r = await chamar("configuracoes", "PUT", {}, { pedidoClienteDiasAlerta: "15" });
+    expect(r.status).toBe(200);
+    expect((await prisma.configuracao.findUnique({ where: { empresaId: "e1" } })).pedidoClienteDiasAlerta).toBe(15);
+    r = await chamar("configuracoes", "PUT", {}, { pedidoClienteDiasAlerta: 0 });
+    expect(r.status).toBe(400);
     await prisma.configuracao.update({ where: { empresaId: "e1" }, data: { pedidoClienteDiasAlerta: 7 } });
   });
 });

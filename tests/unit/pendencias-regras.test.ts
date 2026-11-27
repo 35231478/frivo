@@ -83,7 +83,7 @@ describe("catálogo do painel", () => {
     expect(Object.fromEntries((Object.keys(PENDENCIAS) as (keyof typeof PENDENCIAS)[]).map((id) => [id, escopoDoItem(id)]))).toEqual({
       osSemTecnico: "osSemTecnico", osAtrasadas: "prazos", atividadesEsquecidas: "atividadesEsquecidas", comentariosCampo: "comentariosCampo",
       pmocsVencendo: "pmoc", orcamentosVencendo: "orcamentosVencendo", despesasCampo: "despesasCampo", contasPagarHoje: "contasPagarHoje",
-      contasReceberHoje: "contasReceberHoje", estoqueNegativoCampo: "estoqueNegativoCampo",
+      contasReceberHoje: "contasReceberHoje", estoqueNegativoCampo: "estoqueNegativoCampo", pedidosCliente: "pedidosCliente",
     });
   });
 });

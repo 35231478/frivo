@@ -172,19 +172,19 @@ describe.skipIf(!URL_PG)("painel de pendências (PostgreSQL real)", () => {
   it("virada do dia civil: às 23h30 o que vence hoje ainda conta; às 00h30 virou ontem", async () => {
     const noite = await contar(permissoesTotais(), ANTES_DA_MEIA_NOITE);
     expect(noite.orcamentosVencendo).toBe(2);
-    expect(noite.foraDoNumero).toEqual({ contasPagarHoje: 2, contasReceberHoje: 1 });
+    expect(noite.foraDoNumero).toEqual({ contasPagarHoje: 2, contasReceberHoje: 1, pedidosAguardando: 0, pedidosAguardandoTotal: 0 });
     const madrugada = await contar(permissoesTotais(), DEPOIS_DA_MEIA_NOITE);
     // o1 venceu ontem; o2 (dia 13) segue; o3 (dia 14) entrou no aviso de 3 dias
     expect(madrugada.orcamentosVencendo).toBe(2);
     expect(madrugada.orcamentoVencendoId).toBe("o2");
     // as contas de amanhã (p4, r3) viraram as de hoje
-    expect(madrugada.foraDoNumero).toEqual({ contasPagarHoje: 1, contasReceberHoje: 1 });
+    expect(madrugada.foraDoNumero).toEqual({ contasPagarHoje: 1, contasReceberHoje: 1, pedidosAguardando: 0, pedidosAguardandoTotal: 0 });
     expect(hojeDiaCivil(DEPOIS_DA_MEIA_NOITE).toISOString()).toBe(dia(1).toISOString());
   });
 
   it("contas do dia: em aberto que vencem hoje; o número é o da lista que o toque abre (Vence hoje + Hoje)", async () => {
     const c = await contar();
-    expect(c.foraDoNumero).toEqual({ contasPagarHoje: 2, contasReceberHoje: 1 });
+    expect(c.foraDoNumero).toEqual({ contasPagarHoje: 2, contasReceberHoje: 1, pedidosAguardando: 0, pedidosAguardandoTotal: 0 });
     const hPagar = pendencias.itemPendencia("contasPagarHoje", c).href;
     const hReceber = pendencias.itemPendencia("contasReceberHoje", c).href;
     expect(hPagar).toBe("/financeiro/contas-pagar?card=VENCE_HOJE&periodo=hoje");
@@ -197,19 +197,19 @@ describe.skipIf(!URL_PG)("painel de pendências (PostgreSQL real)", () => {
 
   it("quem vê o quê: só financeiro, só orçamentos, módulo desligado e o técnico no modo técnico", async () => {
     const fin = await contar(SO_FINANCEIRO());
-    expect([fin.osSemTecnico, fin.orcamentosVencendo, fin.foraDoNumero]).toEqual([0, 0, { contasPagarHoje: 2, contasReceberHoje: 1 }]);
+    expect([fin.osSemTecnico, fin.orcamentosVencendo, fin.foraDoNumero]).toEqual([0, 0, { contasPagarHoje: 2, contasReceberHoje: 1, pedidosAguardando: 0, pedidosAguardandoTotal: 0 }]);
     const orc = await contar(SO_ORCAMENTOS());
-    expect([orc.osSemTecnico, orc.orcamentosVencendo, orc.foraDoNumero]).toEqual([0, 2, { contasPagarHoje: 0, contasReceberHoje: 0 }]);
+    expect([orc.osSemTecnico, orc.orcamentosVencendo, orc.foraDoNumero]).toEqual([0, 2, { contasPagarHoje: 0, contasReceberHoje: 0, pedidosAguardando: 0, pedidosAguardandoTotal: 0 }]);
     // contas a pagar só com Financeiro › Visualizar; a receber só com Contas a receber
     const soReceber = await contar(montarPermissoes({ financeiro: ["contasReceber"] } as never));
-    expect(soReceber.foraDoNumero).toEqual({ contasPagarHoje: 0, contasReceberHoje: 1 });
+    expect(soReceber.foraDoNumero).toEqual({ contasPagarHoje: 0, contasReceberHoje: 1, pedidosAguardando: 0, pedidosAguardandoTotal: 0 });
     const tec = await contar(PRESETS.TECNICO, MEIO_DIA, true, "uT");
-    expect([tec.osSemTecnico, tec.orcamentosVencendo, tec.foraDoNumero]).toEqual([0, 0, { contasPagarHoje: 0, contasReceberHoje: 0 }]);
+    expect([tec.osSemTecnico, tec.orcamentosVencendo, tec.foraDoNumero]).toEqual([0, 0, { contasPagarHoje: 0, contasReceberHoje: 0, pedidosAguardando: 0, pedidosAguardandoTotal: 0 }]);
     // módulos desligados somem como sumiram do menu
     await prisma.empresaModulo.createMany({ data: [{ empresaId: "e1", modulo: "orcamentos", ativo: false }, { empresaId: "e1", modulo: "financeiro", ativo: false }] });
     modulos.esquecerModulos("e1");
     const sem = await contar();
-    expect([sem.osSemTecnico, sem.orcamentosVencendo, sem.foraDoNumero]).toEqual([4, 0, { contasPagarHoje: 0, contasReceberHoje: 0 }]);
+    expect([sem.osSemTecnico, sem.orcamentosVencendo, sem.foraDoNumero]).toEqual([4, 0, { contasPagarHoje: 0, contasReceberHoje: 0, pedidosAguardando: 0, pedidosAguardandoTotal: 0 }]);
     await prisma.empresaModulo.deleteMany({ where: { empresaId: "e1" } });
     modulos.esquecerModulos("e1");
   });

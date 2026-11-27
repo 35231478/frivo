@@ -141,12 +141,15 @@ async function alvos(empresaId: string, osIds: string[], orcamentoIds: string[])
   return { oss, orcs };
 }
 
-/** As faturas "Aguardando PC" dessas OS/orçamentos que agora podem seguir (nenhuma linha delas espera mais) */
+/**
+ * As faturas ainda não emitidas dessas OS/orçamentos: o número do pedido vai para elas (é o que entra na NFS-e,
+ * lib/faturamento/fatura › referenciaNota), e a que estava "Aguardando PC" segue quando nenhuma linha espera mais.
+ */
 async function avancarFaturas(tx: Prisma.TransactionClient, osIds: string[], orcamentoIds: string[], extraMedicaoId?: string | null) {
   const medicoes = await tx.medicao.findMany({
-    where: { status: "AGUARDANDO_PC", OR: [{ itens: { some: { OR: [{ ordemServicoId: { in: osIds } }, { orcamentoId: { in: orcamentoIds } }] } } }, ...(extraMedicaoId ? [{ id: extraMedicaoId }] : [])] },
+    where: { status: { in: ["RASCUNHO", "AGUARDANDO_APROVACAO", "APROVADA", "AGUARDANDO_PC", "PC_RECEBIDO"] }, OR: [{ itens: { some: { OR: [{ ordemServicoId: { in: osIds } }, { orcamentoId: { in: orcamentoIds } }] } } }, ...(extraMedicaoId ? [{ id: extraMedicaoId }] : [])] },
     select: {
-      id: true,
+      id: true, status: true,
       itens: {
         select: {
           ordemServico: { select: { ...SELECT_PEDIDO_OS, pedidoCliente: { select: { numero: true } } } },
@@ -157,12 +160,11 @@ async function avancarFaturas(tx: Prisma.TransactionClient, osIds: string[], orc
   });
   for (const m of medicoes) {
     const esperando = m.itens.some((i) => (i.ordemServico && aguardandoPedido(situacaoDaOs(i.ordemServico))) || (i.orcamento && aguardandoPedido(situacaoDoOrcamento(i.orcamento))));
-    if (esperando) continue;
-    const numeros = m.itens.map((i) => i.ordemServico?.pedidoCliente?.numero ?? i.orcamento?.pedidoCliente?.numero);
-    await tx.medicao.updateMany({
-      where: { id: m.id, status: "AGUARDANDO_PC" },
-      data: { status: "PC_RECEBIDO", pcNumero: [...new Set(numeros.filter(Boolean))].join(", ") || null, pcRecebidoEm: new Date() },
-    });
+    const numeros = [...new Set(m.itens.map((i) => i.ordemServico?.pedidoCliente?.numero ?? i.orcamento?.pedidoCliente?.numero).filter(Boolean))].join(", ") || null;
+    if (numeros) await tx.medicao.update({ where: { id: m.id }, data: { pcNumero: numeros } });
+    if (!esperando && m.status === "AGUARDANDO_PC") {
+      await tx.medicao.updateMany({ where: { id: m.id, status: "AGUARDANDO_PC" }, data: { status: "PC_RECEBIDO", pcRecebidoEm: new Date() } });
+    }
   }
 }
 
@@ -291,32 +293,10 @@ export async function travaFaturarOrcamento(empresaId: string, orcamentoId: stri
   return o ? travaFaturar([situacaoDoOrcamento(o)]) : null;
 }
 
-/** A NFS-e da fatura: alguma OS/orçamento dela aguarda o pedido, ou a fatura ainda está "Aguardando PC" */
-export async function travaNfseDaMedicao(medicaoId: string): Promise<string | null> {
-  const m = await prisma.medicao.findUnique({
-    where: { id: medicaoId },
-    select: { status: true, itens: { select: { ordemServico: { select: SELECT_PEDIDO_OS }, orcamento: { select: SELECT_PEDIDO_ORCAMENTO } } } },
-  });
-  if (!m) return null;
-  const itens = m.itens.flatMap((i) => [i.ordemServico ? situacaoDaOs(i.ordemServico) : null, i.orcamento ? situacaoDoOrcamento(i.orcamento) : null]).filter((x): x is SituacaoPedido => !!x);
-  return travaFaturar(itens);
-}
-
 /** O início da execução (escritório, "Cheguei" e iniciar no app): só no modo "para executar e faturar" */
 export async function travaIniciarAtividade(empresaId: string, atividadeId: string): Promise<string | null> {
   const a = await prisma.atividadeOs.findFirst({ where: { id: atividadeId, empresaId }, select: { ordemServico: { select: SELECT_PEDIDO_OS } } });
   return a ? travaIniciar(situacaoDaOs(a.ordemServico)) : null;
-}
-
-/** O número do(s) pedido(s) da fatura, para a discriminação da NFS-e */
-export async function textoPedidoDaMedicao(medicaoId: string): Promise<string | null> {
-  const m = await prisma.medicao.findUnique({
-    where: { id: medicaoId },
-    select: { pcNumero: true, itens: { select: { ordemServico: { select: { pedidoCliente: { select: { numero: true } } } }, orcamento: { select: { pedidoCliente: { select: { numero: true } } } } } } },
-  });
-  if (!m) return null;
-  const dasLinhas = m.itens.map((i) => i.ordemServico?.pedidoCliente?.numero ?? i.orcamento?.pedidoCliente?.numero);
-  return textoPedidoNaNota(dasLinhas.some(Boolean) ? dasLinhas : (m.pcNumero ?? "").split(",").map((x) => x.trim()));
 }
 
 /* ───────── painel e sino ───────── */

@@ -6,6 +6,7 @@ import { AlertTriangle, FileText, Loader2, Paperclip, Unlock } from "lucide-reac
 import { Drawer } from "@/components/ui/drawer";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { InputData } from "@/components/ui/input-data";
 import { Textarea } from "@/components/ui/textarea";
 import { FormField } from "@/components/ui/form-field";
 import { toast } from "@/components/ui/avisos";
@@ -176,7 +177,7 @@ export function GavetaPedido({ aberto, onFechar, alvo, pedidoId = null, onConclu
                 </FormField>
                 <div className="grid grid-cols-2 gap-3">
                   <FormField label="Data">
-                    <Input type="date" value={data} onChange={(e) => setData(e.target.value)} data-pedido-data />
+                    <span data-pedido-data><InputData value={data} onChange={setData} aria-label="Data do pedido" /></span>
                   </FormField>
                   <FormField label="Valor (R$)" error={tentou && !valorOk ? "Valor inválido." : undefined}>
                     <Input value={valor} onChange={(e) => setValor(e.target.value)} inputMode="decimal" placeholder="0,00" data-pedido-valor error={tentou && !valorOk} />
