@@ -28,7 +28,7 @@ export function MateriaisCampo({ osId, podeCorrigir, onMudou }: { osId: string; 
   useEffect(() => { void carregar(); }, [carregar]);
 
   async function estornar(l: LinhaEscritorio) {
-    const ok = await confirmar({ titulo: "Estornar material?", mensagem: `${l.descricao} · ${textoQuantidade(l.quantidade, l.unidade)}. O estoque volta e o lançamento fica registrado como estornado.`, perigo: true, confirmarTexto: "Estornar" });
+    const ok = await confirmar({ titulo: "Estornar material?", mensagem: `${l.descricao} · ${textoQuantidade(l.quantidade, l.unidade)}. O estoque volta.`, perigo: true, confirmarTexto: "Estornar" });
     if (!ok) return;
     const r = await fetch(`/api/ordens/${osId}/materiais-campo/${l.id}`, { method: "DELETE" });
     const j = await r.json().catch(() => null);
