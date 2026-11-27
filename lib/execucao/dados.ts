@@ -10,6 +10,7 @@ import { temModulo } from "@/lib/modulos/servidor";
 import { textoPortaoConsumo } from "@/lib/estoque/separacao";
 import { paraSeparavel } from "@/lib/estoque/separacao-server";
 import { ambienteEquipamento, descricaoEquipamento, fabricanteModelo } from "@/lib/equipamento-descricao";
+import { travaIniciarAtividade } from "@/lib/pedido-cliente/server";
 import {
   completo, faltasEquipamento, paraPendencia, verificarConclusao, textoDispensa, MSG_SEM_EQUIPAMENTO, MSG_SAIDAS_SEM_EQUIPAMENTO,
   type DispensaEquipamento, type EquipamentoParaPendencia, type FaltasEquipamento, type FormularioExecucao, type ItemExecucao, type RespostaItem, type ResultadoConclusao, type StatusItem,
@@ -89,6 +90,8 @@ export interface Execucao {
   conclusao: ResultadoConclusao;
   /** Saída da exigência de equipamento desta atividade (a tela e o app recalculam a conclusão com ela) */
   dispensaEquipamento: DispensaEquipamento | null;
+  /** O cliente exige o pedido dele antes da execução e ele não veio: o motivo (o app avisa antes do início) */
+  aguardandoPedido?: string | null;
 }
 
 /**
@@ -246,6 +249,7 @@ export async function carregarExecucao(empresaId: string, osId: string, atividad
     fotosServico,
     conclusao,
     dispensaEquipamento,
+    aguardandoPedido: await travaIniciarAtividade(empresaId, atividade.id),
   };
 }
 

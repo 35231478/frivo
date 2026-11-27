@@ -214,6 +214,12 @@ export function CartaoAtividade({ c, fila, mostrarDia, proxima, guardado, listaE
       {!entra ? (
         // Antes de chegar: Rota e "Cheguei" (principal). "A caminho" é opcional e some depois do toque.
         <div className="border-t border-surface-border p-3 space-y-1" data-acoes-cartao>
+          {/* O cliente exige o pedido dele antes da execução (lib/pedido-cliente): o "Cheguei" é recusado até o escritório informar */}
+          {c.aguardandoPedido && (
+            <p className="text-xs font-semibold text-atencao-texto bg-atencao-claro rounded-lg px-3 py-2" data-cartao-aguardando-pedido>
+              Aguardando pedido do cliente: o escritório precisa informar o pedido antes do início.
+            </p>
+          )}
           <div className="flex gap-2">
             {/* Sem endereço no cadastro: o botão fica no lugar, apagado, com o porquê (com os dados do cliente ocultos, nem aparece) */}
             {rota ? <BotaoRota rota={rota} className="rounded-card border border-surface-border bg-white" />

@@ -23,6 +23,8 @@ export interface CartaoTela {
   equipamentos: number; atendidos: number; adicionais: number;
   /** A OS veio de um chamado do cliente: a descrição é o que ele pediu. Ausente em listas antigas */
   chamado?: boolean;
+  /** O cliente exige o pedido dele antes da execução e ele não veio (lib/pedido-cliente). Ausente em listas antigas */
+  aguardandoPedido?: boolean;
   /** O que o escritório escreveu para a visita (observação da atividade + observações da OS). Ausente em listas antigas */
   orientacao?: string;
   /** "A caminho" / "Cheguei" de hoje, como a lista baixou. Ausente em listas antigas */
@@ -110,6 +112,8 @@ export interface ExecucaoTela {
   conclusao: ResultadoConclusao;
   /** Saída da exigência de equipamento (tipo, recorrente, justificada); ausente em retratos antigos */
   dispensaEquipamento?: DispensaEquipamento | null;
+  /** O cliente exige o pedido dele antes da execução e ele não veio (lib/pedido-cliente); ausente em retratos antigos */
+  aguardandoPedido?: string | null;
   /** "A caminho" / "Cheguei" registrados hoje nesta atividade; ausente em retratos antigos */
   avisos?: AvisosTela;
   /** Aceite do cliente colhido NESTE aparelho (ainda na fila ou já enviado) */
