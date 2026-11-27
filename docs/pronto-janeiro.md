@@ -66,10 +66,9 @@ atalho, de contrato, não concluída e sem permissão; o seletor com todos escol
 hora selecionada ao entrar (e o campo vazio); as iniciais. Contra o código antigo, 13 dos 16 falham. Os 3 que
 passam nos dois são guardas de regressão.
 
-**Suíte inteira:** 8231 passam. Falham só 2, de `tests/unit/app-campo-leva1-pr2-pg.test.ts` (app de campo).
-Eles dependem do relógio: rodando entre 00:00 e ~03:30 (Brasília), o "término informado" de horas antes cai
-no dia anterior e a mensagem ganha a data. Falham igual no `master` nessa hora; não são desta leva e o
-arquivo é da outra nuvem, então não mexi. Proposta: fixar o relógio no teste (`vi.setSystemTime` ao meio-dia).
+**Suíte inteira:** verde depois de trazer o `master` (resultado no PR). Na rodada antes do merge, 2 testes de
+`tests/unit/app-campo-leva1-pr2-pg.test.ts` falhavam por depender do relógio (entre 00:00 e ~05:00 de
+Brasília); falhavam igual no `master` e já foram corrigidos lá pelo #262 (relógio fixo ao meio-dia).
 
 ## Prints (dados fictícios)
 
