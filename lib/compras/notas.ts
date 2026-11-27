@@ -24,7 +24,7 @@
  * Empresa SEMPRE a da sessão (quem chama passa); nota/produto/pedido de outra empresa = recusado.
  */
 import { criarProdutoComCodigo } from "@/lib/cadastros/codigos-server";
-import { Prisma } from "@prisma/client";
+import { Prisma, type StatusNotaCompra } from "@prisma/client";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { formatarCpfCnpj, formatarData } from "@/lib/utils";
@@ -42,6 +42,7 @@ import { validarRefEmpresa } from "@/lib/ref-empresa";
 import { sugestoesDaNota, vincularNota } from "@/lib/compras/conciliacao-server";
 import { reservarNumeros } from "@/lib/numeracao-server";
 import { whereNotasCompra } from "@/lib/listas/filtros";
+import { lerDanfe, valoresDaNota, type ValoresNota } from "@/lib/compras/danfe";
 import { motivoNaoDescartarNota } from "@/lib/cadastros/regras-arquivar";
 
 /** Recusa com status HTTP e dados extras (ex.: a nota que já existe). */
@@ -168,14 +169,82 @@ export async function carregarNota(empresaId: string, id: string) {
 /** A lista de notas, com a busca e o filtro de situação da URL (lib/listas/filtros › whereNotasCompra). */
 export async function listarNotas(empresaId: string, { pagina = 1, porPagina = 25 } = {}, sp: Record<string, string | undefined> = {}) {
   const where = whereNotasCompra(empresaId, sp);
-  const [total, notas] = await Promise.all([
+  const [total, brutas] = await Promise.all([
     prisma.notaCompra.count({ where }),
     prisma.notaCompra.findMany({
       where, orderBy: [{ criadoEm: "desc" }, { id: "desc" }], skip: (pagina - 1) * porPagina, take: porPagina,
-      select: { id: true, numero: true, serie: true, dataEmissao: true, valorTotal: true, status: true, emitenteNome: true, criadoEm: true, _count: { select: { itens: true } } },
+      select: {
+        id: true, numero: true, serie: true, chaveAcesso: true, dataEmissao: true, lancadaEm: true, valorTotal: true, status: true,
+        emitenteNome: true, emitenteCnpj: true, criadoEm: true, xml: true, _count: { select: { itens: true } },
+        pedidoCompra: { select: { id: true, numero: true } },
+      },
     }),
   ]);
+  // Quem lançou: quem fez a entrada no estoque (a movimentação COMPRA da nota); a nota guarda quem importou
+  const lancadas = brutas.filter((n) => n.status === "LANCADA").map((n) => n.id);
+  const movs = lancadas.length
+    ? await prisma.movimentacaoEstoque.findMany({
+      where: { empresaId, origem: "COMPRA", refId: { in: lancadas } }, orderBy: { criadoEm: "asc" },
+      select: { refId: true, usuario: { select: { nome: true } } },
+    })
+    : [];
+  const lancouPor = new Map<string, string>();
+  for (const m of movs) if (m.refId && m.usuario?.nome && !lancouPor.has(m.refId)) lancouPor.set(m.refId, m.usuario.nome);
+  const notas: NotaDaLista[] = brutas.map(({ xml, ...n }) => ({
+    id: n.id, numero: n.numero, serie: n.serie, chave: n.chaveAcesso, emissao: n.dataEmissao.toISOString(),
+    entrada: n.lancadaEm?.toISOString() ?? null, fornecedor: n.emitenteNome, cnpj: n.emitenteCnpj, itens: n._count.itens,
+    valorTotal: Number(n.valorTotal), valores: valoresDaNota(xml), pedido: n.pedidoCompra, lancadoPor: lancouPor.get(n.id) ?? null,
+    status: n.status,
+  }));
   return { total, notas };
+}
+
+/* ───────── Visualização rápida (a gaveta da lista) ───────── */
+
+/**
+ * O que a gaveta mostra: os dados da nota no banco (sempre) e a DANFE lida do XML importado (null quando a
+ * nota não tem XML legível — aí a gaveta mostra só o que existe e esconde Baixar PDF/XML). Empresa da sessão.
+ */
+export async function visualizacaoDaNota(empresaId: string, id: string) {
+  const n = await prisma.notaCompra.findFirst({
+    where: { id, empresaId },
+    select: {
+      id: true, numero: true, serie: true, chaveAcesso: true, dataEmissao: true, lancadaEm: true, valorTotal: true, status: true,
+      emitenteNome: true, emitenteCnpj: true, xml: true, pedidoCompra: { select: { id: true, numero: true } },
+      itens: { orderBy: { numeroItem: "asc" }, select: { numeroItem: true, codigoFornecedor: true, descricaoFornecedor: true, unidade: true, quantidade: true, valorUnitario: true, valorTotal: true } },
+    },
+  });
+  if (!n) return null;
+  return {
+    nota: {
+      id: n.id, numero: n.numero, serie: n.serie, chave: n.chaveAcesso, emissao: n.dataEmissao.toISOString(), entrada: n.lancadaEm?.toISOString() ?? null,
+      fornecedor: n.emitenteNome, cnpj: n.emitenteCnpj, valorTotal: Number(n.valorTotal), status: n.status, pedido: n.pedidoCompra,
+      itens: n.itens.map((i) => ({ numero: i.numeroItem, codigo: i.codigoFornecedor, descricao: i.descricaoFornecedor, unidade: i.unidade,
+        quantidade: Number(i.quantidade), valorUnitario: Number(i.valorUnitario), valorTotal: Number(i.valorTotal) })),
+    },
+    danfe: lerDanfe(n.xml),
+  };
+}
+export type VisualizacaoNota = NonNullable<Awaited<ReturnType<typeof visualizacaoDaNota>>>;
+
+/** O XML guardado para baixar (null = nota de outra empresa, inexistente ou sem XML de NF-e legível) */
+export async function xmlDaNota(empresaId: string, id: string) {
+  const n = await prisma.notaCompra.findFirst({ where: { id, empresaId }, select: { xml: true, chaveAcesso: true, numero: true, serie: true } });
+  if (!n || !lerDanfe(n.xml)) return null;
+  return { xml: n.xml, chave: n.chaveAcesso, numero: n.numero, serie: n.serie };
+}
+
+/** Uma nota da lista, pronta para a tela (sem o XML; os valores do XML já lidos) */
+export interface NotaDaLista {
+  id: string; numero: string; serie: string; chave: string;
+  /** ISO */
+  emissao: string; entrada: string | null;
+  fornecedor: string; cnpj: string; itens: number; valorTotal: number;
+  /** Produtos, frete, desconto, ICMS, ICMS-ST e IPI do XML; null = nota sem XML legível */
+  valores: ValoresNota | null;
+  pedido: { id: string; numero: string } | null;
+  lancadoPor: string | null;
+  status: StatusNotaCompra;
 }
 
 /* ───────── Descartar (a importada por engano, antes de lançar) ───────── */

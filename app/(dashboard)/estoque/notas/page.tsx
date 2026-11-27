@@ -3,15 +3,17 @@ import Link from "next/link";
 import { ArrowLeft, FileText } from "lucide-react";
 import { exigirModuloNaPagina } from "@/lib/modulos/pagina";
 import { pode } from "@/lib/permissoes";
-import { cn, formatarData, formatarDataHora, formatarMoeda } from "@/lib/utils";
+import { cn, formatarDataHora, formatarMoeda } from "@/lib/utils";
+import { PLANILHA } from "@/lib/planilha";
 import { lerPaginacao, paginaValida } from "@/lib/listagem";
 import { descartesRecentes, listarNotas } from "@/lib/compras/notas";
-import { COR_STATUS_NOTA, LABEL_STATUS_NOTA } from "@/lib/compras/rotulos";
 import { ImportarNota } from "@/components/compras/importar-nota";
-import { BuscaUrl, ConteudoUrl, FiltroSelectUrl, LimparBuscaUrl, ListaUrl, PaginacaoUrl, TabelaProUrl } from "@/components/listagem/lista-url";
+import { LimparBuscaUrl, ListaUrl, PaginacaoUrl } from "@/components/listagem/lista-url";
+import { NotasLista } from "@/components/compras/notas-lista";
+import { periodoNotas } from "@/lib/listas/filtros";
+import { periodoTela } from "@/lib/periodo";
 import { ListaVazia } from "@/components/listagem/listagem-ui";
 import { Dica } from "@/components/ui/dica";
-import { PLANILHA } from "@/lib/planilha";
 
 export const metadata: Metadata = { title: "Notas de compra" };
 
@@ -27,7 +29,9 @@ export default async function NotasCompraPage({ searchParams }: { searchParams: 
   const u = (await exigirModuloNaPagina("estoque"))!.user!;
   const podeImportar = pode(u.permissoes, "estoque", "gerenciar", u.role);
   const busca = sp.q ?? "";
-  const filtrando = !!(busca || sp.status);
+  // O período (por emissão ou entrada) também filtra: a lista vazia oferece "Limpar"
+  const periodo = periodoNotas(sp);
+  const filtrando = !!(busca || sp.status || periodo.tipo !== "todos");
   const { pagina: pedida, porPagina } = lerPaginacao(sp);
   const [{ total }, descartes] = await Promise.all([
     listarNotas(u.empresaId, { pagina: 1, porPagina: 1 }, sp),
@@ -50,69 +54,17 @@ export default async function NotasCompraPage({ searchParams }: { searchParams: 
         {doFinanceiro && <p className="text-sm text-ink-muted -mt-3">Importe o XML: ao confirmar, a nota vira conta a pagar e entrada no estoque de uma vez.</p>}
         {podeImportar && <ImportarNota de={doFinanceiro ? "contas-pagar" : null} />}
 
-        <div className="card overflow-hidden">
-          <div className="p-4 border-b border-surface-border flex flex-wrap items-center gap-2 bg-surface-alt/40">
-            <div className="flex-1 min-w-[220px]">
-              <BuscaUrl lista="notas-compra" placeholder="Pesquisar nº, fornecedor, CNPJ ou chave…" rotulo="Pesquisar notas de compra" />
-            </div>
-            <FiltroSelectUrl param="status" vazio="Todas as situações" opcoes={(["IMPORTADA", "CONCILIADA", "LANCADA"] as const).map((s) => ({ value: s, label: LABEL_STATUS_NOTA[s] }))} />
-          </div>
-          <ConteudoUrl>
-          {notas.length === 0 ? (
-            filtrando
-              ? <div className="flex flex-col items-center gap-2 py-12 text-center" data-lista-vazia>
-                  <p className="text-sm font-medium text-ink">Nenhuma nota encontrada</p>
-                  {busca && <p className="text-xs text-ink-muted">Nada combina com “{busca}”.</p>}
-                  <LimparBuscaUrl />
-                </div>
-              : <ListaVazia mensagem="Nenhuma nota importada ainda. Comece pelo XML da NF-e." />
-          ) : (
-            <TabelaProUrl
-              tela="notas-compra"
-              atributos={{ "data-tabela-notas": true }}
-              cartoes={
-                <ul className="divide-y divide-surface-border" data-cartoes>
-                  {notas.map((n) => (
-                    <li key={n.id} data-nota={n.id} className="px-4 py-3">
-                      <Link href={`/estoque/notas/${n.id}${doFinanceiro ? "?de=contas-pagar" : ""}`} className="font-semibold text-ink hover:text-primary-600">NF {n.numero}/{n.serie}</Link>
-                      <p className="text-xs text-ink-muted truncate">{n.emitenteNome}</p>
-                      <div className="mt-1 flex items-center gap-2 text-xs">
-                        <span className="font-semibold tabular-nums">{formatarMoeda(Number(n.valorTotal))}</span>
-                        <span className="text-ink-subtle">{formatarData(n.dataEmissao)} · {n._count.itens} itens</span>
-                        <span className={cn("text-[10px] font-semibold px-2 py-0.5 rounded-full", COR_STATUS_NOTA[n.status])}>{LABEL_STATUS_NOTA[n.status]}</span>
-                      </div>
-                    </li>
-                  ))}
-                </ul>
-              }
-              colunas={[
-                { id: "nf", titulo: "NF", largura: 120, obrigatoria: true },
-                { id: "fornecedor", titulo: "Fornecedor", minimo: 200, obrigatoria: true, classe: "truncate" },
-                { id: "emissao", titulo: "Emissão", largura: 104 },
-                { id: "valor", titulo: "Valor (R$)", alinhar: "direita", largura: 120, obrigatoria: true },
-                { id: "itens", titulo: "Itens", alinhar: "direita", largura: 72 },
-                { id: "situacao", titulo: "Situação", largura: 140 },
-              ]}
-              linhas={notas.map((n) => ({
-                id: n.id,
-                atributos: { "data-nota": n.id }, href: `/estoque/notas/${n.id}${doFinanceiro ? "?de=contas-pagar" : ""}`,
-                titulos: { fornecedor: n.emitenteNome },
-                celulas: {
-                  nf: <Link href={`/estoque/notas/${n.id}${doFinanceiro ? "?de=contas-pagar" : ""}`} className={cn(PLANILHA.codigo, "font-semibold text-ink hover:text-primary-600")}>{n.numero}/{n.serie}</Link>,
-                  fornecedor: <span className="text-ink-muted">{n.emitenteNome}</span>,
-                  emissao: <span className={cn(PLANILHA.data, PLANILHA.apagado)}>{formatarData(n.dataEmissao)}</span>,
-                  valor: <span className={cn(PLANILHA.numero, "font-semibold text-ink")}>{formatarMoeda(Number(n.valorTotal))}</span>,
-                  itens: <span className="tabular-nums text-ink-muted">{n._count.itens}</span>,
-                  situacao: <span className={cn("text-[10px] font-semibold px-2.5 py-1 rounded-full", COR_STATUS_NOTA[n.status])}>{LABEL_STATUS_NOTA[n.status]}</span>,
-                },
-              }))}
-            />
-          )}
-          </ConteudoUrl>
-          <div className="px-4 py-3 border-t border-surface-border">
-            <PaginacaoUrl total={total} pagina={pagina} porPagina={porPagina} rotulo="notas" />
-          </div>
-        </div>
+        <NotasLista
+          notas={notas} periodo={periodoTela(periodo)} doFinanceiro={doFinanceiro}
+          vazio={filtrando
+            ? <div className="flex flex-col items-center gap-2 py-12 text-center" data-lista-vazia>
+                <p className="text-sm font-medium text-ink">Nenhuma nota encontrada</p>
+                {busca && <p className="text-xs text-ink-muted">Nada combina com “{busca}”.</p>}
+                <LimparBuscaUrl />
+              </div>
+            : <ListaVazia mensagem="Nenhuma nota importada ainda. Comece pelo XML da NF-e." />}
+          paginacao={<PaginacaoUrl total={total} pagina={pagina} porPagina={porPagina} rotulo="notas" />}
+        />
 
         {/* O registro dos descartes (a nota apagada não volta; fica quem descartou, quando e por quê) */}
         {descartes.length > 0 && (
