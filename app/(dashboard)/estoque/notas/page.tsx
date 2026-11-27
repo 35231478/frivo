@@ -3,19 +3,19 @@ import Link from "next/link";
 import { ArrowLeft, FileText } from "lucide-react";
 import { exigirModuloNaPagina } from "@/lib/modulos/pagina";
 import { pode } from "@/lib/permissoes";
-import { cn, formatarData, formatarMoeda } from "@/lib/utils";
+import { cn, formatarData, formatarDataHora, formatarMoeda } from "@/lib/utils";
 import { lerPaginacao, paginaValida } from "@/lib/listagem";
-import { listarNotas } from "@/lib/compras/notas";
+import { descartesRecentes, listarNotas } from "@/lib/compras/notas";
 import { COR_STATUS_NOTA, LABEL_STATUS_NOTA } from "@/lib/compras/rotulos";
 import { ImportarNota } from "@/components/compras/importar-nota";
-import { ConteudoUrl, ListaUrl, PaginacaoUrl, TabelaProUrl } from "@/components/listagem/lista-url";
+import { BuscaUrl, ConteudoUrl, FiltroSelectUrl, LimparBuscaUrl, ListaUrl, PaginacaoUrl, TabelaProUrl } from "@/components/listagem/lista-url";
 import { ListaVazia } from "@/components/listagem/listagem-ui";
 import { Dica } from "@/components/ui/dica";
 import { PLANILHA } from "@/lib/planilha";
 
 export const metadata: Metadata = { title: "Notas de compra" };
 
-const AJUDA = "O XML da NF-e do fornecedor entra aqui. Ao conciliar, cada item da nota é ligado a um produto do cadastro e, ao lançar, a nota vira entrada no estoque e conta a pagar de uma vez — nos dois lugares com a mesma nota como referência. Nota já lançada não se apaga: o estorno é pela conta a pagar e pelo ajuste de estoque.";
+const AJUDA = "O XML da NF-e do fornecedor entra aqui. Ao conciliar, cada item da nota é ligado a um produto do cadastro e, ao lançar, a nota vira entrada no estoque e conta a pagar de uma vez — nos dois lugares com a mesma nota como referência. Nota importada por engano e ainda não lançada pode ser descartada na própria nota (fica registrado quem descartou e quando). Nota já lançada não se apaga: o estorno é pela conta a pagar e pelo ajuste de estoque.";
 
 /**
  * Estoque › Notas de compra: importar o XML da NF-e e acompanhar as notas (rota: Estoque › visualizar).
@@ -26,13 +26,18 @@ export default async function NotasCompraPage({ searchParams }: { searchParams: 
   const doFinanceiro = sp.de === "contas-pagar";
   const u = (await exigirModuloNaPagina("estoque"))!.user!;
   const podeImportar = pode(u.permissoes, "estoque", "gerenciar", u.role);
+  const busca = sp.q ?? "";
+  const filtrando = !!(busca || sp.status);
   const { pagina: pedida, porPagina } = lerPaginacao(sp);
-  const { total } = await listarNotas(u.empresaId, { pagina: 1, porPagina: 1 });
+  const [{ total }, descartes] = await Promise.all([
+    listarNotas(u.empresaId, { pagina: 1, porPagina: 1 }, sp),
+    descartesRecentes(u.empresaId),
+  ]);
   const pagina = paginaValida(pedida, porPagina, total);
-  const { notas } = await listarNotas(u.empresaId, { pagina, porPagina });
+  const { notas } = await listarNotas(u.empresaId, { pagina, porPagina }, sp);
 
   return (
-    <ListaUrl chave="notas-compra" qAtual="">
+    <ListaUrl chave="notas-compra" paramBusca="q" qAtual={busca}>
       <div className="space-y-6">
         {doFinanceiro
           ? <Link href="/financeiro/contas-pagar" className="inline-flex items-center gap-1 text-sm text-ink-muted hover:text-ink" data-voltar="contas-pagar"><ArrowLeft className="w-4 h-4" /> Contas a pagar</Link>
@@ -46,9 +51,21 @@ export default async function NotasCompraPage({ searchParams }: { searchParams: 
         {podeImportar && <ImportarNota de={doFinanceiro ? "contas-pagar" : null} />}
 
         <div className="card overflow-hidden">
+          <div className="p-4 border-b border-surface-border flex flex-wrap items-center gap-2 bg-surface-alt/40">
+            <div className="flex-1 min-w-[220px]">
+              <BuscaUrl lista="notas-compra" placeholder="Pesquisar nº, fornecedor, CNPJ ou chave…" rotulo="Pesquisar notas de compra" />
+            </div>
+            <FiltroSelectUrl param="status" vazio="Todas as situações" opcoes={(["IMPORTADA", "CONCILIADA", "LANCADA"] as const).map((s) => ({ value: s, label: LABEL_STATUS_NOTA[s] }))} />
+          </div>
           <ConteudoUrl>
           {notas.length === 0 ? (
-            <ListaVazia mensagem="Nenhuma nota importada ainda. Comece pelo XML da NF-e." />
+            filtrando
+              ? <div className="flex flex-col items-center gap-2 py-12 text-center" data-lista-vazia>
+                  <p className="text-sm font-medium text-ink">Nenhuma nota encontrada</p>
+                  {busca && <p className="text-xs text-ink-muted">Nada combina com “{busca}”.</p>}
+                  <LimparBuscaUrl />
+                </div>
+              : <ListaVazia mensagem="Nenhuma nota importada ainda. Comece pelo XML da NF-e." />
           ) : (
             <TabelaProUrl
               tela="notas-compra"
@@ -96,6 +113,23 @@ export default async function NotasCompraPage({ searchParams }: { searchParams: 
             <PaginacaoUrl total={total} pagina={pagina} porPagina={porPagina} rotulo="notas" />
           </div>
         </div>
+
+        {/* O registro dos descartes (a nota apagada não volta; fica quem descartou, quando e por quê) */}
+        {descartes.length > 0 && (
+          <details className="card px-4 py-3 text-sm" data-descartes>
+            <summary className="cursor-pointer text-ink-muted font-medium">Notas descartadas ({descartes.length}{descartes.length === 20 ? " mais recentes" : ""})</summary>
+            <ul className="mt-2 divide-y divide-surface-border">
+              {descartes.map((d) => (
+                <li key={d.id} className="py-2 flex flex-wrap items-baseline gap-x-3 gap-y-0.5" data-descarte={d.id}>
+                  <span className={cn(PLANILHA.codigo, "text-ink")}>NF {d.numero}/{d.serie}</span>
+                  <span className="text-ink-muted truncate">{d.emitenteNome}</span>
+                  <span className="tabular-nums text-ink-muted">{formatarMoeda(Number(d.valorTotal))}</span>
+                  <span className="text-xs text-ink-subtle">Descartada em {formatarDataHora(d.descartadoEm)}{d.usuario && ` por ${d.usuario.nome}`}{d.motivo && ` · ${d.motivo}`}</span>
+                </li>
+              ))}
+            </ul>
+          </details>
+        )}
       </div>
     </ListaUrl>
   );

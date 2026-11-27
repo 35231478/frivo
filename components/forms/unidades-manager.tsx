@@ -1,7 +1,7 @@
 "use client";
 
-import { confirmar } from "@/components/ui/avisos";
-import { textoInativar } from "@/lib/cadastros/regras-arquivar";
+import { InativarRegistro } from "@/components/ui/inativar-registro";
+import { SecaoInativos } from "@/components/forms/secao-inativos";
 import { useState, useEffect, useCallback } from "react";
 import { buscarCep, cepCompleto } from "@/lib/cep";
 import { useAutoGeocode } from "@/hooks/use-auto-geocode";
@@ -14,7 +14,7 @@ import { MapaEndereco } from "@/components/ui/mapa-endereco";
 import { EnderecoAutocomplete, type EnderecoSelecionado } from "@/components/ui/endereco-autocomplete";
 import { haversine, formatarDistancia } from "@/lib/geo";
 import type { Unidade } from "@prisma/client";
-import { Plus, Pencil, Ban, X, Check, ChevronDown, Navigation, Smartphone, Search } from "lucide-react";
+import { Plus, Pencil, X, Check, ChevronDown, Navigation, Smartphone, Search } from "lucide-react";
 import { cn, comparaNatural } from "@/lib/utils";
 
 const ESTADOS_BR = [
@@ -63,12 +63,15 @@ interface EmpresaCoords {
 interface UnidadesManagerProps {
   clienteId: string;
   unidadesIniciais: Unidade[];
+  /** Endereços inativados: a seção "Inativos" reativa por aqui */
+  inativosIniciais?: Unidade[];
   /** Endereço legado do cliente, usado para pré-preencher o 1º "Novo endereço" (não vem da consulta). */
   enderecoCliente?: EnderecoCliente;
 }
 
-export function UnidadesManager({ clienteId, unidadesIniciais, enderecoCliente }: UnidadesManagerProps) {
+export function UnidadesManager({ clienteId, unidadesIniciais, inativosIniciais = [], enderecoCliente }: UnidadesManagerProps) {
   const [unidades, setUnidades] = useState<Unidade[]>(unidadesIniciais);
+  const [inativas, setInativas] = useState<Unidade[]>(inativosIniciais);
   const [editando, setEditando] = useState<string | "novo" | null>(null);
   const [expandido, setExpandido] = useState<Set<string>>(new Set());
   const [form, setForm] = useState<UnidadeFormData>(emptyForm);
@@ -219,19 +222,15 @@ export function UnidadesManager({ clienteId, unidadesIniciais, enderecoCliente }
     } catch {}
   }
 
-  async function remover(id: string) {
-    const u = unidades.find((u) => u.id === id);
-    if (u?.principal) { setErro("Não é possível remover o endereço principal."); return; }
-    // O endereço é inativado (o histórico das OS e dos equipamentos continua apontando para ele), não
-    // apagado: o texto é o mesmo de todo lugar que inativa. Ainda não há reativação pela tela.
-    const t = textoInativar("endereço", u?.nome, "m", false);
-    if (!(await confirmar({ titulo: t.titulo, mensagem: t.mensagem, perigo: true, confirmarTexto: t.confirmar, cancelarTexto: "Voltar" }))) return;
-    setErro("");
-    try {
-      const res = await fetch(`/api/unidades/${id}`, { method: "DELETE" });
-      if (!res.ok) { const e = await res.json(); setErro(e.erro ?? "Erro ao inativar."); return; }
-      setUnidades((prev) => prev.filter((u) => u.id !== id));
-    } catch { setErro("Erro de conexão."); }
+  // Inativar e reativar pelo botão padrão dos cadastros (InativarRegistro): o mesmo texto, o impacto
+  // daquele local (GET /api/unidades/[id]/impacto) e o bloqueio do principal e dos equipamentos ativos.
+  function inativada(u: Unidade) {
+    setUnidades((prev) => prev.filter((x) => x.id !== u.id));
+    setInativas((prev) => [...prev, { ...u, ativo: false }].sort((a, b) => comparaNatural(a.nome, b.nome)));
+  }
+  function reativada(u: Unidade, dados?: Unidade) {
+    setInativas((prev) => prev.filter((x) => x.id !== u.id));
+    setUnidades((prev) => [...prev, { ...u, ...dados, ativo: true }]);
   }
 
   const ordenadas = [...unidades].sort((a, b) => {
@@ -384,9 +383,10 @@ export function UnidadesManager({ clienteId, unidadesIniciais, enderecoCliente }
                       <Button type="button" variant="ghost" onClick={() => marcarPrincipal(u.id)} className="text-xs h-7 px-2.5 text-atencao-texto hover:text-atencao-texto">
                         Tornar principal
                       </Button>
-                      <Button type="button" variant="ghost" onClick={() => remover(u.id)} className="text-xs h-7 px-2.5 text-atrasado hover:text-atrasado-texto" data-inativar-endereco>
-                        <Ban className="w-3 h-3" /> Inativar
-                      </Button>
+                      <InativarRegistro url={`/api/unidades/${u.id}`} modulo="clientes" acaoInativar="editar" acaoReativar="editar"
+                        ativo nome={u.nome} entidade="endereço" variante="botao" comMotivo={false}
+                        className="text-xs h-7 px-2.5 py-0 gap-1 border-transparent bg-transparent [&_svg]:w-3 [&_svg]:h-3"
+                        aoConcluir={() => inativada(u)} />
                     </>
                   )}
                 </div>
@@ -397,6 +397,12 @@ export function UnidadesManager({ clienteId, unidadesIniciais, enderecoCliente }
       })}
 
       {editando === "novo" && renderFormInline()}
+
+      <SecaoInativos itens={inativas} detalhe={(u) => [u.logradouro, u.numero].filter(Boolean).join(", ") || u.cidade}
+        acao={(u) => (
+          <InativarRegistro url={`/api/unidades/${u.id}`} modulo="clientes" acaoInativar="editar" acaoReativar="editar"
+            ativo={false} nome={u.nome} entidade="endereço" aoConcluir={(_, dados) => reativada(u, dados)} />
+        )} />
 
       {!editando && (
         <Button type="button" variant="secondary" onClick={abrirNova} className="w-full justify-center border-dashed mt-2">

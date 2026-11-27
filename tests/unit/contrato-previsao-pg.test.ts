@@ -35,9 +35,9 @@ const logar = (empresaId = "e1") => {
   sessao.atual = { user: { id: empresaId === "e1" ? "uA" : "uB", name: "Ana", email: "ana@x.com", empresaId, role: "ADMIN", permissoes: permissoesTotais(), tecnicoId: null } };
 };
 
-async function chamar(rota: string, metodo: string, params: Record<string, string> = {}, corpo?: unknown) {
+async function chamar(rota: string, metodo: string, params: Record<string, string> = {}, corpo?: unknown, query = "") {
   const mod = await import(/* @vite-ignore */ `@/app/api/${rota}/route`);
-  const req = new NextRequest("http://localhost/api/x", {
+  const req = new NextRequest(`http://localhost/api/x${query}`, {
     method: metodo, headers: { "Content-Type": "application/json" }, body: corpo === undefined ? undefined : JSON.stringify(corpo),
   });
   const res: Response = await mod[metodo](req, { params: Promise.resolve(params) });
@@ -220,7 +220,7 @@ describe.skipIf(!URL_PG)("Contrato recorrente PR1 — previsões acompanham o co
     expect(com.map((c: any) => [c.status, Number(c.valor)])).toEqual(Array(6).fill(["PREVISTO", 800]));
   });
 
-  it("EXCLUIR: encerra com histórico e limpa previsões abertas + OS futura intocada; o resto fica; 2ª vez não duplica", async () => {
+  it("CANCELAR pelo status: o impacto mostra antes o que cai; depois cancela previsões abertas + OS futura intocada; o resto fica; não há DELETE", async () => {
     const ct = await criar();
     const recebida = await prisma.contaReceber.create({ data: {
       empresaId: "e1", clienteId: "c1", contratoId: ct.id, numero: `${ct.body.numero}/PAGA`, descricao: "Mês pago", valor: 1000, status: "RECEBIDO",
@@ -231,26 +231,41 @@ describe.skipIf(!URL_PG)("Contrato recorrente PR1 — previsões acompanham o co
       empresaId: "e1", numero: "OS-P01", clienteId: "c1", contratoId: ct.id, criadoPorId: "uA", status: "AGENDADA", origem: "RECORRENTE", descricao: "Preventiva",
     } });
     await prisma.atividadeOs.create({ data: { empresaId: "e1", ordemServicoId: osFutura.id, titulo: "Preventiva", status: "AGENDADA", dataAgendada: new Date("2026-12-10T12:00:00Z") } });
+    // OS que já andou: segue (não é cancelada)
+    await prisma.ordemServico.create({ data: { empresaId: "e1", numero: "OS-P02", clienteId: "c1", contratoId: ct.id, criadoPorId: "uA", status: "EM_ANDAMENTO", origem: "RECORRENTE", descricao: "Corretiva" } });
 
-    const r = await chamar("contratos/[id]", "DELETE", { id: ct.id });
-    expect(r).toMatchObject({ status: 200, json: { ok: true, previsoesCanceladas: 6, osCanceladas: 1 } });
-    expect((await prisma.contrato.findUnique({ where: { id: ct.id } })).status).toBe("ENCERRADO");
+    // O modal pergunta antes: o mesmo filtro da limpeza, sem gravar nada
+    const imp = await chamar("contratos/[id]/impacto", "GET", { id: ct.id }, undefined, "?status=CANCELADO");
+    expect(imp.status).toBe(200);
+    expect(imp.json.bloqueio).toBeNull();
+    expect(imp.json.avisos.map((a: string) => a.replace(/\u00a0/g, " "))).toEqual([
+      "Cancela 1 OS agendada que ainda não começou (OS-P01): sai da agenda.",
+      "Cancela 6 previsões de cobrança em aberto (R$ 6.000,00): o que já foi faturado ou recebido não muda.",
+      "Tem 1 OS já em andamento (OS-P02): segue normalmente.",
+    ]);
+    expect(await prisma.contaReceber.count({ where: { contratoId: ct.id, status: "PREVISTO" } })).toBe(6);
+    // Voltar a Ativo não tem aviso
+    expect((await chamar("contratos/[id]/impacto", "GET", { id: ct.id }, undefined, "?status=ATIVO")).json.avisos).toEqual([]);
+
+    const r = await chamar("contratos/[id]/status", "PATCH", { id: ct.id }, { status: "CANCELADO", motivo: "Distrato" });
+    expect(r.status).toBe(200);
+    expect((await prisma.contrato.findUnique({ where: { id: ct.id } })).status).toBe("CANCELADO");
     const hist = await prisma.contratoHistoricoStatus.findMany({ where: { contratoId: ct.id } });
-    expect(hist.map((h: any) => [h.statusAnterior, h.statusNovo, h.motivo, h.usuarioId])).toEqual([["ATIVO", "ENCERRADO", "Contrato excluído", "uA"]]);
+    expect(hist.map((h: any) => [h.statusAnterior, h.statusNovo, h.motivo, h.usuarioId])).toEqual([["ATIVO", "CANCELADO", "Distrato", "uA"]]);
     expect(await prisma.contaReceber.count({ where: { contratoId: ct.id, status: "PREVISTO" } })).toBe(0);
     const janDepois = await prisma.contaReceber.findUnique({ where: { id: jan.id } });
-    expect([janDepois.status, janDepois.motivoCancelamento, janDepois.observacao]).toEqual(["CANCELADO", `Contrato ${ct.body.numero} excluído`, "Combinado com o síndico"]);
-    expect((await eventos(jan.id)).map((e: any) => e.detalhe)).toEqual([`Pelo contrato: Contrato ${ct.body.numero} excluído. A previsão sai do Contas a Receber.`]);
+    expect([janDepois.status, janDepois.motivoCancelamento, janDepois.observacao]).toEqual(["CANCELADO", "Contrato cancelado — Distrato", "Combinado com o síndico"]);
     expect((await prisma.contaReceber.findUnique({ where: { id: recebida.id } })).status).toBe("RECEBIDO");
     expect((await prisma.ordemServico.findUnique({ where: { id: osFutura.id } })).status).toBe("CANCELADA");
+    // Depois de cancelado, não sobra nada a cancelar
+    expect((await chamar("contratos/[id]/impacto", "GET", { id: ct.id }, undefined, "?status=ENCERRADO")).json.avisos).toEqual(["Tem 1 OS já em andamento (OS-P02): segue normalmente."]);
 
-    const de_novo = await chamar("contratos/[id]", "DELETE", { id: ct.id });
-    expect(de_novo).toMatchObject({ status: 200, json: { previsoesCanceladas: 0, osCanceladas: 0 } });
-    expect(await prisma.contratoHistoricoStatus.count({ where: { contratoId: ct.id } })).toBe(1);
-    expect(await eventos(jan.id)).toHaveLength(1);
-    // Outra empresa não exclui
+    // A rota DELETE (órfã, que "excluía" encerrando) saiu: o contrato só muda pelo status
+    expect((await import("@/app/api/contratos/[id]/route") as any).DELETE).toBeUndefined();
+    // Outra empresa não vê o impacto nem cancela
     logar("e2");
-    expect((await chamar("contratos/[id]", "DELETE", { id: ct.id })).status).toBe(404);
+    expect((await chamar("contratos/[id]/impacto", "GET", { id: ct.id }, undefined, "?status=CANCELADO")).status).toBe(404);
+    expect((await chamar("contratos/[id]/status", "PATCH", { id: ct.id }, { status: "SUSPENSO" })).status).toBe(404);
     logar();
   });
 

@@ -1,7 +1,7 @@
 "use client";
 
 import { BarraPeriodo, type PeriodoTela } from "@/components/listagem/periodo-cards";
-import { BarraFiltros } from "@/components/listagem/barra-filtros";
+import { BarraFiltros, filtroCancelados } from "@/components/listagem/barra-filtros";
 import { BuscaUrl, FiltroSelectUrl, useListaUrl } from "@/components/listagem/lista-url";
 import type { Opcao } from "@/components/listagem/listagem-ui";
 
@@ -21,6 +21,7 @@ export function FiltrosMedicoes({ periodo, opcoes }: { periodo: PeriodoTela; opc
         { id: "status", label: "Status", params: ["status"], render: () => <FiltroSelectUrl param="status" vazio="Todos status" opcoes={opcoes.status} rotulo="Status" className="w-full" /> },
         { id: "tipo", label: "Tipo", params: ["tipo"], render: () => <FiltroSelectUrl param="tipo" vazio="Todos tipos" opcoes={opcoes.tipos} rotulo="Tipo" className="w-full" /> },
         { id: "clienteId", label: "Cliente", params: ["clienteId"], render: () => <FiltroSelectUrl param="clienteId" vazio="Todos clientes" opcoes={opcoes.clientes} rotulo="Cliente" className="w-full" /> },
+        filtroCancelados(navegar, "Mostrar canceladas"),
       ]}
     />
   );

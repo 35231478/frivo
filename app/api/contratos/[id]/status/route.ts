@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { exigirPermissao } from "@/lib/permissoes-server";
+import { pode } from "@/lib/permissoes";
+import { acaoDoStatusContrato } from "@/lib/cadastros/regras-arquivar";
 import { StatusContrato } from "@prisma/client";
 import { mudarStatusContrato, statusHttp } from "@/lib/acoes-massa/regras";
 
@@ -10,6 +12,8 @@ const STATUS_VALIDOS = Object.values(StatusContrato) as string[];
 /**
  * Altera o status do contrato e registra a mudança no histórico.
  * Body: { status: StatusContrato, motivo?: string }
+ * Cancelar exige "Contratos › Excluir" (permissão própria, como cancelar OS e orçamento); as outras
+ * trocas, "Contratos › Editar". O impacto da saída de Ativo é mostrado antes (GET …/impacto).
  */
 export async function PATCH(req: NextRequest, { params }: Params) {
   const guard = await exigirPermissao("contratos", "editar");
@@ -25,6 +29,9 @@ export async function PATCH(req: NextRequest, { params }: Params) {
 
   if (!novoStatus || !STATUS_VALIDOS.includes(novoStatus)) {
     return NextResponse.json({ erro: "Status inválido." }, { status: 400 });
+  }
+  if (acaoDoStatusContrato(novoStatus) === "excluir" && !pode(session.user!.permissoes, "contratos", "excluir", session.user!.role)) {
+    return NextResponse.json({ erro: "Sem permissão para cancelar contratos (Contratos › Excluir)." }, { status: 403 });
   }
 
   // Mesma regra da ação em massa (lib/acoes-massa/regras.ts): troca o status e grava o histórico

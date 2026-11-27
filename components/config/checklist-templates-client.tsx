@@ -1,6 +1,6 @@
 "use client";
 
-import { confirmar, toast } from "@/components/ui/avisos";
+import { toast } from "@/components/ui/avisos";
 import { useState, useEffect, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -14,7 +14,8 @@ import { CampoBusca, ListaVazia, SkeletonLista } from "@/components/listagem/lis
 import { ABAS_ATIVOS_INATIVOS, AbasSituacao, type AbaAtivosInativos } from "@/components/listagem/abas-situacao";
 import { TabelaPro, type ColunaPro } from "@/components/listagem/tabela-pro";
 import { PLANILHA } from "@/lib/planilha";
-import { Plus, Pencil, Ban, Trash2, Check, ArrowUp, ListChecks, RotateCcw } from "lucide-react";
+import { Plus, Pencil, Trash2, Check, ArrowUp, ListChecks } from "lucide-react";
+import { InativarRegistro } from "@/components/ui/inativar-registro";
 
 const FREQUENCIAS = [{ v: "DIARIO", l: "Diário" }, { v: "SEMANAL", l: "Semanal" }, { v: "MENSAL", l: "Mensal" }];
 const TIPOS_ITEM = [
@@ -116,32 +117,6 @@ export function ChecklistTemplatesClient() {
     } catch { setErro("Sem conexão. Tente de novo."); } finally { setSalvando(false); }
   }
 
-  async function inativar(t: Modelo) {
-    const n = nPreenchidos(t);
-    if (!(await confirmar({
-      titulo: `Inativar o modelo "${t.nome}"?`,
-      mensagem: `${n === 0 ? "Ainda não foi preenchido." : `Já foi preenchido ${n} ${n === 1 ? "vez" : "vezes"}.`} Ele deixa de aparecer para os próximos preenchimentos; os já feitos continuam no histórico.`,
-      perigo: true, confirmarTexto: "Inativar",
-    }))) return;
-    try {
-      const res = await fetch(`/api/checklist-templates/${t.id}`, { method: "DELETE" });
-      // Recusado (sem permissão, modelo de outra empresa…): a lista fica como está e a tela diz por quê
-      if (!res.ok) { toast(await erroDaResposta(res, "Não foi possível inativar o modelo."), "erro"); return; }
-      setModelos((p) => (p ?? []).map((x) => (x.id === t.id ? { ...x, ativo: false } : x)));
-      toast("Modelo de checklist inativado. Está na aba Inativos.");
-    } catch { toast("Sem conexão. Tente de novo.", "erro"); }
-  }
-
-  async function reativar(t: Modelo) {
-    try {
-      const res = await fetch(`/api/checklist-templates/${t.id}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ativo: true }) });
-      // Recusado: as duas abas ficam como estão e a tela diz por quê
-      if (!res.ok) { toast(await erroDaResposta(res, "Não foi possível reativar o modelo."), "erro"); return; }
-      setModelos((p) => (p ?? []).map((x) => (x.id === t.id ? { ...x, ativo: true } : x)));
-      toast("Modelo de checklist reativado.");
-    } catch { toast("Sem conexão. Tente de novo.", "erro"); }
-  }
-
   const q = busca.trim().toLowerCase();
   const ativos = useMemo(() => (modelos ?? []).filter((t) => t.ativo !== false), [modelos]);
   const inativos = useMemo(() => (modelos ?? []).filter((t) => t.ativo === false), [modelos]);
@@ -155,18 +130,14 @@ export function ChecklistTemplatesClient() {
         className="p-1.5 text-ink-muted hover:text-primary-600 hover:bg-primary-50 rounded transition-colors">
         {podeGerenciar ? <Pencil className="w-4 h-4" aria-hidden /> : <ListChecks className="w-4 h-4" aria-hidden />}
       </button>
-      {podeGerenciar && aba === "ativos" && (
-        <button type="button" onClick={() => void inativar(t)} aria-label={`Inativar ${t.nome}`} title="Inativar" data-inativar-modelo={t.id}
-          className="p-1.5 text-ink-muted hover:text-atrasado hover:bg-atrasado-claro rounded transition-colors">
-          <Ban className="w-4 h-4" aria-hidden />
-        </button>
-      )}
-      {podeGerenciar && aba === "inativos" && (
-        <button type="button" onClick={() => void reativar(t)} aria-label={`Reativar ${t.nome}`} title="Reativar" data-reativar-modelo={t.id}
-          className="p-1.5 text-ink-muted hover:text-ok-texto hover:bg-ok-claro rounded transition-colors">
-          <RotateCcw className="w-4 h-4" aria-hidden />
-        </button>
-      )}
+      {/* Inativar e reativar: o botão padrão dos cadastros (impacto: preenchimentos e o bloqueio do
+          modelo do checklist diário obrigatório, GET /api/checklist-templates/[id]/impacto) */}
+      <InativarRegistro url={`/api/checklist-templates/${t.id}`} modulo="configuracoes" acaoReativar="gerenciar" permitido={podeGerenciar}
+        ativo={t.ativo !== false} nome={t.nome} entidade="modelo de checklist" comMotivo={false}
+        atributos={t.ativo !== false ? { "data-inativar-modelo": t.id } : { "data-reativar-modelo": t.id }}
+        reativarCom={{ metodo: "PUT", corpo: { ativo: true } }}
+        avisoConcluido={t.ativo !== false ? "Modelo de checklist inativado. Está na aba Inativos." : "Modelo de checklist reativado."}
+        aoConcluir={(ativo) => setModelos((p) => (p ?? []).map((x) => (x.id === t.id ? { ...x, ativo } : x)))} />
     </span>
   );
 

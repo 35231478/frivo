@@ -37,6 +37,7 @@ export async function PUT(req: NextRequest, { params }: Params) {
 /**
  * PATCH: edição no contexto (de dentro da OS e do orçamento) — nome, cargo, telefone e e-mail, e só o que
  * mudou. Mesma permissão da edição completa; tipo, principal e o acesso ao portal não são tocados.
+ * Com { ativo: true }: reativa o contato inativado (o botão padrão dos cadastros).
  */
 export async function PATCH(req: NextRequest, { params }: Params) {
   const session = await auth();
@@ -50,6 +51,11 @@ export async function PATCH(req: NextRequest, { params }: Params) {
   if (!existente) return NextResponse.json({ erro: "Contato não encontrado" }, { status: 404 });
 
   const body = await req.json().catch(() => null);
+  // Reativar (botão padrão dos cadastros): { ativo: true } — o contato volta às listas e seletores
+  if (body?.ativo === true) {
+    const reativado = await prisma.contatoCliente.update({ where: { id: contatoId }, data: { ativo: true } });
+    return NextResponse.json(contatoSeguro(reativado));
+  }
   const parsed = contatoContextoSchema.safeParse(body);
   if (!parsed.success) return NextResponse.json({ erro: parsed.error.issues[0]?.message ?? "Dados inválidos" }, { status: 400 });
   const dados = dadosParciais(parsed.data);

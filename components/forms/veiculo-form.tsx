@@ -24,6 +24,8 @@ import {
 } from "lucide-react";
 import { InputData } from "@/components/ui/input-data";
 import { usePermissoes } from "@/components/providers/permissoes-provider";
+import { AvisoInativacaoStatus } from "@/components/ui/aviso-inativacao-status";
+import { mostrarOpcaoInativo } from "@/lib/cadastros/regras-arquivar";
 
 type Aba = "identificacao" | "responsavel" | "documentos" | "manutencoes" | "checklists";
 
@@ -59,7 +61,8 @@ export function VeiculoForm({ initialData, ocorrencias, somenteLeitura = false }
   somenteLeitura?: boolean;
 }) {
   const router = useRouter();
-  const podeChecklist = usePermissoes().pode("veiculos", "checklist");
+  const { pode } = usePermissoes();
+  const podeChecklist = pode("veiculos", "checklist");
   const isEditing = !!initialData;
   const veiculoId = initialData?.id as string | undefined;
 
@@ -159,6 +162,10 @@ export function VeiculoForm({ initialData, ocorrencias, somenteLeitura = false }
     if (erro && !isEditing) document.querySelector("[data-erro]")?.scrollIntoView({ behavior: "smooth", block: "center" });
   }, [erro, isEditing]);
 
+  // Inativar pelo seletor de status (só na edição, saindo de outro status): o mesmo do botão Inativar
+  const inativandoPeloStatus = isEditing && form.status === "INATIVO" && initialData?.status !== "INATIVO";
+  const [motivoInativacao, setMotivoInativacao] = useState("");
+
   async function salvar() {
     setErro("");
     if (!form.placa.trim()) { setErro("Placa é obrigatória."); setAba("identificacao"); return; }
@@ -172,6 +179,7 @@ export function VeiculoForm({ initialData, ocorrencias, somenteLeitura = false }
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           ...form, fotos: await aliviarFotos(fotos), fotosRotulos, documentos,
+          ...(inativandoPeloStatus && { motivoInativacao }),
           quilometragemAtual: form.quilometragemAtual || null,
           proximaRevisaoKm: form.proximaRevisaoKm || null,
           proximaRevisaoData: form.proximaRevisaoData || null,
@@ -440,10 +448,13 @@ export function VeiculoForm({ initialData, ocorrencias, somenteLeitura = false }
                 </FormField>
                 <FormField label="Status">
                   <Select value={form.status} onChange={(e) => upd("status", e.target.value)}>
-                    {STATUS_VEICULO.map((s) => <option key={s.v} value={s.v}>{s.l}</option>)}
+                    {STATUS_VEICULO.filter((s) => s.v !== "INATIVO" || mostrarOpcaoInativo(pode("veiculos", "excluir"), initialData?.status))
+                      .map((s) => <option key={s.v} value={s.v}>{s.l}</option>)}
                   </Select>
                 </FormField>
               </FormGrid>
+              {/* "Inativo" no seletor faz o mesmo que o botão Inativar: impacto, bloqueio e motivo */}
+              {isEditing && <AvisoInativacaoStatus url={`/api/veiculos/${veiculoId}`} mostrar={inativandoPeloStatus} motivo={motivoInativacao} onMotivo={setMotivoInativacao} />}
               <FormGrid cols={3}>
                 <FormField label="Marca"><Input aria-label="Marca" value={form.marca} onChange={(e) => upd("marca", e.target.value)} placeholder="Ex: Fiat" /></FormField>
                 <FormField label="Modelo" required><Input aria-label="Modelo" value={form.modelo} onChange={(e) => upd("modelo", e.target.value)} placeholder="Ex: Fiorino" /></FormField>

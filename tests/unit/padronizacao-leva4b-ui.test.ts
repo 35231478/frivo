@@ -630,7 +630,7 @@ describe("Formulários de OS: aba Inativos e Reativar", () => {
     await aba("inativos");
     expect(linhas()).toEqual(["f2"]);
     expect($$("[data-inativar-formulario]")).toEqual([]);
-    expect($("[data-formulario='f2'] [data-reativar-formulario]")!.getAttribute("aria-label")).toBe("Reativar Formulário antigo");
+    expect($("[data-formulario='f2'] [data-reativar-formulario]")!.getAttribute("aria-label")).toBe("Reativar formulário");
   });
 
   it("quem só visualiza vê os inativos, sem Reativar", async () => {
@@ -645,6 +645,9 @@ describe("Formulários de OS: aba Inativos e Reativar", () => {
     await abrir(CONFIG);
     await aba("inativos");
     await clicar($("[data-formulario='f2'] [data-reativar-formulario]"));
+    // o botão padrão confirma antes (o mesmo modal de todo cadastro)
+    expect(txt($("h3", dialogo()))).toBe("Reativar formulário Formulário antigo?");
+    await clicar(botao("Reativar", dialogo()));
     expect(gravacoes()).toEqual([{ url: "/api/formularios/f2", metodo: "PUT", corpo: { ativo: true } }]);
     expect(await toasts()).toEqual([["Formulário reativado.", "sucesso"]]);
     expect(linhas()).toEqual([]);
@@ -659,16 +662,20 @@ describe("Formulários de OS: aba Inativos e Reativar", () => {
     await abrir(CONFIG);
     await aba("inativos");
     await clicar($("[data-formulario='f2'] [data-reativar-formulario]"));
-    expect(await toasts()).toEqual([["Sem permissão para esta ação", "erro"]]);
+    await clicar(botao("Reativar", dialogo()));
+    // a recusa fica no modal, com o motivo (sem aviso de sucesso)
+    expect(txt(dialogo())).toContain("Sem permissão para esta ação");
+    expect(await toasts()).toEqual([]);
     expect(linhas()).toEqual(["f2"]);
     expect(abasTxt()).toEqual(["Ativos (1)", "Inativos (1)"]);
   });
 
   it("inativar leva o formulário para a aba Inativos (de onde volta)", async () => {
     respostas["DELETE /api/formularios/f1"] = { status: 200, corpo: { ok: true } };
+    respostas["GET /api/formularios/f1/impacto"] = { status: 200, corpo: { bloqueio: null, avisos: [] } };
     await abrir(CONFIG);
     await clicar($("[data-formulario='f1'] [data-inativar-formulario]"));
-    await clicar($("[data-confirmar-sim]"));
+    await clicar(botao("Sim, inativar", dialogo()));
     expect(await toasts()).toEqual([["Formulário inativado. Está na aba Inativos.", "sucesso"]]);
     expect(abasTxt()).toEqual(["Ativos (0)", "Inativos (2)"]);
     await aba("inativos");
@@ -711,13 +718,18 @@ describe("Modelos de checklist de veículo: aba Inativos e Reativar", () => {
     await abrir(FROTA);
     await aba("inativos");
     await clicar($("[data-modelo='ck2'] [data-reativar-modelo]"));
+    expect(txt($("h3", dialogo()))).toBe("Reativar modelo de checklist Checklist antigo?");
+    await clicar(botao("Reativar", dialogo()));
     expect(gravacoes()).toEqual([{ url: "/api/checklist-templates/ck2", metodo: "PUT", corpo: { ativo: true } }]);
-    expect(await toasts()).toEqual([["Sem permissão para esta ação", "erro"]]);
+    expect(txt(dialogo())).toContain("Sem permissão para esta ação");
+    expect(await toasts()).toEqual([]);
     expect(linhas()).toEqual(["ck2"]);
     expect(abasTxt()).toEqual(["Ativos (1)", "Inativos (1)"]);
+    await clicar(botao("Voltar", dialogo()));
 
     respostas["PUT /api/checklist-templates/ck2"] = { status: 200, corpo: { ...C2, ativo: true } };
     await clicar($("[data-modelo='ck2'] [data-reativar-modelo]"));
+    await clicar(botao("Reativar", dialogo()));
     expect((await toasts()).at(-1)).toEqual(["Modelo de checklist reativado.", "sucesso"]);
     expect(linhas()).toEqual([]);
     expect(abasTxt()).toEqual(["Ativos (2)", "Inativos (0)"]);
@@ -825,6 +837,53 @@ describe("Inativar / Reativar (o botão compartilhado dos cadastros)", () => {
 
   it("o cadastro padrão não repete o aviso (o toast é do botão — um só)", () => {
     expect(fonte("components/cadastros/cadastro-padrao.tsx")).not.toMatch(/aoConcluir=\{\(\) => \{ toast\(/);
+  });
+});
+
+describe("visão de cartões: o mesmo Inativar/Reativar da lista (leva 5 de cadastros)", () => {
+  it("veículos e colaboradores: cada cartão tem o botão padrão, fora do link; sem a permissão, não", async () => {
+    localStorage.setItem("frivo:veiculos:visao", "cards");
+    localStorage.setItem("frivo:colaboradores:visao", "cards");
+    try {
+      const { VeiculosListaClient } = await import("@/app/(dashboard)/veiculos/veiculos-lista-client");
+      const { ColaboradoresListaClient } = await import("@/app/(dashboard)/colaboradores/colaboradores-lista-client");
+      const { SelecaoMassaProvider } = await import("@/components/acoes-massa/selecao");
+      const veic = (id: string, extra: object = {}) => ({ id, placa: `FRV${id}`, marca: "Fiat", modelo: "Fiorino", ano: "2022", anoModelo: "2023", combustivel: "Flex", cor: "Branco", tipo: "CARRO", tipoLabel: "Carro",
+        status: "ATIVO", km: 1000, foto: null, responsavel: "João", equipe: null, documento: null, revisao: null, checklistHoje: null, ...extra });
+      const FV = { q: "", tipos: [], status: "todos", aviso: "", ordem: "placa", dir: "asc", pagina: 1, porPagina: 50 };
+      const RV = { ativos: 1, manutencao: 0, inativos: 1, docVencido: 0, docVencendo: 0, revisaoVencida: 0, revisaoProxima: 0, semChecklist: 1 };
+      await montar(createElement(SelecaoMassaProvider, { entidade: "veiculos", idsPagina: ["1", "2"], total: 2, children: createElement(VeiculosListaClient, { itens: [veic("1"), veic("2", { status: "INATIVO" })] as any, total: 2, filtros: FV as any, tipos: [], resumo: RV }) }),
+        V(["visualizar", "gerenciar", "excluir"]));
+      expect($('[data-visao="cards"]')).toBeTruthy();
+      expect($('[data-acoes-cartao="1"] [data-inativar-registro]')!.getAttribute("data-inativar-registro")).toBe("inativar");
+      expect($('[data-acoes-cartao="2"] [data-inativar-registro]')!.getAttribute("data-inativar-registro")).toBe("reativar");
+      // fora do link do cartão: fechar o modal não abre a ficha
+      expect($('[data-acoes-cartao="1"]')!.closest("a")).toBeNull();
+      respostas["GET /api/veiculos/1/impacto"] = { status: 200, corpo: { bloqueio: null, avisos: [] } };
+      respostas["DELETE /api/veiculos/1"] = { status: 200, corpo: { ok: true } };
+      await clicar($('[data-acoes-cartao="1"] [data-inativar-registro]'));
+      await clicar(botao("Sim, inativar", dialogo()));
+      expect(gravacoes()).toEqual([{ url: "/api/veiculos/1", metodo: "DELETE", corpo: { motivo: "" } }]);
+      act(() => root.unmount()); caixa.remove();
+
+      const colab = (id: string, extra: object = {}) => ({ id, nome: `Colab ${id}`, funcao: "TECNICO_CAMPO", funcaoLabel: "Técnico de campo", cargo: "Eletricista", telefone: "11911111111", email: null, ativo: true, status: "ATIVO",
+        especialidades: [], foto: null, equipes: [], lider: false, semEquipe: true, atividades: 0, documento: null, ...extra });
+      const FC = { q: "", status: "todos", funcoes: [], cargo: "", equipe: "", aviso: "", ordem: "nome", dir: "asc", pagina: 1, porPagina: 50 };
+      const RC = { ativos: 1, inativos: 1, tecnicos: 1, semEquipe: 0, ausentes: 0, docVencido: 0, docVencendo: 0 };
+      const abrirColab = (permissoes: Permissoes) => montar(createElement(SelecaoMassaProvider, { entidade: "colaboradores", idsPagina: ["1", "2"], total: 2, children: createElement(ColaboradoresListaClient, {
+        itens: [colab("1"), colab("2", { ativo: false, status: "INATIVO" })] as any, total: 2, filtros: FC as any, opcoes: { funcoes: [], cargos: [], equipes: [] }, resumo: RC,
+      }) }), permissoes);
+      await abrirColab(E(["visualizar", "gerenciar", "excluir"]));
+      expect($('[data-visao="cards"]')).toBeTruthy();
+      expect($('[data-acoes-cartao="1"] [data-inativar-registro]')!.getAttribute("data-inativar-registro")).toBe("inativar");
+      expect($('[data-acoes-cartao="2"] [data-inativar-registro]')!.getAttribute("data-inativar-registro")).toBe("reativar");
+      act(() => root.unmount()); caixa.remove();
+      await abrirColab(E(["visualizar"]));
+      expect($('[data-acoes-cartao] [data-inativar-registro]')).toBeNull();
+    } finally {
+      localStorage.removeItem("frivo:veiculos:visao");
+      localStorage.removeItem("frivo:colaboradores:visao");
+    }
   });
 });
 

@@ -6,7 +6,7 @@ import { respostaRefEmpresa, validarRefEmpresa } from "@/lib/ref-empresa";
 import { organizarFotosVeiculo } from "@/lib/veiculo-fotos";
 import { exigirPermissao } from "@/lib/permissoes-server";
 import { pode } from "@/lib/permissoes";
-import { lerMotivo } from "@/lib/inativacao-server";
+import { impactoVeiculo, lerMotivo } from "@/lib/inativacao-server";
 import { inativarVeiculo, reativarVeiculo, statusHttp } from "@/lib/acoes-massa/regras";
 
 type Params = { params: Promise<{ id: string }> };
@@ -67,14 +67,22 @@ export async function PUT(req: NextRequest, { params }: Params) {
   }
   // Frente primeiro (capa), depois traseira, laterais e outros
   const { fotos, fotosRotulos } = organizarFotosVeiculo(fotosValidadas.fotos, rotulosBrutos);
-  // Inativar pelo formulário (status) segue a mesma regra do botão: exige "excluir"
-  if (rest.status === "INATIVO" && existente.status !== "INATIVO" && !pode(session.user!.permissoes, "veiculos", "excluir", session.user!.role))
-    return NextResponse.json({ erro: "Sem permissão para inativar veículos" }, { status: 403 });
+  // Status "Inativo" no formulário = inativar pela MESMA função do botão e da ação em massa: exige
+  // "excluir", respeita o bloqueio do impacto e anota o motivo nas observações (como o colaborador)
+  const virandoInativo = rest.status === "INATIVO" && existente.status !== "INATIVO";
+  if (virandoInativo) {
+    if (!pode(session.user!.permissoes, "veiculos", "excluir", session.user!.role))
+      return NextResponse.json({ erro: "Sem permissão para inativar veículos" }, { status: 403 });
+    const impacto = await impactoVeiculo(id, empresaId);
+    if (impacto?.bloqueio) return NextResponse.json({ erro: impacto.bloqueio }, { status: 409 });
+  }
 
   const veiculo = await prisma.veiculo.update({
     where: { id },
     data: {
       ...rest,
+      // o status INATIVO quem grava é inativarVeiculo, logo abaixo (com a anotação)
+      ...(virandoInativo && { status: existente.status }),
       fotos,
       fotosRotulos,
       placa,
@@ -94,6 +102,12 @@ export async function PUT(req: NextRequest, { params }: Params) {
     },
   });
 
+  if (virandoInativo) {
+    const u = session.user!;
+    const r = await inativarVeiculo(id, { empresaId, usuarioId: u.id, usuarioNome: u.name ?? "usuário", motivo: lerMotivo({ motivo: body?.motivoInativacao }) });
+    if (!r.ok) return NextResponse.json({ erro: r.motivo }, { status: statusHttp(r) });
+    return NextResponse.json(await prisma.veiculo.findUnique({ where: { id } }));
+  }
   return NextResponse.json(veiculo);
 }
 

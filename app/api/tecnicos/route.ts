@@ -1,16 +1,27 @@
 import { NextRequest, NextResponse } from "next/server";
-import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { validarFoto } from "@/lib/anexos-server";
 import { respostaRefEmpresa, validarRefEmpresa, validarRefsEmpresa } from "@/lib/ref-empresa";
 import { tecnicoSchema } from "@/lib/validations";
-import { exigirPermissao } from "@/lib/permissoes-server";
+import { exigirAlgumaPermissao, exigirPermissao } from "@/lib/permissoes-server";
+import type { Acao } from "@/lib/permissoes";
+
+/**
+ * Quem pode LISTAR os colaboradores (nome, telefone, CREA): as telas que têm um seletor de colaborador.
+ * Cada par é um chamador conferido — Equipes (cadastro de equipe), Ordens (seletor de execução da OS,
+ * Gerar OS do orçamento), Calendário (agenda), PMOC e Contratos (responsável técnico, técnico da
+ * recorrência), Veículos (responsável) e Financeiro (conta a pagar de um colaborador). Sem nenhuma
+ * delas, a lista não sai (antes bastava estar logado).
+ */
+const PERMISSOES_LISTAR_COLABORADORES: [string, Acao][] = [
+  ["equipes", "visualizar"], ["ordens", "visualizar"], ["calendario", "visualizar"], ["pmoc", "visualizar"],
+  ["contratos", "visualizar"], ["veiculos", "visualizar"], ["financeiro", "visualizar"], ["orcamentos", "visualizar"],
+];
 
 export async function GET(req: NextRequest) {
-  const session = await auth();
-  if (!session) return NextResponse.json({ erro: "Não autorizado" }, { status: 401 });
-
-  const empresaId = session.user!.empresaId;
+  const guard = await exigirAlgumaPermissao(PERMISSOES_LISTAR_COLABORADORES);
+  if (guard.erro) return guard.resposta;
+  const empresaId = guard.session.user!.empresaId;
   const { searchParams } = new URL(req.url);
   const tipo = searchParams.get("tipo");
   const tipoOsId = searchParams.get("tipoOsId");
