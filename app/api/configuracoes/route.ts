@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { limiteHorasSchema } from "@/lib/tecnico/andamento";
 import { auth } from "@/lib/auth";
 import { pode } from "@/lib/permissoes";
 import { prisma } from "@/lib/prisma";
@@ -38,6 +39,7 @@ const configuracaoSchema = z.object({
   appCadastrarEquipamento: z.boolean().optional(),
   appAvisarCliente: z.boolean().optional(),
   appOQueLevar: z.boolean().optional(),
+  appAlertaAndamentoHoras: limiteHorasSchema.optional(),
   appRastrearLocalizacao: z.boolean().optional(),
   notifEmailAbrirOs: z.boolean().optional(),
   notifEmailConcluirOs: z.boolean().optional(),

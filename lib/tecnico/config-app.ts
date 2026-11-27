@@ -7,6 +7,8 @@
  * esconder valores, marca d'água (com o identificador da OS) e um dispositivo já vêm LIGADOS.
  */
 
+import { ALERTA_HORAS_PADRAO, limiteHoras } from "@/lib/tecnico/andamento";
+
 export interface ConfigApp {
   /** Mostra nome/endereço/descrição do cliente no app */
   exibirDadosCliente: boolean;
@@ -41,6 +43,8 @@ export interface ConfigApp {
    * desligado, o app não captura nem envia posição e o servidor recusa o que chegar
    */
   rastrearLocalizacao: boolean;
+  /** Atividade esquecida em andamento: depois de quantas horas o app avisa o técnico e o sino avisa o gestor (1 a 24) */
+  alertaAndamentoHoras: number;
 }
 
 export const CONFIG_APP_PADRAO: ConfigApp = {
@@ -59,6 +63,7 @@ export const CONFIG_APP_PADRAO: ConfigApp = {
   avisarCliente: true,
   oQueLevar: true,
   rastrearLocalizacao: false,
+  alertaAndamentoHoras: ALERTA_HORAS_PADRAO,
 };
 
 /** Os campos de Configuracao (snake→camel do Prisma) que alimentam o ConfigApp. */
@@ -78,6 +83,7 @@ export interface ConfiguracaoApp {
   appAvisarCliente: boolean;
   appOQueLevar: boolean;
   appRastrearLocalizacao: boolean;
+  appAlertaAndamentoHoras: number;
 }
 
 /** Os campos a selecionar de Configuracao (reuso no servidor). */
@@ -97,6 +103,7 @@ export const SELECT_CONFIG_APP = {
   appAvisarCliente: true,
   appOQueLevar: true,
   appRastrearLocalizacao: true,
+  appAlertaAndamentoHoras: true,
 } as const;
 
 /** ConfigApp (chaves amigáveis) → payload de Configuracao (chaves app*) para o PUT /api/configuracoes. */
@@ -117,6 +124,7 @@ export function configAppParaPayload(c: ConfigApp): ConfiguracaoApp {
     appAvisarCliente: c.avisarCliente,
     appOQueLevar: c.oQueLevar,
     appRastrearLocalizacao: c.rastrearLocalizacao,
+    appAlertaAndamentoHoras: limiteHoras(c.alertaAndamentoHoras),
   };
 }
 
@@ -143,5 +151,6 @@ export function normalizarConfigApp(row: Partial<ConfiguracaoApp> | null | undef
     avisarCliente: ou(row.appAvisarCliente, CONFIG_APP_PADRAO.avisarCliente),
     oQueLevar: ou(row.appOQueLevar, CONFIG_APP_PADRAO.oQueLevar),
     rastrearLocalizacao: ou(row.appRastrearLocalizacao, CONFIG_APP_PADRAO.rastrearLocalizacao),
+    alertaAndamentoHoras: limiteHoras(row.appAlertaAndamentoHoras),
   };
 }

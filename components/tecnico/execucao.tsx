@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import {
-  ArrowLeft, Camera, CheckCircle2, ChevronRight, CircleDashed, ClipboardCheck, HardDrive, ListPlus, Loader2, MapPin, Phone, Plus, QrCode, Search, Sparkles, Trash2, WifiOff,
+  ArrowLeft, Camera, CheckCircle2, ChevronRight, CircleDashed, ClipboardCheck, HardDrive, ListPlus, Loader2, MapPin, MessageCircle, Phone, Plus, QrCode, Search, Sparkles, Trash2, WifiOff,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Modal } from "@/components/ui/modal";
@@ -21,13 +21,20 @@ import { MateriaisUsados } from "@/components/tecnico/materiais";
 import { MSG_SEM_UNIDADE } from "@/lib/tecnico/cadastro-equipamento";
 import { ConcluirSemEquipamento } from "@/components/os/concluir-sem-equipamento";
 import { srcFoto, TelaEquipamento } from "@/components/tecnico/equipamento";
-import { CartaoAtividade, DetalhesServico, ROTULO_STATUS_ATIVIDADE, SeloPrazo } from "@/components/tecnico/meu-dia";
+import { CartaoAtividade, ROTULO_STATUS_ATIVIDADE, SeloPrazo } from "@/components/tecnico/meu-dia";
 import { guardadoDoRetrato, podeEntrar } from "@/lib/tecnico/chegada";
 import { adicionalAvaliado, equipamentoDoQr } from "@/lib/tecnico/offline/estado";
 import { novoClientId } from "@/lib/tecnico/offline/motor";
 import { textoFaltas } from "@/lib/execucao/pendencias";
 import { LEGENDA_MAX, limparLegenda, REFERENCIA_GERAL } from "@/lib/os/galeria";
-import type { AdicionalTela, EquipamentoTela, ExecucaoTela, FotoServicoTela, NovaOperacao, RetratoAtividade } from "@/lib/tecnico/offline/tipos";
+import type { AdicionalTela, EquipamentoTela, ExecucaoTela, FotoServicoTela, NovaOperacao, OperacaoFila, RetratoAtividade } from "@/lib/tecnico/offline/tipos";
+import { Dica } from "@/components/ui/dica";
+import { FaixaAndamento, inicioLocal } from "@/components/tecnico/andamento";
+import { descricaoParaApp } from "@/lib/tecnico/cartao";
+import { detalhesDaOs, linkTelefone, linkWhatsapp, PRIORIDADE_DESTAQUE, resumoEquipamentos } from "@/lib/tecnico/topo-os";
+import { horarioNoDia, MSG_TERMINO_FORA, situacaoAndamento, sugerirTermino, tempoSuspeito, terminoValido, ultimaDe } from "@/lib/tecnico/andamento";
+import { chaveDiaBR, horaBR } from "@/lib/fuso";
+import { LABELS_PRIORIDADE } from "@/lib/utils";
 
 /** Situação do equipamento (chip da lista). */
 export function situacao(e: EquipamentoTela) {
@@ -75,7 +82,7 @@ export function VistaOs({ atividadeId, equipamentoId, camera, incluir }: {
   const e = equipamentoId ? tela.equipamentos.find((q) => q.equipamento.id === equipamentoId) : null;
   if (e) return <TelaEquipamento x={tela} e={e} registrar={registrar} endereco={retrato.cartao.endereco}
     qr={retrato.equipamentosUnidade.find((u) => u.id === e.equipamento.id)?.qr?.codigo ?? null} />;
-  return <ResumoOs r={retrato} x={tela} aEnviar={aEnviar} registrar={registrar} camera={camera} incluir={incluir} />;
+  return <ResumoOs r={retrato} x={tela} fila={fila} aEnviar={aEnviar} registrar={registrar} camera={camera} incluir={incluir} />;
 }
 
 function Voltar() {
@@ -86,7 +93,7 @@ function Voltar() {
   );
 }
 
-function ResumoOs({ r, x, aEnviar, registrar, camera, incluir }: { r: RetratoAtividade; x: ExecucaoTela; aEnviar: number; registrar: (ops: NovaOperacao[]) => Promise<void>; camera?: boolean; incluir?: string | null }) {
+function ResumoOs({ r, x, fila, aEnviar, registrar, camera, incluir }: { r: RetratoAtividade; x: ExecucaoTela; fila: OperacaoFila[]; aEnviar: number; registrar: (ops: NovaOperacao[]) => Promise<void>; camera?: boolean; incluir?: string | null }) {
   const c = r.cartao;
   const atividadeId = x.atividade.id;
   const { motor, config } = useTecnico();
@@ -124,6 +131,15 @@ function ResumoOs({ r, x, aEnviar, registrar, camera, incluir }: { r: RetratoAti
   }
   const st = ROTULO_STATUS_ATIVIDADE[x.atividade.status] ?? { rotulo: x.atividade.status, classe: "bg-surface-linha text-ink" };
   const atendidos = x.equipamentos.filter((e) => e.feito).length;
+  // Topo: o que fazer, contato e rota (1 toque); o dado de escritório vai para "Detalhes"
+  const problema = descricaoParaApp(c.descricao, config);
+  const rotaVisivel = config.exibirDadosCliente && (!!c.rota || !!c.cliente);
+  const tel = config.exibirContatosCliente ? linkTelefone(c.telefone) : null;
+  const whats = config.exibirContatosCliente ? linkWhatsapp(r.whatsapp) : null;
+  const detalhes = detalhesDaOs(c, { titulo: x.atividade.titulo !== x.atividade.tipoOs?.nome ? x.atividade.titulo : null, verDados: config.exibirDadosCliente });
+  // Atividade esquecida em andamento (no aparelho, sem sinal também)
+  const inicio = inicioLocal(c.iniciadaEm, fila, atividadeId);
+  const andamento = situacaoAndamento({ status: x.atividade.status, inicio, agora, limiteHoras: r.andamento?.limiteHoras ?? config.alertaAndamentoHoras, jornada: r.andamento?.jornada });
 
   async function lerQr(valor: string) {
     setScan(false);
@@ -141,29 +157,56 @@ function ResumoOs({ r, x, aEnviar, registrar, camera, incluir }: { r: RetratoAti
   return (
     <div className="space-y-4 pb-32" data-vista="os">
       <Voltar />
-      <header className="bg-white rounded-card border border-surface-border overflow-hidden">
-        <div className="p-4 space-y-1.5">
+      {/* Atividade esquecida em andamento: o aviso fica no topo até concluir */}
+      <FaixaAndamento s={andamento} />
+      <header className="bg-white rounded-card border border-surface-border overflow-hidden" data-topo-os>
+        <div className="p-4 space-y-2">
           <div className="flex items-center justify-between gap-2">
             <p className="text-sm font-semibold text-ink-muted">{c.osNumero}{x.atividade.tipoOs ? ` · ${x.atividade.tipoOs.nome}` : ""}</p>
             <span className={cn("text-xs font-semibold rounded-full px-2 py-0.5", st.classe)} data-status={x.atividade.status}>{st.rotulo}</span>
           </div>
           {/* "Exibir dados do cliente" desligado: esconde nome e endereço do cliente (privacidade) */}
           <h1 className="text-xl font-bold text-ink leading-tight">{(config.exibirDadosCliente && c.cliente) || x.atividade.titulo || c.osNumero}</h1>
-          <p className="text-sm text-ink-muted">{[config.exibirDadosCliente && c.cliente && x.atividade.titulo !== x.atividade.tipoOs?.nome && x.atividade.titulo, config.exibirDadosCliente && c.unidade, c.hora].filter(Boolean).join(" · ")}</p>
-          {config.exibirDadosCliente && c.endereco && <p className="text-sm text-ink flex gap-1 pt-1"><MapPin className="w-4 h-4 text-ink-subtle shrink-0 mt-0.5" /> {c.endereco}</p>}
-          {/* Prazo definido pelo escritório (da atividade ou da OS): some quando a atividade conclui */}
-          <SeloPrazo prazo={c.prazo} status={x.atividade.status} agora={agora} />
-          {/* O que fazer (descrição e orientação do escritório) fica sempre; sem dados do cliente, sai só a identidade de quem pediu */}
-          <div className="bg-surface-alt rounded-lg p-2.5 mt-2 empty:hidden"><DetalhesServico c={c} /></div>
-          {/* Materiais previstos desta OS (recolhido: na OS, o que importa é a execução) */}
-          <OQueLevarDaOs c={c} recolhido className="bg-surface-alt rounded-lg px-2.5 mt-2" />
-        </div>
-        {((config.exibirDadosCliente && (c.rota || c.cliente)) || (config.exibirContatosCliente && c.telefone)) && (
-          <div className="flex border-t border-surface-border divide-x divide-surface-border">
-            {/* Rota depende do endereço do cliente (dados); sem endereço no cadastro o botão fica apagado, com o porquê. Ligar é contato do cliente */}
-            {config.exibirDadosCliente && (c.rota ? <BotaoRota rota={c.rota} /> : !!c.cliente && <RotaSemEndereco />)}
-            {config.exibirContatosCliente && c.telefone && <a href={`tel:${c.telefone.replace(/[^\d+]/g, "")}`} className="flex-1 inline-flex items-center justify-center gap-2 py-3 text-sm font-semibold text-ink touch-target"><Phone className="w-4 h-4" /> Ligar</a>}
+          <div className="flex flex-wrap items-center gap-1.5">
+            <SeloPrazo prazo={c.prazo} status={x.atividade.status} agora={agora} />
+            {PRIORIDADE_DESTAQUE.has(c.prioridade) && <span className="text-xs font-semibold rounded-full px-2 py-0.5 bg-atrasado-claro text-atrasado-texto" data-prioridade-topo={c.prioridade}>{LABELS_PRIORIDADE[c.prioridade]}</span>}
           </div>
+          {/* O QUE FAZER: o problema relatado (ou a descrição do serviço) — sempre; sem dados do cliente, sai só quem pediu */}
+          {problema && (
+            <div className="rounded-lg bg-surface-alt p-3" data-problema>
+              <h2 className="text-[11px] font-bold uppercase tracking-wide text-ink-muted">{c.chamado ? "Problema relatado" : "O que fazer"}</h2>
+              <p className="text-base text-ink whitespace-pre-line break-words">{problema}</p>
+            </div>
+          )}
+          <p className="text-sm text-ink inline-flex items-center gap-1.5" data-resumo-equipamentos><HardDrive className="w-4 h-4 text-ink-subtle" /> {resumoEquipamentos(x.equipamentos.length, atendidos)}</p>
+          {config.exibirDadosCliente && c.endereco && <p className="text-sm text-ink flex gap-1.5" data-endereco-topo><MapPin className="w-4 h-4 text-ink-subtle shrink-0 mt-0.5" /> {c.endereco}</p>}
+        </div>
+        {/* Contato e rota: um toque cada (rota depende do endereço do cliente; ligar e WhatsApp, dos contatos) */}
+        {(rotaVisivel || tel || whats) && (
+          <div className="grid grid-flow-col auto-cols-fr border-t border-surface-border divide-x divide-surface-border" data-acoes-topo>
+            {rotaVisivel && (c.rota ? <BotaoRota rota={c.rota} className="py-4 text-base" /> : <RotaSemEndereco />)}
+            {tel && <a href={tel} data-ligar className="inline-flex items-center justify-center gap-2 py-4 text-base font-semibold text-ink active:bg-surface-alt touch-target"><Phone className="w-5 h-5" /> Ligar</a>}
+            {whats && <a href={whats} target="_blank" rel="noopener noreferrer" data-whatsapp-topo className="inline-flex items-center justify-center gap-2 py-4 text-base font-semibold text-ink active:bg-surface-alt touch-target"><MessageCircle className="w-5 h-5" /> WhatsApp</a>}
+          </div>
+        )}
+        {/* Dado de escritório e materiais previstos: recolhido */}
+        {(detalhes.length > 0 || (config.oQueLevar && (c.materiais?.length ?? 0) > 0)) && (
+          <details className="border-t border-surface-border group" data-detalhes-os>
+            <summary className="list-none cursor-pointer px-4 py-3 text-sm font-semibold text-primary-700 inline-flex items-center gap-1.5 w-full touch-target">
+              <ChevronRight className="w-4 h-4 transition-transform group-open:rotate-90" /> Detalhes
+            </summary>
+            <div className="px-4 pb-4 space-y-3">
+              <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1.5 text-sm">
+                {detalhes.map((d) => (
+                  <div key={d.rotulo} className="contents" data-detalhe={d.rotulo}>
+                    <dt className="text-ink-muted">{d.rotulo}</dt>
+                    <dd className="text-ink whitespace-pre-line break-words">{d.valor}</dd>
+                  </div>
+                ))}
+              </dl>
+              <OQueLevarDaOs c={c} recolhido className="bg-surface-alt rounded-lg px-2.5" />
+            </div>
+          </details>
         )}
       </header>
 
@@ -175,7 +218,7 @@ function ResumoOs({ r, x, aEnviar, registrar, camera, incluir }: { r: RetratoAti
             className="w-full rounded-card bg-primary-600 text-white py-4 text-base font-bold shadow-card inline-flex items-center justify-center gap-2 touch-target">
             <Camera className="w-6 h-6" /> Câmera rápida
           </button>
-          <p className="text-xs text-ink-muted">Fotografe à vontade, com a etiqueta QR junto: o app põe cada foto no equipamento certo.</p>
+          <p className="text-xs text-ink-muted inline-flex items-center gap-1">Fotos com a etiqueta QR <Dica rotulo="Câmera rápida" texto="Fotografe à vontade, com a etiqueta QR junto: o app põe cada foto no equipamento certo. As sem etiqueta você confere depois." /></p>
         </section>
       )}
       {aConferir > 0 && (
@@ -285,8 +328,9 @@ function ResumoOs({ r, x, aEnviar, registrar, camera, incluir }: { r: RetratoAti
       {cadastro && <ModalCadastroEquipamento r={r} x={x} endereco={c.endereco} onFechar={() => setCadastro(false)} registrar={registrar} />}
       {fotoServico && <ModalFotoServico x={x} endereco={c.endereco} onFechar={() => setFotoServico(false)} registrar={registrar} />}
       {adicional && <ModalAdicional x={x} r={r} a={adicional === "novo" ? null : adicional} onFechar={() => setAdicional(null)} registrar={registrar} />}
-      {concluir && <ModalConcluir x={x} onFechar={() => setConcluir(false)} onConcluir={async (resumo) => {
-        await registrar([{ tipo: "concluir", atividadeId, dados: resumo ? { resumo } : {} }]);
+      {concluir && <ModalConcluir x={x} tempo={{ inicio, ultima: ultimaGravacaoLocal(r, fila), limite: r.andamento?.limiteHoras ?? config.alertaAndamentoHoras }}
+        onFechar={() => setConcluir(false)} onConcluir={async (resumo, terminoEm) => {
+        await registrar([{ tipo: "concluir", atividadeId, dados: { ...(resumo ? { resumo } : {}), ...(terminoEm ? { terminoEm } : {}) } }]);
         setConcluir(false);
       }} onJustificado={async () => { setConcluir(false); await motor?.baixarRetrato(atividadeId); }} />}
     </div>
@@ -329,6 +373,15 @@ function IncluirPeloQr({ r, x, equipamentoId, registrar }: { r: RetratoAtividade
   );
 }
 
+function OpcaoTermino({ ativo, onClick, chave, children }: { ativo: boolean; onClick: () => void; chave: string; children: React.ReactNode }) {
+  return (
+    <button type="button" role="radio" aria-checked={ativo} onClick={onClick} data-opcao-termino={chave}
+      className={cn("w-full text-left rounded-card border-2 px-3 py-3 text-base font-semibold tabular-nums touch-target", ativo ? "border-primary-600 bg-primary-50 text-ink" : "border-surface-border bg-white text-ink")}>
+      {children}
+    </button>
+  );
+}
+
 const srcFotoServico = (osId: string, f: FotoServicoTela) => f.local ?? `/api/ordens/${osId}/anexos/${f.id}?inline=1`;
 
 /**
@@ -350,12 +403,10 @@ function FotosServico({ x, so, onAdicionar, registrar }: { x: ExecucaoTela; so: 
   }
   return (
     <section className="space-y-2" data-fotos-servico>
-      <h2 className="text-base font-bold text-ink inline-flex items-center gap-1.5"><Camera className="w-4 h-4 text-ink-muted" /> Fotos do serviço</h2>
-      {!fotos.length && (
-        <p className="rounded-card bg-white border border-surface-border p-3 text-sm text-ink-muted">
-          Cada foto vai com o equipamento (ou “Geral da OS”) e uma legenda; checklist e antes/depois ficam lá.
-        </p>
-      )}
+      <h2 className="text-base font-bold text-ink inline-flex items-center gap-1.5"><Camera className="w-4 h-4 text-ink-muted" /> Fotos do serviço
+        <Dica rotulo="Fotos do serviço" texto="Cada foto vai com o equipamento (ou “Geral da OS”) e uma legenda. As do checklist e as de antes/depois ficam no equipamento." />
+      </h2>
+
       {fotos.length > 0 && (
         <ul className="space-y-2">
           {fotos.map((f, i) => (
@@ -549,10 +600,32 @@ function ModalAdicional({ x, r, a, onFechar, registrar }: { x: ExecucaoTela; r: 
   );
 }
 
-export function ModalConcluir({ x, onFechar, onConcluir, onJustificado }: { x: ExecucaoTela; onFechar: () => void; onConcluir: (resumo: string) => void; onJustificado: () => void }) {
+/** Gravações da execução (as que dizem que o técnico estava trabalhando): base do término sugerido */
+const TIPOS_DE_TRABALHO = new Set(["resposta", "audio", "tudoOk", "foto", "equipamento", "formulario", "scan", "vincular", "cadastrarEquipamento", "adicional", "adicionalFoto", "fotoOs", "material"]);
+/** A última gravação: a do servidor ou a mais recente no aparelho (sem sinal também). */
+export function ultimaGravacaoLocal(r: RetratoAtividade, fila: OperacaoFila[]): Date | null {
+  return ultimaDe([r.andamento?.ultimaGravacaoEm, ...fila.filter((o) => o.atividadeId === r.execucao.atividade.id && TIPOS_DE_TRABALHO.has(o.tipo)).map((o) => o.em ?? o.criadoEm)]);
+}
+
+type TempoConclusao = { inicio: string | null; ultima: Date | null; limite: number };
+
+export function ModalConcluir({ x, tempo, onFechar, onConcluir, onJustificado }: {
+  x: ExecucaoTela; /** Início, última gravação e limite: para o término sugerido quando o tempo é suspeito */ tempo?: TempoConclusao;
+  onFechar: () => void; onConcluir: (resumo: string, terminoEm?: string) => void; onJustificado: () => void;
+}) {
   const [resumo, setResumo] = useState("");
   const { config } = useTecnico();
   const c = x.conclusao;
+  // Tempo suspeito (esqueceu de concluir): sugere a última gravação como término; o técnico confirma ou corrige
+  const [abertoEm] = useState(() => Date.now());
+  const suspeito = !!tempo && tempoSuspeito(tempo.inicio, abertoEm, tempo.limite);
+  const sugerido = suspeito ? sugerirTermino(tempo!.inicio, tempo!.ultima, abertoEm) : null;
+  const [escolha, setEscolha] = useState<"sugerido" | "agora" | "outro">(sugerido ? "sugerido" : "outro");
+  const [outro, setOutro] = useState(sugerido ? horaBR(sugerido) : "");
+  const outroEm = escolha === "outro" ? horarioNoDia(outro, tempo?.inicio && chaveDiaBR(tempo.inicio) !== chaveDiaBR(abertoEm) ? new Date(tempo.inicio) : abertoEm) : null;
+  const outroOk = !!outroEm && terminoValido(outroEm, tempo?.inicio ?? null, abertoEm);
+  const terminoEm = !suspeito || escolha === "agora" ? undefined : escolha === "sugerido" ? sugerido?.toISOString() : outroOk ? outroEm!.toISOString() : undefined;
+  const faltaTermino = suspeito && escolha === "outro" && !outroOk;
   // "Campo de conclusão obrigatório": sem o resumo, não conclui
   const faltaResumo = config.conclusaoObrigatoria && !resumo.trim();
   return (
@@ -591,7 +664,26 @@ export function ModalConcluir({ x, onFechar, onConcluir, onJustificado }: { x: E
           <p className="text-sm text-ink">{c.atendidos === 1 ? "1 equipamento atendido" : `${c.atendidos} equipamentos atendidos`}{c.naoAtendidos ? ` · ${c.naoAtendidos} não atendido${c.naoAtendidos > 1 ? "s" : ""}` : ""}{x.adicionais.length ? ` · ${x.adicionais.length} serviço${x.adicionais.length > 1 ? "s" : ""} extra` : ""}.</p>
           <ObservacaoVoz rotulo={config.conclusaoObrigatoria ? "Resumo para o escritório (obrigatório)" : "Resumo para o escritório (opcional)"} obrigatoria={config.conclusaoObrigatoria} valor={resumo} onSalvar={setResumo} aoDigitar={setResumo} />
           {faltaResumo && <p className="text-xs text-ink-muted" data-falta-resumo>Preencha o resumo da conclusão para concluir a atividade.</p>}
-          <button type="button" disabled={faltaResumo} onClick={() => onConcluir(resumo.trim())} data-confirmar-conclusao className="w-full rounded-card bg-success-600 text-white py-4 text-base font-bold touch-target disabled:opacity-40">Concluir atividade</button>
+          {suspeito && (
+            <fieldset className="space-y-2" data-termino>
+              <legend className="text-sm font-semibold text-ink inline-flex items-center gap-1">Horário de término
+                <Dica rotulo="Horário de término" texto={`A atividade está em andamento desde ${tempo!.inicio ? `${horaBR(tempo!.inicio)}${chaveDiaBR(tempo!.inicio) !== chaveDiaBR(abertoEm) ? ` de ${chaveDiaBR(tempo!.inicio).split("-").reverse().slice(0, 2).join("/")}` : ""}` : "antes"}. Confirme quando o serviço terminou de verdade: vale para o relatório e o desempenho.`} />
+              </legend>
+              {sugerido && (
+                <OpcaoTermino ativo={escolha === "sugerido"} onClick={() => setEscolha("sugerido")} chave="sugerido">
+                  {horaBR(sugerido)} <span className="font-normal text-ink-muted">· última gravação</span>
+                </OpcaoTermino>
+              )}
+              <OpcaoTermino ativo={escolha === "agora"} onClick={() => setEscolha("agora")} chave="agora">{horaBR(abertoEm)} <span className="font-normal text-ink-muted">· agora</span></OpcaoTermino>
+              <OpcaoTermino ativo={escolha === "outro"} onClick={() => setEscolha("outro")} chave="outro">Outro horário</OpcaoTermino>
+              {escolha === "outro" && (
+                <input type="time" value={outro} onChange={(e) => setOutro(e.target.value)} aria-label="Horário de término" data-termino-outro
+                  className={cn("w-full rounded-card border px-3 py-3 text-lg tabular-nums", outro && !outroOk ? "border-atrasado" : "border-surface-border")} />
+              )}
+              {escolha === "outro" && outro && !outroOk && <p className="text-xs text-atrasado-texto" data-termino-invalido>{MSG_TERMINO_FORA}</p>}
+            </fieldset>
+          )}
+          <button type="button" disabled={faltaResumo || faltaTermino} onClick={() => onConcluir(resumo.trim(), terminoEm)} data-confirmar-conclusao className="w-full rounded-card bg-success-600 text-white py-4 text-base font-bold touch-target disabled:opacity-40">Concluir atividade</button>
         </div>
       )}
     </Modal>
