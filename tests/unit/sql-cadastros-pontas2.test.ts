@@ -1,6 +1,6 @@
 /**
  * Cadastros, leva 5 — os dois SQLs rodados de verdade num PostgreSQL (schema descartável, cada arquivo DUAS vezes):
- *  - prisma/sql/2027-01-29_notas_compra_descartes.sql (🔵, antes do merge): a tabela do registro de descarte;
+ *  - prisma/sql/2027-02-02_notas_compra_descartes.sql (🔵, antes do merge): a tabela do registro de descarte;
  *  - docs/sql-opcional/contratos-excluir.sql (OPCIONAL, decisão do Zé): "Contratos › Excluir" para quem já edita.
  *   PG_TESTE_URL="postgresql://root@localhost/postgres?host=/var/run/postgresql" npx vitest run tests/unit/sql-cadastros-pontas2
  */
@@ -9,7 +9,7 @@ import { execFileSync } from "node:child_process";
 import path from "node:path";
 
 const URL = process.env.PG_TESTE_URL;
-const DESCARTES = path.resolve(__dirname, "../../prisma/sql/2027-01-29_notas_compra_descartes.sql");
+const DESCARTES = path.resolve(__dirname, "../../prisma/sql/2027-02-02_notas_compra_descartes.sql");
 const OPCIONAL = path.resolve(__dirname, "../../docs/sql-opcional/contratos-excluir.sql");
 const SCHEMA = `teste_sql_cad5_${process.pid}`;
 

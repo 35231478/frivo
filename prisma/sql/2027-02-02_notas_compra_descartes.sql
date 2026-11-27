@@ -15,7 +15,7 @@
 -- O QUE NÃO MUDA: nenhuma nota existente é tocada; sem o descarte, a tabela fica vazia.
 --
 -- Pode rodar mais de uma vez.
---   psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f prisma/sql/2027-01-29_notas_compra_descartes.sql
+--   psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f prisma/sql/2027-02-02_notas_compra_descartes.sql
 
 BEGIN;
 

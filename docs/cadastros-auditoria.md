@@ -116,7 +116,7 @@ Por item da auditoria:
 - Perfis que já existem **não ganham nada sozinhos**: quem cancelava contrato com Editar deixa de poder cancelar até o administrador marcar em **Configurações › Perfis de acesso › Contratos › Excluir**. Administrador e super admin continuam podendo tudo.
 - Para dar a todos os perfis que já editam contratos de uma vez, há um SQL **opcional** em `docs/sql-opcional/contratos-excluir.sql` (fora de `prisma/sql` de propósito: conceder privilégio é decisão do Zé).
 
-**SQL (🔵, antes do merge):** `prisma/sql/2027-01-29_notas_compra_descartes.sql` — tabela nova `notas_compra_descartes`. Aditivo e idempotente; nenhuma nota existente é tocada.
+**SQL (🔵, antes do merge):** `prisma/sql/2027-02-02_notas_compra_descartes.sql` — tabela nova `notas_compra_descartes`. Aditivo e idempotente; nenhuma nota existente é tocada.
 
 ## Pendências anotadas (não corrigidas)
 
