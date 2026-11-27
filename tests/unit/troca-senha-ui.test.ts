@@ -62,7 +62,7 @@ describe("o formulário", () => {
   it("confere antes de enviar: senha recebida, regra forte, confirmação e diferente da recebida", async () => {
     await montar();
     await enviar();
-    expect(txt($("[role=alert]"))).toBe("Informe a senha que você recebeu.");
+    expect(txt($("[role=alert]"))).toBe("Informe a senha recebida.");
     await preencher("Recebida-123", "curta");
     await enviar();
     expect(txt($("[role=alert]"))).toMatch(/8 caracteres/);
@@ -71,7 +71,7 @@ describe("o formulário", () => {
     expect(txt($("[role=alert]"))).toBe("A confirmação não confere com a nova senha.");
     await preencher("Recebida-123", "Recebida-123");
     await enviar();
-    expect(txt($("[role=alert]"))).toBe("A nova senha precisa ser diferente da que você recebeu.");
+    expect(txt($("[role=alert]"))).toBe("A nova senha precisa ser diferente da recebida.");
     expect(chamadas).toEqual([]);
   });
 

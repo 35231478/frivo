@@ -23,11 +23,11 @@ export function TrocarSenhaObrigatoriaForm({ nome, email, destino }: { nome: str
   async function salvar(e: React.FormEvent) {
     e.preventDefault();
     setErro("");
-    if (!atual) { setErro("Informe a senha que você recebeu."); return; }
+    if (!atual) { setErro("Informe a senha recebida."); return; }
     const problema = problemaSenha(nova);
     if (problema) { setErro(problema); return; }
     if (nova !== confirmar) { setErro("A confirmação não confere com a nova senha."); return; }
-    if (nova === atual) { setErro("A nova senha precisa ser diferente da que você recebeu."); return; }
+    if (nova === atual) { setErro("A nova senha precisa ser diferente da recebida."); return; }
     setSalvando(true);
     try {
       const r = await fetch(API_TROCAR_SENHA, {
@@ -50,13 +50,13 @@ export function TrocarSenhaObrigatoriaForm({ nome, email, destino }: { nome: str
       </div>
       {erro && <p role="alert" className="bg-atrasado-claro border border-atrasado/20 text-atrasado-texto text-sm rounded-lg px-3 py-2.5 flex items-center gap-2"><AlertCircle className="w-4 h-4 shrink-0" /> {erro}</p>}
       <label className="block space-y-1.5">
-        <span className="text-sm font-semibold text-ink">Senha que você recebeu</span>
+        <span className="text-sm font-semibold text-ink">Senha recebida</span>
         <input type={mostrar ? "text" : "password"} value={atual} onChange={(e) => setAtual(e.target.value)} autoComplete="current-password" className={cls} data-senha-atual />
       </label>
       <label className="block space-y-1.5">
         <span className="text-sm font-semibold text-ink">Nova senha</span>
         <div className="relative">
-          <input type={mostrar ? "text" : "password"} value={nova} onChange={(e) => setNova(e.target.value)} autoComplete="new-password" className={cls} placeholder={`Pelo menos ${SENHA_MINIMA} caracteres, com letra e número`} data-senha-nova />
+          <input type={mostrar ? "text" : "password"} value={nova} onChange={(e) => setNova(e.target.value)} autoComplete="new-password" className={`${cls} pr-12`} placeholder={`Pelo menos ${SENHA_MINIMA} caracteres, com letra e número`} data-senha-nova />
           <button type="button" onClick={() => setMostrar((v) => !v)} className="absolute right-1 top-1/2 -translate-y-1/2 w-11 h-11 inline-flex items-center justify-center text-ink-subtle" aria-label={mostrar ? "Ocultar senhas" : "Mostrar senhas"}>
             {mostrar ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
           </button>
