@@ -3,6 +3,9 @@ import { prisma } from "@/lib/prisma";
 import { exigirPermissao } from "@/lib/permissoes-server";
 import { checklistSugerido } from "@/lib/checklist/padrao";
 import { checklistSchema, planejarChecklist } from "@/lib/checklist/tipo";
+import { grandezaDoItem } from "@/lib/checklist/faixas";
+
+const n = (d: { toNumber(): number } | null) => (d === null ? null : d.toNumber());
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -13,13 +16,18 @@ async function carregar(empresaId: string, id: string) {
   const itens = await prisma.checklistTipoItem.findMany({
     where: { tipoEquipamentoId: id, ativo: true },
     orderBy: [{ ordem: "asc" }, { criadoEm: "asc" }],
-    select: { id: true, texto: true, tipoResposta: true, unidade: true, pedirFoto: true, pedirObservacao: true, ordem: true, _count: { select: { respostas: true } } },
+    select: {
+      id: true, texto: true, tipoResposta: true, unidade: true, pedirFoto: true, pedirObservacao: true, ordem: true, grandeza: true, valorMin: true, valorMax: true,
+      _count: { select: { respostas: true } },
+    },
   });
   return {
     tipo,
-    itens: itens.map(({ _count, ...i }) => ({ ...i, respostas: _count.respostas })),
+    // A grandeza dos itens antigos vem do texto ("Pressão de sucção" → SUCCAO): a tela já mostra e grava ao salvar
+    itens: itens.map(({ _count, valorMin, valorMax, ...i }) => ({ ...i, grandeza: grandezaDoItem(i), valorMin: n(valorMin), valorMax: n(valorMax), respostas: _count.respostas })),
     sugestao: checklistSugerido(tipo.chaveEnum).map((i) => ({
       texto: i.texto, pedirFoto: !!i.pedirFoto, pedirObservacao: !!i.pedirObservacao, tipoResposta: i.tipoResposta ?? "OK_ATENCAO_NA", unidade: i.unidade ?? null,
+      grandeza: grandezaDoItem({ texto: i.texto, tipoResposta: i.tipoResposta ?? "OK_ATENCAO_NA" }), valorMin: null, valorMax: null,
     })),
   };
 }
@@ -51,9 +59,9 @@ export async function PUT(req: NextRequest, { params }: Params) {
 
   const atuais = await prisma.checklistTipoItem.findMany({
     where: { tipoEquipamentoId: id, ativo: true },
-    select: { id: true, texto: true, pedirFoto: true, pedirObservacao: true, ordem: true, tipoResposta: true, unidade: true },
+    select: { id: true, texto: true, pedirFoto: true, pedirObservacao: true, ordem: true, tipoResposta: true, unidade: true, grandeza: true, valorMin: true, valorMax: true },
   });
-  const r = planejarChecklist(atuais, parsed.data.itens);
+  const r = planejarChecklist(atuais.map((a) => ({ ...a, valorMin: n(a.valorMin), valorMax: n(a.valorMax) })), parsed.data.itens);
   if (!r.ok) return NextResponse.json({ erro: r.erro }, { status: 400 });
 
   const { plano } = r;

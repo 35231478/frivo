@@ -8,13 +8,15 @@ import { LinkRelatorioAtividade } from "@/components/os/link-relatorio-atividade
 import { cn, formatarData, formatarDataHora, LABELS_STATUS_OS } from "@/lib/utils";
 import {
   FileBarChart, DollarSign, Camera, ListChecks, Wrench, Users, Clock,
-  CornerDownRight, CalendarRange, AlertCircle, Lock,
+  CornerDownRight, CalendarRange, AlertCircle, AlertTriangle, Lock,
 } from "lucide-react";
 
 interface Atividade {
   id: string; titulo: string; status: string; criadoEm: string; duracaoMin: number | null;
   tipoOsNome: string | null; tipoOsCor: string | null; tecnicoNome: string | null;
   resumo: string; fotos: number; respostas: number;
+  /** Medições fora da faixa esperada nesta atividade */
+  foraDaFaixa?: number;
   /** Link público do relatório, já com o token. */
   linkRelatorio: string;
 }
@@ -165,6 +167,11 @@ export function OsRelatorios({ osId }: { osId: string }) {
                     <div className="flex items-center gap-3 mt-2 text-xs text-ink-muted">
                       <span className="flex items-center gap-1"><Camera className="w-3.5 h-3.5" /> {a.fotos}</span>
                       <span className="flex items-center gap-1"><ListChecks className="w-3.5 h-3.5" /> {a.respostas} resposta(s)</span>
+                      {(a.foraDaFaixa ?? 0) > 0 && (
+                        <span className="inline-flex items-center gap-1 rounded bg-atencao-claro px-1.5 py-0.5 font-semibold text-atencao-texto" data-fora-da-faixa-atividade>
+                          <AlertTriangle className="w-3.5 h-3.5" /> {a.foraDaFaixa} {a.foraDaFaixa === 1 ? "medição fora do esperado" : "medições fora do esperado"}
+                        </span>
+                      )}
                     </div>
                   </div>
                   <LinkRelatorioAtividade osId={osId} atividadeId={a.id} link={a.linkRelatorio} onNovoLink={(link) => trocarLink(a.id, link)} />

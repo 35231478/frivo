@@ -18,6 +18,8 @@
  *  - JUSTIFICADA: exceção pontual, autorizada com motivo por quem pode concluir OS.
  */
 
+import { ehCalculada, grandezaDoItem } from "@/lib/checklist/faixas";
+
 export type StatusItem = "OK" | "ATENCAO" | "NAO_SE_APLICA";
 export const STATUS_ITEM: StatusItem[] = ["OK", "ATENCAO", "NAO_SE_APLICA"];
 export const ROTULO_STATUS: Record<StatusItem, string> = { OK: "OK", ATENCAO: "Atenção", NAO_SE_APLICA: "Não se aplica" };
@@ -29,6 +31,11 @@ export interface ItemExecucao {
   tipoResposta: TipoResposta;
   /** Unidade padrão da medição (psi, °C, A…) */
   unidade: string | null;
+  /** Medição: o que mede (DELTA_T e afins são calculados: o técnico não digita) */
+  grandeza?: string | null;
+  /** Medição: faixa esperada, na unidade do item (fora dela o app só alerta) */
+  valorMin?: number | null;
+  valorMax?: number | null;
 }
 export interface RespostaItem {
   status: StatusItem | null;
@@ -78,6 +85,7 @@ export function faltasEquipamento(e: EquipamentoParaPendencia): FaltasEquipament
   const f: FaltasEquipamento = { semResposta: [], semFoto: [], semObservacao: [], formulario: null };
   for (const it of e.itens) {
     if (!it.ativo) continue; // item removido do checklist do tipo não é mais exigido
+    if (ehCalculada(grandezaDoItem(it))) continue; // ΔT: sai das leituras (que já são cobradas)
     const r = e.respostas[it.id];
     if (r?.status === "NAO_SE_APLICA") continue;
     if (!respondido(it, r)) { f.semResposta.push(it.texto); continue; }

@@ -1,5 +1,6 @@
 import { BadgeCheck, CalendarClock, Camera, ClipboardCheck, Lock, MapPin, Mic, Sparkles, Truck, Users } from "lucide-react";
 import { cn, formatarCpfCnpj, formatarData, formatarDataHora, formatarTelefone } from "@/lib/utils";
+import { textoFaixa } from "@/lib/checklist/faixas";
 import { enderecoStr } from "@/components/relatorio/cabecalho-relatorio";
 import { mostraSecao, type ConfigRelatorioOs, type SecaoRelatorioId, type VersaoRelatorio } from "@/lib/relatorio-os/config";
 import type { AdicionalRelatorio, BlocoEquipamento, ChecklistTipoRelatorio, FotoRelatorio, GrupoChecklist, RelatorioOsDados } from "@/lib/relatorio-os/dados";
@@ -313,6 +314,7 @@ export function BlocoEquip({ b, checklist, fotos, interna = false }: { b: BlocoE
             <span className="px-1.5 py-0.5 rounded bg-ok-claro text-ok-texto font-semibold">{r.ok} OK</span>
             {r.atencao > 0 && <span className="px-1.5 py-0.5 rounded bg-atencao-claro text-atencao-texto font-semibold">{r.atencao} Atenção</span>}
             {r.naoSeAplica > 0 && <span className="px-1.5 py-0.5 rounded bg-surface-linha text-ink-muted font-semibold">{r.naoSeAplica} Não se aplica</span>}
+            {(r.foraDaFaixa ?? 0) > 0 && <span className="px-1.5 py-0.5 rounded bg-atencao-claro text-atencao-texto font-semibold" data-resumo-fora>{r.foraDaFaixa} fora do esperado</span>}
             {(r.medicoes ?? 0) > 0 && <span className="px-1.5 py-0.5 rounded bg-primary-50 text-primary-700 font-semibold">{r.medicoes} {r.medicoes === 1 ? "medição" : "medições"}</span>}
           </p>
         )}
@@ -365,9 +367,14 @@ function ChecklistTipo({ grupos, interna }: { grupos: ChecklistTipoRelatorio[]; 
                   {it.status
                     ? <span className={cn("shrink-0 text-[11px] font-semibold px-1.5 py-0.5 rounded border", COR_STATUS_REL[it.status])}>{ROTULO_STATUS[it.status]}</span>
                     : it.medicao
-                      ? <span className="shrink-0 text-xs font-bold text-ink tabular-nums" data-medicao-relatorio>{textoMedicao(it.medicao)}</span>
+                      ? <span className={cn("shrink-0 text-xs font-bold tabular-nums", it.medicao.fora ? "text-atencao-texto" : "text-ink")} data-medicao-relatorio data-fora={it.medicao.fora || undefined}>{textoMedicao(it.medicao)}</span>
                       : <span className="shrink-0 text-[11px] text-ink-subtle">—</span>}
                 </div>
+                {it.medicao?.faixa && (
+                  <p className={cn("text-[11px] mt-0.5", it.medicao.fora ? "text-atencao-texto font-semibold" : "text-ink-subtle")} data-faixa-relatorio>
+                    {it.medicao.fora ? "Fora do esperado" : "Esperado"}: {textoFaixa(it.medicao.faixa, it.medicao.unidade)}
+                  </p>
+                )}
                 {it.observacao && <p className="text-xs text-ink-muted whitespace-pre-wrap mt-0.5">{it.observacao}</p>}
                 {interna && it.audio && <p className="text-[11px] text-acento-hover mt-0.5 inline-flex items-center gap-1" data-audio-relatorio><Mic className="w-3 h-3" /> Observação em áudio (ouvir na OS)</p>}
               </li>

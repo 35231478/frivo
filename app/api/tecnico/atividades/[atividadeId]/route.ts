@@ -61,10 +61,11 @@ export async function GET(_: NextRequest, { params }: Params) {
   const itens = tipoIds.length ? await prisma.checklistTipoItem.findMany({
     where: { tipoEquipamentoId: { in: tipoIds }, empresaId, ativo: true },
     orderBy: [{ ordem: "asc" }, { criadoEm: "asc" }],
-    select: { id: true, tipoEquipamentoId: true, texto: true, pedirFoto: true, pedirObservacao: true, ativo: true, ordem: true, tipoResposta: true, unidade: true },
+    select: { id: true, tipoEquipamentoId: true, texto: true, pedirFoto: true, pedirObservacao: true, ativo: true, ordem: true, tipoResposta: true, unidade: true, grandeza: true, valorMin: true, valorMax: true },
   }) : [];
-  const checklistsPorTipo: Record<string, Omit<(typeof itens)[number], "tipoEquipamentoId">[]> = {};
-  for (const { tipoEquipamentoId, ...i } of itens) (checklistsPorTipo[tipoEquipamentoId] ??= []).push(i);
+  // Faixa esperada como número (o app alerta fora dela, também sem sinal)
+  const checklistsPorTipo: Record<string, (Omit<(typeof itens)[number], "tipoEquipamentoId" | "valorMin" | "valorMax"> & { valorMin: number | null; valorMax: number | null })[]> = {};
+  for (const { tipoEquipamentoId, valorMin, valorMax, ...i } of itens) (checklistsPorTipo[tipoEquipamentoId] ??= []).push({ ...i, valorMin: valorMin?.toNumber() ?? null, valorMax: valorMax?.toNumber() ?? null });
   // O nome da unidade do cliente vem junto de cada equipamento: sem "Exibir dados do cliente", sai também
   const semUnidade = <T extends { unidade: string | null }>(e: T): T => (config.exibirDadosCliente ? e : { ...e, unidade: null });
   // "O que levar": os materiais previstos desta OS (opção da empresa desligada = nada sai)

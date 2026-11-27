@@ -31,8 +31,8 @@ export interface GrupoChecklist { formulario: string; atividade: string; itens: 
 export interface FotoRelatorio { url: string; legenda: string }
 export interface ItemChecklistTipo {
   texto: string; status: StatusItem | null; observacao: string | null;
-  /** Medição capturada pelo técnico (número + unidade) — sem avaliação */
-  medicao: { valor: number; unidade: string | null } | null;
+  /** Medição capturada pelo técnico (número + unidade), com a faixa esperada do momento e se ficou fora dela */
+  medicao: { valor: number; unidade: string | null; faixa?: { min: number | null; max: number | null } | null; fora?: boolean } | null;
   /** Tem observação em áudio (ouve-se na OS; no papel, só a marca na versão interna) */
   audio: boolean;
 }
@@ -49,7 +49,7 @@ export interface BlocoEquipamento {
   /** Checklist do tipo do equipamento, por atividade em que ele foi atendido */
   checklistTipo: ChecklistTipoRelatorio[];
   /** Contagem das respostas do checklist do tipo */
-  resumoChecklist: { ok: number; atencao: number; naoSeAplica: number; medicoes: number };
+  resumoChecklist: { ok: number; atencao: number; naoSeAplica: number; medicoes: number; foraDaFaixa?: number };
   /** Formulário do tipo (tipo de OS × tipo de equipamento) */
   checklist: GrupoChecklist[];
   fotos: FotoRelatorio[];
@@ -125,6 +125,7 @@ type Atividade = {
   checklistRespostas?: {
     equipamentoId: string; status: string | null; observacao: string | null; textoItem: string; item?: { ordem: number } | null;
     id?: string; valor?: { toNumber(): number } | number | null; unidade?: string | null; audio?: boolean;
+    faixaMin?: { toNumber(): number } | number | null; faixaMax?: { toNumber(): number } | number | null; foraDaFaixa?: boolean;
   }[];
   fotosAtendimento?: { id: string; equipamentoId: string; url: string; momento?: "ANTES" | "DEPOIS" | null; item?: { texto: string } | null }[];
   servicosAdicionais?: AdicionalEntrada[];
@@ -268,16 +269,18 @@ export function blocosAtendidos(ativs: Atividade[], unidade: string | null, prin
 
   const blocos: BlocoEquipamento[] = [...equips.values()].filter((x) => x.atividades.size).map(({ e, atividades }) => {
     const checklist: GrupoChecklist[] = [], fotos: FotoRelatorio[] = [], checklistTipo: ChecklistTipoRelatorio[] = [], observacoes: string[] = [];
-    const resumoChecklist = { ok: 0, atencao: 0, naoSeAplica: 0, medicoes: 0 };
+    const resumoChecklist = { ok: 0, atencao: 0, naoSeAplica: 0, medicoes: 0, foraDaFaixa: 0 };
     for (const a of ativs.filter((x) => atividades.has(x.id))) {
       const itens: ItemChecklistTipo[] = (a.checklistRespostas ?? [])
         .filter((r) => r.equipamentoId === e.id && (r.status || (r.observacao ?? "").trim() || numero(r.valor) !== null || r.audio))
         .sort((x, y) => (x.item?.ordem ?? 0) - (y.item?.ordem ?? 0))
         .map((r) => {
           const valor = numero(r.valor);
+          const [min, max] = [numero(r.faixaMin), numero(r.faixaMax)];
           return {
             texto: r.textoItem, status: STATUS_VALIDOS.includes(r.status as StatusItem) ? (r.status as StatusItem) : null, observacao: (r.observacao ?? "").trim() || null,
-            medicao: valor === null ? null : { valor, unidade: r.unidade ?? null }, audio: !!r.audio,
+            medicao: valor === null ? null : { valor, unidade: r.unidade ?? null, faixa: min === null && max === null ? null : { min, max }, fora: !!r.foraDaFaixa },
+            audio: !!r.audio,
           };
         });
       for (const it of itens) {
@@ -285,6 +288,7 @@ export function blocosAtendidos(ativs: Atividade[], unidade: string | null, prin
         else if (it.status === "ATENCAO") resumoChecklist.atencao++;
         else if (it.status === "NAO_SE_APLICA") resumoChecklist.naoSeAplica++;
         else if (it.medicao) resumoChecklist.medicoes++;
+        if (it.medicao?.fora) resumoChecklist.foraDaFaixa++;
       }
       if (itens.length) checklistTipo.push({ atividade: a.titulo, itens });
       fotos.push(...(a.fotosAtendimento ?? []).filter((f) => f.equipamentoId === e.id)
@@ -403,7 +407,7 @@ const SELECT_EQUIP = {
   setor: true, localizacao: true, tipoEquipamento: { select: { nome: true } },
 } as const;
 const CAMPO = { select: { label: true, tipo: true, ordem: true } } as const;
-export const SELECT_CHECKLIST = { select: { id: true, equipamentoId: true, status: true, observacao: true, textoItem: true, valor: true, unidade: true, item: { select: { ordem: true } } } } as const;
+export const SELECT_CHECKLIST = { select: { id: true, equipamentoId: true, status: true, observacao: true, textoItem: true, valor: true, unidade: true, faixaMin: true, faixaMax: true, foraDaFaixa: true, item: { select: { ordem: true } } } } as const;
 export const SELECT_FOTOS = { orderBy: { criadoEm: "asc" }, select: { id: true, equipamentoId: true, url: true, momento: true, item: { select: { texto: true } } } } as const;
 export const SELECT_ADICIONAIS = {
   orderBy: { criadoEm: "asc" },

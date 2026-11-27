@@ -9,11 +9,34 @@ import { apresentarCadastro } from "@/lib/tecnico/cadastro-equipamento";
 import { aplicarToque } from "@/lib/tecnico/aviso-cliente";
 import { aplicarMaterial, removerMaterialDaLista } from "@/lib/tecnico/materiais";
 import { aplicarComentario } from "@/lib/tecnico/comentarios";
-import type {
+import { calcularGrandeza, ehCalculada, grandezaDoItem, type Grandeza, type LeituraGrandeza } from "@/lib/checklist/faixas";
+import type { ItemTela,
   AdicionalTela, EquipamentoTela, ExecucaoTela, FotoTela, OperacaoFila, RespostaTela, RetratoAtividade,
 } from "@/lib/tecnico/offline/tipos";
 
 const VAZIA: RespostaTela = { status: null, observacao: null, valor: null, unidade: null, audio: false, audioId: null };
+
+/** ΔT e afins: refaz no aparelho, a partir das leituras do equipamento (a mesma regra do servidor). */
+export function comCalculadas(itens: ItemTela[], respostas: Record<string, RespostaTela>): Record<string, RespostaTela> {
+  const calculadas = itens.filter((i) => ehCalculada(grandezaDoItem(i)));
+  if (!calculadas.length) return respostas;
+  const leituras: Partial<Record<Grandeza, LeituraGrandeza>> = {};
+  for (const it of itens) {
+    const g = grandezaDoItem(it);
+    const r = respostas[it.id];
+    if (g && r && !ehCalculada(g)) leituras[g] = { valor: r.valor, unidade: r.unidade ?? it.unidade, naoSeAplica: r.status === "NAO_SE_APLICA" };
+  }
+  const saida = { ...respostas };
+  for (const it of calculadas) {
+    const c = calcularGrandeza(grandezaDoItem(it)!, leituras, it.unidade);
+    const atual = respostas[it.id] ?? VAZIA;
+    saida[it.id] = c === null ? { ...atual, status: null, valor: null }
+      : "naoSeAplica" in c ? { ...atual, status: "NAO_SE_APLICA", valor: null }
+        : { ...atual, status: null, valor: c.valor, unidade: c.unidade };
+    if (c === null && !respostas[it.id]) delete saida[it.id];
+  }
+  return saida;
+}
 
 /** Recalcula o que falta (por equipamento e para concluir). */
 export function recalcular(x: ExecucaoTela): ExecucaoTela {
@@ -79,6 +102,7 @@ export function aplicar(r: RetratoAtividade, x: ExecucaoTela, op: OperacaoFila):
         const d = op.dados;
         const nova: RespostaTela = { ...atual };
         if (d.observacao !== undefined) nova.observacao = limpar(d.observacao);
+        if (ehCalculada(grandezaDoItem(item)) && (d.valor !== undefined || d.status !== undefined || d.unidade !== undefined)) return e; // o servidor recusa
         if (item.tipoResposta === "MEDICAO") {
           if (d.status === "OK" || d.status === "ATENCAO") return e; // o servidor recusa
           if (d.unidade !== undefined) nova.unidade = limpar(d.unidade);
@@ -92,7 +116,7 @@ export function aplicar(r: RetratoAtividade, x: ExecucaoTela, op: OperacaoFila):
           if (d.status !== undefined) nova.status = d.status;
         }
         const feito = e.feito || !!(nova.status || nova.observacao || nova.valor !== null);
-        return { ...e, feito, respostas: { ...e.respostas, [op.itemId]: nova } };
+        return { ...e, feito, respostas: comCalculadas(e.itens, { ...e.respostas, [op.itemId]: nova }) };
       });
 
     case "audio":

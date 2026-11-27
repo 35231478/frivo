@@ -16,6 +16,7 @@ import { SOLICITACAO_PENDENTE } from "@/lib/solicitacoes";
 import { chaveDiaBR, hojeDiaCivil, inicioHojeBR, inicioMesBR, inicioMesDiaCivil } from "@/lib/fuso";
 import type { BlocoId } from "@/lib/dashboard/blocos";
 import { comparaNatural } from "@/lib/utils";
+import { DIAS_FORA_DA_FAIXA } from "@/lib/checklist/faixas";
 
 const OS_FINAIS = ["CONCLUIDA", "CANCELADA"] as const;
 const DIA = 864e5;
@@ -183,13 +184,43 @@ export async function dadosFinanceiro(empresaId: string, agora = new Date()) {
 export async function dadosEquipamentos(empresaId: string, agora = new Date()) {
   const hoje = hojeDiaCivil(agora); // garantia é dia civil: a que vence hoje ainda é vigente
   const em60 = hojeDiaCivil(agora, 60);
-  const [total, garantiaVencendo, garantiaVigente, semQr] = await Promise.all([
+  const [total, garantiaVencendo, garantiaVigente, semQr, foraDaFaixa] = await Promise.all([
     prisma.equipamento.count({ where: { empresaId, ativo: true } }),
     prisma.equipamento.count({ where: { empresaId, ativo: true, garantiaAte: { gte: hoje, lte: em60 } } }),
     prisma.equipamento.count({ where: { empresaId, ativo: true, garantiaAte: { gte: hoje } } }),
     prisma.equipamento.count({ where: { empresaId, ativo: true, qrcode: null } }),
+    medicoesForaDaFaixa(empresaId, agora),
   ]);
-  return { total, garantiaVencendo, garantiaVigente, semQr };
+  return { total, garantiaVencendo, garantiaVigente, semQr, foraDaFaixa };
+}
+
+
+/**
+ * Medições fora da faixa esperada (app ou escritório) nos últimos 30 dias: quantos equipamentos e as 3 leituras
+ * mais recentes, cada uma com a OS (o gestor abre a OS e decide).
+ */
+export async function medicoesForaDaFaixa(empresaId: string, agora = new Date()) {
+  const desde = new Date(agora.getTime() - DIAS_FORA_DA_FAIXA * 86_400_000);
+  const where = { empresaId, foraDaFaixa: true, respondidoEm: { gte: desde }, equipamento: { ativo: true } };
+  const [porEquipamento, ultimas] = await Promise.all([
+    prisma.checklistResposta.groupBy({ by: ["equipamentoId"], where, _count: { _all: true } }),
+    prisma.checklistResposta.findMany({
+      where, orderBy: { respondidoEm: "desc" }, take: 3,
+      select: {
+        id: true, textoItem: true, valor: true, unidade: true, faixaMin: true, faixaMax: true,
+        equipamento: { select: { nome: true, modelo: true } }, atividade: { select: { ordemServico: { select: { id: true, numero: true, chamadoNumero: true } } } },
+      },
+    }),
+  ]);
+  const n = (d: { toNumber(): number } | null) => (d === null ? null : d.toNumber());
+  return {
+    equipamentos: porEquipamento.length,
+    ultimas: ultimas.map((r) => ({
+      id: r.id, equipamento: r.equipamento.nome || r.equipamento.modelo || "Equipamento", item: r.textoItem,
+      valor: n(r.valor), unidade: r.unidade, faixa: { min: n(r.faixaMin), max: n(r.faixaMax) },
+      os: { id: r.atividade.ordemServico.id, numero: r.atividade.ordemServico.chamadoNumero ?? r.atividade.ordemServico.numero },
+    })),
+  };
 }
 
 /** PMOC: planos vigentes e os avisos de vencimento em aberto (os que ainda não tiveram ciência) */

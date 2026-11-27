@@ -143,13 +143,13 @@ export async function carregarExecucao(empresaId: string, osId: string, atividad
     tipoIds.length ? prisma.checklistTipoItem.findMany({
       where: { tipoEquipamentoId: { in: tipoIds }, ativo: true },
       orderBy: [{ ordem: "asc" }, { criadoEm: "asc" }],
-      select: { id: true, tipoEquipamentoId: true, texto: true, pedirFoto: true, pedirObservacao: true, ativo: true, ordem: true, tipoResposta: true, unidade: true },
+      select: { id: true, tipoEquipamentoId: true, texto: true, pedirFoto: true, pedirObservacao: true, ativo: true, ordem: true, tipoResposta: true, unidade: true, grandeza: true, valorMin: true, valorMax: true },
     }) : Promise.resolve([]),
     prisma.checklistResposta.findMany({
       where: { atividadeId },
       select: {
         id: true, equipamentoId: true, itemId: true, status: true, observacao: true, textoItem: true, valor: true, unidade: true,
-        item: { select: { id: true, tipoEquipamentoId: true, pedirFoto: true, pedirObservacao: true, ativo: true, ordem: true, tipoResposta: true, unidade: true } },
+        item: { select: { id: true, tipoEquipamentoId: true, pedirFoto: true, pedirObservacao: true, ativo: true, ordem: true, tipoResposta: true, unidade: true, grandeza: true, valorMin: true, valorMax: true } },
       },
     }),
     // Só QUAIS têm áudio (o áudio em si é servido à parte)
@@ -207,9 +207,9 @@ export async function carregarExecucao(empresaId: string, osId: string, atividad
     // Itens respondidos que não estão mais no checklist do tipo (removidos, ou o tipo mudou): ficam à mostra, sem exigir
     const antigos = minhas.filter((r) => !ids.has(r.itemId)).map((r) => ({
       id: r.itemId, texto: r.textoItem, pedirFoto: r.item.pedirFoto, pedirObservacao: r.item.pedirObservacao, ativo: false, ordem: 10_000 + r.item.ordem,
-      tipoResposta: r.item.tipoResposta, unidade: r.item.unidade,
+      tipoResposta: r.item.tipoResposta, unidade: r.item.unidade, grandeza: r.item.grandeza, valorMin: numero(r.item.valorMin), valorMax: numero(r.item.valorMax),
     }));
-    const itens = [...ativosDoTipo.map(({ tipoEquipamentoId: _t, ...i }) => i), ...antigos];
+    const itens = [...ativosDoTipo.map(({ tipoEquipamentoId: _t, valorMin, valorMax, ...i }) => ({ ...i, valorMin: numero(valorMin), valorMax: numero(valorMax) })), ...antigos];
     const resp: Record<string, RespostaTela> = Object.fromEntries(minhas.map((r) => [r.itemId, {
       status: (r.status as StatusItem | null) ?? null, observacao: r.observacao, valor: numero(r.valor), unidade: r.unidade,
       audio: audios.has(r.id), audioId: audios.has(r.id) ? r.id : null,
