@@ -78,6 +78,8 @@ export interface ColunaImportacao {
   apelidos?: string[];
   /** Valores aceitos (aparecem na aba de instruções do modelo) */
   opcoes?: string[];
+  /** Coluna só de quem tem a permissão (ex.: custo): sem ela, a coluna nem existe no modelo dessa pessoa (defPara) */
+  restrita?: (permitido: (modulo: string, acao: Acao) => boolean, papel?: string) => boolean;
 }
 
 /** Opção de um campo referenciado (unidade, segmento, tabela de preço…): valor gravado + o que se aceita digitar. */
@@ -135,6 +137,8 @@ export interface DefImportacao {
   avisarPlanilha?: (linhas: LinhaAnalisada[]) => Map<number, string>;
   /** Aviso fixo da prévia (ex.: "cada cliente novo ganha a unidade Principal"). */
   avisoPrevia?: string;
+  /** Texto do link "baixar os já cadastrados" dentro do assistente (sem ele, o link não aparece lá) */
+  baixar?: string;
 }
 
 export type StatusLinha = "criar" | "atualizar" | "erro";

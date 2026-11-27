@@ -1,0 +1,22 @@
+-- IMPLANTAÇÃO: ETAPA "NÃO SE APLICA / FAZER DEPOIS".
+--
+-- 🔵 PENDENTE — aplicar ANTES de subir o código desta leva (o Prisma passa a ler esta coluna).
+--
+-- Na tela de Implantação (Configurações › Conta › Implantação), cada etapa pode ser marcada como "Não se aplica /
+-- fazer depois": ela conta como concluída para os 100% (o destaque sai do painel) e pode ser reaberta a qualquer hora.
+-- Ex.: quem começa sem contratos não fica com o destaque preso no painel.
+--
+-- O LEVANTAMENTO (o que já existia e continua igual):
+--   • "configuracoes": uma linha por empresa. Nenhuma coluna existente guarda isso (reusar um JSON de outro assunto
+--     seria misturar dados).
+--   • As contagens da Implantação vêm do cadastro (clientes, equipamentos, estoque…): nada disso muda.
+--
+-- O QUE ENTRA (ADITIVO; nada é removido, alterado ou preenchido):
+--   "configuracoes"."implantacao_dispensadas" — a lista das etapas marcadas (ex.: {contratos}). Vazia por padrão.
+--
+-- O QUE NÃO MUDA:
+--   • Vazia (o padrão), a Implantação conta só o que está cadastrado, como hoje. Sem preenchimento retroativo.
+--
+-- Pode rodar mais de uma vez.
+
+ALTER TABLE "configuracoes" ADD COLUMN IF NOT EXISTS "implantacao_dispensadas" TEXT[] DEFAULT ARRAY[]::TEXT[];
