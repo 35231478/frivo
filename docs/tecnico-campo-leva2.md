@@ -138,6 +138,25 @@ Não existia módulo de despesas nem de reembolso. O mínimo que entrou, com as 
 - O "← Perfil" grudava no título "Minhas despesas" (mesma linha, sem espaço). Corrigido.
 - O caminho do topo do escritório mostrava "Despesas-cam…". Ganhou o nome "Despesas de campo".
 
+### Testes (PR B)
+
+- `app-campo-leva2-despesas` (18, regra pura), `app-campo-leva2-despesas-ui` (11, tela), `app-campo-leva2-despesas-pg`
+  (16, PostgreSQL real), `sql-app-despesas-campo` (6, o SQL rodado 2× e comparado com o Prisma).
+- **3 testes antigos atualizados de propósito:** as listas travadas da configuração do app (a coluna nova) e as seções do
+  Perfil ("Minhas despesas").
+- **Mutação: 65 mutantes, 63 mortos, 2 equivalentes.** Na 1ª rodada sobraram 6:
+  - **achado de segurança:** "sino no modo técnico" mostrou que as rotas do escritório não barravam o modo técnico. Um
+    técnico com o Financeiro liberado veria as despesas dos colegas e o custo da OS. Agora as 7 rotas recusam (403), com
+    teste e 8 mutantes novos (todos mortos);
+  - "aprovar a já decidida" e "descrição só de espaços" ganharam prova; "decide sem permissão" ganhou uma pendente no
+    teste de quem só vê;
+  - **equivalentes:** aparar o motivo da recusa e a descrição de "Outros" no servidor (o schema já apara antes).
+- A suíte completa pegou a tela geral de Configurações: ela manda a configuração inteira de volta e o servidor recusava
+  o campo do mapa de categorias. Agora o campo é ignorado ali (tem rota própria) e há teste de que salvar Configurações
+  não apaga o mapa.
+- **Fora do app (1 linha):** `lib/importacao/lotes-regras.ts` ganhou o nome "despesas de campo" para a relação nova do
+  colaborador (o teste da implantação exige nome para toda relação).
+
 ### Prints (PR B)
 
 `depois-40…44` (iPhone 13, Pixel 7, desktop): botão no Meu dia, lançamento preenchido, lançamento sem sinal
