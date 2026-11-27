@@ -25,6 +25,8 @@ import { avisoClienteSchema } from "@/lib/tecnico/aviso-cliente";
 import { avisarCliente } from "@/lib/execucao/aviso-cliente";
 import { aceiteLocalSchema } from "@/lib/os/aceite";
 import { aceiteNoLocal } from "@/lib/os/aceite-server";
+import { materialRemoverSchema, materialSchema } from "@/lib/tecnico/materiais";
+import { gravarMaterial, removerMaterial } from "@/lib/execucao/materiais-campo";
 
 export const MAX_OPERACOES = 100;
 /** Quanto tempo a marca de "já aplicada" fica guardada (reenvio depois disso é raríssimo) */
@@ -45,7 +47,8 @@ export const operacaoSchema = z.discriminatedUnion("tipo", [
   z.object({ ...base, tipo: z.literal("fotoRemover"), dados: ref }).strict(),
   z.object({ ...base, tipo: z.literal("equipamento"), equipamentoId: id, dados: equipamentoSchema }).strict(),
   z.object({ ...base, tipo: z.literal("formulario"), equipamentoId: id, dados: formularioSchema }).strict(),
-  z.object({ ...base, tipo: z.literal("vincular"), equipamentoIds: z.array(id).min(1).max(200) }).strict(),
+  // `origem: "qr"`: incluído pelo QR lido no Meu dia (o técnico confirmou) — fica no histórico da OS
+  z.object({ ...base, tipo: z.literal("vincular"), equipamentoIds: z.array(id).min(1).max(200), origem: z.literal("qr").optional() }).strict(),
   z.object({ ...base, tipo: z.literal("scan"), valor: z.string().min(1).max(500) }).strict(),
   // Cadastro em campo: o id do equipamento novo vai DENTRO de `dados` (ainda não há vínculo para conferir)
   z.object({ ...base, tipo: z.literal("cadastrarEquipamento"), dados: cadastroEquipamentoSchema }).strict(),
@@ -55,6 +58,9 @@ export const operacaoSchema = z.discriminatedUnion("tipo", [
   z.object({ ...base, tipo: z.literal("adicionalFotoRemover"), dados: ref }).strict(),
   z.object({ ...base, tipo: z.literal("fotoOs"), dados: fotoOsSchema }).strict(),
   z.object({ ...base, tipo: z.literal("fotoOsRemover"), dados: ref }).strict(),
+  // Material usado em campo (catálogo, sem valores): `clientId` gerado no aparelho; a mesma gravação corrige a quantidade
+  z.object({ ...base, tipo: z.literal("material"), dados: materialSchema }).strict(),
+  z.object({ ...base, tipo: z.literal("materialRemover"), dados: materialRemoverSchema }).strict(),
   z.object({ ...base, tipo: z.literal("concluir"), dados: concluirSchema }).strict(),
   // Aceite do cliente no local: nome + assinatura desenhada no aparelho, depois de concluir
   z.object({ ...base, tipo: z.literal("aceite"), dados: aceiteLocalSchema }).strict(),
@@ -104,7 +110,7 @@ async function executar(ator: Ator, op: Operacao, lote: OpcoesLote): Promise<Res
     case "fotoRemover": return removerFoto(ctx, { fotoId: op.dados.id, clientId: op.dados.clientId });
     case "equipamento": return marcarEquipamento(ctx, op.dados);
     case "formulario": return responderFormulario(ctx, op.dados);
-    case "vincular": return vincularEquipamentos(ctx, op.equipamentoIds);
+    case "vincular": return vincularEquipamentos(ctx, op.equipamentoIds, { origem: op.origem });
     case "scan": return vincularPorQr(ctx, op.valor);
     case "cadastrarEquipamento": return cadastrarEquipamentoEmCampo(ctx, op.dados);
     case "adicional": return salvarAdicional(ctx, op.dados);
@@ -113,6 +119,8 @@ async function executar(ator: Ator, op: Operacao, lote: OpcoesLote): Promise<Res
     case "adicionalFotoRemover": return removerFotoAdicional(ctx, { fotoId: op.dados.id, clientId: op.dados.clientId });
     case "fotoOs": return adicionarFotoOs(ctx, op.dados);
     case "fotoOsRemover": return removerFotoOs(ctx, { fotoId: op.dados.id, clientId: op.dados.clientId });
+    case "material": return gravarMaterial(ctx, op.dados);
+    case "materialRemover": return removerMaterial(ctx, op.dados);
     case "concluir": {
       // "Campo de conclusão obrigatório" (Configuracao.appConclusaoObrigatoria): sem resumo, não conclui.
       if (!(op.dados.resumo ?? "").trim() && await conclusaoExigeResumo(ator.empresaId)) {

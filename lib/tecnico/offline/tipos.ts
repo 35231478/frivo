@@ -9,6 +9,7 @@ import type { CadastroCampo } from "@/lib/tecnico/cadastro-equipamento";
 import type { AvisoClienteRetrato, AvisosTela } from "@/lib/tecnico/aviso-cliente";
 import type { AceiteRetrato } from "@/lib/os/aceite";
 import type { MaterialPrevisto } from "@/lib/tecnico/o-que-levar";
+import type { MaterialTela } from "@/lib/tecnico/materiais";
 
 export type { Operacao };
 export type TipoOperacao = Operacao["tipo"];
@@ -96,6 +97,8 @@ export interface ExecucaoTela {
   avisos?: AvisosTela;
   /** Aceite do cliente colhido NESTE aparelho (ainda na fila ou já enviado) */
   aceiteLocal?: { nome: string; em: string };
+  /** Materiais usados em campo (sem valores); ausente em retratos antigos */
+  materiais?: MaterialTela[];
 }
 
 /** O que o servidor manda (e o aparelho guarda) de uma atividade */

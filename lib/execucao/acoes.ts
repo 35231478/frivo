@@ -374,13 +374,23 @@ export async function marcarEquipamento(ctx: ContextoExecucao, d: z.infer<typeof
 }
 
 /** Vincula equipamentos (da lista da unidade) à atividade. Só do cliente da OS e ativos; repetir não duplica. */
-export async function vincularEquipamentos(ctx: ContextoExecucao, equipamentoIds: string[]) {
+export async function vincularEquipamentos(ctx: ContextoExecucao, equipamentoIds: string[], op: { /** Incluído pelo QR lido no Meu dia: registra no histórico da OS */ origem?: "qr" } = {}) {
   // Equipamentos desligado: recusa GRACIOSA de um vínculo NOVO (403 com o motivo). O que já está
   // vinculado continua na OS, e concluir a OS não passa por aqui — o vínculo é N:N e opcional.
   if (!(await temModulo(ctx.empresaId, "equipamentos"))) return erro(403, MSG_MODULO_DESLIGADO("equipamentos"));
   const { validos, erro: msg } = await equipamentosDoCliente(ctx.empresaId, ctx.atividade.ordemServico.clienteId, equipamentoIds);
   if (msg) return erro(400, msg);
+  const ja = op.origem ? new Set((await prisma.atividadeEquipamento.findMany({ where: { atividadeId: ctx.atividade.id, equipamentoId: { in: validos } }, select: { equipamentoId: true } })).map((v) => v.equipamentoId)) : null;
   await prisma.atividadeEquipamento.createMany({ data: validos.map((equipamentoId) => ({ atividadeId: ctx.atividade.id, equipamentoId })), skipDuplicates: true });
+  // Pelo QR do Meu dia: o escritório vê no histórico quem incluiu, o quê e em qual atividade (só o que entrou agora)
+  const novos = ja ? validos.filter((id) => !ja.has(id)) : [];
+  if (novos.length) {
+    const eqs = await prisma.equipamento.findMany({ where: { id: { in: novos }, empresaId: ctx.empresaId }, select: { nome: true, marca: true, modelo: true } });
+    await prisma.osHistorico.create({ data: {
+      ordemServicoId: ctx.atividade.ordemServico.id, usuarioId: ctx.usuarioId, acao: "Equipamento incluído pelo técnico (QR Code)",
+      detalhes: `"${ctx.atividade.titulo}": ${eqs.map(nomeEquipamento).join("; ")} (app do técnico)`.slice(0, 1000),
+    } });
+  }
   return ok({ vinculados: validos });
 }
 

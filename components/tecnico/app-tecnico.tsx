@@ -13,6 +13,7 @@ import { ProvedorTecnico, irPara, useTecnico, useVista, type UsuarioApp, type Vi
 import type { ConfigApp } from "@/lib/tecnico/config-app";
 import { Agenda, MeuDia } from "@/components/tecnico/meu-dia";
 import { VistaOs } from "@/components/tecnico/execucao";
+import { VistaFichaEquipamento } from "@/components/tecnico/qr-equipamento";
 import { PerfilTecnico } from "@/components/tecnico/perfil";
 import { DesempenhoTecnico } from "@/components/tecnico/desempenho";
 import { BloqueioLocalizacao, useLocalizacaoObrigatoria } from "@/components/tecnico/localizacao-gate";
@@ -50,7 +51,7 @@ export function AppTecnico({ usuario, config, perfilInicial, porteiro = null }: 
 function Casca({ perfilInicial, resumoPorteiro }: { perfilInicial: PerfilInicial; resumoPorteiro: ResumoPorteiro | null }) {
   const { estado, semBanco, motor, config, usuario, avatar } = useTecnico();
   const vista = useVista();
-  const ativa = vista?.ver === "os" ? "dia" : vista?.ver;
+  const ativa = vista?.ver === "os" || vista?.ver === "equipamento" ? "dia" : vista?.ver;
   // "Exigir localização ativa": sem GPS, o app fica travado (libera sozinho quando a posição volta)
   const loc = useLocalizacaoObrigatoria(config.exigirLocalizacao);
   const travadoLoc = config.exigirLocalizacao && loc.estado !== "ok";
@@ -127,7 +128,8 @@ function Conteudo({ vista, perfilInicial }: { vista: Vista; perfilInicial: Perfi
     case "agenda": return <Agenda />;
     case "perfil": return <PerfilTecnico perfilInicial={perfilInicial} />;
     case "desempenho": return <DesempenhoTecnico />;
-    case "os": return <VistaOs key={vista.a} atividadeId={vista.a} equipamentoId={vista.e} camera={vista.cam} />;
+    case "os": return <VistaOs key={vista.a} atividadeId={vista.a} equipamentoId={vista.e} camera={vista.cam} incluir={vista.inc} />;
+    case "equipamento": return <VistaFichaEquipamento key={vista.q} valor={vista.q} />;
     default: return <MeuDia />;
   }
 }

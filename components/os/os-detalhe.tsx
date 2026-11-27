@@ -10,6 +10,7 @@ import { OsOrcamentosVinculados } from "@/components/os/os-orcamentos-vinculados
 import { OsRelatorios } from "@/components/os/os-relatorios";
 import { ComprasSecao } from "@/components/compras/compras-secao";
 import { OsSeparacao, materiaisDaOs } from "@/components/os/os-separacao";
+import { MateriaisCampo } from "@/components/os/materiais-campo";
 import { resumoSeparacao } from "@/lib/estoque/separacao";
 import { useModulos } from "@/components/providers/modulos-provider";
 import { OsInativarBotao } from "@/components/os/os-inativar";
@@ -179,6 +180,8 @@ export function OsDetalhe({ os: initialOs, abaInicial, verCusto = false }: {
                       podeConsumir={pode("ordens", "editar") || pode("ordens", "concluir")} finalizada={os.status === "CONCLUIDA" || os.status === "CANCELADA" || !!os.fatura}
                       cancelada={os.status === "CANCELADA"} exigirPrestacao={!!os.exigirPrestacaoMaterial} onMudou={() => router.refresh()}
                     />
+                    {/* App do técnico: o que foi lançado em campo (o escritório corrige ou estorna, com registro) */}
+                    <MateriaisCampo osId={os.id} podeCorrigir={pode("ordens", "editar")} onMudou={() => router.refresh()} />
                     <div className="border-t border-surface-linha pt-6" data-secao-compras>
                       <ComprasSecao ordemServicoId={os.id} />
                     </div>

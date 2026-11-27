@@ -7,6 +7,7 @@
 import { completo, faltasEquipamento, paraPendencia, verificarConclusao, type StatusItem } from "@/lib/execucao/pendencias";
 import { apresentarCadastro } from "@/lib/tecnico/cadastro-equipamento";
 import { aplicarToque } from "@/lib/tecnico/aviso-cliente";
+import { aplicarMaterial, removerMaterialDaLista } from "@/lib/tecnico/materiais";
 import type {
   AdicionalTela, EquipamentoTela, ExecucaoTela, FotoTela, OperacaoFila, RespostaTela, RetratoAtividade,
 } from "@/lib/tecnico/offline/tipos";
@@ -205,6 +206,12 @@ export function aplicar(r: RetratoAtividade, x: ExecucaoTela, op: OperacaoFila):
       };
     }
 
+    case "material":
+      return { ...x, materiais: aplicarMaterial(x.materiais ?? [], op.dados) };
+
+    case "materialRemover":
+      return { ...x, materiais: removerMaterialDaLista(x.materiais ?? [], op.dados) };
+
     case "fotoOsRemover":
       return { ...x, fotosServico: (x.fotosServico ?? []).filter((f) => !((op.dados.clientId && f.clientId === op.dados.clientId) || (op.dados.id && f.id === op.dados.id))) };
 
@@ -228,6 +235,7 @@ export function estadoDaAtividade(r: RetratoAtividade, fila: OperacaoFila[]): Ex
     ...r.execucao,
     adicionais: r.execucao.adicionais ?? [],
     fotosServico: r.execucao.fotosServico ?? [],
+    materiais: r.execucao.materiais ?? [],
     equipamentos: r.execucao.equipamentos.map((e) => ({ ...e, respostas: { ...e.respostas } })),
   };
   return recalcular(ops.reduce((x, op) => aplicar(r, x, op), base));
