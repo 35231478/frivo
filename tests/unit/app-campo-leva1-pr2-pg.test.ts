@@ -14,7 +14,7 @@ import { randomUUID } from "node:crypto";
 import path from "node:path";
 import { NextRequest } from "next/server";
 import { PRESETS, montarPermissoes, permissoesTotais, type Permissoes } from "@/lib/permissoes";
-import { inicioHojeBR } from "@/lib/fuso";
+import { inicioHojeBR, instanteBR, partesBR } from "@/lib/fuso";
 
 const URL_PG = process.env.PG_TESTE_URL;
 const SCHEMA = `teste_app_campo_l1b_${process.pid}`;
@@ -40,11 +40,17 @@ const H = 3_600_000;
 
 describe.skipIf(!URL_PG)("app de campo, leva 1 (PR 2): atividade esquecida e topo da OS (PostgreSQL real)", () => {
   let prisma: any;
-  const hoje = inicioHojeBR();
+  let hoje: Date;
   const atividade = (id: string) => prisma.atividadeOs.findUnique({ where: { id } });
   const sino = async () => (await chamar("alertas", "GET")).json;
 
   beforeAll(async () => {
+    // Relógio fixo ao meio-dia de Brasília: os "5 h atrás" e "30 min atrás" dos dados nunca cruzam a meia-noite.
+    // Com o relógio real, de madrugada eles caíam ontem, e pela regra o que começou ontem conta como esquecida.
+    const { ano, mes, dia } = partesBR();
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(instanteBR(ano, mes, dia, 12));
+    hoje = inicioHojeBR();
     const url = `${URL_PG}${URL_PG!.includes("?") ? "&" : "?"}schema=${SCHEMA}&connection_limit=10`;
     execFileSync(path.join(RAIZ, "node_modules/.bin/prisma"), ["db", "push", "--skip-generate", "--schema", "prisma/schema.prisma"], { cwd: RAIZ, env: { ...process.env, DATABASE_URL: url }, stdio: "pipe" });
     process.env.DATABASE_URL = url;
@@ -76,6 +82,7 @@ describe.skipIf(!URL_PG)("app de campo, leva 1 (PR 2): atividade esquecida e top
     ] });
   }, 180_000);
   afterAll(async () => {
+    vi.useRealTimers();
     await prisma?.$disconnect();
     execFileSync("psql", [URL_PG!, "-q", "-c", `DROP SCHEMA IF EXISTS ${SCHEMA} CASCADE;`], { stdio: "pipe" });
   });
