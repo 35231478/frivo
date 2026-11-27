@@ -287,6 +287,14 @@ describe("topo da OS: o que fazer", () => {
     expect(t.querySelector("[data-endereco-topo]")).toBeNull();
     expect(texto(t.querySelector("[data-detalhes-os]"))).not.toContain("Matriz");
   });
+  it("retrato guardado de ANTES de a empresa esconder os contatos: a tela não mostra ligar nem WhatsApp mesmo assim", async () => {
+    contatos = true; // o retrato (antigo) ainda traz telefone e WhatsApp
+    await abrirOs({ exibirContatosCliente: false });
+    const t = $("[data-topo-os]")!;
+    expect(t.querySelector("[data-ligar]")).toBeNull();
+    expect(t.querySelector("[data-whatsapp-topo]")).toBeNull();
+    expect(t.querySelector("[data-rota]")).toBeTruthy(); // rota é dado do cliente, não contato
+  });
   it("sem texto explicativo na tela: as explicações ficam na dica (ⓘ)", async () => {
     await abrirOs();
     const tudo = texto($("[data-vista='os']"));

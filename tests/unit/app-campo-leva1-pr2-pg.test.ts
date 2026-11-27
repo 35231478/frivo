@@ -135,6 +135,18 @@ describe.skipIf(!URL_PG)("app de campo, leva 1 (PR 2): atividade esquecida e top
     expect((await sino()).atividadesEsquecidas).toBe(0);
   });
 
+  it("sino: começou ONTEM à noite e tem menos do limite (1 h 30 min) — conta, porque virou o dia", async () => {
+    const { contarAtividadesEsquecidas } = await import("@/lib/execucao/andamento-server");
+    const agora = new Date(inicioHojeBR().getTime() + H); // 01:00 de hoje em Brasília
+    await prisma.ordemServico.create({ data: { id: "osN", empresaId: "e1", numero: "OS-9", clienteId: "c1", unidadeId: "un1", criadoPorId: "uA", descricao: "x" } });
+    await prisma.atividadeOs.create({ data: { id: "aNoite", empresaId: "e1", ordemServicoId: "osN", titulo: "Plantão", tecnicoId: "t1", status: "EM_ANDAMENTO", iniciadaEm: new Date(inicioHojeBR().getTime() - 30 * 60_000) } });
+    const com = await contarAtividadesEsquecidas("e1", agora);
+    await prisma.atividadeOs.update({ where: { id: "aNoite" }, data: { iniciadaEm: new Date(inicioHojeBR().getTime() + 10 * 60_000) } }); // hoje 00:10: 50 min, mesmo dia
+    const sem = await contarAtividadesEsquecidas("e1", agora);
+    expect(com.atividadesEsquecidas - sem.atividadesEsquecidas).toBe(1);
+    await prisma.atividadeOs.delete({ where: { id: "aNoite" } });
+  });
+
   it("concluir com término informado (entre o início e o toque): vale como data da conclusão e fica no histórico", async () => {
     comoTecnico();
     const a = await atividade("aA");
