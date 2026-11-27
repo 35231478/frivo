@@ -14,6 +14,8 @@ import { guardadoDoRetrato, situacaoDoCartao, type EstadoCartao, type Guardado }
 import { toqueLeve } from "@/lib/haptico";
 import { BotaoQrEquipamento } from "@/components/tecnico/qr-equipamento";
 import { AvisosDoDia, type DadosAndamento } from "@/components/tecnico/andamento";
+import { useComentariosNovos } from "@/components/tecnico/comentarios";
+import { BotaoLancarDespesa } from "@/components/tecnico/despesas";
 import { chaveDiaBR, diaCivilDeChave, diasAteDiaCivil, horaBR, partesBR } from "@/lib/fuso";
 import { prazoParaOTecnico } from "@/lib/os/prazo-execucao";
 
@@ -100,10 +102,12 @@ const diaMes = (dia: string) => dia.split("-").reverse().slice(0, 2).join("/");
  * "A caminho" é opcional e discreto: dá para tocar "Cheguei" direto. Depois de chegar (ou com a OS já
  * em andamento), o card abre a OS e ganha o atalho da Câmera — a foto é sempre no local.
  */
-export function CartaoAtividade({ c, fila, mostrarDia, proxima, guardado, listaEm, depoisDeChegar }: {
+export function CartaoAtividade({ c, fila, mostrarDia, proxima, guardado, listaEm, depoisDeChegar, comentariosNovos = 0 }: {
   c: CartaoTela; fila: OperacaoFila[]; mostrarDia?: boolean; /** A primeira OS do dia ainda por concluir */ proxima?: boolean;
   /** Veio do QR lido no Meu dia: depois do "Cheguei", abre direto no equipamento (ou pergunta se inclui) */
   depoisDeChegar?: { e?: string | null; inc?: string | null };
+  /** Comentários do escritório ainda não vistos neste aparelho */
+  comentariosNovos?: number;
   /** O retrato desta OS guardado no aparelho (o mesmo que a tela da OS usa) */ guardado?: Guardado | null;
   /** Quando a lista foi baixada */ listaEm?: number | null;
 }) {
@@ -179,6 +183,7 @@ export function CartaoAtividade({ c, fila, mostrarDia, proxima, guardado, listaE
             {!encerrada && <MarcaDeMateriais c={c} />}
             {PRIORIDADE[c.prioridade] && <span className="text-xs font-semibold rounded-full px-2 py-0.5 bg-atrasado-claro text-atrasado-texto" data-prioridade={c.prioridade}>{PRIORIDADE[c.prioridade]}</span>}
             {aEnviar > 0 && <span className="text-xs font-semibold rounded-full px-2 py-0.5 bg-atencao-claro text-atencao-texto">{aEnviar} a enviar</span>}
+            {comentariosNovos > 0 && <span className="text-xs font-semibold rounded-full px-2 py-0.5 bg-acento text-white inline-flex items-center gap-1" data-cartao-comentarios={comentariosNovos}><MessageCircle className="w-3 h-3" aria-hidden /> {comentariosNovos === 1 ? "1 comentário novo" : `${comentariosNovos} comentários novos`}</span>}
           </div>
         </div>
       </button>
@@ -326,6 +331,7 @@ export function MeuDia() {
 
   const d = r?.dados;
   const guardados = useGuardados([...(d?.anteriores ?? []), ...(d?.atividades ?? [])].map((c) => c.atividadeId));
+  const comentarios = useComentariosNovos([...(d?.anteriores ?? []), ...(d?.atividades ?? [])]);
   const primeiroNome = (d?.tecnico?.nome ?? usuario.nome).split(" ")[0];
   const resumo = resumoDoDia(d?.atividades ?? [], fila);
   return (
@@ -362,6 +368,8 @@ export function MeuDia() {
 
       {/* Aponta a câmera para a etiqueta: abre o equipamento na OS de hoje, ou a ficha com o histórico */}
       {d && d.tecnico && <BotaoQrEquipamento atividadeIds={[...d.anteriores, ...d.atividades].map((c) => c.atividadeId)} />}
+      {/* Despesa fora de OS (combustível, pedágio…): com a OS aberta, o botão de dentro dela já vincula */}
+      {d && d.tecnico && <BotaoLancarDespesa />}
 
       {/* O que carregar no veículo antes de sair: a soma dos materiais previstos das OS ainda por fazer */}
       {d && <OQueLevarDoDia cartoes={[...d.anteriores, ...d.atividades]} fila={fila} />}
@@ -369,13 +377,13 @@ export function MeuDia() {
       {d && d.anteriores.length > 0 && (
         <section className="space-y-2">
           <h2 className="text-sm font-bold text-ink-muted uppercase tracking-wide">Começadas antes — falta concluir</h2>
-          {d.anteriores.map((c) => <CartaoAtividade key={c.atividadeId} c={c} fila={fila} mostrarDia guardado={guardados.get(c.atividadeId)} listaEm={r?.baixadoEm} />)}
+          {d.anteriores.map((c) => <CartaoAtividade key={c.atividadeId} c={c} fila={fila} mostrarDia guardado={guardados.get(c.atividadeId)} listaEm={r?.baixadoEm} comentariosNovos={comentarios.get(c.atividadeId)} />)}
         </section>
       )}
       {d && d.atividades.length > 0 && (
         <section className="space-y-3">
           {d.anteriores.length > 0 && <h2 className="text-sm font-bold text-ink-muted uppercase tracking-wide">Hoje</h2>}
-          {d.atividades.map((c) => <CartaoAtividade key={c.atividadeId} c={c} fila={fila} proxima={c.atividadeId === resumo.proxima} guardado={guardados.get(c.atividadeId)} listaEm={r?.baixadoEm} />)}
+          {d.atividades.map((c) => <CartaoAtividade key={c.atividadeId} c={c} fila={fila} proxima={c.atividadeId === resumo.proxima} guardado={guardados.get(c.atividadeId)} listaEm={r?.baixadoEm} comentariosNovos={comentarios.get(c.atividadeId)} />)}
         </section>
       )}
       {d && d.tecnico && !d.atividades.length && !d.anteriores.length && (

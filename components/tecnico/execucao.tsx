@@ -18,6 +18,9 @@ import { AceiteNaOs } from "@/components/tecnico/aceite-cliente";
 import { CameraRapida, useRapida } from "@/components/tecnico/camera-rapida";
 import { ConferenciaRapida } from "@/components/tecnico/conferencia-rapida";
 import { MateriaisUsados } from "@/components/tecnico/materiais";
+import { SeloGarantia } from "@/components/tecnico/garantia";
+import { ComentariosDaOs } from "@/components/tecnico/comentarios";
+import { BotaoLancarDespesa } from "@/components/tecnico/despesas";
 import { MSG_SEM_UNIDADE } from "@/lib/tecnico/cadastro-equipamento";
 import { ConcluirSemEquipamento } from "@/components/os/concluir-sem-equipamento";
 import { srcFoto, TelaEquipamento } from "@/components/tecnico/equipamento";
@@ -213,6 +216,8 @@ function ResumoOs({ r, x, fila, aEnviar, registrar, camera, incluir }: { r: Retr
 
       <ChegadaNaOs r={r} x={x} />
 
+      <ComentariosDaOs x={x} registrar={registrar} />
+
       {!so && (
         <section className="space-y-2" data-camera-rapida-atalho>
           <button type="button" onClick={() => setCameraAberta(true)} data-abrir-camera-rapida
@@ -252,6 +257,7 @@ function ResumoOs({ r, x, fila, aEnviar, registrar, camera, incluir }: { r: Retr
                   <span className="min-w-0 flex-1">
                     <span className="block font-semibold text-ink truncate">{e.equipamento.titulo}</span>
                     <span className="block text-xs text-ink-muted truncate">{[e.equipamento.tipo?.nome, e.equipamento.tag && `TAG ${e.equipamento.tag}`, e.equipamento.local].filter(Boolean).join(" · ")}</span>
+                    <SeloGarantia fim={e.equipamento.garantiaAte} className="mt-1" />
                   </span>
                   <span className={cn("text-xs font-semibold rounded-full px-2 py-0.5 shrink-0", s.classe)}>{s.rotulo}</span>
                   <ChevronRight className="w-5 h-5 text-ink-subtle shrink-0" />
@@ -277,6 +283,8 @@ function ResumoOs({ r, x, fila, aEnviar, registrar, camera, incluir }: { r: Retr
       </section>
 
       <MateriaisUsados x={x} registrar={registrar} nomeEquipamento={(id) => x.equipamentos.find((e) => e.equipamento.id === id)?.equipamento.titulo ?? null} />
+
+      <BotaoLancarDespesa atividadeId={atividadeId} osNumero={x.os.numero} />
 
       <FotosServico x={x} so={so} onAdicionar={() => setFotoServico(true)} registrar={registrar} />
 

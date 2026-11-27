@@ -45,6 +45,8 @@ export interface ConfigApp {
   rastrearLocalizacao: boolean;
   /** Atividade esquecida em andamento: depois de quantas horas o app avisa o técnico e o sino avisa o gestor (1 a 24) */
   alertaAndamentoHoras: number;
+  /** O colaborador lança despesas de campo pelo app (foto do cupom; o escritório aprova). Desligado: o botão some e o servidor recusa */
+  lancarDespesas: boolean;
 }
 
 export const CONFIG_APP_PADRAO: ConfigApp = {
@@ -64,6 +66,7 @@ export const CONFIG_APP_PADRAO: ConfigApp = {
   oQueLevar: true,
   rastrearLocalizacao: false,
   alertaAndamentoHoras: ALERTA_HORAS_PADRAO,
+  lancarDespesas: true,
 };
 
 /** Os campos de Configuracao (snake→camel do Prisma) que alimentam o ConfigApp. */
@@ -84,6 +87,7 @@ export interface ConfiguracaoApp {
   appOQueLevar: boolean;
   appRastrearLocalizacao: boolean;
   appAlertaAndamentoHoras: number;
+  appLancarDespesas: boolean;
 }
 
 /** Os campos a selecionar de Configuracao (reuso no servidor). */
@@ -104,6 +108,7 @@ export const SELECT_CONFIG_APP = {
   appOQueLevar: true,
   appRastrearLocalizacao: true,
   appAlertaAndamentoHoras: true,
+  appLancarDespesas: true,
 } as const;
 
 /** ConfigApp (chaves amigáveis) → payload de Configuracao (chaves app*) para o PUT /api/configuracoes. */
@@ -125,6 +130,7 @@ export function configAppParaPayload(c: ConfigApp): ConfiguracaoApp {
     appOQueLevar: c.oQueLevar,
     appRastrearLocalizacao: c.rastrearLocalizacao,
     appAlertaAndamentoHoras: limiteHoras(c.alertaAndamentoHoras),
+    appLancarDespesas: c.lancarDespesas,
   };
 }
 
@@ -152,5 +158,6 @@ export function normalizarConfigApp(row: Partial<ConfiguracaoApp> | null | undef
     oQueLevar: ou(row.appOQueLevar, CONFIG_APP_PADRAO.oQueLevar),
     rastrearLocalizacao: ou(row.appRastrearLocalizacao, CONFIG_APP_PADRAO.rastrearLocalizacao),
     alertaAndamentoHoras: limiteHoras(row.appAlertaAndamentoHoras),
+    lancarDespesas: ou(row.appLancarDespesas, CONFIG_APP_PADRAO.lancarDespesas),
   };
 }

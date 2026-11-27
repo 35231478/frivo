@@ -74,6 +74,8 @@ export interface FichaEquipamento {
   equipamento: {
     id: string; titulo: string; fabricante: string; tag: string | null; numeroSerie: string | null;
     local: string | null; unidade: string | null; cliente: string | null; tipo: string | null; ativo: boolean;
+    /** Fim da garantia (ISO); null = sem garantia cadastrada */
+    garantiaAte?: string | null;
   };
   /** O equipamento está numa atividade DESTE técnico hoje (ex.: vinculado de outra unidade do cliente) */
   atividadeHoje: { atividadeId: string; vinculado: boolean } | null;

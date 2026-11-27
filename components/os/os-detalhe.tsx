@@ -6,11 +6,13 @@ import { Tabs } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { OsOrcamento } from "@/components/os/os-orcamento";
 import { OsFinanceiro } from "@/components/os/os-financeiro";
+import { DespesasCampoOs } from "@/components/os/despesas-campo-os";
 import { OsOrcamentosVinculados } from "@/components/os/os-orcamentos-vinculados";
 import { OsRelatorios } from "@/components/os/os-relatorios";
 import { ComprasSecao } from "@/components/compras/compras-secao";
 import { OsSeparacao, materiaisDaOs } from "@/components/os/os-separacao";
 import { MateriaisCampo } from "@/components/os/materiais-campo";
+import { ComentariosOs } from "@/components/os/comentarios-os";
 import { resumoSeparacao } from "@/lib/estoque/separacao";
 import { useModulos } from "@/components/providers/modulos-provider";
 import { OsInativarBotao } from "@/components/os/os-inativar";
@@ -157,6 +159,8 @@ export function OsDetalhe({ os: initialOs, abaInicial, verCusto = false }: {
             {(ativa) => (
               <div className="px-4 pb-5 sm:px-6 sm:pb-6">
                 {ativa === "resumo" && <ResumoOs os={os} central={central} onAba={irPara} onAtualizado={(d) => setOs((prev: any) => ({ ...prev, ...d }))} />}
+                {/* App do técnico: a conversa interna com o campo (abrir marca como lido) */}
+                {ativa === "resumo" && <div className="mt-6 border-t border-surface-linha pt-6"><ComentariosOs osId={os.id} podeResponder={pode("ordens", "editar")} /></div>}
 
                 {ativa === "comercial" && (
                   <div className="space-y-6">
@@ -191,6 +195,7 @@ export function OsDetalhe({ os: initialOs, abaInicial, verCusto = false }: {
                 {ativa === "financeiro" && (
                   <OsFinanceiro osId={os.id} temContrato={!!os.contrato} concluida={os.status === "CONCLUIDA"} fatura={os.fatura ?? null} faturamento={os.faturamento ?? null} medicoes={os.medicoes} itensOrcamento={os.itensOrcamento} contasReceber={os.contasReceber ?? []} abrirNfse={abrirNfse} onAbriuNfse={() => setAbrirNfse(false)} />
                 )}
+                {ativa === "financeiro" && pode("financeiro", "visualizar") && <div className="mt-6"><DespesasCampoOs osId={os.id} /></div>}
 
                 {ativa === "relatorios" && (
                   <div className="space-y-8">

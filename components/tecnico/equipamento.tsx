@@ -8,6 +8,7 @@ import { CampoFormulario } from "@/components/os/execucao-equipamento";
 import { BotaoFoto, Miniatura, ObservacaoVoz, type MarcaFoto } from "@/components/tecnico/captura";
 import { irPara } from "@/components/tecnico/contexto";
 import { MateriaisUsados } from "@/components/tecnico/materiais";
+import { SeloGarantia } from "@/components/tecnico/garantia";
 import { novoClientId } from "@/lib/tecnico/offline/motor";
 import { proximoEquipamento } from "@/lib/tecnico/offline/estado";
 import { UNIDADES_SUGERIDAS } from "@/lib/checklist/tipo";
@@ -135,6 +136,7 @@ export function TelaEquipamento({ x, e, registrar, endereco, qr }: Props) {
         <p className="text-sm text-ink-muted">
           {[e.equipamento.tipo?.nome, e.equipamento.tag && `TAG ${e.equipamento.tag}`, e.equipamento.local, qr].filter(Boolean).join(" · ")}
         </p>
+        <SeloGarantia fim={e.equipamento.garantiaAte} />
         {e.pendente && !e.vinculoId && <p className="text-xs text-atencao-texto" data-equipamento-no-aparelho>No aparelho: sobe sozinho quando houver sinal.</p>}
         <div className="flex items-center gap-2">
           <div className="h-2.5 flex-1 rounded-full bg-surface-page overflow-hidden">

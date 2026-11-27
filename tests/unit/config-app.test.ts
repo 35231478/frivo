@@ -30,13 +30,14 @@ describe("ConfigApp — padrões (espelham os @default do schema)", () => {
       oQueLevar: true, // "O que levar" (materiais previstos): nasce LIGADO
       rastrearLocalizacao: false, // mapa dos técnicos: dado sensível, nasce DESLIGADO
       alertaAndamentoHoras: 4, // atividade esquecida em andamento: avisa depois de 4 h
+      lancarDespesas: true, // despesas de campo pelo app: nasce LIGADO
     });
   });
 
-  it("SELECT_CONFIG_APP cobre exatamente as 16 colunas app*", () => {
+  it("SELECT_CONFIG_APP cobre exatamente as 17 colunas app*", () => {
     expect(Object.keys(SELECT_CONFIG_APP).sort()).toEqual([
       "appAlertaAndamentoHoras", "appAvisarCliente", "appCadastrarEquipamento", "appConclusaoObrigatoria", "appEsconderValores", "appExibirContatosCliente", "appExibirDadosCliente",
-      "appExigirLocalizacao", "appFotoSomenteCamera", "appMarcaDagua", "appMarcaDaguaCoordenadas",
+      "appExigirLocalizacao", "appFotoSomenteCamera", "appLancarDespesas", "appMarcaDagua", "appMarcaDaguaCoordenadas",
       "appMarcaDaguaEndereco", "appMarcaDaguaOs", "appOQueLevar", "appRastrearLocalizacao", "appUmDispositivo",
     ]);
     expect(Object.values(SELECT_CONFIG_APP).every((v) => v === true)).toBe(true);

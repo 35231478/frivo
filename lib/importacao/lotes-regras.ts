@@ -80,7 +80,7 @@ export const NOMES_VINCULO: Record<string, string> = {
   posicao: "localização no mapa", pmocsResponsavel: "PMOC", desempenhoParticipante: "desempenho",
   desempenhoFechamentoLinhas: "fechamentos de desempenho", admissoes: "admissão digital", documentosEmitidos: "documentos emitidos",
   documentacaoItens: "envios de documentação", dependentes: "dependentes", formTypeMappings: "formulários do tipo",
-  checklistItens: "itens de checklist do tipo", materiaisCampo: "materiais usados em campo",
+  checklistItens: "itens de checklist do tipo", materiaisCampo: "materiais usados em campo", despesasCampo: "despesas de campo",
   relatorios: "relatórios", reajustes: "reajustes", historicoStatus: "histórico de situação", recorrenciasLocais: "recorrências por local",
   prazosAtendimento: "prazos de atendimento", execucoesFaturamento: "faturamentos do contrato", cronograma: "cronograma do PMOC",
   execucoes: "execuções do PMOC", historico: "histórico", ocorrencias: "ocorrências do PMOC", avisos: "avisos enviados",

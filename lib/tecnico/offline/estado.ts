@@ -8,6 +8,7 @@ import { completo, faltasEquipamento, paraPendencia, verificarConclusao, type St
 import { apresentarCadastro } from "@/lib/tecnico/cadastro-equipamento";
 import { aplicarToque } from "@/lib/tecnico/aviso-cliente";
 import { aplicarMaterial, removerMaterialDaLista } from "@/lib/tecnico/materiais";
+import { aplicarComentario } from "@/lib/tecnico/comentarios";
 import type {
   AdicionalTela, EquipamentoTela, ExecucaoTela, FotoTela, OperacaoFila, RespostaTela, RetratoAtividade,
 } from "@/lib/tecnico/offline/tipos";
@@ -212,6 +213,13 @@ export function aplicar(r: RetratoAtividade, x: ExecucaoTela, op: OperacaoFila):
     case "materialRemover":
       return { ...x, materiais: removerMaterialDaLista(x.materiais ?? [], op.dados) };
 
+    case "comentario":
+      return { ...x, comentarios: aplicarComentario(x.comentarios ?? [], op.dados, op.em ?? op.criadoEm) };
+
+    case "despesa":
+      // A despesa não muda a execução: aparece em "Minhas despesas" (lida da fila e do servidor)
+      return x;
+
     case "fotoOsRemover":
       return { ...x, fotosServico: (x.fotosServico ?? []).filter((f) => !((op.dados.clientId && f.clientId === op.dados.clientId) || (op.dados.id && f.id === op.dados.id))) };
 
@@ -236,6 +244,7 @@ export function estadoDaAtividade(r: RetratoAtividade, fila: OperacaoFila[]): Ex
     adicionais: r.execucao.adicionais ?? [],
     fotosServico: r.execucao.fotosServico ?? [],
     materiais: r.execucao.materiais ?? [],
+    comentarios: r.execucao.comentarios ?? [],
     equipamentos: r.execucao.equipamentos.map((e) => ({ ...e, respostas: { ...e.respostas } })),
   };
   return recalcular(ops.reduce((x, op) => aplicar(r, x, op), base));
