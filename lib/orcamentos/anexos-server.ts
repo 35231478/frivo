@@ -56,15 +56,15 @@ export async function fotoDaOsParaCopiar(
   if (origem === "EXECUCAO") {
     const f = await prisma.fotoAtendimento.findFirst({
       where: { id: fotoId, empresaId, atividade: { ordemServico: os } },
-      select: { url: true, momento: true, item: { select: { texto: true } }, atividade: { select: { ordemServico: { select: { numero: true } } } } },
+      select: { url: true, momento: true, legenda: true, item: { select: { texto: true } }, atividade: { select: { ordemServico: { select: { numero: true } } } } },
     });
-    if (f) bruto = { conteudo: f.url, legenda: legendaExecucao({ momento: f.momento ?? null, item: f.item?.texto ?? null }), numero: f.atividade.ordemServico.numero };
+    if (f) bruto = { conteudo: f.url, legenda: f.legenda ?? legendaExecucao({ momento: f.momento ?? null, item: f.item?.texto ?? null }), numero: f.atividade.ordemServico.numero };
   } else if (origem === "ADICIONAL") {
     const f = await prisma.servicoAdicionalFoto.findFirst({
       where: { id: fotoId, empresaId, servico: { ordemServico: os } },
-      select: { url: true, servico: { select: { descricao: true, ordemServico: { select: { numero: true } } } } },
+      select: { url: true, legenda: true, servico: { select: { descricao: true, ordemServico: { select: { numero: true } } } } },
     });
-    if (f) bruto = { conteudo: f.url, legenda: legendaAdicional(f.servico.descricao), numero: f.servico.ordemServico.numero };
+    if (f) bruto = { conteudo: f.url, legenda: f.legenda ?? legendaAdicional(f.servico.descricao), numero: f.servico.ordemServico.numero };
   } else {
     const a = await prisma.osAnexo.findFirst({
       where: { id: fotoId, ordemServico: os },

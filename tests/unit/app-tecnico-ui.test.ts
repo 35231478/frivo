@@ -582,6 +582,27 @@ describe("execução guiada", () => {
     expect(ops.at(-1)).toMatchObject({ tipo: "fotoOsRemover", dados: { clientId: f1.dados.clientId } });
     expect(confirmar).toHaveBeenCalledTimes(2);
     confirmar.mockRestore();
+
+    // Leva F: corrigir a legenda (com a OS aberta): abre com a atual; legenda curta não grava; a nova vai pela fila
+    await clicar($("[data-foto-servico] [data-legenda-editar-abrir]"));
+    expect($<HTMLInputElement>("[data-legenda-editar]")!.value).toBe("Quadro elétrico");
+    await digitar($("[data-legenda-editar]"), "x");
+    await clicar($("[data-legenda-salvar]"));
+    expect((await fila()).at(-1)!.tipo).toBe("fotoOsRemover");
+    await digitar($("[data-legenda-editar]"), "Quadro elétrico do 2º andar");
+    await clicar($("[data-legenda-salvar]"));
+    await esperarAte(() => ($("[data-foto-servico]")?.textContent ?? "").includes("Quadro elétrico do 2º andar"), "legenda nova");
+    expect($("[data-legenda-editar]")).toBeNull();
+    expect((await fila()).at(-1)).toMatchObject({ tipo: "fotoOsLegenda", atividadeId: "aA", dados: { clientId: f2.dados.clientId, legenda: "Quadro elétrico do 2º andar" } });
+  });
+
+  it("foto do serviço com a OS já encerrada (Leva F): a legenda não se edita mais no app (só o escritório)", async () => {
+    const comFoto = (status: string) => (r: RetratoAtividade) => ({ ...r, execucao: { ...r.execucao, os: { ...r.execucao.os, status }, fotosServico: [{ id: "f0", clientId: null, equipamentoId: null, legenda: "Fachada" }] } }) as RetratoAtividade;
+    ajustarRetrato = comFoto("CONCLUIDA");
+    await motor.baixarRetrato("aA");
+    await abrirOs("aA");
+    await esperarAte(() => $$("[data-foto-servico]").length === 1, "foto do serviço");
+    expect($("[data-foto-servico] [data-legenda-editar-abrir]")).toBeNull();
   });
 });
 

@@ -76,9 +76,10 @@ describe("atalhos", () => {
 describe("setas ‹ › e o menu", () => {
   const url = (sp: Record<string, string>, delta: number, o?: { padrao?: "mes" | "todos"; permitirTodos?: boolean }) => urlVizinho(lerPeriodo(sp, AGORA, o), delta, AGORA);
   const limpo = { mes: null, de: null, ate: null, periodo: null, ref: null };
-  it("mês: vizinho; o corrente sai da URL", () => {
+  it("mês: vizinho; o corrente também vai explícito (numa tela 'todo o período' por padrão, sem ele virava todo o período)", () => {
     expect(url({}, -1)).toEqual({ ...limpo, mes: "2026-10" });
-    expect(url({ mes: "2026-10" }, 1)).toEqual(limpo);
+    expect(url({ mes: "2026-10" }, 1)).toEqual({ ...limpo, mes: "2026-11" });
+    expect(url({ mes: "2026-10" }, 1, { padrao: "todos", permitirTodos: true })).toEqual({ ...limpo, mes: "2026-11" });
   });
   it("hoje/semana/ano/30d/12m: anda a unidade do atalho; voltar ao de hoje limpa a ref", () => {
     expect(url({ periodo: "hoje" }, -1)).toEqual({ ...limpo, periodo: "hoje", ref: "2026-11-02" });
@@ -95,9 +96,11 @@ describe("setas ‹ › e o menu", () => {
     expect(url({ de: "2026-11-01" }, 1)).toBeNull();
     expect(url({}, 1, { padrao: "todos" })).toBeNull();
   });
-  it("ir a um atalho zera o resto; 'este mês' é a URL limpa; ehAtual diz se é o de hoje", () => {
+  it("ir a um atalho zera o resto; 'este mês' vai explícito (mes=AAAA-MM); ehAtual diz se é o de hoje", () => {
     expect(urlDoAtalho("semana")).toEqual({ ...limpo, periodo: "semana" });
-    expect(urlDoAtalho("mes")).toEqual(limpo);
+    expect(urlDoAtalho("mes", AGORA)).toEqual({ ...limpo, mes: "2026-11" });
+    // numa tela com "todo o período" por padrão, a URL de "Este mês" lida de volta é o mês, não todo o período
+    expect(lerPeriodo(urlDoAtalho("mes", AGORA) as never, AGORA, { padrao: "todos", permitirTodos: true }).tipo).toBe("mes");
     expect(urlDoAtalho("todos")).toEqual({ ...limpo, periodo: "todos" });
     expect(ehAtual(lerPeriodo({}, AGORA), AGORA)).toBe(true);
     expect(ehAtual(lerPeriodo({ mes: "2026-10" }, AGORA), AGORA)).toBe(false);

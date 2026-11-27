@@ -382,7 +382,7 @@ describe("período + cards do período + cara de planilha (padrão da casa)", ()
     expect(ultimaUrl()).toBe("/financeiro/contas-receber");
   });
 
-  it("período: ‹ › trocam o mês na URL; o mês atual sai da URL; o menu tem todo o período e o personalizado", async () => {
+  it("período: ‹ › trocam o mês na URL; o mês vai explícito na URL; o menu tem todo o período e o personalizado", async () => {
     await montarTela();
     expect(txt($("[data-mes-rotulo]"))).toBe("Novembro de 2026");
     await clicar($("[data-mes-anterior]"));
@@ -403,7 +403,7 @@ describe("período + cards do período + cara de planilha (padrão da casa)", ()
       expect(($("[data-mes-anterior]") as HTMLButtonElement).disabled).toBe(true);
       await clicar($("[data-periodo-menu]"));
       await clicar($("[data-periodo-opcao=mes]"));
-      expect(ultimaUrl()).toBe("/financeiro/contas-receber?q=hospital");
+      expect(ultimaUrl()).toMatch(/^\/financeiro\/contas-receber\?q=hospital&mes=\d{4}-\d{2}$/); // o mês vai explícito na URL
     } finally { nav.qs = ""; }
   });
 

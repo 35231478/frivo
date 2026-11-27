@@ -130,6 +130,18 @@ describe("cabeçalho-resumo da OS", () => {
     expect(texto("[data-numero='atividades']")).toContain("1 de 2 concluídas"); // cancelada não conta
     expect(texto("[data-numero='equipamentos']")).toContain("3");
     expect(texto("[data-numero='valor']")).toMatch(/R\$\s?1\.200,00 · R\$\s?0,00/);
+    // Leva F: ao rolar, só a LINHA DA OS fica presa (desktop), com fundo sólido, encostada no topo da área que rola
+    // (o topo negativo desconta o respiro da página, sem fresta por cima); a barra de andamento e os números rolam
+    const presa = $("[data-cabecalho-os]")!;
+    expect(presa.className.split(/\s+/)).toEqual(expect.arrayContaining(["md:sticky", "md:-top-6", "z-20", "bg-surface-page", "border-b"]));
+    expect(presa.className).not.toMatch(/bg-surface-page\/|backdrop-blur|(^|\s)sticky/);
+    expect([presa.querySelector("[data-numeros-chave]"), presa.querySelector("[data-barra-progresso]")]).toEqual([null, null]);
+    const andamento = $("[data-cabecalho-os-andamento]")!;
+    expect(andamento.className).not.toMatch(/sticky/);
+    expect([!!andamento.querySelector("[data-numeros-chave]"), !!andamento.querySelector("[data-barra-progresso]")]).toEqual([true, true]);
+    // a linha presa e o resto são irmãos no corpo da OS: a linha continua presa enquanto a página inteira rola
+    expect(presa.parentElement).toBe(andamento.parentElement);
+    expect(presa.parentElement?.hasAttribute("data-os-central")).toBe(true);
     expect($("[data-pagamento]")?.getAttribute("data-pagamento")).toBe("PREVISTO");
   });
 
@@ -203,7 +215,7 @@ describe("cabeçalho-resumo da OS", () => {
   it("cancelada: faixa no lugar da barra e sem ajuste de status", async () => {
     await montar(fixture({ status: "CANCELADA" }));
     expect($("[data-barra-progresso]")).toBeNull();
-    expect(texto("[data-cabecalho-os]")).toContain("OS inativada (cancelada)");
+    expect(texto("[data-cabecalho-os-andamento]")).toContain("OS inativada (cancelada)");
     expect($("[data-ajustar-status]")).toBeNull();
     expect($("[data-cartao='o-que-falta'] [data-pendencia-os]")).toBeNull();
   });

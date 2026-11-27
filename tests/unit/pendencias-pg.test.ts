@@ -145,7 +145,7 @@ describe.skipIf(!URL_PG)("painel de pendências (PostgreSQL real)", () => {
     expect(c.osSemTecnicoId).toBe("os1"); // a mais antiga
     // o toque: a lista de OS com ?tecnico=sem mostra as mesmas 4
     const href = pendencias.itemPendencia("osSemTecnico", c).href;
-    expect(href).toBe("/ordens?tecnico=sem");
+    expect(href).toBe("/ordens?tecnico=sem&periodo=todos");
     expect(await prisma.ordemServico.count({ where: filtros.whereOrdens("e1", spDaUrl(href)) })).toBe(4);
   });
 
@@ -247,6 +247,53 @@ describe.skipIf(!URL_PG)("painel de pendências (PostgreSQL real)", () => {
     await prisma.orcamento.delete({ where: { id: "oHoje" } });
   });
 
+  it("sino lido (/api/alertas/lidos): o toque tira o aviso do número na hora; volta com um novo ou no outro dia; é de cada pessoa", async () => {
+    const { GET } = await import("@/app/api/alertas/route");
+    const { POST } = await import("@/app/api/alertas/lidos/route");
+    const { assinaturaDoAviso } = await import("@/lib/alertas/lidos");
+    const ler = async () => (await GET()).json();
+    const tocar = (corpo: unknown) => POST(new Request("http://x/api/alertas/lidos", { method: "POST", body: JSON.stringify(corpo) }) as never);
+    // relógio fixo ao meio-dia de Brasília: o "dia" do lido não vira no meio do teste
+    vi.useFakeTimers({ toFake: ["Date"] }); vi.setSystemTime(MEIO_DIA);
+    try {
+      escritorio();
+      const antes = await ler();
+      expect(antes.osSemTecnico).toBe(4);
+      // a resposta de orçamento ainda não vista (o7, aprovado pelo cliente): uma só, o link abre o orçamento
+      expect([antes.orcamentosRespondidos, antes.orcamentoRespondidoId]).toEqual([1, "o7"]);
+      expect([antes.total, antes.totalGeral, antes.lidos]).toEqual([antes.totalGeral, antes.totalGeral, []]);
+      // o toque: grava o lido do aviso (com a assinatura que a tela mostrava) e o número cai 4
+      expect((await tocar({ campo: "osSemTecnico", assinatura: assinaturaDoAviso(antes, "osSemTecnico") })).status).toBe(200);
+      const lido = await ler();
+      expect([lido.total, lido.totalGeral, lido.lidos]).toEqual([antes.total - 4, antes.totalGeral, ["osSemTecnico"]]);
+      const guardado = await prisma.preferenciaUsuario.findUnique({ where: { usuarioId_chave: { usuarioId: "uA", chave: "sino:lidos" } } });
+      expect(guardado.valor).toEqual({ osSemTecnico: { assinatura: "4:os1", dia: "2027-03-10" } });
+      // é de cada pessoa: outra pessoa do escritório continua com o número cheio
+      escritorio(permissoesTotais(), "uT");
+      expect((await ler()).total).toBe(antes.total);
+      escritorio();
+      // chegou uma OS nova sem técnico: a assinatura muda e o aviso volta a contar (com a nova)
+      await prisma.ordemServico.create({ data: { id: "osNova", empresaId: "e1", numero: "OS-N", clienteId: "c1", unidadeId: "un1", criadoPorId: "uA", descricao: "Ar quente", status: "ABERTA" } });
+      const novo = await ler();
+      expect([novo.osSemTecnico, novo.total, novo.lidos]).toEqual([5, antes.total + 1, []]);
+      await prisma.ordemServico.delete({ where: { id: "osNova" } });
+      expect((await ler()).total).toBe(antes.total - 4); // a mesma situação de quando foi lido
+      // no outro dia, com a situação ainda de pé, volta a contar
+      vi.setSystemTime(new Date(MEIO_DIA.getTime() + 86_400_000));
+      expect((await ler()).total).toBe(antes.total);
+      vi.setSystemTime(MEIO_DIA);
+      // o que não é aviso do número, ou sem assinatura: recusado; sem sessão: 401
+      expect((await tocar({ campo: "contasPagarHoje", assinatura: "1:" })).status).toBe(400);
+      expect((await tocar({ campo: "osSemTecnico" })).status).toBe(400);
+      expect((await tocar({ campo: "toString", assinatura: "1:" })).status).toBe(400);
+      sessao.atual = null;
+      expect((await tocar({ campo: "osSemTecnico", assinatura: "4:os1" })).status).toBe(401);
+    } finally {
+      vi.useRealTimers();
+      await prisma.preferenciaUsuario.deleteMany({ where: { chave: "sino:lidos" } });
+    }
+  });
+
   it("a tela /pendencias: as áreas de quem vê, o toque de cada item e o vazio do técnico", async () => {
     const { default: Pagina } = await import("@/app/(dashboard)/pendencias/page");
     const html = async () => renderToStaticMarkup(await Pagina());
@@ -255,7 +302,7 @@ describe.skipIf(!URL_PG)("painel de pendências (PostgreSQL real)", () => {
     expect(h).toContain("Pendências de hoje");
     expect(h).toMatch(/data-area="operacao"/);
     expect(h).toContain('data-pendencia="osSemTecnico"');
-    expect(h).toContain('href="/ordens?tecnico=sem"');
+    expect(h).toContain('href="/ordens?tecnico=sem&amp;periodo=todos"');
     escritorio(SO_FINANCEIRO(), "uF");
     h = await html();
     expect(h).not.toMatch(/data-area="operacao"/);

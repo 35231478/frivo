@@ -5,7 +5,8 @@
  */
 import { describe, expect, it } from "vitest";
 import {
-  agruparGaleria, ehImagem, legendaAdicional, legendaExecucao, limparLegenda, nomeArquivoFoto, REFERENCIA_GERAL, type FotoGaleria,
+  agruparGaleria, ehImagem, legendaAdicional, legendaExecucao, limparLegenda, MSG_LEGENDA_OS_ENCERRADA, MSG_LEGENDA_SEM_PERMISSAO,
+  motivoSemEditarLegenda, nomeArquivoFoto, REFERENCIA_GERAL, type FotoGaleria,
 } from "@/lib/os/galeria";
 import { estadoDaAtividade } from "@/lib/tecnico/offline/estado";
 import type { OperacaoFila, RetratoAtividade } from "@/lib/tecnico/offline/tipos";
@@ -88,5 +89,20 @@ describe("app do técnico: fotos do serviço na fila do aparelho", () => {
     expect(estadoDaAtividade(r, [op({ tipo: "fotoOsRemover", dados: { clientId: "c-1" } })]).fotosServico!.map((f) => f.id)).toEqual(["f0"]);
     expect(estadoDaAtividade(r, [op({ tipo: "fotoOsRemover", dados: { id: "f0" } })]).fotosServico!.map((f) => f.id)).toEqual(["f1"]);
     expect(estadoDaAtividade(r, [op({ tipo: "fotoOsRemover", atividadeId: "outra", dados: { id: "f0" } })]).fotosServico).toHaveLength(2);
+  });
+
+  it("legenda pela fila (Leva F): pelo clientId ou pelo id, sem espaços sobrando; as outras fotos e outra atividade não mudam", () => {
+    const r = retrato([{ id: "f0", clientId: null, equipamentoId: null, legenda: "Fachada" }, { id: "f1", clientId: "c-1", equipamentoId: "eqA", legenda: "Placa" }]);
+    const legendas = (ops: OperacaoFila[]) => estadoDaAtividade(r, ops).fotosServico!.map((f) => f.legenda);
+    expect(legendas([op({ tipo: "fotoOsLegenda", dados: { clientId: "c-1", legenda: "  Placa nova " } })])).toEqual(["Fachada", "Placa nova"]);
+    expect(legendas([op({ tipo: "fotoOsLegenda", dados: { id: "f0", legenda: "Fachada da loja" } })])).toEqual(["Fachada da loja", "Placa"]);
+    expect(legendas([op({ tipo: "fotoOsLegenda", atividadeId: "outra", dados: { id: "f0", legenda: "Outra" } })])).toEqual(["Fachada", "Placa"]);
+  });
+
+  it("quem edita a legenda: o escritório com OS › Editar, sempre; o técnico, só com a OS aberta", () => {
+    expect(motivoSemEditarLegenda({ restrito: false, podeEditarOs: true, osEncerrada: true })).toBeNull();
+    expect(motivoSemEditarLegenda({ restrito: false, podeEditarOs: false, osEncerrada: false })).toBe(MSG_LEGENDA_SEM_PERMISSAO);
+    expect(motivoSemEditarLegenda({ restrito: true, podeEditarOs: false, osEncerrada: false })).toBeNull();
+    expect(motivoSemEditarLegenda({ restrito: true, podeEditarOs: true, osEncerrada: true })).toBe(MSG_LEGENDA_OS_ENCERRADA);
   });
 });

@@ -143,10 +143,12 @@ describe("c) sino: cada um recebe o que é dele", () => {
     // a contagem mora em lib/alertas/sino-server (a mesma do painel de pendências); a rota só monta o escopo
     const contagem = fonte("lib/alertas/sino-server.ts");
     expect(rota).toContain("const e = escopoDoSino({ permissoes, role, restrito: escopoTecnico.restrito });");
-    expect(rota).toContain("contarSino({ empresaId, usuarioId: session.user!.id, escopo: e,");
+    expect(rota).toContain("contarSino({ empresaId, usuarioId, escopo: e,");
     expect(rota + contagem).not.toMatch(/\bpode\(/);
     expect(contagem).toContain("{ separarNotaBaixa: e.notaBaixa }");
-    expect(contagem).toContain("aceites.avaliacoesBaixas");
+    // o total soma os avisos do número (lib/alertas/lidos), a nota baixa entre eles
+    expect(contagem).toContain("total: totalDoSino(contagem)");
+    expect(fonte("lib/alertas/lidos.ts")).toContain('avaliacoesBaixas: "avaliacaoBaixaOsId"');
   });
 });
 

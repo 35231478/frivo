@@ -374,11 +374,11 @@ describe("Sino: prazo de atendimento vencendo e estourado", () => {
 
   it("cada aviso com a sua contagem e o link para a lista de OS já filtrada; o estourado vem antes; não se confunde com \"OS atrasadas\"", async () => {
     await sino({ atendimentoEstourado: 2, atendimentoVencendo: 3, atendimentosAtraso: 4, total: 9 }, OS);
-    expect([link(ESTOURADO)?.getAttribute("href"), txt(link(ESTOURADO))]).toEqual(["/ordens?atendimento=estourado", "Prazo de atendimento estourado2"]);
-    expect([link(VENCENDO)?.getAttribute("href"), txt(link(VENCENDO))]).toEqual(["/ordens?atendimento=vencendo", "Prazo de atendimento vencendo3"]);
+    expect([link(ESTOURADO)?.getAttribute("href"), txt(link(ESTOURADO))]).toEqual(["/ordens?atendimento=estourado&periodo=todos", "Prazo de atendimento estourado2"]);
+    expect([link(VENCENDO)?.getAttribute("href"), txt(link(VENCENDO))]).toEqual(["/ordens?atendimento=vencendo&periodo=todos", "Prazo de atendimento vencendo3"]);
     expect(links().indexOf(link(ESTOURADO)!)).toBeLessThan(links().indexOf(link(VENCENDO)!));
     // o prazo de EXECUÇÃO continua com o aviso dele, com o filtro dele
-    expect([link("OS atrasadas")?.getAttribute("href"), txt(link("OS atrasadas"))]).toEqual(["/ordens?prazo=atrasadas", "OS atrasadas4"]);
+    expect([link("OS atrasadas")?.getAttribute("href"), txt(link("OS atrasadas"))]).toEqual(["/ordens?prazo=atrasadas&periodo=todos", "OS atrasadas4"]);
   });
 
   it("zero não aparece: o sino não ganha linha parada quando está tudo em dia", async () => {

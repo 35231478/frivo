@@ -7,6 +7,9 @@ import { registrarAvisosPmoc } from "@/lib/pmoc-avisos-server";
 import { escopoDaSessao, filtroEscopo } from "@/lib/tecnico/escopo";
 import { conferirEsquecidasPeloSino } from "@/lib/push/eventos";
 import { pushLigado } from "@/lib/push/config";
+import { prisma } from "@/lib/prisma";
+import { CHAVE_SINO_LIDOS, avisosLidos, lerLidos, numeroDoSino, totalDoSino } from "@/lib/alertas/lidos";
+import { chaveHojeBR } from "@/lib/fuso";
 
 export async function GET() {
   const session = await auth();
@@ -33,6 +36,13 @@ export async function GET() {
   if (pushLigado()) conferirEsquecidasPeloSino(empresaId);
 
   // A contagem é a mesma do painel de pendências (lib/alertas/sino-server); as contas do dia ficam só no painel
-  const { foraDoNumero: _soNoPainel, ...sino } = await contarSino({ empresaId, usuarioId: session.user!.id, escopo: e, filtroTecnico: filtroEscopo(escopoTecnico) });
-  return NextResponse.json(sino);
+  // O que a pessoa já leu hoje (lib/alertas/lidos) vem junto, em paralelo: o número do sino é só o não lido
+  const usuarioId = session.user!.id;
+  const [{ foraDoNumero: _soNoPainel, ...sino }, guardado] = await Promise.all([
+    contarSino({ empresaId, usuarioId, escopo: e, filtroTecnico: filtroEscopo(escopoTecnico) }),
+    prisma.preferenciaUsuario.findUnique({ where: { usuarioId_chave: { usuarioId, chave: CHAVE_SINO_LIDOS } }, select: { valor: true } }),
+  ]);
+  const hoje = chaveHojeBR();
+  const lidos = lerLidos(guardado?.valor, hoje);
+  return NextResponse.json({ ...sino, total: numeroDoSino(sino, lidos, hoje), totalGeral: totalDoSino(sino), lidos: avisosLidos(sino, lidos, hoje) });
 }

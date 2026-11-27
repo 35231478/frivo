@@ -78,7 +78,7 @@ function BotaoTentar({ id, ocupado, onTentar }: { id: string; ocupado: boolean; 
 export function FaturamentoContratosView({ periodo, linhas, resumo, soAtencao }: {
   periodo: PeriodoTela; linhas: LinhaFaturamentoContrato[]; resumo: ResumoFaturamentoContratos; soAtencao: boolean;
 }) {
-  const { navegar } = useListagemUrl({ chave: "faturamento-contratos", qAtual: "", lembrarFiltros: false });
+  const { navegar } = useListagemUrl({ chave: "faturamento-contratos", qAtual: "" });
   const router = useRouter();
   const [ocupado, setOcupado] = useState<string | null>(null);
   const visiveis = soAtencao ? linhas.filter((l) => l.execucao && retentavel(l.execucao.situacao)) : linhas;

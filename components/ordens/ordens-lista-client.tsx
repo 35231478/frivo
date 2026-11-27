@@ -4,7 +4,8 @@ import { FILTRO_SEM_TECNICO } from "@/lib/os/sem-tecnico";
 import { ALERTAS_ATENDIMENTO, ROTULO_FILTRO_ATENDIMENTO } from "@/lib/atendimento/prazo";
 import { useEffect, useMemo, useState, useTransition } from "react";
 import { CampoBusca, Paginacao, sugerirPorUrl } from "@/components/listagem/listagem-ui";
-import { DEBOUNCE_BUSCA_MS, useTamanhoPreferido } from "@/components/listagem/use-listagem-url";
+import { DEBOUNCE_BUSCA_MS } from "@/components/listagem/use-listagem-url";
+import { useFiltrosLembrados } from "@/components/listagem/use-filtros-lembrados";
 import Link from "next/link";
 import { OsInativarBotao } from "@/components/os/os-inativar";
 import { CheckboxLinha, CheckboxPagina, useAcoesMassaDisponiveis } from "@/components/acoes-massa/selecao";
@@ -22,7 +23,7 @@ import { AvatarCliente } from "@/components/ui/avatar-cliente";
 import { AvatarStack } from "@/components/ui/avatar-stack";
 import { formatarDiaCivil } from "@/lib/os/prazos";
 import { FILTROS_PRAZO, ROTULO_FILTRO_PRAZO } from "@/lib/os/prazo-execucao";
-import { ClipboardList, Plus, LayoutGrid, List, Download, Headset } from "lucide-react";
+import { ClipboardList, Plus, Download, Headset } from "lucide-react";
 import { TabelaPro } from "@/components/listagem/tabela-pro";
 import { PLANILHA } from "@/lib/planilha";
 
@@ -91,7 +92,6 @@ export function OrdensListaClient({ ordens, total, pagina, porPagina, opcoes, pe
   const sp = useSearchParams();
   const get = (k: string) => sp.get(k) ?? "";
 
-  const view = get("view") === "cards" ? "cards" : "tabela";
   const massa = useAcoesMassaDisponiveis("ordens");
   const sortAtual = get("sort") || "criadoEm";
   const dirAtual = (get("dir") || "desc") as "asc" | "desc";
@@ -107,7 +107,8 @@ export function OrdensListaClient({ ordens, total, pagina, porPagina, opcoes, pe
     if (!manterPagina && !("pagina" in updates)) novo.delete("pagina");
     startTransition(() => router.replace(`${pathname}?${novo.toString()}`, { scroll: false }));
   }
-  useTamanhoPreferido((por) => setParams({ por }, true));
+  // Filtros lembrados (por usuário e empresa, no dia) e os itens por página preferidos: o hook único das listas
+  useFiltrosLembrados("ordens");
   const sugerir = useMemo(() => sugerirPorUrl("/api/listas/sugestoes?lista=ordens"), []);
 
   // Busca ao vivo (debounce), sem Enter
@@ -184,10 +185,6 @@ export function OrdensListaClient({ ordens, total, pagina, porPagina, opcoes, pe
         paramBusca="busca" navegar={(m) => setParams(m)}
         extras={
           <>
-            <div className="flex items-center bg-surface-page border border-surface-border rounded-lg p-0.5">
-              <button type="button" onClick={() => setParams({ view: null })} aria-pressed={view === "tabela"} className={cn("p-1.5 rounded-md transition-colors", view === "tabela" ? "bg-white text-acento shadow-card" : "text-ink-muted hover:text-ink")} title="Tabela"><List className="w-4 h-4" /></button>
-              <button type="button" onClick={() => setParams({ view: "cards" })} aria-pressed={view === "cards"} className={cn("p-1.5 rounded-md transition-colors", view === "cards" ? "bg-white text-acento shadow-card" : "text-ink-muted hover:text-ink")} title="Cards"><LayoutGrid className="w-4 h-4" /></button>
-            </div>
             <a href={exportUrl} className="btn-secondary px-3 py-2 font-medium text-ink-muted">
               <Download className="w-4 h-4" /> Exportar
             </a>
@@ -268,11 +265,12 @@ export function OrdensListaClient({ ordens, total, pagina, porPagina, opcoes, pe
             {filtrosAtivos > 0 && <button type="button" onClick={limparFiltros} className="text-sm font-medium text-acento hover:underline">Limpar filtros</button>}
           </div>
         ) : (<>
-          <div className={cn("p-4 sm:p-5 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3", view !== "cards" && "md:hidden")} data-cartoes>
+          {/* Celular: a lista vira cartões (não há tabela na tela pequena). No desktop, só a tabela (a visão em cartões saiu) */}
+          <div className="p-4 sm:p-5 grid grid-cols-1 sm:grid-cols-2 gap-3 md:hidden" data-cartoes>
             {ordens.map((os) => (
               <div key={os.id} className="relative">
               {massa && <CheckboxLinha id={os.id} rotulo={os.chamadoNumero ?? os.numero} className="absolute top-3 right-3 z-10 bg-white rounded" />}
-              <Link href={`/ordens/${os.id}`} className="block h-full bg-white border border-surface-border rounded-card p-4 shadow-card hover:border-acento/40 hover:shadow-card-hover transition-shadow">
+              <Link href={`/ordens/${os.id}`} prefetch={false} className="block h-full bg-white border border-surface-border rounded-card p-4 shadow-card hover:border-acento/40 hover:shadow-card-hover transition-shadow">
                 <div className="flex items-center justify-between gap-2">
                   <span className="font-display font-semibold tabular-nums text-acento">{os.chamadoNumero ?? os.numero}</span>
                   {os.origem === "PORTAL_CLIENTE" && <span className="pill-acento text-[11px] px-2"><Headset className="w-3 h-3" aria-hidden="true" /> Portal</span>}
@@ -297,7 +295,6 @@ export function OrdensListaClient({ ordens, total, pagina, porPagina, opcoes, pe
               </div>
             ))}
           </div>
-          {view !== "cards" && (
           <TabelaPro
             tela="ordens"
             ordenacao={{ ativa: sortAtual, dir: dirAtual, onOrdenar: ordenarPor }}
@@ -324,7 +321,7 @@ export function OrdensListaClient({ ordens, total, pagina, porPagina, opcoes, pe
                 sel: massa ? <CheckboxLinha id={os.id} rotulo={os.chamadoNumero ?? os.numero} /> : null,
                 numero: (
                   <span className="whitespace-nowrap">
-                    <Link href={`/ordens/${os.id}`} className={cn(PLANILHA.codigo, "text-acento hover:underline")}>{os.chamadoNumero ?? os.numero}</Link>
+                    <Link href={`/ordens/${os.id}`} prefetch={false} className={cn(PLANILHA.codigo, "text-acento hover:underline")}>{os.chamadoNumero ?? os.numero}</Link>
                     {os.origem === "PORTAL_CLIENTE" && <span className="ml-2 pill-acento text-[11px] px-2"><Headset className="w-3 h-3" aria-hidden="true" /> Portal</span>}
                   </span>
                 ),
@@ -345,7 +342,6 @@ export function OrdensListaClient({ ordens, total, pagina, porPagina, opcoes, pe
               },
             }))}
           />
-          )}
         </>)}
         </div>
         <div className="px-4 sm:px-5 py-3 border-t border-surface-border">

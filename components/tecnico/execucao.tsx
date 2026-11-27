@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import {
-  ArrowLeft, Camera, CheckCircle2, ChevronRight, CircleDashed, ClipboardCheck, HardDrive, ListPlus, Loader2, MapPin, MessageCircle, Phone, Plus, QrCode, Search, Sparkles, Trash2, WifiOff,
+  ArrowLeft, Camera, CheckCircle2, ChevronRight, CircleDashed, ClipboardCheck, HardDrive, ListPlus, Loader2, MapPin, MessageCircle, Pencil, Phone, Plus, QrCode, Search, Sparkles, Trash2, WifiOff,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Modal } from "@/components/ui/modal";
@@ -30,7 +30,8 @@ import { guardadoDoRetrato, podeEntrar } from "@/lib/tecnico/chegada";
 import { adicionalAvaliado, equipamentoDoQr, proximoEquipamento } from "@/lib/tecnico/offline/estado";
 import { novoClientId } from "@/lib/tecnico/offline/motor";
 import { textoFaltas } from "@/lib/execucao/pendencias";
-import { LEGENDA_MAX, limparLegenda, REFERENCIA_GERAL } from "@/lib/os/galeria";
+import { LEGENDA_MAX, limparLegenda, MSG_LEGENDA, REFERENCIA_GERAL } from "@/lib/os/galeria";
+import { osEncerrada } from "@/lib/os/prazo-execucao";
 import type { AdicionalTela, EquipamentoTela, ExecucaoTela, FotoServicoTela, NovaOperacao, OperacaoFila, RetratoAtividade } from "@/lib/tecnico/offline/tipos";
 import { Dica } from "@/components/ui/dica";
 import { InputHora } from "@/components/ui/input-hora";
@@ -431,6 +432,19 @@ function FotosServico({ x, so, onAdicionar, registrar }: { x: ExecucaoTela; so: 
     await registrar([{ tipo: "fotoOsRemover", atividadeId: x.atividade.id, dados: f.clientId ? { clientId: f.clientId } : { id: f.id! } }]);
     toast("Foto removida.");
   }
+  // A LEGENDA se corrige enquanto a OS não estiver encerrada (também com a atividade concluída); depois, só o escritório
+  const podeLegenda = !osEncerrada(x.os.status);
+  const [editando, setEditando] = useState<string | null>(null);
+  const [texto, setTexto] = useState("");
+  const chaveDe = (f: FotoServicoTela) => f.clientId ?? f.id ?? "";
+  async function salvarLegenda(f: FotoServicoTela) {
+    const legenda = limparLegenda(texto);
+    if (!legenda) { toast(MSG_LEGENDA, "erro"); return; }
+    setEditando(null);
+    if (legenda === f.legenda) return;
+    await registrar([{ tipo: "fotoOsLegenda", atividadeId: x.atividade.id, dados: { ...(f.clientId ? { clientId: f.clientId } : { id: f.id! }), legenda } }]);
+    toast("Legenda atualizada.");
+  }
   return (
     <section className="space-y-2" data-fotos-servico>
       <h2 className="text-base font-bold text-ink inline-flex items-center gap-1.5"><Camera className="w-4 h-4 text-ink-muted" /> Fotos do serviço
@@ -442,10 +456,29 @@ function FotosServico({ x, so, onAdicionar, registrar }: { x: ExecucaoTela; so: 
           {fotos.map((f, i) => (
             <li key={f.clientId ?? f.id ?? i} className="rounded-card border border-surface-border bg-white p-2.5 flex gap-3 items-center" data-foto-servico>
               <Miniatura src={srcFotoServico(x.os.id, f)} alt={f.legenda ?? `foto ${i + 1}`} pendente={f.pendente} onRemover={so ? undefined : () => remover(f)} />
-              <span className="min-w-0 text-sm">
-                <span className="block font-semibold text-ink line-clamp-2">{f.legenda}</span>
-                <span className="block text-ink-muted truncate" data-referencia-foto>{nomeRef(f.equipamentoId)}</span>
-              </span>
+              {editando === chaveDe(f) ? (
+                <span className="min-w-0 flex-1 space-y-2">
+                  <input value={texto} onChange={(e) => setTexto(e.target.value)} maxLength={LEGENDA_MAX} aria-label="Legenda da foto" data-legenda-editar autoFocus
+                    className="w-full rounded-lg border border-surface-border px-3 py-2 text-base" />
+                  <span className="flex gap-2">
+                    <button type="button" onClick={() => salvarLegenda(f)} className="btn-primary flex-1 touch-target" data-legenda-salvar>Salvar</button>
+                    <button type="button" onClick={() => setEditando(null)} className="btn-secondary flex-1 touch-target">Cancelar</button>
+                  </span>
+                </span>
+              ) : (
+                <>
+                  <span className="min-w-0 flex-1 text-sm">
+                    <span className="block font-semibold text-ink line-clamp-2">{f.legenda}</span>
+                    <span className="block text-ink-muted truncate" data-referencia-foto>{nomeRef(f.equipamentoId)}</span>
+                  </span>
+                  {podeLegenda && (
+                    <button type="button" onClick={() => { setTexto(f.legenda ?? ""); setEditando(chaveDe(f)); }} aria-label="Editar legenda" data-legenda-editar-abrir
+                      className="shrink-0 p-2 rounded-lg text-ink-muted hover:text-ink hover:bg-surface-alt touch-target">
+                      <Pencil className="w-4 h-4" />
+                    </button>
+                  )}
+                </>
+              )}
             </li>
           ))}
         </ul>

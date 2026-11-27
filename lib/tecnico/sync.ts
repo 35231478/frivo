@@ -30,6 +30,8 @@ import { gravarMaterial, removerMaterial } from "@/lib/execucao/materiais-campo"
 import { comentarioSchema } from "@/lib/tecnico/comentarios";
 import { comentarDoApp } from "@/lib/execucao/comentarios";
 import { despesaSchema, SEM_OS } from "@/lib/tecnico/despesas";
+import { editarLegendaFoto } from "@/lib/os/legenda-foto-server";
+import { LEGENDA_MAX } from "@/lib/os/galeria";
 import { lancarDespesa } from "@/lib/execucao/despesas";
 
 export const MAX_OPERACOES = 100;
@@ -62,6 +64,8 @@ export const operacaoSchema = z.discriminatedUnion("tipo", [
   z.object({ ...base, tipo: z.literal("adicionalFotoRemover"), dados: ref }).strict(),
   z.object({ ...base, tipo: z.literal("fotoOs"), dados: fotoOsSchema }).strict(),
   z.object({ ...base, tipo: z.literal("fotoOsRemover"), dados: ref }).strict(),
+  // Legenda de uma foto do serviço (só enquanto a OS não estiver encerrada: lib/os/galeria › motivoSemEditarLegenda)
+  z.object({ ...base, tipo: z.literal("fotoOsLegenda"), dados: ref.extend({ legenda: z.string().max(LEGENDA_MAX) }).strict() }).strict(),
   // Material usado em campo (catálogo, sem valores): `clientId` gerado no aparelho; a mesma gravação corrige a quantidade
   z.object({ ...base, tipo: z.literal("material"), dados: materialSchema }).strict(),
   z.object({ ...base, tipo: z.literal("materialRemover"), dados: materialRemoverSchema }).strict(),
@@ -108,7 +112,7 @@ async function executar(ator: Ator, op: Operacao, lote: OpcoesLote): Promise<Res
   // Despesa fora de OS: não há atividade a conferir (o servidor só aceita a do próprio colaborador)
   if (op.tipo === "despesa" && op.atividadeId === SEM_OS) return lancarDespesa(ator, op.dados, null);
   const equipamentoId = "equipamentoId" in op ? op.equipamentoId : undefined;
-  const ctx = await carregarContexto(ator, op.atividadeId, { equipamentoId, permitirBloqueada: op.tipo === "concluir" || op.tipo === "aceite" || op.tipo === "comentario" || op.tipo === "despesa" });
+  const ctx = await carregarContexto(ator, op.atividadeId, { equipamentoId, permitirBloqueada: op.tipo === "concluir" || op.tipo === "aceite" || op.tipo === "comentario" || op.tipo === "despesa" || op.tipo === "fotoOsLegenda" });
   if (!ctx.ok) return { ok: false, status: ctx.status, erro: ctx.erro };
   switch (op.tipo) {
     case "iniciar": return iniciarAtividade(ctx, { em: op.em, agoraAparelho: lote.agoraAparelho });
@@ -129,6 +133,9 @@ async function executar(ator: Ator, op: Operacao, lote: OpcoesLote): Promise<Res
     case "adicionalFotoRemover": return removerFotoAdicional(ctx, { fotoId: op.dados.id, clientId: op.dados.clientId });
     case "fotoOs": return adicionarFotoOs(ctx, op.dados);
     case "fotoOsRemover": return removerFotoOs(ctx, { fotoId: op.dados.id, clientId: op.dados.clientId });
+    case "fotoOsLegenda": return editarLegendaFoto({ ...ator, podeEditarOs: lote.podeEditarOs ?? true }, ctx.atividade.ordemServico.id, {
+      origem: "ANEXO", fotoId: op.dados.id, clientId: op.dados.clientId, legenda: op.dados.legenda, atividadeId: ctx.atividade.id,
+    });
     case "material": return gravarMaterial(ctx, op.dados);
     case "materialRemover": return removerMaterial(ctx, op.dados);
     case "comentario": return comentarDoApp(ctx, op.dados);

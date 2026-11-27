@@ -7,7 +7,8 @@ import { TabelaPro } from "@/components/listagem/tabela-pro";
 import { PLANILHA } from "@/lib/planilha";
 import { Dica } from "@/components/ui/dica";
 import { usePermissoes } from "@/components/providers/permissoes-provider";
-import { DEBOUNCE_BUSCA_MS, useTamanhoPreferido } from "@/components/listagem/use-listagem-url";
+import { DEBOUNCE_BUSCA_MS } from "@/components/listagem/use-listagem-url";
+import { useFiltrosLembrados } from "@/components/listagem/use-filtros-lembrados";
 import Link from "next/link";
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import { passoCobranca, textoFrequencia } from "@/lib/financeiro/contrato-previsao";
@@ -74,7 +75,8 @@ export function ContratosListaClient({ contratos, total, pagina, porPagina, soma
     if (!manterPagina && !("pagina" in updates)) novo.delete("pagina");
     startTransition(() => router.replace(`${pathname}?${novo.toString()}`, { scroll: false }));
   }
-  useTamanhoPreferido((por) => setParams({ por }, true));
+  // Filtros lembrados (por usuário e empresa, no dia) e os itens por página preferidos: o hook único das listas
+  useFiltrosLembrados("contratos");
   const sugerir = useMemo(() => sugerirPorUrl("/api/listas/sugestoes?lista=contratos"), []);
 
 

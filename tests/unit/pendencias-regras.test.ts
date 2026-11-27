@@ -60,8 +60,8 @@ describe("catálogo do painel", () => {
   it("o toque: um registro só (com o id) abre o registro; vários, ou sem o id, a lista filtrada", () => {
     const h = (id: keyof typeof PENDENCIAS, d: Partial<DadosPendencias>) => itemPendencia(id, { ...ZERO, ...d }).href;
     expect(h("osSemTecnico", { osSemTecnico: 1, osSemTecnicoId: "os9" })).toBe("/ordens/os9");
-    expect(h("osSemTecnico", { osSemTecnico: 2, osSemTecnicoId: "os9" })).toBe("/ordens?tecnico=sem");
-    expect(h("osSemTecnico", { osSemTecnico: 1, osSemTecnicoId: null })).toBe("/ordens?tecnico=sem");
+    expect(h("osSemTecnico", { osSemTecnico: 2, osSemTecnicoId: "os9" })).toBe("/ordens?tecnico=sem&periodo=todos");
+    expect(h("osSemTecnico", { osSemTecnico: 1, osSemTecnicoId: null })).toBe("/ordens?tecnico=sem&periodo=todos");
     expect(h("orcamentosVencendo", { orcamentosVencendo: 1, orcamentoVencendoId: "o3" })).toBe("/orcamentos/o3");
     expect(h("orcamentosVencendo", { orcamentosVencendo: 3, orcamentoVencendoId: "o3" })).toBe("/orcamentos?validade=vencendo&periodo=todos");
     // os do sino continuam com o mesmo destino de antes
@@ -109,7 +109,7 @@ describe("as regras novas como where", () => {
   it("filtros das listas: ?tecnico=sem e ?validade=vencendo entram no AND; outro valor é ignorado", () => {
     const agora = new Date("2027-03-10T15:00:00.000Z");
     expect(whereOrdens("e1", { tecnico: "sem" }, agora).AND).toContainEqual(whereOsSemTecnico());
-    expect(whereOrdens("e1", { tecnico: "x" }, agora).AND).toBeUndefined();
+    expect(whereOrdens("e1", { tecnico: "x", periodo: "todos" }, agora).AND).toBeUndefined();
     const hoje = new Date(Date.UTC(2027, 2, 10));
     expect(whereOrcamentos("e1", { validade: "vencendo" }, agora).AND).toContainEqual(whereOrcamentoVencendo(hoje, 3));
     expect(whereOrcamentos("e1", { validade: "vencendo" }, agora, 7).AND).toContainEqual(whereOrcamentoVencendo(hoje, 7));

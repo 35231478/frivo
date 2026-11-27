@@ -6,6 +6,9 @@ import { pode as podeRaw, type Acao, type Permissoes } from "@/lib/permissoes";
 interface PermissoesCtx {
   admin: boolean;
   role?: string;
+  /** Quem está logado e em qual empresa (os filtros lembrados das listas separam por estes dois) */
+  usuarioId?: string;
+  empresaId?: string;
   permissoes?: Permissoes;
   pode: (modulo: string, acao?: Acao) => boolean;
 }
@@ -19,10 +22,14 @@ const PermissoesContext = createContext<PermissoesCtx>({ admin: false, pode: () 
 export function PermissoesProvider({
   role,
   permissoes,
+  usuarioId,
+  empresaId,
   children,
 }: {
   role?: string;
   permissoes?: Permissoes;
+  usuarioId?: string;
+  empresaId?: string;
   children: React.ReactNode;
 }) {
   const value = useMemo<PermissoesCtx>(
@@ -30,9 +37,11 @@ export function PermissoesProvider({
       admin: role === "ADMIN",
       role,
       permissoes,
+      usuarioId,
+      empresaId,
       pode: (modulo: string, acao: Acao = "visualizar") => podeRaw(permissoes, modulo, acao, role),
     }),
-    [role, permissoes],
+    [role, permissoes, usuarioId, empresaId],
   );
   return <PermissoesContext.Provider value={value}>{children}</PermissoesContext.Provider>;
 }

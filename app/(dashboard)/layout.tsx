@@ -30,7 +30,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
   if (emModoTecnico(session.user)) {
     return (
       <AuthSessionProvider session={session}>
-        <PermissoesProvider role={session.user.role} permissoes={session.user.permissoes}>
+        <PermissoesProvider role={session.user.role} permissoes={session.user.permissoes} usuarioId={session.user.id} empresaId={session.user.empresaId}>
           <Avisos />
           <SincronizarAcesso mudou={session.user.acessoMudou === true} />
           <CascaTecnico>{children}</CascaTecnico>
@@ -54,7 +54,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
 
   return (
     <AuthSessionProvider session={sessao}>
-      <PermissoesProvider role={session.user.role} permissoes={session.user.permissoes}>
+      <PermissoesProvider role={session.user.role} permissoes={session.user.permissoes} usuarioId={session.user.id} empresaId={session.user.empresaId}>
        <ModulosProvider desligados={[...desligados]}>
         <div className="flex h-screen overflow-hidden bg-surface-page">
           <Avisos />

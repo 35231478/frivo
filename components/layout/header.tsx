@@ -10,12 +10,17 @@ import type { Session } from "next-auth";
 import { pode } from "@/lib/permissoes";
 import { EVENTO_SINO } from "@/lib/ui/sino";
 import type { ContagemSino } from "@/lib/alertas/sino-server";
-import { escopoDoItem, itemPendencia, type IdPendencia } from "@/lib/alertas/pendencias";
+import { avisoDoItem, escopoDoItem, itemPendencia, type IdPendencia } from "@/lib/alertas/pendencias";
+import { assinaturaDoAviso, type AvisoDoNumero } from "@/lib/alertas/lidos";
+import { URL_SOLICITACOES } from "@/lib/solicitacoes";
 import { escopoDoSino } from "@/lib/alertas/sino";
 import { COR_TOM, ICONE_PENDENCIA } from "@/components/alertas/icones-pendencia";
 
-/** A resposta de /api/alertas: a contagem do sino (lib/alertas/sino-server), sem as contas do dia (só o painel) */
-type Alertas = Omit<ContagemSino, "foraDoNumero">;
+/**
+ * A resposta de /api/alertas: a contagem do sino (lib/alertas/sino-server), sem as contas do dia (só o painel).
+ * `total` é o número do sino (só o não lido); `totalGeral`, todos; `lidos`, os avisos lidos hoje (lib/alertas/lidos).
+ */
+type Alertas = Omit<ContagemSino, "foraDoNumero"> & { totalGeral?: number; lidos?: AvisoDoNumero[] };
 
 interface HeaderProps {
   session: Session;
@@ -154,8 +159,23 @@ export function Header({ session, avatarUrl }: HeaderProps) {
     if (!alertas || !escopo[escopoDoItem(id)]) return null;
     const i = itemPendencia(id, alertas);
     if (!sempre && i.valor <= 0) return null;
-    return <AlertaItem href={i.href} icone={ICONE_PENDENCIA[i.icone]} cor={COR_TOM[i.tom]} label={i.rotulo} valor={i.valor} onClick={() => setSinoAberto(false)} />;
+    return <AlertaItem href={i.href} icone={ICONE_PENDENCIA[i.icone]} cor={COR_TOM[i.tom]} label={i.rotulo} valor={i.valor} {...toque(avisoDoItem(id))} />;
   };
+  // O TOQUE num aviso: fecha o sino, marca o aviso como lido (o número cai na hora) e vai para o destino.
+  // A marca é gravada no servidor (/api/alertas/lidos, com keepalive: a navegação não a corta).
+  const lidos = new Set(alertas?.lidos ?? []);
+  const toque = (campo: AvisoDoNumero | null) => ({
+    lido: !!campo && lidos.has(campo),
+    onClick: () => {
+      setSinoAberto(false);
+      if (!campo || !alertas || lidos.has(campo)) return;
+      const valor = Number(alertas[campo]) || 0;
+      if (valor <= 0) return;
+      const assinatura = assinaturaDoAviso(alertas, campo);
+      setAlertas((a) => (a ? { ...a, total: Math.max(0, a.total - valor), lidos: [...(a.lidos ?? []), campo] } : a));
+      fetch("/api/alertas/lidos", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ campo, assinatura }), keepalive: true }).catch(() => {});
+    },
+  });
 
   // Carrega os alertas uma vez ao montar e revalida por polling (2 min).
   // Antes isso rodava a cada troca de rota ([pathname]), o que disparava ~16
@@ -187,6 +207,8 @@ export function Header({ session, avatarUrl }: HeaderProps) {
   }, []);
 
   const total = alertas?.total ?? 0;
+  // A lista aparece enquanto houver aviso de pé, mesmo já lido (o lido fica apagado)
+  const totalGeral = alertas?.totalGeral ?? total;
   const iniciais =
     usuario.name
       ?.split(" ")
@@ -268,48 +290,48 @@ export function Header({ session, avatarUrl }: HeaderProps) {
                 className="flex items-center justify-between px-4 py-2.5 text-sm font-medium text-acento hover:bg-surface-alt border-b border-surface-border transition-colors">
                 Ver pendências de hoje <ChevronRight className="w-4 h-4" aria-hidden />
               </Link>
-              {total === 0 ? (
+              {totalGeral === 0 ? (
                 <p className="text-sm text-ink-muted text-center py-6">Nenhum alerta no momento.</p>
               ) : (
                 <div className="divide-y divide-surface-linha">
-                  {podeVer("orcamentos") && (alertas?.leadsSite ?? 0) > 0 && <AlertaItem href="/leads-site" icone={Globe} cor="text-primary-600" label="Novos leads do site" valor={alertas?.leadsSite ?? 0} onClick={() => setSinoAberto(false)} />}
-                  {podeVer("orcamentos") && <AlertaItem href="/orcamentos?resposta=nova&periodo=todos" icone={MessageSquareReply} cor="text-acento" label="Respostas de orçamentos" valor={alertas?.orcamentosRespondidos ?? 0} onClick={() => setSinoAberto(false)} />}
+                  {podeVer("orcamentos") && (alertas?.leadsSite ?? 0) > 0 && <AlertaItem href="/leads-site" icone={Globe} cor="text-primary-600" label="Novos leads do site" valor={alertas?.leadsSite ?? 0} {...toque("leadsSite")} />}
+                  {podeVer("orcamentos") && <AlertaItem href={umOuLista(alertas?.orcamentosRespondidos, alertas?.orcamentoRespondidoId, (id) => `/orcamentos/${id}`, "/orcamentos?resposta=nova&periodo=todos")} icone={MessageSquareReply} cor="text-acento" label="Respostas de orçamentos" valor={alertas?.orcamentosRespondidos ?? 0} {...toque("orcamentosRespondidos")} />}
                   {doPainel("orcamentosVencendo")}
                   {/* Aceite do cliente: confirmou pelo link (ou assinou com o técnico) e ninguém abriu a OS ainda; a ressalva primeiro */}
-                  {podeVer("ordens") && (alertas?.avaliacoesBaixas ?? 0) > 0 && <AlertaItem href={hrefOs(alertas?.avaliacaoBaixaOsId)} icone={StarOff} cor="text-atrasado" label="Avaliações baixas do cliente" valor={alertas?.avaliacoesBaixas ?? 0} onClick={() => setSinoAberto(false)} />}
-                  {podeVer("ordens") && (alertas?.aceitesRessalva ?? 0) > 0 && <AlertaItem href={hrefOs(alertas?.aceiteRessalvaOsId)} icone={MessageSquareWarning} cor="text-atencao" label="Ressalvas de clientes" valor={alertas?.aceitesRessalva ?? 0} onClick={() => setSinoAberto(false)} />}
-                  {podeVer("ordens") && (alertas?.aceitesConfirmados ?? 0) > 0 && <AlertaItem href={hrefOs(alertas?.aceiteConfirmadoOsId)} icone={BadgeCheck} cor="text-ok" label="Serviços confirmados pelo cliente" valor={alertas?.aceitesConfirmados ?? 0} onClick={() => setSinoAberto(false)} />}
-                  {podeVer("admissao", "gerenciar") && (alertas?.admissoesAssinadas ?? 0) > 0 && <AlertaItem href="/admissoes?situacao=ASSINADO" icone={UserPlus} cor="text-ok" label="Admissões assinadas" valor={alertas?.admissoesAssinadas ?? 0} onClick={() => setSinoAberto(false)} />}
+                  {podeVer("ordens") && (alertas?.avaliacoesBaixas ?? 0) > 0 && <AlertaItem href={hrefOs(alertas?.avaliacaoBaixaOsId)} icone={StarOff} cor="text-atrasado" label="Avaliações baixas do cliente" valor={alertas?.avaliacoesBaixas ?? 0} {...toque("avaliacoesBaixas")} />}
+                  {podeVer("ordens") && (alertas?.aceitesRessalva ?? 0) > 0 && <AlertaItem href={hrefOs(alertas?.aceiteRessalvaOsId)} icone={MessageSquareWarning} cor="text-atencao" label="Ressalvas de clientes" valor={alertas?.aceitesRessalva ?? 0} {...toque("aceitesRessalva")} />}
+                  {podeVer("ordens") && (alertas?.aceitesConfirmados ?? 0) > 0 && <AlertaItem href={hrefOs(alertas?.aceiteConfirmadoOsId)} icone={BadgeCheck} cor="text-ok" label="Serviços confirmados pelo cliente" valor={alertas?.aceitesConfirmados ?? 0} {...toque("aceitesConfirmados")} />}
+                  {podeVer("admissao", "gerenciar") && (alertas?.admissoesAssinadas ?? 0) > 0 && <AlertaItem href="/admissoes?situacao=ASSINADO" icone={UserPlus} cor="text-ok" label="Admissões assinadas" valor={alertas?.admissoesAssinadas ?? 0} {...toque("admissoesAssinadas")} />}
                   {/* NFS-e: só aparece quando há o que ver (resultado não visto ou nota parada) */}
-                  {podeVer("financeiro", "fiscal") && (alertas?.nfseRejeitadas ?? 0) > 0 && <AlertaItem href={hrefMedicao(alertas?.nfseRejeitadaMedicaoId)} icone={FileX2} cor="text-atrasado" label="NFS-e não aceitas" valor={alertas?.nfseRejeitadas ?? 0} onClick={() => setSinoAberto(false)} />}
-                  {podeVer("financeiro", "fiscal") && (alertas?.nfseAguardando ?? 0) > 0 && <AlertaItem href={hrefMedicao(alertas?.nfseAguardandoMedicaoId)} icone={Hourglass} cor="text-atencao" label="NFS-e aguardando a prefeitura" valor={alertas?.nfseAguardando ?? 0} onClick={() => setSinoAberto(false)} />}
-                  {podeVer("financeiro", "fiscal") && (alertas?.nfseAutorizadas ?? 0) > 0 && <AlertaItem href={hrefMedicao(alertas?.nfseAutorizadaMedicaoId)} icone={FileCheck2} cor="text-ok" label="NFS-e autorizadas" valor={alertas?.nfseAutorizadas ?? 0} onClick={() => setSinoAberto(false)} />}
-                  {podeVer("financeiro", "medicoes") && (alertas?.faturamentoContratos ?? 0) > 0 && <AlertaItem href="/financeiro/faturamento-contratos?atencao=1" icone={CalendarX2} cor="text-atrasado" label="Faturamento de contrato parado" valor={alertas?.faturamentoContratos ?? 0} onClick={() => setSinoAberto(false)} />}
-                  {podeVer("contratos", "editar") && (alertas?.reajustesContrato ?? 0) > 0 && <AlertaItem href="/contratos/reajustes" icone={TrendingUp} cor="text-atencao" label="Reajustes a aplicar" valor={alertas?.reajustesContrato ?? 0} onClick={() => setSinoAberto(false)} />}
-                  {podeVer("pmoc") && (alertas?.pmocsExpirados ?? 0) > 0 && <AlertaItem href="/pmoc?status=EXPIRADO" icone={ShieldX} cor="text-atrasado" label="PMOC expirados" valor={alertas?.pmocsExpirados ?? 0} onClick={() => setSinoAberto(false)} />}
+                  {podeVer("financeiro", "fiscal") && (alertas?.nfseRejeitadas ?? 0) > 0 && <AlertaItem href={hrefMedicao(alertas?.nfseRejeitadaMedicaoId)} icone={FileX2} cor="text-atrasado" label="NFS-e não aceitas" valor={alertas?.nfseRejeitadas ?? 0} {...toque("nfseRejeitadas")} />}
+                  {podeVer("financeiro", "fiscal") && (alertas?.nfseAguardando ?? 0) > 0 && <AlertaItem href={hrefMedicao(alertas?.nfseAguardandoMedicaoId)} icone={Hourglass} cor="text-atencao" label="NFS-e aguardando a prefeitura" valor={alertas?.nfseAguardando ?? 0} {...toque("nfseAguardando")} />}
+                  {podeVer("financeiro", "fiscal") && (alertas?.nfseAutorizadas ?? 0) > 0 && <AlertaItem href={hrefMedicao(alertas?.nfseAutorizadaMedicaoId)} icone={FileCheck2} cor="text-ok" label="NFS-e autorizadas" valor={alertas?.nfseAutorizadas ?? 0} {...toque("nfseAutorizadas")} />}
+                  {podeVer("financeiro", "medicoes") && (alertas?.faturamentoContratos ?? 0) > 0 && <AlertaItem href="/financeiro/faturamento-contratos?atencao=1" icone={CalendarX2} cor="text-atrasado" label="Faturamento de contrato parado" valor={alertas?.faturamentoContratos ?? 0} {...toque("faturamentoContratos")} />}
+                  {podeVer("contratos", "editar") && (alertas?.reajustesContrato ?? 0) > 0 && <AlertaItem href="/contratos/reajustes" icone={TrendingUp} cor="text-atencao" label="Reajustes a aplicar" valor={alertas?.reajustesContrato ?? 0} {...toque("reajustesContrato")} />}
+                  {podeVer("pmoc") && (alertas?.pmocsExpirados ?? 0) > 0 && <AlertaItem href="/pmoc?status=EXPIRADO" icone={ShieldX} cor="text-atrasado" label="PMOC expirados" valor={alertas?.pmocsExpirados ?? 0} {...toque("pmocsExpirados")} />}
                   {doPainel("pmocsVencendo")}
-                  {podeVer("estoque", "separar") && (alertas?.separacoesPendentes ?? 0) > 0 && <AlertaItem href="/estoque/separacao" icone={PackageOpen} cor="text-acento" label="OS com material a separar" valor={alertas?.separacoesPendentes ?? 0} onClick={() => setSinoAberto(false)} />}
-                  {podeVer("estoque", "separar") && (alertas?.devolucoesPendentes ?? 0) > 0 && <AlertaItem href="/estoque/devolucao" icone={PackageMinus} cor="text-atencao" label="OS com material a devolver" valor={alertas?.devolucoesPendentes ?? 0} onClick={() => setSinoAberto(false)} />}
+                  {podeVer("estoque", "separar") && (alertas?.separacoesPendentes ?? 0) > 0 && <AlertaItem href="/estoque/separacao" icone={PackageOpen} cor="text-acento" label="OS com material a separar" valor={alertas?.separacoesPendentes ?? 0} {...toque("separacoesPendentes")} />}
+                  {podeVer("estoque", "separar") && (alertas?.devolucoesPendentes ?? 0) > 0 && <AlertaItem href="/estoque/devolucao" icone={PackageMinus} cor="text-atencao" label="OS com material a devolver" valor={alertas?.devolucoesPendentes ?? 0} {...toque("devolucoesPendentes")} />}
                   {doPainel("despesasCampo")}
                   {doPainel("comentariosCampo")}
                   {doPainel("atividadesEsquecidas")}
                   {doPainel("estoqueNegativoCampo")}
-                  {(alertas?.nfPedidos ?? 0) > 0 && <AlertaItem href={`/compras/pedidos/${alertas?.nfPedidoId ?? ""}`} icone={PackageCheck} cor="text-ok" label="NF chegou nos seus pedidos" valor={alertas?.nfPedidos ?? 0} onClick={() => setSinoAberto(false)} />}
-                  {podeVer("ordens") && <AlertaItem href="/ordens/etapas?status=ATRASADO" icone={AlertTriangle} cor="text-atrasado" label="Etapas com prazo vencidas" valor={alertas?.prazosVencidos ?? 0} onClick={() => setSinoAberto(false)} />}
-                  {podeVer("ordens") && <AlertaItem href="/ordens/etapas?status=ATIVO" icone={Clock} cor="text-atencao" label="Etapas vencendo hoje" valor={alertas?.etapasVencendoHoje ?? 0} onClick={() => setSinoAberto(false)} />}
-                  {podeVer("compras") && <AlertaItem href="/compras/pedidos" icone={ShoppingCart} cor="text-atencao" label="Compras pendentes" valor={alertas?.pedidosPendentes ?? 0} onClick={() => setSinoAberto(false)} />}
-                  {podeVer("ordens") && <AlertaItem href="/ordens?origem=PORTAL_CLIENTE" icone={Headset} cor="text-acento" label="Chamados do portal" valor={alertas?.chamadosPortal ?? 0} onClick={() => setSinoAberto(false)} />}
+                  {(alertas?.nfPedidos ?? 0) > 0 && <AlertaItem href={`/compras/pedidos/${alertas?.nfPedidoId ?? ""}`} icone={PackageCheck} cor="text-ok" label="NF chegou nos seus pedidos" valor={alertas?.nfPedidos ?? 0} {...toque("nfPedidos")} />}
+                  {podeVer("ordens") && <AlertaItem href="/ordens/etapas?status=ATRASADO" icone={AlertTriangle} cor="text-atrasado" label="Etapas com prazo vencidas" valor={alertas?.prazosVencidos ?? 0} {...toque("prazosVencidos")} />}
+                  {podeVer("ordens") && <AlertaItem href="/ordens/etapas?status=ATIVO" icone={Clock} cor="text-atencao" label="Etapas vencendo hoje" valor={alertas?.etapasVencendoHoje ?? 0} {...toque("etapasVencendoHoje")} />}
+                  {podeVer("compras") && <AlertaItem href="/compras/pedidos?abertos=1" icone={ShoppingCart} cor="text-atencao" label="Compras pendentes" valor={alertas?.pedidosPendentes ?? 0} {...toque("pedidosPendentes")} />}
+                  {podeVer("ordens") && <AlertaItem href={URL_SOLICITACOES} icone={Headset} cor="text-acento" label="Chamados do portal" valor={alertas?.chamadosPortal ?? 0} {...toque("chamadosPortal")} />}
                   {doPainel("osSemTecnico")}
                   {doPainel("osAtrasadas", true)}
                   {/* Prazo de ATENDIMENTO do contrato (comparecer / resolver) — não é o prazo de execução da OS. Só aparece quando há o que ver */}
-                  {podeVer("ordens") && (alertas?.atendimentoEstourado ?? 0) > 0 && <AlertaItem href="/ordens?atendimento=estourado" icone={Headset} cor="text-atrasado" label="Prazo de atendimento estourado" valor={alertas?.atendimentoEstourado ?? 0} onClick={() => setSinoAberto(false)} />}
-                  {podeVer("ordens") && (alertas?.atendimentoVencendo ?? 0) > 0 && <AlertaItem href="/ordens?atendimento=vencendo" icone={Headset} cor="text-atencao" label="Prazo de atendimento vencendo" valor={alertas?.atendimentoVencendo ?? 0} onClick={() => setSinoAberto(false)} />}
-                  {podeVer("veiculos") && <AlertaItem href="/veiculos/checklist" icone={ClipboardCheck} cor="text-acento" label="Checklists pendentes" valor={alertas?.checklistPendente ?? 0} onClick={() => setSinoAberto(false)} />}
-                  {podeVer("veiculos") && <AlertaItem href="/veiculos" icone={AlertTriangle} cor="text-atencao" label="Checklists com alertas" valor={alertas?.checklistsComAlertas ?? 0} onClick={() => setSinoAberto(false)} />}
-                  {podeVer("veiculos") && (alertas?.checklistNaoVaiUsar ?? 0) > 0 && <AlertaItem href="/veiculos/checklist?aba=diario" icone={ClipboardCheck} cor="text-atencao" label="Não vão usar o veículo hoje" valor={alertas?.checklistNaoVaiUsar ?? 0} onClick={() => setSinoAberto(false)} />}
-                  {podeVer("veiculos") && <AlertaItem href="/veiculos" icone={FileWarning} cor="text-atencao" label="Documentos de veículo vencendo" valor={alertas?.documentosVencendo ?? 0} onClick={() => setSinoAberto(false)} />}
-                  {podeVer("veiculos") && <AlertaItem href="/veiculos" icone={Wrench} cor="text-acento" label="Veículos em manutenção" valor={alertas?.veiculosManutencao ?? 0} onClick={() => setSinoAberto(false)} />}
-                  {podeVer("financeiro", "contasReceber") && <AlertaItem href="/financeiro/contas-receber?card=RECEBIDO&periodo=todos" icone={Barcode} cor="text-ok" label="Boletos pagos hoje" valor={alertas?.boletosPagos ?? 0} onClick={() => setSinoAberto(false)} />}
+                  {podeVer("ordens") && (alertas?.atendimentoEstourado ?? 0) > 0 && <AlertaItem href="/ordens?atendimento=estourado&periodo=todos" icone={Headset} cor="text-atrasado" label="Prazo de atendimento estourado" valor={alertas?.atendimentoEstourado ?? 0} {...toque("atendimentoEstourado")} />}
+                  {podeVer("ordens") && (alertas?.atendimentoVencendo ?? 0) > 0 && <AlertaItem href="/ordens?atendimento=vencendo&periodo=todos" icone={Headset} cor="text-atencao" label="Prazo de atendimento vencendo" valor={alertas?.atendimentoVencendo ?? 0} {...toque("atendimentoVencendo")} />}
+                  {podeVer("veiculos") && <AlertaItem href="/veiculos/checklist" icone={ClipboardCheck} cor="text-acento" label="Checklists pendentes" valor={alertas?.checklistPendente ?? 0} {...toque("checklistPendente")} />}
+                  {podeVer("veiculos") && <AlertaItem href="/veiculos" icone={AlertTriangle} cor="text-atencao" label="Checklists com alertas" valor={alertas?.checklistsComAlertas ?? 0} {...toque("checklistsComAlertas")} />}
+                  {podeVer("veiculos") && (alertas?.checklistNaoVaiUsar ?? 0) > 0 && <AlertaItem href="/veiculos/checklist?aba=diario" icone={ClipboardCheck} cor="text-atencao" label="Não vão usar o veículo hoje" valor={alertas?.checklistNaoVaiUsar ?? 0} {...toque("checklistNaoVaiUsar")} />}
+                  {podeVer("veiculos") && <AlertaItem href="/veiculos" icone={FileWarning} cor="text-atencao" label="Documentos de veículo vencendo" valor={alertas?.documentosVencendo ?? 0} {...toque("documentosVencendo")} />}
+                  {podeVer("veiculos") && <AlertaItem href="/veiculos?status=manutencao" icone={Wrench} cor="text-acento" label="Veículos em manutenção" valor={alertas?.veiculosManutencao ?? 0} {...toque("veiculosManutencao")} />}
+                  {podeVer("financeiro", "contasReceber") && <AlertaItem href="/financeiro/contas-receber?card=RECEBIDO&periodo=todos" icone={Barcode} cor="text-ok" label="Boletos pagos hoje" valor={alertas?.boletosPagos ?? 0} {...toque("boletosPagos")} />}
                 </div>
               )}
             </div>
@@ -350,8 +372,12 @@ const hrefMedicao = (id: string | null | undefined) => (id ? `/financeiro/medico
 /** A OS do aviso mais recente: abrir a OS é o que dá o aviso por visto */
 const hrefOs = (id: string | null | undefined) => (id ? `/ordens/${id}` : "/ordens");
 
+/** Um registro só e o id dele: abre o registro; senão, a lista (a mesma regra do painel de pendências) */
+const umOuLista = (valor: number | undefined, id: string | null | undefined, registro: (id: string) => string, lista: string) =>
+  valor === 1 && id ? registro(id) : lista;
+
 function AlertaItem({
-  href, icone: Icone, cor, label, valor, onClick,
+  href, icone: Icone, cor, label, valor, onClick, lido = false,
 }: {
   href: string;
   icone: React.ComponentType<{ className?: string }>;
@@ -359,14 +385,19 @@ function AlertaItem({
   label: string;
   valor: number;
   onClick: () => void;
+  /** Já tocado hoje: fica na lista, apagado, e fora do número do sino (lib/alertas/lidos) */
+  lido?: boolean;
 }) {
+  const forte = valor > 0 && !lido;
   return (
-    <Link href={href} onClick={onClick} className="flex items-center justify-between px-4 py-2.5 hover:bg-surface-alt transition-colors">
-      <span className="flex items-center gap-2.5 text-sm text-ink">
+    <Link href={href} onClick={onClick} data-sino-item={lido ? "lido" : forte ? "novo" : "zero"}
+      title={lido ? "Lido hoje. Volta a contar se chegar um novo ou no dia seguinte, se ainda estiver pendente." : undefined}
+      className={`flex items-center justify-between px-4 py-2.5 hover:bg-surface-alt transition-colors ${lido ? "opacity-60" : ""}`}>
+      <span className={`flex items-center gap-2.5 text-sm ${lido ? "text-ink-muted" : "text-ink"}`}>
         <Icone className={`w-4 h-4 ${cor}`} />
         {label}
       </span>
-      <span className={valor > 0 ? "text-sm font-bold text-ink" : "text-sm text-ink-subtle"}>{valor}</span>
+      <span className={forte ? "text-sm font-bold text-ink" : "text-sm text-ink-subtle"}>{valor}</span>
     </Link>
   );
 }

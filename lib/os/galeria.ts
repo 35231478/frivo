@@ -63,10 +63,25 @@ export function legendaExecucao(f: { momento: "ANTES" | "DEPOIS" | null; item: s
   return "Foto do atendimento";
 }
 
+/** Foto enviada à OS sem legenda (anexo antigo) */
+export const LEGENDA_ANEXO_SEM = "Foto enviada (sem legenda)";
+
 export const legendaAdicional = (descricao: string) => `Serviço adicional: ${descricao}`;
 
 /** A foto (imagem) ou documento? Pelo tipo conferido no upload. */
 export const ehImagem = (tipo: string) => tipo.startsWith("image/");
+
+/**
+ * QUEM EDITA A LEGENDA de uma foto da OS (aba Relatórios; no app, as fotos do serviço):
+ *  - o escritório, com "OS › Editar": sempre (também com a OS concluída: a legenda é o texto do relatório);
+ *  - o técnico (modo técnico, só as atividades dele): enquanto a OS não estiver concluída ou cancelada.
+ */
+export const MSG_LEGENDA_OS_ENCERRADA = "A OS já foi encerrada: a legenda agora só pode ser mudada pelo escritório.";
+export const MSG_LEGENDA_SEM_PERMISSAO = "Sem permissão para editar a OS.";
+export function motivoSemEditarLegenda(q: { restrito: boolean; podeEditarOs: boolean; osEncerrada: boolean }): string | null {
+  if (q.restrito) return q.osEncerrada ? MSG_LEGENDA_OS_ENCERRADA : null;
+  return q.podeEditarOs ? null : MSG_LEGENDA_SEM_PERMISSAO;
+}
 
 /** Legenda digitada: sem espaços sobrando; null se inválida. */
 export function limparLegenda(v: unknown): string | null {

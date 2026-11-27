@@ -2566,6 +2566,8 @@ model FotoAtendimento {
   url           String       @db.Text
   /// Antes / depois do serviço (fotos do equipamento); nulo = foto do item ou geral
   momento       MomentoFoto?
+  /// Legenda escrita por alguém (aba Relatórios da OS); nula = a do sistema (lib/os/galeria › legendaExecucao)
+  legenda       String?
   /// Id gerado no aparelho (app offline): reenviar a mesma foto não duplica
   clientId      String?      @unique @map("client_id")
   criadoPorId   String?      @map("criado_por_id")
@@ -2621,6 +2623,8 @@ model ServicoAdicionalFoto {
   servicoId   String   @map("servico_id")
   /// Imagem em data URL (base64), tipo conferido pelo conteúdo no upload
   url         String   @db.Text
+  /// Legenda escrita por alguém (aba Relatórios da OS); nula = a do sistema (lib/os/galeria › legendaAdicional)
+  legenda     String?
   clientId    String?  @unique @map("client_id")
   criadoPorId String?  @map("criado_por_id")
   criadoEm    DateTime @default(now()) @map("criado_em")

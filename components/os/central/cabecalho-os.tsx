@@ -52,7 +52,13 @@ export function CabecalhoOs({ os, central, acoes, onAba, onAtualizado }: {
   const local = os.unidade ? [os.unidade.nome, os.unidade.cidade && `${os.unidade.cidade}/${os.unidade.estado}`].filter(Boolean).join(" — ") : null;
 
   return (
-    <header data-cabecalho-os className="md:sticky md:top-0 z-20 -mx-4 sm:-mx-6 -mt-4 sm:-mt-6 px-4 sm:px-6 pt-5 pb-4 bg-surface-page/95 backdrop-blur border-b border-surface-border space-y-4">
+    <>
+    {/* A LINHA DA OS (número, situação, cliente, prazo e ações) fica presa no topo ao rolar, no desktop: fundo
+        sólido e encostada na borda da área que rola (o topo negativo desconta o respiro da página), então nada
+        aparece por cima nem por trás dela. A barra de andamento e os números-chave rolam com o conteúdo (antes
+        o bloco inteiro ficava preso: alto demais, translúcido e com uma fresta acima). No celular não prende:
+        a tela é curta e o rodapé de navegação já ocupa a base. */}
+    <header data-cabecalho-os className="md:sticky md:-top-6 z-20 -mx-4 sm:-mx-6 -mt-4 sm:-mt-6 px-4 sm:px-6 pt-5 pb-4 bg-surface-page border-b border-surface-border">
       {/* Linha 1: número, status, prioridade, ações */}
       <div className="flex items-start justify-between gap-3 flex-wrap">
         <div className="flex items-start gap-2 min-w-0">
@@ -133,6 +139,9 @@ export function CabecalhoOs({ os, central, acoes, onAba, onAtualizado }: {
         </div>
       </div>
 
+    </header>
+
+    <div data-cabecalho-os-andamento className="space-y-4">
       <EditarOs os={os} aberto={editando} onFechar={() => setEditando(false)} onAtualizado={onAtualizado} />
 
       {/* Linha 2: barra de progresso (ou faixa de cancelada) */}
@@ -170,7 +179,8 @@ export function CabecalhoOs({ os, central, acoes, onAba, onAtualizado }: {
       {podeEditar && os.status !== "CANCELADA" && (
         <AjusteStatus os={os} manual={status.manual} automatico={status.automatico} onAtualizado={onAtualizado} />
       )}
-    </header>
+    </div>
+    </>
   );
 }
 
