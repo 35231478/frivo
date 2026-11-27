@@ -6,7 +6,7 @@
  "rolagens": 4,
  "fotos": 12,
  "assinaturas": 0,
- "esperaApp": 1.1,
+ "esperaApp": 1.2,
  "passos": [
   "(rolou 1)",
   "Cheguei",
@@ -54,7 +54,7 @@
   "Concluir equipamento",
   "Confirmar conclusão"
  ],
- "fimExecucao": 19.671,
+ "fimExecucao": 19.612,
  "tempoPadrao": 101.3,
- "tempoTotal": 102.4
+ "tempoTotal": 102.5
 }
