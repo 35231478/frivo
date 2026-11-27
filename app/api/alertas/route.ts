@@ -17,6 +17,8 @@ import { contarAdmissoesAssinadas } from "@/lib/admissao/admissao-server";
 import { escopoDaSessao, filtroEscopo } from "@/lib/tecnico/escopo";
 import { empresaTemModulo } from "@/lib/modulos/catalogo";
 import { modulosDesligados } from "@/lib/modulos/servidor";
+import { conferirEsquecidasPeloSino } from "@/lib/push/eventos";
+import { pushLigado } from "@/lib/push/config";
 
 export async function GET() {
   const session = await auth();
@@ -47,6 +49,10 @@ export async function GET() {
   // PMOC: o aviso de vencimento é calculado pela data; aqui ele é REGISTRADO no histórico do plano,
   // uma vez por plano e data de expiração (idempotente), depois de responder
   if (verPmoc) after(() => registrarAvisosPmoc(empresaId).catch((e) => console.error("[pmoc] avisos", (e as Error)?.name)));
+
+  // PUSH: atividade esquecida em andamento com o app fechado — o sino (2 em 2 min) puxa a conferência da
+  // empresa, no máximo 1 a cada 5 min e só com o push ligado; push_envios não deixa repetir o aviso
+  if (pushLigado()) conferirEsquecidasPeloSino(empresaId);
 
   const inicioHoje = hojeDiaCivil(); // recebimento é dia civil: hoje em Brasília
 

@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { agendarPush, notificarSolicitacaoPortal } from "@/lib/push/eventos";
 import { prisma } from "@/lib/prisma";
 import { proximoNumeroOs } from "@/lib/os-server";
 import { getPortalSession } from "@/lib/auth-portal";
@@ -102,6 +103,8 @@ export async function POST(req: NextRequest) {
   });
   });
 
+  // O escritório recebe o push "Chamado novo do portal" (depois da resposta)
+  agendarPush(() => notificarSolicitacaoPortal(empresaId, os.id));
   await prisma.osHistorico.create({
     data: { ordemServicoId: os.id, usuarioId: gestor.id, acao: "Chamado aberto pelo portal", detalhes: `${os.chamadoNumero} — ${sessao.user.name ?? "cliente"}` },
   });

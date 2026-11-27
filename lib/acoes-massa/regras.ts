@@ -1,6 +1,7 @@
 import type { StatusContrato } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { contratoGeraFinanceiro, encerrarFinanceiroDoContrato, gerarPrevisaoContratoContasReceber } from "@/lib/financeiro-server";
+import { agendarPush, notificarOsCancelada } from "@/lib/push/eventos";
 import { motivoBloqueioInativacao } from "@/lib/os-server";
 import { anotarInativacao, cancelarPrevistasDoOrcamento, impactoColaborador, impactoEquipe, impactoOrcamento, impactoVeiculo } from "@/lib/inativacao-server";
 import { gerarQrCodeEquipamento } from "@/lib/qrcode-server";
@@ -59,6 +60,8 @@ export async function cancelarOs(id: string, ctx: ContextoItem, opts: { recusa?:
   const bloqueio = await motivoBloqueioInativacao(id);
   if (bloqueio) return falha("bloqueado", bloqueio);
   await prisma.ordemServico.update({ where: { id }, data: { status: "CANCELADA" } });
+  // Os técnicos das atividades em aberto recebem o push "OS cancelada" (depois da resposta)
+  agendarPush(() => notificarOsCancelada(ctx.empresaId, id, ctx.motivo));
   await prisma.osHistorico.create({
     data: {
       ordemServicoId: id, usuarioId: ctx.usuarioId,

@@ -517,6 +517,7 @@ model Empresa {
   movimentacoesEstoque   MovimentacaoEstoque[]
   notasCompra            NotaCompra[]
   notasCompraDescartes   NotaCompraDescarte[]
+  pushEnvios             PushEnvio[]
   deParasProduto         DeParaProdutoFornecedor[]
   orcamentos             Orcamento[]
   orcamentoAnexos        OrcamentoAnexo[]
@@ -926,6 +927,7 @@ model Usuario {
   osMateriaisDevolvidos  OsMaterial[]              @relation("OsMaterialDevolvidoPor")
   notasCompra            NotaCompra[]
   notasCompraDescartadas NotaCompraDescarte[]
+  pushEnvios             PushEnvio[]
   modulosAlterados       EmpresaModulo[]           @relation("ModuloAlteradoPor")
   checklistRespostas     ChecklistResposta[]
   fotosAtendimento       FotoAtendimento[]
@@ -988,18 +990,48 @@ model PreferenciaUsuario {
   @@map("preferencias_usuario")
 }
 
+/// Inscrição de push de UM aparelho (navegador) de um usuário. Revogar = apagar a linha; o navegador que
+/// recusa de vez (404/410) também é apagado no envio (lib/push/servidor).
 model PushSubscription {
-  id        String   @id @default(cuid())
-  userId    String   @map("user_id")
-  endpoint  String   @unique
-  p256dh    String
-  auth      String
-  userAgent String?  @map("user_agent")
-  criadoEm  DateTime @default(now()) @map("criado_em")
+  id            String    @id @default(cuid())
+  userId        String    @map("user_id")
+  /// A empresa do usuário no momento da inscrição (as consultas de envio são por empresa)
+  empresaId     String?   @map("empresa_id")
+  endpoint      String    @unique
+  p256dh        String
+  auth          String
+  userAgent     String?   @map("user_agent")
+  criadoEm      DateTime  @default(now()) @map("criado_em")
+  ultimoEnvioEm DateTime? @map("ultimo_envio_em")
+  /// Falhas seguidas que não são definitivas (rede, 5xx); volta a 0 no próximo envio que der certo
+  falhas        Int       @default(0)
 
   usuario Usuario @relation(fields: [userId], references: [id], onDelete: Cascade)
 
+  @@index([userId])
   @@map("push_subscriptions")
+}
+
+/// Registro das notificações push mandadas (uma linha por pessoa e evento): evita repetir o mesmo aviso
+/// (`chave` única por usuário — ex.: "esquecida:<atividade>:<início>") e deixa o rastro do que foi enviado.
+model PushEnvio {
+  id        String   @id @default(cuid())
+  empresaId String   @map("empresa_id")
+  usuarioId String   @map("usuario_id")
+  tipo      String
+  chave     String
+  titulo    String
+  url       String?
+  /// Quantos aparelhos aceitaram (0 = a pessoa não tem aparelho inscrito ou todos recusaram)
+  aparelhos Int      @default(0)
+  criadoEm  DateTime @default(now()) @map("criado_em")
+
+  empresa Empresa @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  usuario Usuario @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+
+  @@unique([usuarioId, chave])
+  @@index([empresaId, criadoEm])
+  @@map("push_envios")
 }
 
 // ─────────────────────────────────────────────
