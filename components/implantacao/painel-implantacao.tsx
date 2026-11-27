@@ -110,9 +110,9 @@ export function PainelImplantacao({ etapas, progresso }: { etapas: Etapa[]; prog
                 })}
               </ul>
 
-              {(botoes.length > 0 || modelos.length > 0 || e.href || e.semPlanilha) && (
+              {(botoes.length > 0 || modelos.length > 0 || e.href || e.nota) && (
                 <div className="pl-10 space-y-2">
-                  {e.semPlanilha && <p className="text-xs text-ink-muted">{e.semPlanilha}</p>}
+                  {e.nota && <p className="text-xs text-ink-muted" data-etapa-nota>{e.nota}</p>}
                   <div className="flex flex-wrap items-center gap-2">
                     {botoes.map((x) => (
                       <ImportarPlanilha key={x} entidade={x} rotulo={botoes.length > 1 || principais.length > 1 ? `Importar ${IMPORTACOES[x].plural}` : "Importar planilha"} />
