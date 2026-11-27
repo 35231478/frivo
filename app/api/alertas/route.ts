@@ -3,6 +3,7 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { DIAS_USO_CAMPO_SINO, escopoDoSino } from "@/lib/alertas/sino";
 import { contarAtividadesEsquecidas } from "@/lib/execucao/andamento-server";
+import { contarComentariosNovos } from "@/lib/execucao/comentarios";
 import { contarAlertasPrazos } from "@/lib/prazo-server";
 import { contarAlertasVeiculos } from "@/lib/veiculo-server";
 import { hojeDiaCivil } from "@/lib/fuso";
@@ -59,7 +60,7 @@ export async function GET() {
   const zeroVeiculos = { checklistPendente: 0, checklistsComAlertas: 0, checklistNaoVaiUsar: 0, documentosVencendo: 0, veiculosManutencao: 0, revisaoChegando: 0 };
   const zeroNfse = { nfseAutorizadas: 0, nfseAutorizadaMedicaoId: null, nfseRejeitadas: 0, nfseRejeitadaMedicaoId: null, nfseAguardando: 0, nfseAguardandoMedicaoId: null };
   const desde24h = new Date(Date.now() - 24 * 60 * 60 * 1000);
-  const [prazosBrutos, veiculosBrutos, boletosPagos, orcamentosRespondidos, leadsSite, nfsDoPedido, nfse, faturamentoContratos, reajustesContrato, separacoesPendentes, devolucoesPendentes, pmoc, aceites, admissoes, estoqueNegativoCampo, esquecidas] = await Promise.all([
+  const [prazosBrutos, veiculosBrutos, boletosPagos, orcamentosRespondidos, leadsSite, nfsDoPedido, nfse, faturamentoContratos, reajustesContrato, separacoesPendentes, devolucoesPendentes, pmoc, aceites, admissoes, estoqueNegativoCampo, esquecidas, comentarios] = await Promise.all([
     verOrdens || verCompras ? contarAlertasPrazos(empresaId) : Promise.resolve(null),
     verVeiculos && temFrota ? contarAlertasVeiculos(empresaId) : Promise.resolve(null),
     verBoletos
@@ -104,6 +105,8 @@ export async function GET() {
       : Promise.resolve(0),
     // App do técnico: atividade esquecida em andamento (passou do limite da empresa ou começou em outro dia)
     e.atividadesEsquecidas ? contarAtividadesEsquecidas(empresaId) : Promise.resolve({ atividadesEsquecidas: 0, atividadeEsquecidaOsId: null }),
+    // App do técnico: comentário novo do campo numa OS que esta pessoa ainda não leu
+    e.comentariosCampo ? contarComentariosNovos(empresaId, session.user!.id) : Promise.resolve({ comentariosCampo: 0, comentarioCampoOsId: null }),
   ]);
 
   const prazos = {
@@ -139,6 +142,7 @@ export async function GET() {
     ...admissoes,
     estoqueNegativoCampo,
     ...esquecidas,
-    total: totalPrazos + totalVeiculos + boletosPagos + orcamentosRespondidos + leadsSite + nfsDoPedido.length + nfse.nfseAutorizadas + nfse.nfseRejeitadas + nfse.nfseAguardando + faturamentoContratos + reajustesContrato + separacoesPendentes + devolucoesPendentes + pmoc.pmocsVencendo + pmoc.pmocsExpirados + aceites.aceitesRessalva + aceites.aceitesConfirmados + aceites.avaliacoesBaixas + admissoes.admissoesAssinadas + estoqueNegativoCampo + esquecidas.atividadesEsquecidas,
+    ...comentarios,
+    total: totalPrazos + totalVeiculos + boletosPagos + orcamentosRespondidos + leadsSite + nfsDoPedido.length + nfse.nfseAutorizadas + nfse.nfseRejeitadas + nfse.nfseAguardando + faturamentoContratos + reajustesContrato + separacoesPendentes + devolucoesPendentes + pmoc.pmocsVencendo + pmoc.pmocsExpirados + aceites.aceitesRessalva + aceites.aceitesConfirmados + aceites.avaliacoesBaixas + admissoes.admissoesAssinadas + estoqueNegativoCampo + esquecidas.atividadesEsquecidas + comentarios.comentariosCampo,
   });
 }

@@ -10,6 +10,7 @@ import { temModulo } from "@/lib/modulos/servidor";
 import { cadastroParaRetrato } from "@/lib/execucao/cadastro-campo";
 import { avisoParaRetrato, avisosDeHoje, whatsappDoCliente } from "@/lib/execucao/aviso-cliente";
 import { andamentoParaRetrato } from "@/lib/execucao/andamento-server";
+import { comentariosDaOs } from "@/lib/execucao/comentarios";
 import { aceiteParaRetrato } from "@/lib/os/aceite-server";
 import { pode, type Permissoes } from "@/lib/permissoes";
 import { comMateriaisPrevistos } from "@/lib/tecnico/o-que-levar-server";
@@ -70,8 +71,10 @@ export async function GET(_: NextRequest, { params }: Params) {
   const [comMateriais] = await comMateriaisPrevistos(empresaId, [cartao], config.oQueLevar);
   // Materiais usados em campo nesta atividade (sem valores; "meu" = lançado por quem está com o aparelho)
   // Atividade esquecida em andamento (limite, jornada, última gravação) e o WhatsApp do topo da OS (1 toque)
-  const [materiais, andamento, whatsapp] = await Promise.all([
+  const [materiais, andamento, whatsapp, comentarios] = await Promise.all([
     materiaisDaAtividade(empresaId, atividadeId, guard.session.user.id), andamentoParaRetrato(empresaId, atividadeId), whatsappDoCliente(empresaId, config, cartao.osId),
+    // Comentários da OS (conversa interna com o escritório; o cliente nunca vê)
+    comentariosDaOs(empresaId, cartao.osId, guard.session.user.id),
   ]);
   return NextResponse.json({
     cartao: aplicarPrivacidade(comMateriais, config),
@@ -83,6 +86,7 @@ export async function GET(_: NextRequest, { params }: Params) {
       adicionais: execucao.adicionais.map(({ statusCobranca, ...a }) => ({ ...a, cobrancaDecidida: statusCobranca !== "A_AVALIAR" })),
       avisos,
       materiais,
+      comentarios,
     },
     equipamentosUnidade: daUnidade.map(({ qrcode, ...e }) => ({ ...semUnidade(apresentarEquipamento(e)), tipoEquipamentoId: e.tipoEquipamentoId, qr: qrcode })),
     checklistsPorTipo,

@@ -48,6 +48,7 @@ export async function POST(req: NextRequest, ctx: Ctx) {
   if (analise.resumo.criar + analise.resumo.atualizar === 0)
     return NextResponse.json({ erro: "Nenhuma linha válida para gravar: corrija a planilha e envie de novo." }, { status: 400 });
 
-  const r = await gravarImportacao(g.entidade, analise, g.empresaId, { usuarioId: g.usuarioId });
-  return NextResponse.json({ ok: true, criados: r.criados, atualizados: r.atualizados, comErro: r.erros.length, erros: r.erros, observacoes: r.observacoes, avisos: r.avisos });
+  // Toda importação confirmada vira um lote (Implantação › Importações), com o nome do arquivo
+  const r = await gravarImportacao(g.entidade, analise, g.empresaId, { usuarioId: g.usuarioId, arquivo: (arquivo as File).name ?? "planilha" });
+  return NextResponse.json({ ok: true, criados: r.criados, atualizados: r.atualizados, comErro: r.erros.length, erros: r.erros, observacoes: r.observacoes, avisos: r.avisos, loteId: r.loteId });
 }
