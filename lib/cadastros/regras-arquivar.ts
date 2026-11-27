@@ -91,16 +91,16 @@ export interface TextoInativar {
 
 /**
  * O mesmo texto em todo lugar que inativa: título "Inativar {entidade} {nome}?" e "Tem certeza? O
- * {entidade} sai das listas e seletores; nada é apagado…". Onde não há reativação (endereço, contato),
- * a frase não promete o "pode ser reativado depois".
+ * {entidade} sai das listas e seletores; nada é apagado e pode ser reativado depois." (desde a leva 5,
+ * endereço e contato também reativam pela tela: a promessa vale para todos).
  */
-export function textoInativar(entidade: string, nome: string | null | undefined, genero: Genero = "m", reativavel = true): TextoInativar {
+export function textoInativar(entidade: string, nome: string | null | undefined, genero: Genero = "m"): TextoInativar {
   const art = genero === "f" ? "A" : "O";
   const fim = genero === "f" ? "a" : "o";
   const n = (nome ?? "").trim();
   return {
     titulo: `Inativar ${entidade}${n ? ` ${n}` : ""}?`,
-    mensagem: `Tem certeza? ${art} ${entidade} sai das listas e seletores; nada é apagado${reativavel ? ` e pode ser reativad${fim} depois` : ""}.`,
+    mensagem: `Tem certeza? ${art} ${entidade} sai das listas e seletores; nada é apagado e pode ser reativad${fim} depois.`,
     confirmar: "Sim, inativar",
   };
 }

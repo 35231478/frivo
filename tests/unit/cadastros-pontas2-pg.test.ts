@@ -55,6 +55,7 @@ describe.skipIf(!URL_PG)("pontas soltas de cadastro, leva 5 (PostgreSQL real)", 
     ] });
     await prisma.cliente.createMany({ data: [
       { id: "c1", empresaId: "e1", nome: "Comercial de Alimentos Silva Ltda", nomeFantasia: "Mercado do Zé", cpfCnpj: "44.555.666/0001-77" },
+      { id: "c2", empresaId: "e1", nome: "Hotel Mirante", cpfCnpj: "22.333.444/0001-55" },
       { id: "cE2", empresaId: "e2", nome: "Silva & Filhos", cpfCnpj: "33.444.555/0001-66" },
     ] });
     await prisma.unidade.createMany({ data: [
@@ -78,6 +79,8 @@ describe.skipIf(!URL_PG)("pontas soltas de cadastro, leva 5 (PostgreSQL real)", 
     await prisma.contatoCliente.createMany({ data: [
       { id: "ctoPortal", empresaId: "e1", clienteId: "c1", nome: "Marina", principal: true, senha: "hash" },
       { id: "ctoInativo", empresaId: "e1", clienteId: "c1", nome: "Paulo", ativo: false },
+      // outro cliente da MESMA empresa, com acesso ao portal: pela URL de c1 não pode aparecer
+      { id: "ctoHotel", empresaId: "e1", clienteId: "c2", nome: "Recepção do hotel", principal: true, senha: "hash" },
       { id: "ctoE2", empresaId: "e2", clienteId: "cE2", nome: "Da outra" },
     ] });
   }, 120_000);
@@ -135,6 +138,9 @@ describe.skipIf(!URL_PG)("pontas soltas de cadastro, leva 5 (PostgreSQL real)", 
     expect((await rota("api/clientes/[id]/contatos/[contatoId]/impacto", "GET", undefined, { id: "cE2", contatoId: "ctoE2" })).status).toBe(404);
     // o contato de outro cliente pela URL de c1 também não aparece
     expect((await rota("api/clientes/[id]/contatos/[contatoId]/impacto", "GET", undefined, { id: "c1", contatoId: "ctoE2" })).status).toBe(404);
+    // nem o de outro cliente da mesma empresa (a empresa sozinha não basta: o contato é do cliente da URL)
+    expect((await rota("api/clientes/[id]/contatos/[contatoId]/impacto", "GET", undefined, { id: "c1", contatoId: "ctoHotel" })).status).toBe(404);
+    expect((await rota("api/clientes/[id]/contatos/[contatoId]/impacto", "GET", undefined, { id: "c2", contatoId: "ctoHotel" })).json.avisos).toHaveLength(2);
 
     const re = await rota("api/clientes/[id]/contatos/[contatoId]", "PATCH", { ativo: true }, { id: "c1", contatoId: "ctoInativo" });
     expect([re.status, re.json.ativo, re.json.nome, "senha" in re.json]).toEqual([200, true, "Paulo", false]);

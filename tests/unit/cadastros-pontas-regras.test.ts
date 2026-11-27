@@ -80,10 +80,10 @@ describe("o texto da confirmação: um jeito só", () => {
     });
     expect(textoInativar("equipe", "Norte", "f").mensagem).toBe("Tem certeza? A equipe sai das listas e seletores; nada é apagado e pode ser reativada depois.");
   });
-  it("sem reativação pela tela (endereço, contato): não promete o \"reativado depois\"", () => {
-    expect(textoInativar("endereço", "Depósito", "m", false)).toEqual({
+  it("endereço e contato (leva 5: reativam pela tela): a mesma promessa de todos", () => {
+    expect(textoInativar("endereço", "Depósito", "m")).toEqual({
       titulo: "Inativar endereço Depósito?",
-      mensagem: "Tem certeza? O endereço sai das listas e seletores; nada é apagado.",
+      mensagem: "Tem certeza? O endereço sai das listas e seletores; nada é apagado e pode ser reativado depois.",
       confirmar: "Sim, inativar",
     });
   });

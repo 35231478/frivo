@@ -28,7 +28,7 @@ export function InativarRegistro({
   url, modulo, acaoInativar = "excluir", acaoReativar, ativo, nome, entidade, variante = "icone",
   rotuloInativar = "Inativar", rotuloReativar = "Reativar", comMotivo = true,
   textoInativar, textoReativar, aoConcluir, feminino = false,
-  abrirAoMontar = false, onFechar, corpoInativar, comImpacto = true, titulo, avisoConcluido, placeholderMotivo, className,
+  abrirAoMontar = false, onFechar, corpoInativar, titulo, avisoConcluido, placeholderMotivo, className,
   reativarCom = { metodo: "PATCH", corpo: { ativo: true } }, permitido: permitidoExterno, atributos,
 }: {
   url: string;
@@ -56,8 +56,6 @@ export function InativarRegistro({
   onFechar?: () => void;
   /** Campos a mais no corpo do DELETE (ex.: `{ recusa: true }` da OS). */
   corpoInativar?: Record<string, unknown>;
-  /** false: o cadastro não tem `${url}/impacto` (nada a verificar antes). */
-  comImpacto?: boolean;
   /** Título próprio do modal (padrão: "Inativar {entidade} {nome}?"). */
   titulo?: string;
   /** Aviso ao concluir (padrão: "{Entidade} inativado." / "reativado."). */
@@ -96,7 +94,7 @@ export function InativarRegistro({
   async function abrir(e?: React.MouseEvent) {
     e?.preventDefault(); e?.stopPropagation();
     setAberto(true); setErro(""); setMotivo(""); setImpacto(null); setInativarUsuario(false);
-    if (!ativo || !comImpacto) return;
+    if (!ativo) return;
     setChecando(true);
     try {
       const res = await fetch(`${url}/impacto`, { cache: "no-store" });
