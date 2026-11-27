@@ -70,7 +70,17 @@ A escolha "Tabela / Cards" saiu de `/ordens`:
 - **O sino.** O prazo do orçamento vencendo entrou no lote paralelo.
 - **Os links das linhas da lista.** Não pré-carregam a OS (`prefetch={false}`).
 
-**Antes e depois.** Os números em ms estão na tabela do PR.
+**Antes e depois.** Banco a 20 ms de ida e volta, 17 OS, mediana de 10 medidas. O instante em que a lista aparece foi anotado por um observador do DOM dentro da página:
+
+| O quê | ANTES | DEPOIS |
+|---|---|---|
+| Lista na tela, abrindo `/ordens` direto (mês atual) | 470 ms | 277 ms |
+| Lista na tela, abrindo `/ordens` direto (todo o período) | 321 ms | 261 ms |
+| Lista na tela, pelo menu | 341 ms | 326 ms |
+| Idas ao banco em fila ao montar `/ordens` | 12 ondas | 5 ondas |
+| Sino | 323 ms | ~275 ms |
+
+Não era N+1 nem falta de índice: cada consulta leva menos de 1 ms no banco. O tempo era a fila de idas pela rede.
 
 ## 5. Sino: tocar marca como lido e leva ao item certo
 
