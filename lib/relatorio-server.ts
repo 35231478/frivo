@@ -184,10 +184,25 @@ export async function carregarAtividade(atividadeId: string, token: unknown) {
   const { blocos: equipamentos, fotosServico } = blocosAtendidos([atividade], os.unidade?.nome ?? null);
   const adicionais = adicionaisDe([atividade]);
 
-  const rel = await prisma.relatorioOs.findFirst({
-    where: { atividadeId, escopo: "ATIVIDADE" },
-    select: { numero: true },
-  });
+  const [rel, materiais, aceite] = await Promise.all([
+    prisma.relatorioOs.findFirst({ where: { atividadeId, escopo: "ATIVIDADE" }, select: { numero: true } }),
+    // Materiais usados em campo nesta atividade (sem valores: o relatório vai para o cliente)
+    prisma.atividadeMaterial.findMany({
+      where: { atividadeId, removidoEm: null }, orderBy: { criadoEm: "asc" },
+      select: { id: true, descricao: true, quantidade: true, unidade: true, equipamento: { select: { nome: true, modelo: true } } },
+    }),
+    // O aceite do cliente (é da OS): quem, quando e a assinatura, quando já confirmou
+    prisma.osAceite.findFirst({
+      where: { ordemServicoId: os.id, situacao: "CONFIRMADO" },
+      select: { nome: true, assinatura: true, confirmadoEm: true, metodo: true },
+    }),
+  ]);
 
-  return { empresa: os.empresa, os, atividade, equipamentos, adicionais, fotosServico, numero: rel?.numero ?? "RELATÓRIO" };
+  return {
+    empresa: os.empresa, os, atividade, equipamentos, adicionais, fotosServico, numero: rel?.numero ?? "RELATÓRIO",
+    materiais: materiais.map((m) => ({
+      id: m.id, descricao: m.descricao, quantidade: m.quantidade.toNumber(), unidade: m.unidade, equipamento: m.equipamento ? m.equipamento.nome || m.equipamento.modelo : null,
+    })),
+    aceite: aceite ? { nome: aceite.nome, assinatura: aceite.assinatura, confirmadoEm: aceite.confirmadoEm, noLocal: aceite.metodo === "LOCAL" } : null,
+  };
 }
