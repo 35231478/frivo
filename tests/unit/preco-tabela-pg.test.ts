@@ -164,12 +164,29 @@ describe.skipIf(!URL_PG)("Preço de tabela travado (PostgreSQL real)", () => {
     });
   });
 
+  describe("Meu perfil", () => {
+    it("o telefone grava (e vazio apaga), sem pedir senha", async () => {
+      logar("operador");
+      const r = await chamar("perfil", "PATCH", { telefone: "(11) 90000-0000" });
+      expect(r.status).toBe(200);
+      expect(r.json.telefone).toBe("(11) 90000-0000");
+      expect((await prisma.usuario.findUnique({ where: { id: "uOp" }, select: { telefone: true } })).telefone).toBe("(11) 90000-0000");
+      expect((await chamar("perfil", "PATCH", { telefone: "" })).status).toBe(200);
+      expect((await prisma.usuario.findUnique({ where: { id: "uOp" }, select: { telefone: true } })).telefone).toBeNull();
+    });
+  });
+
   describe("OS", () => {
     it("incluir: o catálogo diz que o preço é da tabela (serviço e produto); fora dela sem a permissão = 403", async () => {
       const os = await novaOs();
       logar("operador");
-      const cat = await chamar("ordens/[id]/orcamento/catalogo", "GET", undefined, { id: os.id }).catch(() => null);
-      void cat; // a rota de catálogo lê a query; o teste do preço fica nas gravações abaixo
+      // O catálogo da OS (o que a tela usa para travar o campo): o que está na tabela do cliente vem como "contrato"
+      const { catalogoParaItemOs } = await import("@/lib/os/materiais-server");
+      const serv = await catalogoParaItemOs("e1", "c1", { servicoId: "sLimp" });
+      const prod = await catalogoParaItemOs("e1", "c1", { produtoId: "pFiltro" });
+      expect([serv?.origemPreco, serv?.valorUnitario, prod?.origemPreco, prod?.valorUnitario]).toEqual(["contrato", 150, "contrato", 80]);
+      expect((await catalogoParaItemOs("e1", "c1", { servicoId: "sVisita" }))?.origemPreco).toBe("padrao");
+      expect((await catalogoParaItemOs("e1", "c2", { produtoId: "pFiltro" }))?.origemPreco).toBe("padrao");
       expect((await chamar("ordens/[id]/orcamento", "POST", { tipo: "SERVICO", servicoId: "sLimp", descricao: "Limpeza", quantidade: 1, valorUnitario: 150 }, { id: os.id })).status).toBe(201);
       expect((await chamar("ordens/[id]/orcamento", "POST", { tipo: "PRODUTO", produtoId: "pFiltro", descricao: "Filtro", quantidade: 1, valorUnitario: 60 }, { id: os.id })).status).toBe(403);
       expect(await historico(os.id)).toHaveLength(0);
@@ -202,6 +219,8 @@ describe.skipIf(!URL_PG)("Preço de tabela travado (PostgreSQL real)", () => {
       // Agora 130 é o gravado: salvar de novo com 130 não pede
       logar("operador");
       expect((await chamar("ordens/[id]/orcamento/[itemId]", "PATCH", { quantidade: 3, valorUnitario: 130 }, { id: os.id, itemId: item.id })).status).toBe(200);
+      expect((await chamar("ordens/[id]/orcamento/[itemId]", "PUT", { quantidade: 4, valorUnitario: 130 }, { id: os.id, itemId: item.id })).status).toBe(200);
+      expect(await historico(os.id)).toHaveLength(1);
     });
 
     it("cliente sem tabela: a OS é livre", async () => {
