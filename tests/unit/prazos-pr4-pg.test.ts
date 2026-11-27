@@ -480,9 +480,10 @@ describe.skipIf(!URL_PG)("Prazos da OS — PR 4: prazo de atendimento do contrat
       const [chegou] = await sync([toque("CHEGOU", os.a)]);
       expect(chegou.ok, JSON.stringify(chegou)).toBe(true);
       expect(await comparecido(os.id)).toBe(iso(br("2026-11-18", "13:42")));
-      // os limites prometidos não mudam com a chegada; e o atendimento não começa por causa dela
+      // os limites prometidos não mudam com a chegada. Desde "Pronto pra janeiro 2" (G), chegar é começar:
+      // a atividade passa a Em andamento no "Cheguei" (antes ficava Agendada até o técnico iniciar)
       expect(await limites(os.id)).toEqual([iso(br("2026-11-18", "14:00")), iso(br("2026-11-19", "10:00"))]);
-      expect((await prisma.atividadeOs.findUnique({ where: { id: os.a } })).status).toBe("AGENDADA");
+      expect((await prisma.atividadeOs.findUnique({ where: { id: os.a } })).status).toBe("EM_ANDAMENTO");
       // a partir daqui a OS não alerta mais pelo comparecimento, mesmo depois das 14h
       expect(alertaDoAtendimento(await lerOs(os.id), br("2026-11-18", "14:30"))).toBeNull();
     });

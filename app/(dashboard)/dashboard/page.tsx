@@ -6,6 +6,7 @@ import { aplicarPreferencia, blocosPermitidos, COOKIE_DASHBOARD, lerPreferencia,
 import { carregarBlocos, type DadosBloco } from "@/lib/dashboard/dados";
 import { empresaTemModulo } from "@/lib/modulos/catalogo";
 import { modulosDesligados } from "@/lib/modulos/servidor";
+import { nomeDaEmpresa } from "@/lib/empresa/nome";
 import { partesBR } from "@/lib/fuso";
 import { cn } from "@/lib/utils";
 import { PersonalizarDashboard } from "@/components/dashboard/personalizar-dashboard";
@@ -57,7 +58,7 @@ export default async function DashboardPage() {
   // Blocos que o perfil pode ver, na ordem/visibilidade escolhidas pelo usuário (cookie deste navegador)
   const pref = lerPreferencia((await cookies()).get(COOKIE_DASHBOARD)?.value);
   // Os módulos que a empresa desligou somem do dashboard (que é núcleo) junto com o menu
-  const desligados = await modulosDesligados(user.empresaId);
+  const [desligados, empresaNome] = await Promise.all([modulosDesligados(user.empresaId), nomeDaEmpresa(user.empresaId)]);
   const { todos, visiveis } = aplicarPreferencia(blocosPermitidos(permissoes, user.role, desligados), pref);
   const temQr = empresaTemModulo(desligados, "qrcodes");
 
@@ -80,7 +81,7 @@ export default async function DashboardPage() {
           <h1 className="page-title">{primeiroNome ? `${saudacao}, ${primeiroNome}` : "Dashboard"}</h1>
           <p className="page-subtitle first-letter:uppercase">
             {/* O nome vem da sessão (nome fantasia no login): empresa nova ainda sem ele não deixa o "·" pendurado */}
-            {DIAS[semana]}, {dia} de {MESES[mes]}{user.empresaNome ? ` · ${user.empresaNome}` : ""}
+            {DIAS[semana]}, {dia} de {MESES[mes]}{empresaNome ? ` · ${empresaNome}` : ""}
           </p>
         </div>
         {todos.length > 0 && (

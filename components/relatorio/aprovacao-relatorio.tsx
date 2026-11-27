@@ -3,6 +3,7 @@
 import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import SignatureCanvas from "react-signature-canvas";
+import { useAssinaturaPreservada } from "@/lib/assinatura-quadro";
 import { Button } from "@/components/ui/button";
 import { AlertCircle, CheckCircle2, Eraser, PenLine } from "lucide-react";
 import { neutro } from "@/lib/ui/tokens";
@@ -18,6 +19,7 @@ function mascararCpf(v: string): string {
 export function AprovacaoRelatorio({ token }: { token: string }) {
   const router = useRouter();
   const sigRef = useRef<SignatureCanvas | null>(null);
+  useAssinaturaPreservada(sigRef);
   const [aberto, setAberto] = useState(false);
   const [nome, setNome] = useState("");
   const [cpf, setCpf] = useState("");
@@ -88,7 +90,7 @@ export function AprovacaoRelatorio({ token }: { token: string }) {
             <button type="button" onClick={() => sigRef.current?.clear()} className="text-xs text-ink-muted hover:text-primary-600 inline-flex items-center gap-1"><Eraser className="w-3 h-3" /> Limpar</button>
           </div>
           <div className="bg-surface-alt border-2 border-dashed border-surface-border rounded-lg overflow-hidden touch-none">
-            <SignatureCanvas ref={sigRef} penColor={neutro.texto} canvasProps={{ className: "w-full h-40 bg-white" }} />
+            <SignatureCanvas ref={sigRef} clearOnResize={false} penColor={neutro.texto} canvasProps={{ className: "w-full h-40 bg-white" }} />
           </div>
           <p className="text-xs text-ink-subtle mt-1">Use o dedo (celular) ou mouse para assinar.</p>
         </div>

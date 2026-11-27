@@ -1,6 +1,7 @@
 "use client";
 
 import { CadastroPadrao } from "@/components/cadastros/cadastro-padrao";
+import { ModelosTiposOs } from "@/components/cadastros/modelos-tipos-os";
 
 const pl = (n: number, um: string, varios: string) => `${n} ${n === 1 ? um : varios}`;
 
@@ -12,6 +13,7 @@ export function TiposOsTela() {
   return (
     <CadastroPadrao
       entidade="tipos-os"
+      aviso={(recarregar) => <ModelosTiposOs onCriados={recarregar} />}
       ajuda="Os tipos de serviço que a empresa executa. Cada atividade de uma OS tem um tipo: ele define a cor na agenda, os formulários, se a conclusão exige equipamento e o prazo padrão da OS (opcional). Inativar um tipo o retira das novas escolhas; as OS já lançadas não mudam."
       celula={(col, t) => {
         if (col === "descricao") return t.descricao || "—";

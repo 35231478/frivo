@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { nomeDaEmpresa } from "@/lib/empresa/nome";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { exigirPermissao } from "@/lib/permissoes-server";
@@ -24,7 +25,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   if (guard.erro) return guard.resposta;
   const { session } = guard;
   const empresaId = session.user!.empresaId;
-  const empresaNome = session.user!.empresaNome;
+  const empresaNome = await nomeDaEmpresa(empresaId);
   const { id } = await params;
   const corpo = corpoSchema.safeParse(await req.json().catch(() => null));
   if (!corpo.success) return NextResponse.json({ erro: "Canal de envio inválido." }, { status: 400 });

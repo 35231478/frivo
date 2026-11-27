@@ -22,6 +22,7 @@ import { ehCalculada, grandezaDoItem } from "@/lib/checklist/faixas";
 import { equipamentosDoCliente, nomeEquipamento } from "@/lib/execucao/vinculos";
 import { temModulo } from "@/lib/modulos/servidor";
 import { MSG_MODULO_DESLIGADO } from "@/lib/modulos/catalogo";
+import { marcarItensAoConcluirUltima } from "@/lib/execucao/itens-ao-concluir";
 import { sincronizarStatusOs } from "@/lib/os/sincronizar-status";
 import { equipamentosDaOs } from "@/lib/os/galeria-server";
 import { limparLegenda, MSG_EQUIPAMENTO_FORA, MSG_LEGENDA, nomeArquivoFoto } from "@/lib/os/galeria";
@@ -635,6 +636,8 @@ export async function concluirAtividade(ctx: ContextoExecucao, d: z.infer<typeof
     await prisma.osHistorico.create({ data: { ordemServicoId: atividade.ordemServico.id, usuarioId: ctx.usuarioId, acao: "Horário de término informado", detalhes: `"${atividade.titulo}": ${historicoTermino(concluidaEm, toque)}` } });
   }
   atividade.status = "CONCLUIDA";
+  // F (Pronto pra janeiro 2): a última atividade aberta concluída marca os itens da OS como executados (o escritório desmarca)
+  await marcarItensAoConcluirUltima(ctx.empresaId, atividade.ordemServico.id, ctx.usuarioId, concluidaEm);
   await sincronizarStatusOs(atividade.ordemServico.id, ctx.empresaId, ctx.usuarioId);
   return ok({ status: "CONCLUIDA", jaEstava: false });
 }

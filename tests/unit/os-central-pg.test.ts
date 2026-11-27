@@ -72,13 +72,15 @@ describe.skipIf(!URL_PG)("central da OS: status automático, ajuste manual e pra
       { id: "e1", nome: "Clima Total", cnpj: "12.345.678/0001-90", email: "e@x.com" },
       { id: "e2", nome: "Outra", cnpj: "98.765.432/0001-10", email: "o@x.com" },
     ] });
+    // "Pronto pra janeiro 2" (E): sem tipo de OS a atividade não exige equipamento. As provas da trava usam um tipo que exige
+    await prisma.tipoOs.create({ data: { id: "tpPrev", empresaId: "e1", nome: "Manutenção Preventiva", exigeEquipamento: true } });
     await prisma.usuario.createMany({ data: [
       { id: "u1", empresaId: "e1", nome: "Ana", email: "a@x.com", senha: "x" },
       { id: "u3", empresaId: "e1", nome: "Carla", email: "c@x.com", senha: "x" },
       { id: "uT", empresaId: "e1", nome: "João", email: "joao@x.com", senha: "x", role: "TECNICO" },
       { id: "u2", empresaId: "e2", nome: "Beto", email: "b@x.com", senha: "x" },
     ] });
-    await prisma.tecnico.create({ data: { id: "t1", empresaId: "e1", nome: "João Silva", cpf: "11122233344", telefone: "11999990000" } });
+    await prisma.tecnico.create({ data: { id: "t1", empresaId: "e1", nome: "João Silva", cpf: "11122233344", telefone: "11999990000", competencias: { connect: { id: "tpPrev" } } } });
     await prisma.cliente.create({ data: { id: "c1", empresaId: "e1", nome: "Hospital Santa Luzia", cpfCnpj: "11222333000181" } });
     await prisma.unidade.create({ data: { id: "un1", empresaId: "e1", clienteId: "c1", nome: "Matriz" } });
     await prisma.tipoEquipamentoCustom.create({ data: { id: "te1", empresaId: "e1", nome: "Split", chaveEnum: "AR_CONDICIONADO_SPLIT" } });
@@ -97,14 +99,14 @@ describe.skipIf(!URL_PG)("central da OS: status automático, ajuste manual e pra
 
   it("OS nova sem data fica Aberta; com a 1ª atividade agendada COM data já nasce Agendada (histórico em nome de quem criou)", async () => {
     logar();
-    const r1 = await chamar("ordens", "POST", {}, { clienteId: "c1", unidadeId: "un1", descricao: "Preventiva mensal", execucao: { tecnicoIds: ["t1"], responsavelId: "t1" } });
+    const r1 = await chamar("ordens", "POST", {}, { clienteId: "c1", unidadeId: "un1", descricao: "Preventiva mensal", execucao: { tipoOsId: "tpPrev", tecnicoIds: ["t1"], responsavelId: "t1" } });
     expect(r1.status).toBe(201);
     expect(await statusDe(r1.json.id)).toMatchObject({ status: "ABERTA", statusManual: false });
     expect(await historico(r1.json.id, "Status automático")).toEqual([]);
 
     const r2 = await chamar("ordens", "POST", {}, {
       clienteId: "c1", unidadeId: "un1", descricao: "Corretiva no split", equipamentoIds: ["eqA"],
-      execucao: { tecnicoIds: ["t1"], responsavelId: "t1", dataAgendada: "2026-10-30T13:00:00.000Z" },
+      execucao: { tipoOsId: "tpPrev", tecnicoIds: ["t1"], responsavelId: "t1", dataAgendada: "2026-10-30T13:00:00.000Z" },
     });
     osId = r2.json.id;
     at1 = (await prisma.atividadeOs.findFirst({ where: { ordemServicoId: osId } })).id;
@@ -155,7 +157,7 @@ describe.skipIf(!URL_PG)("central da OS: status automático, ajuste manual e pra
   });
 
   it("todas as atividades concluídas mas trava não passa (sem equipamento atendido): fica Em execução, não conclui", async () => {
-    const r = await chamar("ordens", "POST", {}, { clienteId: "c1", descricao: "Visita técnica", execucao: { tecnicoIds: ["t1"], responsavelId: "t1" } });
+    const r = await chamar("ordens", "POST", {}, { clienteId: "c1", descricao: "Visita técnica", execucao: { tipoOsId: "tpPrev", tecnicoIds: ["t1"], responsavelId: "t1" } });
     const at = (await prisma.atividadeOs.findFirst({ where: { ordemServicoId: r.json.id } })).id;
     // atividade concluída "por fora" (dado legado) — a OS não pode virar Concluída sem a trava
     await prisma.atividadeOs.update({ where: { id: at }, data: { status: "CONCLUIDA" } });
@@ -166,7 +168,7 @@ describe.skipIf(!URL_PG)("central da OS: status automático, ajuste manual e pra
 
   it("ajuste MANUAL grava quem/quando e o automático NÃO sobrescreve; Voltar ao automático recalcula", async () => {
     const r = await chamar("ordens", "POST", {}, {
-      clienteId: "c1", descricao: "Instalação", execucao: { tecnicoIds: ["t1"], responsavelId: "t1", dataAgendada: "2026-11-02T13:00:00.000Z" },
+      clienteId: "c1", descricao: "Instalação", execucao: { tipoOsId: "tpPrev", tecnicoIds: ["t1"], responsavelId: "t1", dataAgendada: "2026-11-02T13:00:00.000Z" },
     });
     const id = r.json.id;
     const at = (await prisma.atividadeOs.findFirst({ where: { ordemServicoId: id } })).id;
@@ -202,7 +204,7 @@ describe.skipIf(!URL_PG)("central da OS: status automático, ajuste manual e pra
   });
 
   it("ajuste manual para Concluída respeita a trava e a permissão de concluir; editar é exigido", async () => {
-    const r = await chamar("ordens", "POST", {}, { clienteId: "c1", descricao: "Limpeza geral", execucao: { tecnicoIds: ["t1"], responsavelId: "t1" } });
+    const r = await chamar("ordens", "POST", {}, { clienteId: "c1", descricao: "Limpeza geral", execucao: { tipoOsId: "tpPrev", tecnicoIds: ["t1"], responsavelId: "t1" } });
     const id = r.json.id;
     logar(sem("ordens", "concluir"));
     expect((await chamar(OS, "PUT", { id }, { status: "CONCLUIDA" })).status).toBe(403);
@@ -222,7 +224,7 @@ describe.skipIf(!URL_PG)("central da OS: status automático, ajuste manual e pra
 
   it("reabrir uma OS cancelada volta ao automático (e recalcula pelos fatos); cancelada não volta por voltarAutomatico", async () => {
     const r = await chamar("ordens", "POST", {}, {
-      clienteId: "c1", descricao: "Vistoria anual", execucao: { tecnicoIds: ["t1"], responsavelId: "t1", dataAgendada: "2026-11-03T13:00:00.000Z" },
+      clienteId: "c1", descricao: "Vistoria anual", execucao: { tipoOsId: "tpPrev", tecnicoIds: ["t1"], responsavelId: "t1", dataAgendada: "2026-11-03T13:00:00.000Z" },
     });
     const id = r.json.id;
     await chamar(OS, "PUT", { id }, { status: "PAUSADA" });
@@ -237,7 +239,7 @@ describe.skipIf(!URL_PG)("central da OS: status automático, ajuste manual e pra
   it("prazo da atividade: grava (dia civil), valida, entra no histórico e limpa", async () => {
     const ruim = await chamar(ATS, "POST", { id: osId }, { titulo: "X", tecnicoIds: ["t1"], prazo: "05/11/2026" });
     expect(ruim.status).toBe(400);
-    const r = await chamar("ordens", "POST", {}, { clienteId: "c1", descricao: "Troca de compressor", execucao: { tecnicoIds: ["t1"], responsavelId: "t1" } });
+    const r = await chamar("ordens", "POST", {}, { clienteId: "c1", descricao: "Troca de compressor", execucao: { tipoOsId: "tpPrev", tecnicoIds: ["t1"], responsavelId: "t1" } });
     const id = r.json.id;
     const at = (await prisma.atividadeOs.findFirst({ where: { ordemServicoId: id } })).id;
 

@@ -80,11 +80,13 @@ describe.skipIf(!URL_PG)("execução da OS por equipamento (PostgreSQL real)", (
       { id: "e1", nome: "Clima Total", cnpj: "12.345.678/0001-90", email: "e@x.com" },
       { id: "e2", nome: "Outra", cnpj: "98.765.432/0001-10", email: "o@x.com" },
     ] });
+    // "Pronto pra janeiro 2" (E): sem tipo de OS a atividade não exige equipamento. As provas da trava usam um tipo que exige
+    await prisma.tipoOs.create({ data: { id: "tpPrev", empresaId: "e1", nome: "Manutenção Preventiva", exigeEquipamento: true } });
     await prisma.usuario.createMany({ data: [
       { id: "u1", empresaId: "e1", nome: "Ana", email: "a@x.com", senha: "x" },
       { id: "u2", empresaId: "e2", nome: "Beto", email: "b@x.com", senha: "x" },
     ] });
-    await prisma.tecnico.create({ data: { id: "t1", empresaId: "e1", nome: "João Silva", cpf: "11122233344", telefone: "11999990000" } });
+    await prisma.tecnico.create({ data: { id: "t1", empresaId: "e1", nome: "João Silva", cpf: "11122233344", telefone: "11999990000", competencias: { connect: { id: "tpPrev" } } } });
     await prisma.cliente.createMany({ data: [
       { id: "c1", empresaId: "e1", nome: "Hospital Santa Luzia", cpfCnpj: "11222333000181" },
       { id: "c2", empresaId: "e1", nome: "Padaria Pão Quente", cpfCnpj: "22333444000190" },
@@ -128,7 +130,7 @@ describe.skipIf(!URL_PG)("execução da OS por equipamento (PostgreSQL real)", (
 
   const novaOs = (extra: Record<string, unknown> = {}) => chamar("ordens", "POST", {}, {
     clienteId: "c1", unidadeId: "un1", descricao: "Preventiva mensal", prioridade: "NORMAL",
-    execucao: { tecnicoIds: ["t1"], responsavelId: "t1" }, ...extra,
+    execucao: { tipoOsId: "tpPrev", tecnicoIds: ["t1"], responsavelId: "t1" }, ...extra,
   });
   const primeiraAtividade = async (osId: string) => (await prisma.atividadeOs.findFirst({ where: { ordemServicoId: osId } })).id;
 

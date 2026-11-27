@@ -146,7 +146,7 @@ describe.skipIf(!URL_PG)("Acabamento: ações da lista, forma de pagamento e doc
     expect((await chamar("orcamentos/[id]/enviar", "POST", { canal: "LINK" }, { id: "oOutra" })).status).toBe(404);
   });
 
-  it("forma de pagamento escolhida (parcelado 6x) é gravada e sai no documento; nome automático curto", async () => {
+  it("forma de pagamento escolhida (parcelado 6x) é gravada e sai no documento; nome automático inteiro", async () => {
     const r = await chamar("orcamentos", "POST", {
       clienteId: "c1", formaPagamento: "Parcelado no boleto em 6x",
       servicos: [{ descricao: "Instalação de condensadora com suporte de piso e interligação elétrica completa", quantidade: 1, valorUnitario: 1000 }, { descricao: "Gás", quantidade: 1, valorUnitario: 50 }],
@@ -154,7 +154,8 @@ describe.skipIf(!URL_PG)("Acabamento: ações da lista, forma de pagamento e doc
     });
     expect(r.status).toBe(201);
     expect(r.json.formaPagamento).toBe("Parcelado no boleto em 6x");
-    expect(r.json.nome).toBe("Instalação de condensadora com… +1 — Hospital Santa Clara");
+    // "Pronto pra janeiro 2" (H): o nome automático vem inteiro, sem "…" (corta só no limite do campo)
+    expect(r.json.nome).toBe("Instalação de condensadora com suporte de piso e interligação elétrica completa +1 — Hospital Santa Clara");
     const { default: Imprimir } = await import("@/app/(publico)/orcamento/[token]/imprimir/page");
     const h = renderToStaticMarkup(await Imprimir({ params: Promise.resolve({ token: r.json.tokenPublico }) }));
     expect(texto(h)).toContain("Forma de pagamento Parcelado no boleto em 6x");

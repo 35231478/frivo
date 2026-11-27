@@ -16,7 +16,8 @@ import { ERRO_ITEM_SEPARADO, itemTemMaterialSeparado } from "@/lib/estoque/separ
 type Params = { params: Promise<{ id: string; itemId: string }> };
 
 /**
- * PUT: { executado: true } marca executado (como sempre); senão, edita o item da OS sem orçamento (E3.3b):
+ * PUT: { executado: true } marca executado (como sempre); { executado: false } desmarca (o escritório corrige;
+ * registro fechado não desmarca); senão, edita o item da OS sem orçamento (E3.3b):
  * quantidade, unitário base, total manual e o snapshot dos materiais — regrava materiais e peças derivadas.
  * Item que veio do orçamento (orcamentoServicoId) e peça derivada (materialId) não se editam aqui.
  */
@@ -44,6 +45,17 @@ export async function PUT(req: NextRequest, { params }: Params) {
       data: { ordemServicoId: id, usuarioId: session.user!.id, acao: "Item executado", detalhes: item.descricao },
     });
 
+    return NextResponse.json(atualizado);
+  }
+  // Desmarcar (o escritório corrige o "executado" — inclusive o marcado ao concluir a última atividade no app).
+  // Registro fechado (assinada pelo cliente, faturada ou com nota) não muda: o faturado não pode "deixar de ter sido feito"
+  if (body.executado === false && item.executado) {
+    const fechada = await travaDasLinhasDaOs(id);
+    if (fechada) return NextResponse.json({ erro: fechada }, { status: 400 });
+    const atualizado = await prisma.osItemOrcamento.update({ where: { id: itemId }, data: { executado: false, executadoEm: null } });
+    await prisma.osHistorico.create({
+      data: { ordemServicoId: id, usuarioId: session.user!.id, acao: "Item desmarcado como executado", detalhes: item.descricao },
+    });
     return NextResponse.json(atualizado);
   }
   if (body.executado !== undefined) return NextResponse.json(item);

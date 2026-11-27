@@ -3,6 +3,7 @@
 import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import SignatureCanvas from "react-signature-canvas";
+import { useAssinaturaPreservada } from "@/lib/assinatura-quadro";
 import { Button } from "@/components/ui/button";
 import { AlertCircle, CheckCircle2, Eraser, PenLine } from "lucide-react";
 import { neutro } from "@/lib/ui/tokens";
@@ -22,6 +23,7 @@ function mascararCpf(v: string): string {
 export function AprovacaoPublica({ token, onRecusar }: { token: string; onRecusar?: () => void }) {
   const router = useRouter();
   const sigRef = useRef<SignatureCanvas | null>(null);
+  useAssinaturaPreservada(sigRef);
   const [aberto, setAberto] = useState(false);
   const [nome, setNome] = useState("");
   const [cpf, setCpf] = useState("");
@@ -152,6 +154,7 @@ export function AprovacaoPublica({ token, onRecusar }: { token: string; onRecusa
           <div className="bg-surface-alt border-2 border-dashed border-surface-border rounded-lg overflow-hidden touch-none">
             <SignatureCanvas
               ref={sigRef}
+              clearOnResize={false}
               penColor={neutro.texto}
               canvasProps={{
                 className: "w-full h-40 bg-white",

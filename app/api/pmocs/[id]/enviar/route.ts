@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { nomeDaEmpresa } from "@/lib/empresa/nome";
 import { exigirPermissao } from "@/lib/permissoes-server";
 import { prisma } from "@/lib/prisma";
 import { dataBR } from "@/lib/pmoc";
@@ -40,7 +41,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
   const destino = await destinoDoCliente(p.clienteId, empresaId);
   const telefone = destino.whatsapp ?? "", email = destino.email ?? "";
-  const empresaNome = session.user!.empresaNome;
+  const empresaNome = await nomeDaEmpresa(empresaId);
   const vigencia = `${dataBR(p.dataInicio)} a ${dataBR(p.dataExpiracao)}`;
 
   const publicUrl = `${new URL(req.url).origin}${caminhoPublicoDocumento(await tokenDoPlano(id))}`;

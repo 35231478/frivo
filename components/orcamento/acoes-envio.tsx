@@ -10,6 +10,8 @@ import { buildPublicUrl } from "@/lib/orcamento-helpers";
 import { Mail, MessageCircle, Link2, Printer, Pencil, Check, AlertCircle, Undo2, XCircle } from "lucide-react";
 import type { EtapaCiclo } from "@/lib/orcamentos/ciclo";
 import { abaPendente, pedirEnvio, resultadoEmail, SEM_WHATSAPP, type CanalEnvio } from "@/components/orcamento/envio-proposta";
+import { BotaoClienteAprovou } from "@/components/orcamento/aprovacao-equipe";
+import { usePermissoes } from "@/components/providers/permissoes-provider";
 
 interface AcoesEnvioProps {
   orcamentoId: string;
@@ -116,6 +118,9 @@ export function AcoesEnvio({ orcamentoId, tokenPublico, status, podeEditar, etap
   const podeEnviar = e === "RASCUNHO" || e === "ENVIADO" || e === "VISUALIZADO" || e === "RECUSADO";
   const aguardando = e === "ENVIADO" || e === "VISUALIZADO";
   const podeVoltarRascunho = aguardando || e === "EXPIRADO" || e === "RECUSADO";
+  // "Cliente aprovou" (espelho do "Cliente recusou"): aguardando o cliente ou ainda em rascunho; quem aprova orçamentos
+  const { pode } = usePermissoes();
+  const podeAprovarPorFora = (aguardando || e === "RASCUNHO") && pode("orcamentos", "aprovar");
 
   return (
     <div className="space-y-3" data-acoes-envio>
@@ -166,8 +171,9 @@ export function AcoesEnvio({ orcamentoId, tokenPublico, status, podeEditar, etap
         )}
       </div>
 
-      {(aguardando || podeVoltarRascunho) && (
+      {(aguardando || podeVoltarRascunho || podeAprovarPorFora) && (
         <div className="flex flex-wrap gap-2">
+          {podeAprovarPorFora && <BotaoClienteAprovou orcamentoId={orcamentoId} />}
           {aguardando && (
             <Button
               variant="ghost"

@@ -9,11 +9,12 @@ import { moduloDaRota, pode, podeEntrarNoModulo, type Acao } from "@/lib/permiss
 import { FrivoLogo, FrivoMark } from "./frivo-logo";
 import { secoesVisiveis as secoesVisiveisConfig } from "@/lib/navegacao/configuracoes";
 import { useModulos } from "@/components/providers/modulos-provider";
+import { veAreaDeEmpresas } from "@/lib/empresa/area-frivo";
 import type { Session } from "next-auth";
 import {
   LayoutDashboard, Users, Thermometer, ClipboardList, FileText, HardHat, Settings, ChevronDown, ChevronRight,
   Wrench, Calculator, Wallet, Receipt, TrendingUp, FileBarChart, ShoppingCart, CalendarDays, QrCode, MapPinned,
-  Truck, UsersRound, BadgeDollarSign, ClipboardCheck, Smartphone, FolderOutput, UserCog, Upload, Landmark, Globe, Coins,
+  Truck, UsersRound, BadgeDollarSign, ClipboardCheck, Smartphone, Building2, FolderOutput, UserCog, Upload, Landmark, Globe, Coins,
   PanelLeftClose, PanelLeftOpen, MoreVertical, LogOut, Package, FileBadge,
   CalendarClock, PackageOpen, PackageMinus, Trophy, UserPlus, Timer, ReceiptText, ListChecks,
 } from "lucide-react";
@@ -529,6 +530,23 @@ export function Sidebar({ session, variant = "desktop", avatarUrl }: SidebarProp
           >
             <Settings className="w-[18px] h-[18px] shrink-0" />
             {!colapsada && <span className="truncate">Configurações</span>}
+          </Link>
+        )}
+        {/* Área de Empresas: só o dono do Frivo (SUPER_ADMIN). A página e a API também recusam os demais */}
+        {veAreaDeEmpresas(usuario) && (
+          <Link
+            href="/admin/empresas"
+            title={colapsada ? "Empresas (Frivo)" : undefined}
+            aria-current={pathname.startsWith("/admin/empresas") ? "page" : undefined}
+            data-acao="rodape-empresas"
+            className={cn(
+              "flex items-center rounded-lg text-sm transition-colors w-full",
+              colapsada ? "justify-center py-2" : "gap-3 pl-4 pr-3 py-2.5",
+              pathname.startsWith("/admin/empresas") ? cn(ativoBg, "text-acento font-semibold") : "text-ink-muted hover:bg-surface-page hover:text-ink",
+            )}
+          >
+            <Building2 className="w-[18px] h-[18px] shrink-0" />
+            {!colapsada && <span className="truncate">Empresas (Frivo)</span>}
           </Link>
         )}
         <Link
