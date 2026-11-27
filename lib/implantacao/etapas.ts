@@ -60,8 +60,8 @@ export interface Etapa {
   importacoes: EntidadeImportacao[];
   /** A lista onde se cadastra pela tela */
   href?: string;
-  /** Quando ainda não há planilha para a etapa */
-  semPlanilha?: string;
+  /** Um aviso da etapa, acima dos botões (ex.: como os contratos entram pela planilha) */
+  nota?: string;
 }
 
 /** Módulo da empresa de que cada etapa depende (desligado = a etapa some). Etapas do núcleo não têm. */
@@ -126,8 +126,9 @@ export function montarEtapas(c: Contagens, temModulo: (m: string) => boolean, di
         ...(temModulo("contratos") ? [{ rotulo: "Contratos", valor: c.contratos }] : []),
         ...(temModulo("pmoc") ? [{ rotulo: "Planos PMOC", valor: c.pmocs }] : []),
       ],
-      importacoes: [], href: temModulo("contratos") ? "/contratos" : "/pmoc",
-      semPlanilha: "A planilha de contratos e PMOC vem na última leva da implantação. Por enquanto, cadastre pela tela.",
+      // A tela mostra só as planilhas dos módulos ligados (e que a pessoa pode importar)
+      importacoes: ["contratos", "pmocs"], href: temModulo("contratos") ? "/contratos" : "/pmoc",
+      nota: "Pela planilha, o contrato ativo entra Suspenso e o PMOC entra em Rascunho: nada é cobrado nem agendado até alguém revisar e ativar (ou publicar) pela tela.",
     },
   ];
   return todas

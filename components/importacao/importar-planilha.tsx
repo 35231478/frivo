@@ -176,9 +176,11 @@ function Assistente({ entidade, onConcluido }: { entidade: EntidadeImportacao; o
         <p className="text-sm text-ink-muted">
           Uma linha por {def.singular}. Obrigatória{obrigatorias.length > 1 ? "s" : ""}: {obrigatorias.map((t, i) => <span key={t}>{i > 0 && ", "}<strong>{t}</strong></span>)}.
         </p>
-        <p className="text-xs text-ink-muted">
-          {def.plural[0].toUpperCase() + def.plural.slice(1)} existentes (mesmo <strong>{def.chaveDescricao}</strong>) são <strong>{def.feminino ? "atualizadas" : "atualizados"}</strong>; células vazias não apagam dados. Nenhum registro é excluído.
-        </p>
+        {def.soCadastra ? <p className="text-xs text-ink-muted" data-so-cadastra>{def.soCadastra}</p> : (
+          <p className="text-xs text-ink-muted">
+            {def.plural[0].toUpperCase() + def.plural.slice(1)} existentes (mesmo <strong>{def.chaveDescricao}</strong>) são <strong>{def.feminino ? "atualizadas" : "atualizados"}</strong>; células vazias não apagam dados. Nenhum registro é excluído.
+          </p>
+        )}
         <div className="flex flex-wrap gap-2">
           <a href={`/api/importacao/${entidade}/modelo?formato=xlsx`} className="btn-secondary inline-flex items-center gap-1.5 text-sm" data-acao="baixar-modelo-xlsx">
             <Download className="w-4 h-4" /> Modelo Excel (.xlsx)
@@ -193,7 +195,7 @@ function Assistente({ entidade, onConcluido }: { entidade: EntidadeImportacao; o
           </a>
         )}
         {/* Onde o "baixar" mora no próprio assistente (def.baixar), a dica de usar o botão da lista não vale */}
-        {!def.baixar && <p className="text-xs text-ink-muted flex items-center gap-1" data-dica-exportar>
+        {!def.baixar && !def.soCadastra && <p className="text-xs text-ink-muted flex items-center gap-1" data-dica-exportar>
           Edição em massa de cadastros existentes
           <Dica rotulo="Edição em massa" lado="direita" texto={<>
             Use <strong>Baixar planilha</strong> na lista: o arquivo vem no mesmo formato, com o <strong>id_sistema</strong>

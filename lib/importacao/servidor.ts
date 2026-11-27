@@ -8,7 +8,8 @@ import { pode, type Permissoes } from "@/lib/permissoes";
 import { CADASTROS, type Requisito } from "@/lib/cadastros/registro";
 import { ErroRefEmpresa, validarRefEmpresa } from "@/lib/ref-empresa";
 import { chaveNome, type Analise, type ContextoImportacao, type LinhaAnalisada, type OpcaoRef } from "@/lib/importacao/motor";
-import { APELIDOS_TIPO_EQUIPAMENTO, chaveCodigo, chaveParecido, chavePlaca, PERMISSOES_IMPORTACAO, type EntidadeImportacao } from "@/lib/importacao/entidades";
+import { APELIDOS_TIPO_EQUIPAMENTO, chaveCodigo, chaveParecido, chavePlaca, PERMISSOES_IMPORTACAO, statusImportado, type EntidadeImportacao } from "@/lib/importacao/entidades";
+import { proximoNumero } from "@/lib/numeracao-server";
 import { LABELS_TIPO_EQUIPAMENTO } from "@/lib/utils";
 import { resolverTipoEquipamento } from "@/lib/tipo-equipamento";
 import { proximoCodigoServico } from "@/lib/cadastros/codigos";
@@ -165,6 +166,38 @@ export async function carregarContexto(
       mapas.cargosInativos = new Map(cargos.filter((c) => !c.ativo && !ativos.has(chaveNome(c.nome))).map((c) => [chaveNome(c.nome), c.id]));
       break;
     }
+    case "contratos":
+    case "pmocs": {
+      await clientesPorDoc();
+      const us = await prisma.unidade.findMany({ where: { empresaId, ativo: true }, select: { id: true, nome: true, clienteId: true, principal: true } });
+      mapas.unidades = new Map();
+      for (const u of us) {
+        const k = `${u.clienteId}|${chaveNome(u.nome)}`;
+        if (!mapas.unidades.has(k)) mapas.unidades.set(k, u.id);
+        if (u.principal) mapas.unidades.set(`${u.clienteId}|*principal`, u.id);
+      }
+      if (entidade === "contratos") {
+        // A planilha só cadastra: o número que já existe vira erro na linha
+        const cs = await prisma.contrato.findMany({ where: { empresaId }, select: { id: true, numero: true } });
+        for (const c of cs) existentes.set(`num:${c.numero.trim().toUpperCase()}`, c.id);
+      } else {
+        const [ps, eqs] = await Promise.all([
+          prisma.pmoc.findMany({ where: { empresaId }, select: { id: true, nome: true, unidadeId: true } }),
+          // Equipamentos ATIVOS do cliente, pela série (a mesma regra da tela do PMOC)
+          prisma.equipamento.findMany({ where: { empresaId, ativo: true, numeroSerie: { not: null } }, select: { id: true, numeroSerie: true, unidade: { select: { clienteId: true } } } }),
+        ]);
+        for (const pm of ps) existentes.set(`pmoc:${pm.unidadeId}|${chaveNome(pm.nome)}`, pm.id);
+        const porSerie = new Map<string, string[]>();
+        for (const e of eqs) {
+          if (!e.numeroSerie?.trim()) continue;
+          const k = `${e.unidade.clienteId}|serie:${chaveCodigo(e.numeroSerie)}`;
+          porSerie.set(k, [...(porSerie.get(k) ?? []), e.id]);
+        }
+        mapas.series = new Map([...porSerie].filter(([, ids]) => ids.length === 1).map(([k, ids]) => [k, ids[0]]));
+        mapas.seriesAmbiguas = new Map([...porSerie].filter(([, ids]) => ids.length > 1).map(([k, ids]) => [k, String(ids.length)]));
+      }
+      break;
+    }
     case "veiculos": {
       const [vs, ts] = await Promise.all([
         prisma.veiculo.findMany({ where: { empresaId }, select: { id: true, placa: true } }),
@@ -216,6 +249,8 @@ export async function carregarExportacao(entidade: EntidadeImportacao, empresaId
       // Nunca salário, dados bancários ou documentos pessoais: só as colunas da planilha
       select: { id: true, nome: true, cpf: true, telefone: true, email: true, tipo: true, tipoEquipe: true, cargoId: true, crea: true, endereco: true, numero: true, complemento: true, bairro: true, cidade: true, estado: true, cep: true, observacoes: true },
     });
+    case "contratos":
+    case "pmocs": return [];
     case "veiculos": return prisma.veiculo.findMany({
       where: { empresaId }, orderBy: [{ placa: "asc" }, { id: "asc" }],
       select: { id: true, placa: true, modelo: true, marca: true, ano: true, anoModelo: true, tipo: true, combustivel: true, cor: true, chassi: true, renavam: true, quilometragemAtual: true, observacoes: true, responsavel: { select: { cpf: true } } },
@@ -230,7 +265,7 @@ type Delegate = {
 };
 const MODELO: Record<EntidadeImportacao, string> = {
   clientes: "cliente", unidades: "unidade", contatos: "contatoCliente", equipamentos: "equipamento", fornecedores: "fornecedor", servicos: "servico", produtos: "produto",
-  estoque: "produto", colaboradores: "tecnico", veiculos: "veiculo",
+  estoque: "produto", colaboradores: "tecnico", veiculos: "veiculo", contratos: "contrato", pmocs: "pmoc",
 };
 const tabela = (e: EntidadeImportacao) => (prisma as unknown as Record<string, Delegate>)[MODELO[e]];
 const semIndefinidos = (o: Record<string, unknown>) => Object.fromEntries(Object.entries(o).filter(([, v]) => v !== undefined));
@@ -257,7 +292,7 @@ export class ErroLinha extends Error {}
 type Feito = { r: "criado" | "atualizado" | "igual"; id?: string; extras?: { entidade: string; id: string }[] };
 
 /** O que a gravação fez além de criar/atualizar a linha (vira uma frase no resultado). */
-interface Efeitos { unidadesPrincipais: number; principaisTrocados: number; saldosIguais: number }
+interface Efeitos { unidadesPrincipais: number; principaisTrocados: number; saldosIguais: number; contratosSuspensos: number }
 
 /** Endereço do cliente → a unidade "Principal" (mesmos campos da unidade). */
 function unidadePrincipalDe(c: Record<string, unknown>, empresaId: string, clienteId: string) {
@@ -423,6 +458,79 @@ async function gravarVeiculo(l: LinhaAnalisada, dados: Record<string, unknown>, 
   return { r: "atualizado", id: l.existenteId };
 }
 
+/** "AAAA-MM-DD" da planilha → a data (meio-dia UTC: o dia não muda em nenhum fuso do Brasil) */
+const dataDe = (iso: unknown) => (typeof iso === "string" && iso ? new Date(`${iso}T12:00:00.000Z`) : null);
+
+/**
+ * Contrato da planilha (leva 6): SÓ cadastra. Nasce com tudo que cobra ou agenda DESLIGADO e, se veio "ativo",
+ * SUSPENSO (só contrato ATIVO gera previsão de contas a receber, entra nas medições e gera OS — regra CO2). Não
+ * chama a previsão nem a recorrência que a tela chama ao salvar. O número vazio vem da numeração da empresa.
+ */
+async function gravarContrato(dados: Record<string, unknown>, empresaId: string, usuarioId: string | null, ef: Efeitos): Promise<Feito> {
+  const clienteId = dados.clienteId as string;
+  await validarRefEmpresa("cliente", clienteId, empresaId, "Cliente");
+  const unidadeIds = (dados.unidadeIds as string[] | undefined) ?? [];
+  if (unidadeIds.length && (await prisma.unidade.count({ where: { id: { in: unidadeIds }, empresaId, clienteId } })) !== unidadeIds.length)
+    throw new ErroLinha("unidades: uma das unidades não é mais deste cliente. Gere a prévia de novo.");
+  const situacao = String(dados.situacao ?? "ATIVO");
+  const status = statusImportado(situacao) as "SUSPENSO" | "ENCERRADO" | "CANCELADO";
+  const autor = usuarioId && (await prisma.usuario.count({ where: { id: usuarioId, empresaId } })) ? usuarioId : null;
+  const id = await prisma.$transaction(async (tx) => {
+    const numero = (dados.numero as string | undefined) ?? await proximoNumero(tx, empresaId, "contrato");
+    const c = await tx.contrato.create({
+      data: {
+        empresaId, clienteId, numero, status,
+        tipo: dados.tipo as Prisma.ContratoUncheckedCreateInput["tipo"],
+        periodicidade: dados.periodicidade as Prisma.ContratoUncheckedCreateInput["periodicidade"],
+        dataInicio: dataDe(dados.dataInicio)!, dataFim: dataDe(dados.dataFim),
+        valorMensal: (dados.valorMensal as number | undefined) ?? null, diaVencimento: (dados.diaVencimento as number | undefined) ?? null,
+        descricaoServicos: (dados.descricaoServicos as string | undefined) ?? null, artNumero: (dados.artNumero as string | undefined) ?? null,
+        observacoes: (dados.observacoes as string | undefined) ?? null,
+        // DESLIGADO até a revisão (explícito: não depende do padrão do banco)
+        faturamentoAutomatico: false, aprovacaoAutomatica: false, emitirNfseAuto: false, emitirBoletoAuto: false,
+        recorrencia: false, renovacaoAutomatica: false, reajusteAtivo: false, reajusteNotificar: false,
+        notificarClienteRenovacao: false, alertaEmailCliente: false,
+        unidades: { create: unidadeIds.map((unidadeId) => ({ unidadeId })) },
+      },
+      select: { id: true },
+    });
+    if (status === "SUSPENSO" && autor)
+      await tx.contratoHistoricoStatus.create({
+        data: {
+          empresaId, contratoId: c.id, statusAnterior: "ATIVO", statusNovo: "SUSPENSO", usuarioId: autor,
+          motivo: "Importado por planilha (ativo na planilha): suspenso até a revisão de cobrança, NFS-e, boleto e recorrência.",
+        },
+      });
+    return c.id;
+  });
+  if (status === "SUSPENSO") ef.contratosSuspensos++;
+  return { r: "criado", id };
+}
+
+/** Plano PMOC da planilha (leva 6): SÓ cadastra, sempre em RASCUNHO (não gera cronograma, OS nem aviso). */
+async function gravarPmoc(dados: Record<string, unknown>, empresaId: string, usuarioId: string | null): Promise<Feito> {
+  const clienteId = dados.clienteId as string;
+  const unidadeId = dados.unidadeId as string;
+  await validarRefEmpresa("cliente", clienteId, empresaId, "Cliente");
+  if (!(await prisma.unidade.count({ where: { id: unidadeId, empresaId, clienteId, ativo: true } })))
+    throw new ErroLinha("unidade: não é mais uma unidade ativa deste cliente. Gere a prévia de novo.");
+  const equipamentoIds = (dados.equipamentoIds as string[] | undefined) ?? [];
+  if (equipamentoIds.length && (await prisma.equipamento.count({ where: { id: { in: equipamentoIds }, empresaId, ativo: true, unidade: { clienteId } } })) !== equipamentoIds.length)
+    throw new ErroLinha("equipamentos: algum equipamento foi inativado ou não é mais deste cliente. Gere a prévia de novo.");
+  const autor = usuarioId && (await prisma.usuario.count({ where: { id: usuarioId, empresaId } })) ? usuarioId : null;
+  const p = await prisma.pmoc.create({
+    data: {
+      empresaId, clienteId, unidadeId, status: "RASCUNHO", criadoPorId: autor,
+      nome: dados.nome as string, descricao: (dados.descricao as string | undefined) ?? null,
+      dataInicio: dataDe(dados.dataInicio)!, dataExpiracao: dataDe(dados.dataExpiracao)!,
+      rtNome: (dados.rtNome as string | undefined) ?? null, rtCrea: (dados.rtCrea as string | undefined) ?? null, artNumero: (dados.artNumero as string | undefined) ?? null,
+      equipamentos: { create: equipamentoIds.map((equipamentoId) => ({ equipamentoId })) },
+    },
+    select: { id: true },
+  });
+  return { r: "criado", id: p.id };
+}
+
 /**
  * Cargos que a planilha cita e não existem: criados UMA vez cada (sem acento/maiúsculas), em sequência, antes de
  * gravar; o que já existe ativo (criado enquanto se importava) é reaproveitado. As linhas passam a ter o cargoId.
@@ -456,6 +564,11 @@ async function gravarLinha(entidade: EntidadeImportacao, l: LinhaAnalisada, empr
   if (entidade === "estoque") return gravarEstoque(l, dados, empresaId, usuarioId, ef);
   if (entidade === "colaboradores") return gravarColaborador(l, dados, empresaId);
   if (entidade === "veiculos") return gravarVeiculo(l, dados, empresaId);
+  // Contratos e PMOC só cadastram: uma linha que "casou" com um existente nunca chega aqui (é erro na prévia)
+  if (entidade === "contratos" || entidade === "pmocs") {
+    if (l.status !== "criar") throw new ErroLinha(`A planilha só cadastra ${entidade === "contratos" ? "contratos" : "planos PMOC"} novos.`);
+    return entidade === "contratos" ? gravarContrato(dados, empresaId, usuarioId, ef) : gravarPmoc(dados, empresaId, usuarioId);
+  }
   if (l.status === "criar") {
     // O código já foi reservado para a linha (gravarImportacao); o schema do produto não aceita código
     const { codigo, ...semCodigo } = dados;
@@ -491,6 +604,7 @@ export interface ResultadoImportacao {
 export const ENTIDADE_DO_ITEM: Record<EntidadeImportacao, string> = {
   clientes: "clientes", unidades: "unidades", contatos: "contatos", equipamentos: "equipamentos", fornecedores: "fornecedores",
   servicos: "servicos", produtos: "produtos", estoque: "produtos", colaboradores: "colaboradores", veiculos: "veiculos",
+  contratos: "contratos", pmocs: "pmocs",
 };
 
 type ItemLote = { entidade: string; registroId: string; acao: "CRIADO" | "ATUALIZADO"; linha: number | null };
@@ -528,7 +642,7 @@ export async function gravarImportacao(
   o: { usuarioId?: string | null; arquivo?: string } = {},
 ): Promise<ResultadoImportacao> {
   const res: ResultadoImportacao = { criados: 0, atualizados: 0, observacoes: [], avisos: [], erros: analise.linhas.filter((l) => l.status === "erro") };
-  const ef: Efeitos = { unidadesPrincipais: 0, principaisTrocados: 0, saldosIguais: 0 };
+  const ef: Efeitos = { unidadesPrincipais: 0, principaisTrocados: 0, saldosIguais: 0, contratosSuspensos: 0 };
   const gravar = analise.linhas.filter((l) => l.status !== "erro");
   await reservarCodigos(entidade, gravar, empresaId);
   const itens: ItemLote[] = [];
@@ -540,9 +654,10 @@ export async function gravarImportacao(
   for (const id of cargosCriadosIds) itens.push({ entidade: "cargos", registroId: id, acao: "CRIADO", linha: null });
   for (let i = 0; i < gravar.length; i += TAMANHO_LOTE) {
     const lote = gravar.slice(i, i + TAMANHO_LOTE);
-    // Unidades e contatos: uma linha por vez (o "principal" de um cliente não pode correr em paralelo)
-    const feitos = entidade === "unidades" || entidade === "contatos"
-      ? await (async () => { const r: PromiseSettledResult<Feito>[] = []; for (const l of lote) r.push(...await Promise.allSettled([gravarLinha(entidade, l, empresaId, ef)])); return r; })()
+    // Unidades e contatos: uma linha por vez (o "principal" de um cliente não pode correr em paralelo); contratos
+    // também (o número automático e o número digitado não podem disputar o mesmo valor)
+    const feitos = entidade === "unidades" || entidade === "contatos" || entidade === "contratos" || entidade === "pmocs"
+      ? await (async () => { const r: PromiseSettledResult<Feito>[] = []; for (const l of lote) r.push(...await Promise.allSettled([gravarLinha(entidade, l, empresaId, ef, tipos, o.usuarioId ?? null)])); return r; })()
       : await Promise.allSettled(lote.map((l) => gravarLinha(entidade, l, empresaId, ef, tipos, o.usuarioId ?? null)));
     feitos.forEach((f, k) => {
       if (f.status === "fulfilled") {
@@ -558,7 +673,7 @@ export async function gravarImportacao(
       const motivo = e instanceof ErroRefEmpresa || e instanceof ErroLinha || e instanceof ErroEstoque ? e.message
         : e?.code === "P2002" && String((e as { meta?: { target?: unknown } }).meta?.target ?? "").includes("codigo")
           ? "Este código já é de outro cadastro (ou foi usado enquanto você importava). Gere a prévia de novo."
-        : e?.code === "P2002" ? `Já existe um registro com ${entidade === "veiculos" ? "esta placa" : entidade === "colaboradores" ? "este CPF" : "este documento"} (cadastrado enquanto você importava). Gere a prévia de novo.`
+        : e?.code === "P2002" ? `Já existe um registro com ${entidade === "veiculos" ? "esta placa" : entidade === "colaboradores" ? "este CPF" : entidade === "contratos" ? "este número de contrato" : "este documento"} (cadastrado enquanto você importava). Gere a prévia de novo.`
         : e?.message?.includes("não foi encontrado") ? e.message
         : "Não foi possível gravar esta linha.";
       res.erros.push({ ...lote[k], erros: [motivo] });
@@ -566,6 +681,8 @@ export async function gravarImportacao(
   }
   res.erros.sort((a, b) => a.linha - b.linha);
   res.avisos.sort((a, b) => a.linha - b.linha);
+  if (ef.contratosSuspensos)
+    res.observacoes.push(`${ef.contratosSuspensos === 1 ? "1 contrato ativo entrou SUSPENSO" : `${ef.contratosSuspensos} contratos ativos entraram SUSPENSOS`}: faturamento automático, NFS-e, boleto, recorrência de OS, renovação automática e reajuste estão desligados. Revise cada um e ative pela tela do contrato — só então a cobrança começa.`);
   if (ef.unidadesPrincipais)
     res.observacoes.push(`${ef.unidadesPrincipais} ${ef.unidadesPrincipais === 1 ? "cliente ganhou" : "clientes ganharam"} a unidade “Principal” com o endereço do cadastro.`);
   if (cargosCriados.length)

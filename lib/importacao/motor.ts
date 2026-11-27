@@ -139,6 +139,11 @@ export interface DefImportacao {
   avisoPrevia?: string;
   /** Texto do link "baixar os já cadastrados" dentro do assistente (sem ele, o link não aparece lá) */
   baixar?: string;
+  /**
+   * A planilha SÓ CADASTRA (contratos, PMOC): o que já existe vira erro na prévia. O texto troca o "existentes são
+   * atualizados" do assistente e a dica de edição em massa some.
+   */
+  soCadastra?: string;
 }
 
 export type StatusLinha = "criar" | "atualizar" | "erro";
