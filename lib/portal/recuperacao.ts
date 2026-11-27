@@ -70,8 +70,8 @@ export async function definirSenhaPortal(token: string, senha: string) {
   if (!v.ok) return v;
   await prisma.contatoCliente.update({
     where: { id: v.contato.id },
-    // A senha provisória anotada para o gestor deixa de valer junto
-    data: { senha: await bcrypt.hash(senha, 12), senhaProvisoria: null },
+    // A senha agora é do próprio contato: a troca obrigatória (se havia) está feita
+    data: { senha: await bcrypt.hash(senha, 12), senhaProvisoria: null, trocarSenha: false },
   });
   await limparTentativas("PORTAL_LOGIN", { email: v.contato.email });
   return v;

@@ -3,13 +3,15 @@ import { redirect } from "next/navigation";
 import { FrivoLogo } from "@/components/layout/frivo-logo";
 import { PortalLoginForm } from "@/components/portal/portal-login-form";
 import { getPortalSession } from "@/lib/auth-portal";
+import { destinoDoPortal } from "@/lib/portal/senha-provisoria";
 
 export const metadata: Metadata = { title: "Portal do cliente — Entrar" };
 export const dynamic = "force-dynamic";
 
 export default async function PortalLoginPage() {
-  const sessao = await getPortalSession();
-  if (sessao?.user) redirect("/portal/dashboard");
+  // Já logado: o painel do portal, ou a tela de troca se a senha ainda é a provisória (uma decisão só)
+  const sessao = await getPortalSession({ comTroca: true });
+  if (sessao?.user) redirect(destinoDoPortal(sessao.user));
 
   return (
     <div className="min-h-screen flex items-center justify-center p-4 bg-surface-page">

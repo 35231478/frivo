@@ -3,6 +3,7 @@ import { agendarPush, notificarSolicitacaoPortal } from "@/lib/push/eventos";
 import { prisma } from "@/lib/prisma";
 import { proximoNumeroOs } from "@/lib/os-server";
 import { getPortalSession } from "@/lib/auth-portal";
+import { MSG_TROCA_PENDENTE_PORTAL } from "@/lib/portal/senha-provisoria";
 import { chamadoPortalSchema } from "@/lib/validations";
 import { validarDataUrl, type ArquivoValidado } from "@/lib/anexos-server";
 import { TIPOS_IMAGEM } from "@/lib/anexos";
@@ -16,8 +17,10 @@ const MAP_URGENCIA: Record<string, "NORMAL" | "ALTA" | "CRITICO"> = {
 };
 
 export async function POST(req: NextRequest) {
-  const sessao = await getPortalSession();
+  const sessao = await getPortalSession({ comTroca: true });
   if (!sessao?.user) return NextResponse.json({ erro: "Não autorizado" }, { status: 401 });
+  // Senha provisória ainda não trocada: nada é feito até o contato criar a própria
+  if (sessao.user.trocarSenha) return NextResponse.json({ erro: MSG_TROCA_PENDENTE_PORTAL }, { status: 403 });
   if (!sessao.user.permissoes?.abrirChamados) {
     return NextResponse.json({ erro: "Sem permissão para abrir chamados" }, { status: 403 });
   }

@@ -52,7 +52,6 @@ export const portalLoginSchema = z.object({
 // Concessão/edição de acesso ao portal para um contato
 export const acessoPortalSchema = z.object({
   email: z.string().email("E-mail inválido"),
-  senha: z.string().optional(), // se vazio, mantém a senha atual
   ativo: z.boolean().default(true),
   permissoes: z.object({
     verOS: z.boolean().default(false),

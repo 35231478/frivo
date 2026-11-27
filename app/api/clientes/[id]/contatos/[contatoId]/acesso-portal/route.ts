@@ -1,26 +1,19 @@
 import { NextRequest, NextResponse } from "next/server";
-import { randomInt } from "node:crypto";
 import bcrypt from "bcryptjs";
 import { auth } from "@/lib/auth";
 import { pode } from "@/lib/permissoes";
 import { prisma } from "@/lib/prisma";
 import { acessoPortalSchema } from "@/lib/validations";
+import { gerarSenhaProvisoria } from "@/lib/portal/senha-provisoria";
 
 type Params = { params: Promise<{ id: string; contatoId: string }> };
 
 /*
- * Senha do portal: só o hash (bcrypt) fica no banco. A senha em texto aparece UMA vez, na
- * resposta de quem acabou de definir/redefinir, para o gestor repassar ao contato.
- * A coluna `senha_provisoria` (texto legível) deixa de ser usada e é limpa a cada alteração.
+ * Senha do portal: a equipe NÃO define a senha de ninguém. Ao liberar o acesso (e em "Gerar nova senha
+ * provisória") o sistema gera uma provisória, grava SÓ o hash (bcrypt), marca a troca obrigatória
+ * (`trocarSenha`) e devolve a senha em texto UMA vez, nesta resposta, para quem liberou repassar ao contato.
+ * A coluna antiga `senha_provisoria` (texto legível) não é mais lida nem gravada com valor: só é zerada.
  */
-
-// Gera uma senha provisória legível (sem caracteres ambíguos), com gerador criptográfico.
-function gerarSenha(tamanho = 10): string {
-  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789";
-  let s = "";
-  for (let i = 0; i < tamanho; i++) s += chars[randomInt(chars.length)];
-  return s;
-}
 
 // Concede/atualiza acesso ao portal para um contato do cliente.
 export async function PUT(req: NextRequest, { params }: Params) {
@@ -47,17 +40,10 @@ export async function PUT(req: NextRequest, { params }: Params) {
   });
   if (conflito) return NextResponse.json({ erro: "Já existe acesso de portal com este e-mail" }, { status: 409 });
 
-  // Senha mínima de 8: curta demais cai em força bruta (o login do portal é público)
-  if (d.senha && d.senha.length < 8) {
-    return NextResponse.json({ erro: "A senha do portal precisa ter pelo menos 8 caracteres" }, { status: 400 });
-  }
-  const data: any = { email: d.email, permissoes: d.permissoes, senhaProvisoria: null };
-  const senhaDefinida = d.senha && d.senha.length >= 8 ? d.senha : null;
-  if (senhaDefinida) {
-    data.senha = await bcrypt.hash(senhaDefinida, 12);
-  } else if (!contato.senha) {
-    return NextResponse.json({ erro: "Defina uma senha de acesso (mín. 8 caracteres)" }, { status: 400 });
-  }
+  // Acesso novo (sem senha ainda): o sistema gera a provisória. Já com acesso: muda e-mail e permissões, a senha fica.
+  const data: Record<string, unknown> = { email: d.email, permissoes: d.permissoes, senhaProvisoria: null };
+  const senhaGerada = contato.senha ? null : gerarSenhaProvisoria();
+  if (senhaGerada) { data.senha = await bcrypt.hash(senhaGerada, 12); data.trocarSenha = true; }
   if (!contato.acessoConcedidoEm) data.acessoConcedidoEm = new Date();
 
   const atualizado = await prisma.contatoCliente.update({
@@ -76,14 +62,15 @@ export async function PUT(req: NextRequest, { params }: Params) {
     email: atualizado.email,
     permissoes: atualizado.permissoes,
     temAcesso: !!atualizado.senha,
-    // Só a senha que acabou de ser definida nesta requisição (nunca a gravada)
-    senhaProvisoria: senhaDefinida,
+    // Só a senha gerada nesta requisição (nunca a gravada): aparece uma vez, para repassar
+    senhaProvisoria: senhaGerada,
     acessoConcedidoEm: atualizado.acessoConcedidoEm,
     portalAtivado: !!atualizado.senha,
   });
 }
 
-// Redefine a senha do portal: gera nova senha aleatória, grava o hash e a devolve só nesta resposta.
+// "Gerar nova senha provisória": nova senha gerada, só o hash gravado, troca obrigatória marcada; o texto
+// vai só nesta resposta. As sessões abertas do contato caem (a senha mudou).
 export async function POST(_: NextRequest, { params }: Params) {
   const session = await auth();
   if (!session) return NextResponse.json({ erro: "Não autorizado" }, { status: 401 });
@@ -96,12 +83,13 @@ export async function POST(_: NextRequest, { params }: Params) {
   if (!contato) return NextResponse.json({ erro: "Contato não encontrado" }, { status: 404 });
   if (!contato.email) return NextResponse.json({ erro: "Contato sem e-mail de acesso" }, { status: 400 });
 
-  const novaSenha = gerarSenha();
+  const novaSenha = gerarSenhaProvisoria();
   const atualizado = await prisma.contatoCliente.update({
     where: { id: contatoId },
     data: {
       senha: await bcrypt.hash(novaSenha, 12),
       senhaProvisoria: null,
+      trocarSenha: true,
       acessoConcedidoEm: contato.acessoConcedidoEm ?? new Date(),
     },
     select: { id: true, email: true, acessoConcedidoEm: true },
@@ -129,6 +117,6 @@ export async function DELETE(_: NextRequest, { params }: Params) {
   const contato = await prisma.contatoCliente.findFirst({ where: { id: contatoId, clienteId: id, empresaId } });
   if (!contato) return NextResponse.json({ erro: "Contato não encontrado" }, { status: 404 });
 
-  await prisma.contatoCliente.update({ where: { id: contatoId }, data: { senha: null, senhaProvisoria: null } });
+  await prisma.contatoCliente.update({ where: { id: contatoId }, data: { senha: null, senhaProvisoria: null, trocarSenha: false } });
   return NextResponse.json({ ok: true });
 }

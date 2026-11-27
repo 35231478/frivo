@@ -12,7 +12,7 @@ import { prisma } from "@/lib/prisma";
  */
 const MIN = 60_000;
 
-export type TipoTentativa = "LOGIN" | "ESQUECI_SENHA" | "TROCA_SENHA" | "PORTAL_LOGIN" | "CHAMADO_PUBLICO"
+export type TipoTentativa = "LOGIN" | "ESQUECI_SENHA" | "TROCA_SENHA" | "PORTAL_LOGIN" | "PORTAL_TROCA_SENHA" | "CHAMADO_PUBLICO"
   | "ADMISSAO_PUBLICA" | "ADMISSAO_CODIGO" | "DOCUMENTACAO_PUBLICA";
 type Alvo = "email" | "ip" | "usuario";
 
@@ -21,6 +21,7 @@ export const LIMITES: Record<TipoTentativa, { janelaMs: number; max: Partial<Rec
   ESQUECI_SENHA: { janelaMs: 60 * MIN, max: { email: 3, ip: 10 } }, // pedidos de link
   TROCA_SENHA: { janelaMs: 15 * MIN, max: { usuario: 5 } },          // senha atual errada no perfil
   PORTAL_LOGIN: { janelaMs: 15 * MIN, max: { email: 5, ip: 20 } },   // senha errada no portal do cliente
+  PORTAL_TROCA_SENHA: { janelaMs: 15 * MIN, max: { usuario: 5 } },    // senha recebida errada na troca do portal (por contato)
   CHAMADO_PUBLICO: { janelaMs: 60 * MIN, max: { ip: 10, usuario: 15 } }, // abertura de chamado (QR público / portal)
   // Link da admissão: conta TOKEN RECUSADO (não existe, venceu, já encerrou). Quem tem um link
   // bom preenche à vontade — o que o limite impede é varrer tokens no escuro.
