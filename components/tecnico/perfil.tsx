@@ -10,6 +10,7 @@ import { PerfilClient } from "@/components/perfil/perfil-client";
 import { rotuloSync } from "@/components/tecnico/indicador-sync";
 import { useTecnico } from "@/components/tecnico/contexto";
 import { PreferenciaRota } from "@/components/tecnico/rota";
+import { NotificacoesAparelho } from "@/components/push/notificacoes-aparelho";
 import type { OperacaoFila } from "@/lib/tecnico/offline/tipos";
 import { horaBR } from "@/lib/fuso";
 
@@ -96,6 +97,9 @@ export function PerfilTecnico({ perfilInicial }: { perfilInicial: React.Componen
           </div>
         )}
       </section>
+
+      {/* Notificações com o app fechado (leva push; o bloco mora em components/push) */}
+      <NotificacoesAparelho modo="app" />
 
       <a href="/veiculos/checklist" className="flex items-center gap-3 bg-white rounded-card border border-surface-border p-4 font-semibold text-ink touch-target">
         <Car className="w-5 h-5 text-ink-muted" /> Checklist do veículo

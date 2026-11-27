@@ -10,7 +10,8 @@ import { FormField, FormSection, FormGrid } from "@/components/ui/form-field";
 import { cn } from "@/lib/utils";
 import { problemaSenha } from "@/lib/acesso/senha";
 import { RequisitosSenha } from "@/components/auth/requisitos-senha";
-import { User, Camera, Lock, Building2, ShieldCheck, FileCheck, AlertCircle, Briefcase } from "lucide-react";
+import { User, Camera, Lock, Building2, ShieldCheck, FileCheck, AlertCircle, Briefcase, Bell } from "lucide-react";
+import { NotificacoesAparelho } from "@/components/push/notificacoes-aparelho";
 
 interface Initial {
   nome: string;
@@ -59,7 +60,7 @@ const ABAS = [
   { id: "conta", label: "Minha conta", icone: Building2 },
 ];
 
-export function PerfilClient({ initial, onAvatar, topoFixo = true, emailSomenteLeitura = false }: {
+export function PerfilClient({ initial, onAvatar, topoFixo = true, emailSomenteLeitura = false, notificacoes = false }: {
   initial: Initial;
   /** Foto nova salva (o app do técnico atualiza o topo na hora) */
   onAvatar?: (avatar: string) => void;
@@ -70,6 +71,8 @@ export function PerfilClient({ initial, onAvatar, topoFixo = true, emailSomenteL
    * é por esse e-mail; quem troca é o escritório, na ficha do colaborador). No painel, editável.
    */
   emailSomenteLeitura?: boolean;
+  /** Aba "Notificações" (push com o app fechado): só no painel, e só com o push ligado no servidor */
+  notificacoes?: boolean;
 }) {
   const router = useRouter();
   const { update } = useSession();
@@ -213,7 +216,7 @@ export function PerfilClient({ initial, onAvatar, topoFixo = true, emailSomenteL
         {/* Card central branco com abas + conteúdo */}
         <div className="bg-white rounded-card shadow-card border border-surface-border overflow-hidden">
           <nav className="flex gap-1.5 overflow-x-auto px-4 pt-4 pb-4 border-b border-surface-border">
-            {ABAS.map((t) => {
+            {[...ABAS, ...(notificacoes ? [{ id: "notificacoes", label: "Notificações", icone: Bell }] : [])].map((t) => {
               const ativa = aba === t.id;
               return (
                 <button
@@ -313,6 +316,13 @@ export function PerfilClient({ initial, onAvatar, topoFixo = true, emailSomenteL
                 <p className="text-xs text-ink-muted">Ao trocar a senha, esta sessão continua conectada; as abertas em outros aparelhos são encerradas.</p>
               </FormSection>
             </Painel>
+
+            {/* ABA 5 — Notificações neste aparelho (só com o push ligado) */}
+            {notificacoes && (
+              <Painel ativo={aba === "notificacoes"}>
+                <NotificacoesAparelho modo="escritorio" />
+              </Painel>
+            )}
 
             {/* ABA 4 — Minha Conta (somente leitura) */}
             <Painel ativo={aba === "conta"}>
