@@ -5,7 +5,7 @@
  *  - aparelhos: inscrever, listar e revogar só os próprios; o navegador que recusa (410) é apagado;
  *  - preferência por tipo (só os tipos que a pessoa pode receber);
  *  - eventos: atribuição (só quem ENTROU, e só se continuou), reagendamento, cancelamento, esquecida
- *    (técnico e escritório, sem repetir), aceite, portal, orçamento, estoque, comentário e despesa;
+ *    (técnico e escritório, sem repetir), aceite, portal, orçamento, estoque, comentário (ligado) e despesa (pronta);
  *  - escopo: o técnico nunca recebe o que é da empresa inteira; outra empresa nunca recebe nada;
  *  - a rota do agendador só com o CRON_SECRET, e sem repetir.
  * Pula sem PG_TESTE_URL.
@@ -318,7 +318,7 @@ describe.skipIf(!URL_PG)("push (PostgreSQL real)", () => {
   });
 
   /* ───────── Prontos sem chamador ───────── */
-  it("comentário na OS (pronto): os técnicos da OS (no app) e o escritório, menos o autor", async () => {
+  it("comentário na OS: os técnicos da OS (no app) e o escritório, menos o autor", async () => {
     await ev.notificarComentarioOS("os1", "uAdmin", { comentarioId: "cm1", texto: "Levar escada" });
     const por = Object.fromEntries(h.enviados.map((e) => [e.endpoint.replace("https://push.exemplo/", ""), e.msg]));
     expect(Object.keys(por).sort()).toEqual(["carlos-cel", "carlos-tab", "fin", "rosa"]);
@@ -326,6 +326,29 @@ describe.skipIf(!URL_PG)("push (PostgreSQL real)", () => {
     limpar();
     await ev.notificarComentarioOS("os1", "uAdmin", { comentarioId: "cm1", texto: "Levar escada" });
     expect(recebidos()).toEqual([]); // o mesmo comentário não repete
+  });
+
+  it("comentário gravado pelo escritório (lib/execucao/comentarios) dispara o aviso de verdade, depois da resposta", async () => {
+    const { comentarDoEscritorio } = await import("@/lib/execucao/comentarios");
+    const c = await comentarDoEscritorio("e1", "os1", "uFin", "Cliente pediu para ligar antes");
+    expect(c).not.toBeNull();
+    expect(h.enviados).toEqual([]); // nada antes da resposta
+    await depoisDaResposta();
+    expect(recebidos().sort()).toEqual([["admin", "Comentário novo na OS OS-0001"], ["carlos-cel", "Comentário novo na OS OS-0001"], ["carlos-tab", "Comentário novo na OS OS-0001"], ["rosa", "Comentário novo na OS OS-0001"]]);
+    expect(h.enviados.find((e) => e.endpoint.endsWith("admin"))!.msg.corpo).toBe("uFin · Cliente pediu para ligar antes");
+  });
+
+  it("comentário do técnico pelo app: o escritório recebe; o autor não; reenviar a mesma gravação não avisa de novo", async () => {
+    const { comentarDoApp } = await import("@/lib/execucao/comentarios");
+    const ctx = { ok: true, empresaId: "e1", usuarioId: "uCarlos", escopo: { restrito: true, tecnicoId: "tCarlos" },
+      atividade: { id: "at1", titulo: "Preventiva", status: "AGENDADA", tipoOsId: null, tecnicoId: "tCarlos", ordemServico: { id: "os1", clienteId: "c1", unidadeId: null } }, vinculo: null } as any;
+    expect((await comentarDoApp(ctx, { clientId: "cl-1", texto: "Falta a peça do compressor" } as any)).status).toBe(201);
+    await depoisDaResposta();
+    expect(recebidos().map((x) => x[0]).sort()).toEqual(["admin", "fin", "rosa"]);
+    limpar();
+    expect((await comentarDoApp(ctx, { clientId: "cl-1", texto: "Falta a peça do compressor" } as any)).status).toBe(200);
+    await depoisDaResposta();
+    expect(recebidos()).toEqual([]);
   });
 
   it("despesa (pronta): enviada vai ao escritório que aprova; aprovada/recusada, a quem enviou", async () => {

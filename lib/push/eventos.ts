@@ -6,9 +6,9 @@
  * Técnico: só as atividades DELE (responsável ou na composição). Escritório: quem tem a permissão do tipo,
  * fora do modo técnico. Sem as chaves VAPID, tudo isto vira nada (o envio não faz nada).
  *
- * Ligados nesta leva: atribuição, reagendamento e cancelamento da OS, atividade esquecida (sino e agendador),
- * aceite com ressalva/comentário/nota baixa, chamado do portal, resposta de orçamento e saldo negativo em campo.
- * PRONTOS SEM CHAMADOR (os eventos nascem em PRs do app de campo): `notificarComentarioOS` e `notificarDespesa`.
+ * Ligados: atribuição, reagendamento e cancelamento da OS, atividade esquecida (sino e agendador), aceite com
+ * ressalva/comentário/nota baixa, chamado do portal, resposta de orçamento, saldo negativo em campo e comentário
+ * na OS. PRONTO SEM CHAMADOR (as despesas nascem no PR "App-Campo 2 · PR B"): `notificarDespesa`.
  */
 import { after } from "next/server";
 import type { Prisma } from "@prisma/client";
@@ -160,9 +160,8 @@ export async function notificarAceite(empresaId: string, osId: string) {
 }
 
 /**
- * Comentário novo na OS — PRONTO, ainda sem chamador: os comentários nascem no PR "App-Campo 2 · PR A".
- * Quem mergear por último liga a chamada ao gravar o comentário: `agendarPush(() => notificarComentarioOS(osId, autorId, { comentarioId, texto }))`.
- * Recebem os técnicos da OS e o escritório (quem vê OS), menos o autor.
+ * Comentário novo na OS (lib/execucao/comentarios: do app e do escritório). Recebem os técnicos da OS e o
+ * escritório (quem vê OS), menos o autor; o mesmo comentário não repete (chave pelo id).
  */
 export async function notificarComentarioOS(osId: string, autorId: string, opts: { comentarioId?: string; texto?: string | null } = {}) {
   const os = await prisma.ordemServico.findUnique({ where: { id: osId }, select: { id: true, numero: true, empresaId: true, cliente: { select: { nome: true, nomeFantasia: true } } } });

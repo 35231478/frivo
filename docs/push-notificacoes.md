@@ -17,7 +17,7 @@ Avisos no celular ou no computador mesmo com o Frivo fechado. O técnico recebe 
 2. **Colar no Vercel:** projeto › Settings › Environment Variables › ambiente **Production**. Crie uma variável para cada linha, com o nome e o valor.
    - A chave **privada** é segredo: só no Vercel, nunca em código, chat ou e-mail.
 3. **Fazer um novo deploy:** Deployments › último deploy › ⋯ › Redeploy. O servidor lê as chaves na hora, sem precisar recompilar, mas a variável nova só vale a partir de um deploy.
-4. **Rodar o SQL** `prisma/sql/2027-02-03_push_notificacoes.sql`, **antes** de subir esta versão.
+4. **Rodar o SQL** `prisma/sql/2027-02-04_push_notificacoes.sql`, **antes** de subir esta versão.
 5. **Testar:** Meu perfil › Notificações › "Ativar notificações neste aparelho" › "Enviar teste".
 
 **Não troque as chaves depois.** Trocar desinscreve todos os aparelhos, e cada pessoa precisaria ativar de novo.
@@ -54,7 +54,7 @@ Authorization: Bearer <CRON_SECRET>
 | Chamado novo do portal | o escritório (quem vê OS) | abre o chamado |
 | Orçamento aprovado ou recusado | quem vê orçamentos | abre o orçamento |
 | Saldo negativo por uso em campo | quem vê o estoque | abre o estoque |
-| Comentário novo na OS *(pronto, sem chamador)* | os técnicos da OS e o escritório, menos o autor | abre a OS |
+| Comentário novo na OS (do app ou do escritório) | os técnicos da OS e o escritório, menos o autor | abre a OS |
 | Despesa de campo *(pronto, sem chamador)* | enviada: o escritório (Financeiro › Fluxo de caixa); aprovada ou recusada: quem enviou | abre a despesa |
 
 **Regras de quem recebe:**
@@ -80,10 +80,7 @@ Authorization: Bearer <CRON_SECRET>
 
 ## Para quem mergear os PRs do app de campo
 
-- **Comentários na OS** (PR "App-Campo 2 · PR A"): ao gravar o comentário, chamar
-  ```ts
-  agendarPush(() => notificarComentarioOS(osId, autorId, { comentarioId, texto }))
-  ```
+- **Comentários na OS** (PR "App-Campo 2 · PR A", já no master): a chamada já está ligada nesta leva, em `lib/execucao/comentarios.ts`. Ela dispara só para comentário novo; o reenvio da mesma gravação não avisa de novo.
 - **Despesas de campo** (PR "App-Campo 2 · PR B"):
   - ao enviar: `agendarPush(() => notificarDespesa({ empresaId, despesaId, situacao: "ENVIADA", autorUsuarioId, descricao, valor, url }))`;
   - ao aprovar ou recusar: a mesma chamada, com `situacao: "APROVADA"` ou `"RECUSADA"` e, ao recusar, `motivo`.

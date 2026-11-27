@@ -1,5 +1,5 @@
 /**
- * Push — o SQL de produção (prisma/sql/2027-02-03_push_notificacoes.sql) rodado de verdade num PostgreSQL, DUAS
+ * Push — o SQL de produção (prisma/sql/2027-02-04_push_notificacoes.sql) rodado de verdade num PostgreSQL, DUAS
  * vezes: num banco com a "push_subscriptions" como está hoje (com uma inscrição antiga) e num banco sem ela.
  *   PG_TESTE_URL="postgresql://root@localhost/postgres?host=/var/run/postgresql" npx vitest run tests/unit/sql-push-notificacoes
  */
@@ -8,7 +8,7 @@ import { execFileSync } from "node:child_process";
 import path from "node:path";
 
 const URL = process.env.PG_TESTE_URL;
-const ARQUIVO = path.resolve(__dirname, "../../prisma/sql/2027-02-03_push_notificacoes.sql");
+const ARQUIVO = path.resolve(__dirname, "../../prisma/sql/2027-02-04_push_notificacoes.sql");
 const COM = `teste_sql_push_${process.pid}`;
 const SEM = `teste_sql_push_vazio_${process.pid}`;
 

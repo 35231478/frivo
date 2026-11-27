@@ -19,7 +19,7 @@
 -- SEM AS CHAVES VAPID no ambiente, nada é enviado e as tabelas ficam paradas.
 --
 -- Pode rodar mais de uma vez.
---   psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f prisma/sql/2027-02-03_push_notificacoes.sql
+--   psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f prisma/sql/2027-02-04_push_notificacoes.sql
 
 BEGIN;
 
