@@ -250,6 +250,12 @@ async function atualizar(
 /** Erro de UMA linha, com a mensagem que a pessoa vê (o resto do lote segue). */
 export class ErroLinha extends Error {}
 
+/**
+ * O que a gravação de UMA linha fez: o registro dela (criado ou atualizado) e o que criou por conta própria
+ * (ex.: a unidade "Principal" do cliente novo). Vira os itens do lote de importação (leva 5).
+ */
+type Feito = { r: "criado" | "atualizado" | "igual"; id?: string; extras?: { entidade: string; id: string }[] };
+
 /** O que a gravação fez além de criar/atualizar a linha (vira uma frase no resultado). */
 interface Efeitos { unidadesPrincipais: number; principaisTrocados: number; saldosIguais: number }
 
@@ -267,7 +273,7 @@ function unidadePrincipalDe(c: Record<string, unknown>, empresaId: string, clien
  * Cliente: cria (com a unidade "Principal" com o endereço dele, na mesma transação) ou atualiza;
  * cliente atualizado que ainda não tem NENHUMA unidade também ganha a "Principal".
  */
-async function gravarCliente(l: LinhaAnalisada, dados: Record<string, unknown>, empresaId: string, ef: Efeitos): Promise<"criado" | "atualizado"> {
+async function gravarCliente(l: LinhaAnalisada, dados: Record<string, unknown>, empresaId: string, ef: Efeitos): Promise<Feito> {
   if (dados.tabelaPrecoId)
     await validarRefEmpresa("tabelaPreco", dados.tabelaPrecoId as string, empresaId, "Tabela de preço", { novoAtivo: true });
   return prisma.$transaction(async (tx) => {
@@ -280,13 +286,15 @@ async function gravarCliente(l: LinhaAnalisada, dados: Record<string, unknown>, 
       await atualizar(tx.cliente as unknown as Delegate, { id: l.existenteId, empresaId }, dados);
       clienteId = l.existenteId!; resultado = "atualizado";
     }
+    const extras: { entidade: string; id: string }[] = [];
     if ((await tx.unidade.count({ where: { clienteId, empresaId } })) === 0) {
       // O endereço gravado (no update, o que já estava + o que veio preenchido)
       const c = await tx.cliente.findFirstOrThrow({ where: { id: clienteId, empresaId } });
-      await tx.unidade.create({ data: unidadePrincipalDe(c as unknown as Record<string, unknown>, empresaId, clienteId) });
+      const u = await tx.unidade.create({ data: unidadePrincipalDe(c as unknown as Record<string, unknown>, empresaId, clienteId), select: { id: true } });
+      extras.push({ entidade: "unidades", id: u.id });
       ef.unidadesPrincipais++;
     }
-    return resultado;
+    return { r: resultado, id: clienteId, extras };
   });
 }
 
@@ -295,7 +303,7 @@ async function gravarCliente(l: LinhaAnalisada, dados: Record<string, unknown>, 
  * do principal anterior DO MESMO CLIENTE (na mesma transação). Unidade nova de um cliente sem nenhuma
  * unidade vira a principal (o cliente sempre tem um endereço principal). Nunca muda o cliente.
  */
-async function gravarDoCliente(entidade: "unidades" | "contatos", l: LinhaAnalisada, dados: Record<string, unknown>, empresaId: string, ef: Efeitos): Promise<"criado" | "atualizado"> {
+async function gravarDoCliente(entidade: "unidades" | "contatos", l: LinhaAnalisada, dados: Record<string, unknown>, empresaId: string, ef: Efeitos): Promise<Feito> {
   const clienteId = String(dados.clienteId);
   delete dados.clienteId;
   return prisma.$transaction(async (tx) => {
@@ -312,12 +320,12 @@ async function gravarDoCliente(entidade: "unidades" | "contatos", l: LinhaAnalis
       ef.principaisTrocados += r.count;
     }
     if (l.status === "criar") {
-      await t.create({ data: { ...dados, principal: dados.principal === true, empresaId, clienteId } });
-      return "criado";
+      const novo = await t.create({ data: { ...dados, principal: dados.principal === true, empresaId, clienteId } }) as { id: string };
+      return { r: "criado", id: novo.id } as Feito;
     }
     if (l.chave?.includes("|") && !l.chave.startsWith("ctmail:")) delete dados.nome; // casou pelo nome: não renomeia
     await atualizar(t, { id: l.existenteId, empresaId, clienteId }, dados);
-    return "atualizado";
+    return { r: "atualizado", id: l.existenteId } as Feito;
   });
 }
 
@@ -328,7 +336,7 @@ type TipoResolvido = { tipo: string; tipoEquipamentoId: string | null };
  * resolvido (uma vez por planilha). Cria nunca sem tipo (vazio = Outro); atualiza sem mudar de
  * cliente (pode mudar de unidade dentro do mesmo cliente) e só o que veio preenchido.
  */
-async function gravarEquipamento(l: LinhaAnalisada, dados: Record<string, unknown>, empresaId: string, tipos: Map<string, TipoResolvido>): Promise<"criado" | "atualizado"> {
+async function gravarEquipamento(l: LinhaAnalisada, dados: Record<string, unknown>, empresaId: string, tipos: Map<string, TipoResolvido>): Promise<Feito> {
   const { clienteId, tipoRef, semChave: _s, ...campos } = dados as Record<string, unknown> & { clienteId: string; tipoRef?: string };
   const unidade = await prisma.unidade.findFirst({ where: { id: String(campos.unidadeId), empresaId, clienteId }, select: { id: true } });
   if (!unidade) throw new ErroLinha("A unidade desta linha não foi encontrada no cliente (na sua empresa).");
@@ -337,25 +345,30 @@ async function gravarEquipamento(l: LinhaAnalisada, dados: Record<string, unknow
   if (l.status === "criar") {
     const t = tipo ?? tipos.get("e:OUTRO");
     if (!t) throw new ErroLinha("Tipo de equipamento não encontrado.");
-    await prisma.equipamento.create({ data: { ...(campos as Prisma.EquipamentoUncheckedCreateInput), tipo: t.tipo as Prisma.EquipamentoUncheckedCreateInput["tipo"], tipoEquipamentoId: t.tipoEquipamentoId, empresaId, ativo: true, fotos: [] } });
-    return "criado";
+    const novo = await prisma.equipamento.create({ data: { ...(campos as Prisma.EquipamentoUncheckedCreateInput), tipo: t.tipo as Prisma.EquipamentoUncheckedCreateInput["tipo"], tipoEquipamentoId: t.tipoEquipamentoId, empresaId, ativo: true, fotos: [] }, select: { id: true } });
+    return { r: "criado", id: novo.id };
   }
   const existe = await prisma.equipamento.count({ where: { id: l.existenteId, empresaId, unidade: { clienteId } } });
   if (existe !== 1) throw new ErroLinha("O equipamento a atualizar não foi encontrado neste cliente (na sua empresa).");
   await atualizar(prisma.equipamento as unknown as Delegate, { id: l.existenteId, empresaId }, { ...campos, ...(tipo && { tipo: tipo.tipo, tipoEquipamentoId: tipo.tipoEquipamentoId }) });
-  return "atualizado";
+  return { r: "atualizado", id: l.existenteId };
 }
 
 /**
  * Tipos de equipamento da planilha, resolvidos UMA vez e em sequência antes de gravar (o tipo do
  * sistema sem personalizado ganha o personalizado na 1ª vez — gravar em paralelo criaria vários).
  */
-async function resolverTipos(linhas: LinhaAnalisada[], empresaId: string) {
+async function resolverTipos(linhas: LinhaAnalisada[], empresaId: string, criados: string[] = []) {
   const refs = new Set(linhas.filter((l) => l.status === "criar" || l.dados?.tipoRef).map((l) => String(l.dados?.tipoRef ?? "e:OUTRO")));
   const tipos = new Map<string, TipoResolvido>();
   for (const ref of refs) {
+    // Tipo do sistema que ainda não tem o personalizado: a resolução CRIA o personalizado (entra no lote)
+    const antes = ref.startsWith("e:") ? await prisma.tipoEquipamentoCustom.count({ where: { empresaId, chaveEnum: ref.slice(2) } }) : 1;
     const r = ref.startsWith("c:") ? await resolverTipoEquipamento(empresaId, "OUTRO", ref.slice(2)) : await resolverTipoEquipamento(empresaId, ref.slice(2), null);
-    if (!("erro" in r)) tipos.set(ref, r);
+    if (!("erro" in r)) {
+      tipos.set(ref, r);
+      if (antes === 0 && r.tipoEquipamentoId) criados.push(r.tipoEquipamentoId);
+    }
   }
   return tipos;
 }
@@ -367,7 +380,7 @@ export const OBS_SALDO_INICIAL = "Saldo inicial (planilha de implantação)";
  * travada (o saldo é relido aqui, nunca o da prévia). Subindo = ENTRADA de origem Inventário, com o custo
  * (vira o último custo de compra do produto); descendo = ajuste de inventário (sem custo); igual = nada.
  */
-async function gravarEstoque(l: LinhaAnalisada, dados: Record<string, unknown>, empresaId: string, usuarioId: string | null, ef: Efeitos): Promise<"atualizado" | "igual"> {
+async function gravarEstoque(l: LinhaAnalisada, dados: Record<string, unknown>, empresaId: string, usuarioId: string | null, ef: Efeitos): Promise<Feito> {
   const produtoId = l.existenteId!;
   const quantidade = Number(dados.quantidade);
   const custo = dados.custoUnitario === undefined ? null : Number(dados.custoUnitario);
@@ -376,45 +389,45 @@ async function gravarEstoque(l: LinhaAnalisada, dados: Record<string, unknown>, 
       .catch((e: { code?: string }) => { throw e?.code === "P2025" ? new ErroLinha("O produto desta linha não foi encontrado na sua empresa.") : e; });
     if (!p.controlaEstoque || !p.ativo) throw new ErroLinha("Este produto não controla estoque ou está inativo.");
     const atual = arred(Number(p.saldo));
-    if (quantidade === atual) { ef.saldosIguais++; return "igual"; }
+    if (quantidade === atual) { ef.saldosIguais++; return { r: "igual" } as Feito; }
     const base = { empresaId, produtoId, usuarioId, observacao: OBS_SALDO_INICIAL, origem: "INVENTARIO" as const };
     if (quantidade > atual) await movimentar({ ...base, operacao: "ENTRADA", valor: arred(quantidade - atual), custoUnitario: custo }, tx);
     else await movimentar({ ...base, operacao: "INVENTARIO", valor: quantidade }, tx);
-    return "atualizado";
+    return { r: "atualizado", id: produtoId } as Feito;
   });
 }
 
 /** Colaborador: cria (com o CPF formatado e o cargo conferido) ou atualiza só o que veio — nunca o CPF. */
-async function gravarColaborador(l: LinhaAnalisada, dados: Record<string, unknown>, empresaId: string): Promise<"criado" | "atualizado"> {
+async function gravarColaborador(l: LinhaAnalisada, dados: Record<string, unknown>, empresaId: string): Promise<Feito> {
   if (dados.cargoId) await validarRefEmpresa("cargo", dados.cargoId as string, empresaId, "Cargo", { novoAtivo: true });
   delete dados.cargoNovo; // já virou cargoId (resolverCargos)
   if (l.status === "criar") {
     // Sem telefone entra vazio (a coluna é obrigatória), como na planilha da folha; a prévia avisou
-    await prisma.tecnico.create({ data: { ...(dados as Prisma.TecnicoUncheckedCreateInput), telefone: (dados.telefone as string | undefined) ?? "", empresaId, ativo: true } });
-    return "criado";
+    const novo = await prisma.tecnico.create({ data: { ...(dados as Prisma.TecnicoUncheckedCreateInput), telefone: (dados.telefone as string | undefined) ?? "", empresaId, ativo: true }, select: { id: true } });
+    return { r: "criado", id: novo.id };
   }
   const { cpf: _cpf, ...resto } = dados;
   await atualizar(prisma.tecnico as unknown as Delegate, { id: l.existenteId, empresaId }, resto);
-  return "atualizado";
+  return { r: "atualizado", id: l.existenteId };
 }
 
 /** Veículo: cria com a placa normalizada ou atualiza só o que veio — nunca a placa. Responsável conferido na empresa. */
-async function gravarVeiculo(l: LinhaAnalisada, dados: Record<string, unknown>, empresaId: string): Promise<"criado" | "atualizado"> {
+async function gravarVeiculo(l: LinhaAnalisada, dados: Record<string, unknown>, empresaId: string): Promise<Feito> {
   if (dados.responsavelId) await validarRefEmpresa("tecnico", dados.responsavelId as string, empresaId, "Responsável");
   if (l.status === "criar") {
-    await prisma.veiculo.create({ data: { ...(dados as Prisma.VeiculoUncheckedCreateInput), empresaId, fotos: [] } });
-    return "criado";
+    const novo = await prisma.veiculo.create({ data: { ...(dados as Prisma.VeiculoUncheckedCreateInput), empresaId, fotos: [] }, select: { id: true } });
+    return { r: "criado", id: novo.id };
   }
   const { placa: _placa, ...resto } = dados;
   await atualizar(prisma.veiculo as unknown as Delegate, { id: l.existenteId, empresaId }, resto);
-  return "atualizado";
+  return { r: "atualizado", id: l.existenteId };
 }
 
 /**
  * Cargos que a planilha cita e não existem: criados UMA vez cada (sem acento/maiúsculas), em sequência, antes de
  * gravar; o que já existe ativo (criado enquanto se importava) é reaproveitado. As linhas passam a ter o cargoId.
  */
-export async function resolverCargos(linhas: LinhaAnalisada[], empresaId: string): Promise<string[]> {
+export async function resolverCargos(linhas: LinhaAnalisada[], empresaId: string, criadosIds: string[] = []): Promise<string[]> {
   const novos = new Map<string, string>(); // chave → nome como veio na 1ª linha
   for (const l of linhas) { const n = l.dados?.cargoNovo as string | undefined; if (n && !novos.has(chaveNome(n))) novos.set(chaveNome(n), n); }
   const ids = new Map<string, string>();
@@ -423,7 +436,7 @@ export async function resolverCargos(linhas: LinhaAnalisada[], empresaId: string
     const existe = await prisma.cargo.findFirst({ where: { empresaId, ativo: true, nome: { equals: nome, mode: "insensitive" } }, select: { id: true } });
     if (existe) { ids.set(k, existe.id); continue; }
     const c = await prisma.cargo.create({ data: { empresaId, nome }, select: { id: true } });
-    ids.set(k, c.id); criados.push(nome);
+    ids.set(k, c.id); criados.push(nome); criadosIds.push(c.id);
   }
   for (const l of linhas) {
     const n = l.dados?.cargoNovo as string | undefined;
@@ -432,10 +445,8 @@ export async function resolverCargos(linhas: LinhaAnalisada[], empresaId: string
   return criados.sort((a, b) => a.localeCompare(b, "pt-BR"));
 }
 
-type Gravado = "criado" | "atualizado" | "igual";
-
 /** Uma linha: cria (com os padrões do cadastro) ou atualiza só o que veio preenchido. */
-async function gravarLinha(entidade: EntidadeImportacao, l: LinhaAnalisada, empresaId: string, ef: Efeitos, tipos: Map<string, TipoResolvido> = new Map(), usuarioId: string | null = null): Promise<Gravado> {
+async function gravarLinha(entidade: EntidadeImportacao, l: LinhaAnalisada, empresaId: string, ef: Efeitos, tipos: Map<string, TipoResolvido> = new Map(), usuarioId: string | null = null): Promise<Feito> {
   const dados = semIndefinidos(l.dados ?? {});
   // Nunca deixa a planilha escolher empresa, id ou situação
   delete dados.empresaId; delete dados.id; delete dados.ativo;
@@ -452,13 +463,13 @@ async function gravarLinha(entidade: EntidadeImportacao, l: LinhaAnalisada, empr
     const base = cad.schemaCriar.parse(semCodigo) as Record<string, unknown>;
     // Campo estruturado (ex.: materiais padrão do serviço, E3.2) não vem da planilha: o padrão do schema (lista vazia) fica de fora da gravação
     for (const c of cad.campos) if (c.tipo === "estruturado") delete base[c.key];
-    await tabela(entidade).create({ data: { ...base, ...(codigo !== undefined && { codigo }), empresaId, ativo: true } });
-    return "criado";
+    const novo = await tabela(entidade).create({ data: { ...base, ...(codigo !== undefined && { codigo }), empresaId, ativo: true } }) as { id: string };
+    return { r: "criado", id: novo.id };
   }
   // Casou pelo nome: o nome é a chave — "gas r410a" na planilha não renomeia o "Gás R410A" do cadastro
   if (l.chave?.startsWith("nome:")) delete dados.nome;
   await atualizar(tabela(entidade), { id: l.existenteId, empresaId }, dados);
-  return "atualizado";
+  return { r: "atualizado", id: l.existenteId };
 }
 
 export const TAMANHO_LOTE = 50;
@@ -472,7 +483,17 @@ export interface ResultadoImportacao {
   avisos: (Pick<LinhaAnalisada, "linha" | "rotulo" | "valores"> & { avisos: string[] })[];
   /** Linhas com erro (da análise e da gravação), com os valores originais para a planilha de erros */
   erros: Pick<LinhaAnalisada, "linha" | "rotulo" | "erros" | "valores">[];
+  /** O lote desta importação (Implantação › Importações), quando registrado */
+  loteId?: string;
 }
+
+/** O cadastro do registro de cada planilha, nos itens do lote (a de estoque ATUALIZA produtos) */
+export const ENTIDADE_DO_ITEM: Record<EntidadeImportacao, string> = {
+  clientes: "clientes", unidades: "unidades", contatos: "contatos", equipamentos: "equipamentos", fornecedores: "fornecedores",
+  servicos: "servicos", produtos: "produtos", estoque: "produtos", colaboradores: "colaboradores", veiculos: "veiculos",
+};
+
+type ItemLote = { entidade: string; registroId: string; acao: "CRIADO" | "ATUALIZADO"; linha: number | null };
 
 /**
  * Grava as linhas válidas em lotes (uma linha que falhar ao gravar vira erro e as outras seguem).
@@ -501,23 +522,35 @@ async function reservarCodigos(entidade: EntidadeImportacao, linhas: LinhaAnalis
   }
 }
 
-export async function gravarImportacao(entidade: EntidadeImportacao, analise: Analise, empresaId: string, o: { usuarioId?: string | null } = {}): Promise<ResultadoImportacao> {
+export async function gravarImportacao(
+  entidade: EntidadeImportacao, analise: Analise, empresaId: string,
+  /** arquivo: o nome do arquivo enviado — com ele, a importação vira um LOTE (leva 5) */
+  o: { usuarioId?: string | null; arquivo?: string } = {},
+): Promise<ResultadoImportacao> {
   const res: ResultadoImportacao = { criados: 0, atualizados: 0, observacoes: [], avisos: [], erros: analise.linhas.filter((l) => l.status === "erro") };
   const ef: Efeitos = { unidadesPrincipais: 0, principaisTrocados: 0, saldosIguais: 0 };
   const gravar = analise.linhas.filter((l) => l.status !== "erro");
   await reservarCodigos(entidade, gravar, empresaId);
-  const tipos = entidade === "equipamentos" ? await resolverTipos(gravar, empresaId) : new Map<string, TipoResolvido>();
-  const cargosCriados = entidade === "colaboradores" ? await resolverCargos(gravar, empresaId) : [];
+  const itens: ItemLote[] = [];
+  const tiposCriados: string[] = [];
+  const cargosCriadosIds: string[] = [];
+  const tipos = entidade === "equipamentos" ? await resolverTipos(gravar, empresaId, tiposCriados) : new Map<string, TipoResolvido>();
+  const cargosCriados = entidade === "colaboradores" ? await resolverCargos(gravar, empresaId, cargosCriadosIds) : [];
+  for (const id of tiposCriados) itens.push({ entidade: "tiposEquipamento", registroId: id, acao: "CRIADO", linha: null });
+  for (const id of cargosCriadosIds) itens.push({ entidade: "cargos", registroId: id, acao: "CRIADO", linha: null });
   for (let i = 0; i < gravar.length; i += TAMANHO_LOTE) {
     const lote = gravar.slice(i, i + TAMANHO_LOTE);
     // Unidades e contatos: uma linha por vez (o "principal" de um cliente não pode correr em paralelo)
     const feitos = entidade === "unidades" || entidade === "contatos"
-      ? await (async () => { const r: PromiseSettledResult<Gravado>[] = []; for (const l of lote) r.push(...await Promise.allSettled([gravarLinha(entidade, l, empresaId, ef)])); return r; })()
+      ? await (async () => { const r: PromiseSettledResult<Feito>[] = []; for (const l of lote) r.push(...await Promise.allSettled([gravarLinha(entidade, l, empresaId, ef)])); return r; })()
       : await Promise.allSettled(lote.map((l) => gravarLinha(entidade, l, empresaId, ef, tipos, o.usuarioId ?? null)));
     feitos.forEach((f, k) => {
       if (f.status === "fulfilled") {
-        if (f.value === "criado") res.criados++; else if (f.value === "atualizado") res.atualizados++;
         const l = lote[k];
+        if (f.value.r === "criado") res.criados++; else if (f.value.r === "atualizado") res.atualizados++;
+        if (f.value.id && f.value.r !== "igual")
+          itens.push({ entidade: ENTIDADE_DO_ITEM[entidade], registroId: f.value.id, acao: f.value.r === "criado" ? "CRIADO" : "ATUALIZADO", linha: l.linha });
+        for (const x of f.value.extras ?? []) itens.push({ entidade: x.entidade, registroId: x.id, acao: "CRIADO", linha: null });
         if (l.avisos?.length) res.avisos.push({ linha: l.linha, rotulo: l.rotulo, valores: l.valores, avisos: l.avisos });
         return;
       }
@@ -541,5 +574,24 @@ export async function gravarImportacao(entidade: EntidadeImportacao, analise: An
     res.observacoes.push(`${ef.saldosIguais} ${ef.saldosIguais === 1 ? "produto já estava" : "produtos já estavam"} com esse saldo: nada foi lançado.`);
   if (ef.principaisTrocados)
     res.observacoes.push(`${ef.principaisTrocados} ${entidade === "contatos" ? (ef.principaisTrocados === 1 ? "contato deixou" : "contatos deixaram") : (ef.principaisTrocados === 1 ? "unidade deixou" : "unidades deixaram")} de ser ${entidade === "contatos" ? "o principal" : "a principal"}: a planilha marcou outro.`);
+  // O lote: quem, quando, o arquivo, as contagens e cada registro criado/atualizado (para "Desfazer lote")
+  // Os dados já estão gravados: registrar o lote nunca derruba a importação (falhou = aviso no resultado)
+  if (o.arquivo !== undefined) {
+    try {
+      const usuarioId = o.usuarioId && (await prisma.usuario.count({ where: { id: o.usuarioId } })) ? o.usuarioId : null;
+      const lote = await prisma.importacaoLote.create({
+        data: {
+          empresaId, usuarioId, entidade, arquivo: o.arquivo.slice(0, 200) || "planilha",
+          criados: res.criados, atualizados: res.atualizados, comErro: res.erros.length, avisos: res.avisos.length,
+          itens: { createMany: { data: itens.map((x) => ({ ...x, empresaId })) } },
+        },
+        select: { id: true },
+      });
+      res.loteId = lote.id;
+    } catch (e) {
+      console.error("[importacao] lote não registrado", e);
+      res.observacoes.push("Os dados foram gravados, mas o lote desta importação não foi registrado: ela não aparece em Implantação › Importações e não pode ser desfeita por lá.");
+    }
+  }
   return res;
 }
