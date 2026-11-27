@@ -96,7 +96,10 @@ entrou numa medição válida. O técnico (modo técnico) não usa essas rotas, 
 ## Testes
 
 - `app-campo-leva1` (30, regra pura), `app-campo-leva1-ui` (21, DOM real + banco do aparelho real),
-  `app-campo-leva1-pg` (25, PostgreSQL real com as rotas de verdade), `sql-app-materiais-campo` (5).
+  `app-campo-leva1-pg` (27, PostgreSQL real com as rotas de verdade), `sql-app-materiais-campo` (5).
+- **Mutação: 62 de 62 mortos.** Na 1ª rodada sobraram 2, que eram buracos de prova e ganharam teste: a OS já numa
+  medição não muda mais o material usado, e saldo exatamente zero não é "negativo" no sino.
+- Suíte inteira: 525 arquivos, 7.899 testes, todos verdes (com o PostgreSQL). Typecheck limpo. Build de produção ok.
 - O teste no PostgreSQL achou um bug antes do PR: na rota da ficha, o filtro de escopo do técnico (`OR`) era
   sobrescrito pelo `OR` da janela de hoje — atividade de outro técnico podia levar à OS dele. Corrigido com `AND`.
 
