@@ -287,6 +287,7 @@ describe.skipIf(!URL_PG)("Exportar dados da empresa — PostgreSQL real", () => 
     it.each([
       ["operador com tudo liberado", "e1-op", "OPERADOR"],
       ["técnico", "e1-tecu", "TECNICO"],
+      ["rebaixado: o cookie ainda diz ADMIN, o banco diz OPERADOR", "e1-op", "ADMIN"],
       ["administrador inativo (o cookie ainda diz ADMIN)", "e1-ex", "ADMIN"],
       ["usuário de outra empresa com a sessão apontando para esta", "e2-admin", "ADMIN"],
     ])("%s: 403, nada é registrado", async (_, id, role) => {
