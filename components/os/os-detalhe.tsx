@@ -6,6 +6,7 @@ import { Tabs } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { OsOrcamento } from "@/components/os/os-orcamento";
 import { OsFinanceiro } from "@/components/os/os-financeiro";
+import { DespesasCampoOs } from "@/components/os/despesas-campo-os";
 import { OsOrcamentosVinculados } from "@/components/os/os-orcamentos-vinculados";
 import { OsRelatorios } from "@/components/os/os-relatorios";
 import { ComprasSecao } from "@/components/compras/compras-secao";
@@ -194,6 +195,7 @@ export function OsDetalhe({ os: initialOs, abaInicial, verCusto = false }: {
                 {ativa === "financeiro" && (
                   <OsFinanceiro osId={os.id} temContrato={!!os.contrato} concluida={os.status === "CONCLUIDA"} fatura={os.fatura ?? null} faturamento={os.faturamento ?? null} medicoes={os.medicoes} itensOrcamento={os.itensOrcamento} contasReceber={os.contasReceber ?? []} abrirNfse={abrirNfse} onAbriuNfse={() => setAbrirNfse(false)} />
                 )}
+                {ativa === "financeiro" && pode("financeiro", "visualizar") && <div className="mt-6"><DespesasCampoOs osId={os.id} /></div>}
 
                 {ativa === "relatorios" && (
                   <div className="space-y-8">

@@ -15,7 +15,7 @@ import {
   Wrench, Calculator, Wallet, Receipt, TrendingUp, FileBarChart, ShoppingCart, CalendarDays, QrCode, MapPinned,
   Truck, UsersRound, BadgeDollarSign, ClipboardCheck, Smartphone, FolderOutput, UserCog, Upload, Landmark, Globe, Coins,
   PanelLeftClose, PanelLeftOpen, MoreVertical, LogOut, Package, FileBadge,
-  CalendarClock, PackageOpen, PackageMinus, Trophy, UserPlus, Timer,
+  CalendarClock, PackageOpen, PackageMinus, Trophy, UserPlus, Timer, ReceiptText,
 } from "lucide-react";
 
 type Icone = React.ComponentType<{ className?: string }>;
@@ -145,6 +145,7 @@ const FINANCEIRO: Secao[] = [
       {
         tipo: "grupo", label: "Pagamentos", icone: Upload, itens: [
           { href: "/financeiro/contas-pagar", icone: Upload, label: "Contas a pagar", modulo: "financeiro" },
+          { href: "/financeiro/despesas-campo", icone: ReceiptText, label: "Despesas de campo", modulo: "financeiro" },
           { href: "/compras/pedidos", icone: ShoppingCart, label: "Pedidos de compra", modulo: "compras" },
           { href: "/financeiro/fornecedores", icone: Truck, label: "Fornecedores", modulo: "financeiro" },
         ],

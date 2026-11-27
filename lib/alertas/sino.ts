@@ -38,6 +38,8 @@ export interface EscopoDoSino {
   aceites: boolean;
   /** Nota baixa do aceite: só o escritório (quem gere a OS), nunca o técnico */
   notaBaixa: boolean;
+  /** Despesas de campo esperando aprovação: quem lança contas a pagar (Financeiro › Fluxo de caixa) */
+  despesasCampo: boolean;
   /** Comentário novo do campo na OS (conversa interna): só o escritório, para quem vê OS */
   comentariosCampo: boolean;
   /** Atividade esquecida em andamento (passou do limite da empresa, ou começou em outro dia): só o escritório */
@@ -69,6 +71,7 @@ export function escopoDoSino({ permissoes, role, restrito }: QuemPergunta): Esco
     estoqueNegativoCampo: daEmpresa && p("estoque", "visualizar"),
     atividadesEsquecidas: daEmpresa && verOrdens,
     comentariosCampo: daEmpresa && verOrdens,
+    despesasCampo: daEmpresa && p("financeiro", "fluxoCaixa"),
     nfDosMeusPedidos: true,
   };
 }

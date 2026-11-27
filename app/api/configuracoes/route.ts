@@ -40,6 +40,7 @@ const configuracaoSchema = z.object({
   appAvisarCliente: z.boolean().optional(),
   appOQueLevar: z.boolean().optional(),
   appAlertaAndamentoHoras: limiteHorasSchema.optional(),
+  appLancarDespesas: z.boolean().optional(),
   appRastrearLocalizacao: z.boolean().optional(),
   notifEmailAbrirOs: z.boolean().optional(),
   notifEmailConcluirOs: z.boolean().optional(),
@@ -120,6 +121,8 @@ export async function PUT(req: NextRequest) {
     checklistDiarioAtivo: _cdA, checklistDiarioDias: _cdD, checklistDiarioTemplateId: _cdT, checklistDiarioTodos: _cdTo, checklistDiarioTecnicos: _cdTe,
     // Implantação ("não se aplica / fazer depois"): rota própria (/api/implantacao/etapas); a tela geral não sobrescreve
     implantacaoDispensadas: _impl,
+    // Categorias das despesas de campo: rota própria (/api/despesas-campo/categorias); a tela geral não sobrescreve
+    despesasCampoCategorias: _despCat,
     ...entrada
   } = semCampoMorto(body);
   const parsed = configuracaoSchema.safeParse(entrada);

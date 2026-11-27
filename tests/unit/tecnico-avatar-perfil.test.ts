@@ -112,11 +112,11 @@ describe("Perfil enxuto", () => {
     expect(texto($("[data-avatar-perfil]"))).toBe("JS");
   });
 
-  it("o card 'App de rota' saiu da frente (e o 'Trocar senha' solto também): ficam Sincronização, Checklist do veículo, Meus dados e Sair", async () => {
+  it("o card 'App de rota' saiu da frente (e o 'Trocar senha' solto também): ficam Sincronização, Minhas despesas, Checklist do veículo, Meus dados e Sair", async () => {
     await abrirApp(usuario(), "?ver=perfil");
     expect($("[data-preferencia-rota]")).toBeNull();
     expect(texto()).not.toContain("App de rota");
-    expect(secoes()).toEqual(["cabeçalho", "Sincronização", "Checklist do veículo", "Meus dados", "Sair"]);
+    expect(secoes()).toEqual(["cabeçalho", "Sincronização", "Minhas despesas", "Checklist do veículo", "Meus dados", "Sair"]);
     expect(texto()).not.toContain("Trocar senha"); // a troca de senha vive só em Meus dados › Segurança
   });
 
