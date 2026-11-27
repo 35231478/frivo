@@ -78,3 +78,38 @@ export function textoDaTrilha(alteracoes: readonly AlteracaoPrecoTabela[], motiv
   const itens = alteracoes.map((a) => `${a.descricao} (${reais(a.valorTabela)} → ${reais(a.valorNovo)})`).join("; ");
   return `Preço de tabela alterado: ${itens}. Motivo: ${motivo}`;
 }
+
+/* ───────── na tela (orçamento e OS): as mesmas contas, para travar o campo e pedir o motivo antes de salvar ───────── */
+
+export interface ItemDaTela {
+  catalogoId?: string | null;
+  valorUnitario: number;
+  valorManual?: boolean;
+  /** Veio da tabela do cliente ("contrato") */
+  origemPreco?: string;
+  /** O valor da tabela para este item */
+  valorTabela?: number;
+  /** O valor já gravado (ao abrir um documento salvo): mudar de volta para ele não é alteração */
+  valorGravado?: number;
+  /** O campo de preço não se edita */
+  bloqueado?: boolean;
+}
+
+/**
+ * Marca os itens que estão na tabela do cliente (ao abrir um documento salvo ou trocar de cliente): origem
+ * "contrato", o valor da tabela e — sem a permissão — o campo travado. Sem tabela, nada muda.
+ */
+export function marcarItensDaTabela<T extends ItemDaTela>(itens: T[], tabela: Record<string, { valorFinal: number }> | null | undefined, podeAlterar: boolean): T[] {
+  if (!tabela) return itens;
+  return itens.map((it) => {
+    const t = it.catalogoId ? tabela[it.catalogoId] : undefined;
+    if (!t) return it;
+    return { ...it, origemPreco: "contrato" as const, valorTabela: t.valorFinal, bloqueado: !podeAlterar, valorGravado: it.valorGravado ?? it.valorUnitario };
+  });
+}
+
+/** Os itens da tabela com o preço mudado (nem o da tabela, nem o já gravado): pedem o motivo ao salvar. */
+export function itensComPrecoDeTabelaAlterado<T extends ItemDaTela>(itens: readonly T[]): T[] {
+  return itens.filter((it) => it.origemPreco === "contrato" && it.valorTabela != null && !it.valorManual
+    && !iguais(Number(it.valorUnitario), it.valorTabela) && !(it.valorGravado != null && iguais(Number(it.valorUnitario), it.valorGravado)));
+}

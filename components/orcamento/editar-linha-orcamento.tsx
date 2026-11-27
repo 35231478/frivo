@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { EditarNoContexto, type EdicaoDoSelecionado } from "@/components/ui/select-cadastro-rapido";
 import { motivoDaLinhaDoOrcamento, numeroDoCampo, numeroParaCampo } from "@/lib/edicao-contexto";
+import { usePermissoes } from "@/components/providers/permissoes-provider";
 
 export interface LinhaParaEditar {
   id: string; descricao: string; quantidade: number;
@@ -20,6 +21,8 @@ export interface LinhaParaEditar {
 export function EditarLinhaOrcamento({ orcamentoId, status, faturado, linha }: { orcamentoId: string; status: string; faturado: boolean; linha: LinhaParaEditar }) {
   const router = useRouter();
   const semPreco = linha.valorManual && linha.comMateriais;
+  // Preço que veio da tabela do cliente: mudar pede o motivo (vai para a linha do tempo); sem a permissão, o servidor recusa
+  const podeAlterarPrecoTabela = usePermissoes().pode("orcamentos", "alterarPrecoTabela");
   const edicao: EdicaoDoSelecionado = {
     escopo: "uso", alvo: "este item do orçamento", travado: motivoDaLinhaDoOrcamento(linha, { status, faturado }),
     permissao: { modulo: "orcamentos", acao: "editar" }, mensagemSucesso: "Item do orçamento atualizado.",
@@ -29,16 +32,17 @@ export function EditarLinhaOrcamento({ orcamentoId, status, faturado, linha }: {
       // Total digitado à mão no serviço com materiais: o preço é esse total (muda no formulário do orçamento)
       ...(semPreco ? [] : [{ nome: "valorUnitario", label: linha.comMateriais ? "Unit. base (R$)" : "Valor unitário (R$)", obrigatorio: true, colunas: 3 as const, inputMode: "decimal" as const }]),
       { nome: "observacao", label: "Observação", tipo: "textarea", placeholder: "Aparece abaixo do item no documento" },
+      ...(podeAlterarPrecoTabela && !semPreco ? [{ nome: "motivoPrecoTabela", label: "Motivo (se alterar preço de tabela)", maxLength: 300 }] : []),
     ],
     valores: () => ({
-      descricao: linha.descricao, quantidade: numeroParaCampo(linha.quantidade), valorUnitario: numeroParaCampo(linha.valorUnitario, 2), observacao: linha.observacao ?? "",
+      descricao: linha.descricao, quantidade: numeroParaCampo(linha.quantidade), valorUnitario: numeroParaCampo(linha.valorUnitario, 2), observacao: linha.observacao ?? "", motivoPrecoTabela: "",
     }),
     // Formulário completo (materiais, desconto, condições): o editar de sempre
     linkCadastroCompleto: undefined,
     acaoSecundaria: () => ({ rotulo: "Abrir o formulário do orçamento", onClick: () => router.push(`/orcamentos/${orcamentoId}/editar`) }),
     async salvar(id, valores, alterados) {
       const corpo: Record<string, unknown> = {};
-      for (const k of alterados) corpo[k] = k === "descricao" ? valores[k] : k === "observacao" ? valores[k] || null : numeroDoCampo(valores[k]);
+      for (const k of alterados) corpo[k] = k === "descricao" ? valores[k] : k === "observacao" || k === "motivoPrecoTabela" ? valores[k] || null : numeroDoCampo(valores[k]);
       if ("quantidade" in corpo && !(Number(corpo.quantidade) > 0)) throw new Error("Quantidade deve ser maior que zero.");
       if ("valorUnitario" in corpo && corpo.valorUnitario === null) throw new Error("Valor unitário inválido.");
       const res = await fetch(`/api/orcamentos/${orcamentoId}/linhas/${id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(corpo) });

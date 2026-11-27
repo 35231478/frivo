@@ -1,22 +1,22 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import { Check, Search, Trash2 } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { Check, Plus, Search, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select } from "@/components/ui/select";
 import { FormField, FormGrid } from "@/components/ui/form-field";
-import { ToggleSwitch } from "@/components/ui/toggle-switch";
 import { Drawer } from "@/components/ui/drawer";
 import { cn, formatarMoeda, LABELS_TIPO_TABELA_PRECO } from "@/lib/utils";
 import { calcularValorFinalTabela } from "@/lib/tabela-preco-helpers";
 import { salvarCadastro, type EditorCadastroProps } from "@/components/cadastros/cadastro-padrao";
+import { alternarTodos, escolhidos, estadoDeTodos, filtrarCatalogo, type FiltroTipo } from "@/lib/tabela-preco-selecao";
 
-interface CatalogoItem { id: string; nome: string; valorPadrao: number; kind: "SERVICO" | "PRODUTO" }
+interface CatalogoItem { id: string; nome: string; valorPadrao: number; kind: "SERVICO" | "PRODUTO"; codigo?: string | number | null }
 interface ItemEdit {
   _id: string; catalogoId: string; kind: "SERVICO" | "PRODUTO"; nome: string; valorPadrao: number; inativo: boolean;
-  tipoPreco: "VALOR_FIXO" | "DESCONTO_PERCENTUAL"; valorFixo: string; descontoPercent: string; bloqueado: boolean;
+  tipoPreco: "VALOR_FIXO" | "DESCONTO_PERCENTUAL"; valorFixo: string; descontoPercent: string;
 }
 
 function uid() { return Math.random().toString(36).slice(2); }
@@ -35,21 +35,21 @@ function paraEdicao(itens: unknown): ItemEdit[] {
       tipoPreco: it.tipoPreco,
       valorFixo: it.valorFixo != null ? String(Number(it.valorFixo)) : "",
       descontoPercent: it.descontoPercent != null ? String(Number(it.descontoPercent)) : "",
-      bloqueado: !!it.bloqueado,
     };
   });
 }
 
 /**
- * Editor de tabela de preços (CadastroPadrao › tabelas-preco): nome, tipo, bloqueio e os itens.
- * Grava pela rota genérica; o valor final de cada item é recalculado no servidor.
+ * Editor de tabela de preços (CadastroPadrao › tabelas-preco): nome, tipo e os itens (adicionados em massa).
+ * Grava pela rota genérica; o valor final de cada item é recalculado no servidor. Não há mais "bloquear preço"
+ * aqui: o preço que vem da tabela fica SEMPRE travado no orçamento e na OS, e quem pode mudar é decidido pela
+ * permissão "Alterar preço de tabela" do perfil (lib/precos/trava-tabela).
  */
 export function EditorTabelaPreco({ item, aberto, onFechar, onSalvo }: EditorCadastroProps) {
   const [catalogo, setCatalogo] = useState<CatalogoItem[]>([]);
   const [nome, setNome] = useState("");
   const [descricao, setDescricao] = useState("");
   const [tipo, setTipo] = useState("PERSONALIZADA");
-  const [precosBloqueados, setPrecosBloqueados] = useState(false);
   const [itens, setItens] = useState<ItemEdit[]>([]);
   const [erro, setErro] = useState("");
   const [salvando, setSalvando] = useState(false);
@@ -62,7 +62,7 @@ export function EditorTabelaPreco({ item, aberto, onFechar, onSalvo }: EditorCad
     if (!aberto) return;
     setErro("");
     setNome(item?.nome ?? ""); setDescricao((item?.descricao as string | null) ?? ""); setTipo(item?.tipo ?? "PERSONALIZADA");
-    setPrecosBloqueados(!!item?.precosBloqueados); setItens([]); setItensOk(!item);
+    setItens([]); setItensOk(!item);
     if (!item) return;
     // A lista não traz os itens: busca o registro completo
     let cancelado = false;
@@ -81,17 +81,20 @@ export function EditorTabelaPreco({ item, aberto, onFechar, onSalvo }: EditorCad
       fetch("/api/cadastros/servicos?ativo=sim").then((r) => r.json()).catch(() => []),
       fetch("/api/cadastros/produtos?ativo=sim").then((r) => r.json()).catch(() => []),
     ]).then(([s, p]) => setCatalogo([
-      ...(Array.isArray(s) ? s : []).map((x: any) => ({ id: x.id, nome: x.nome, valorPadrao: x.valorPadrao ? Number(x.valorPadrao) : 0, kind: "SERVICO" as const })),
-      ...(Array.isArray(p) ? p : []).map((x: any) => ({ id: x.id, nome: x.nome, valorPadrao: x.valorPadrao ? Number(x.valorPadrao) : 0, kind: "PRODUTO" as const })),
+      ...(Array.isArray(s) ? s : []).map((x: any) => ({ id: x.id, nome: x.nome, codigo: x.codigo ?? null, valorPadrao: x.valorPadrao ? Number(x.valorPadrao) : 0, kind: "SERVICO" as const })),
+      ...(Array.isArray(p) ? p : []).map((x: any) => ({ id: x.id, nome: x.nome, codigo: x.codigo ?? null, valorPadrao: x.valorPadrao ? Number(x.valorPadrao) : 0, kind: "PRODUTO" as const })),
     ]));
   }, [aberto, catalogo.length]);
 
-  function adicionarDoCatalogo(c: CatalogoItem) {
-    if (itens.some((i) => i.catalogoId === c.id)) return;
-    setItens((p) => [...p, {
-      _id: uid(), catalogoId: c.id, kind: c.kind, nome: c.nome, valorPadrao: c.valorPadrao, inativo: false,
-      tipoPreco: "VALOR_FIXO", valorFixo: String(c.valorPadrao || ""), descontoPercent: "", bloqueado: false,
-    }]);
+  /** Adiciona de uma vez os escolhidos (cada um com o preço padrão como valor fixo inicial) */
+  function adicionarDoCatalogo(cs: CatalogoItem[]) {
+    setItens((p) => {
+      const ja = new Set(p.map((i) => i.catalogoId));
+      return [...p, ...cs.filter((c) => !ja.has(c.id)).map((c) => ({
+        _id: uid(), catalogoId: c.id, kind: c.kind, nome: c.nome, valorPadrao: c.valorPadrao, inativo: false,
+        tipoPreco: "VALOR_FIXO" as const, valorFixo: String(c.valorPadrao || ""), descontoPercent: "",
+      }))];
+    });
   }
   const patch = (id: string, p: Partial<ItemEdit>) => setItens((arr) => arr.map((i) => (i._id === id ? { ...i, ...p } : i)));
 
@@ -100,14 +103,15 @@ export function EditorTabelaPreco({ item, aberto, onFechar, onSalvo }: EditorCad
     if (!itensOk) { setErro("Os itens da tabela não carregaram: feche e abra de novo antes de salvar."); return; }
     setSalvando(true); setErro("");
     const r = await salvarCadastro("tabelas-preco", item?.id ?? null, {
-      nome: nome.trim(), descricao: descricao.trim() || null, tipo, precosBloqueados,
+      // precosBloqueados/bloqueado vão sempre falsos: a trava agora é a regra do sistema + a permissão do perfil
+      nome: nome.trim(), descricao: descricao.trim() || null, tipo, precosBloqueados: false,
       itens: itens.map((i) => ({
         servicoId: i.kind === "SERVICO" ? i.catalogoId : null,
         produtoId: i.kind === "PRODUTO" ? i.catalogoId : null,
         tipoPreco: i.tipoPreco,
         valorFixo: i.tipoPreco === "VALOR_FIXO" ? i.valorFixo : null,
         descontoPercent: i.tipoPreco === "DESCONTO_PERCENTUAL" ? i.descontoPercent : null,
-        bloqueado: i.bloqueado,
+        bloqueado: false,
       })),
     });
     setSalvando(false);
@@ -138,18 +142,10 @@ export function EditorTabelaPreco({ item, aberto, onFechar, onSalvo }: EditorCad
           </FormField>
         </FormGrid>
         <FormField label="Descrição"><Textarea value={descricao} onChange={(e) => setDescricao(e.target.value)} rows={2} /></FormField>
-        <div className="border-t border-surface-border pt-1">
-          <ToggleSwitch
-            label="Preços bloqueados"
-            description="Quando ativo, os valores desta tabela não podem ser alterados no orçamento/medição."
-            checked={precosBloqueados}
-            onChange={setPrecosBloqueados}
-          />
-        </div>
 
         <div>
           <h5 className="text-xs font-bold text-ink-muted uppercase tracking-wider mb-2">Itens da tabela</h5>
-          <BuscaCatalogo catalogo={catalogo} jaAdicionados={itens.map((i) => i.catalogoId)} onSelect={adicionarDoCatalogo} />
+          <SeletorCatalogo catalogo={catalogo} jaAdicionados={itens.map((i) => i.catalogoId)} onAdicionar={adicionarDoCatalogo} />
 
           <div className="space-y-2 mt-3">
             {carregando && <p className="text-sm text-ink-subtle text-center py-4">Carregando itens…</p>}
@@ -183,7 +179,6 @@ export function EditorTabelaPreco({ item, aberto, onFechar, onSalvo }: EditorCad
                       <div className="input-base bg-surface-alt font-semibold text-success-700 flex items-center">{formatarMoeda(valorFinal)}</div>
                     </FormField>
                   </FormGrid>
-                  <ToggleSwitch label="Preço bloqueado (este item)" checked={it.bloqueado} onChange={(v) => patch(it._id, { bloqueado: v })} />
                 </div>
               );
             })}
@@ -194,44 +189,67 @@ export function EditorTabelaPreco({ item, aberto, onFechar, onSalvo }: EditorCad
   );
 }
 
-function BuscaCatalogo({ catalogo, jaAdicionados, onSelect }: { catalogo: CatalogoItem[]; jaAdicionados: string[]; onSelect: (c: CatalogoItem) => void }) {
-  const [query, setQuery] = useState("");
-  const [aberto, setAberto] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    function onClick(e: MouseEvent) { if (ref.current && !ref.current.contains(e.target as Node)) setAberto(false); }
-    document.addEventListener("mousedown", onClick);
-    return () => document.removeEventListener("mousedown", onClick);
-  }, []);
-
-  const q = query.trim().toLowerCase();
-  const filtrados = catalogo.filter((c) => !jaAdicionados.includes(c.id) && (!q || c.nome.toLowerCase().includes(q)));
-
+/**
+ * Escolher serviços e produtos para a tabela: busca + tipo, uma caixa por linha e "Selecionar todos" do filtro
+ * atual; "Adicionar selecionados" põe todos de uma vez (lib/tabela-preco-selecao).
+ */
+function SeletorCatalogo({ catalogo, jaAdicionados, onAdicionar }: { catalogo: CatalogoItem[]; jaAdicionados: string[]; onAdicionar: (cs: CatalogoItem[]) => void }) {
+  const [q, setQ] = useState("");
+  const [tipo, setTipo] = useState<FiltroTipo>("TODOS");
+  const [sel, setSel] = useState<Set<string>>(new Set());
+  const jaNaTabela = useMemo(() => new Set(jaAdicionados), [jaAdicionados]);
+  const visiveis = useMemo(() => filtrarCatalogo(catalogo, { q, tipo, jaNaTabela }), [catalogo, q, tipo, jaNaTabela]);
+  const todos = estadoDeTodos(sel, visiveis);
+  const marcados = escolhidos(catalogo, sel, jaNaTabela);
+  const alternar = (id: string) => setSel((s) => { const n = new Set(s); if (n.has(id)) n.delete(id); else n.add(id); return n; });
+  function adicionar() {
+    if (!marcados.length) return;
+    onAdicionar(marcados);
+    setSel(new Set());
+  }
   return (
-    <div className="relative" ref={ref}>
-      <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-ink-subtle pointer-events-none" />
-      <input
-        value={query}
-        onChange={(e) => { setQuery(e.target.value); setAberto(true); }}
-        onFocus={() => setAberto(true)}
-        placeholder="Pesquisar serviço ou produto para adicionar..."
-        className="w-full bg-white border border-surface-border rounded-lg pl-9 pr-3 py-2 text-sm text-ink placeholder:text-ink-subtle focus:outline-none focus:border-primary-500 focus:ring-4 focus:ring-primary-500/10 transition-all"
-      />
-      {aberto && filtrados.length > 0 && (
-        <div className="absolute z-20 left-0 right-0 top-full mt-1 max-h-64 overflow-y-auto bg-white border border-surface-border rounded-lg shadow-card-hover">
-          {filtrados.slice(0, 20).map((c) => (
-            <button key={c.id} type="button" onClick={() => { onSelect(c); setQuery(""); setAberto(false); }}
-              className="w-full text-left px-3 py-2 hover:bg-primary-50 border-b border-surface-border last:border-0 flex items-center justify-between gap-3">
-              <span className="flex items-center gap-2 min-w-0">
-                <span className={cn("text-[10px] font-semibold px-1.5 py-0.5 rounded", c.kind === "SERVICO" ? "bg-primary-50 text-primary-700" : "bg-acento-claro text-acento-hover")}>{c.kind === "SERVICO" ? "S" : "P"}</span>
-                <span className="text-sm text-ink truncate">{c.nome}</span>
-              </span>
-              <span className="text-xs font-mono text-ink-muted shrink-0">{formatarMoeda(c.valorPadrao)}</span>
-            </button>
-          ))}
+    <div className="border border-surface-border rounded-lg" data-seletor-catalogo>
+      <div className="flex flex-col sm:flex-row gap-2 p-2 border-b border-surface-border bg-surface-alt/40">
+        <div className="relative flex-1">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-ink-subtle pointer-events-none" />
+          <input
+            value={q} onChange={(e) => setQ(e.target.value)} placeholder="Filtrar por nome ou código" aria-label="Filtrar serviços e produtos"
+            className="w-full bg-white border border-surface-border rounded-lg pl-9 pr-3 py-2 text-sm text-ink placeholder:text-ink-subtle focus:outline-none focus:border-primary-500 focus:ring-4 focus:ring-primary-500/10"
+          />
         </div>
-      )}
+        <Select value={tipo} onChange={(e) => setTipo(e.target.value as FiltroTipo)} aria-label="Tipo" className="sm:w-40" data-filtro-tipo>
+          <option value="TODOS">Serviços e produtos</option>
+          <option value="SERVICO">Só serviços</option>
+          <option value="PRODUTO">Só produtos</option>
+        </Select>
+      </div>
+      <label className="flex items-center gap-2 px-3 min-h-[44px] border-b border-surface-border text-sm font-medium text-ink cursor-pointer">
+        <input
+          type="checkbox" className="w-4 h-4" data-selecionar-todos disabled={!visiveis.length}
+          checked={todos === "todos"} ref={(el) => { if (el) el.indeterminate = todos === "alguns"; }}
+          onChange={() => setSel((s) => alternarTodos(s, visiveis))}
+        />
+        Selecionar todos{q || tipo !== "TODOS" ? " do filtro" : ""} ({visiveis.length})
+      </label>
+      <ul className="max-h-64 overflow-y-auto divide-y divide-surface-border" data-lista-catalogo>
+        {!visiveis.length && <li className="px-3 py-4 text-sm text-ink-subtle text-center italic">Nada para adicionar com este filtro.</li>}
+        {visiveis.map((c) => (
+          <li key={c.id}>
+            <label className="flex items-center gap-2 px-3 min-h-[44px] cursor-pointer hover:bg-primary-50" data-opcao-catalogo={c.id}>
+              <input type="checkbox" className="w-4 h-4" checked={sel.has(c.id)} onChange={() => alternar(c.id)} />
+              <span className={cn("text-[10px] font-semibold px-1.5 py-0.5 rounded", c.kind === "SERVICO" ? "bg-primary-50 text-primary-700" : "bg-acento-claro text-acento-hover")}>{c.kind === "SERVICO" ? "Serviço" : "Produto"}</span>
+              <span className="text-sm text-ink truncate flex-1">{c.nome}</span>
+              <span className="text-xs font-mono text-ink-muted shrink-0">{formatarMoeda(c.valorPadrao)}</span>
+            </label>
+          </li>
+        ))}
+      </ul>
+      <div className="flex items-center justify-between gap-2 px-3 py-2 border-t border-surface-border">
+        <span className="text-xs text-ink-muted" data-contagem-selecionados>{marcados.length ? `${marcados.length} selecionado${marcados.length > 1 ? "s" : ""}` : "Nenhum selecionado"}</span>
+        <Button type="button" size="sm" disabled={!marcados.length} onClick={adicionar} data-adicionar-selecionados>
+          <Plus className="w-4 h-4" /> Adicionar selecionados
+        </Button>
+      </div>
     </div>
   );
 }

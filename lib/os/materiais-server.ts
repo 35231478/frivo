@@ -1,4 +1,6 @@
 import type { Prisma } from "@prisma/client";
+import { precosDaTabelaDoCliente } from "@/lib/precos/trava-tabela-server";
+import { chaveCatalogo } from "@/lib/precos/trava-tabela";
 import { prisma } from "@/lib/prisma";
 import { ErroRefEmpresa, validarRefEmpresa, validarRefsEmpresa } from "@/lib/ref-empresa";
 import { erroDosMateriais, materialAvulso, regraDeCobranca, type CobrancaMateriais, type MaterialOrcamento } from "@/lib/orcamentos/materiais";
@@ -45,8 +47,10 @@ export async function catalogoParaItemOs(empresaId: string, clienteId: string | 
     const r = await produtoComoMaterial(empresaId, p.produtoId, clienteId);
     if (!r) return null;
     const m = materialAvulso({ produtoId: r.produto.id, nome: r.produto.nome, unidade: r.produto.unidade, comportamento: comportamentoDoProduto(r.produto), valorVendaUnit: r.valorVendaUnit, custoUnit: r.custoUnit });
-    const precos = await precosDeVendaParaCliente(empresaId, clienteId, [r.produto.id]);
-    return { tipo: "PRODUTO" as const, produtoId: r.produto.id, descricao: r.produto.nome, unidade: r.produto.unidade, valorUnitario: precos.get(r.produto.id) ?? 0, origemPreco: "padrao" as const, material: m };
+    const [precos, tabela] = await Promise.all([precosDeVendaParaCliente(empresaId, clienteId, [r.produto.id]), precosDaTabelaDoCliente(empresaId, clienteId)]);
+    // Preço da tabela do cliente = "contrato" (travado na tela, como no serviço — lib/precos/trava-tabela)
+    const origemPreco = tabela.has(chaveCatalogo("produto", r.produto.id)) ? "contrato" as const : "padrao" as const;
+    return { tipo: "PRODUTO" as const, produtoId: r.produto.id, descricao: r.produto.nome, unidade: r.produto.unidade, valorUnitario: precos.get(r.produto.id) ?? 0, origemPreco, material: m };
   }
   return null;
 }

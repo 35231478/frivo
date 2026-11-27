@@ -14,6 +14,7 @@ import { valorDaLinha, type CobrancaMateriais, type MaterialOrcamento } from "@/
 import { unitarioParaEdicao } from "@/lib/os/materiais";
 import { cn, formatarMoeda } from "@/lib/utils";
 import { usePermissoes } from "@/components/providers/permissoes-provider";
+import { itensComPrecoDeTabelaAlterado } from "@/lib/precos/trava-tabela";
 import { Plus, X, Check, CheckCircle, Lock, Trash2, Package, Wrench } from "lucide-react";
 
 type Tipo = "SERVICO" | "PRODUTO";
@@ -25,7 +26,13 @@ interface ItemOs {
   pecas?: ItemOs[];
 }
 /** O item em edição (novo ou existente): o unitário é o BASE quando há materiais */
-interface Edicao { id?: string; tipo: Tipo; servicoId: string | null; produtoId: string | null; descricao: string; quantidade: number; valorUnitario: number; valorTotal?: number | null; valorManual: boolean; materiais?: MaterialOrcamento[]; origemPreco?: string }
+interface Edicao {
+  id?: string; tipo: Tipo; servicoId: string | null; produtoId: string | null; descricao: string; quantidade: number; valorUnitario: number; valorTotal?: number | null; valorManual: boolean; materiais?: MaterialOrcamento[]; origemPreco?: string;
+  /** Preço da tabela do cliente (lib/precos/trava-tabela): travado sem a permissão; com ela, mudar pede motivo */
+  valorTabela?: number; motivoPrecoTabela?: string;
+  /** O servidor pediu o motivo (preço de tabela alterado num item já salvo) */
+  pedeMotivo?: boolean;
+}
 
 const num = (v: unknown) => Number(v ?? 0) || 0;
 const uid = () => Math.random().toString(36).slice(2);
@@ -53,7 +60,10 @@ export function OsOrcamento({ osId, itens: iniciais, clienteId = null, situacao 
 }) {
   const fechada = motivoDaTrava(situacao);
   // RBAC: quem não edita OS vê os itens, sem lápis, lixeira nem "novo item" (o servidor recusa de qualquer jeito)
-  const podeEditar = usePermissoes().pode("ordens", "editar");
+  const { pode } = usePermissoes();
+  const podeEditar = pode("ordens", "editar");
+  // Preço que vem da tabela do cliente: travado; com "Alterar preço de tabela", editável com motivo
+  const podeAlterarPrecoTabela = pode("orcamentos", "alterarPrecoTabela");
   const [itens, setItens] = useState<ItemOs[]>(iniciais);
   const [edicao, setEdicao] = useState<Edicao | null>(null);
   const [modo, setModo] = useState<"livre" | "servico" | "produto" | null>(null);
@@ -72,12 +82,18 @@ export function OsOrcamento({ osId, itens: iniciais, clienteId = null, situacao 
     try {
       const res = await fetch(url, { headers: { "Content-Type": "application/json" }, ...init });
       const d = await res.json().catch(() => null);
-      if (!res.ok) { setErro(d?.erro ?? "Não foi possível gravar."); return null; }
+      if (!res.ok) {
+        setErro(d?.erro ?? "Não foi possível gravar.");
+        // Faltou o motivo do preço de tabela: o formulário passa a pedir
+        if (d?.precoTabela && res.status === 400) setEdicao((a) => (a ? { ...a, pedeMotivo: true } : a));
+        return null;
+      }
       return d;
     } catch { setErro("Erro de conexão. Tente novamente."); return null; } finally { setSalvando(false); }
   }
   const corpo = (e: Edicao) => ({
     tipo: e.tipo, servicoId: e.servicoId, produtoId: e.produtoId, descricao: e.descricao.trim(), quantidade: e.quantidade, valorUnitario: e.valorUnitario,
+    ...(e.motivoPrecoTabela?.trim() ? { motivoPrecoTabela: e.motivoPrecoTabela.trim() } : {}),
     ...(e.materiais?.length ? { valorTotal: valorDaLinha(e, regraMateriais).valorTotal, valorManual: e.valorManual, materiais: e.materiais.map(({ id: _id, ...m }) => ({ ...m, kitNome: m.kitNome ?? null, custoUnit: m.custoUnit ?? null })) } : {}),
   });
   /** Resposta do servidor (item + peças derivadas) → lista: substitui o item e as peças dele */
@@ -118,6 +134,7 @@ export function OsOrcamento({ osId, itens: iniciais, clienteId = null, situacao 
     if (!d) return;
     setEdicao({
       tipo: d.tipo, servicoId: d.servicoId ?? null, produtoId: d.produtoId ?? null, descricao: d.descricao, quantidade: 1, valorUnitario: num(d.valorUnitario), valorManual: false, origemPreco: d.origemPreco,
+      valorTabela: d.origemPreco === "contrato" ? num(d.valorUnitario) : undefined,
       materiais: d.tipo === "SERVICO" && Array.isArray(d.materiais) && d.materiais.length ? d.materiais.map((m: MaterialOrcamento) => ({ ...m, id: uid() })) : undefined,
     });
   }
@@ -145,11 +162,13 @@ export function OsOrcamento({ osId, itens: iniciais, clienteId = null, situacao 
         { nome: "quantidade", label: "Quantidade", obrigatorio: true, colunas: 3, inputMode: "decimal" },
         // Linha com total digitado à mão: o preço é esse total (muda em "Materiais e peças")
         ...(i.valorManual && comMateriais ? [] : [{ nome: "valorUnitario", label: comMateriais ? "Unit. base (R$)" : "Valor unitário (R$)", obrigatorio: true, colunas: 3 as const, inputMode: "decimal" as const }]),
+        // Preço que veio da tabela do cliente: mudar pede o motivo (vai para o histórico); sem a permissão, o servidor recusa
+        ...(podeAlterarPrecoTabela ? [{ nome: "motivoPrecoTabela", label: "Motivo (se alterar preço de tabela)", maxLength: 300 }] : []),
       ],
-      valores: () => ({ descricao: i.descricao, quantidade: numeroParaCampo(num(i.quantidade)), valorUnitario: numeroParaCampo(unitarioParaEdicao(i), 2) }),
+      valores: () => ({ descricao: i.descricao, quantidade: numeroParaCampo(num(i.quantidade)), valorUnitario: numeroParaCampo(unitarioParaEdicao(i), 2), motivoPrecoTabela: "" }),
       async salvar(id, valores, alterados) {
         const corpo: Record<string, unknown> = {};
-        for (const k of alterados) corpo[k] = k === "descricao" ? valores[k] : numeroDoCampo(valores[k]);
+        for (const k of alterados) corpo[k] = k === "descricao" ? valores[k] : k === "motivoPrecoTabela" ? valores[k] || null : numeroDoCampo(valores[k]);
         if ("quantidade" in corpo && !(Number(corpo.quantidade) > 0)) throw new Error("Quantidade deve ser maior que zero.");
         if ("valorUnitario" in corpo && corpo.valorUnitario === null) throw new Error("Valor unitário inválido.");
         const res = await fetch(`/api/ordens/${osId}/orcamento/${id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(corpo) });
@@ -226,7 +245,7 @@ export function OsOrcamento({ osId, itens: iniciais, clienteId = null, situacao 
               {doOrcamento && !!i.materiais?.length && (
                 <div className="px-3 pb-2"><MateriaisLinha item={{ id: i.id, descricao: i.descricao, quantidade: num(i.quantidade), valorUnitario: unitarioParaEdicao(i), valorTotal: num(i.valorTotal), valorManual: !!i.valorManual, materiais: i.materiais.map((m) => ({ ...m, quantidade: num(m.quantidade), quantidadePadrao: num(m.quantidadePadrao), valorVendaUnit: num(m.valorVendaUnit), custoUnit: m.custoUnit == null ? null : num(m.custoUnit) })) }} clienteId={clienteId} catalogoProdutos={[]} onChange={() => {}} somenteLeitura verCusto={verCusto} regra={regraMateriais} /></div>
               )}
-              {emEdicao && edicao && <FormItem edicao={edicao} setEdicao={setEdicao} total={totalEdicao} salvar={salvar} cancelar={() => setEdicao(null)} salvando={salvando} clienteId={clienteId} produtos={produtos.itens} buscarAvulso={buscarAvulso} verCusto={verCusto} regra={regraMateriais} />}
+              {emEdicao && edicao && <FormItem edicao={edicao} setEdicao={setEdicao} total={totalEdicao} salvar={salvar} cancelar={() => setEdicao(null)} salvando={salvando} clienteId={clienteId} produtos={produtos.itens} buscarAvulso={buscarAvulso} verCusto={verCusto} regra={regraMateriais} podeAlterarPrecoTabela={podeAlterarPrecoTabela} />}
             </div>
           );
         })}
@@ -248,7 +267,7 @@ export function OsOrcamento({ osId, itens: iniciais, clienteId = null, situacao 
           {!edicao && modo === "livre" && (
             <Button type="button" variant="secondary" size="sm" onClick={() => setEdicao({ tipo: "SERVICO", servicoId: null, produtoId: null, descricao: "", quantidade: 1, valorUnitario: 0, valorManual: false })} data-acao="linha-livre">Linha livre</Button>
           )}
-          {edicao && <FormItem edicao={edicao} setEdicao={setEdicao} total={totalEdicao} salvar={salvar} cancelar={() => { setEdicao(null); setModo(null); }} salvando={salvando} clienteId={clienteId} produtos={produtos.itens} buscarAvulso={buscarAvulso} verCusto={verCusto} regra={regraMateriais} />}
+          {edicao && <FormItem edicao={edicao} setEdicao={setEdicao} total={totalEdicao} salvar={salvar} cancelar={() => { setEdicao(null); setModo(null); }} salvando={salvando} clienteId={clienteId} produtos={produtos.itens} buscarAvulso={buscarAvulso} verCusto={verCusto} regra={regraMateriais} podeAlterarPrecoTabela={podeAlterarPrecoTabela} />}
           {!edicao && <div className="flex justify-end"><Button type="button" variant="secondary" size="sm" onClick={() => setModo(null)}><X className="w-4 h-4" /> Fechar</Button></div>}
         </div>
       )}
@@ -270,14 +289,18 @@ export function OsOrcamento({ osId, itens: iniciais, clienteId = null, situacao 
   );
 }
 
-function FormItem({ edicao: e, setEdicao, total, salvar, cancelar, salvando, clienteId, produtos, buscarAvulso, verCusto, regra }: {
+function FormItem({ edicao: e, setEdicao, total, salvar, cancelar, salvando, clienteId, produtos, buscarAvulso, verCusto, regra, podeAlterarPrecoTabela = false }: {
   edicao: Edicao; setEdicao: (f: (e: Edicao | null) => Edicao | null) => void; total: number; salvar: () => void; cancelar: () => void; salvando: boolean;
   clienteId: string | null; produtos: ItemCadastro[]; buscarAvulso: (produtoId: string) => Promise<{ material?: MaterialOrcamento; erro?: string }>;
   verCusto: boolean;
   /** "Orçamento E2": regra de cobrança dos materiais da OS */
   regra?: CobrancaMateriais | null;
+  podeAlterarPrecoTabela?: boolean;
 }) {
   const comMateriais = !!e.materiais?.length;
+  // Preço de tabela: travado sem a permissão; com ela, alterado pede o motivo (lib/precos/trava-tabela)
+  const precoTravado = e.origemPreco === "contrato" && !podeAlterarPrecoTabela;
+  const pedeMotivo = !!e.pedeMotivo || itensComPrecoDeTabelaAlterado([e]).length > 0;
   const patch = (p: Partial<Edicao>) => setEdicao((atual) => (atual ? { ...atual, ...p } : atual));
   return (
     <div className="space-y-3 px-3 py-3 bg-white border-t border-surface-border" data-form-item>
@@ -289,7 +312,8 @@ function FormItem({ edicao: e, setEdicao, total, salvar, cancelar, salvando, cli
         </FormField>
         <FormField label="Quantidade"><CampoNumero valor={e.quantidade} onValor={(q) => patch({ quantidade: q })} data-quantidade-item className="!bg-white !border-surface-border !py-2" /></FormField>
         <FormField label={comMateriais ? "Unit. base (R$)" : "Valor unitário (R$)"} dica={comMateriais ? "Preço antes dos materiais. O total = base + materiais inclusos (digite o total para fixar um valor manual)." : undefined}>
-          <CampoNumero valor={e.valorUnitario} casas={2} onValor={(u) => patch({ valorUnitario: u })} data-unitario-item className="!bg-white !border-surface-border !py-2" />
+          <CampoNumero valor={e.valorUnitario} casas={2} onValor={(u) => patch({ valorUnitario: u })} data-unitario-item className="!bg-white !border-surface-border !py-2"
+            disabled={precoTravado} title={precoTravado ? "Preço da tabela do cliente: só quem tem a permissão Alterar preço de tabela muda" : undefined} />
         </FormField>
         <FormField label="Total (R$)">
           {comMateriais ? (
@@ -304,7 +328,12 @@ function FormItem({ edicao: e, setEdicao, total, salvar, cancelar, salvando, cli
       ) : (
         <button type="button" onClick={() => patch({ materiais: [] })} className="text-[11px] font-medium text-primary-600 hover:text-primary-700" data-adicionar-materiais>+ Materiais e peças</button>
       ))}
-      {e.origemPreco === "contrato" && <p className="text-[11px] text-ok-texto">Preço da tabela do cliente.</p>}
+      {e.origemPreco === "contrato" && <p className="text-[11px] text-ok-texto" data-preco-tabela>{precoTravado ? "Preço da tabela do cliente (travado)." : "Preço da tabela do cliente."}</p>}
+      {pedeMotivo && (
+        <FormField label="Motivo da alteração do preço de tabela" required hint="Fica no histórico da OS.">
+          <Input value={e.motivoPrecoTabela ?? ""} onChange={(ev) => patch({ motivoPrecoTabela: ev.target.value })} maxLength={300} placeholder="Ex.: desconto negociado com o cliente" data-motivo-preco-tabela />
+        </FormField>
+      )}
       <div className="flex justify-end gap-2">
         <Button type="button" variant="secondary" onClick={cancelar}>Cancelar</Button>
         <Button type="button" loading={salvando} onClick={salvar} data-acao="salvar-item"><Check className="w-4 h-4" /> Salvar</Button>
