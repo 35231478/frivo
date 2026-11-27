@@ -234,6 +234,8 @@ describe("Configurações › Orçamentos e propostas", () => {
       // Orçamento, leva D: a tela também guarda o padrão de "mostrar materiais" (aqui, intocado = ligado, o padrão
       // desde o "Orçamento E"; a opção de valores dos materiais saiu da tela)
       orcamentoMostrarMateriais: true,
+      // "Orçamento E2": a tela também manda como a empresa cobra os materiais (intocado = Incluso, o padrão)
+      orcamentoCobrancaMateriais: "INCLUSO",
     });
     // Leva 3 da padronização: a confirmação do salvar é o toast (não mais a caixa verde na tela)
     expect([...document.querySelectorAll("[data-toast='sucesso']")].map((t) => t.textContent?.trim())).toEqual(["Padrões salvos. Valem para os próximos orçamentos."]);
