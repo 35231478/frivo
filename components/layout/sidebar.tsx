@@ -9,7 +9,7 @@ import { moduloDaRota, pode, podeEntrarNoModulo, type Acao } from "@/lib/permiss
 import { FrivoLogo, FrivoMark } from "./frivo-logo";
 import { secoesVisiveis as secoesVisiveisConfig } from "@/lib/navegacao/configuracoes";
 import { useModulos } from "@/components/providers/modulos-provider";
-import { ehDonoDoFrivo } from "@/lib/anotacoes/dono";
+import { veAreaDeEmpresas } from "@/lib/empresa/area-frivo";
 import type { Session } from "next-auth";
 import {
   LayoutDashboard, Users, Thermometer, ClipboardList, FileText, HardHat, Settings, ChevronDown, ChevronRight,
@@ -531,7 +531,7 @@ export function Sidebar({ session, variant = "desktop", avatarUrl }: SidebarProp
           </Link>
         )}
         {/* Área de Empresas: só o dono do Frivo (SUPER_ADMIN). A página e a API também recusam os demais */}
-        {ehDonoDoFrivo(usuario) && (
+        {veAreaDeEmpresas(usuario) && (
           <Link
             href="/admin/empresas"
             title={colapsada ? "Empresas (Frivo)" : undefined}

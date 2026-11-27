@@ -134,12 +134,10 @@ export async function avisarCliente(ctx: ContextoExecucao, d: AvisoCliente, relo
   }
 
   // "Cheguei" é o comparecimento do prazo de atendimento: o primeiro da OS para o relógio
-  if (d.evento === "CHEGOU") {
-    await marcarComparecimento(prisma, atividade.ordemServico.id, registradoEm);
-    // G (Pronto pra janeiro 2): chegou = começou. A atividade Agendada passa a Em andamento (hora do toque) e a OS
-    // segue para Em execução pelo status automático — o ajuste manual de status da OS é respeitado (sincronizarStatusOs)
-    await iniciarAtividade(ctx, relogio);
-  }
+  if (d.evento === "CHEGOU") await marcarComparecimento(prisma, atividade.ordemServico.id, registradoEm);
+  // G (Pronto pra janeiro 2): chegou = começou. A atividade Agendada passa a Em andamento (hora do toque) e a OS
+  // segue para Em execução pelo status automático — o ajuste manual de status da OS é respeitado (sincronizarStatusOs)
+  if (d.evento === "CHEGOU") await iniciarAtividade(ctx, relogio);
 
   const [config, os, chegada] = await Promise.all([
     carregarConfigApp(empresaId),

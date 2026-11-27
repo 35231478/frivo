@@ -51,7 +51,7 @@ export function BotaoClienteAprovou({ orcamentoId }: { orcamentoId: string }) {
       </Button>
       <Modal aberto={aberto} onFechar={() => { if (!salvando) setAberto(false); }} titulo="Registrar aprovação do cliente" tamanho="sm">
         <div className="space-y-4" data-modal-aprovacao-equipe>
-          <p className="text-sm text-ink-muted">Use quando o cliente aprovou por fora do link (telefone, WhatsApp, e-mail). O orçamento passa para Aprovado; o documento mostra que a aprovação foi registrada pela equipe, sem assinatura.</p>
+          <p className="text-sm text-ink-muted">Para quando o cliente aprovou por telefone, WhatsApp ou e-mail. Fica registrado pela equipe, sem assinatura.</p>
           <FormField label="Quem aprovou" required><Input value={nome} onChange={(e) => { setNome(e.target.value); setErro(""); }} placeholder="Nome de quem aprovou pelo cliente" data-campo="nome" /></FormField>
           <fieldset>
             <legend className="text-sm font-medium text-ink mb-1.5">Por onde <span className="text-atrasado">*</span></legend>

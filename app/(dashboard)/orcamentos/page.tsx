@@ -171,8 +171,7 @@ export default async function OrcamentosPage({
                   sel: massa ? <CheckboxLinha id={o.id} rotulo={o.codigo} /> : null,
                   codigo: <Link href={`/orcamentos/${o.id}`} title={o.codigo} className={cn(PLANILHA.codigo, "text-primary-600 hover:underline")}>{o.codigo}</Link>,
                   // Uma linha só: o texto inteiro aparece no hover
-                  // O nome vai inteiro para o banco e o documento; a lista corta só na tela (o nome todo no title)
-                  nome: <span className={`${PLANILHA.nome} block truncate max-w-[24rem]`} title={o.nome} data-nome-orcamento>{o.nome}</span>,
+                  nome: <span className={PLANILHA.nome} data-nome-orcamento>{o.nome}</span>,
                   cliente: <span className="text-ink" data-cliente-orcamento>{cliente}</span>,
                   tipo: <span className={CLASSE_TIPO_ORCAMENTO[o.tipo]}>{LABELS_TIPO_ORCAMENTO[o.tipo]}</span>,
                   status: <PilulaEtapa etapa={etapaCiclo(o, agora)} desde={dataDaEtapa(o, agora)} compacta />,

@@ -105,7 +105,7 @@ export function EmpresasAdmin({ inicial }: { inicial: EmpresaDaLista[] }) {
 
       <Modal aberto={aberto} onFechar={() => { if (!salvando) setAberto(false); }} titulo="Nova empresa" tamanho="lg">
         <form onSubmit={salvar} className="space-y-5" data-form-nova-empresa>
-          <p className="text-sm text-ink-muted">A empresa já nasce com os perfis de acesso (Administrador, Gestor, Financeiro, Técnico e Vendas), os tipos de OS de climatização e a configuração padrão.</p>
+          <p className="text-sm text-ink-muted">Nasce com os 5 perfis de acesso, os tipos de OS de climatização e a configuração padrão.</p>
           <fieldset className="space-y-3" disabled={salvando}>
             <legend className="text-xs font-semibold uppercase tracking-wide text-ink-muted mb-1">Empresa</legend>
             <div className="grid sm:grid-cols-2 gap-3">
