@@ -122,10 +122,10 @@ function ModalMaterial({ x, registrar, linha, equipamentoId, onFechar }: {
   }
   async function remover() {
     if (!linha) return;
-    const okRemover = await confirmar({ titulo: "Remover material?", mensagem: `${linha.descricao} · ${textoQuantidade(linha.quantidade, linha.unidade)}`, perigo: true, confirmarTexto: "Remover" });
-    if (!okRemover) return;
+    const okExcluir = await confirmar({ titulo: "Excluir material?", mensagem: `${linha.descricao} · ${textoQuantidade(linha.quantidade, linha.unidade)}`, perigo: true, confirmarTexto: "Excluir" });
+    if (!okExcluir) return;
     await registrar([{ tipo: "materialRemover", atividadeId, dados: linha.id && !linha.pendente ? { id: linha.id } : { clientId: linha.clientId } }]);
-    toast("Material removido.");
+    toast("Material excluído.");
     onFechar();
   }
 
@@ -203,7 +203,7 @@ function ModalMaterial({ x, registrar, linha, equipamentoId, onFechar }: {
               className="w-full rounded-card bg-primary-600 text-white py-4 text-base font-bold disabled:opacity-40 touch-target">{linha ? "Salvar" : "Lançar"}</button>
             {linha && (
               <button type="button" onClick={remover} data-remover-material className="w-full inline-flex items-center justify-center gap-1.5 text-sm font-semibold text-atrasado py-2 touch-target">
-                <Trash2 className="w-4 h-4" /> Remover
+                <Trash2 className="w-4 h-4" /> Excluir
               </button>
             )}
           </>
