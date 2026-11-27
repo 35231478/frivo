@@ -78,6 +78,7 @@ A empresa de demonstração é "Refrigeração Nova Era Ltda (fictícia)".
 - **Ciclo de importação evitado**: o "Cheguei" chama o início da atividade por `import()` tardio. No topo,
   fecharia o ciclo `acoes → sincronizar-status → aceite-server → aviso-cliente → acoes`, que travava a carga
   dos testes do app do técnico.
+- **O build pegou um vazamento**: a tela "Cliente aprovou" importava o arquivo que também grava no banco, e o código de servidor ia para o navegador. A regra pura ficou em `lib/orcamentos/aprovacao-equipe.ts` e a gravação em `aprovacao-equipe-server.ts`. Agora o build não acusa nada desta leva.
 - **Um defeito pego pelos testes antes do PR**: o "Desmarcar" usava a trava da linha, que sempre existe em
   item executado. Por isso o botão nunca aparecia. Agora usa só a trava do registro fechado.
 

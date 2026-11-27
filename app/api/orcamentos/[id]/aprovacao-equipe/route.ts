@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { exigirPermissao } from "@/lib/permissoes-server";
-import { aprovacaoEquipeSchema, registrarAprovacaoDaEquipe } from "@/lib/orcamentos/aprovacao-equipe";
+import { aprovacaoEquipeSchema } from "@/lib/orcamentos/aprovacao-equipe";
+import { registrarAprovacaoDaEquipe } from "@/lib/orcamentos/aprovacao-equipe-server";
 
 /**
  * "Cliente aprovou" pela equipe (por telefone, WhatsApp...): quem aprovou, o canal e a observação.
