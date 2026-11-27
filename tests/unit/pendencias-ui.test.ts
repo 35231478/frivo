@@ -132,6 +132,12 @@ describe("lista de OS: filtro 'Atribuição › Sem técnico'", () => {
     expect($<HTMLSelectElement>("select[aria-label='Atribuição']")!.value).toBe("sem");
     await clicar($("[data-limpar-filtros]"));
     expect(new URLSearchParams(ultimaUrl().split("?")[1] ?? "").get("tecnico")).toBeNull();
+    // lista vazia (alguém já atribuiu): o "Limpar filtros" do estado vazio também tira o filtro
+    await lista("tecnico=sem");
+    nav.replace.mockClear();
+    await clicar($$("[data-lista-vazia] button").find((b) => txt(b) === "Limpar filtros") ?? null);
+    expect(nav.replace).toHaveBeenCalled();
+    expect(new URLSearchParams(ultimaUrl().split("?")[1] ?? "").get("tecnico")).toBeNull();
   });
 });
 
@@ -157,5 +163,19 @@ describe("lista de orçamentos: a pílula do filtro 'vencendo'", () => {
     // a pílula das respostas do sino continua a mesma
     await cartoes({ resposta: "nova" });
     expect(txt($("[data-filtro-resposta]"))).toBe("Respostas novas do cliente Limpar filtro");
+  });
+});
+
+/* ───────── o menu ───────── */
+describe("menu Início: Pendências logo abaixo de Dashboard", () => {
+  it("aparece para qualquer perfil (o conteúdo é que segue a permissão), entre Dashboard e Clientes", async () => {
+    const [{ Sidebar }, { ModulosProvider }] = await Promise.all([import("@/components/layout/sidebar"), import("@/components/providers/modulos-provider")]);
+    for (const permissoes of [permissoesTotais(), montarPermissoes({ financeiro: ["visualizar"] } as never)]) {
+      const sessao = { user: { id: "u1", name: "Ana", email: "a@x.com", empresaId: "e1", role: "OPERADOR", permissoes, perfilNome: "Gestor", empresaNome: "Clima Total" } };
+      await montar(createElement(ModulosProvider as any, { desligados: [] }, createElement(Sidebar as any, { session: sessao, variant: "desktop" })));
+      const hrefs = $$("a[href]").map((a) => a.getAttribute("href"));
+      expect(txt($$("a[href='/pendencias']")[0] ?? null)).toBe("Pendências");
+      expect(hrefs.indexOf("/pendencias")).toBe(hrefs.indexOf("/dashboard") + 1);
+    }
   });
 });

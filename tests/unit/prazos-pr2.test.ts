@@ -205,7 +205,10 @@ describe("Menu e vocabulário", () => {
   });
 
   it("o sino e o dashboard levam \"atrasadas\" para a lista JÁ filtrada (antes abriam a lista inteira)", () => {
-    expect(fonte("components/layout/header.tsx")).toContain('href="/ordens?prazo=atrasadas" icone={Timer} cor="text-atrasado" label="OS atrasadas"');
+    // o sino lê o rótulo e o destino do catálogo do painel de pendências (lib/alertas/pendencias)
+    expect(fonte("components/layout/header.tsx")).toContain('doPainel("osAtrasadas", true)');
+    expect(fonte("lib/alertas/pendencias.ts")).toContain('rotulo: "OS atrasadas", tom: "atrasado"');
+    expect(fonte("lib/alertas/pendencias.ts")).toContain('href: () => "/ordens?prazo=atrasadas"');
     expect(fonte("components/dashboard/blocos.tsx")).toContain('href="/ordens?prazo=atrasadas"');
   });
 
