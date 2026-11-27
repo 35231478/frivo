@@ -18,6 +18,7 @@ import { LABELS_STATUS_MEDICAO } from "@/lib/utils";
 import { buscarMunicipio, normalizarNome } from "@/lib/nfse/municipio";
 import { ambienteDisponivel, baixarNfse, consultarNfse, emitirNfse, ErroPlugNotas, mensagemLimpa } from "@/lib/nfse/plugnotas";
 import { LABEL_AMBIENTE, type Ambiente } from "@/lib/nfse/regras";
+import { textoPedidoDaMedicao, travaNfseDaMedicao } from "@/lib/pedido-cliente/server";
 import {
   agruparNotas, aguardandoResposta, corpoNotaPlugNotas, LABEL_STATUS_NOTA, lerConsulta, pendenciasEmitente, pendenciasItens,
   pendenciasMedicao, pendenciasNotas, pendenciasTomador, statusVivo,
@@ -129,13 +130,16 @@ async function preparar(empresaId: string, medicaoId: string) {
   };
   const itens = itensDe(c);
   const opcoes = { aliquotaPadrao: c.aliquotaPadrao, cnaeEmpresa: c.cnaeEmpresa };
-  const grupos = agruparNotas(itens, Number(c.medicao.valorTotal) - Number(c.medicao.valorLiquido), opcoes, { medicaoNumero: c.medicao.numero, osNumeros: numerosOs(c), referencia: referenciaNota(c.medicao) });
+  // O pedido do cliente: a trava (sem pedido não emite) e o número, que entra sozinho na discriminação
+  const [semPedido, pedidoCliente] = await Promise.all([travaNfseDaMedicao(c.medicao.id), textoPedidoDaMedicao(c.medicao.id)]);
+  const grupos = agruparNotas(itens, Number(c.medicao.valorTotal) - Number(c.medicao.valorLiquido), opcoes, { medicaoNumero: c.medicao.numero, osNumeros: numerosOs(c), referencia: referenciaNota(c.medicao), pedidoCliente });
   const tomador = await tomadorDe(c, await codigoCidadeTomador(c.medicao.cliente, c.fiscal));
   const pendencias = [
     ...pendenciasEmitente(emitente),
     ...pendenciasMedicao({ id: c.medicao.id, numero: c.medicao.numero, status: c.medicao.status, nfManual: nfManual(c) }, LABELS_STATUS_MEDICAO[c.medicao.status] ?? c.medicao.status),
     ...pendenciasTomador(tomador),
     ...pendenciasItens(itens, opcoes),
+    ...(semPedido ? [{ area: "medicao" as const, texto: semPedido, link: `/financeiro/medicoes/${c.medicao.id}`, rotuloLink: "Abrir a fatura" }] : []),
   ];
   return { c, ambiente, itens, grupos, tomador, pendencias };
 }

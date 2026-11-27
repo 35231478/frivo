@@ -206,6 +206,8 @@ export interface ContextoDiscriminacao {
   medicaoNumero: string; osNumeros?: string[];
   /** Referência pronta ("Fatura nº 2026-0012" no avulso); sem ela, "Medição MED-…" */
   referencia?: string;
+  /** O pedido do cliente ("Pedido do cliente nº 4500012345"), quando há: entra sozinho na referência */
+  pedidoCliente?: string | null;
 }
 
 /** Valor em reais com espaço comum (o Intl usa espaço sem quebra, que algumas prefeituras recusam) */
@@ -221,7 +223,7 @@ export function discriminacaoPadrao(g: Pick<GrupoNota, "itens">, ctx: ContextoDi
       ? `${item.descricao.trim()} — ${String(q).replace(".", ",")} x ${reais(unit)} = ${reais(item.valorTotal)}`
       : `${item.descricao.trim()} — ${reais(item.valorTotal)}`;
   });
-  const ref = [ctx.referencia ?? `Medição ${ctx.medicaoNumero}`, ...(ctx.osNumeros?.length ? [`OS ${ctx.osNumeros.join(", ")}`] : [])].join(" · ");
+  const ref = [ctx.referencia ?? `Medição ${ctx.medicaoNumero}`, ...(ctx.osNumeros?.length ? [`OS ${ctx.osNumeros.join(", ")}`] : []), ...(ctx.pedidoCliente ? [ctx.pedidoCliente] : [])].join(" · ");
   return [...bases, ...linhas, `Ref.: ${ref}`].join(" | ");
 }
 

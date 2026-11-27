@@ -376,3 +376,25 @@ export async function contarPedidosAtrasados(empresaId: string, agora: Date = ne
   });
   return { pedidosAtrasados: atrasadas.length, pedidoAtrasadoOsId: atrasadas[0]?.id ?? null, diasAlertaPedido: dias };
 }
+
+/**
+ * Para onde vai a fatura aprovada: "Aguardando PC" se alguma OS/orçamento dela ainda espera o pedido do cliente
+ * (ou, na fatura sem OS nem orçamento — a de contrato —, se o cliente exige o pedido); senão, segue, já com o
+ * número do pedido das linhas.
+ */
+export async function situacaoDaFaturaAprovada(medicaoId: string): Promise<{ status: "AGUARDANDO_PC" | "PC_RECEBIDO"; pcNumero: string | null }> {
+  const m = await prisma.medicao.findUnique({
+    where: { id: medicaoId },
+    select: {
+      cliente: { select: { exigePcAntesNf: true } },
+      itens: { select: { ordemServico: { select: { ...SELECT_PEDIDO_OS, pedidoCliente: { select: { numero: true } } } }, orcamento: { select: { ...SELECT_PEDIDO_ORCAMENTO, pedidoCliente: { select: { numero: true } } } } } },
+    },
+  });
+  if (!m) return { status: "PC_RECEBIDO", pcNumero: null };
+  const linhas = m.itens.filter((i) => i.ordemServico || i.orcamento);
+  const esperando = linhas.length
+    ? linhas.some((i) => (i.ordemServico && aguardandoPedido(situacaoDaOs(i.ordemServico))) || (i.orcamento && aguardandoPedido(situacaoDoOrcamento(i.orcamento))))
+    : m.cliente.exigePcAntesNf;
+  const numeros = [...new Set(linhas.map((i) => i.ordemServico?.pedidoCliente?.numero ?? i.orcamento?.pedidoCliente?.numero).filter(Boolean))] as string[];
+  return { status: esperando ? "AGUARDANDO_PC" : "PC_RECEBIDO", pcNumero: esperando ? null : numeros.join(", ") || null };
+}
