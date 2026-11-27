@@ -8,6 +8,8 @@ import { validarDestinatario } from "@/lib/orcamentos/padroes-server";
 import { podeMudarStatus } from "@/lib/orcamentos/ciclo";
 import { diaCivilPassou } from "@/lib/fuso";
 import { registrarEvento } from "@/lib/orcamentos/ciclo-server";
+import { itensDoOrcamentoParaTrava, precosAnterioresDoOrcamento, verificarPrecoDeTabela } from "@/lib/precos/trava-tabela-server";
+import { textoDaTrilha } from "@/lib/precos/trava-tabela";
 import { LABELS_STATUS_ORCAMENTO } from "@/lib/utils";
 import { exigirPermissao } from "@/lib/permissoes-server";
 import { fixarCustosDosMateriais, podeVerCusto } from "@/lib/orcamentos/estoque-margem-server";
@@ -158,6 +160,12 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
   const valores = montarValoresOrcamento(data, issAliquota, existente.cobrancaMateriais);
   // O custo dos materiais é decidido aqui (o gravado ou o último custo de compra), nunca o que veio do navegador
   await fixarCustosDosMateriais(empresaId, id, valores.servicos);
+  // Preço que veio da tabela do cliente: travado; o que já estava gravado não pede de novo (lib/precos/trava-tabela)
+  const trava = await verificarPrecoDeTabela({
+    user: session.user!, empresaId, clienteId: data.clienteId, itens: itensDoOrcamentoParaTrava(valores),
+    anteriores: await precosAnterioresDoOrcamento(id), motivo: data.motivoPrecoTabela,
+  });
+  if (!trava.veredito.ok) return NextResponse.json({ erro: trava.veredito.erro, precoTabela: true }, { status: trava.veredito.status });
   // RT/ART que não vieram: mantém os do orçamento (como garantias, normas e destinatário)
   const proposta = montarCamposProposta({
     ...data,
@@ -191,6 +199,9 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       },
     });
     await gravarItensOrcamento(tx, id, valores);
+    if (trava.alteracoes.length && trava.veredito.ok && trava.veredito.motivo) {
+      await registrarEvento({ empresaId, orcamentoId: id, tipo: "PRECO_TABELA", usuarioId: session.user!.id, detalhe: textoDaTrilha(trava.alteracoes, trava.veredito.motivo) }, tx);
+    }
     return o;
   });
 

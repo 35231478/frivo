@@ -4,13 +4,14 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
-import { Check, Loader2, MessageSquarePlus, Pin, X } from "lucide-react";
+import { Check, Loader2, MessageSquarePlus, Pin, RotateCcw, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "@/components/ui/avisos";
 import { cn } from "@/lib/utils";
 import { ancorarElemento, pontoDoPin, reencontrar } from "@/lib/anotacoes/ancora";
 import { ROTULO_PRECISAO, TEXTO_MAX, telaDaRota, type Ancora, type Precisao } from "@/lib/anotacoes/regras";
+import { chavePosicaoBotao, ehArraste, lerPosicao, limitarPosicao, posicaoArrastada, type Ponto } from "@/lib/anotacoes/posicao-botao";
 
 /**
  * ANOTAÇÕES INTERNAS — a ferramenta na tela. Só o dono do Frivo chega aqui (o layout do painel só
@@ -51,7 +52,7 @@ interface Rascunho {
 
 const CLASSE_FORA_DO_PRINT = { "data-anotacoes-fora-do-print": "" } as const;
 
-export function AnotacoesFerramenta() {
+export function AnotacoesFerramenta({ usuarioId = "" }: { usuarioId?: string }) {
   const pathname = usePathname();
   const params = useSearchParams();
   const [montado, setMontado] = useState(false);
@@ -69,6 +70,59 @@ export function AnotacoesFerramenta() {
   const destacar = params?.get("anotacao") ?? null;
 
   useEffect(() => setMontado(true), []);
+
+  /* ── a posição do botão: arrastável (mouse e dedo), lembrada neste navegador por usuário ── */
+  const botaoRef = useRef<HTMLButtonElement>(null);
+  const [posicao, setPosicao] = useState<Ponto | null>(null);
+  const arraste = useRef<{ inicio: Ponto; origem: Ponto; movendo: boolean; id: number } | null>(null);
+  const engolirClique = useRef(false);
+  const chave = chavePosicaoBotao(usuarioId);
+  const tamanhoBotao = () => {
+    const r = botaoRef.current?.getBoundingClientRect();
+    return { w: r?.width || 110, h: r?.height || 36 };
+  };
+  const janela = () => ({ w: window.innerWidth, h: window.innerHeight });
+  const gravarPosicao = (p: Ponto | null) => {
+    try { if (p) localStorage.setItem(chave, JSON.stringify(p)); else localStorage.removeItem(chave); } catch { /* sem armazenamento: vale só nesta visita */ }
+  };
+  useEffect(() => {
+    let salva: Ponto | null = null;
+    try { salva = lerPosicao(localStorage.getItem(chave)); } catch { salva = null; }
+    if (salva) setPosicao(limitarPosicao(salva, tamanhoBotao(), janela()));
+    // A janela encolheu: o botão volta para dentro da área visível
+    const aoRedimensionar = () => setPosicao((p) => (p ? limitarPosicao(p, tamanhoBotao(), janela()) : p));
+    window.addEventListener("resize", aoRedimensionar);
+    return () => window.removeEventListener("resize", aoRedimensionar);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [chave]);
+
+  const aoApertar = (e: React.PointerEvent<HTMLButtonElement>) => {
+    if (e.button !== 0) return;
+    const r = e.currentTarget.getBoundingClientRect();
+    arraste.current = { inicio: { x: e.clientX, y: e.clientY }, origem: { x: r.left, y: r.top }, movendo: false, id: e.pointerId };
+  };
+  const aoMover = (e: React.PointerEvent<HTMLButtonElement>) => {
+    const a = arraste.current;
+    if (!a || a.id !== e.pointerId) return;
+    const agora = { x: e.clientX, y: e.clientY };
+    if (!a.movendo) {
+      if (!ehArraste(a.inicio, agora)) return;
+      a.movendo = true;
+      try { e.currentTarget.setPointerCapture(e.pointerId); } catch { /* ponteiro já solto */ }
+    }
+    setPosicao(posicaoArrastada(a.origem, a.inicio, agora, tamanhoBotao(), janela()));
+  };
+  const aoSoltar = (e: React.PointerEvent<HTMLButtonElement>) => {
+    const a = arraste.current;
+    arraste.current = null;
+    if (!a || a.id !== e.pointerId || !a.movendo) return;
+    // Foi arraste: grava onde ficou e não deixa o clique que vem em seguida ligar o modo
+    engolirClique.current = true;
+    const final = posicaoArrastada(a.origem, a.inicio, { x: e.clientX, y: e.clientY }, tamanhoBotao(), janela());
+    setPosicao(final);
+    gravarPosicao(final);
+  };
+  const voltarAoPadrao = () => { setPosicao(null); gravarPosicao(null); };
 
   /* ── o atalho: o único ouvinte que vive fora do modo ── */
   useEffect(() => {
@@ -206,15 +260,24 @@ export function AnotacoesFerramenta() {
           barra lateral é da logo do Frivo, e nada pode cobrir a logo. O z fica acima do véu
           (45) para que, em modo de anotação, clicar aqui SAIA do modo em vez de marcar um
           ponto; e abaixo da barra (48) e do balão (49), que mandam enquanto estão abertos. */}
+      {/* Arrastável (mouse e dedo): a posição fica neste navegador; o "voltar" aparece ao lado quando foi movido */}
       <button
+        ref={botaoRef}
         type="button"
-        onClick={() => setModo((m) => !m)}
+        onClick={() => { if (engolirClique.current) { engolirClique.current = false; return; } setModo((m) => !m); }}
+        onPointerDown={aoApertar}
+        onPointerMove={aoMover}
+        onPointerUp={aoSoltar}
+        onPointerCancel={() => { arraste.current = null; }}
         {...CLASSE_FORA_DO_PRINT}
         data-anotacoes-botao
+        data-movido={posicao ? "" : undefined}
         aria-pressed={modo}
-        title={modo ? "Sair do modo anotação (Alt+A)" : "Anotar nesta tela (Alt+A)"}
+        title={modo ? "Sair do modo anotação (Alt+A)" : "Anotar nesta tela (Alt+A). Arraste para mudar de lugar."}
+        style={posicao ? { left: posicao.x, top: posicao.y } : undefined}
         className={cn(
-          "fixed z-[47] right-4 bottom-[5rem] hidden lg:inline-flex items-center gap-2 rounded-full border px-3 py-2 shadow-sm transition-colors",
+          "fixed z-[47] hidden lg:inline-flex items-center gap-2 rounded-full border px-3 py-2 shadow-sm transition-colors touch-none select-none",
+          !posicao && "right-4 bottom-[5rem]",
           modo
             ? "bg-acento text-white border-acento"
             : "bg-white text-ink-muted border-surface-border hover:text-ink hover:border-acento/40",
@@ -223,6 +286,16 @@ export function AnotacoesFerramenta() {
         <MessageSquarePlus className="w-4 h-4" aria-hidden />
         <span className="text-xs font-semibold">{modo ? "Anotando" : "Anotar"}</span>
       </button>
+      {posicao && (
+        <button
+          type="button" onClick={voltarAoPadrao} {...CLASSE_FORA_DO_PRINT} data-anotacoes-voltar
+          title="Voltar o botão à posição padrão" aria-label="Voltar o botão de anotações à posição padrão"
+          style={{ left: Math.max(8, posicao.x - 40), top: posicao.y + 2 }}
+          className="fixed z-[47] hidden lg:inline-flex items-center justify-center w-8 h-8 rounded-full border border-surface-border bg-white text-ink-muted shadow-sm hover:text-ink hover:border-acento/40"
+        >
+          <RotateCcw className="w-3.5 h-3.5" aria-hidden />
+        </button>
+      )}
 
       {modo && (
         <>

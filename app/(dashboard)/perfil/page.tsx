@@ -14,11 +14,11 @@ const ROLE_LABELS: Record<string, string> = {
   OPERADOR: "Operador",
 };
 
-export default async function PerfilPage() {
+export default async function PerfilPage({ searchParams }: { searchParams: Promise<{ aba?: string }> }) {
   const session = await auth();
   const u = session!.user;
   const [db, empresaNome] = await Promise.all([
-    prisma.usuario.findUnique({ where: { id: u.id }, select: { avatar: true } }),
+    prisma.usuario.findUnique({ where: { id: u.id }, select: { avatar: true, telefone: true, ultimoAcesso: true } }),
     nomeDaEmpresa(u.empresaId),
   ]);
 
@@ -28,11 +28,15 @@ export default async function PerfilPage() {
         nome: u.name ?? "",
         email: u.email ?? "",
         avatar: db?.avatar ?? null,
+        telefone: db?.telefone ?? null,
+        ultimoAcesso: db?.ultimoAcesso?.toISOString() ?? null,
         empresaNome,
         perfilNome: (u as any).perfilNome ?? null,
         cargo: ROLE_LABELS[u.role] ?? u.role,
       }}
       notificacoes={pushLigado()}
+      abaNaUrl
+      abaPedida={(await searchParams).aba ?? null}
     />
   );
 }

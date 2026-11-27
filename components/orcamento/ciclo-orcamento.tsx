@@ -1,4 +1,4 @@
-import { CheckCircle2, Circle, Eye, Mail, MessageCircle, Link2, Send, XCircle, Clock, FilePen, ArrowRightLeft } from "lucide-react";
+import { CheckCircle2, Circle, Eye, Mail, MessageCircle, Link2, Send, XCircle, Clock, FilePen, ArrowRightLeft, Tag } from "lucide-react";
 import { cn, formatarData } from "@/lib/utils";
 import {
   CLASSE_ETAPA, LABELS_ETAPA, ROTULO_EVENTO, etapaCiclo, marcosCiclo, type EtapaCiclo, type OrcamentoCiclo,
@@ -18,7 +18,7 @@ const TRILHA: EtapaCiclo[] = ["RASCUNHO", "ENVIADO", "VISUALIZADO", "APROVADO"];
 
 const ICONE_EVENTO: Record<string, typeof Circle> = {
   ENVIADO: Send, ENVIADO_EMAIL: Mail, ENVIADO_WHATSAPP: MessageCircle, LINK_COPIADO: Link2,
-  VISUALIZADO: Eye, APROVADO: CheckCircle2, RECUSADO: XCircle, STATUS: ArrowRightLeft,
+  VISUALIZADO: Eye, APROVADO: CheckCircle2, RECUSADO: XCircle, STATUS: ArrowRightLeft, PRECO_TABELA: Tag,
 };
 
 /** Pílula da etapa do ciclo (lista e tela) */

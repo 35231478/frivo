@@ -8,6 +8,8 @@ import { criarItemOs, fixarCustosDosMateriaisOs, INCLUIR_ITEM_OS, prepararItemOs
 import { usuarioVeCustoDeCompra } from "@/lib/estoque/custo-acesso";
 import { semCustoNosItensOs } from "@/lib/os/custo";
 import { travaDasLinhasDaOs } from "@/lib/os/trava-edicao-server";
+import { verificarItemDaOs } from "@/lib/precos/trava-tabela-server";
+import { textoDaTrilha } from "@/lib/precos/trava-tabela";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -36,8 +38,13 @@ export async function POST(req: NextRequest, { params }: Params) {
   // "Orçamento E2": a regra de cobrança dos materiais da OS (fixada aqui se ainda não tinha e o item tem materiais)
   const regra = await regraDaOs(id, empresaId, !!parsed.data.materiais?.length);
   try { prep = await prepararItemOsConferido(empresaId, parsed.data, regra); } catch (e) { const r = respostaRefEmpresa(e); if (r) return r; throw e; }
+  // Preço que veio da tabela do cliente: travado (só com a permissão e o motivo — lib/precos/trava-tabela)
+  const trava = await verificarItemDaOs({ user: session.user!, empresaId, osId: id, item: { ...parsed.data, ...prep }, motivo: parsed.data.motivoPrecoTabela });
+  if (!trava.veredito.ok) return NextResponse.json({ erro: trava.veredito.erro, precoTabela: true }, { status: trava.veredito.status });
   const criado = await prisma.$transaction(async (tx) => {
     const item = await criarItemOs(tx, id, prep);
+    if (trava.alteracoes.length && trava.veredito.ok && trava.veredito.motivo)
+      await tx.osHistorico.create({ data: { ordemServicoId: id, usuarioId: session.user!.id, acao: "Preço de tabela alterado", detalhes: textoDaTrilha(trava.alteracoes, trava.veredito.motivo).slice(0, 500) } });
     await tx.osHistorico.create({
       data: { ordemServicoId: id, usuarioId: session.user!.id, acao: "Item de orçamento adicionado", detalhes: prep.pecas.length ? `${prep.descricao} (+ ${prep.pecas.length} peça(s) à parte)` : prep.descricao },
     });

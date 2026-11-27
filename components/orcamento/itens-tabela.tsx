@@ -24,6 +24,10 @@ export interface ItemTabela {
   bloqueado?: boolean;
   origemPreco?: "contrato" | "padrao" | "fora_tabela";
   valorPadraoCadastro?: number;
+  /** Preço da tabela do cliente para este item (lib/precos/trava-tabela) */
+  valorTabela?: number;
+  /** O preço já gravado no documento (mudar de volta para ele não pede motivo) */
+  valorGravado?: number;
   /** E3.3 (serviço): snapshot dos materiais/peças da linha; com eles, `valorUnitario` é o BASE e o total = base + ajuste */
   materiais?: MaterialOrcamento[];
   /** E3.3: o total digitado na mão vale (não segue base + ajuste) */
@@ -55,8 +59,7 @@ export interface CatalogoItem {
 export interface TabelaPrecoCliente {
   nome: string;
   tipo: string;
-  precosBloqueados: boolean;
-  itens: Record<string, { valorFinal: number; bloqueado: boolean; tipoPreco: string; descontoPercent: number | null }>;
+  itens: Record<string, { valorFinal: number; tipoPreco: string; descontoPercent: number | null }>;
 }
 
 /** Cadastro rápido de item de catálogo (produto/serviço) direto da busca. */
@@ -78,6 +81,8 @@ interface ItensTabelaProps {
   itens: ItemTabela[];
   onChange: (itens: ItemTabela[]) => void;
   tabela?: TabelaPrecoCliente | null;
+  /** "Alterar preço de tabela" (Orçamentos): sem ela, o preço que vem da tabela do cliente fica travado */
+  podeAlterarPrecoTabela?: boolean;
   cadastro?: CadastroCatalogo;
   /**
    * O TOTAL da linha também é digitável (orçamento): editar o unitário recalcula o total
@@ -202,7 +207,7 @@ function ObservacaoItem({ valor, onChange, descricao }: { valor: string; onChang
 const COLUNAS = "grid grid-cols-3 sm:grid-cols-[minmax(0,1fr)_4.5rem_7.25rem_7.25rem_2rem] gap-x-2 sm:gap-x-3";
 const rotuloCelular = "block sm:sr-only text-[11px] font-semibold uppercase tracking-wider text-ink-muted mb-0.5";
 
-export function ItensTabela({ titulo, dica, labelAdicionar, catalogo, itens, onChange, tabela, cadastro, totalEditavel = false, extraLinha, infoLinha, onAdicionadoDoCatalogo, regraMateriais }: ItensTabelaProps) {
+export function ItensTabela({ titulo, dica, labelAdicionar, catalogo, itens, onChange, tabela, podeAlterarPrecoTabela = false, cadastro, totalEditavel = false, extraLinha, infoLinha, onAdicionadoDoCatalogo, regraMateriais }: ItensTabelaProps) {
   function atualizar(id: string, patch: Partial<ItemTabela>) {
     onChange(itens.map((it) => (it.id === id ? { ...it, ...patch } : it)));
   }
@@ -240,7 +245,8 @@ export function ItensTabela({ titulo, dica, labelAdicionar, catalogo, itens, onC
     let origemPreco: ItemTabela["origemPreco"] = tabela ? "fora_tabela" : undefined;
     if (tItem) {
       valorUnitario = tItem.valorFinal;
-      bloqueado = (tabela?.precosBloqueados ?? false) || tItem.bloqueado;
+      // Preço de tabela: SEMPRE travado; só quem tem "Alterar preço de tabela" edita (com motivo — lib/precos/trava-tabela)
+      bloqueado = !podeAlterarPrecoTabela;
       origemPreco = "contrato";
     }
     const novo: ItemTabela = {
@@ -252,6 +258,7 @@ export function ItensTabela({ titulo, dica, labelAdicionar, catalogo, itens, onC
       bloqueado,
       origemPreco,
       valorPadraoCadastro: padrao,
+      ...(tItem ? { valorTabela: tItem.valorFinal } : {}),
     };
     onChange([...itens, novo]);
     onAdicionadoDoCatalogo?.(novo, c);

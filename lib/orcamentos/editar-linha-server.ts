@@ -3,8 +3,13 @@ import { montarValoresOrcamento } from "@/lib/orcamento-helpers";
 import { orcamentoJaFaturado } from "@/lib/faturamento-os";
 import { motivoDaLinhaDoOrcamento } from "@/lib/edicao-contexto";
 import type { OrcamentoInput } from "@/lib/validations";
+import { registrarEvento } from "@/lib/orcamentos/ciclo-server";
+import { chaveCatalogo, textoDaTrilha } from "@/lib/precos/trava-tabela";
+import { precoComparavelDoServico, verificarPrecoDeTabela } from "@/lib/precos/trava-tabela-server";
 
-export interface MudancaDaLinha { descricao?: string; quantidade?: number; valorUnitario?: number; observacao?: string | null }
+export interface MudancaDaLinha { descricao?: string; quantidade?: number; valorUnitario?: number; observacao?: string | null; motivoPrecoTabela?: string | null }
+/** Quem edita (para a trava do preço de tabela e a trilha) */
+export interface QuemEdita { id: string; permissoes?: unknown; role?: string }
 export type ResultadoLinha =
   | { ok: true; linha: { id: string; tipo: "SERVICO" | "PRODUTO"; descricao: string; quantidade: number; valorUnitario: number; valorTotal: number; observacao: string | null }; totalGeral: number }
   | { ok: false; status: number; erro: string };
@@ -20,7 +25,7 @@ const n = (v: unknown) => Number(v ?? 0) || 0;
  * voltam como o formulário as mandaria, com a linha alterada no lugar — uma regra só para desconto, ISS e
  * serviço com materiais. Só a linha editada e os totais do orçamento são regravados.
  */
-export async function editarLinhaDoOrcamento(empresaId: string, orcamentoId: string, linhaId: string, m: MudancaDaLinha): Promise<ResultadoLinha> {
+export async function editarLinhaDoOrcamento(empresaId: string, orcamentoId: string, linhaId: string, m: MudancaDaLinha, quem?: QuemEdita): Promise<ResultadoLinha> {
   const o = await prisma.orcamento.findFirst({
     where: { id: orcamentoId, empresaId },
     include: { servicos: { orderBy: { ordem: "asc" }, include: { materiais: { orderBy: { ordem: "asc" } } } }, produtos: { orderBy: { ordem: "asc" } } },
@@ -74,7 +79,25 @@ export async function editarLinhaDoOrcamento(empresaId: string, orcamentoId: str
 
   const tipo = servico ? "SERVICO" as const : "PRODUTO" as const;
   const novo = servico ? valores.servicos[o.servicos.indexOf(servico)] : valores.produtos[doUsuario.indexOf(produto!)];
+
+  // Preço que veio da tabela do cliente: travado (lib/precos/trava-tabela). O preço gravado antes não pede de novo.
+  const antes = servico
+    ? precoComparavelDoServico({ valorUnitario: n(servico.valorUnitario), quantidade: n(servico.quantidade), valorBase: servico.valorBase == null ? null : n(servico.valorBase), valorManual: servico.valorManual })
+    : n(produto!.valorUnitario);
+  const catalogoId = servico ? servico.servicoId : produto!.produtoId;
+  const trava = await verificarPrecoDeTabela({
+    user: quem ?? {}, empresaId, clienteId: o.clienteId,
+    itens: [{ tipo: servico ? "servico" : "produto", catalogoId, descricao: novo.descricao,
+      valorUnitario: servico ? precoComparavelDoServico(valores.servicos[o.servicos.indexOf(servico)]) : n(novo.valorUnitario) }],
+    anteriores: catalogoId ? new Map([[chaveCatalogo(servico ? "servico" : "produto", catalogoId), [antes]]]) : undefined,
+    motivo: m.motivoPrecoTabela,
+  });
+  if (!trava.veredito.ok) return { ok: false, status: trava.veredito.status, erro: trava.veredito.erro };
+
   await prisma.$transaction(async (tx) => {
+    if (trava.alteracoes.length && trava.veredito.ok && trava.veredito.motivo) {
+      await registrarEvento({ empresaId, orcamentoId, tipo: "PRECO_TABELA", usuarioId: quem?.id, detalhe: textoDaTrilha(trava.alteracoes, trava.veredito.motivo) }, tx);
+    }
     if (servico) {
       const s = valores.servicos[o.servicos.indexOf(servico)];
       await tx.orcamentoServico.update({ where: { id: linhaId }, data: {

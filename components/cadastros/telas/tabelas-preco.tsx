@@ -1,6 +1,6 @@
 "use client";
 
-import { Lock, Tags } from "lucide-react";
+import { Tags } from "lucide-react";
 import { CadastroPadrao } from "@/components/cadastros/cadastro-padrao";
 import { EditorTabelaPreco } from "@/components/cadastros/editores/editor-tabela-preco";
 import { LABELS_TIPO_TABELA_PRECO } from "@/lib/utils";
@@ -17,7 +17,6 @@ export function TabelasPrecoTela() {
           <span className="inline-flex flex-col">
             <span className="inline-flex items-center gap-2 flex-wrap font-medium">
               <Tags className="w-4 h-4 text-primary-600 shrink-0" /> {t.nome}
-              {t.precosBloqueados && <span className="inline-flex items-center gap-1 text-[10px] font-semibold px-1.5 py-0.5 rounded bg-atencao-claro text-atencao-texto"><Lock className="w-3 h-3" /> Bloqueada</span>}
             </span>
             {t.descricao && <span className="text-xs text-ink-subtle font-normal mt-0.5">{t.descricao}</span>}
           </span>

@@ -433,7 +433,9 @@ describe("uso: 'Editando este item da OS'", () => {
     expect(tituloDoPainel()).toBe("Editando este item da OS");
     const faixa = $("[data-faixa-edicao]", painel()!)!;
     expect([faixa.getAttribute("data-faixa-edicao"), txt(faixa)]).toEqual(["uso", "Vale só aqui. O cadastro não muda."]);
-    expect(rotulosDosCampos()).toEqual(["Descrição", "Quantidade", "Valor unitário (R$)"]);
+    // Leva G: quem tem "Alterar preço de tabela" (aqui, todas as permissões) vê também o motivo, pedido se o preço
+    // fugir da tabela do cliente (o servidor decide); sem a permissão o campo não aparece (caso abaixo)
+    expect(rotulosDosCampos()).toEqual(["Descrição", "Quantidade", "Valor unitário (R$)", "Motivo (se alterar preço de tabela)"]);
     expect([campo("Descrição")!.value, campo("Quantidade")!.value, campo("Valor unitário (R$)")!.value]).toEqual(["Visita técnica", "2", "100,00"]);
     // nada de link para o catálogo: o item é uso
     expect(painel()!.querySelector("a")).toBeNull();
@@ -491,7 +493,7 @@ describe("uso: 'Editando este item da OS'", () => {
   it("serviço com materiais: o preço é o unitário BASE; os materiais ficam no editor completo, com a mesma faixa de uso", async () => {
     await abrirItens();
     await clicar(lapisDa("i1"));
-    expect(rotulosDosCampos()).toEqual(["Descrição", "Quantidade", "Unit. base (R$)"]);
+    expect(rotulosDosCampos()).toEqual(["Descrição", "Quantidade", "Unit. base (R$)", "Motivo (se alterar preço de tabela)"]);
     expect(campo("Unit. base (R$)")!.value).toBe("800,00");
     const acao = $("[data-acao-secundaria]", painel()!)!;
     expect(txt(acao)).toBe("Materiais e peças deste item");
@@ -503,6 +505,12 @@ describe("uso: 'Editando este item da OS'", () => {
     expect($("[data-materiais-linha]", editor)).not.toBeNull();
     // enquanto o editor completo está aberto, a linha não mostra outro lápis
     expect(lapisDa("i1")).toBeNull();
+  });
+
+  it("Leva G: sem a permissão 'Alterar preço de tabela', o painel não pede motivo (o preço da tabela fica com o servidor)", async () => {
+    await abrirItens(undefined, undefined, SO_OPERA);
+    await clicar(lapisDa("i3"));
+    expect(rotulosDosCampos()).toEqual(["Descrição", "Quantidade", "Valor unitário (R$)"]);
   });
 
   it("produto não tem 'materiais e peças'; linha com total digitado à mão não oferece o unitário", async () => {
@@ -625,7 +633,8 @@ describe("uso: 'Editando este item do orçamento' (detalhe do orçamento)", () =
     await clicar($("[data-editar-no-contexto]"));
     expect(tituloDoPainel()).toBe("Editando este item do orçamento");
     expect(txt($("[data-faixa-edicao='uso']", painel()!))).toBe("Vale só aqui. O cadastro não muda.");
-    expect(rotulosDosCampos()).toEqual(["Descrição", "Quantidade", "Valor unitário (R$)", "Observação"]);
+    // Leva G: com a permissão "Alterar preço de tabela", o motivo (pedido só se o preço fugir da tabela do cliente)
+    expect(rotulosDosCampos()).toEqual(["Descrição", "Quantidade", "Valor unitário (R$)", "Observação", "Motivo (se alterar preço de tabela)"]);
     expect([campo("Descrição")!.value, campo("Quantidade")!.value, campo("Valor unitário (R$)")!.value, campo("Observação")!.value]).toEqual(["Limpeza", "2", "150,00", "Fora do horário"]);
     await digitar(campo("Quantidade"), "3");
     await digitar(campo("Observação"), "");
@@ -648,11 +657,16 @@ describe("uso: 'Editando este item do orçamento' (detalhe do orçamento)", () =
   it("serviço com materiais: unitário BASE; com total digitado à mão, o unitário não é oferecido", async () => {
     await abrirLinha("RASCUNHO", { comMateriais: true, valorUnitario: 800 });
     await clicar($("[data-editar-no-contexto]"));
-    expect(rotulosDosCampos()).toEqual(["Descrição", "Quantidade", "Unit. base (R$)", "Observação"]);
+    expect(rotulosDosCampos()).toEqual(["Descrição", "Quantidade", "Unit. base (R$)", "Observação", "Motivo (se alterar preço de tabela)"]);
     desmontar();
     await abrirLinha("RASCUNHO", { comMateriais: true, valorManual: true });
     await clicar($("[data-editar-no-contexto]"));
     expect(rotulosDosCampos()).toEqual(["Descrição", "Quantidade", "Observação"]);
+    // Leva G: sem a permissão "Alterar preço de tabela", nada de motivo
+    desmontar();
+    await abrirLinha("RASCUNHO", {}, SO_OPERA);
+    await clicar($("[data-editar-no-contexto]"));
+    expect(rotulosDosCampos()).toEqual(["Descrição", "Quantidade", "Valor unitário (R$)", "Observação"]);
   });
 
   it.each([

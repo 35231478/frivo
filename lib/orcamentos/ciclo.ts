@@ -244,4 +244,6 @@ export const ROTULO_EVENTO: Record<string, string> = {
   STATUS: "Status alterado",
   OS_GERADA: "OS gerada",
   FATURADO: "Faturado",
+  // Leva G: preço que veio da tabela do cliente alterado por quem tem a permissão, com o motivo no detalhe
+  PRECO_TABELA: "Preço de tabela alterado",
 };

@@ -306,11 +306,14 @@ function Conteudo({ entidade, Editor, celula, acoesLinha, ajuda, aviso, grupos }
                   classe: "truncate",
                 })),
                 ...(aba === "todos" ? [{ id: "situacao", titulo: "Situação", largura: 96 }] : []),
-                { id: "acoes", titulo: "Ações", fixa: true, largura: 96, semTitulo: true, alinhar: "direita" as const, classe: "py-0.5" },
+                // Presa à direita: numa gaveta estreita (Configurações › Produtos) a tabela rola e as ações sumiam depois da última coluna
+                { id: "acoes", titulo: "Ações", fixa: true, grudada: true, largura: 96, semTitulo: true, alinhar: "direita" as const, classe: "py-0.5" },
               ]}
               linhas={itens.map((item) => ({
                 id: item.id,
                 atributos: { "data-linha": item.id },
+                // A linha inteira abre o mesmo editor do lápis (quem não pode editar não recebe: a linha fica só leitura)
+                aoAbrir: podeCad("editar") ? () => setEditando(item) : undefined,
                 classe: !item.ativo ? "text-ink-muted" : undefined,
                 celulas: {
                   sel: massa ? <CheckboxLinha id={item.id} rotulo={item.nome} /> : null,
