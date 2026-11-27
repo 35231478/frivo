@@ -36,6 +36,13 @@ import {
  * fixas; Ctrl/⌘ + clique e o botão do meio abrem em nova aba; a linha entra no Tab e abre no Enter.
  * O link do número/nome continua existindo (botão direito › abrir em nova aba).
  */
+/**
+ * Coluna presa à direita: fundo sólido (o conteúdo que rola por baixo não aparece) acompanhando a zebra, o realce do
+ * mouse e a seleção da linha, com uma sombra fina na borda esquerda.
+ */
+const GRUDADA_TD = "sticky right-0 z-[1] bg-white group-even/linha:bg-surface-alt group-hover/linha:bg-primary-50 group-data-[selecionada]/linha:bg-primary-50 shadow-[-6px_0_6px_-6px_rgb(0_0_0/0.18)]";
+const GRUDADA_TH = "sticky right-0 z-[2] bg-surface-alt shadow-[-6px_0_6px_-6px_rgb(0_0_0/0.18)]";
+
 export interface ColunaPro {
   id: string;
   /** Texto do cabeçalho (e do menu "Colunas") */
@@ -55,6 +62,11 @@ export interface ColunaPro {
   oculta?: boolean;
   /** Coluna de serviço (checkbox, ações): não redimensiona, não entra no menu e é sempre visível */
   fixa?: boolean;
+  /**
+   * Fica presa à direita quando a tabela rola na horizontal (ex.: as ações da linha, que numa gaveta estreita
+   * sumiriam depois da última coluna)
+   */
+  grudada?: boolean;
   /** Chave de ordenação (o cabeçalho vira botão quando a tabela recebe `ordenacao`) */
   ordenar?: string;
   /** Classes extras do <td> (ex.: "truncate") */
@@ -70,11 +82,15 @@ export interface LinhaPro {
   atributos?: Record<string, string | undefined>;
   /** title de cada célula (o texto inteiro no hover de uma célula truncada) */
   titulos?: Record<string, string | undefined>;
-  /** O registro que a linha inteira abre (sem ele a linha é só leitura; quem não tem permissão não recebe) */
+  /**
+   * O registro que a linha inteira abre (sem ele e sem `aoAbrir` a linha é só leitura; quem não tem permissão não
+   * recebe nenhum dos dois)
+   */
   href?: string;
   /**
    * O que abrir a linha faz nesta aba, no lugar de ir ao `href` (ex.: a visualização rápida numa gaveta).
-   * Ctrl/⌘ + clique e o botão do meio continuam abrindo o `href` em nova aba.
+   * Ctrl/⌘ + clique e o botão do meio continuam abrindo o `href` em nova aba. Sem `href` (ex.: o cadastro que edita
+   * numa gaveta), a linha abre só pelo `aoAbrir`, nesta aba.
    */
   aoAbrir?: () => void;
 }
@@ -369,7 +385,7 @@ export function TabelaPro({ tela, colunas, linhas, ordenacao, cartoes, barra, qu
                   return (
                     <th
                       key={c.id} scope="col" data-coluna={c.id}
-                      className={cn(PLANILHA.th, al, "relative whitespace-nowrap overflow-hidden", c.semTitulo && "py-0.5")}
+                      className={cn(PLANILHA.th, al, "relative whitespace-nowrap overflow-hidden", c.semTitulo && "py-0.5", c.grudada && GRUDADA_TH)}
                       aria-sort={ativa ? (ordenacao!.dir === "asc" ? "ascending" : "descending") : undefined}
                     >
                       {c.cabecalho !== undefined ? (
@@ -399,38 +415,41 @@ export function TabelaPro({ tela, colunas, linhas, ordenacao, cartoes, barra, qu
               </tr>
             </thead>
             <tbody>
-              {linhas.map((l) => (
-                <tr key={l.id} data-linha={l.id} data-abrir={l.href}
-                  className={cn(PLANILHA.linha, PLANILHA.linhaHover, l.href && PLANILHA.linhaAbre, l.classe, selecionados?.has(l.id) && PLANILHA.linhaSelecionada)}
+              {linhas.map((l) => {
+                const abre = !!(l.href || l.aoAbrir);
+                return (
+                <tr key={l.id} data-linha={l.id} data-abrir={l.href ?? (l.aoAbrir ? "" : undefined)}
+                  className={cn("group/linha", PLANILHA.linha, PLANILHA.linhaHover, abre && PLANILHA.linhaAbre, l.classe, selecionados?.has(l.id) && PLANILHA.linhaSelecionada)}
                   aria-selected={selecionados ? selecionados.has(l.id) : undefined} data-selecionada={selecionados?.has(l.id) ? "" : undefined}
-                  tabIndex={l.href ? 0 : undefined}
-                  onClick={l.href ? (e) => {
+                  tabIndex={abre ? 0 : undefined}
+                  onClick={abre ? (e) => {
                     const destino = destinoDoClique(e);
                     if (destino === "nenhum" || !cliqueAbreLinha(e.target as Element, e.currentTarget, window.getSelection()?.toString())) return;
-                    if (destino === "mesma-aba" && l.aoAbrir) { l.aoAbrir(); return; }
-                    abrirRegistro(l.href!, destino, roteador);
+                    if ((destino === "mesma-aba" || !l.href) && l.aoAbrir) { l.aoAbrir(); return; }
+                    if (l.href) abrirRegistro(l.href, destino, roteador);
                   } : undefined}
                   onAuxClick={l.href ? (e) => {
                     if (e.button !== 1 || !cliqueAbreLinha(e.target as Element, e.currentTarget)) return;
                     e.preventDefault();
                     abrirRegistro(l.href!, "nova-aba", roteador);
                   } : undefined}
-                  onKeyDown={l.href ? (e) => {
+                  onKeyDown={abre ? (e) => {
                     if (!teclaAbreLinha(e)) return;
                     e.preventDefault();
-                    const novaAba = e.ctrlKey || e.metaKey;
+                    const novaAba = (e.ctrlKey || e.metaKey) && !!l.href;
                     if (!novaAba && l.aoAbrir) { l.aoAbrir(); return; }
-                    abrirRegistro(l.href!, novaAba ? "nova-aba" : "mesma-aba", roteador);
+                    if (l.href) abrirRegistro(l.href, novaAba ? "nova-aba" : "mesma-aba", roteador);
                   } : undefined}
                   {...l.atributos}>
                   {visiveis.map((c) => (
-                    <td key={c.id} className={cn(PLANILHA.td, "align-middle", ALINHAR[c.alinhar ?? "esquerda"], c.alinhar === "direita" && "tabular-nums whitespace-nowrap", c.classe)}
-                      title={l.titulos?.[c.id]} data-celula={c.id} data-fixa={c.fixa ? "" : undefined}>
+                    <td key={c.id} className={cn(PLANILHA.td, "align-middle", ALINHAR[c.alinhar ?? "esquerda"], c.alinhar === "direita" && "tabular-nums whitespace-nowrap", c.classe, c.grudada && GRUDADA_TD)}
+                      title={l.titulos?.[c.id]} data-celula={c.id} data-fixa={c.fixa ? "" : undefined} data-grudada={c.grudada ? "" : undefined}>
                       {l.celulas[c.id]}
                     </td>
                   ))}
                 </tr>
-              ))}
+                );
+              })}
             </tbody>
           </table>
         </div>

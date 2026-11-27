@@ -52,7 +52,6 @@ export const portalLoginSchema = z.object({
 // Concessão/edição de acesso ao portal para um contato
 export const acessoPortalSchema = z.object({
   email: z.string().email("E-mail inválido"),
-  senha: z.string().optional(), // se vazio, mantém a senha atual
   ativo: z.boolean().default(true),
   permissoes: z.object({
     verOS: z.boolean().default(false),
@@ -511,6 +510,8 @@ export const itemOsSchema = z.object({
   valorTotal: z.preprocess((v) => (v === "" || v == null ? undefined : typeof v === "string" ? Number(v.replace(",", ".")) : Number(v)), z.number().nonnegative("Valor não pode ser negativo").optional()),
   valorManual: z.boolean().default(false),
   materiais: z.lazy(() => z.array(materialOrcamentoSchema).max(200, "Uma linha vai até 200 materiais.")).optional(),
+  /** Motivo de alterar o preço que veio da tabela de preço do cliente (lib/precos/trava-tabela; vai para o histórico) */
+  motivoPrecoTabela: z.string().trim().max(300).optional().nullable(),
 }).strict();
 
 export const orcamentoItemSchema = z.object({
@@ -578,6 +579,8 @@ export const orcamentoSchema = z.object({
   servicos: z.array(orcamentoItemSchema).default([]),
   produtos: z.array(orcamentoItemSchema).default([]),
   ordensServicoIds: z.array(z.string()).default([]),
+  /** Motivo de alterar o preço que veio da tabela de preço do cliente (lib/precos/trava-tabela; vai para a trilha) */
+  motivoPrecoTabela: z.string().trim().max(300).optional().nullable(),
 
   // Proposta de contrato
   valorMensal: decimalOpcional,
@@ -949,7 +952,7 @@ export const unidadeContextoSchema = unidadeSchema
 export const equipamentoContextoSchema = equipamentoSchema
   .pick({ nome: true, marca: true, modelo: true, numeroSerie: true, patrimonio: true, localizacao: true }).partial().strict();
 /** A linha da OS como USO: descrição, quantidade e o preço aplicado naquele documento. Nada do catálogo. */
-export const linhaOsContextoSchema = itemOsSchema.pick({ descricao: true, quantidade: true, valorUnitario: true }).partial().strict();
+export const linhaOsContextoSchema = itemOsSchema.pick({ descricao: true, quantidade: true, valorUnitario: true, motivoPrecoTabela: true }).partial().strict();
 /** A linha do orçamento como USO (a observação já existe na linha do orçamento). */
 export const linhaOrcamentoContextoSchema = linhaOsContextoSchema.extend({ observacao: z.string().trim().max(2000).nullable().optional() }).strict();
 

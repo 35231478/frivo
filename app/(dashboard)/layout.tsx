@@ -79,7 +79,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
               tag no HTML, e por isso nem chega a baixar o chunk da ferramenta (a 2ª trava está em
               components/anotacoes/carregador.tsx; a 3ª é o 403 nas rotas). Sem consulta nova:
               o papel já viaja no token da sessão. */}
-          {ehDonoDoFrivo(session.user) && <AnotacoesCarregador />}
+          {ehDonoDoFrivo(session.user) && <AnotacoesCarregador usuarioId={session.user.id} />}
         </div>
        </ModulosProvider>
       </PermissoesProvider>

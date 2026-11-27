@@ -2,12 +2,14 @@ import { redirect } from "next/navigation";
 import QRCode from "qrcode";
 import { prisma } from "@/lib/prisma";
 import { getPortalSession, type PortalSession } from "@/lib/auth-portal";
+import { ROTA_TROCA_PORTAL } from "@/lib/portal/senha-provisoria";
 import { neutro } from "@/lib/ui/tokens";
 
-/** Garante uma sessão de portal; redireciona para o login se ausente. */
+/** Garante uma sessão de portal; sem sessão, o login; com a troca de senha pendente, a tela de troca. */
 export async function requirePortalSession(): Promise<PortalSession> {
-  const sessao = await getPortalSession();
+  const sessao = await getPortalSession({ comTroca: true });
   if (!sessao?.user) redirect("/portal/login");
+  if (sessao.user.trocarSenha) redirect(ROTA_TROCA_PORTAL);
   return sessao;
 }
 

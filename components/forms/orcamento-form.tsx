@@ -26,6 +26,7 @@ import { MateriaisLinha } from "@/components/orcamento/materiais-linha";
 import { InfoProduto, ResumoCustoMargem, useSituacaoProdutos } from "@/components/orcamento/estoque-margem";
 import { custosDoOrcamento, resumoMargem } from "@/lib/orcamentos/estoque-margem";
 import { usePermissoes } from "@/components/providers/permissoes-provider";
+import { itensComPrecoDeTabelaAlterado, marcarItensDaTabela, MOTIVO_MIN } from "@/lib/precos/trava-tabela";
 import { confirmar, toast } from "@/components/ui/avisos";
 import { nomeAutomaticoOrcamento, type ContextoNomeOrcamento } from "@/lib/orcamentos/nome";
 import { Select } from "@/components/ui/select";
@@ -375,6 +376,16 @@ export function OrcamentoForm({
   ].filter((x): x is string => !!x), [produtos, pecasDerivadas, servicos]);
   const situacao = useSituacaoProdutos(produtoIds);
   const verCusto = pode("orcamentos", "verCusto") && situacao?.verCusto !== false;
+  // Preço que vem da tabela do cliente: travado; com "Alterar preço de tabela", editável com motivo (lib/precos/trava-tabela)
+  const podeAlterarPrecoTabela = pode("orcamentos", "alterarPrecoTabela");
+  const [motivoPrecoTabela, setMotivoPrecoTabela] = useState("");
+  // Ao abrir um orçamento salvo (ou trocar de cliente), os itens que estão na tabela do cliente ficam marcados
+  useEffect(() => {
+    if (!tabelaPreco) return;
+    setServicos((prev) => marcarItensDaTabela(prev, tabelaPreco.itens, podeAlterarPrecoTabela));
+    setProdutos((prev) => marcarItensDaTabela(prev, tabelaPreco.itens, podeAlterarPrecoTabela));
+  }, [tabelaPreco, podeAlterarPrecoTabela]);
+  const precosDeTabelaAlterados = itensComPrecoDeTabelaAlterado([...servicos, ...produtos]);
   const totais = useMemo(() => calcularOrcamento({
     // Serviço com materiais: base + ajuste dos inclusos (ou o manual) — lib/orcamentos/materiais.ts
     servicos: servicos.filter((s) => s.descricao.trim()).map((s) => (s.materiais?.length ? { quantidade: s.quantidade, valorUnitario: valorDaLinha(s, regraMateriais).valorUnitario, valorTotal: valorDaLinha(s, regraMateriais).valorTotal } : s)),
@@ -458,6 +469,9 @@ export function OrcamentoForm({
     if (tipo === "PROPOSTA_CONTRATO" && (!proposta.valorMensal || Number(proposta.valorMensal) <= 0)) {
       return setErro("Informe o valor mensal do contrato proposto.");
     }
+    if (precosDeTabelaAlterados.length && motivoPrecoTabela.trim().length < MOTIVO_MIN) {
+      return setErro("Informe o motivo da alteração do preço de tabela.");
+    }
     const limpar = (it: ItemTabela) => ({
       catalogoId: it.catalogoId ?? null,
       descricao: it.descricao.trim(),
@@ -482,6 +496,7 @@ export function OrcamentoForm({
     const prodPayload = produtos.filter((p) => p.descricao.trim() && !p.derivada).map(limpar);
 
     const payload: Record<string, any> = {
+      motivoPrecoTabela: precosDeTabelaAlterados.length ? motivoPrecoTabela.trim() : null,
       // Em branco = o servidor compõe o nome automático (a mesma regra da prévia)
       nome: nome.trim() || null,
       prazoExecucao: prazoExecucao.trim() || null,
@@ -588,9 +603,9 @@ export function OrcamentoForm({
           <span className="inline-flex items-center gap-1.5 bg-success-50 text-success-700 text-xs font-semibold rounded-full px-3 py-1">
             <Tags className="w-3.5 h-3.5" /> Tabela: {tabelaPreco.nome}
           </span>
-          {tabelaPreco.precosBloqueados && (
-            <span className="text-xs text-ink-muted">Preços bloqueados por contrato</span>
-          )}
+          <span className="text-xs text-ink-muted" data-trava-tabela>
+            {podeAlterarPrecoTabela ? "Mudar o preço da tabela pede motivo" : "Preços da tabela travados"}
+          </span>
         </div>
       )}
       {tabelaInativa && (
@@ -721,6 +736,7 @@ export function OrcamentoForm({
           itens={servicos}
           onChange={setServicos}
           tabela={tabelaPreco}
+          podeAlterarPrecoTabela={podeAlterarPrecoTabela}
           cadastro={cadastroServico}
           totalEditavel
           regraMateriais={regraMateriais}
@@ -748,6 +764,7 @@ export function OrcamentoForm({
           itens={[...produtos, ...pecasDerivadas]}
           onChange={(itens) => setProdutos(itens.filter((i) => !i.derivada))}
           tabela={tabelaPreco}
+          podeAlterarPrecoTabela={podeAlterarPrecoTabela}
           cadastro={cadastroProduto}
           totalEditavel
           infoLinha={(it, total) => (
@@ -757,6 +774,17 @@ export function OrcamentoForm({
           )}
         />
       </div>
+
+      {precosDeTabelaAlterados.length > 0 && (
+        <div className="card-padded" data-motivo-preco-tabela>
+          <FormField
+            label="Motivo da alteração do preço de tabela" required
+            hint={`Fora da tabela: ${precosDeTabelaAlterados.map((i) => i.descricao).join(", ")}`}
+          >
+            <Input value={motivoPrecoTabela} onChange={(e) => setMotivoPrecoTabela(e.target.value)} maxLength={300} placeholder="Ex.: desconto negociado com o cliente" />
+          </FormField>
+        </div>
+      )}
 
       {tipo !== "PROPOSTA_CONTRATO" && (
         <div className="card-padded space-y-6" data-condicoes-comerciais>

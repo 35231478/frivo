@@ -6,7 +6,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ToggleSwitch } from "@/components/ui/toggle-switch";
 import { PERMISSOES_PORTAL, whatsappLink } from "@/lib/utils";
-import { KeyRound, Mail, MessageCircle, Check, AlertCircle, ShieldOff, Eye, EyeOff, RefreshCw } from "lucide-react";
+import { mensagemDoAcesso } from "@/lib/portal/senha-provisoria";
+import { KeyRound, Mail, MessageCircle, Check, AlertCircle, ShieldOff, Copy, RefreshCw } from "lucide-react";
 
 export interface AcessoChange {
   temAcesso: boolean;
@@ -32,11 +33,11 @@ export function PortalAcessoContato({
 }: Props) {
   const [aberto, setAberto] = useState(false);
   const [email, setEmail] = useState(emailInicial ?? "");
-  const [senha, setSenha] = useState("");
   const [temAcesso, setTemAcesso] = useState(temAcessoInicial);
-  // A senha só existe aqui logo depois de definida/redefinida: o servidor guarda apenas o hash.
+  // A senha provisória é GERADA pelo sistema e só existe aqui logo depois de gerada: o servidor guarda
+  // apenas o hash. Fechou o quadro ou recarregou a tela, ela some (gera-se outra, se precisar).
   const [senhaProvisoria, setSenhaProvisoria] = useState<string | null>(null);
-  const [revelar, setRevelar] = useState(false);
+  const [copiou, setCopiou] = useState(false);
   // UX-5 (C1): acesso NOVO já nasce vendo o essencial — inclusive as FATURAS (o portal
   // existe para o boleto se entregar sozinho). O gestor desmarca o que não quiser.
   const PERMISSOES_PADRAO_CONCESSAO: Record<string, boolean> = {
@@ -47,7 +48,7 @@ export function PortalAcessoContato({
     permissoesIniciais ?? (temAcessoInicial ? {} : PERMISSOES_PADRAO_CONCESSAO),
   );
   const [salvando, setSalvando] = useState(false);
-  const [acao, setAcao] = useState<"salvar" | "redefinir" | "revogar" | null>(null);
+  const [acao, setAcao] = useState<"salvar" | "gerar" | "revogar" | null>(null);
   const [fb, setFb] = useState<{ t: "ok" | "erro"; m: string } | null>(null);
 
   const linkPortal = typeof window !== "undefined" ? `${window.location.origin}/portal/login` : "/portal/login";
@@ -59,33 +60,37 @@ export function PortalAcessoContato({
   async function salvar() {
     setFb(null);
     if (!email) { setFb({ t: "erro", m: "Informe o e-mail de acesso." }); return; }
-    if (!temAcesso && senha.length < 8) { setFb({ t: "erro", m: "Defina uma senha (mín. 8 caracteres)." }); return; }
-    if (temAcesso && senha && senha.length < 8) { setFb({ t: "erro", m: "A nova senha precisa de pelo menos 8 caracteres." }); return; }
     setSalvando(true); setAcao("salvar");
     try {
       const res = await fetch(`/api/clientes/${clienteId}/contatos/${contatoId}/acesso-portal`, {
         method: "PUT", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, senha: senha || undefined, ativo: true, permissoes: perms }),
+        body: JSON.stringify({ email, ativo: true, permissoes: perms }),
       });
       if (!res.ok) { const e = await res.json().catch(() => ({})); setFb({ t: "erro", m: e.erro ?? "Erro ao salvar." }); return; }
       const data = await res.json().catch(() => ({}));
-      setTemAcesso(true); setSenha("");
-      if (data.senhaProvisoria) { setSenhaProvisoria(data.senhaProvisoria); setRevelar(true); }
-      setFb({ t: "ok", m: "Acesso concedido." });
-      onChange?.({ temAcesso: true, senhaProvisoria: data.senhaProvisoria ?? senhaProvisoria, acessoConcedidoEm: data.acessoConcedidoEm ?? null });
+      setTemAcesso(true);
+      if (data.senhaProvisoria) { setSenhaProvisoria(data.senhaProvisoria); setCopiou(false); }
+      setFb({ t: "ok", m: data.senhaProvisoria ? "Acesso liberado. Repasse a senha provisória abaixo." : "Acesso atualizado." });
+      onChange?.({ temAcesso: true, senhaProvisoria: data.senhaProvisoria ?? null, acessoConcedidoEm: data.acessoConcedidoEm ?? null });
     } catch { setFb({ t: "erro", m: "Erro de conexão." }); } finally { setSalvando(false); setAcao(null); }
   }
 
-  async function redefinir() {
-    setFb(null); setSalvando(true); setAcao("redefinir");
+  async function gerarNova() {
+    if (!(await confirmar({ mensagem: "Gerar uma nova senha provisória? A senha atual deixa de valer e o contato cria uma nova no próximo acesso.", confirmarTexto: "Gerar nova senha" }))) return;
+    setFb(null); setSalvando(true); setAcao("gerar");
     try {
       const res = await fetch(`/api/clientes/${clienteId}/contatos/${contatoId}/acesso-portal`, { method: "POST" });
-      if (!res.ok) { const e = await res.json().catch(() => ({})); setFb({ t: "erro", m: e.erro ?? "Erro ao redefinir." }); return; }
+      if (!res.ok) { const e = await res.json().catch(() => ({})); setFb({ t: "erro", m: e.erro ?? "Erro ao gerar a senha." }); return; }
       const data = await res.json();
-      setTemAcesso(true); setSenhaProvisoria(data.senhaProvisoria ?? null); setRevelar(true);
-      setFb({ t: "ok", m: "Nova senha provisória gerada." });
+      setTemAcesso(true); setSenhaProvisoria(data.senhaProvisoria ?? null); setCopiou(false);
+      setFb({ t: "ok", m: "Nova senha provisória gerada. Repasse ao contato." });
       onChange?.({ temAcesso: true, senhaProvisoria: data.senhaProvisoria ?? null, acessoConcedidoEm: data.acessoConcedidoEm ?? null });
     } catch { setFb({ t: "erro", m: "Erro de conexão." }); } finally { setSalvando(false); setAcao(null); }
+  }
+
+  async function copiar() {
+    if (!senhaProvisoria) return;
+    try { await navigator.clipboard.writeText(senhaProvisoria); setCopiou(true); } catch { setFb({ t: "erro", m: "Não foi possível copiar. Selecione a senha e copie." }); }
   }
 
   async function revogar() {
@@ -94,16 +99,14 @@ export function PortalAcessoContato({
     try {
       const res = await fetch(`/api/clientes/${clienteId}/contatos/${contatoId}/acesso-portal`, { method: "DELETE" });
       if (res.ok) {
-        setTemAcesso(false); setRevelar(false); setSenhaProvisoria(null);
+        setTemAcesso(false); setSenhaProvisoria(null);
         setFb({ t: "ok", m: "Acesso revogado." });
         onChange?.({ temAcesso: false, senhaProvisoria: null, acessoConcedidoEm: null });
       }
     } finally { setSalvando(false); setAcao(null); }
   }
 
-  const msgConvite =
-    `Prezado(a) ${contatoNome}, seu acesso ao portal do cliente está pronto.\n` +
-    `Acesse: ${linkPortal}\nE-mail: ${email}${senhaProvisoria ? `\nSenha: ${senhaProvisoria}` : ""}`;
+  const msgConvite = mensagemDoAcesso({ contatoNome, link: linkPortal, email, senha: senhaProvisoria });
   const mailto = `mailto:${encodeURIComponent(email)}?subject=${encodeURIComponent("Acesso ao Portal do Cliente")}&body=${encodeURIComponent(msgConvite)}`;
   const wpp = whatsappInicial ? whatsappLink(whatsappInicial, msgConvite) : `https://wa.me/?text=${encodeURIComponent(msgConvite)}`;
 
@@ -141,32 +144,26 @@ export function PortalAcessoContato({
           <div className="min-w-0">
             <p className="text-[11px] font-semibold text-ink-muted">Senha provisória</p>
             {senhaProvisoria ? (
-              <>
+              <div data-senha-provisoria>
                 <div className="flex items-center gap-2">
-                  <span className="text-sm font-mono text-ink">{revelar ? senhaProvisoria : "••••••••"}</span>
-                  <button type="button" onClick={() => setRevelar((v) => !v)} className="text-ink-muted hover:text-ink" title={revelar ? "Ocultar" : "Revelar"}>
-                    {revelar ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                  <span className="text-sm font-mono text-ink select-all" data-senha-gerada>{senhaProvisoria}</span>
+                  <button type="button" onClick={copiar} className="inline-flex items-center gap-1 text-xs font-semibold text-primary-700 hover:text-primary-800 min-h-[32px] px-1" data-copiar-senha>
+                    {copiou ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />} {copiou ? "Copiada" : "Copiar"}
                   </button>
                 </div>
-                <p className="text-[10px] text-atencao-texto">Repasse agora: por segurança ela não será exibida de novo.</p>
-              </>
+                <p className="text-[11px] text-atencao-texto">Aparece só agora. O contato cria a própria senha no 1º acesso.</p>
+              </div>
             ) : (
-              <p className="text-xs text-ink-muted">Definida. Para enviar uma nova ao contato, use “Redefinir senha”.</p>
+              <p className="text-xs text-ink-muted" data-senha-nao-exibida>Não fica guardada. Para enviar uma senha ao contato, gere uma nova.</p>
             )}
           </div>
         </div>
       )}
 
-      {/* Formulário de e-mail/senha */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-        <div>
-          <label className="text-[11px] font-semibold text-ink">E-mail de acesso</label>
-          <Input value={email} onChange={(e) => setEmail(e.target.value)} type="email" placeholder="email@cliente.com" />
-        </div>
-        <div>
-          <label className="text-[11px] font-semibold text-ink">{temAcesso ? "Nova senha (opcional)" : "Senha temporária"}</label>
-          <Input value={senha} onChange={(e) => setSenha(e.target.value)} type="text" placeholder={temAcesso ? "deixe em branco para manter" : "mín. 8 caracteres"} />
-        </div>
+      {/* E-mail de acesso (a senha é gerada pelo sistema ao liberar) */}
+      <div>
+        <label className="text-[11px] font-semibold text-ink">E-mail de acesso</label>
+        <Input value={email} onChange={(e) => setEmail(e.target.value)} type="email" placeholder="email@cliente.com" />
       </div>
 
       <div>
@@ -179,12 +176,12 @@ export function PortalAcessoContato({
       </div>
 
       <div className="flex flex-wrap items-center gap-2">
-        <Button type="button" loading={salvando && acao === "salvar"} onClick={salvar} className="text-xs h-8"><Check className="w-3.5 h-3.5" /> Salvar acesso</Button>
+        <Button type="button" loading={salvando && acao === "salvar"} onClick={salvar} className="text-xs h-8" data-salvar-acesso><Check className="w-3.5 h-3.5" /> {temAcesso ? "Salvar acesso" : "Liberar acesso"}</Button>
         {temAcesso && (
           <>
-            <Button type="button" variant="secondary" loading={salvando && acao === "redefinir"} onClick={redefinir} className="text-xs h-8"><RefreshCw className="w-3.5 h-3.5" /> Redefinir senha</Button>
-            <a href={mailto} className="inline-flex items-center gap-1 text-xs font-medium text-primary-600 hover:text-primary-700"><Mail className="w-3.5 h-3.5" /> Convite e-mail</a>
-            <a href={wpp} target="_blank" rel="noopener" className="inline-flex items-center gap-1 text-xs font-medium text-success-700 hover:text-success-800"><MessageCircle className="w-3.5 h-3.5" /> Convite WhatsApp</a>
+            <Button type="button" variant="secondary" loading={salvando && acao === "gerar"} onClick={gerarNova} className="text-xs h-8" data-gerar-senha><RefreshCw className="w-3.5 h-3.5" /> Gerar nova senha provisória</Button>
+            <a href={mailto} className="inline-flex items-center gap-1 text-xs font-medium text-primary-600 hover:text-primary-700" data-convite-email><Mail className="w-3.5 h-3.5" /> Convite e-mail</a>
+            <a href={wpp} target="_blank" rel="noopener" className="inline-flex items-center gap-1 text-xs font-medium text-success-700 hover:text-success-800" data-convite-whatsapp><MessageCircle className="w-3.5 h-3.5" /> Convite WhatsApp</a>
             <button type="button" onClick={revogar} className="inline-flex items-center gap-1 text-xs font-medium text-atrasado hover:text-atrasado-texto ml-auto"><ShieldOff className="w-3.5 h-3.5" /> Revogar acesso</button>
           </>
         )}

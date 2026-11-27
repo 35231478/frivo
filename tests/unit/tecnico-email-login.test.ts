@@ -192,11 +192,13 @@ describe("tela: Meus dados", () => {
       expect(sessaoCliente.update).toHaveBeenCalledWith({ name: "João Pedro Silva", email: "joao@clima.com" });
     });
 
-    it("a FOTO continua editável: a aba 'Foto de perfil' segue com 'Alterar foto'", async () => {
+    // Leva G: o perfil foi redesenhado — a foto saiu da aba própria e fica em "Dados" (botão "Enviar foto", ou
+    // "Trocar foto" quando já há uma) e no avatar do topo. A regra é a mesma: no app, a foto continua editável
+    it("a FOTO continua editável: em Dados, 'Enviar foto' e o avatar do topo", async () => {
       await abrirNoApp();
-      await clicar(botoes("Foto de perfil")[0]);
-      expect(botoes("Alterar foto").filter(visivel)).toHaveLength(1);
-      expect(botoes("Alterar foto")[0].disabled).toBe(false);
+      expect(botoes("Enviar foto").filter(visivel)).toHaveLength(1);
+      expect(botoes("Enviar foto")[0].disabled).toBe(false);
+      expect((caixa.querySelector("[data-trocar-foto]") as HTMLButtonElement).disabled).toBe(false);
     });
 
     it("o campo travado segue com alvo de 44 px no app (está dentro da área de Meus dados)", async () => {
@@ -213,23 +215,25 @@ describe("tela: Meus dados", () => {
       await abrirNoPainel();
       expect(caixa.querySelector("[data-email-somente-leitura]")).toBeNull();
       expect(texto(caixa)).not.toContain("feita pelo escritório");
-      const email = campo("E-mail")!;
+      // Leva G: o rótulo passou a ser "E-mail de login" (o mesmo do app)
+      const email = campo("E-mail de login")!;
       expect(email.readOnly).toBe(false);
       await digitar(email, "joao.novo@clima.com");
-      expect(campo("E-mail")!.value).toBe("joao.novo@clima.com");
+      expect(campo("E-mail de login")!.value).toBe("joao.novo@clima.com");
       expect(campo("Confirmar e-mail")).toBeTruthy();
       expect(campo("Senha atual")).toBeTruthy();
     });
 
-    it("salvar no painel manda nome + e-mail + confirmação + senha (o corpo de sempre) e troca o e-mail", async () => {
+    // Leva G: o Salvar manda só o que mudou — o nome, que não mudou, não vai mais no corpo
+    it("salvar no painel manda e-mail + confirmação + senha (só o que mudou) e troca o e-mail", async () => {
       vi.spyOn(await import("@/components/ui/avisos"), "toast").mockImplementation(() => {});
       como({ id: "uAdm", role: "ADMIN", permissoes: permissoesTotais(), tecnicoId: null });
       await abrirNoPainel();
-      await digitar(campo("E-mail"), "ana.souza@clima.com");
+      await digitar(campo("E-mail de login"), "ana.souza@clima.com");
       await digitar(campo("Confirmar e-mail"), "ana.souza@clima.com");
       await digitar(campo("Senha atual"), SENHA);
       await clicar(botoes("Salvar alterações").at(-1));
-      expect(chamadas[0].corpo).toEqual({ nome: "João Silva", email: "ana.souza@clima.com", confirmacaoEmail: "ana.souza@clima.com", senhaAtual: SENHA });
+      expect(chamadas[0].corpo).toEqual({ email: "ana.souza@clima.com", confirmacaoEmail: "ana.souza@clima.com", senhaAtual: SENHA });
       expect(banco.usuarios.find((u) => u.id === "uAdm")!.email).toBe("ana.souza@clima.com");
     });
   });

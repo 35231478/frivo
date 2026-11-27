@@ -193,10 +193,11 @@ describe("app do técnico › Perfil › Meus dados › Segurança (o único lug
     expect(campos().map((c) => c.value)).toEqual(["", "", ""]);
   });
 
-  it("o botão da faixa de cima faz o mesmo que o do rodapé", async () => {
+  // Leva G (perfil redesenhado): um só "Trocar senha", no rodapé do bloco Senha — antes havia também um na faixa de cima
+  it("um só botão Trocar senha, no bloco Senha", async () => {
     vi.spyOn(await import("@/components/ui/avisos"), "toast").mockImplementation(() => {});
     await abrirSeguranca();
-    expect(botoes("Trocar senha")).toHaveLength(2);
+    expect(botoes("Trocar senha")).toHaveLength(1);
     await preencher(SENHA_ANTIGA, "Nova-senha9", "Nova-senha9");
     await clicar(botoes("Trocar senha")[0]);
     expect(chamadas.map((c) => c.url)).toEqual(["/api/perfil/senha"]);

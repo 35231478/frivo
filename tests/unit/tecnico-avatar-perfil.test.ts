@@ -23,8 +23,8 @@ vi.mock("next/navigation", () => ({
 }));
 // "Meus dados" (tela do painel reaproveitada): aqui basta saber a foto que ela recebeu e simular a troca
 vi.mock("@/components/perfil/perfil-client", () => ({
-  PerfilClient: ({ initial, onAvatar, topoFixo }: { initial: { avatar: string | null }; onAvatar?: (a: string) => void; topoFixo?: boolean }) =>
-    createElement("div", { "data-meus-dados": "", "data-foto-inicial": initial.avatar ?? "", "data-topo-fixo": String(topoFixo) },
+  PerfilClient: ({ initial, onAvatar, emailSomenteLeitura }: { initial: { avatar: string | null }; onAvatar?: (a: string) => void; emailSomenteLeitura?: boolean }) =>
+    createElement("div", { "data-meus-dados": "", "data-foto-inicial": initial.avatar ?? "", "data-email-somente-leitura": String(!!emailSomenteLeitura) },
       createElement("button", { type: "button", "data-trocar-foto": "", onClick: () => onAvatar?.("data:image/jpeg;base64,NOVA") }, "Salvar foto")),
 }));
 
@@ -143,7 +143,8 @@ describe("Perfil enxuto", () => {
     await abrirApp(usuario({ avatar: FOTO }), "?ver=perfil");
     await clicar([...document.querySelectorAll("button")].find((b) => texto(b) === "Meus dados"));
     expect($("[data-meus-dados]")!.getAttribute("data-foto-inicial")).toBe(FOTO); // "Foto de perfil" abre com a foto atual
-    expect($("[data-meus-dados]")!.getAttribute("data-topo-fixo")).toBe("false"); // a faixa de "Meus dados" não gruda por cima do topo do app
+    // Leva G: o perfil não tem mais faixa grudada no topo (o "topoFixo" saiu); no app, o e-mail de login segue só leitura
+    expect($("[data-meus-dados]")!.getAttribute("data-email-somente-leitura")).toBe("true");
     await clicar($("[data-trocar-foto]"));
     expect($("[data-avatar-topo] img")!.getAttribute("src")).toBe("data:image/jpeg;base64,NOVA");
     expect($("[data-avatar-perfil] img")!.getAttribute("src")).toBe("data:image/jpeg;base64,NOVA");

@@ -1,5 +1,6 @@
 "use client";
 
+import { usePermissoes } from "@/components/providers/permissoes-provider";
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
@@ -89,6 +90,8 @@ export function MedicaoForm({
 
   const [contratos, setContratos] = useState<ContratoOpt[]>([]);
   const [tabelaPreco, setTabelaPreco] = useState<TabelaPrecoCliente | null>(null);
+  // Preço da tabela do cliente: travado, como no orçamento; "Alterar preço de tabela" libera (lib/precos/trava-tabela)
+  const podeAlterarPrecoTabela = usePermissoes().pode("orcamentos", "alterarPrecoTabela");
   /** O cliente está ligado a uma tabela inativa: valem os preços padrão do catálogo, e a tela avisa */
   const [tabelaInativa, setTabelaInativa] = useState<{ id: string; nome: string } | null>(null);
   const [erro, setErro] = useState("");
@@ -212,9 +215,7 @@ export function MedicaoForm({
           <span className="inline-flex items-center gap-1.5 bg-success-50 text-success-700 text-xs font-semibold rounded-full px-3 py-1">
             <Tags className="w-3.5 h-3.5" /> Tabela: {tabelaPreco.nome}
           </span>
-          {tabelaPreco.precosBloqueados && (
-            <span className="text-xs text-ink-muted">Preços bloqueados por contrato</span>
-          )}
+          <span className="text-xs text-ink-muted">Preços da tabela do cliente</span>
         </div>
       )}
       {tabelaInativa && (
@@ -262,11 +263,11 @@ export function MedicaoForm({
       </div>
 
       <div className="card-padded">
-        <ItensTabela titulo="Serviços" labelAdicionar="Pesquisar serviço por nome ou código..." catalogo={catalogoServicos} itens={servicos} onChange={setServicos} tabela={tabelaPreco} />
+        <ItensTabela titulo="Serviços" labelAdicionar="Pesquisar serviço por nome ou código..." catalogo={catalogoServicos} itens={servicos} onChange={setServicos} tabela={tabelaPreco} podeAlterarPrecoTabela={podeAlterarPrecoTabela} />
       </div>
 
       <div className="card-padded">
-        <ItensTabela titulo="Produtos" labelAdicionar="Pesquisar produto por nome ou código..." catalogo={catalogoProdutos} itens={produtos} onChange={setProdutos} tabela={tabelaPreco} />
+        <ItensTabela titulo="Produtos" labelAdicionar="Pesquisar produto por nome ou código..." catalogo={catalogoProdutos} itens={produtos} onChange={setProdutos} tabela={tabelaPreco} podeAlterarPrecoTabela={podeAlterarPrecoTabela} />
       </div>
 
       <div className="card-padded">

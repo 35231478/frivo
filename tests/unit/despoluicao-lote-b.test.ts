@@ -39,7 +39,7 @@ describe("entrada, portal e público", () => {
   it("mensagens ao cliente/fornecedor começam formais", () => {
     expect(ler("lib/compras/pedido.ts")).toMatch(/Prezado\(a\) \$\{[^}]+\},` : "Prezados,"/);
     expect(ler("app/api/orcamentos/[id]/enviar/route.ts")).toMatch(/Prezado\(a\)/);
-    for (const f of ["lib/orcamento-helpers.ts", "components/relatorio/relatorio-envio.tsx", "app/api/medicoes/[id]/acao/route.ts", "components/forms/portal-acesso-contato.tsx"]) {
+    for (const f of ["lib/orcamento-helpers.ts", "components/relatorio/relatorio-envio.tsx", "app/api/medicoes/[id]/acao/route.ts", "lib/portal/senha-provisoria.ts" /* a mensagem do acesso ao portal (antes em components/forms/portal-acesso-contato.tsx) */]) {
       expect(ler(f), f).not.toMatch(/Olá/);
       expect(ler(f), f).toMatch(/Prezad/);
     }

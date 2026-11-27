@@ -11,6 +11,8 @@ const schema = z.object({
   email: z.string().trim().email("E-mail inválido").optional(),
   confirmacaoEmail: z.string().trim().email().optional(),
   senhaAtual: z.string().optional(),
+  // Telefone de contato (opcional; vazio apaga). Não é login: não pede senha
+  telefone: z.string().trim().max(30, "Telefone muito longo").nullable().optional(),
 });
 
 export async function PATCH(req: NextRequest) {
@@ -29,8 +31,9 @@ export async function PATCH(req: NextRequest) {
   const atual = await prisma.usuario.findUnique({ where: { id: userId }, select: { email: true, senha: true } });
   if (!atual) return NextResponse.json({ erro: "Usuário não encontrado" }, { status: 404 });
 
-  const data: { nome?: string; email?: string } = {};
+  const data: { nome?: string; email?: string; telefone?: string | null } = {};
   if (nome) data.nome = nome;
+  if (parsed.data.telefone !== undefined) data.telefone = parsed.data.telefone || null;
 
   if (email && email !== atual.email.toLowerCase()) {
     // App do técnico: o técnico é ligado às OS dele pelo e-mail de login. Trocando aqui, ele perderia
@@ -68,7 +71,7 @@ export async function PATCH(req: NextRequest) {
   const atualizado = await prisma.usuario.update({
     where: { id: userId },
     data,
-    select: { nome: true, email: true },
+    select: { nome: true, email: true, telefone: true },
   });
   return NextResponse.json(atualizado);
 }

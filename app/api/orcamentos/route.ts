@@ -1,4 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
+import { registrarEvento } from "@/lib/orcamentos/ciclo-server";
+import { itensDoOrcamentoParaTrava, verificarPrecoDeTabela } from "@/lib/precos/trava-tabela-server";
+import { textoDaTrilha } from "@/lib/precos/trava-tabela";
 import { prisma } from "@/lib/prisma";
 import { respostaRefEmpresa, validarRefEmpresa, validarRefsEmpresa } from "@/lib/ref-empresa";
 import { exigirPermissao } from "@/lib/permissoes-server";
@@ -106,6 +109,9 @@ export async function POST(req: NextRequest) {
   const valores = montarValoresOrcamento(data, Number(cfg?.issAliquota ?? 0), padroes.cobrancaMateriais);
   // O custo dos materiais é decidido aqui (último custo de compra), nunca o que veio do navegador
   await fixarCustosDosMateriais(empresaId, null, valores.servicos);
+  // Preço que veio da tabela do cliente: travado (só com a permissão e o motivo — lib/precos/trava-tabela)
+  const trava = await verificarPrecoDeTabela({ user: session.user!, empresaId, clienteId: data.clienteId, itens: itensDoOrcamentoParaTrava(valores), motivo: data.motivoPrecoTabela });
+  if (!trava.veredito.ok) return NextResponse.json({ erro: trava.veredito.erro, precoTabela: true }, { status: trava.veredito.status });
   const proposta = montarCamposProposta(
     data.responsavelTecnicoId === undefined ? { ...data, responsavelTecnicoId: padroes.responsavelTecnicoId } : data,
   );
@@ -144,6 +150,9 @@ export async function POST(req: NextRequest) {
       });
       // Linhas em ordem: serviço → materiais (snapshot) → produtos → peças derivadas
       await gravarItensOrcamento(tx, criado.id, valores);
+      if (trava.alteracoes.length && trava.veredito.ok && trava.veredito.motivo) {
+        await registrarEvento({ empresaId, orcamentoId: criado.id, tipo: "PRECO_TABELA", usuarioId, detalhe: textoDaTrilha(trava.alteracoes, trava.veredito.motivo) }, tx);
+      }
       return criado;
   });
 
