@@ -41,7 +41,7 @@ export function useCustosProdutos(ids: readonly string[]) {
   return { custos: permitido && !negado ? custos : null, carregando };
 }
 
-/** Rótulo "Peça · Venda à parte"/"Material · Incluso" de um produto da composição (pela categoria) */
+/** Pílula "Peça"/"Material" de um produto da composição (pelo Uso do cadastro; a exceção do serviço vence) */
 export function ComportamentoDoProduto({ produto, override }: { produto: ProdutoDaComposicao | null | undefined; override?: string | null }) {
   const c = override === "VENDA_A_PARTE" || override === "INCLUSO_NO_SERVICO" ? override : comportamentoDoProduto(produto);
   return <PilulaComportamento comportamento={c} className={override ? "ring-1 ring-acento/40" : undefined} />;

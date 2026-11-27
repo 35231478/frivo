@@ -1,8 +1,8 @@
 // @vitest-environment happy-dom
 /**
  * Estoque E3.1 — as telas num DOM de verdade (happy-dom), API simulada:
- *  - Produtos: coluna "Categoria" (nome + pílula do comportamento; sem categoria = "Sem categoria" +
- *    "Incluso no serviço (padrão)"), filtro por categoria no topo (Todas / Sem categoria / as cadastradas,
+ *  - Produtos: coluna "Categoria" (só o nome; sem categoria = "Sem categoria"; desde o "Orçamento E" Material × Peça
+ *    é a coluna Uso), filtro por categoria no topo (Todas / Sem categoria / as cadastradas,
  *    na URL e na consulta à API), e o seletor de categoria no formulário (vai como categoriaProdutoId);
  *  - Categorias de produto: lista com a pílula do comportamento e o uso; formulário com o select do
  *    comportamento (obrigatório) e o ⓘ fora de botão.
@@ -97,19 +97,20 @@ async function montar(el: React.ReactElement) {
 const ultimaLista = () => chamadas.filter((c) => c.url.startsWith("/api/cadastros/produtos?") && c.metodo === "GET").at(-1)!.url;
 
 describe("Produtos", () => {
-  it("coluna Categoria: nome + pílula; sem categoria = 'Sem categoria' + 'Incluso no serviço' (padrão)", async () => {
+  // "Orçamento E": a coluna Categoria mostra só o nome; Material × Peça é a coluna Uso (o Uso do produto manda —
+  // a pílula da categoria ao lado dizia "Material" para um produto de Uso "Peça")
+  it("coluna Categoria: só o nome; sem categoria = 'Sem categoria'; Material × Peça na coluna Uso", async () => {
     const { TelaProdutos } = await import("@/components/config/telas/produtos");
     await montar(createElement(TelaProdutos));
-    expect($$("[data-cadastro=produtos] thead th").map(txt)).toContain("Categoria");
+    expect($$("[data-cadastro=produtos] thead th").map(txt)).toEqual(expect.arrayContaining(["Categoria", "Uso"]));
     const linhas = $$("[data-cadastro=produtos] tbody tr");
     expect(linhas).toHaveLength(2);
     const cel = (i: number) => linhas[i].querySelector("[data-categoria-produto]")!;
     expect(cel(0).getAttribute("data-categoria-produto")).toBe("sim");
-    expect(txt(cel(0))).toBe("Peças de reposição Venda à parte");
-    expect(cel(0).querySelector("[data-comportamento]")!.getAttribute("data-comportamento")).toBe("VENDA_A_PARTE");
+    expect(txt(cel(0))).toBe("Peças de reposição");
     expect(cel(1).getAttribute("data-categoria-produto")).toBe("nao");
-    expect(txt(cel(1))).toBe("Sem categoria Incluso no serviço (padrão)");
-    expect(cel(1).querySelector("[data-comportamento]")!.getAttribute("data-comportamento")).toBe("INCLUSO_NO_SERVICO");
+    expect(txt(cel(1))).toBe("Sem categoria");
+    expect(linhas.some((l) => l.querySelector("[data-categoria-produto] [data-comportamento]"))).toBe(false);
   });
 
   it("filtro por categoria: Todas / Sem categoria / as cadastradas (a inativa não entra como escolha nova); escolher vai para a URL e para a consulta", async () => {
@@ -161,13 +162,13 @@ describe("Categorias de produto", () => {
     await montar(createElement(CategoriasProdutoTela));
     expect($$("[data-cadastro=categorias-produto] thead th").map(txt).filter((t) => t !== "Selecionar a página").slice(0, 3)).toEqual(["Categoria", "Faturamento", "Produtos"]);
     const linhas = $$("[data-cadastro=categorias-produto] tbody tr");
-    expect(txt(linhas[0])).toMatch(/^Peças de reposição\s*Venda à parte\s*1 produto\(s\)/);
-    expect(txt(linhas[1])).toMatch(/^Materiais de instalação\/consumo\s*Incluso no serviço\s*—/);
+    expect(txt(linhas[0])).toMatch(/^Peças de reposição\s*Peça\s*1 produto\(s\)/);
+    expect(txt(linhas[1])).toMatch(/^Materiais de instalação\/consumo\s*Material\s*—/);
     expect(linhas[0].querySelector("[data-comportamento]")!.getAttribute("data-comportamento")).toBe("VENDA_A_PARTE");
     await clicar($("[data-acao=novo-cadastro]"));
     const sel = $<HTMLSelectElement>('select[id]')!;
     expect([...sel.options].map((o) => o.value)).toEqual(["VENDA_A_PARTE", "INCLUSO_NO_SERVICO"]);
-    expect([...sel.options][0].textContent).toMatch(/^Venda à parte — Peça de reposição/);
+    expect([...sel.options][0].textContent).toMatch(/^Peça — Vendida à parte/);
     expect($("[data-dica]")!.parentElement!.closest("button, a")).toBeNull(); // ⓘ do campo fora de qualquer botão
     await digitar($('input[id]'), "Consumíveis");
     await escolher(sel, "INCLUSO_NO_SERVICO");

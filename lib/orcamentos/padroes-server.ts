@@ -17,7 +17,7 @@ export async function padroesOrcamento(empresaId: string) {
       select: {
         orcamentoValidadeDias: true, orcamentoGarantiaServico: true, orcamentoGarantiaPecas: true,
         orcamentoNaoIncluso: true, orcamentoNormas: true,
-        orcamentoMostrarMateriais: true, orcamentoMostrarValoresMateriais: true,
+        orcamentoMostrarMateriais: true,
       },
     }),
     prisma.empresa.findUnique({
@@ -32,8 +32,8 @@ export async function padroesOrcamento(empresaId: string) {
     garantiaPecas: cfg ? cfg.orcamentoGarantiaPecas : "Conforme garantia do fabricante",
     naoIncluso: cfg?.orcamentoNaoIncluso ?? null,
     normas: cfg?.orcamentoNormas ?? [],
-    // Leva D: as opções do documento do cliente (materiais dentro do serviço; valores só com materiais)
-    ...opcoesDoDocumento({ mostrarMateriais: cfg?.orcamentoMostrarMateriais, mostrarValoresMateriais: cfg?.orcamentoMostrarValoresMateriais }),
+    // Leva D / "Orçamento E": a opção do documento do cliente (materiais dentro do serviço, sem valor; ligada por padrão)
+    ...opcoesDoDocumento({ mostrarMateriais: cfg?.orcamentoMostrarMateriais }),
     // RT padrão só vale se ainda for um responsável técnico ativo da empresa
     responsavelTecnicoId: rt && rt.ativo && rt.tipo === "RESPONSAVEL_TECNICO" && rt.empresaId === empresaId ? rt.id : null,
   };

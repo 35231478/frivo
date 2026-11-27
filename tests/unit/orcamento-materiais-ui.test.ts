@@ -7,7 +7,8 @@
  *    aparece na tabela de produtos como linha derivada (só leitura), cobrada à parte; o payload leva o snapshot,
  *    o total que vale e NÃO manda a peça como produto;
  *  - valor manual na linha (badge + "Recalcular"); tirar material da composição = "não usado" (abate); avulso;
- *  - serviço sem composição ganha o painel sob demanda; o documento do cliente não mostra material nenhum;
+ *  - serviço sem composição ganha o painel sob demanda; o documento do cliente mostra os materiais dentro do serviço,
+ *    sem valor ("Orçamento E": ligado por padrão), e nada com "mostrar materiais" desligado;
  *  - "Definir categoria" em massa na tela de Produtos: botão, formulário (Escolha… / Sem categoria / ativas) e o lote.
  */
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
@@ -167,7 +168,7 @@ describe("materiais e peças no construtor", () => {
     expect(dicaMateriais).toBeTruthy();
     expect(tituloMateriais.nextElementSibling!.contains(dicaMateriais)).toBe(true); // logo ao lado do que explica
     expect(tituloMateriais.contains(dicaMateriais)).toBe(false); // botão dentro de botão, não
-    expect(document.getElementById(dicaMateriais.getAttribute("aria-describedby") ?? "")?.textContent ?? document.body.textContent).toContain("o cliente vê apenas a linha do serviço (já ajustada) e as peças como produtos");
+    expect(document.getElementById(dicaMateriais.getAttribute("aria-describedby") ?? "")?.textContent ?? document.body.textContent).toContain("MATERIAL vai dentro do serviço: o cliente vê a lista, sem valor") // "Orçamento E": a lista aparece por padrão, sem valor;
     const corpo = await salvar();
     expect(corpo.servicos).toHaveLength(1);
     expect(corpo.servicos[0]).toMatchObject({ catalogoId: "s1", valorUnitario: 800, valorTotal: 840, valorManual: false });
@@ -232,7 +233,21 @@ describe("materiais e peças no construtor", () => {
     expect(texto).toMatch(/Instalação split.*840,00/);
     expect(texto).toMatch(/Capacitor 35uF.*80,00/);
     expect(texto).toMatch(/920,00/);
-    expect(texto).not.toMatch(/Tubo|Filtro secador|Suporte|custo|material|ajuste/i);
+    // "Orçamento E": a lista dos materiais aparece por padrão DENTRO do serviço, sem valor; a peça só como produto;
+    // custo e ajuste em lugar nenhum
+    const bloco = html.match(/data-materiais-servico[^>]*>([\s\S]*?)<\/ul>/)?.[1].replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim() ?? "";
+    expect(bloco).toMatch(/^Materiais inclusos Tubo de cobre 1\/4 · 5 m Filtro secador · 1 un Suporte · 1 un$/);
+    expect(bloco).not.toMatch(/R\$|Capacitor/);
+    expect(texto).not.toMatch(/custo|ajuste/i);
+    // desligado no orçamento: só a linha do serviço
+    const sem = renderToStaticMarkup(createElement(OrcamentoDocumento as any, {
+      versao: "cliente",
+      orcamento: { codigo: "ORC-1", nome: "Instalação UTI", status: "ENVIADO", criadoEm: new Date(), totalServicos: 840, totalProdutos: 80, totalGeral: 920, mostrarMateriais: false,
+        servicos: [{ descricao: "Instalação split", quantidade: 1, valorUnitario: 840, valorTotal: 840, valorBase: 800, ajusteMateriais: 40, materiais }],
+        produtos: [{ descricao: "Capacitor 35uF", quantidade: 1, valorUnitario: 80, valorTotal: 80, materialId: "m3" }] },
+      empresa: { nome: "Clima Total", cnpj: "12345678000190" }, cliente: { nome: "Hospital", cpfCnpj: "22101333000111" },
+    })).replace(/<[^>]+>/g, " ");
+    expect(sem).not.toMatch(/Tubo|Filtro secador|Suporte|custo|material|ajuste/i);
   });
 });
 
@@ -261,7 +276,7 @@ describe("'Definir categoria' em massa (tela de Produtos)", () => {
     expect($("[data-modal-massa]")).not.toBeNull();
     expect(txt($("[data-modal-massa]"))).toContain("Definir categoria 2 produtos");
     const sel = $<HTMLSelectElement>("[data-form-definir-categoria] select[name='categoriaProdutoId']")!;
-    expect([...sel.options].map((o) => [o.value, o.textContent])).toEqual([["__", "Escolha…"], ["", "Sem categoria (tirar a categoria)"], ["cPecas", "Peças — Venda à parte"], ["cMat", "Materiais — Incluso no serviço"]]);
+    expect([...sel.options].map((o) => [o.value, o.textContent])).toEqual([["__", "Escolha…"], ["", "Sem categoria (tirar a categoria)"], ["cPecas", "Peças — Peça"], ["cMat", "Materiais — Material"]]);
     expect(confirmar().disabled).toBe(true);
     await escolher(sel, "cMat");
     expect(confirmar().disabled).toBe(false);

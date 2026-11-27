@@ -4,6 +4,7 @@ import { materialAvulso } from "@/lib/orcamentos/materiais";
 import { materiaisPadraoDoServico, produtoComoMaterial } from "@/lib/orcamentos/materiais-server";
 import { podeVerCusto } from "@/lib/orcamentos/estoque-margem-server";
 import { semCustoNosMateriais } from "@/lib/orcamentos/estoque-margem";
+import { comportamentoDoProduto } from "@/lib/estoque/categoria";
 
 /**
  * Estoque E3.3 — materializar no orçamento:
@@ -31,7 +32,7 @@ export async function GET(req: NextRequest) {
     const r = await produtoComoMaterial(empresaId, produtoId, clienteId);
     if (!r) return NextResponse.json({ erro: "Produto não encontrado" }, { status: 404 });
     const { produto: p } = r;
-    const material = materialAvulso({ produtoId: p.id, nome: p.nome, unidade: p.unidade, comportamento: p.categoriaProduto?.comportamento, valorVendaUnit: r.valorVendaUnit, custoUnit: r.custoUnit });
+    const material = materialAvulso({ produtoId: p.id, nome: p.nome, unidade: p.unidade, comportamento: comportamentoDoProduto(p), valorVendaUnit: r.valorVendaUnit, custoUnit: r.custoUnit });
     return NextResponse.json({ material: verCusto ? material : semCustoNosMateriais([material])[0] });
   }
   return NextResponse.json({ erro: "Informe servicoId ou produtoId" }, { status: 400 });

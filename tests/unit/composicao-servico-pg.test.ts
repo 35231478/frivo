@@ -59,7 +59,8 @@ describe.skipIf(!URL_PG)("Kits + composição do serviço (PostgreSQL real)", ()
     await prisma.usuario.create({ data: { id: "u1", empresaId: "e1", nome: "Ana", email: "a@x.com", senha: "x" } });
     const pecas = await prisma.categoriaProduto.create({ data: { empresaId: "e1", nome: "Peças", comportamento: "VENDA_A_PARTE" } });
     const mat = await prisma.categoriaProduto.create({ data: { empresaId: "e1", nome: "Materiais", comportamento: "INCLUSO_NO_SERVICO" } });
-    const p = async (nome: string, unidade: string, cat: string | null, empresaId = "e1") => (await prisma.produto.create({ data: { empresaId, nome, unidade, categoriaProdutoId: cat } })).id;
+    // "Orçamento E": o Uso do PRODUTO manda (a categoria só sugere no cadastro); aqui, como o SQL deixaria: Peças → Peça
+    const p = async (nome: string, unidade: string, cat: string | null, empresaId = "e1") => (await prisma.produto.create({ data: { empresaId, nome, unidade, categoriaProdutoId: cat, uso: cat === pecas.id ? "PECA" : "MATERIAL" } })).id;
     ids.gas = await p("Gás R410A", "kg", mat.id); ids.cap = await p("Capacitor", "un", pecas.id); ids.sup = await p("Suporte", "un", null); ids.outro = await p("Da outra", "un", null, "e2");
     const mov = (produtoId: string, custo: number | null, data: string) =>
       prisma.movimentacaoEstoque.create({ data: { empresaId: "e1", produtoId, tipo: "ENTRADA", origem: "COMPRA", quantidade: 10, saldoApos: 10, custoUnitario: custo, data: new Date(data) } });

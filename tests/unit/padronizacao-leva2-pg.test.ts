@@ -116,7 +116,8 @@ describe.skipIf(!URL_PG)("Leva 2: editar no contexto na OS e no orçamento (Post
     ] });
     const pecas = await prisma.categoriaProduto.create({ data: { empresaId: "e1", nome: "Peças", comportamento: "VENDA_A_PARTE" } });
     const mat = await prisma.categoriaProduto.create({ data: { empresaId: "e1", nome: "Materiais", comportamento: "INCLUSO_NO_SERVICO" } });
-    const p = (id: string, nome: string, unidade: string, cat: string | null, valorPadrao: number) => prisma.produto.create({ data: { id, empresaId: "e1", nome, unidade, categoriaProdutoId: cat, valorPadrao, saldo: 10 } });
+    // "Orçamento E": o Uso do PRODUTO manda (a categoria só sugere no cadastro); aqui, como o SQL deixaria: Peças → Peça
+    const p = (id: string, nome: string, unidade: string, cat: string | null, valorPadrao: number) => prisma.produto.create({ data: { id, empresaId: "e1", nome, unidade, categoriaProdutoId: cat, valorPadrao, saldo: 10, uso: cat === pecas.id ? "PECA" : "MATERIAL" } });
     await p("tubo", "Tubo de cobre 1/4", "m", mat.id, 20); await p("filtro", "Filtro secador", "un", mat.id, 35);
     await p("cap", "Capacitor 35uF", "un", pecas.id, 80); await p("fita", "Fita", "un", null, 15);
     const kit = await prisma.kitMaterial.create({ data: { empresaId: "e1", nome: "Kit instalação", itens: { create: [{ produtoId: "tubo", quantidade: 3, ordem: 0 }, { produtoId: "filtro", quantidade: 1, ordem: 1 }] } } });

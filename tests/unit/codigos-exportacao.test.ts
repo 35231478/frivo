@@ -103,7 +103,10 @@ describe("código do produto, rótulo e busca", () => {
 
 describe("motor: chave que precisa existir, conflito e mensagens", () => {
   const tab = (...linhas: (string | null)[][]) => [IMPORTACOES.produtos.colunas.map((c) => c.titulo), ...linhas];
-  const linhaP = (o: { codigo?: string; nome?: string; id?: string }) => [o.codigo ?? "", o.nome ?? "", "", "", "", "", o.id ?? ""];
+  // A linha montada pela CHAVE de cada coluna (a planilha é lida pelo título, não pela posição: "Orçamento E" pôs a
+  // coluna uso antes do id_sistema)
+  const linhaP = (o: { codigo?: string; nome?: string; id?: string }) =>
+    IMPORTACOES.produtos.colunas.map((c) => ({ codigo: o.codigo, nome: o.nome, id_sistema: o.id } as Record<string, string | undefined>)[c.chave] ?? "");
 
   it("id_sistema de outra empresa / inexistente = erro (não cria); código de produto inexistente = erro", () => {
     const a = analisar(tab(linhaP({ nome: "A", id: "cmdeoutraempresa00000000" }), linhaP({ nome: "B", codigo: "99" })), IMPORTACOES.produtos, ctx({ [`id:${ID_P}`]: ID_P, "cod:1": ID_P }));
@@ -171,8 +174,8 @@ describe("exportação = mesmas colunas, lidas de volta (round-trip)", () => {
   const refs = { tabela_preco: [{ valor: "tp1", rotulo: "Tabela VIP" }] };
   const REG = {
     produtos: [
-      { id: ID_P, codigo: 1, nome: "Gás R410A", descricao: "Cilindro; 11 kg", unidade: "kg", valorPadrao: "1250.5", estoqueMinimo: 2, ativo: true },
-      { id: ID_Q, codigo: 2, nome: "Filtro", descricao: null, unidade: "un", valorPadrao: null, estoqueMinimo: null, ativo: false },
+      { id: ID_P, codigo: 1, nome: "Gás R410A", descricao: "Cilindro; 11 kg", unidade: "kg", valorPadrao: "1250.5", estoqueMinimo: 2, uso: "MATERIAL", ativo: true },
+      { id: ID_Q, codigo: 2, nome: "Filtro", descricao: null, unidade: "un", valorPadrao: null, estoqueMinimo: null, uso: "PECA", ativo: false },
     ],
     servicos: [{ id: "cmservicoaaaaaaaaaa1", codigo: "LIMP01", nome: "Limpeza", descricao: "", unidade: "hora", valorPadrao: 80, codigoMunicipal: "1401", codigoLc116: "14.01", aliquotaISS: 2.5, ativo: true }],
     fornecedores: [
@@ -208,10 +211,10 @@ describe("exportação = mesmas colunas, lidas de volta (round-trip)", () => {
   it("valores no formato da importação (e voltam iguais)", () => {
     const [cab, gas, filtro] = linhasExportacao(IMPORTACOES.produtos, REG.produtos as any);
     const v = Object.fromEntries(cab.map((c, i) => [c, gas[i]]));
-    expect(v).toEqual({ codigo: "1", nome: "Gás R410A", descricao: "Cilindro; 11 kg", unidade: "Quilograma (kg)", valor_padrao: "1250,50", estoque_minimo: "2", id_sistema: ID_P });
-    expect(filtro).toEqual(["2", "Filtro", "", "Unidade (un)", "", "", ID_Q]);
+    expect(v).toEqual({ codigo: "1", nome: "Gás R410A", descricao: "Cilindro; 11 kg", unidade: "Quilograma (kg)", valor_padrao: "1250,50", estoque_minimo: "2", uso: "Material", id_sistema: ID_P });
+    expect(filtro).toEqual(["2", "Filtro", "", "Unidade (un)", "", "", "Peça", ID_Q]);
     const a = analisar([cab, gas], IMPORTACOES.produtos, ctx({ [`id:${ID_P}`]: ID_P, "cod:1": ID_P }));
-    expect(a.linhas[0].dados).toMatchObject({ nome: "Gás R410A", descricao: "Cilindro; 11 kg", unidade: "kg", valorPadrao: 1250.5, estoqueMinimo: 2 });
+    expect(a.linhas[0].dados).toMatchObject({ nome: "Gás R410A", descricao: "Cilindro; 11 kg", unidade: "kg", valorPadrao: 1250.5, estoqueMinimo: 2, uso: "MATERIAL" });
     const [, s] = linhasExportacao(IMPORTACOES.servicos, REG.servicos as any);
     expect(s).toEqual(["LIMP01", "Limpeza", "", "Hora (h)", "80,00", "1401", "14.01", "2,5", "cmservicoaaaaaaaaaa1"]);
     const [cc, c] = linhasExportacao(IMPORTACOES.clientes, REG.clientes as any, refs);
@@ -225,8 +228,8 @@ describe("exportação = mesmas colunas, lidas de volta (round-trip)", () => {
   it("cada valor vai na coluna do seu título (a ordem é a das colunas, não a do exportar; faltou = vazio)", () => {
     const def = { ...IMPORTACOES.produtos, exportar: () => ({ id_sistema: "X1", nome: "Gás", codigo: "7" }) };
     const [cab, l] = linhasExportacao(def, [{}]);
-    expect(cab).toEqual(["codigo", "nome", "descricao", "unidade", "valor_padrao", "estoque_minimo", "id_sistema"]);
-    expect(l).toEqual(["7", "Gás", "", "", "", "", "X1"]);
+    expect(cab).toEqual(["codigo", "nome", "descricao", "unidade", "valor_padrao", "estoque_minimo", "uso", "id_sistema"]);
+    expect(l).toEqual(["7", "Gás", "", "", "", "", "", "X1"]);
   });
 
   it("instruções: a planilha exportada explica o id_sistema; o modelo, a linha de exemplo; nada é apagado", () => {

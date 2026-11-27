@@ -585,6 +585,12 @@ const servicos: DefImportacao = {
   },
 };
 
+/** "Orçamento E": o Uso do produto na planilha (Material | Peça), com os nomes que a gente encontra por aí */
+export const OPCOES_USO_PRODUTO: OpcaoRef[] = [
+  { valor: "MATERIAL", rotulo: "Material", aceitos: ["consumo", "material de consumo", "incluso", "incluso no servico", "insumo", "material de instalacao"] },
+  { valor: "PECA", rotulo: "Peça", aceitos: ["peca", "pecas", "peca de reposicao", "venda a parte", "vendida a parte", "produto", "revenda"] },
+];
+
 const produtos: DefImportacao = {
   entidade: "produtos", singular: "produto", plural: "produtos", chaveDescricao: "id_sistema, código (ou nome, sem código)",
   colunas: [
@@ -594,6 +600,7 @@ const produtos: DefImportacao = {
     { chave: "unidade", titulo: "unidade", ajuda: "Unidade (vazio = un)", exemplo: "kg", opcoes: UNIDADES_PRODUTO.map((u) => u.rotulo), apelidos: ["un", "und"] },
     { chave: "valor_padrao", titulo: "valor_padrao", ajuda: "Valor em R$ (ex.: 1.250,00)", exemplo: "890,00", apelidos: ["valor", "preco", "preco_padrao"] },
     { chave: "estoque_minimo", titulo: "estoque_minimo", ajuda: "Estoque mínimo (número inteiro)", exemplo: "5", apelidos: ["estoque", "minimo"] },
+    { chave: "uso", titulo: "uso", ajuda: "Material (vai dentro do serviço, sem valor para o cliente) ou Peça (vendida à parte). Vazio: produto novo vira Material; o que já existe não muda.", exemplo: "Material", opcoes: OPCOES_USO_PRODUTO.map((o) => o.rotulo), apelidos: ["tipo_uso", "uso_produto", "classificacao"] },
     COLUNA_ID,
   ],
   // O código do produto é sempre do sistema: informado e inexistente = erro (não inventa número)
@@ -602,7 +609,7 @@ const produtos: DefImportacao = {
   }],
   exportar: (p) => ({
     codigo: txt(p.codigo), nome: txt(p.nome), descricao: txt(p.descricao), unidade: rotuloDe(UNIDADES_PRODUTO, p.unidade),
-    valor_padrao: num(p.valorPadrao, 2), estoque_minimo: num(p.estoqueMinimo), id_sistema: txt(p.id),
+    valor_padrao: num(p.valorPadrao, 2), estoque_minimo: num(p.estoqueMinimo), uso: rotuloDe(OPCOES_USO_PRODUTO, p.uso), id_sistema: txt(p.id),
   }),
   validar(v, ctx) {
     const erros: string[] = [];
@@ -615,8 +622,10 @@ const produtos: DefImportacao = {
     if (un.erro) erros.push(un.erro);
     const valor = lerNumero(v.valor_padrao, "valor_padrao", erros);
     const estoque = lerNumero(v.estoque_minimo, "estoque_minimo", erros, { inteiro: true });
+    const uso = opcao(v.uso, OPCOES_USO_PRODUTO, "uso");
+    if (uso.erro) erros.push(uso.erro);
     return validarPeloCadastro(CADASTROS.produtos, {
-      nome: rotulo || undefined, descricao: texto(v.descricao), unidade: un.valor, valorPadrao: valor, estoqueMinimo: estoque,
+      nome: rotulo || undefined, descricao: texto(v.descricao), unidade: un.valor, valorPadrao: valor, estoqueMinimo: estoque, uso: uso.valor,
     }, erros, rotulo, chavesItem(id, cod.codigo, rotulo), ctx);
   },
 };

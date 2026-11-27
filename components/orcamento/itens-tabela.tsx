@@ -140,9 +140,9 @@ export function CampoNumero({ valor, onValor, casas, className, ...props }: {
 }
 
 /**
- * Observação do item — aparece no orçamento do cliente.
- * Desktop: coluna própria à direita da descrição, uma linha que cresce com o texto.
- * Celular: botão "Adicionar observação" que abre o campo no cartão do item.
+ * Observação do item — aparece no orçamento do cliente. Fica no lugar próprio dela, logo ABAIXO da descrição (como
+ * no PDF: menor, cinza, itálico), e não numa coluna no meio da linha ("Orçamento E"). Vazia: só um link discreto
+ * "+ Observação" (no computador, aparece ao passar o mouse na linha ou com o foco do teclado).
  */
 function ObservacaoItem({ valor, onChange, descricao }: { valor: string; onChange: (v: string) => void; descricao: string }) {
   const [aberta, setAberta] = useState(!!valor);
@@ -158,47 +158,45 @@ function ObservacaoItem({ valor, onChange, descricao }: { valor: string; onChang
   useEffect(ajustar, [aberta, valor]);
   const mostrar = aberta || !!valor;
 
+  if (!mostrar) {
+    return (
+      <button
+        type="button"
+        onClick={() => { setAberta(true); setTimeout(() => ref.current?.focus(), 0); }}
+        className="inline-flex items-center gap-1 text-[11px] font-medium text-ink-subtle hover:text-primary-600 rounded px-1 -ml-0.5 sm:opacity-0 sm:group-hover/linha:opacity-100 sm:group-focus-within/linha:opacity-100 focus:opacity-100 transition-opacity"
+        title="Observação do item: aparece no orçamento do cliente"
+        data-abrir-observacao
+      >
+        <MessageSquarePlus className="w-3 h-3" aria-hidden /> Observação
+      </button>
+    );
+  }
   return (
-    <div className="min-w-0" data-observacao-item={mostrar ? "" : undefined}>
-      {!mostrar && (
-        <button
-          type="button"
-          onClick={() => { setAberta(true); setTimeout(() => ref.current?.focus(), 0); }}
-          className="sm:hidden inline-flex items-center gap-1.5 text-xs font-medium text-primary-600 hover:text-primary-700 hover:bg-primary-50 rounded-md px-2 py-1 -ml-2"
-          data-abrir-observacao
-        >
-          <MessageSquarePlus className="w-3.5 h-3.5" aria-hidden /> Adicionar observação
-        </button>
-      )}
-      <div className={cn(!mostrar && "hidden sm:block")}>
-        <label htmlFor={id} className="block sm:sr-only text-[11px] font-semibold uppercase tracking-wider text-ink-muted mb-0.5">
-          Observação do item <span className="normal-case font-normal tracking-normal">· aparece no orçamento do cliente</span>
-        </label>
-        <textarea
-          id={id}
-          ref={ref}
-          rows={1}
-          value={valor}
-          aria-label={`Observação de ${descricao || "item"}`}
-          title="Aparece no orçamento do cliente"
-          onChange={(e) => onChange(e.target.value)}
-          onInput={ajustar}
-          onBlur={() => { if (!valor.trim()) setAberta(false); }}
-          placeholder="Observação (sai para o cliente)"
-          className={cn(
-            "block w-full resize-none overflow-hidden rounded-md text-sm leading-snug text-ink placeholder:text-ink-subtle",
-            "bg-white border border-surface-border px-2.5 py-1.5 min-h-[56px]",
-            "sm:bg-transparent sm:border-transparent sm:px-2 sm:py-0.5 sm:min-h-0 sm:text-[13px] sm:text-ink-muted sm:hover:border-surface-border",
-            "focus:outline-none focus:bg-white focus:text-ink focus:border-acento focus:ring-2 focus:ring-acento/15",
-          )}
-        />
-      </div>
+    <div className="min-w-0" data-observacao-item>
+      <label htmlFor={id} className="sr-only">Observação do item · aparece no orçamento do cliente</label>
+      <textarea
+        id={id}
+        ref={ref}
+        rows={1}
+        value={valor}
+        aria-label={`Observação de ${descricao || "item"}`}
+        title="Observação do item: aparece no orçamento do cliente"
+        onChange={(e) => onChange(e.target.value)}
+        onInput={ajustar}
+        onBlur={() => { if (!valor.trim()) setAberta(false); }}
+        placeholder="Observação (sai para o cliente)"
+        className={cn(
+          "block w-full resize-none overflow-hidden rounded text-xs leading-snug italic text-ink-muted placeholder:text-ink-subtle placeholder:not-italic",
+          "bg-transparent border border-transparent px-1 py-0.5 hover:border-surface-border",
+          "focus:outline-none focus:bg-white focus:not-italic focus:text-ink focus:border-acento focus:ring-2 focus:ring-acento/15",
+        )}
+      />
     </div>
   );
 }
 
-// Desktop: Descrição | Observação | Qtd | Unitário | Total | (excluir) — linhas compactas, tipo planilha
-const COLUNAS = "grid grid-cols-3 sm:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)_4.5rem_7.25rem_7.25rem_2rem] gap-x-2 sm:gap-x-3";
+// Desktop: Descrição (com a observação embaixo) | Qtd | Unitário | Total | (excluir) — linhas compactas, tipo planilha
+const COLUNAS = "grid grid-cols-3 sm:grid-cols-[minmax(0,1fr)_4.5rem_7.25rem_7.25rem_2rem] gap-x-2 sm:gap-x-3";
 const rotuloCelular = "block sm:sr-only text-[11px] font-semibold uppercase tracking-wider text-ink-muted mb-0.5";
 
 export function ItensTabela({ titulo, dica, labelAdicionar, catalogo, itens, onChange, tabela, cadastro, totalEditavel = false, extraLinha, infoLinha, onAdicionadoDoCatalogo }: ItensTabelaProps) {
@@ -272,8 +270,8 @@ export function ItensTabela({ titulo, dica, labelAdicionar, catalogo, itens, onC
 
       <div className="border border-surface-border rounded-lg overflow-hidden" role="table" aria-label={titulo}>
         <div className={cn(COLUNAS, "hidden sm:grid bg-surface-alt border-b border-surface-border px-3 py-1.5")} role="row">
-          {["Descrição", "Observação", "Qtd", "Unitário", "Total"].map((c, i) => (
-            <span key={c} role="columnheader" className={cn("font-semibold text-ink-muted text-[11px] uppercase tracking-wider", i === 1 && "sm:pl-3", i > 1 && "text-right")}>{c}</span>
+          {["Descrição", "Qtd", "Unitário", "Total"].map((c, i) => (
+            <span key={c} role="columnheader" className={cn("font-semibold text-ink-muted text-[11px] uppercase tracking-wider", i > 0 && "text-right")}>{c}</span>
           ))}
           <span role="columnheader" className="sr-only">Ações</span>
         </div>
@@ -291,8 +289,9 @@ export function ItensTabela({ titulo, dica, labelAdicionar, catalogo, itens, onC
           const travado = it.bloqueado || derivada;
           return (
             <div key={it.id} className="border-b border-surface-border last:border-b-0">
-            <div role="row" data-item-linha data-linha-derivada={derivada ? "true" : undefined} data-valor-manual={it.valorManual && comMateriais(it) ? "true" : undefined} className={cn(COLUNAS, "gap-y-2 sm:items-center px-3 py-2.5 sm:py-1 hover:bg-surface-alt/40", derivada && "bg-surface-page/60")}>
-              <div role="cell" className="col-span-3 sm:col-span-1 flex items-start sm:items-center gap-2 min-w-0">
+            <div role="row" data-item-linha data-linha-derivada={derivada ? "true" : undefined} data-valor-manual={it.valorManual && comMateriais(it) ? "true" : undefined} className={cn(COLUNAS, "group/linha gap-y-2 sm:items-center px-3 py-2.5 sm:py-1 hover:bg-surface-alt/40", derivada && "bg-surface-page/60")}>
+              <div role="cell" className="col-span-3 sm:col-span-1 min-w-0">
+              <div className="flex items-start sm:items-center gap-2 min-w-0">
                 <div className="flex-1 min-w-0 flex flex-wrap sm:flex-nowrap items-center gap-x-1.5">
                   <input
                     value={it.descricao}
@@ -337,10 +336,8 @@ export function ItensTabela({ titulo, dica, labelAdicionar, catalogo, itens, onC
                   <Trash2 className="w-4 h-4" />
                 </button>}
               </div>
-
-              {/* Observação: à direita da descrição no desktop (com divisória); no fim do cartão no celular */}
-              <div role="cell" className="col-span-3 order-last sm:order-none sm:col-span-1 sm:pl-3 sm:border-l sm:border-surface-linha min-w-0">
-                {derivada ? <span className="hidden sm:block text-[11px] text-ink-subtle italic px-2">Cobrada à parte</span> : <ObservacaoItem valor={it.observacao ?? ""} onChange={(v) => atualizar(it.id, { observacao: v })} descricao={it.descricao} />}
+              {/* Observação: logo abaixo da descrição, discreta (como no PDF). Peça dos materiais não tem: edita-se lá */}
+              {!derivada && <div className="pl-0.5"><ObservacaoItem valor={it.observacao ?? ""} onChange={(v) => atualizar(it.id, { observacao: v })} descricao={it.descricao} /></div>}
               </div>
 
               <label role="cell" className="block">

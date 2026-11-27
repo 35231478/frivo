@@ -10,6 +10,7 @@ import { normalizarCodigoServico } from "@/lib/cadastros/codigos";
 import { colisaoDeCodigo, criarProdutoComCodigo, criarServicoComCodigo, servicoComCodigo } from "@/lib/cadastros/codigos-server";
 import { motivoRetencaoServicoInvalida, type RetencoesDoServico } from "@/lib/financeiro/retencoes";
 import { categoriaProdutoComNome, garantirCategoriasProdutoPadrao } from "@/lib/estoque/categoria-server";
+import { usoSugeridoPelaCategoria } from "@/lib/estoque/categoria";
 import { custoDoKit } from "@/lib/estoque/composicao";
 import { kitMaterialComNome, montarItensKit, montarMateriaisServico } from "@/lib/estoque/composicao-server";
 import { ultimosCustos } from "@/lib/estoque/custo";
@@ -425,6 +426,13 @@ const produtos: RegrasCadastro = {
   async criar(dados, ator) {
     const erro = await validarCategoriaProduto(dados.categoriaProdutoId, ator.empresaId);
     if (erro) return falha(400, erro);
+    // "Orçamento E": sem Uso escolhido, vale o que a categoria sugere (Peças de reposição = Peça); sem categoria, Material
+    if (!dados.uso) {
+      const cat = typeof dados.categoriaProdutoId === "string" && dados.categoriaProdutoId
+        ? await prisma.categoriaProduto.findFirst({ where: { id: dados.categoriaProdutoId, empresaId: ator.empresaId }, select: { comportamento: true } })
+        : null;
+      dados = { ...dados, uso: usoSugeridoPelaCategoria(cat?.comportamento) };
+    }
     const item = await criarProdutoComCodigo(ator.empresaId, (codigo, tx) =>
       tx.produto.create({ data: { ...(dados as any), codigo, empresaId: ator.empresaId, ativo: true }, include: INCLUIR_PRODUTO }));
     return { ok: true, item };

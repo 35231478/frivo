@@ -44,6 +44,16 @@ const num = (v: unknown) => { const n = typeof v === "number" ? v : Number(v ?? 
 const arred3 = (n: number) => Math.round(n * 1000) / 1000;
 
 export const ehPeca = (m: Pick<MaterialOrcamento, "comportamento">) => m.comportamento === "VENDA_A_PARTE";
+
+/**
+ * "Orçamento E" — troca o Uso de um item SÓ neste orçamento (o cadastro do produto não muda): Material ↔ Peça.
+ * Caso típico: gás refrigerante cobrado por kg (Material no cadastro, Peça neste orçamento). A Peça vai inteira em
+ * linha própria (quantidade × venda) e deixa de ajustar o serviço; voltar a Material volta a ajustar pela diferença
+ * do padrão. Nada mais muda (quantidade, venda, custo e origem ficam).
+ */
+export function trocarUso<T extends Pick<MaterialOrcamento, "comportamento">>(m: T): T {
+  return { ...m, comportamento: ehPeca(m) ? "INCLUSO_NO_SERVICO" : "VENDA_A_PARTE" };
+}
 export const ehIncluso = (m: Pick<MaterialOrcamento, "comportamento">) => !ehPeca(m);
 export const LABEL_ORIGEM: Record<OrigemMaterial, string> = { SOLTO: "Composição", KIT: "Kit", AVULSO: "Avulso" };
 

@@ -8,7 +8,7 @@ import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { materiaisPrevistosDaOs, type LinhaDaOs, type MaterialPrevisto } from "@/lib/tecnico/o-que-levar";
 
-const PRODUTO = { id: true, nome: true, unidade: true, ativo: true, categoriaProduto: { select: { comportamento: true } } } satisfies Prisma.ProdutoSelect;
+const PRODUTO = { id: true, nome: true, unidade: true, ativo: true, uso: true, categoriaProduto: { select: { comportamento: true } } } satisfies Prisma.ProdutoSelect;
 
 const SELECT_LINHA = {
   ordemServicoId: true, tipo: true, executado: true, descricao: true, quantidade: true, materialId: true,

@@ -358,7 +358,8 @@ function Celula({ col, item, primeira }: { col: ColunaCadastro; item: Item; prim
       </span>
     );
   }
-  return <span className={cn(primeira && "font-medium")}>{v != null && v !== "" ? String(v) : "—"}</span>;
+  const texto = v != null && v !== "" ? (col.rotulos?.[String(v)] ?? String(v)) : "—";
+  return <span className={cn(primeira && "font-medium")}>{texto}</span>;
 }
 
 /** Select de um filtro por vínculo: "Todas", a opção "sem" e os registros do outro cadastro (os inativos marcados) */
