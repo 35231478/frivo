@@ -38,6 +38,13 @@ const op = (tipo: string, atividadeId: string, extra: Record<string, unknown> = 
 const sync = async (operacoes: unknown[], agora?: string) => (await chamar("tecnico/sync", "POST", {}, { operacoes, ...(agora && { agora }) })).json.resultados as any[];
 const H = 3_600_000;
 
+// RELÓGIO FIXO, no meio da tarde em Brasília: "agora − 5 h", "agora − 30 min" e o término informado nunca cruzam a
+// meia-noite. Com o relógio real o teste quebrava perto da meia-noite (o CI rodou às 00:09): a regra de produção passa
+// a ver "começou em outro dia" e a escrever a data no término, como deve. A virada do dia tem teste próprio, no fim.
+const AGORA = new Date("2026-11-12T18:00:00.000Z"); // 15:00 em Brasília
+vi.useFakeTimers({ toFake: ["Date"] });
+vi.setSystemTime(AGORA);
+
 describe.skipIf(!URL_PG)("app de campo, leva 1 (PR 2): atividade esquecida e topo da OS (PostgreSQL real)", () => {
   let prisma: any;
   const hoje = inicioHojeBR();
@@ -76,6 +83,7 @@ describe.skipIf(!URL_PG)("app de campo, leva 1 (PR 2): atividade esquecida e top
     ] });
   }, 180_000);
   afterAll(async () => {
+    vi.useRealTimers();
     await prisma?.$disconnect();
     execFileSync("psql", [URL_PG!, "-q", "-c", `DROP SCHEMA IF EXISTS ${SCHEMA} CASCADE;`], { stdio: "pipe" });
   });
@@ -189,6 +197,27 @@ describe.skipIf(!URL_PG)("app de campo, leva 1 (PR 2): atividade esquecida e top
     expect(Math.abs(a.iniciadaEm.getTime() - Date.now())).toBeLessThan(60_000);
     expect(a.concluidaEm).toBeNull();
     expect((await sino()).atividadesEsquecidas).toBe(1); // continua só a de ontem
+  });
+
+  it("virada do dia: começou ontem à noite, conclui hoje 00:10 com término de ontem — vale, e o histórico traz a data", async () => {
+    const meiaNoite = inicioHojeBR(); // 00:00 de hoje em Brasília (12/11/2026)
+    await prisma.ordemServico.create({ data: { id: "osV", empresaId: "e1", numero: "OS-10", clienteId: "c1", unidadeId: "un1", criadoPorId: "uA", descricao: "x" } });
+    await prisma.atividadeOs.create({ data: {
+      id: "aVirada", empresaId: "e1", ordemServicoId: "osV", titulo: "Plantão", tipoOsId: "tVis", tecnicoId: "t1", status: "EM_ANDAMENTO",
+      dataAgendada: new Date(meiaNoite.getTime() - 2 * H), iniciadaEm: new Date(meiaNoite.getTime() - 2 * H), // ontem 22:00
+    } });
+    vi.setSystemTime(new Date(meiaNoite.getTime() + 10 * 60_000)); // hoje 00:10
+    try {
+      comoTecnico();
+      const termino = new Date(meiaNoite.getTime() - 30 * 60_000).toISOString(); // ontem 23:30
+      const [r] = await sync([op("concluir", "aVirada", { dados: { terminoEm: termino } })]);
+      expect(r).toMatchObject({ ok: true });
+      expect((await atividade("aVirada")).concluidaEm.toISOString()).toBe(termino);
+      const h = await prisma.osHistorico.findFirst({ where: { ordemServicoId: "osV", acao: "Horário de término informado" } });
+      expect(h.detalhes).toBe('"Plantão": Término informado pelo técnico: 23:30 de 11/11/2026 (concluída no app às 00:10)');
+    } finally {
+      vi.setSystemTime(AGORA);
+    }
   });
 
   it("limite por empresa: 1 a 24 h pelo PUT de configurações", async () => {
