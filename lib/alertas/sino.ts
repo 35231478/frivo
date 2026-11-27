@@ -54,6 +54,8 @@ export interface EscopoDoSino {
   contasPagarHoje: boolean;
   /** Contas a receber que vencem hoje: quem abre a lista (Financeiro › Contas a receber); só no painel */
   contasReceberHoje: boolean;
+  /** OS esperando o pedido do cliente (lib/pedido-cliente): quem vê OS; o painel conta todas, o sino só as atrasadas */
+  pedidosCliente: boolean;
   /** NF chegou num pedido que a própria pessoa fez: sempre (é dela) */
   nfDosMeusPedidos: true;
 }
@@ -84,6 +86,7 @@ export function escopoDoSino({ permissoes, role, restrito }: QuemPergunta): Esco
     orcamentosVencendo: daEmpresa && p("orcamentos", "visualizar"),
     contasPagarHoje: daEmpresa && p("financeiro", "visualizar"),
     contasReceberHoje: daEmpresa && p("financeiro", "contasReceber"),
+    pedidosCliente: daEmpresa && verOrdens,
     nfDosMeusPedidos: true,
   };
 }

@@ -30,6 +30,7 @@ import { FILTRO_VENCENDO } from "@/lib/orcamentos/ciclo";
 import { diasOrcamentoVencendo } from "@/lib/orcamentos/ciclo-server";
 import { whereListaPagar, whereListaReceber, whereOrcamentos } from "@/lib/listas/filtros";
 import { lerPeriodo } from "@/lib/periodo";
+import { contarPedidosAtrasados, resumoAguardandoEmpresa, usaPedidoCliente } from "@/lib/pedido-cliente/server";
 
 export interface EntradaSino {
   empresaId: string;
@@ -70,9 +71,14 @@ export async function contarSino({ empresaId, usuarioId, escopo: e, filtroTecnic
     return Promise.all([prisma.orcamento.count({ where }), prisma.orcamento.findFirst({ where, orderBy: { validadeEm: "asc" }, select: { id: true } })]);
   };
   const whereSemTecnico = { empresaId, ...whereOsSemTecnico() };
+  // Pedido do cliente: o painel conta as OS que esperam (e o R$); o sino, só as que passaram do prazo da empresa.
+  // Empresa sem cliente que exige o pedido: nem consulta
+  const contarPedidos = async () => (e.pedidosCliente && await usaPedidoCliente(empresaId)
+    ? Promise.all([resumoAguardandoEmpresa(empresaId), contarPedidosAtrasados(empresaId, agora)])
+    : [{ quantidade: 0, total: 0 }, { pedidosAtrasados: 0, pedidoAtrasadoOsId: null, diasAlertaPedido: 0 }] as const);
   const whereRespondidos = { empresaId, status: { in: ["APROVADO" as const, "REPROVADO" as const] }, respostaVistaEm: null };
 
-  const [prazosBrutos, veiculosBrutos, boletosPagos, respondidos, leadsSite, nfsDoPedido, nfse, faturamentoContratos, reajustesContrato, separacoesPendentes, devolucoesPendentes, pmoc, aceites, admissoes, estoqueNegativoCampo, esquecidas, comentarios, despesasCampo, semTecnico, vencendo, contasPagarHoje, contasReceberHoje] = await Promise.all([
+  const [prazosBrutos, veiculosBrutos, boletosPagos, respondidos, leadsSite, nfsDoPedido, nfse, faturamentoContratos, reajustesContrato, separacoesPendentes, devolucoesPendentes, pmoc, aceites, admissoes, estoqueNegativoCampo, esquecidas, comentarios, despesasCampo, semTecnico, vencendo, contasPagarHoje, contasReceberHoje, pedidos] = await Promise.all([
     e.prazos || e.comprasPendentes ? contarAlertasPrazos(empresaId) : Promise.resolve(null),
     e.veiculos && temFrota ? contarAlertasVeiculos(empresaId) : Promise.resolve(null),
     e.boletos
@@ -133,7 +139,9 @@ export async function contarSino({ empresaId, usuarioId, escopo: e, filtroTecnic
     // Contas do dia (só o painel): a mesma conta da lista com "Vence hoje" e período "Hoje"
     e.contasPagarHoje && temFinanceiro ? prisma.contaPagar.count({ where: whereListaPagar(empresaId, SP_CONTAS_HOJE, periodoHoje, agora) }) : Promise.resolve(0),
     e.contasReceberHoje && temFinanceiro ? prisma.contaReceber.count({ where: whereListaReceber(empresaId, SP_CONTAS_HOJE, periodoHoje, agora) }) : Promise.resolve(0),
+    contarPedidos(),
   ]);
+  const [pedidosAguardando, pedidosAtrasados] = pedidos;
 
   const verOrdens = e.prazos, verCompras = e.comprasPendentes;
   const prazos = {
@@ -175,10 +183,18 @@ export async function contarSino({ empresaId, usuarioId, escopo: e, filtroTecnic
     osSemTecnicoId: osSemTecnicoMaisAntiga?.id ?? null,
     orcamentosVencendo,
     orcamentoVencendoId: orcamentoVencendoPrimeiro?.id ?? null,
+    // O sino: OS esperando o pedido do cliente há mais que os dias da empresa (Configurações › Orçamentos e propostas)
+    pedidosAtrasados: pedidosAtrasados.pedidosAtrasados,
+    pedidoAtrasadoOsId: pedidosAtrasados.pedidoAtrasadoOsId,
+    diasAlertaPedido: pedidosAtrasados.diasAlertaPedido,
   };
   // O total do sino (lidos ou não): os avisos de lib/alertas/lidos › AVISOS_DO_NUMERO; as contas do dia
   // ficam fora (são rotina de todo dia; o painel as mostra)
-  return { ...contagem, total: totalDoSino(contagem), foraDoNumero: { contasPagarHoje, contasReceberHoje } };
+  return {
+    ...contagem, total: totalDoSino(contagem),
+    // Só o painel: as contas do dia e as OS que esperam o pedido do cliente (todas, com o R$ parado)
+    foraDoNumero: { contasPagarHoje, contasReceberHoje, pedidosAguardando: pedidosAguardando.quantidade, pedidosAguardandoTotal: pedidosAguardando.total },
+  };
 }
 
 export type ContagemSino = Awaited<ReturnType<typeof contarSino>>;
