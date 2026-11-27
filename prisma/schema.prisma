@@ -496,6 +496,7 @@ model Empresa {
   usuarios               Usuario[]
   checklistsDiarios      ChecklistDiario[]
   clientes               Cliente[]
+  pedidosCliente         PedidoCliente[]
   equipamentos           Equipamento[]
   faturamentoExecucoes   FaturamentoContratoExecucao[]
   contratos              Contrato[]
@@ -752,6 +753,8 @@ model Configuracao {
 
   /// Padrões do orçamento novo (cada orçamento grava os seus e pode editar)
   orcamentoValidadeDias    Int      @default(10) @map("orcamento_validade_dias")
+  /// Pedido do cliente: o sino avisa depois de tantos dias esperando (lib/pedido-cliente)
+  pedidoClienteDiasAlerta  Int      @default(7) @map("pedido_cliente_dias_alerta")
   orcamentoGarantiaServico String?  @default("90 dias") @map("orcamento_garantia_servico")
   orcamentoGarantiaPecas   String?  @default("Conforme garantia do fabricante") @map("orcamento_garantia_pecas")
   orcamentoNaoIncluso      String?  @map("orcamento_nao_incluso") @db.Text
@@ -1213,6 +1216,12 @@ model Cliente {
   diaFaturamento      Int                @default(1) @map("dia_faturamento")
   condicaoPagamento   String?            @map("condicao_pagamento")
   exigePcAntesNf      Boolean            @default(false) @map("exige_pc_antes_nf")
+  /// Pedido do cliente (lib/pedido-cliente/regra): exigePcAntesNf = "Para faturar"; com este, "Para executar e faturar"
+  exigePedidoExecutar Boolean            @default(false) @map("exige_pedido_executar")
+  /// Contato de compras (quem emite o pedido do cliente)
+  comprasNome         String?            @map("compras_nome")
+  comprasEmail        String?            @map("compras_email")
+  comprasTelefone     String?            @map("compras_telefone")
   agrupaAdicionais    Boolean            @default(false) @map("agrupa_adicionais")
   boletoUnicoMensal   Boolean            @default(false) @map("boleto_unico_mensal")
   emailsFaturamento   String[]           @map("emails_faturamento")
@@ -1250,6 +1259,7 @@ model Cliente {
   tabelaPreco             TabelaPreco?             @relation(fields: [tabelaPrecoId], references: [id])
 
   notasFiscais NotaFiscal[]
+  pedidosCliente PedidoCliente[]
 
   pmocs Pmoc[]
 
@@ -1371,6 +1381,8 @@ model Unidade {
   longitude    Float?
   telefone     String?
   observacoes  String?
+  /// Pedido do cliente nesta unidade: NAO | FATURAR | EXECUTAR; nulo = como o cliente (lib/pedido-cliente/regra)
+  exigePedido  String?  @map("exige_pedido")
   ativo        Boolean  @default(true)
   criadoEm     DateTime @default(now()) @map("criado_em")
   atualizadoEm DateTime @updatedAt @map("atualizado_em")
@@ -2056,6 +2068,11 @@ model OrdemServico {
   /// Orçamento aprovado que GEROU esta OS ("Gerar OS" no orçamento). Único: um orçamento gera no
   /// máximo uma OS (dois cliques não duplicam). O vínculo de leitura continua em OrcamentoOs.
   orcamentoOrigemId    String?    @unique @map("orcamento_origem_id")
+  /// Pedido do cliente que cobre esta OS (lib/pedido-cliente); a liberação sem pedido fica nos 3 campos abaixo e no histórico
+  pedidoClienteId      String?    @map("pedido_cliente_id")
+  pedidoLiberadoEm     DateTime?  @map("pedido_liberado_em")
+  pedidoLiberadoPorId  String?    @map("pedido_liberado_por_id")
+  pedidoLiberadoMotivo String?    @map("pedido_liberado_motivo")
   descricao            String
   /// DATA PREVISTA: o dia (às vezes com hora) em que o serviço está marcado quando a OS ainda não
   /// tem atividade agendada — a OS recorrente, a do PMOC, a solicitação aceita, o arrasto no
@@ -2112,6 +2129,7 @@ model OrdemServico {
   historico          OsHistorico[]
   orcamentos         OrcamentoOs[]
   medicaoItens       MedicaoItem[]
+  pedidoCliente      PedidoCliente?        @relation(fields: [pedidoClienteId], references: [id], onDelete: SetNull)
   pedidosCompra      PedidoCompraInterno[]
   prazos             OsPrazo[]
   relatorios         RelatorioOs[]
@@ -2140,6 +2158,7 @@ model OrdemServico {
   @@index([contratoId])
   @@index([responsavelId])
   @@index([unidadeId])
+  @@index([pedidoClienteId])
   @@index([equipamentoId])
   @@index([contatoOrigemId])
   @@map("ordens_servico")
@@ -3072,6 +3091,11 @@ model Orcamento {
   totalLembretes    Int       @default(0) @map("total_lembretes")
   lembretesAtivos   Boolean   @default(true) @map("lembretes_ativos")
   assinadoEm        DateTime? @map("assinado_em")
+  /// Pedido do cliente que cobre este orçamento (lib/pedido-cliente) e a liberação sem pedido
+  pedidoClienteId      String?   @map("pedido_cliente_id")
+  pedidoLiberadoEm     DateTime? @map("pedido_liberado_em")
+  pedidoLiberadoPorId  String?   @map("pedido_liberado_por_id")
+  pedidoLiberadoMotivo String?   @map("pedido_liberado_motivo")
   assinadoPor       String?   @map("assinado_por")
   assinadoCpf       String?   @map("assinado_cpf")
   assinaturaUrl     String?   @db.Text
@@ -3109,6 +3133,7 @@ model Orcamento {
   pedidosCompra      PedidoCompraInterno[]
   contratoGerado     Contrato?             @relation("OrcamentoContrato")
   osGerada           OrdemServico?         @relation("OrcamentoOsGerada")
+  pedidoCliente      PedidoCliente?        @relation(fields: [pedidoClienteId], references: [id], onDelete: SetNull)
   /// Ocorrências do PMOC que deram origem a este orçamento (ligação futura)
   pmocOcorrencias    PmocOcorrencia[]
 
@@ -3116,6 +3141,7 @@ model Orcamento {
   @@index([empresaId, status])
   @@index([empresaId, criadoEm])
   @@index([clienteId])
+  @@index([pedidoClienteId])
   @@map("orcamentos")
 }
 
@@ -6033,4 +6059,31 @@ model ExportacaoDados {
 
   @@index([empresaId, criadoEm])
   @@map("exportacoes_dados")
+}
+
+/// PEDIDO DO CLIENTE (o pedido que o cliente emite para pagar; não é o pedido de compra do fornecedor).
+/// Um pedido cobre várias OS e orçamentos do mesmo cliente (lib/pedido-cliente).
+model PedidoCliente {
+  id           String   @id @default(cuid())
+  empresaId    String   @map("empresa_id")
+  clienteId    String   @map("cliente_id")
+  numero       String
+  data         DateTime @db.Date
+  valor        Decimal? @db.Decimal(12, 2)
+  observacao   String?
+  /// O PDF ou a foto do pedido (data URL; o tipo conferido pelo conteúdo no envio)
+  anexo        String?  @db.Text
+  anexoNome    String?  @map("anexo_nome")
+  anexoTipo    String?  @map("anexo_tipo")
+  criadoPorId  String?  @map("criado_por_id")
+  criadoEm     DateTime @default(now()) @map("criado_em")
+  atualizadoEm DateTime @default(now()) @updatedAt @map("atualizado_em")
+
+  empresa    Empresa        @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  cliente    Cliente        @relation(fields: [clienteId], references: [id])
+  ordens     OrdemServico[]
+  orcamentos Orcamento[]
+
+  @@index([empresaId, clienteId])
+  @@map("pedidos_cliente")
 }
