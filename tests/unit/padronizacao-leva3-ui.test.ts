@@ -81,6 +81,8 @@ const toasts = async () => vi.mocked((await import("@/components/ui/avisos")).to
 const gravacoes = () => chamadas.filter((c) => c.metodo !== "GET" && !c.url.startsWith("/api/preferencias"));
 const gaveta = () => $$('[role="dialog"]').filter((d) => !d.hasAttribute("data-confirmacao")).at(-1) ?? null;
 const confirmacao = () => $("[data-confirmacao]");
+/** O modal padrão de inativar (InativarRegistro), pelo título */
+const modalInativar = () => $$('[role="dialog"]').find((d) => /^(Inativar|Reativar)/.test(txt($("h3", d)))) ?? null;
 /** O texto do ⓘ ao lado de um rótulo */
 const dica = (rotulo: string, dentro: ParentNode = document) => {
   const b = $(`[data-dica][aria-label="Ajuda: ${rotulo}"]`, dentro);
@@ -177,32 +179,33 @@ describe("Formulários", () => {
     expect(linhas()).toEqual(["f1", "f2"]);
   });
 
-  it("Inativar: mostra o impacto (onde é usado) antes; confirmado, manda o DELETE, avisa e a linha sai", async () => {
+  it("Inativar: o botão padrão mostra o impacto (onde é usado) antes; confirmado, manda o DELETE, avisa e a linha sai", async () => {
     await abrir(GERENCIA);
-    respostas["GET /api/formularios/f1/vinculos"] = { status: 200, corpo: [{ id: "v1" }, { id: "v2" }] };
+    respostas["GET /api/formularios/f1/impacto"] = { status: 200, corpo: { bloqueio: null, avisos: ["Em uso em 2 combinações de equipamento e tipo de OS: sai das próximas OS; as respostas já dadas ficam."] } };
     await clicar($("[data-formulario='f1'] [data-inativar-formulario]"));
-    expect(txt($("h3", confirmacao()!))).toBe('Inativar o formulário "Checklist de instalação"?');
-    expect(txt($("p", confirmacao()!))).toBe("Em uso em 2 combinações de equipamento e tipo de OS. Ele deixa de aparecer nas próximas OS; as respostas já dadas continuam no histórico.");
-    // cancelar: nada vai para o servidor
-    await clicar($("[data-confirmar-nao]"));
+    expect(txt($("h3", modalInativar()!))).toBe("Inativar formulário Checklist de instalação?");
+    expect(txt($("[data-avisos]", modalInativar()!))).toContain("Em uso em 2 combinações de equipamento e tipo de OS");
+    // voltar: nada vai para o servidor
+    await clicar(botao("Voltar", modalInativar()!));
     expect(gravacoes()).toEqual([]);
     expect(linhas()).toEqual(["f1", "f2"]);
     await clicar($("[data-formulario='f1'] [data-inativar-formulario]"));
-    expect(txt($("[data-confirmar-sim]"))).toBe("Inativar");
-    await clicar($("[data-confirmar-sim]"));
-    expect(gravacoes()).toEqual([{ url: "/api/formularios/f1", metodo: "DELETE", corpo: null }]);
+    await clicar(botao("Sim, inativar", modalInativar()!));
+    expect(gravacoes()).toEqual([{ url: "/api/formularios/f1", metodo: "DELETE", corpo: { motivo: "" } }]);
     // Leva 4B: o aviso passou a dizer onde o inativado foi parar (a aba Inativos, de onde se reativa)
     expect(await toasts()).toEqual([["Formulário inativado. Está na aba Inativos.", "sucesso"]]);
     expect(linhas()).toEqual(["f2"]);
   });
 
-  it("Inativar recusado pelo servidor: a linha CONTINUA na lista e o motivo vira aviso", async () => {
+  it("Inativar recusado pelo servidor: a linha CONTINUA na lista e o motivo aparece no modal", async () => {
     await abrir(GERENCIA);
+    respostas["GET /api/formularios/f2/impacto"] = { status: 200, corpo: { bloqueio: null, avisos: [] } };
     respostas["DELETE /api/formularios/f2"] = { status: 403, corpo: { erro: "Sem permissão para esta ação" } };
     await clicar($("[data-formulario='f2'] [data-inativar-formulario]"));
-    expect(txt($("p", confirmacao()!))).toContain("Não está vinculado a nenhum equipamento.");
-    await clicar($("[data-confirmar-sim]"));
-    expect(await toasts()).toEqual([["Sem permissão para esta ação", "erro"]]);
+    expect($("[data-avisos]", modalInativar()!)).toBeNull();
+    await clicar(botao("Sim, inativar", modalInativar()!));
+    expect(txt(modalInativar())).toContain("Sem permissão para esta ação");
+    expect(await toasts()).toEqual([]);
     expect(linhas()).toEqual(["f1", "f2"]);
   });
 
@@ -271,20 +274,32 @@ describe("Checklists de veículo", () => {
 
   it("Inativar RECUSADO pelo servidor: o modelo continua na lista (antes sumia da tela mesmo com 403)", async () => {
     await abrir(GERENCIA);
+    respostas["GET /api/checklist-templates/ck1/impacto"] = { status: 200, corpo: { bloqueio: null, avisos: ["Já foi preenchido 12 vezes: os preenchimentos continuam no histórico."] } };
     respostas["DELETE /api/checklist-templates/ck1"] = { status: 403, corpo: { erro: "Sem permissão para esta ação" } };
     await clicar($("[data-modelo='ck1'] [data-inativar-modelo]"));
-    expect(txt($("p", confirmacao()!))).toBe("Já foi preenchido 12 vezes. Ele deixa de aparecer para os próximos preenchimentos; os já feitos continuam no histórico.");
-    await clicar($("[data-confirmar-sim]"));
-    expect(gravacoes()).toEqual([{ url: "/api/checklist-templates/ck1", metodo: "DELETE", corpo: null }]);
-    expect(await toasts()).toEqual([["Sem permissão para esta ação", "erro"]]);
+    expect(txt($("[data-avisos]", modalInativar()!))).toContain("Já foi preenchido 12 vezes: os preenchimentos continuam no histórico.");
+    await clicar(botao("Sim, inativar", modalInativar()!));
+    expect(gravacoes()).toEqual([{ url: "/api/checklist-templates/ck1", metodo: "DELETE", corpo: { motivo: "" } }]);
+    expect(txt(modalInativar())).toContain("Sem permissão para esta ação");
+    expect(await toasts()).toEqual([]);
     expect(linhas()).toEqual(["ck1", "ck2"]);
+  });
+
+  it("Inativar do modelo do checklist diário obrigatório: o bloqueio aparece antes e o botão trava", async () => {
+    await abrir(GERENCIA);
+    respostas["GET /api/checklist-templates/ck1/impacto"] = { status: 200, corpo: { bloqueio: "Modelo do checklist diário obrigatório: troque o modelo do checklist diário antes de inativar.", avisos: [] } };
+    await clicar($("[data-modelo='ck1'] [data-inativar-modelo]"));
+    expect(txt($("[data-bloqueio]", modalInativar()!))).toContain("Modelo do checklist diário obrigatório");
+    expect((botao("Sim, inativar", modalInativar()!) as HTMLButtonElement).disabled).toBe(true);
+    expect(gravacoes()).toEqual([]);
   });
 
   it("Inativar aceito: avisa (toast) e o modelo sai da lista", async () => {
     await abrir(GERENCIA);
+    respostas["GET /api/checklist-templates/ck2/impacto"] = { status: 200, corpo: { bloqueio: null, avisos: [] } };
     await clicar($("[data-modelo='ck2'] [data-inativar-modelo]"));
-    expect(txt($("p", confirmacao()!))).toContain("Ainda não foi preenchido.");
-    await clicar($("[data-confirmar-sim]"));
+    expect(txt($("h3", modalInativar()!))).toBe("Inativar modelo de checklist Checklist semanal?");
+    await clicar(botao("Sim, inativar", modalInativar()!));
     // Leva 4B: o aviso passou a dizer onde o inativado foi parar (a aba Inativos, de onde se reativa)
     expect(await toasts()).toEqual([["Modelo de checklist inativado. Está na aba Inativos.", "sucesso"]]);
     expect(linhas()).toEqual(["ck1"]);

@@ -65,7 +65,10 @@ export const SECOES: SecaoDef[] = [
       // verCusto: custo dos produtos/materiais, lucro e margem no Editar orçamento. Nunca vai ao PDF nem ao link do
       // cliente; sem ela, o custo nem chega ao navegador (lib/orcamentos/estoque-margem-server). Padrão: só administrador.
       { id: "orcamentos", label: "Orçamentos", icone: "Calculator", acoes: ["visualizar", "criar", "editar", "aprovar", "excluir", "verCusto"] },
-      { id: "contratos", label: "Contratos", icone: "FileText", acoes: ["visualizar", "criar", "editar"] },
+      // excluir = CANCELAR o contrato (nada é apagado), como em OS e orçamentos. Perfil gravado antes desta
+      // permissão não a tem: o administrador marca em Configurações › Perfis de acesso (o SQL opcional está
+      // em docs/sql-opcional/contratos-excluir.sql). Administrador e super admin podem tudo, sem nada no banco.
+      { id: "contratos", label: "Contratos", icone: "FileText", acoes: ["visualizar", "criar", "editar", "excluir"] },
     ],
   },
   {
@@ -358,7 +361,7 @@ export const PRESETS: Record<string, Permissoes> = {
     clientes: ["visualizar"],
     ordens: ["visualizar"],
     orcamentos: ["visualizar", "criar", "editar", "aprovar"],
-    contratos: ["visualizar", "criar", "editar"],
+    contratos: ["visualizar", "criar", "editar", "excluir"],
     financeiro: ["visualizar", "medicoes", "contasReceber", "fluxoCaixa", "folha", "fiscal"],
     compras: ["visualizar", "gerenciar"],
     estoque: ["visualizar"],

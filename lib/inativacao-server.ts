@@ -2,7 +2,7 @@ import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { formatarData, formatarMoeda } from "@/lib/utils";
 import { orcamentoJaFaturado } from "@/lib/faturamento-os";
-import { avisosInativarCliente } from "@/lib/cadastros/regras-arquivar";
+import { avisosInativarCliente, avisosInativarContato, avisosInativarEndereco, bloqueioInativarEndereco } from "@/lib/cadastros/regras-arquivar";
 
 /**
  * Regras de inativação (soft-delete) de Orçamentos, Colaboradores, Equipes e Veículos.
@@ -257,4 +257,34 @@ export async function impactoCliente(id: string, empresaId: string): Promise<Imp
       pmocsAtivos: c._count.pmocs,
     }),
   };
+}
+
+/* ───────── Endereço do cliente (unidade): bloqueia principal e equipamentos; avisa o resto ───────── */
+export async function impactoEndereco(id: string, empresaId: string): Promise<Impacto | null> {
+  const u = await prisma.unidade.findFirst({
+    where: { id, empresaId },
+    select: {
+      principal: true,
+      _count: { select: { equipamentos: { where: { ativo: true } } } },
+      contratos: { where: { contrato: { status: "ATIVO" } }, select: { contrato: { select: { numero: true } } }, orderBy: { contrato: { numero: "asc" } } },
+      pmocs: { where: { ativo: true }, select: { nome: true }, orderBy: { nome: "asc" } },
+      ordensServico: { where: { status: { notIn: ["CONCLUIDA", "CANCELADA"] } }, select: { numero: true, chamadoNumero: true }, orderBy: { criadoEm: "desc" } },
+    },
+  });
+  if (!u) return null;
+  return {
+    bloqueio: bloqueioInativarEndereco({ principal: u.principal, equipamentosAtivos: u._count.equipamentos }),
+    avisos: avisosInativarEndereco({
+      contratosAtivos: u.contratos.map((c) => c.contrato.numero),
+      pmocsAtivos: u.pmocs.map((p) => p.nome),
+      osAbertas: u.ordensServico.map((o) => o.chamadoNumero ?? o.numero),
+    }),
+  };
+}
+
+/* ───────── Contato do cliente: nunca bloqueia; avisa o acesso ao portal e o principal ───────── */
+export async function impactoContato(id: string, clienteId: string, empresaId: string): Promise<Impacto | null> {
+  const c = await prisma.contatoCliente.findFirst({ where: { id, clienteId, empresaId }, select: { principal: true, senha: true } });
+  if (!c) return null;
+  return { bloqueio: null, avisos: avisosInativarContato({ principal: c.principal, temAcessoPortal: !!c.senha }) };
 }

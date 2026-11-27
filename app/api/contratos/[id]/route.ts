@@ -129,26 +129,5 @@ export async function PUT(req: NextRequest, { params }: Params) {
   return NextResponse.json(atualizado);
 }
 
-export async function DELETE(_: NextRequest, { params }: Params) {
-  const guard = await exigirPermissao("contratos", "editar");
-  if (guard.erro) return guard.resposta;
-  const { session } = guard;
-  const { id } = await params;
-  const empresaId = session.user!.empresaId;
-
-  const existente = await prisma.contrato.findFirst({ where: { id, empresaId } });
-  if (!existente) return NextResponse.json({ erro: "Não encontrado" }, { status: 404 });
-
-  // Excluir = encerrar (o contrato fica no histórico). CO2: como em qualquer saída de ATIVO,
-  // a receita fantasma sai junto — previsões ainda abertas e OS futuras intocadas.
-  if (existente.status !== "ENCERRADO") {
-    await prisma.$transaction([
-      prisma.contrato.update({ where: { id }, data: { status: "ENCERRADO" } }),
-      prisma.contratoHistoricoStatus.create({
-        data: { empresaId, contratoId: id, statusAnterior: existente.status, statusNovo: "ENCERRADO", motivo: "Contrato excluído", usuarioId: session.user!.id },
-      }),
-    ]);
-  }
-  const limpeza = await encerrarFinanceiroDoContrato(id, `Contrato ${existente.numero} excluído`, session.user!.id);
-  return NextResponse.json({ ok: true, ...limpeza });
-}
+// Não há DELETE: o contrato nunca é apagado. Encerrar ou cancelar é a troca de status
+// (PATCH …/status), com histórico, permissão própria para cancelar e o impacto mostrado antes.

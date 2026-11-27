@@ -19,6 +19,7 @@ import {
   Filter, BarChart3, Wallet, CalendarClock, AlertTriangle,
 } from "lucide-react";
 import { InputData } from "@/components/ui/input-data";
+import { FiltroCanceladosUrl } from "@/components/listagem/barra-filtros";
 
 interface ContratoView {
   id: string; numero: string; cliente: string; clienteLogo: string | null; periodicidade: string; valorMensal: number | null;
@@ -40,7 +41,7 @@ const COR_FREQ: Record<string, string> = {
   TRIMESTRAL: "bg-previsto-claro text-previsto-texto", SEMESTRAL: "bg-previsto-claro text-previsto-texto", ANUAL: "bg-previsto-claro text-previsto-texto",
 };
 
-const FILTROS = ["busca", "status", "frequencia", "vigenciaInicio", "vigenciaFim", "valorMin", "valorMax", "clienteId"];
+const FILTROS = ["busca", "status", "frequencia", "vigenciaInicio", "vigenciaFim", "valorMin", "valorMax", "clienteId", "cancelados"];
 
 /** Princípio 7: o que a tela mostra fica no ⓘ do título, não num parágrafo acima da lista. */
 const AJUDA = "Contratos de manutenção: o valor é o de CADA cobrança, e o valor por ano segue a frequência. Vencidos e vencendo em 30 dias aparecem destacados. O reajuste anual é decidido em Contratos › Reajustes a aplicar.";
@@ -158,6 +159,8 @@ export function ContratosListaClient({ contratos, total, pagina, porPagina, soma
               className={cn("inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium border transition-colors", avancado ? "bg-primary-50 border-primary-200 text-primary-700" : "bg-white border-surface-border text-ink-muted hover:bg-surface-alt")}>
               <SlidersHorizontal className="w-4 h-4" /> Mais filtros
             </button>
+            {/* Cancelado fica fora da lista padrão (como em OS e orçamentos); o status "Cancelado" também traz */}
+            <FiltroCanceladosUrl navegar={(p) => setParams(p)} />
           </div>
 
           {avancado && (

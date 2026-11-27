@@ -60,6 +60,8 @@ interface ClienteFormProps {
     unidades?: Unidade[];
     anexos?: AnexoItem[];
     contatosCliente?: ContatoSeguro<ContatoCliente>[];
+    unidadesInativas?: Unidade[];
+    contatosInativos?: ContatoSeguro<ContatoCliente>[];
     interacoes?: InteracaoItem[];
     _count?: { contratos: number };
   };
@@ -586,7 +588,7 @@ export function ClienteForm({ initialData, statusFinanceiroCalc, perdas12m, cons
             </p>
           )}
           {isEditing ? (
-            <UnidadesManager clienteId={initialData!.id} unidadesIniciais={initialData!.unidades ?? []}
+            <UnidadesManager clienteId={initialData!.id} unidadesIniciais={initialData!.unidades ?? []} inativosIniciais={initialData!.unidadesInativas ?? []}
               enderecoCliente={{ endereco: initialData!.endereco, numero: initialData!.numero, complemento: initialData!.complemento, bairro: initialData!.bairro, cidade: initialData!.cidade, estado: initialData!.estado, cep: initialData!.cep, telefone: initialData!.telefone }} />
           ) : (
             <UnidadesLocal unidades={unidadesNovas} onChange={setUnidadesNovas} />
@@ -601,7 +603,7 @@ export function ClienteForm({ initialData, statusFinanceiroCalc, perdas12m, cons
             </p>
           )}
           {isEditing ? (
-            <ContatosManager clienteId={initialData!.id} contatosIniciais={initialData!.contatosCliente ?? []}
+            <ContatosManager clienteId={initialData!.id} contatosIniciais={initialData!.contatosCliente ?? []} inativosIniciais={initialData!.contatosInativos ?? []}
               sugestao={sugestaoContato ? { nome: watch("nome"), email: sugestaoContato.email, telefone: sugestaoContato.telefone } : null}
               prefillNonce={consultaNonce} />
           ) : (

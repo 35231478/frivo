@@ -87,6 +87,7 @@ export default async function PedidosCompraPage({ searchParams }: { searchParams
             <FiltroSelectUrl param="origem" vazio="Toda origem" opcoes={[{ value: "OS", label: "OS" }, { value: "ORCAMENTO", label: "Orçamento" }, { value: "AVULSO", label: "Avulso" }]} />
             {compradores.length > 0 && <FiltroSelectUrl param="compradorId" vazio="Todos compradores" opcoes={compradores.map((c) => ({ value: c.id, label: c.nome }))} />}
             <FiltroCheckUrl param="abertos" rotulo="Só abertos" />
+            <FiltroCheckUrl param="cancelados" rotulo="Mostrar cancelados" />
           </div>
 
           <ConteudoUrl>

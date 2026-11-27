@@ -18,6 +18,7 @@ import { numeroFatura, rotuloStatusMedicao } from "@/lib/faturamento/fatura";
 
 import { lerPeriodo, periodoTela } from "@/lib/periodo";
 import { FiltrosMedicoes } from "@/components/financeiro/medicoes-filtros";
+import { whereMedicoes } from "@/lib/listas/filtros";
 
 export const metadata: Metadata = { title: "Medições" };
 
@@ -27,26 +28,15 @@ export default async function MedicoesPage({
   searchParams: Promise<Record<string, string | undefined>>;
 }) {
   const sp = await searchParams;
-  const { busca = "", status = "", clienteId = "", tipo = "" } = sp;
+  const { busca = "" } = sp;
   const session = await auth();
   if (!pode(session!.user!.permissoes, "financeiro", "medicoes", session!.user!.role)) redirect("/sem-permissao");
   const empresaId = session!.user!.empresaId;
 
-  const where: any = { empresaId };
-  if (status) where.status = status;
-  if (clienteId) where.clienteId = clienteId;
-  if (tipo) where.tipo = tipo;
   // Período (pela data de criação): o seletor da lista; por padrão todo o período (como sempre foi).
   // Links antigos com dataInicio/dataFim valem como período personalizado.
   const periodo = lerPeriodo({ ...sp, de: sp.de ?? sp.dataInicio, ate: sp.ate ?? sp.dataFim }, new Date(), { permitirTodos: true, padrao: "todos" });
-  if (periodo.gte || periodo.lt) where.criadoEm = { ...(periodo.gte && { gte: periodo.gte }), ...(periodo.lt && { lt: periodo.lt }) };
-  if (busca) {
-    where.OR = [
-      { numero: { contains: busca, mode: "insensitive" } },
-      { descricao: { contains: busca, mode: "insensitive" } },
-      { cliente: { nome: { contains: busca, mode: "insensitive" } } },
-    ];
-  }
+  const where = whereMedicoes(empresaId, sp, periodo);
 
   // UX-4 (Y4): Medições no padrão das listas — paginação de servidor (sem o corte fixo de 100)
   const { pagina: paginaPedida, porPagina } = lerPaginacao(sp);

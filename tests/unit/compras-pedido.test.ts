@@ -178,10 +178,13 @@ describe("envio ao fornecedor", () => {
 
 describe("filtro da lista central", () => {
   it("sempre a empresa; status junta o legado; abertos; comprador", () => {
-    expect(wherePedidosCompra("e1", {})).toEqual({ empresaId: "e1" });
+    // cancelado fica fora da lista padrão; "Mostrar cancelados" traz de volta
+    expect(wherePedidosCompra("e1", {})).toEqual({ empresaId: "e1", status: { not: "CANCELADO" } });
+    expect(wherePedidosCompra("e1", { cancelados: "1" })).toEqual({ empresaId: "e1" });
     expect(wherePedidosCompra("e1", { status: "COTANDO" }).status).toEqual({ in: ["COTANDO", "COMPRADO"] });
     expect(wherePedidosCompra("e1", { status: "CONCLUIDO" }).status).toEqual({ in: ["CONCLUIDO", "ENTREGUE"] });
-    expect(wherePedidosCompra("e1", { status: "XYZ" }).status).toBeUndefined();
+    // status desconhecido é como nenhum: vale o padrão (sem os cancelados)
+    expect(wherePedidosCompra("e1", { status: "XYZ" }).status).toEqual({ not: "CANCELADO" });
     expect(wherePedidosCompra("e1", { abertos: "1" }).status).toEqual({ in: ["SOLICITADO", "COTANDO", "COMPRADO", "PARCIAL"] });
     expect(wherePedidosCompra("e1", { abertos: "1", status: "CANCELADO" }).status).toEqual({ in: ["CANCELADO"] });
     expect(wherePedidosCompra("e1", { compradorId: "u9" }).compradorId).toBe("u9");
