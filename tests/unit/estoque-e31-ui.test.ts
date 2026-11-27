@@ -105,10 +105,11 @@ describe("Produtos", () => {
     expect(linhas).toHaveLength(2);
     const cel = (i: number) => linhas[i].querySelector("[data-categoria-produto]")!;
     expect(cel(0).getAttribute("data-categoria-produto")).toBe("sim");
-    expect(txt(cel(0))).toBe("Peças de reposição Venda à parte");
+    // "Orçamento E": termos únicos Material e Peça (antes "Incluso no serviço" e "Venda à parte")
+    expect(txt(cel(0))).toBe("Peças de reposição Peça");
     expect(cel(0).querySelector("[data-comportamento]")!.getAttribute("data-comportamento")).toBe("VENDA_A_PARTE");
     expect(cel(1).getAttribute("data-categoria-produto")).toBe("nao");
-    expect(txt(cel(1))).toBe("Sem categoria Incluso no serviço (padrão)");
+    expect(txt(cel(1))).toBe("Sem categoria Material (padrão)");
     expect(cel(1).querySelector("[data-comportamento]")!.getAttribute("data-comportamento")).toBe("INCLUSO_NO_SERVICO");
   });
 
@@ -161,13 +162,13 @@ describe("Categorias de produto", () => {
     await montar(createElement(CategoriasProdutoTela));
     expect($$("[data-cadastro=categorias-produto] thead th").map(txt).filter((t) => t !== "Selecionar a página").slice(0, 3)).toEqual(["Categoria", "Faturamento", "Produtos"]);
     const linhas = $$("[data-cadastro=categorias-produto] tbody tr");
-    expect(txt(linhas[0])).toMatch(/^Peças de reposição\s*Venda à parte\s*1 produto\(s\)/);
-    expect(txt(linhas[1])).toMatch(/^Materiais de instalação\/consumo\s*Incluso no serviço\s*—/);
+    expect(txt(linhas[0])).toMatch(/^Peças de reposição\s*Peça\s*1 produto\(s\)/);
+    expect(txt(linhas[1])).toMatch(/^Materiais de instalação\/consumo\s*Material\s*—/);
     expect(linhas[0].querySelector("[data-comportamento]")!.getAttribute("data-comportamento")).toBe("VENDA_A_PARTE");
     await clicar($("[data-acao=novo-cadastro]"));
     const sel = $<HTMLSelectElement>('select[id]')!;
     expect([...sel.options].map((o) => o.value)).toEqual(["VENDA_A_PARTE", "INCLUSO_NO_SERVICO"]);
-    expect([...sel.options][0].textContent).toMatch(/^Venda à parte — Peça de reposição/);
+    expect([...sel.options][0].textContent).toMatch(/^Peça — Vendida à parte/);
     expect($("[data-dica]")!.parentElement!.closest("button, a")).toBeNull(); // ⓘ do campo fora de qualquer botão
     await digitar($('input[id]'), "Consumíveis");
     await escolher(sel, "INCLUSO_NO_SERVICO");

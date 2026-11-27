@@ -185,11 +185,11 @@ describe("Serviço › Materiais padrão", () => {
     expect(linhas.map((l) => l.getAttribute("data-linha-material"))).toEqual(["produto", "kit"]);
     // Produto solto: pela categoria (peça = venda à parte)
     expect($<HTMLSelectElement>('[data-linha-material=produto] select[name=comportamento]')!.value).toBe("");
-    expect(txt($('[data-linha-material=produto] select[name=comportamento] option[value=""]'))).toBe("Pela categoria (Venda à parte)");
+    expect(txt($('[data-linha-material=produto] select[name=comportamento] option[value=""]'))).toBe("Pelo cadastro (Peça)") // "Orçamento E": vem do Uso do produto;
     expect(linhas[0].querySelector("[data-comportamento]")!.getAttribute("data-comportamento")).toBe("VENDA_A_PARTE");
     // Kit aberto: itens × 2 kits, com a pílula pela categoria de cada produto e o custo
     const itensKit = $$("[data-itens-do-kit] [data-kit-item]");
-    expect(itensKit.map(txt)).toEqual([expect.stringMatching(/^Gás R410A 1 kg Incluso no serviço R\$\s?50,00$/), expect.stringMatching(/^Suporte 4 un Incluso no serviço sem custo de compra$/)]);
+    expect(itensKit.map(txt)).toEqual([expect.stringMatching(/^Gás R410A 1 kg Material R\$\s?50,00$/), expect.stringMatching(/^Suporte 4 un Material sem custo de compra$/)]);
     // Resumo: inclusos = gás 1 kg × 50 = 50 (suporte sem custo); à parte = capacitor 1 × 30
     const resumo = $("[data-resumo-custo]")!;
     expect(resumo.getAttribute("data-inclusos")).toBe("50");

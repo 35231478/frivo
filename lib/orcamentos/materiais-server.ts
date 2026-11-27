@@ -42,7 +42,7 @@ export async function materiaisPadraoDoServico(empresaId: string, servicoId: str
   return materializarComposicao(efetivos, (id) => precos.get(id), custos);
 }
 
-/** Um produto do catálogo como material AVULSO: comportamento pela categoria, venda pela tabela/padrão, custo interno. */
+/** Um produto do catálogo como material AVULSO: comportamento pelo Uso do produto, venda pela tabela/padrão, custo interno. */
 export async function produtoComoMaterial(empresaId: string, produtoId: string, clienteId?: string | null) {
   const p = await prisma.produto.findFirst({ where: { id: produtoId, empresaId }, select: { ...PRODUTO_DA_COMPOSICAO, valorPadrao: true } });
   if (!p) return null;

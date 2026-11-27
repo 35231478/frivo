@@ -79,7 +79,8 @@ describe("comportamento de faturamento (regra pura)", () => {
     expect([semCategoria({}), semCategoria({ categoriaProduto: { comportamento: "VENDA_A_PARTE" } })]).toEqual([true, false]);
     expect([ehComportamento("VENDA_A_PARTE"), ehComportamento("venda"), ehComportamento(null)]).toEqual([true, false, false]);
     expect(OPCOES_COMPORTAMENTO.map((o) => o.value)).toEqual(["VENDA_A_PARTE", "INCLUSO_NO_SERVICO"]);
-    expect(OPCOES_COMPORTAMENTO[0].label).toMatch(/^Venda à parte — Peça de reposição/);
+    // "Orçamento E": termos únicos Material e Peça (antes "Incluso no serviço" e "Venda à parte")
+    expect(OPCOES_COMPORTAMENTO[0].label).toMatch(/^Peça — Vendida à parte/);
     expect(CATEGORIAS_PADRAO).toEqual([{ nome: "Peças de reposição", comportamento: "VENDA_A_PARTE" }, { nome: "Materiais de instalação/consumo", comportamento: "INCLUSO_NO_SERVICO" }]);
   });
 });

@@ -389,15 +389,18 @@ describe("ajustes finos: nome automático, condições, observação ao lado, ti
     expect(tipos).toEqual([]);
   });
 
-  it("observação na coluna ao lado da descrição (cabeçalho Descrição | Observação | Qtd | Unitário | Total), na mesma linha do item", async () => {
+  // "Orçamento E": a observação saiu da coluna do meio e ficou logo abaixo da descrição, na MESMA célula (como no PDF)
+  it("observação logo abaixo da descrição, na mesma célula (cabeçalho Descrição | Qtd | Unitário | Total), na mesma linha do item", async () => {
     await montar();
     await adicionar("Pesquisar serviço por nome ou código...", "Limpeza de split");
     const cabecalho = $$("[role='table'][aria-label='Serviços'] [role='columnheader']").map((c) => c.textContent);
-    expect(cabecalho.slice(0, 5)).toEqual(["Descrição", "Observação", "Qtd", "Unitário", "Total"]);
+    expect(cabecalho.slice(0, 4)).toEqual(["Descrição", "Qtd", "Unitário", "Total"]);
     const linha = linhas()[0];
     const celulas = [...linha.querySelectorAll(":scope > [role='cell']")];
-    expect(celulas[1].querySelector("textarea[aria-label='Observação de Limpeza de split']")).toBeTruthy(); // 2ª coluna = observação
-    await digitar(celulas[1].querySelector("textarea"), "Inclui deslocamento");
+    await clicar(celulas[0].querySelector("[data-abrir-observacao]"));
+    const area = celulas[0].querySelector("textarea[aria-label='Observação de Limpeza de split']");
+    expect(area).toBeTruthy(); // 1ª célula = descrição + a observação embaixo
+    await digitar(area, "Inclui deslocamento");
     const corpo = await salvar();
     expect(corpo.servicos[0].observacao).toBe("Inclui deslocamento");
   });

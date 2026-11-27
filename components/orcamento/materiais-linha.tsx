@@ -114,7 +114,7 @@ export function MateriaisLinha({ item, clienteId, catalogoProdutos, onChange, so
                   {somenteLeitura ? <PilulaComportamento comportamento={m.comportamento} /> : (
                     <button type="button" onClick={() => mudar(m.id!, trocarUso(m))} data-trocar-uso
                       className="inline-flex items-center gap-1 rounded-full border border-surface-border bg-white px-2 py-0.5 text-[10px] font-semibold text-ink-muted hover:border-primary-300 hover:text-primary-700 whitespace-nowrap justify-self-start"
-                      aria-label={`${m.descricao}: ${LABEL_COMPORTAMENTO[m.comportamento]}. Trocar para ${peca ? "Material" : "Peça"} só neste orçamento`}
+                      aria-label={`Trocar ${m.descricao} para ${peca ? "Material" : "Peça"}`}
                       title={`Trocar para ${peca ? "Material" : "Peça"} só neste orçamento (o cadastro não muda)`}>
                       <span data-comportamento={m.comportamento}>{LABEL_COMPORTAMENTO[m.comportamento]}</span>
                       <ArrowLeftRight className="w-3 h-3" aria-hidden />

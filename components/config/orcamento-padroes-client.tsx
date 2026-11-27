@@ -87,7 +87,7 @@ export function OrcamentoPadroesClient({ inicial, podeEditar }: { inicial: Padro
           <div data-padrao-mostrar-materiais>
             <ToggleSwitch
               label="Mostrar materiais ao cliente"
-              description="Dentro de cada serviço, a lista dos materiais inclusos nele, sem valor. Desligado: o cliente vê só a linha do serviço."
+              description="Dentro de cada serviço, os materiais dele, sem valor."
               checked={mostrarMateriais} disabled={!podeEditar}
               onChange={mudou(setMostrarMateriais)}
             />

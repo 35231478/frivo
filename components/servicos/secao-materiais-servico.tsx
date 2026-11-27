@@ -132,9 +132,9 @@ function LinhaProduto({ linha, produtos, produto, custos, disabled, onChange, on
         <FormField label={`Quantidade${produto?.unidade ? ` (${produto.unidade})` : ""}`} required>
           <Input type="text" inputMode="decimal" value={linha.quantidade} onChange={(e) => onChange({ quantidade: e.target.value })} disabled={disabled} data-quantidade-material />
         </FormField>
-        <FormField label="Faturamento" dica="Vem da categoria do produto. Mude aqui só como exceção pontual deste serviço (ex.: uma peça que neste serviço vai inclusa).">
+        <FormField label="Faturamento" dica="Vem do Uso no cadastro do produto (Material ou Peça). Mude aqui só como exceção pontual deste serviço (ex.: uma peça que neste serviço vai inclusa).">
           <Select value={linha.comportamento} onChange={(e) => onChange({ comportamento: e.target.value as LinhaEdit["comportamento"] })} disabled={disabled} name="comportamento">
-            <option value="">Pela categoria ({daCategoria})</option>
+            <option value="">Pelo cadastro ({daCategoria})</option>
             <option value="VENDA_A_PARTE">{LABEL_COMPORTAMENTO.VENDA_A_PARTE} (exceção)</option>
             <option value="INCLUSO_NO_SERVICO">{LABEL_COMPORTAMENTO.INCLUSO_NO_SERVICO} (exceção)</option>
           </Select>
