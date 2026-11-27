@@ -1,7 +1,7 @@
 import { NextResponse, after } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { escopoDoSino } from "@/lib/alertas/sino";
+import { DIAS_USO_CAMPO_SINO, escopoDoSino } from "@/lib/alertas/sino";
 import { contarAlertasPrazos } from "@/lib/prazo-server";
 import { contarAlertasVeiculos } from "@/lib/veiculo-server";
 import { hojeDiaCivil } from "@/lib/fuso";
@@ -52,7 +52,7 @@ export async function GET() {
   const zeroVeiculos = { checklistPendente: 0, checklistsComAlertas: 0, checklistNaoVaiUsar: 0, documentosVencendo: 0, veiculosManutencao: 0, revisaoChegando: 0 };
   const zeroNfse = { nfseAutorizadas: 0, nfseAutorizadaMedicaoId: null, nfseRejeitadas: 0, nfseRejeitadaMedicaoId: null, nfseAguardando: 0, nfseAguardandoMedicaoId: null };
   const desde24h = new Date(Date.now() - 24 * 60 * 60 * 1000);
-  const [prazosBrutos, veiculosBrutos, boletosPagos, orcamentosRespondidos, leadsSite, nfsDoPedido, nfse, faturamentoContratos, reajustesContrato, separacoesPendentes, devolucoesPendentes, pmoc, aceites, admissoes] = await Promise.all([
+  const [prazosBrutos, veiculosBrutos, boletosPagos, orcamentosRespondidos, leadsSite, nfsDoPedido, nfse, faturamentoContratos, reajustesContrato, separacoesPendentes, devolucoesPendentes, pmoc, aceites, admissoes, estoqueNegativoCampo] = await Promise.all([
     verOrdens || verCompras ? contarAlertasPrazos(empresaId) : Promise.resolve(null),
     verVeiculos && temFrota ? contarAlertasVeiculos(empresaId) : Promise.resolve(null),
     verBoletos
@@ -91,6 +91,10 @@ export async function GET() {
     e.aceites ? avisosDeAceite(empresaId, filtroEscopo(escopoTecnico), { separarNotaBaixa: e.notaBaixa }) : Promise.resolve(SEM_AVISOS_DE_ACEITE),
     // Admissão assinada esperando ir para o contador (Equipe › Admissões)
     verAdmissoes ? contarAdmissoesAssinadas(empresaId) : Promise.resolve({ admissoesAssinadas: 0, admissaoAssinadaId: null }),
+    // App do técnico: material usado em campo deixou o produto com saldo negativo (o técnico não trava; o escritório confere)
+    e.estoqueNegativoCampo && temEstoque
+      ? prisma.produto.count({ where: { empresaId, ativo: true, controlaEstoque: true, saldo: { lt: 0 }, materiaisCampo: { some: { removidoEm: null, criadoEm: { gte: new Date(Date.now() - DIAS_USO_CAMPO_SINO * 86_400_000) } } } } })
+      : Promise.resolve(0),
   ]);
 
   const prazos = {
@@ -124,6 +128,7 @@ export async function GET() {
     ...pmoc,
     ...aceites,
     ...admissoes,
-    total: totalPrazos + totalVeiculos + boletosPagos + orcamentosRespondidos + leadsSite + nfsDoPedido.length + nfse.nfseAutorizadas + nfse.nfseRejeitadas + nfse.nfseAguardando + faturamentoContratos + reajustesContrato + separacoesPendentes + devolucoesPendentes + pmoc.pmocsVencendo + pmoc.pmocsExpirados + aceites.aceitesRessalva + aceites.aceitesConfirmados + aceites.avaliacoesBaixas + admissoes.admissoesAssinadas,
+    estoqueNegativoCampo,
+    total: totalPrazos + totalVeiculos + boletosPagos + orcamentosRespondidos + leadsSite + nfsDoPedido.length + nfse.nfseAutorizadas + nfse.nfseRejeitadas + nfse.nfseAguardando + faturamentoContratos + reajustesContrato + separacoesPendentes + devolucoesPendentes + pmoc.pmocsVencendo + pmoc.pmocsExpirados + aceites.aceitesRessalva + aceites.aceitesConfirmados + aceites.avaliacoesBaixas + admissoes.admissoesAssinadas + estoqueNegativoCampo,
   });
 }

@@ -14,6 +14,9 @@
  */
 import { pode, type Permissoes } from "@/lib/permissoes";
 
+/** Janela do aviso de saldo negativo por uso em campo: produtos com uso do app nestes dias */
+export const DIAS_USO_CAMPO_SINO = 30;
+
 /** Nota do aceite que vira alerta para o gestor: 1 ou 2 estrelas (não há configuração na empresa para isso). */
 export const NOTA_BAIXA_ACEITE = 2;
 
@@ -35,6 +38,8 @@ export interface EscopoDoSino {
   aceites: boolean;
   /** Nota baixa do aceite: só o escritório (quem gere a OS), nunca o técnico */
   notaBaixa: boolean;
+  /** Uso em campo deixou produto com saldo negativo (app do técnico): quem vê o Estoque, nunca o técnico */
+  estoqueNegativoCampo: boolean;
   /** NF chegou num pedido que a própria pessoa fez: sempre (é dela) */
   nfDosMeusPedidos: true;
 }
@@ -57,6 +62,7 @@ export function escopoDoSino({ permissoes, role, restrito }: QuemPergunta): Esco
     admissoes: daEmpresa && p("admissao", "gerenciar"),
     aceites: verOrdens,
     notaBaixa: daEmpresa && verOrdens,
+    estoqueNegativoCampo: daEmpresa && p("estoque", "visualizar"),
     nfDosMeusPedidos: true,
   };
 }

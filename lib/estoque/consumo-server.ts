@@ -12,6 +12,9 @@ import { ErroSeparacao, paraSeparavel, separacaoDaOs, type SeparacaoDaOs } from 
  * trancada (`movimentar`). A regra é a pura (lib/estoque/separacao). Empresa sempre da sessão.
  */
 
+/** O consumo desta separação foi informado pelo técnico no app: corrigir/estornar é pelos materiais usados em campo. */
+export const MSG_CONSUMO_DO_CAMPO = "Consumo informado pelo técnico em campo: corrija ou estorne em Materiais usados em campo.";
+
 export interface ResultadoConsumo { separacao: SeparacaoDaOs; avisos: string[]; movimentos: number; /** Status da OS depois (a conclusão automática pode destravar) */ status: string | null }
 
 const SELECT = { id: true, produtoId: true, descricao: true, unidade: true, quantidade: true, quantidadeSeparada: true, quantidadeConsumida: true, estadoSeparacao: true } as const;
@@ -78,6 +81,8 @@ export async function desfazerConsumo(empresaId: string, osId: string, usuarioId
     if (await osFinalizada(osId)) throw new ErroSeparacao("OS finalizada: o consumo não pode mais ser desfeito.");
     const m = await tx.osMaterial.findFirst({ where: { id: materialId, ordemServicoId: osId }, select: SELECT });
     if (!m) throw new ErroSeparacao("Material não pertence a esta OS.");
+    // Consumo que veio do app (uso em campo): desfazer aqui deixaria o lançamento do técnico sem baixa — corrige-se lá
+    if (await tx.atividadeMaterial.count({ where: { osMaterialId: m.id, removidoEm: null } })) throw new ErroSeparacao(MSG_CONSUMO_DO_CAMPO);
     const plano = planoDesfazerConsumo(paraSeparavel(m));
     if (!plano.ok) throw new ErroSeparacao(`${m.descricao}: ${plano.erro}`);
     const numero = os.chamadoNumero ?? os.numero;
