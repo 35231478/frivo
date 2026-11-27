@@ -5,6 +5,7 @@ import { ArrowDown, ArrowUp, Calculator, Camera, Check, Gauge, ListChecks, Messa
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Modal } from "@/components/ui/modal";
+import { Dica } from "@/components/ui/dica";
 import { cn } from "@/lib/utils";
 import { UNIDADES_SUGERIDAS, type TipoRespostaItem } from "@/lib/checklist/tipo";
 import {
@@ -242,7 +243,9 @@ function ModalFaixas({ itens, onFechar, onAplicar }: { itens: ItemTela[]; onFech
     <Modal aberto titulo="Aplicar faixas sugeridas" onFechar={onFechar}>
       <div className="space-y-4" data-modal-faixas>
         <div className="space-y-1.5">
-          <p className="text-sm font-semibold text-ink">Gás do equipamento</p>
+          <p className="text-sm font-semibold text-ink inline-flex items-center gap-1.5">Gás do equipamento
+            <Dica rotulo="Faixas sugeridas" texto="Referências típicas em condição nominal. Confira com o fabricante; dá para ajustar item a item. Corrente fica sem faixa (depende da placa)." />
+          </p>
           <div className="flex flex-wrap gap-2" role="radiogroup" aria-label="Gás">
             {GASES.map((g) => (
               <button key={g} type="button" role="radio" aria-checked={gas === g} onClick={() => setGas(g)} data-gas={g}
@@ -255,7 +258,6 @@ function ModalFaixas({ itens, onFechar, onAplicar }: { itens: ItemTela[]; onFech
         {r.mudancas.length === 0
           ? <p className="text-sm text-ink-muted" data-sem-mudancas>Nada a mudar: as medições reconhecidas já estão com a faixa sugerida.</p>
           : <TabelaMudancas mudancas={r.mudancas} />}
-        <p className="text-xs text-ink-muted">Referências típicas em condição nominal. Confira com o fabricante; dá para ajustar item a item. Corrente fica sem faixa (depende da placa).</p>
         <div className="flex justify-end gap-2">
           <Button type="button" variant="secondary" onClick={onFechar}>Cancelar</Button>
           <Button type="button" onClick={() => onAplicar(lista)} disabled={!r.mudancas.length} data-confirmar-faixas>Aplicar</Button>
