@@ -31,6 +31,11 @@ describe("quem pode receber cada tipo", () => {
     expect(ids(FINANCEIRO)).toEqual(["ATIVIDADE_ESQUECIDA", "OS_COMENTARIO", "ACEITE", "DESPESA", "SOLICITACAO_PORTAL", "ORCAMENTO_RESPOSTA", "ESTOQUE_NEGATIVO"]);
     const soOrcamento: QuemRecebe = { permissoes: montarPermissoes({ orcamentos: ["visualizar"] }), role: "OPERADOR", restrito: false };
     expect(ids(soOrcamento)).toEqual(["ORCAMENTO_RESPOSTA"]);
+    // só OS: nada de estoque nem de despesa (que pede Financeiro › Fluxo de caixa)
+    const soOs: QuemRecebe = { permissoes: montarPermissoes({ ordens: ["visualizar"] }), role: "OPERADOR", restrito: false };
+    expect(ids(soOs)).toEqual(["ATIVIDADE_ESQUECIDA", "OS_COMENTARIO", "ACEITE", "SOLICITACAO_PORTAL"]);
+    const soEstoque: QuemRecebe = { permissoes: montarPermissoes({ estoque: ["visualizar"] }), role: "OPERADOR", restrito: false };
+    expect(ids(soEstoque)).toEqual(["ESTOQUE_NEGATIVO"]);
   });
   it("supervisor ligado a um técnico: recebe os 'para você' e os do escritório", () => {
     const t = ids(SUPERVISOR_TECNICO);
@@ -104,6 +109,9 @@ describe("os textos", () => {
   it("texto longo é cortado; sem data, 'sem data marcada'", () => {
     expect(msgComentario({ osNumero: "1", texto: "a".repeat(300) }, "/x").corpo).toHaveLength(110);
     expect(quandoBR(null)).toBe("sem data marcada");
+    // data só de dia (meia-noite UTC): o próprio dia e SEM hora, mesmo pedindo a hora
+    expect(quandoBR(new Date("2026-12-10T00:00:00Z"))).toBe("qui. 10/12");
+    expect(sp(quandoBR(new Date("2026-12-10T03:00:00Z")))).toBe("qui. 10/12 às 00:00");
     expect(urlAppAtividade("a b")).toBe("/tecnico?ver=os&a=a%20b");
   });
 });

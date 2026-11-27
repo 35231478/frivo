@@ -211,6 +211,22 @@ describe.skipIf(!URL_PG)("push (PostgreSQL real)", () => {
     expect(h.enviados.some((e) => e.endpoint.endsWith("carlos-e2"))).toBe(false);
   });
 
+  it("isolamento: destinatários só da empresa do evento (o técnico homônimo da outra empresa, nunca)", async () => {
+    const { enviarPush, usuariosDosTecnicos } = await import("@/lib/push/servidor");
+    expect(await usuariosDosTecnicos("e1", ["tCarlos"])).toEqual(["uCarlos"]);
+    expect(await usuariosDosTecnicos("e1", ["tCarlosE2"])).toEqual([]);
+    const r = await enviarPush({ empresaId: "e1", tipo: "TESTE", alcance: "pessoal", usuarios: ["uOutra", "uCarlosE2"], chave: "iso", mensagem: { titulo: "x", corpo: "", url: "/", tag: "t" } });
+    expect(r.enviados).toEqual([]);
+    expect(h.enviados).toEqual([]);
+  });
+
+  it("reagendar para a MESMA data (a edição regravou a data igual): ninguém recebe, nem na primeira vez", async () => {
+    const at1 = await prisma.atividadeOs.findUnique({ where: { id: "at1" }, select: { dataAgendada: true } });
+    expect(await ev.notificarReagendamento("e1", "at1", at1.dataAgendada)).toBeNull();
+    expect(h.enviados).toEqual([]);
+    expect(await prisma.pushEnvio.count({ where: { tipo: "OS_REAGENDADA" } })).toBe(0);
+  });
+
   /* ───────── Reagendamento e cancelamento pelas rotas ───────── */
   it("reagendar pelo calendário avisa os técnicos (de → para), uma vez por nova data", async () => {
     como("uAdmin");
