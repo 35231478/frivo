@@ -15,6 +15,7 @@ import { OQueLevarDaOs } from "@/components/tecnico/o-que-levar";
 import { ModalCadastroEquipamento } from "@/components/tecnico/cadastro-equipamento";
 import { ChegadaNaOs, useAgora } from "@/components/tecnico/aviso-cliente";
 import { AceiteNaOs } from "@/components/tecnico/aceite-cliente";
+import { EnviarRelatorio } from "@/components/tecnico/relatorio-cliente";
 import { CameraRapida, useRapida } from "@/components/tecnico/camera-rapida";
 import { ConferenciaRapida } from "@/components/tecnico/conferencia-rapida";
 import { MateriaisUsados } from "@/components/tecnico/materiais";
@@ -238,6 +239,8 @@ function ResumoOs({ r, x, fila, aEnviar, registrar, camera, incluir }: { r: Retr
       {so && <p className="rounded-card bg-success-50 border border-success-200 px-3 py-2 text-sm text-success-800 inline-flex items-center gap-2 w-full"><CheckCircle2 className="w-4 h-4" /> Atividade concluída{aEnviar ? " no aparelho (a enviar)" : ""}. Só leitura.</p>}
       {/* Concluiu a atividade que fecha a OS: é a hora do aceite do cliente (assina aqui ou recebe o link) */}
       <AceiteNaOs r={r} x={x} aEnviar={aEnviar} registrar={registrar} />
+      {/* Concluída: o relatório da visita ao cliente, pelo WhatsApp (espera a conclusão subir) */}
+      <EnviarRelatorio r={r} x={x} aEnviar={aEnviar} />
       {aviso && <p role="status" className={cn("rounded-card px-3 py-2 text-sm", aviso.tipo === "ok" ? "bg-success-50 text-success-800" : "bg-atrasado-claro text-atrasado-texto")}>{aviso.texto}</p>}
 
       <section className="space-y-2">

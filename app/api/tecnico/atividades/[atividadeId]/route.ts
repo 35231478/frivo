@@ -9,6 +9,7 @@ import { carregarConfigApp } from "@/lib/tecnico/config-app-server";
 import { temModulo } from "@/lib/modulos/servidor";
 import { cadastroParaRetrato } from "@/lib/execucao/cadastro-campo";
 import { avisoParaRetrato, avisosDeHoje, whatsappDoCliente } from "@/lib/execucao/aviso-cliente";
+import { relatorioParaRetrato } from "@/lib/execucao/relatorio-envio";
 import { andamentoParaRetrato } from "@/lib/execucao/andamento-server";
 import { comentariosDaOs } from "@/lib/execucao/comentarios";
 import { aceiteParaRetrato } from "@/lib/os/aceite-server";
@@ -97,6 +98,8 @@ export async function GET(_: NextRequest, { params }: Params) {
     // Campos-ponte do app: sem Equipamentos some o vínculo pela lista; sem QR Codes, a leitura de etiqueta
     andamento,
     whatsapp,
+    // O relatório da visita (link com token): o técnico manda ao cliente pelo WhatsApp ao concluir
+    relatorio: await relatorioParaRetrato(empresaId, atividadeId),
     modulos: { equipamentos: await temModulo(empresaId, "equipamentos"), qrcodes: await temModulo(empresaId, "qrcodes") },
     geradoEm: new Date().toISOString(),
   }, { headers: { "Cache-Control": "private, no-store" } });
