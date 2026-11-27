@@ -157,13 +157,9 @@ export function OsDetalhe({ os: initialOs, abaInicial, verCusto = false }: {
           <Tabs tabs={tabs} active={aba} onChange={irPara}>
             {(ativa) => (
               <div className="px-4 pb-5 sm:px-6 sm:pb-6">
-                {ativa === "resumo" && (
-                  <div className="space-y-6">
-                    <ResumoOs os={os} central={central} onAba={irPara} onAtualizado={(d) => setOs((prev: any) => ({ ...prev, ...d }))} />
-                    {/* App do técnico: a conversa interna com o campo (abrir marca como lido) */}
-                    <div className="border-t border-surface-linha pt-6"><ComentariosOs osId={os.id} podeResponder={pode("ordens", "editar")} /></div>
-                  </div>
-                )}
+                {ativa === "resumo" && <ResumoOs os={os} central={central} onAba={irPara} onAtualizado={(d) => setOs((prev: any) => ({ ...prev, ...d }))} />}
+                {/* App do técnico: a conversa interna com o campo (abrir marca como lido) */}
+                {ativa === "resumo" && <div className="mt-6 border-t border-surface-linha pt-6"><ComentariosOs osId={os.id} podeResponder={pode("ordens", "editar")} /></div>}
 
                 {ativa === "comercial" && (
                   <div className="space-y-6">

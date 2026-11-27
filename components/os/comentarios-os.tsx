@@ -18,9 +18,12 @@ export function ComentariosOs({ osId, podeResponder }: { osId: string; podeRespo
   const [texto, setTexto] = useState("");
   const [enviando, setEnviando] = useState(false);
   const carregar = useCallback(async () => {
-    const r = await fetch(`/api/ordens/${osId}/comentarios`, { cache: "no-store" });
-    setLista(r.ok ? (await r.json()).comentarios : []);
-    atualizarSino();
+    try {
+      const r = await fetch(`/api/ordens/${osId}/comentarios`, { cache: "no-store" });
+      const l = r.ok ? (await r.json().catch(() => null))?.comentarios : null;
+      setLista(Array.isArray(l) ? l : []);
+      if (r.ok) atualizarSino();
+    } catch { setLista([]); }
   }, [osId]);
   useEffect(() => { void carregar(); }, [carregar]);
 
