@@ -97,6 +97,40 @@ describe("TabelaPro — a linha abre o editor (aoAbrir) e as ações ficam presa
   });
 });
 
+describe("Configurações › Produtos — o Editar pela linha (a gaveta estreita escondia o lápis)", () => {
+  const P1 = { id: "p1", codigo: 7, nome: "Filtro secador", unidade: "un", uso: "MATERIAL", ativo: true, valorPadrao: 35 };
+  async function abrir(permissoes: Record<string, string[]>) {
+    const { PermissoesProvider } = await import("@/components/providers/permissoes-provider");
+    const { montarPermissoes } = await import("@/lib/permissoes");
+    const { TelaProdutos } = await import("@/components/config/telas/produtos");
+    vi.stubGlobal("fetch", vi.fn(async (url: string, init?: RequestInit) => {
+      chamadas.push({ url: String(url), init });
+      const corpo = String(url).startsWith("/api/cadastros/produtos?") ? { itens: [P1], total: 1, pagina: 1, porPagina: 50, contagens: { ativos: 1, inativos: 0, todos: 1 } } : [];
+      return new Response(JSON.stringify(corpo), { status: 200, headers: { "Content-Type": "application/json" } });
+    }));
+    await montar(createElement(PermissoesProvider, { role: "OPERADOR", permissoes: montarPermissoes(permissoes as any), children: createElement(TelaProdutos) } as any));
+  }
+
+  it("quem pode editar: clicar na linha abre o editor do produto; o lápis fica na coluna presa à direita", async () => {
+    await abrir({ configuracoes: ["visualizar", "gerenciar"] });
+    const linha = $('tr[data-linha="p1"]')!;
+    expect(linha.hasAttribute("data-abrir")).toBe(true);
+    expect(linha.querySelector('[aria-label="Editar Filtro secador"]')!.closest("td")!.hasAttribute("data-grudada")).toBe(true);
+    expect($('[role="dialog"]')).toBeNull();
+    await clicar(linha.querySelector('[data-celula="nome"]'));
+    expect($('[role="dialog"]')!.textContent).toContain("Editar Filtro secador");
+  });
+
+  it("quem só vê: a linha não abre nada e não há lápis", async () => {
+    await abrir({ configuracoes: ["visualizar"] });
+    const linha = $('tr[data-linha="p1"]')!;
+    expect(linha.hasAttribute("data-abrir")).toBe(false);
+    expect(linha.querySelector('[aria-label="Editar Filtro secador"]')).toBeNull();
+    await clicar(linha.querySelector("td"));
+    expect($('[role="dialog"]')).toBeNull();
+  });
+});
+
 describe("grade do orçamento — preço de tabela travado", () => {
   it("travado: sem campo, com o cadeado e o aviso; destravado (com a permissão): campo editável", async () => {
     const { ItensTabela } = await import("@/components/orcamento/itens-tabela");
