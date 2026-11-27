@@ -94,7 +94,7 @@ export function MateriaisLinha({ item, clienteId, catalogoProdutos, onChange, so
         </span>
         <span className="text-[11px] text-ink-muted tabular-nums">
           Ajuste no serviço: <strong className={cn(r.ajuste > 0 && "text-ink", r.ajuste < 0 && "text-ok-texto")} data-ajuste={r.ajuste}>{sinal(r.ajuste)}</strong>
-          {r.quantasPecas > 0 && <> · Peças à parte: <strong data-pecas={r.pecas}>{formatarMoeda(r.pecas)}</strong></>}
+          {r.quantasPecas > 0 && <> · {regra === "A_PARTE" ? "À parte" : "Peças à parte"}: <strong data-pecas={r.pecas}>{formatarMoeda(r.pecas)}</strong></>}
         </span>
       </div>
       {aberto && (

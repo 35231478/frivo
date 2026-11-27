@@ -174,6 +174,9 @@ describe("Construtor do orçamento nos dois modos", () => {
     expect($("[data-material='tubo'] [data-a-parte]")).not.toBeNull();
     expect($("[data-resumo-a-parte]")!.getAttribute("data-resumo-a-parte")).toBe("3");
     expect(txt($("[data-resumo-a-parte]"))).toMatch(/3 itens vão como linha de produto/);
+    // o cabeçalho do painel não chama de "Peças" o que inclui materiais
+    expect(txt($("[data-pecas]")!.parentElement)).toMatch(/À parte: R\$\s*240,00/);
+    expect(txt($("[data-pecas]")!.parentElement)).not.toMatch(/Peças à parte/);
     const corpo = await salvar();
     expect(corpo.servicos[0].valorTotal).toBe(800);
     // os materiais continuam Material no snapshot (estoque, separação e custo)
