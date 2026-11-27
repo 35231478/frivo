@@ -17,6 +17,18 @@ export async function GET(req: NextRequest) {
   const empresaId = session.user.empresaId;
   const osIds = lista(req.nextUrl.searchParams.get("os"));
   const orcIds = lista(req.nextUrl.searchParams.get("orc"));
+  // A fatura (medição): as OS e orçamentos dela
+  const medicaoId = req.nextUrl.searchParams.get("med");
+  let clienteDaFatura: { nome: string; nomeFantasia: string | null; comprasNome: string | null; comprasEmail: string | null; comprasTelefone: string | null } | null = null;
+  if (medicaoId) {
+    const m = await prisma.medicao.findFirst({
+      where: { id: medicaoId, empresaId },
+      select: { itens: { select: { ordemServicoId: true, orcamentoId: true } }, cliente: { select: { nome: true, nomeFantasia: true, comprasNome: true, comprasEmail: true, comprasTelefone: true } } },
+    });
+    if (!m) return NextResponse.json({ erro: "Fatura não encontrada." }, { status: 404 });
+    clienteDaFatura = m.cliente;
+    for (const i of m.itens) { if (i.ordemServicoId && !osIds.includes(i.ordemServicoId)) osIds.push(i.ordemServicoId); if (i.orcamentoId && !orcIds.includes(i.orcamentoId)) orcIds.push(i.orcamentoId); }
+  }
   const pedido = { select: { id: true, numero: true } };
   const cliente = { select: { id: true, nome: true, nomeFantasia: true, comprasNome: true, comprasEmail: true, comprasTelefone: true } };
   const [oss, orcs, valores] = await Promise.all([
@@ -28,7 +40,7 @@ export async function GET(req: NextRequest) {
     ...oss.map((o) => ({ tipo: "os" as const, id: o.id, numero: o.chamadoNumero ?? o.numero, clienteId: o.clienteId, valor: valores.get(o.id) ?? 0, aguardando: aguardandoPedido(situacaoDaOs(o)), pedido: o.pedidoCliente, liberado: !!o.pedidoLiberadoEm })),
     ...orcs.map((o) => ({ tipo: "orcamento" as const, id: o.id, numero: o.codigo, clienteId: o.clienteId, valor: Number(o.totalGeral) || 0, aguardando: aguardandoPedido(situacaoDoOrcamento(o)), pedido: o.pedidoCliente, liberado: !!o.pedidoLiberadoEm })),
   ];
-  const c = oss[0]?.cliente ?? orcs[0]?.cliente ?? null;
+  const c = oss[0]?.cliente ?? orcs[0]?.cliente ?? clienteDaFatura;
   return NextResponse.json({
     itens,
     mesmoCliente: new Set(itens.map((i) => i.clienteId)).size <= 1,

@@ -25,7 +25,7 @@ describe("rótulos (D1: o número interno MED não muda; na tela vira \"Fatura\"
   });
   it("status: a avulsa liberada (PC_RECEBIDO) aparece \"A emitir\"; o resto como sempre", () => {
     expect(rotuloStatusMedicao({ status: "PC_RECEBIDO", avulsa: true }, LABELS_STATUS_MEDICAO)).toBe("A emitir");
-    expect(rotuloStatusMedicao({ status: "PC_RECEBIDO", avulsa: false }, LABELS_STATUS_MEDICAO)).toBe("PC recebido");
+    expect(rotuloStatusMedicao({ status: "PC_RECEBIDO", avulsa: false }, LABELS_STATUS_MEDICAO)).toBe("Pedido recebido");
     expect(rotuloStatusMedicao({ status: "NF_EMITIDA", avulsa: true }, LABELS_STATUS_MEDICAO)).toBe("NF emitida");
     expect(rotuloStatusMedicao({ status: "XYZ" }, LABELS_STATUS_MEDICAO)).toBe("XYZ");
   });

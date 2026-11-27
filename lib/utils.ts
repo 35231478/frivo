@@ -338,8 +338,9 @@ export const LABELS_STATUS_MEDICAO: Record<string, string> = {
   RASCUNHO: "Rascunho",
   AGUARDANDO_APROVACAO: "Aguardando aprovação",
   APROVADA: "Aprovada",
-  AGUARDANDO_PC: "Aguardando PC",
-  PC_RECEBIDO: "PC recebido",
+  // Pedido do cliente (lib/pedido-cliente): o "PC" da fatura é o pedido do cliente
+  AGUARDANDO_PC: "Aguardando pedido",
+  PC_RECEBIDO: "Pedido recebido",
   NF_EMITIDA: "NF emitida",
   BOLETO_GERADO: "Boleto gerado",
   PAGO: "Pago",

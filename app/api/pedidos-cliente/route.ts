@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { registrarPedido } from "@/lib/pedido-cliente/server";
+import { pode } from "@/lib/permissoes";
 import { ids, MSG_SEM_PERMISSAO_PEDIDO, podeInformarPedido } from "@/lib/pedido-cliente/acesso";
 
 /**
@@ -14,8 +15,12 @@ export async function POST(req: NextRequest) {
   const corpo = await req.json().catch(() => null);
   if (!corpo || typeof corpo !== "object") return NextResponse.json({ erro: "Dados inválidos" }, { status: 400 });
   const osIds = ids(corpo.osIds), orcamentoIds = ids(corpo.orcamentoIds);
-  if (!podeInformarPedido(session, { os: osIds.length > 0, orcamentos: orcamentoIds.length > 0 })) return NextResponse.json({ erro: MSG_SEM_PERMISSAO_PEDIDO }, { status: 403 });
-  const r = await registrarPedido({ empresaId: session.user.empresaId, usuarioId: session.user.id }, corpo, { osIds, orcamentoIds });
+  // A fatura (medição): o "Registrar PC" dela é este mesmo registro — exige lançar faturas (Financeiro › Medições)
+  const medicaoId = typeof corpo.medicaoId === "string" && corpo.medicaoId.length <= 64 ? corpo.medicaoId : null;
+  const permitido = medicaoId ? podeInformarPedido(session, { os: true, orcamentos: true }) && pode(session.user.permissoes, "financeiro", "medicoes", session.user.role)
+    : podeInformarPedido(session, { os: osIds.length > 0, orcamentos: orcamentoIds.length > 0 });
+  if (!permitido) return NextResponse.json({ erro: MSG_SEM_PERMISSAO_PEDIDO }, { status: 403 });
+  const r = await registrarPedido({ empresaId: session.user.empresaId, usuarioId: session.user.id }, corpo, { osIds, orcamentoIds, medicaoId });
   if (!r.ok) return NextResponse.json({ erro: r.erro }, { status: r.status });
   return NextResponse.json(r, { status: 201 });
 }

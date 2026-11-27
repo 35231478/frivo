@@ -12,7 +12,7 @@ import { cache } from "react";
 import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { validarDataUrl } from "@/lib/anexos-server";
-import { FATURAS_EMITIDAS, whereOrcamentoAguardando, whereOsAguardando } from "@/lib/pedido-cliente/where";
+import { FATURAS_EMITIDAS, whereMedicaoAguardando, whereOrcamentoAguardando, whereOsAguardando } from "@/lib/pedido-cliente/where";
 export { whereOrcamentoAguardando, whereOsAguardando };
 import { chaveHojeBR } from "@/lib/fuso";
 import {
@@ -405,4 +405,17 @@ export async function pedidoDosOrcamentos(empresaId: string, ids: string[]): Pro
     r.set(o.id, { aguardando: aguardandoPedido(s), pedido: o.pedidoCliente, liberadoMotivo: o.pedidoLiberadoEm ? o.pedidoLiberadoMotivo : null });
   }
   return r;
+}
+
+/** Faturas da lista que esperam o pedido do cliente (a etiqueta) — vazio quando a empresa não usa */
+export async function medicoesAguardando(empresaId: string, ids: string[]): Promise<Set<string>> {
+  if (!ids.length || !(await usaPedidoCliente(empresaId))) return new Set();
+  const r = await prisma.medicao.findMany({ where: { id: { in: ids }, empresaId, ...whereMedicaoAguardando() }, select: { id: true } });
+  return new Set(r.map((m) => m.id));
+}
+
+/** O filtro rápido das faturas: quantas esperam o pedido e o total (R$) */
+export async function resumoMedicoesAguardando(where: Prisma.MedicaoWhereInput) {
+  const r = await prisma.medicao.aggregate({ where: { AND: [where, whereMedicaoAguardando()] }, _count: { _all: true }, _sum: { valorLiquido: true } });
+  return { quantidade: r._count._all, total: num(r._sum.valorLiquido) };
 }

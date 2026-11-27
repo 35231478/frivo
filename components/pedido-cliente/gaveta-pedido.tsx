@@ -11,7 +11,7 @@ import { FormField } from "@/components/ui/form-field";
 import { toast } from "@/components/ui/avisos";
 import { alertaValorPedido, limparMotivo, limparNumeroPedido, MSG_MOTIVO, reais } from "@/lib/pedido-cliente/regra";
 
-export interface AlvoPedido { osIds?: string[]; orcamentoIds?: string[] }
+export interface AlvoPedido { osIds?: string[]; orcamentoIds?: string[]; /** A fatura: as OS e orçamentos dela (e ela mesma, a de contrato) */ medicaoId?: string }
 
 interface ItemAlvo { tipo: "os" | "orcamento"; id: string; numero: string; valor: number; aguardando: boolean; pedido: { id: string; numero: string } | null; liberado: boolean }
 interface Alvos {
@@ -57,7 +57,7 @@ export function GavetaPedido({ aberto, onFechar, alvo, pedidoId = null, onConclu
   const [enviando, setEnviando] = useState(false);
   const [tentou, setTentou] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
-  const chaveAlvo = `${(alvo.osIds ?? []).join(",")}|${(alvo.orcamentoIds ?? []).join(",")}`;
+  const chaveAlvo = `${(alvo.osIds ?? []).join(",")}|${(alvo.orcamentoIds ?? []).join(",")}|${alvo.medicaoId ?? ""}`;
 
   useEffect(() => {
     if (!aberto) return;
@@ -66,6 +66,7 @@ export function GavetaPedido({ aberto, onFechar, alvo, pedidoId = null, onConclu
     const q = new URLSearchParams();
     if (alvo.osIds?.length) q.set("os", alvo.osIds.join(","));
     if (alvo.orcamentoIds?.length) q.set("orc", alvo.orcamentoIds.join(","));
+    if (alvo.medicaoId) q.set("med", alvo.medicaoId);
     Promise.all([
       fetch(`/api/pedidos-cliente/alvos?${q}`).then((r) => (r.ok ? r.json() : Promise.reject())),
       pedidoId ? fetch(`/api/pedidos-cliente/${pedidoId}`).then((r) => (r.ok ? r.json() : Promise.reject())) : Promise.resolve(null),
@@ -106,7 +107,7 @@ export function GavetaPedido({ aberto, onFechar, alvo, pedidoId = null, onConclu
     setTentou(true); setErro(null);
     if (!numeroOk || !valorOk || !alvos?.mesmoCliente) return;
     setEnviando(true);
-    const corpo = { numero: numeroOk, data, valor: valorNum, observacao, anexo, osIds: alvo.osIds ?? [], orcamentoIds: alvo.orcamentoIds ?? [] };
+    const corpo = { numero: numeroOk, data, valor: valorNum, observacao, anexo, osIds: alvo.osIds ?? [], orcamentoIds: alvo.orcamentoIds ?? [], medicaoId: alvo.medicaoId };
     const res = await fetch(editando ? `/api/pedidos-cliente/${pedidoId}` : "/api/pedidos-cliente", {
       method: editando ? "PATCH" : "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(corpo),
     }).catch(() => null);

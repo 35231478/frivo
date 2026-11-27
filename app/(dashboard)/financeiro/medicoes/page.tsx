@@ -18,6 +18,8 @@ import { numeroFatura, rotuloStatusMedicao } from "@/lib/faturamento/fatura";
 
 import { lerPeriodo, periodoTela } from "@/lib/periodo";
 import { FiltrosMedicoes } from "@/components/financeiro/medicoes-filtros";
+import { medicoesAguardando, resumoMedicoesAguardando, usaPedidoCliente } from "@/lib/pedido-cliente/server";
+import { EtiquetaPedido } from "@/components/pedido-cliente/etiqueta-pedido";
 import { whereMedicoes } from "@/lib/listas/filtros";
 
 export const metadata: Metadata = { title: "Medições" };
@@ -40,13 +42,16 @@ export default async function MedicoesPage({
 
   // UX-4 (Y4): Medições no padrão das listas — paginação de servidor (sem o corte fixo de 100)
   const { pagina: paginaPedida, porPagina } = lerPaginacao(sp);
-  const [total, clientes] = await Promise.all([
+  const [total, clientes, usaPedido, resumoPedido] = await Promise.all([
     prisma.medicao.count({ where }),
     prisma.cliente.findMany({
       where: { empresaId, ativo: true },
       select: { id: true, nome: true, nomeFantasia: true },
       orderBy: { nome: "asc" },
     }),
+    // Pedido do cliente (lib/pedido-cliente): a empresa usa? e o filtro rápido "Aguardando pedido"
+    usaPedidoCliente(empresaId),
+    resumoMedicoesAguardando(where),
   ]);
   const pagina = paginaValida(paginaPedida, porPagina, total);
   const medicoes = total
@@ -57,6 +62,10 @@ export default async function MedicoesPage({
         ...janela(pagina, porPagina),
       })
     : [];
+  const esperando = await medicoesAguardando(empresaId, medicoes.map((m) => m.id));
+  // A etiqueta abre a gaveta do pedido; a fatura "Aguardando pedido" já diz isso no status, então só as outras ganham a etiqueta
+  const etiqueta = (m: { id: string; status: string }) => (esperando.has(m.id) && m.status !== "AGUARDANDO_PC"
+    ? <EtiquetaPedido situacao={{ aguardando: true, pedido: null }} alvo={{ medicaoId: m.id }} /> : null);
 
   return (
     <ListaUrl chave="medicoes" paramBusca="busca" qAtual={busca}>
@@ -82,6 +91,7 @@ export default async function MedicoesPage({
 
       <FiltrosMedicoes
         periodo={periodoTela(periodo)}
+        resumoPedido={usaPedido ? resumoPedido : null}
         opcoes={{
           status: Object.entries(LABELS_STATUS_MEDICAO).map(([value, label]) => ({ value, label })),
           tipos: Object.entries(LABELS_TIPO_MEDICAO).map(([value, label]) => ({ value, label })),
@@ -113,6 +123,7 @@ export default async function MedicoesPage({
                           </div>
                           <div className="flex flex-wrap items-center gap-x-2 gap-y-1 mt-1.5 text-xs text-ink-muted">
                             <span className={CLASSE_STATUS_MEDICAO[m.status]}>{rotuloStatusMedicao(m, LABELS_STATUS_MEDICAO)}</span>
+                            {etiqueta(m)}
                             <span>{m.avulsa ? "Avulsa" : LABELS_TIPO_MEDICAO[m.tipo]}</span>
                             <span>· {m.mes ? `${nomeMes(m.mes)}/${m.ano}` : formatarData(m.criadoEm)}</span>
                           </div>
@@ -146,7 +157,7 @@ export default async function MedicoesPage({
                     ),
                     tipo: <span className={PLANILHA.apagado}>{m.avulsa ? "Avulsa" : LABELS_TIPO_MEDICAO[m.tipo]}</span>,
                     referencia: <span className={cn(PLANILHA.data, PLANILHA.apagado)}>{m.mes ? `${nomeMes(m.mes)}/${m.ano}` : formatarData(m.criadoEm)}</span>,
-                    status: <span className={CLASSE_STATUS_MEDICAO[m.status]}>{rotuloStatusMedicao(m, LABELS_STATUS_MEDICAO)}</span>,
+                    status: <span className="inline-flex flex-wrap items-center gap-1"><span className={CLASSE_STATUS_MEDICAO[m.status]}>{rotuloStatusMedicao(m, LABELS_STATUS_MEDICAO)}</span>{etiqueta(m)}</span>,
                     valor: <span className={cn(PLANILHA.numero, "font-semibold text-ink")} data-valor>{valorSemMoeda(Number(m.valorLiquido))}</span>,
                   },
                 };

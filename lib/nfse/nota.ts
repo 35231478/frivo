@@ -91,7 +91,7 @@ export function pendenciasEmitente(e: EmitenteEmissao, agora: Date = new Date())
   return p;
 }
 
-/** Medição em que a NF pode sair: aprovada (e com o pedido de compra, se o cliente exige) */
+/** Medição em que a NF pode sair: aprovada (e com o pedido do cliente, se ele exige) */
 export const STATUS_MEDICAO_EMITE = ["PC_RECEBIDO", "NF_EMITIDA", "BOLETO_GERADO", "PAGO"] as const;
 export interface MedicaoEmissao {
   id: string; numero: string; status: string;
@@ -104,7 +104,7 @@ export function pendenciasMedicao(m: MedicaoEmissao, rotuloStatus: string): Pend
   if (m.status === "CANCELADA") return [{ area: "medicao", texto: `A medição ${m.numero} está cancelada.`, link, rotuloLink: "Abrir a medição" }];
   if (m.nfManual) return [{ area: "medicao", texto: `A medição ${m.numero} já tem NF registrada à mão (nº ${m.nfManual}): não emitimos outra.`, link, rotuloLink: "Abrir a medição" }];
   if (!(STATUS_MEDICAO_EMITE as readonly string[]).includes(m.status)) {
-    return [{ area: "medicao", texto: `A medição ${m.numero} precisa estar aprovada (e com o pedido de compra, se o cliente exige) antes da nota. Hoje está “${rotuloStatus}”.`, link, rotuloLink: "Abrir a medição" }];
+    return [{ area: "medicao", texto: `A medição ${m.numero} precisa estar aprovada (e com o pedido do cliente, se ele exige) antes da nota. Hoje está “${rotuloStatus}”.`, link, rotuloLink: "Abrir a medição" }];
   }
   return [];
 }

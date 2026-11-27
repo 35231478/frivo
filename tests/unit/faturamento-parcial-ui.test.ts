@@ -111,7 +111,7 @@ describe("Bloco de faturamento (P5)", () => {
     expect(txt($("[data-pill-faturamento]"))).toBe("Faturado");
     expect(txt($("[data-resumo-faturamento]"))).toMatch(/^Faturado R\$\s?1\.000,00 de R\$\s?1\.000,00$/);
     expect($$("[data-historico-faturas] [data-fatura]").map((l) => txt(l.querySelector("[data-rotulo-fatura]")))).toEqual(["Fatura 2026-0012", "Fatura 2026-0015"]);
-    expect($$("[data-historico-faturas] [data-tom]").map(txt)).toEqual(["Pago", "PC recebido"]);
+    expect($$("[data-historico-faturas] [data-tom]").map(txt)).toEqual(["Pago", "Pedido recebido"]);
     expect($("[data-faturar]")).toBeNull();
     expect($("[data-faturar-parcial]")).toBeNull();
     expect($("[data-faturar-parcelas]")).toBeNull();

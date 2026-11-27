@@ -61,7 +61,7 @@ describe("pré-validação", () => {
     expect(STATUS_MEDICAO_EMITE).toEqual(["PC_RECEBIDO", "NF_EMITIDA", "BOLETO_GERADO", "PAGO"]);
     for (const status of STATUS_MEDICAO_EMITE) expect(pendenciasMedicao({ ...m, status }, "x")).toEqual([]);
     for (const status of ["RASCUNHO", "AGUARDANDO_APROVACAO", "APROVADA", "AGUARDANDO_PC"]) {
-      expect(pendenciasMedicao({ ...m, status }, "Aguardando PC")).toEqual([{ area: "medicao", texto: "A medição MED-1 precisa estar aprovada (e com o pedido de compra, se o cliente exige) antes da nota. Hoje está “Aguardando PC”.", link: "/financeiro/medicoes/m1", rotuloLink: "Abrir a medição" }]);
+      expect(pendenciasMedicao({ ...m, status }, "Aguardando pedido")).toEqual([{ area: "medicao", texto: "A medição MED-1 precisa estar aprovada (e com o pedido do cliente, se ele exige) antes da nota. Hoje está “Aguardando pedido”.", link: "/financeiro/medicoes/m1", rotuloLink: "Abrir a medição" }]);
     }
     expect(textos(pendenciasMedicao({ ...m, status: "CANCELADA" }, "x"))).toEqual(["A medição MED-1 está cancelada."]);
     expect(textos(pendenciasMedicao({ ...m, nfManual: "555" }, "x"))).toEqual(["A medição MED-1 já tem NF registrada à mão (nº 555): não emitimos outra."]);
