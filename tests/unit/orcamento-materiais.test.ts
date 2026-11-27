@@ -66,7 +66,7 @@ describe("materializar a composição no orçamento", () => {
 describe("material incluso ajusta o serviço pela diferença do padrão", () => {
   it("tubo 3→5 (+2 × 20), filtro secador 1→3 (+2 × 35), suporte 1→10 (+9 × 60): +40 +70 +540 = +650; a peça não entra", () => {
     const ms = com(materializar(), { tubo: { quantidade: 5 }, filtro: { quantidade: 3 }, suporte: { quantidade: 10 } });
-    expect([porProduto(ms, "tubo"), porProduto(ms, "filtro"), porProduto(ms, "suporte"), porProduto(ms, "capacitor")].map(diferencaDoMaterial)).toEqual([40, 70, 540, 0]);
+    expect([porProduto(ms, "tubo"), porProduto(ms, "filtro"), porProduto(ms, "suporte"), porProduto(ms, "capacitor")].map((m) => diferencaDoMaterial(m))).toEqual([40, 70, 540, 0]);
     expect(ajusteDosMateriais(ms)).toBe(650);
     // Serviço de 800: vale 1.450; o unitário efetivo acompanha
     expect(valorDaLinha({ quantidade: 1, valorUnitario: 800, materiais: ms })).toEqual({ temMateriais: true, valorBase: 800, ajuste: 650, valorManual: false, valorTotal: 1450, valorUnitario: 1450 });

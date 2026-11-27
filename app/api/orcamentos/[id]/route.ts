@@ -154,7 +154,8 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
   const issAliquota = data.atualizarIss
     ? Number((await prisma.configuracao.findUnique({ where: { empresaId }, select: { issAliquota: true } }))?.issAliquota ?? 0)
     : Number(existente.issAliquota);
-  const valores = montarValoresOrcamento(data, issAliquota);
+  // "Orçamento E2": a regra de cobrança dos materiais é a congelada no orçamento (não a da configuração de hoje)
+  const valores = montarValoresOrcamento(data, issAliquota, existente.cobrancaMateriais);
   // O custo dos materiais é decidido aqui (o gravado ou o último custo de compra), nunca o que veio do navegador
   await fixarCustosDosMateriais(empresaId, id, valores.servicos);
   // RT/ART que não vieram: mantém os do orçamento (como garantias, normas e destinatário)

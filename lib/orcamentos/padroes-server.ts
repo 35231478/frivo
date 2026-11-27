@@ -4,6 +4,7 @@ import { chaveHojeBR, diaCivilDeChave } from "@/lib/fuso";
 import { validadePadrao } from "@/lib/orcamentos/calculo";
 import { diasValidadeValidos } from "@/lib/orcamentos/proposta";
 import { opcoesDoDocumento } from "@/lib/orcamentos/documento-opcoes";
+import { regraDeCobranca } from "@/lib/orcamentos/materiais";
 
 /**
  * Padrões do orçamento NOVO (Configurações › Orçamento + RT padrão do cadastro da empresa). A tela
@@ -17,7 +18,7 @@ export async function padroesOrcamento(empresaId: string) {
       select: {
         orcamentoValidadeDias: true, orcamentoGarantiaServico: true, orcamentoGarantiaPecas: true,
         orcamentoNaoIncluso: true, orcamentoNormas: true,
-        orcamentoMostrarMateriais: true,
+        orcamentoMostrarMateriais: true, orcamentoCobrancaMateriais: true,
       },
     }),
     prisma.empresa.findUnique({
@@ -34,6 +35,8 @@ export async function padroesOrcamento(empresaId: string) {
     normas: cfg?.orcamentoNormas ?? [],
     // Leva D / "Orçamento E": a opção do documento do cliente (materiais dentro do serviço, sem valor; ligada por padrão)
     ...opcoesDoDocumento({ mostrarMateriais: cfg?.orcamentoMostrarMateriais }),
+    // "Orçamento E2": como a empresa cobra os materiais (o orçamento novo nasce com ela)
+    cobrancaMateriais: regraDeCobranca(cfg?.orcamentoCobrancaMateriais),
     // RT padrão só vale se ainda for um responsável técnico ativo da empresa
     responsavelTecnicoId: rt && rt.ativo && rt.tipo === "RESPONSAVEL_TECNICO" && rt.empresaId === empresaId ? rt.id : null,
   };

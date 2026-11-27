@@ -5,6 +5,7 @@ import { pode } from "@/lib/permissoes";
 import { prisma } from "@/lib/prisma";
 import { z } from "zod";
 import { linhasNaoIncluso, normasValidas } from "@/lib/orcamentos/proposta";
+import { COBRANCAS_MATERIAIS } from "@/lib/orcamentos/materiais";
 
 /** Texto curto opcional: vazio = sem padrão (null) */
 const textoPadrao = (max: number) =>
@@ -75,6 +76,8 @@ const configuracaoSchema = z.object({
   // Leva D: padrão de "mostrar materiais" no documento do cliente. "Orçamento E": o antigo "mostrar valores dos
   // materiais" ainda é aceito (tela velha aberta) e ignorado — não muda mais nada (a coluna fica no banco)
   orcamentoMostrarMateriais: z.boolean().optional(),
+  // "Orçamento E2": como a empresa cobra os materiais (vale para os orçamentos e OS que nascerem daqui em diante)
+  orcamentoCobrancaMateriais: z.enum(COBRANCAS_MATERIAIS, { errorMap: () => ({ message: "Escolha como os materiais entram na cobrança." }) }).optional(),
   orcamentoMostrarValoresMateriais: z.boolean().optional(),
 }).strict();
 

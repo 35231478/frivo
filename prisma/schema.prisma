@@ -760,6 +760,9 @@ model Configuracao {
   orcamentoMostrarMateriais        Boolean @default(true) @map("orcamento_mostrar_materiais")
   /// "Orçamento E": deixou de ser usada (o documento não mostra valor de material); a coluna fica
   orcamentoMostrarValoresMateriais Boolean @default(false) @map("orcamento_mostrar_valores_materiais")
+  /// "Orçamento E2" — como a EMPRESA cobra os materiais: INCLUSO = dentro do serviço, sem valor para o cliente;
+  /// A_PARTE = em linha própria com o preço de venda, somando no total (como a peça). Copiada para cada orçamento novo.
+  orcamentoCobrancaMateriais       CobrancaMateriais @default(INCLUSO) @map("orcamento_cobranca_materiais")
 
   /// Checklist de veículo obrigatório no app (o "porteiro"): nos dias escolhidos, o colaborador com veículo padrão só
   /// usa o app depois do checklist do dia (ou de "Hoje não vou usar o veículo"). Tudo desligado por padrão.
@@ -2015,6 +2018,9 @@ model FormularioCampo {
 
 model OrdemServico {
   id                   String     @id @default(cuid())
+  /// "Orçamento E2" — a regra de cobrança dos materiais desta OS: a do orçamento de origem (copiada ao gerar) ou,
+  /// na OS sem orçamento, a da empresa no 1º salvamento de um item com materiais. Nula = ainda não fixada.
+  cobrancaMateriais    CobrancaMateriais? @map("cobranca_materiais")
   empresaId            String     @map("empresa_id")
   numero               String
   clienteId            String     @map("cliente_id")
@@ -3040,6 +3046,9 @@ model Orcamento {
   mostrarMateriais        Boolean      @default(true) @map("mostrar_materiais")
   /// "Orçamento E": deixou de ser usada (o documento não mostra valor de material); a coluna fica
   mostrarValoresMateriais Boolean      @default(false) @map("mostrar_valores_materiais")
+  /// "Orçamento E2" — a regra com que o orçamento NASCEU (copiada da configuração da empresa); mudar a
+  /// configuração depois não altera este orçamento. Os que já existiam ficam INCLUSO (como eram).
+  cobrancaMateriais       CobrancaMateriais @default(INCLUSO) @map("cobranca_materiais")
 
   tokenPublico      String    @unique @map("token_publico")
   enviadoEm         DateTime? @map("enviado_em")
@@ -3585,6 +3594,12 @@ model CategoriaFinanceira {
 enum UsoProduto {
   MATERIAL
   PECA
+}
+
+/// "Orçamento E2" — como os MATERIAIS entram na cobrança (regra de cada empresa; a Peça vai sempre à parte)
+enum CobrancaMateriais {
+  INCLUSO
+  A_PARTE
 }
 
 enum ComportamentoFaturamento {

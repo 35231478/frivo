@@ -1,11 +1,13 @@
 import { round2, totalDoUnitario, unitarioDoTotal } from "@/lib/orcamentos/calculo";
-import { pecasDosMateriais, valorDaLinha, type MaterialOrcamento } from "@/lib/orcamentos/materiais";
+import { pecasDosMateriais, valorDaLinha, type CobrancaMateriais, type MaterialOrcamento } from "@/lib/orcamentos/materiais";
 
 /**
  * Estoque E3.3b — item da OS sem orçamento com materiais e peças: a MESMA regra do orçamento
  * (lib/orcamentos/materiais.ts), pura. Um item de SERVIÇO com materiais vale base + ajuste dos inclusos (ou o
  * total manual); cada PEÇA (venda à parte) vira um item PRODUTO derivado, cobrado à parte. Item sem materiais
  * (serviço, produto do catálogo ou linha livre) vale unitário × quantidade, como sempre.
+ * "Orçamento E2": `regra` = a regra de cobrança dos materiais da OS (com "Cobrado à parte", o Material também vira
+ * item PRODUTO derivado, com valor, e não ajusta o serviço). Sem regra, INCLUSO.
  */
 
 export type TipoItemOs = "SERVICO" | "PRODUTO";
@@ -43,15 +45,15 @@ const num = (v: unknown) => { const n = typeof v === "number" ? v : Number(v ?? 
 const arred3 = (n: number) => Math.round(n * 1000) / 1000;
 
 /** Monta o que gravar a partir do que a tela mandou (produto nunca leva materiais; peça só de serviço). */
-export function prepararItemOs(e: EntradaItemOs): ItemOsPreparado {
+export function prepararItemOs(e: EntradaItemOs, regra?: CobrancaMateriais | null): ItemOsPreparado {
   const tipo: TipoItemOs = e.tipo === "PRODUTO" ? "PRODUTO" : "SERVICO";
   const materiais = tipo === "SERVICO"
     ? (e.materiais ?? []).map((m, ordem) => ({ ...m, quantidade: arred3(num(m.quantidade)), quantidadePadrao: arred3(num(m.quantidadePadrao)), valorVendaUnit: round2(num(m.valorVendaUnit)), ordem }))
     : [];
   const quantidade = num(e.quantidade);
-  const v = valorDaLinha({ quantidade, valorUnitario: e.valorUnitario, valorTotal: e.valorTotal, valorManual: e.valorManual, materiais });
+  const v = valorDaLinha({ quantidade, valorUnitario: e.valorUnitario, valorTotal: e.valorTotal, valorManual: e.valorManual, materiais }, regra);
   const valorTotal = v.temMateriais ? v.valorTotal : (e.valorTotal !== undefined && e.valorTotal !== null && e.valorTotal !== "" ? round2(num(e.valorTotal)) : totalDoUnitario(quantidade, e.valorUnitario));
-  const pecas = pecasDosMateriais(materiais).map((p) => ({
+  const pecas = pecasDosMateriais(materiais, regra).map((p) => ({
     idxMaterial: materiais.indexOf(p.material as (typeof materiais)[number]), produtoId: p.material.produtoId ?? null,
     descricao: p.descricao, quantidade: p.quantidade, valorUnitario: p.valorUnitario, valorTotal: p.valorTotal,
   }));

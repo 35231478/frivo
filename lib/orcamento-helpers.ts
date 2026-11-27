@@ -1,7 +1,7 @@
 import type { OrcamentoInput } from "./validations";
 import { calcularDataFimContrato } from "./utils";
 import { calcularOrcamento, descontoGeralPorGrupo, totalDoItem, type TotaisOrcamento } from "./orcamentos/calculo";
-import { prepararServicosComMateriais } from "./orcamentos/materiais";
+import { prepararServicosComMateriais, type CobrancaMateriais } from "./orcamentos/materiais";
 import { linhasNaoIncluso, normasValidas } from "./orcamentos/proposta";
 
 /**
@@ -10,11 +10,13 @@ import { linhasNaoIncluso, normasValidas } from "./orcamentos/proposta";
  *  - `totalServicos`/`totalProdutos` = subtotais BRUTOS dos grupos (como sempre foram);
  *  - `desconto` = soma dos descontos dos grupos em R$ (tipoDesconto VALOR) — leitores antigos continuam certos;
  *  - `totalGeral` = serviços − desconto + ISS + produtos − desconto.
- * `issAliquota` é a alíquota congelada neste orçamento (a da empresa na criação).
+ * `issAliquota` é a alíquota congelada neste orçamento (a da empresa na criação). `regra` ("Orçamento E2") é a
+ * regra de cobrança dos materiais congelada no orçamento (a da empresa na criação); sem ela, INCLUSO.
  */
-export function montarValoresOrcamento(data: OrcamentoInput, issAliquota: number) {
-  // E3.3: serviço com materiais vale base + ajuste dos inclusos (ou o manual); as peças viram linhas de produto
-  const prep = prepararServicosComMateriais(data.servicos);
+export function montarValoresOrcamento(data: OrcamentoInput, issAliquota: number, regra?: CobrancaMateriais | null) {
+  // E3.3: serviço com materiais vale base + ajuste dos inclusos (ou o manual); o que vai à parte (peças; e os
+  // materiais com a regra "Cobrado à parte") vira linhas de produto
+  const prep = prepararServicosComMateriais(data.servicos, regra);
   const servicosEfetivos = prep.linhas.map((l) => ({ quantidade: l.linha.quantidade, valorUnitario: l.valor.valorUnitario, valorTotal: l.valor.valorTotal }));
   const produtosDoUsuario = data.produtos.map((p) => ({ ...p, materiais: undefined }));
   const todosProdutos = [...produtosDoUsuario, ...prep.pecas.map((p) => ({ quantidade: p.quantidade, valorUnitario: p.valorUnitario, valorTotal: p.valorTotal }))];
