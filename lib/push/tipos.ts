@@ -10,7 +10,7 @@
  * Cada pessoa liga e desliga cada tipo (Perfil › Notificações). Sem preferência gravada, tudo ligado.
  */
 import { pode, type Permissoes } from "@/lib/permissoes";
-import { chaveDiaBR, horaBR } from "@/lib/fuso";
+import { chaveDiaCivil, ehDiaCivil, horaBR } from "@/lib/fuso";
 import { ehNotaBaixa } from "@/lib/alertas/sino";
 
 export type TipoPush =
@@ -104,13 +104,17 @@ export interface MensagemPush {
   acao?: string;
 }
 
-/** "qui., 12/03 às 14:30" — o dia e a hora de Brasília (sem hora: só o dia) */
+/**
+ * "qui. 12/03 às 14:30" — o dia e a hora de Brasília. Data só de dia (gravada à meia-noite UTC, o dia
+ * civil da casa — lib/fuso › chaveDiaCivil) é aquele dia, sem hora: nunca a véspera.
+ */
 export function quandoBR(d: Date | string | null | undefined, comHora = true): string {
   if (!d) return "sem data marcada";
   const x = new Date(d);
-  const [, mes, dia] = chaveDiaBR(x).split("-");
-  const semana = new Intl.DateTimeFormat("pt-BR", { weekday: "short", timeZone: "America/Sao_Paulo" }).format(x);
-  return `${semana} ${dia}/${mes}${comHora ? ` às ${horaBR(x)}` : ""}`;
+  const chave = chaveDiaCivil(x);
+  const [, mes, dia] = chave.split("-");
+  const semana = new Intl.DateTimeFormat("pt-BR", { weekday: "short", timeZone: "UTC" }).format(new Date(`${chave}T12:00:00Z`));
+  return `${semana} ${dia}/${mes}${comHora && !ehDiaCivil(x) ? ` às ${horaBR(x)}` : ""}`;
 }
 
 /** A OS no app do técnico (a atividade dele) e no escritório */
