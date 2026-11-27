@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { exigirPermissao } from "@/lib/permissoes-server";
+import { aprovarDespesa, soEscritorio } from "@/lib/execucao/despesas";
 import { aprovacaoSchema } from "@/lib/tecnico/despesas";
-import { aprovarDespesa } from "@/lib/execucao/despesas";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -12,6 +12,8 @@ type Params = { params: Promise<{ id: string }> };
 export async function POST(req: NextRequest, { params }: Params) {
   const guard = await exigirPermissao("financeiro", "fluxoCaixa");
   if (guard.erro) return guard.resposta;
+  const fora = soEscritorio(guard.session);
+  if (fora) return fora;
   const parsed = aprovacaoSchema.safeParse((await req.json().catch(() => null)) ?? {});
   if (!parsed.success) return NextResponse.json({ erro: parsed.error.issues[0]?.message ?? "Dados inválidos" }, { status: 400 });
   const { id } = await params;

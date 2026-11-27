@@ -179,6 +179,19 @@ describe.skipIf(!URL_PG)("app de campo, leva 2 (PR B): despesas de campo (Postgr
       expect((await chamar("ordens/[id]/despesas-campo", "GET", { id: "osA" })).status).toBe(403);
       expect((await chamar("alertas", "GET")).json.despesasCampo).toBe(0);
     });
+    it("nem com o Financeiro liberado: o técnico (modo técnico) não lê, não decide, não vê custo da OS nem o sino", async () => {
+      comoTecnico();
+      sessao.atual.user.permissoes = permissoesTotais();
+      sessao.atual.user.role = "TECNICO";
+      const bloqueadas = await Promise.all([
+        chamar("despesas-campo", "GET"), chamar("despesas-campo/[id]/foto", "GET", { id: await idDe("dM") }), aprovar(await idDe("d1"), { vencimento: HOJE }),
+        recusar(await idDe("d1"), { motivo: "Eu mesmo" }), chamar("despesas-campo/categorias", "GET"), chamar("despesas-campo/categorias", "PUT", {}, { mapa: {} }),
+        chamar("ordens/[id]/despesas-campo", "GET", { id: "osA" }),
+      ]);
+      expect(bloqueadas.map((r) => r.status)).toEqual([403, 403, 403, 403, 403, 403, 403]);
+      expect((await chamar("alertas", "GET")).json.despesasCampo).toBe(0);
+      expect((await prisma.despesaCampo.findFirst({ where: { clientId: "d1" } })).status).toBe("PENDENTE");
+    });
   });
 
   describe("o escritório decide", () => {

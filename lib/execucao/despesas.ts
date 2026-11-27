@@ -8,6 +8,8 @@
  *  - sino: as pendentes.
  */
 import type { Prisma } from "@prisma/client";
+import { NextResponse } from "next/server";
+import { escopoDaSessao } from "@/lib/tecnico/escopo";
 import { prisma } from "@/lib/prisma";
 import { TIPOS_IMAGEM } from "@/lib/anexos";
 import { validarDataUrl } from "@/lib/anexos-server";
@@ -96,6 +98,11 @@ export async function fotoDaDespesa(empresaId: string, id: string, op: { ator?: 
 }
 
 /* ───────── escritório ───────── */
+
+/** As rotas do escritório não servem ao modo técnico (nem com Financeiro liberado): o técnico só vê as próprias, pelo app. */
+export function soEscritorio(session: Parameters<typeof escopoDaSessao>[0]): NextResponse | null {
+  return escopoDaSessao(session).restrito ? NextResponse.json({ erro: "O técnico vê as próprias despesas pelo app." }, { status: 403 }) : null;
+}
 
 export interface DespesaEscritorio {
   id: string; colaborador: string; categoria: CategoriaDespesa; categoriaNome: string; valor: number; data: string; pagamento: Pagamento;
