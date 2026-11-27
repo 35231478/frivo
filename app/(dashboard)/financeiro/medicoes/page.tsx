@@ -42,7 +42,7 @@ export default async function MedicoesPage({
 
   // UX-4 (Y4): Medições no padrão das listas — paginação de servidor (sem o corte fixo de 100)
   const { pagina: paginaPedida, porPagina } = lerPaginacao(sp);
-  const [total, clientes, usaPedido, resumoPedido] = await Promise.all([
+  const [total, clientes, resumoPedido] = await Promise.all([
     prisma.medicao.count({ where }),
     prisma.cliente.findMany({
       where: { empresaId, ativo: true },
@@ -50,7 +50,6 @@ export default async function MedicoesPage({
       orderBy: { nome: "asc" },
     }),
     // Pedido do cliente (lib/pedido-cliente): a empresa usa? e o filtro rápido "Aguardando pedido"
-    usaPedidoCliente(empresaId),
     usaPedidoCliente(empresaId).then((u) => (u ? resumoMedicoesAguardando(where) : null)),
   ]);
   const pagina = paginaValida(paginaPedida, porPagina, total);
@@ -91,7 +90,7 @@ export default async function MedicoesPage({
 
       <FiltrosMedicoes
         periodo={periodoTela(periodo)}
-        resumoPedido={usaPedido ? resumoPedido : null}
+        resumoPedido={resumoPedido}
         opcoes={{
           status: Object.entries(LABELS_STATUS_MEDICAO).map(([value, label]) => ({ value, label })),
           tipos: Object.entries(LABELS_TIPO_MEDICAO).map(([value, label]) => ({ value, label })),

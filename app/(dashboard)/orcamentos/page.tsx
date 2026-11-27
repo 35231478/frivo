@@ -116,7 +116,7 @@ export default async function OrcamentosPage({
       {/* Período (pela criação) + cards de funil do período, clicáveis como filtro — padrão da casa */}
       <PeriodoCardsOrcamentos
         periodo={periodoTela(periodo)} resumo={resumo} card={card} resposta={resposta} diasVencendo={diasVencendo}
-        resumoPedido={usaPedido ? resumoPedido : null}
+        resumoPedido={resumoPedido}
         opcoes={{
           tipos: Object.entries(LABELS_TIPO_ORCAMENTO).map(([value, label]) => ({ value, label })),
           status: Object.entries(LABELS_ETAPA).map(([value, label]) => ({ value, label })),

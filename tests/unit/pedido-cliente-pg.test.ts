@@ -133,6 +133,8 @@ describe.skipIf(!URL_PG)("pedido do cliente (PostgreSQL real)", () => {
     expect([r.status, r.json.erro]).toEqual([r.status, MSG_TRAVA_FATURAR]);
     expect(r.status).toBeGreaterThanOrEqual(400);
     expect(await srv.travaFaturarOrcamento("e1", "orcFat")).toBe(MSG_TRAVA_FATURAR);
+    const { faturarOrcamento } = await import("@/lib/faturamento/faturar-server");
+    expect(await faturarOrcamento({ empresaId: "e1", usuarioId: "uA", orcamentoId: "orcFat" })).toEqual({ tipo: "bloqueado", erro: MSG_TRAVA_FATURAR });
     expect(await srv.travaFaturarOs("e1", "oNao")).toBeNull();
     // o início: só o modo "para executar"
     expect(await srv.travaIniciarAtividade("e1", "aExe")).toBe(MSG_TRAVA_INICIAR);
@@ -155,10 +157,17 @@ describe.skipIf(!URL_PG)("pedido do cliente (PostgreSQL real)", () => {
     comoAdmin();
     let r = await chamar("pedidos-cliente", "POST", {}, { numero: "4500", osIds: ["oFat1", "oUni"] });
     expect([r.status, r.json.erro]).toEqual([400, "Um pedido do cliente cobre OS e orçamentos de um cliente só. Selecione itens do mesmo cliente."]);
+    // a gaveta já sabe antes de salvar (e avisa)
+    expect((await chamar("pedidos-cliente/alvos", "GET", {}, undefined, "?os=oFat1,oUni")).json.mesmoCliente).toBe(false);
+    expect((await chamar("pedidos-cliente/alvos", "GET", {}, undefined, "?os=oFat1,oFat2")).json.mesmoCliente).toBe(true);
     r = await chamar("pedidos-cliente", "POST", {}, { numero: "4500", osIds: ["oFat1", "oOutra"] });
     expect(r.status).toBe(404);
     r = await chamar("pedidos-cliente", "POST", {}, { numero: "   ", osIds: ["oFat1"] });
     expect(r.status).toBe(400);
+    for (const valor of [-1, "abc"]) {
+      r = await chamar("pedidos-cliente", "POST", {}, { numero: "4500", valor, osIds: ["oFat1"] });
+      expect([r.status, r.json.erro]).toEqual([400, "Valor do pedido inválido."]);
+    }
     r = await chamar("pedidos-cliente", "POST", {}, { numero: " 4500012345 ", data: "2026-11-25", valor: 1200, observacao: "Pedido do semestre", osIds: ["oFat1", "oFat2"],
       anexo: { conteudo: dataUrl("image/png", PNG), nome: "pedido.png" } });
     expect(r.status).toBe(201);
@@ -201,6 +210,17 @@ describe.skipIf(!URL_PG)("pedido do cliente (PostgreSQL real)", () => {
     const osId = (await prisma.ordemServico.findFirst({ where: { orcamentoOrigemId: "orcFat" } })).id;
     expect((await prisma.ordemServico.findUnique({ where: { id: osId } })).pedidoClienteId).toBe(r.json.pedidoId);
     expect((await prisma.orcamentoEvento.findFirst({ where: { orcamentoId: "orcFat", tipo: "PEDIDO_CLIENTE" } })).detalhe).toBe("Pedido do cliente nº PO-77");
+    // a OS JÁ gerada: informar no orçamento leva a OS; informar na OS leva o orçamento de origem
+    for (const n of [2, 3]) {
+      await prisma.orcamento.create({ data: { id: `orcFat${n}`, empresaId: "e1", codigo: `ORC-${n}`, nome: "Instalação", clienteId: "cFat", criadoPorId: "uA", tokenPublico: `tk-orc${n}`, status: "APROVADO", assinadoEm: DIA(2), totalGeral: 100, equipamentosCobertos: [] } });
+      await prisma.ordemServico.create({ data: { id: `oGer${n}`, empresaId: "e1", numero: `OS-G${n}`, clienteId: "cFat", criadoPorId: "uA", descricao: "x", status: "ABERTA", orcamentoOrigemId: `orcFat${n}` } });
+    }
+    const r2 = await chamar("pedidos-cliente", "POST", {}, { numero: "PO-78", orcamentoIds: ["orcFat2"] });
+    expect(r2.json.ligadas).toEqual({ os: 1, orcamentos: 1 });
+    expect((await prisma.ordemServico.findUnique({ where: { id: "oGer2" } })).pedidoClienteId).toBe(r2.json.pedidoId);
+    const r3 = await chamar("pedidos-cliente", "POST", {}, { numero: "PO-79", osIds: ["oGer3"] });
+    expect(r3.json.ligadas).toEqual({ os: 1, orcamentos: 1 });
+    expect((await prisma.orcamento.findUnique({ where: { id: "orcFat3" } })).pedidoClienteId).toBe(r3.json.pedidoId);
   });
 
   it("liberar sem pedido: só com a permissão (o administrador sempre), com motivo; a trilha guarda; o início destrava", async () => {
@@ -258,6 +278,8 @@ describe.skipIf(!URL_PG)("pedido do cliente (PostgreSQL real)", () => {
     expect(await srv.contarPedidosAtrasados("e1", agora)).toEqual({ pedidosAtrasados: 2, pedidoAtrasadoOsId: "sFatVelha", diasAlertaPedido: 7 });
     await prisma.configuracao.update({ where: { empresaId: "e1" }, data: { pedidoClienteDiasAlerta: 20 } });
     expect((await srv.contarPedidosAtrasados("e1", agora)).pedidosAtrasados).toBe(1); // só a de 22 dias
+    await prisma.configuracao.update({ where: { empresaId: "e1" }, data: { pedidoClienteDiasAlerta: 22 } });
+    expect((await srv.contarPedidosAtrasados("e1", agora)).pedidosAtrasados).toBe(0); // 22 dias exatos ainda não é "há mais de 22"
     await prisma.configuracao.update({ where: { empresaId: "e1" }, data: { pedidoClienteDiasAlerta: 7 } });
   });
 

@@ -49,7 +49,7 @@ export async function carregarListaOs(empresaId: string, sp: SPOrdens, agora: Da
   const daPagina = (p: number) => prisma.ordemServico.findMany({ where, orderBy, ...janela(p, porPagina) });
 
   // 1ª onda: a contagem e a página pedida juntas (não esperam uma pela outra), e as opções dos filtros
-  const [total, paginaPedida, clientes, usuarios, tiposOs, contratos, usaPedido, resumoPedido] = await Promise.all([
+  const [total, paginaPedida, clientes, usuarios, tiposOs, contratos, resumoPedido] = await Promise.all([
     prisma.ordemServico.count({ where }),
     daPagina(pedida),
     prisma.cliente.findMany({ where: { empresaId, ativo: true }, select: { id: true, nome: true, nomeFantasia: true }, orderBy: { nome: "asc" } }),
@@ -57,7 +57,6 @@ export async function carregarListaOs(empresaId: string, sp: SPOrdens, agora: Da
     prisma.tipoOs.findMany({ where: { empresaId, ativo: true }, select: { id: true, nome: true }, orderBy: { nome: "asc" } }),
     prisma.contrato.findMany({ where: { empresaId }, select: { id: true, numero: true }, orderBy: { numero: "asc" } }),
     // Pedido do cliente (lib/pedido-cliente): a empresa usa? e o filtro rápido "Aguardando pedido" (contagem e R$)
-    usaPedidoCliente(empresaId),
     usaPedidoCliente(empresaId).then((u) => (u ? resumoOsAguardando(where) : null)),
   ]);
   const pagina = paginaValida(pedida, porPagina, total);
@@ -137,7 +136,7 @@ export async function carregarListaOs(empresaId: string, sp: SPOrdens, agora: Da
   return {
     total, pagina, porPagina, periodo, linhas,
     // O filtro rápido "Aguardando pedido": só para a empresa que tem cliente que exige o pedido
-    resumoPedido: usaPedido ? resumoPedido : null,
+    resumoPedido,
     opcoes: {
       clientes: clientes.map((c) => ({ value: c.id, label: c.nomeFantasia ?? c.nome })),
       usuarios: usuarios.map((u) => ({ value: u.id, label: u.nome })),
