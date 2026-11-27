@@ -1,30 +1,31 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { toast } from "@/components/ui/avisos";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { FormField, FormSection, FormGrid } from "@/components/ui/form-field";
-import { cn } from "@/lib/utils";
+import { PhoneInput } from "@/components/ui/phone-input";
+import { FormField, FormGrid } from "@/components/ui/form-field";
+import { Tabs } from "@/components/ui/tabs";
+import { formatarDataHora } from "@/lib/utils";
 import { problemaSenha } from "@/lib/acesso/senha";
 import { RequisitosSenha } from "@/components/auth/requisitos-senha";
-import { User, Camera, Lock, Building2, ShieldCheck, FileCheck, AlertCircle, Briefcase, Bell } from "lucide-react";
+import { AlertCircle, Camera, MonitorSmartphone } from "lucide-react";
 import { NotificacoesAparelho } from "@/components/push/notificacoes-aparelho";
+import { abaInicialDoPerfil, abasDoPerfil, alteracoesDoPerfil, linhaDaConta, type AbaPerfil } from "@/lib/perfil/abas";
 
 interface Initial {
   nome: string;
   email: string;
+  telefone?: string | null;
   avatar: string | null;
   empresaNome: string;
   perfilNome: string | null;
   cargo: string;
-}
-
-// Painel de aba (oculto via CSS quando inativo, p/ preservar estado dos campos)
-function Painel({ ativo, children }: { ativo: boolean; children: React.ReactNode }) {
-  return <div className={cn("space-y-8", !ativo && "hidden")}>{children}</div>;
+  /** Último acesso registrado no login (Segurança › Sessões) */
+  ultimoAcesso?: string | null;
 }
 
 // Redimensiona a imagem p/ no máx 256px e exporta JPEG leve (data URL)
@@ -53,38 +54,58 @@ function redimensionar(file: File): Promise<string> {
   });
 }
 
-const ABAS = [
-  { id: "dados", label: "Dados pessoais", icone: User },
-  { id: "foto", label: "Foto de perfil", icone: Camera },
-  { id: "seguranca", label: "Segurança", icone: Lock },
-  { id: "conta", label: "Minha conta", icone: Building2 },
-];
+/** Um bloco da tela: título, uma linha do que é, e o conteúdo (o mesmo cartão das telas de Configurações). */
+function Bloco({ titulo, descricao, children, rodape, ...dados }: {
+  titulo: string; descricao?: string; children: React.ReactNode; rodape?: React.ReactNode;
+} & Record<`data-${string}`, string | undefined>) {
+  return (
+    <section className="card overflow-hidden" {...dados}>
+      <div className="px-5 pt-5">
+        <h2 className="text-sm font-semibold text-ink">{titulo}</h2>
+        {descricao && <p className="text-xs text-ink-muted mt-0.5">{descricao}</p>}
+      </div>
+      <div className="px-5 py-4 space-y-4">{children}</div>
+      {rodape && <div className="flex justify-end gap-2 px-5 py-3 border-t border-surface-border bg-surface-alt/40">{rodape}</div>}
+    </section>
+  );
+}
 
-export function PerfilClient({ initial, onAvatar, topoFixo = true, emailSomenteLeitura = false, notificacoes = false }: {
+/**
+ * "Meu perfil" — no painel (/perfil) e no app do técnico (Meus dados). Um cabeçalho (foto, nome, e-mail e o
+ * perfil de acesso UMA vez) e três abas: Dados (foto, nome, e-mail, telefone), Segurança (senha e sessões) e
+ * Preferências (as notificações deste aparelho; só existe quando o push está ligado). As regras moram em
+ * lib/perfil/abas.
+ */
+export function PerfilClient({ initial, onAvatar, emailSomenteLeitura = false, notificacoes = false, abaNaUrl = false, abaPedida }: {
   initial: Initial;
   /** Foto nova salva (o app do técnico atualiza o topo na hora) */
   onAvatar?: (avatar: string) => void;
-  /** A faixa com o nome e "Salvar" acompanha a rolagem (painel). No app do técnico, que já tem o seu topo fixo, não */
-  topoFixo?: boolean;
   /**
    * App do técnico: o e-mail de login só aparece — não dá para editar (o vínculo do técnico com as OS
    * é por esse e-mail; quem troca é o escritório, na ficha do colaborador). No painel, editável.
    */
   emailSomenteLeitura?: boolean;
-  /** Aba "Notificações" (push com o app fechado): só no painel, e só com o push ligado no servidor */
+  /** Aba "Preferências" (push com o app fechado): só no painel, e só com o push ligado no servidor */
   notificacoes?: boolean;
+  /** Painel: a aba acompanha a URL (?aba=), para o refresh e os links voltarem na mesma aba */
+  abaNaUrl?: boolean;
+  abaPedida?: string | null;
 }) {
   const router = useRouter();
   const { update } = useSession();
-
-  const [aba, setAba] = useState("dados");
+  const abas = abasDoPerfil({ notificacoes });
+  const [aba, setAba] = useState<AbaPerfil>(() => abaInicialDoPerfil(abaPedida, abas));
   const [erro, setErro] = useState("");
-  function trocarAba(id: string) { setAba(id); setErro(""); }
+
+  function trocarAba(id: string) {
+    const nova = abaInicialDoPerfil(id, abas);
+    setAba(nova); setErro("");
+    if (abaNaUrl) window.history.replaceState(null, "", nova === "dados" ? window.location.pathname : `?aba=${nova}`);
+  }
 
   // ── Foto ──
   const [avatar, setAvatar] = useState<string | null>(initial.avatar);
   const [preview, setPreview] = useState<string | null>(null); // imagem redimensionada pendente
-  const [enviandoFoto, setEnviandoFoto] = useState(false);
   const fotoRef = useRef<HTMLInputElement>(null);
 
   async function onFoto(e: React.ChangeEvent<HTMLInputElement>) {
@@ -98,31 +119,29 @@ export function PerfilClient({ initial, onAvatar, topoFixo = true, emailSomenteL
     catch { setErro("Não foi possível processar a imagem."); }
   }
 
-  async function salvarFoto() {
-    if (!preview) return;
-    setErro(""); setEnviandoFoto(true);
-    try {
-      const res = await fetch("/api/perfil/avatar", {
-        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ imagem: preview }),
-      });
-      const data = await res.json();
-      if (!res.ok) { setErro(data?.erro ?? "Erro ao enviar foto."); return; }
-      setAvatar(data.avatar);
-      onAvatar?.(data.avatar);
-      setPreview(null);
-      toast("Foto atualizada.");
-      router.refresh(); // reflete no sidebar/header (avatar vem do banco no layout)
-    } catch { setErro("Erro de conexão."); }
-    finally { setEnviandoFoto(false); }
+  async function enviarFoto(): Promise<boolean> {
+    const res = await fetch("/api/perfil/avatar", {
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ imagem: preview }),
+    });
+    const data = await res.json().catch(() => null);
+    if (!res.ok) { setErro(data?.erro ?? "Erro ao enviar foto."); return false; }
+    setAvatar(data.avatar);
+    onAvatar?.(data.avatar);
+    setPreview(null);
+    return true;
   }
 
-  // ── Dados pessoais ──
+  // ── Dados ──
+  const [base, setBase] = useState({ nome: initial.nome, email: initial.email, telefone: initial.telefone ?? "" });
   const [nome, setNome] = useState(initial.nome);
   const [email, setEmail] = useState(initial.email);
+  const [telefone, setTelefone] = useState(initial.telefone ?? "");
   const [confirmacaoEmail, setConfirmacaoEmail] = useState("");
   const [senhaAtualEmail, setSenhaAtualEmail] = useState("");
   const [salvandoDados, setSalvandoDados] = useState(false);
-  const emailMudou = !emailSomenteLeitura && email.trim().toLowerCase() !== initial.email.toLowerCase();
+  const emailMudou = !emailSomenteLeitura && email.trim().toLowerCase() !== base.email.toLowerCase();
+  const corpo = alteracoesDoPerfil(base, { nome, email, telefone, confirmacaoEmail, senhaAtual: senhaAtualEmail }, { emailEditavel: !emailSomenteLeitura });
+  const temAlteracao = !!corpo || !!preview;
 
   async function salvarDados() {
     setErro("");
@@ -133,19 +152,26 @@ export function PerfilClient({ initial, onAvatar, topoFixo = true, emailSomenteL
     if (emailMudou && !senhaAtualEmail) { setErro("Informe a senha atual para trocar o e-mail de login."); return; }
     setSalvandoDados(true);
     try {
-      const res = await fetch("/api/perfil", {
-        method: "PATCH", headers: { "Content-Type": "application/json" },
-        // E-mail somente leitura: o e-mail nem vai no corpo (só o nome)
-        body: JSON.stringify(emailSomenteLeitura ? { nome: nome.trim() } : { nome: nome.trim(), email: email.trim(), confirmacaoEmail: confirmacaoEmail.trim() || undefined, senhaAtual: emailMudou ? senhaAtualEmail : undefined }),
-      });
-      const data = await res.json();
-      if (!res.ok) { setErro(data?.erro ?? "Erro ao salvar."); return; }
-      setConfirmacaoEmail(""); setSenhaAtualEmail("");
+      // A foto e os dados no mesmo "Salvar": primeiro a foto (se houver), depois o que mudou nos campos
+      if (preview && !(await enviarFoto())) return;
+      if (corpo) {
+        const res = await fetch("/api/perfil", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(corpo) });
+        const data = await res.json().catch(() => null);
+        if (!res.ok) { setErro(data?.erro ?? "Erro ao salvar."); return; }
+        setBase({ nome: data.nome, email: data.email, telefone: data.telefone ?? "" });
+        setEmail(data.email);
+        setConfirmacaoEmail(""); setSenhaAtualEmail("");
+        await update({ name: data.nome, email: data.email }); // atualiza o JWT (menu e topo)
+      }
       toast("Dados salvos.");
-      await update({ name: data.nome, email: data.email }); // atualiza o JWT (sidebar/header)
-      router.refresh();
+      router.refresh(); // reflete no menu e no topo (a foto vem do banco no layout)
     } catch { setErro("Erro de conexão."); }
     finally { setSalvandoDados(false); }
+  }
+
+  function descartarDados() {
+    setNome(base.nome); setEmail(base.email); setTelefone(base.telefone);
+    setConfirmacaoEmail(""); setSenhaAtualEmail(""); setPreview(null); setErro("");
   }
 
   // ── Senha ──
@@ -176,183 +202,146 @@ export function PerfilClient({ initial, onAvatar, topoFixo = true, emailSomenteL
     finally { setSalvandoSenha(false); }
   }
 
+  // O erro é de uma aba: trocar de aba limpa (já feito em trocarAba); sair da tela também
+  useEffect(() => () => setErro(""), []);
+
   const iniciais = nome?.split(" ").map((n) => n[0]).slice(0, 2).join("").toUpperCase() || "??";
-
-  // Ação do botão "Salvar" (depende da aba ativa; oculto na aba somente-leitura)
-  const acao: { label: string; fn: () => void; saving: boolean; disabled?: boolean } | null =
-    aba === "dados" ? { label: "Salvar alterações", fn: salvarDados, saving: salvandoDados }
-      : aba === "foto" ? { label: "Salvar foto", fn: salvarFoto, saving: enviandoFoto, disabled: !preview }
-      : aba === "seguranca" ? { label: "Trocar senha", fn: salvarSenha, saving: salvandoSenha }
-      : null;
-
-  const BotaoSalvar = ({ compact = false }: { compact?: boolean }) =>
-    acao ? (
-      <Button type="button" variant="primary" size={compact ? "sm" : "md"} loading={acao.saving} disabled={acao.disabled} onClick={acao.fn}>
-        <FileCheck className="w-4 h-4" /> {acao.label}
-      </Button>
-    ) : null;
+  const foto = preview ?? avatar;
 
   return (
-    <div className="min-h-full -m-6 bg-surface-page p-4 sm:p-6">
-      {/* Toast de sucesso */}
-
-      <div className="max-w-5xl mx-auto space-y-5">
-        {/* Cabeçalho fixo: título + badges + ação */}
-        <div className={cn(topoFixo && "sticky top-0 z-30", "-mx-4 sm:-mx-6 px-4 sm:px-6 py-3 bg-surface-page/90 backdrop-blur border-b border-surface-border")} data-topo-perfil data-topo-fixo={topoFixo || undefined}>
-          <div className="max-w-5xl mx-auto flex items-center justify-between gap-3 flex-wrap">
-            <div className="flex items-center gap-3 flex-wrap min-w-0">
-              <h1 className="text-xl font-bold text-ink truncate">{nome || "Meu perfil"}</h1>
-              <span className="inline-flex items-center gap-1.5 bg-acento-claro border border-acento/20 text-acento-hover text-xs font-medium rounded-lg px-2.5 py-1">
-                <ShieldCheck className="w-3.5 h-3.5" /> {initial.perfilNome ?? initial.cargo}
-              </span>
-              <span className="inline-flex items-center gap-1.5 text-xs font-medium px-2 py-0.5 rounded-full bg-surface-linha text-ink-muted">
-                <Briefcase className="w-3 h-3" /> {initial.cargo}
-              </span>
-            </div>
-            <BotaoSalvar compact />
-          </div>
+    <div className="max-w-4xl mx-auto space-y-6" data-perfil>
+      {/* Cabeçalho: quem é (o perfil de acesso aparece uma vez só) */}
+      <header className="flex items-center gap-4" data-topo-perfil>
+        <button
+          type="button" onClick={() => fotoRef.current?.click()} data-trocar-foto
+          className="relative shrink-0 w-16 h-16 rounded-full group focus:outline-none focus-visible:ring-2 focus-visible:ring-acento"
+          aria-label="Alterar foto de perfil" title="Alterar foto"
+        >
+          {foto ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={foto} alt="Foto de perfil" className="w-16 h-16 rounded-full object-cover border border-surface-border" />
+          ) : (
+            <span className="w-16 h-16 rounded-full bg-acento-claro flex items-center justify-center text-acento-hover text-xl font-bold">{iniciais}</span>
+          )}
+          <span className="absolute -bottom-0.5 -right-0.5 w-7 h-7 rounded-full bg-white border border-surface-border shadow-sm flex items-center justify-center text-ink-muted group-hover:text-acento">
+            <Camera className="w-3.5 h-3.5" aria-hidden />
+          </span>
+        </button>
+        <input ref={fotoRef} type="file" accept="image/png,image/jpeg,image/webp" onChange={onFoto} className="hidden" data-arquivo-foto />
+        <div className="min-w-0">
+          <h1 className="font-display text-2xl font-bold text-ink tracking-tight truncate">{base.nome || "Meu perfil"}</h1>
+          <p className="text-sm text-ink-muted truncate">{base.email}</p>
+          <p className="text-xs text-ink-subtle mt-0.5 truncate" data-linha-conta>{linhaDaConta(initial.perfilNome, initial.cargo, initial.empresaNome)}</p>
         </div>
+      </header>
 
-        {/* Card central branco com abas + conteúdo */}
-        <div className="bg-white rounded-card shadow-card border border-surface-border overflow-hidden">
-          <nav className="flex gap-1.5 overflow-x-auto px-4 pt-4 pb-4 border-b border-surface-border">
-            {[...ABAS, ...(notificacoes ? [{ id: "notificacoes", label: "Notificações", icone: Bell }] : [])].map((t) => {
-              const ativa = aba === t.id;
-              return (
-                <button
-                  key={t.id} type="button" onClick={() => trocarAba(t.id)}
-                  className={cn(
-                    "flex items-center gap-2 px-4 py-2.5 text-sm font-medium rounded-card whitespace-nowrap transition-all",
-                    ativa ? "bg-primary-500 text-white shadow-sm" : "text-ink-muted hover:text-ink hover:bg-surface-alt",
-                  )}
-                >
-                  <t.icone className="w-4 h-4" />
-                  {t.label}
-                </button>
-              );
-            })}
-          </nav>
-
-          <div className="p-5 sm:p-6 lg:p-8">
+      <Tabs tabs={abas} active={aba} onChange={trocarAba}>
+        {(ativa) => (
+          <div className="space-y-5">
             {erro && (
-              <div className="mb-6 bg-atrasado-claro border border-atrasado/20 text-atrasado-texto text-sm rounded-lg px-4 py-3 flex items-center gap-2">
+              <div className="bg-atrasado-claro border border-atrasado/20 text-atrasado-texto text-sm rounded-lg px-4 py-3 flex items-center gap-2" role="alert" data-erro-perfil>
                 <AlertCircle className="w-4 h-4 shrink-0" /> {erro}
               </div>
             )}
 
-            {/* ABA 1 — Dados Pessoais */}
-            <Painel ativo={aba === "dados"}>
-              <FormSection title="Dados pessoais" icon={<User className="w-3.5 h-3.5" />}>
+            {ativa === "dados" && (
+              <Bloco
+                titulo="Dados pessoais" descricao="Nome, contato e foto que aparecem para a equipe." data-bloco="dados"
+                rodape={(
+                  <>
+                    {temAlteracao && <Button type="button" variant="ghost" onClick={descartarDados}>Descartar</Button>}
+                    <Button type="button" variant="primary" loading={salvandoDados} disabled={!temAlteracao} onClick={salvarDados} data-salvar-dados>
+                      Salvar alterações
+                    </Button>
+                  </>
+                )}
+              >
+                <div className="flex items-center gap-3" data-foto>
+                  {foto ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={foto} alt="" className="w-12 h-12 rounded-full object-cover border border-surface-border" />
+                  ) : (
+                    <span className="w-12 h-12 rounded-full bg-acento-claro flex items-center justify-center text-acento-hover text-sm font-bold">{iniciais}</span>
+                  )}
+                  <Button type="button" variant="secondary" size="sm" onClick={() => fotoRef.current?.click()} data-alterar-foto>
+                    <Camera className="w-4 h-4" /> {foto ? "Alterar foto" : "Enviar foto"}
+                  </Button>
+                  <span className="text-xs text-ink-muted">{preview ? "Foto nova: salve para confirmar." : "JPG ou PNG, até 2 MB."}</span>
+                </div>
                 <FormGrid>
                   <FormField label="Nome completo" required>
-                    <Input value={nome} onChange={(e) => setNome(e.target.value)} />
+                    <Input value={nome} onChange={(e) => setNome(e.target.value)} autoComplete="name" />
                   </FormField>
+                  <FormField label="Telefone">
+                    <PhoneInput value={telefone} onChange={(e) => setTelefone(e.target.value)} data-telefone />
+                  </FormField>
+                </FormGrid>
+                <FormGrid>
                   {emailSomenteLeitura ? (
                     <FormField label="E-mail de login" hint="A troca do e-mail de login é feita pelo escritório.">
                       <Input type="email" value={initial.email} readOnly aria-readonly="true" data-email-somente-leitura className="bg-surface-linha text-ink-muted" />
                     </FormField>
                   ) : (
-                    <FormField label="E-mail" required>
-                      <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} />
+                    <FormField label="E-mail de login" required>
+                      <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="email" />
                     </FormField>
                   )}
                 </FormGrid>
                 {emailMudou && (
                   <FormGrid>
-                    <FormField label="Confirmar e-mail" required hint="Repita o novo e-mail para confirmar a alteração">
+                    <FormField label="Confirmar e-mail" required hint="Repita o novo e-mail">
                       <Input type="email" value={confirmacaoEmail} onChange={(e) => setConfirmacaoEmail(e.target.value)} />
                     </FormField>
-                    <FormField label="Senha atual" required hint="Trocar o e-mail de login exige a sua senha">
+                    <FormField label="Senha atual" required hint="Trocar o e-mail de login pede a senha">
                       <Input type="password" value={senhaAtualEmail} onChange={(e) => setSenhaAtualEmail(e.target.value)} autoComplete="current-password" />
                     </FormField>
                   </FormGrid>
                 )}
-              </FormSection>
-            </Painel>
-
-            {/* ABA 2 — Foto de Perfil */}
-            <Painel ativo={aba === "foto"}>
-              <FormSection title="Foto de perfil" icon={<Camera className="w-3.5 h-3.5" />}>
-                <div className="flex flex-col items-center gap-4 py-4">
-                  {preview || avatar ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img src={(preview ?? avatar)!} alt="Foto de perfil" className="w-32 h-32 rounded-full object-cover border-4 border-white shadow-card" />
-                  ) : (
-                    <span className="w-32 h-32 rounded-full bg-acento-claro flex items-center justify-center text-acento-hover text-4xl font-bold shadow-card">{iniciais}</span>
-                  )}
-                  <input ref={fotoRef} type="file" accept="image/png,image/jpeg,image/webp" onChange={onFoto} className="hidden" />
-                  <div className="flex items-center gap-2">
-                    <Button type="button" variant="secondary" onClick={() => fotoRef.current?.click()}>
-                      <Camera className="w-4 h-4" /> Alterar foto
-                    </Button>
-                    {preview && (
-                      <Button type="button" variant="ghost" onClick={() => setPreview(null)}>Descartar</Button>
-                    )}
-                  </div>
-                  <p className="text-xs text-ink-muted text-center">
-                    JPG ou PNG, máximo 2 MB.{preview && " Pré-visualização — clique em \"Salvar foto\" para confirmar."}
-                  </p>
-                </div>
-              </FormSection>
-            </Painel>
-
-            {/* ABA 3 — Segurança */}
-            <Painel ativo={aba === "seguranca"}>
-              <FormSection title="Trocar senha" icon={<Lock className="w-3.5 h-3.5" />}>
-                <FormGrid>
-                  <FormField label="Senha atual" required>
-                    <Input type="password" value={senhaAtual} onChange={(e) => setSenhaAtual(e.target.value)} autoComplete="current-password" />
-                  </FormField>
-                </FormGrid>
-                <FormGrid>
-                  <FormField label="Nova senha" required>
-                    <Input type="password" value={novaSenha} onChange={(e) => setNovaSenha(e.target.value)} autoComplete="new-password" />
-                    <RequisitosSenha senha={novaSenha} className="pt-1.5" />
-                  </FormField>
-                  <FormField label="Confirmar nova senha" required>
-                    <Input type="password" value={confirmar} onChange={(e) => setConfirmar(e.target.value)} autoComplete="new-password" />
-                  </FormField>
-                </FormGrid>
-                <p className="text-xs text-ink-muted">Ao trocar a senha, esta sessão continua conectada; as abertas em outros aparelhos são encerradas.</p>
-              </FormSection>
-            </Painel>
-
-            {/* ABA 5 — Notificações neste aparelho (só com o push ligado) */}
-            {notificacoes && (
-              <Painel ativo={aba === "notificacoes"}>
-                <NotificacoesAparelho modo="escritorio" />
-              </Painel>
+              </Bloco>
             )}
 
-            {/* ABA 4 — Minha Conta (somente leitura) */}
-            <Painel ativo={aba === "conta"}>
-              <FormSection title="Informações da conta" icon={<Building2 className="w-3.5 h-3.5" />}>
-                <FormGrid>
-                  <FormField label="Empresa">
-                    <Input value={initial.empresaNome} disabled readOnly className="bg-surface-linha text-ink-muted" />
-                  </FormField>
-                  <FormField label="Perfil de acesso">
-                    <Input value={initial.perfilNome ?? initial.cargo} disabled readOnly className="bg-surface-linha text-ink-muted" />
-                  </FormField>
-                </FormGrid>
-                <FormGrid>
-                  <FormField label="Cargo / função">
-                    <Input value={initial.cargo} disabled readOnly className="bg-surface-linha text-ink-muted" />
-                  </FormField>
-                </FormGrid>
-                <p className="text-xs text-ink-muted">Estes dados são definidos por um administrador e não podem ser editados aqui.</p>
-              </FormSection>
-            </Painel>
-          </div>
+            {ativa === "seguranca" && (
+              <>
+                <Bloco
+                  titulo="Senha" descricao="Trocar a senha encerra as sessões abertas em outros aparelhos." data-bloco="senha"
+                  rodape={<Button type="button" variant="primary" loading={salvandoSenha} onClick={salvarSenha} data-trocar-senha>Trocar senha</Button>}
+                >
+                  <FormGrid>
+                    <FormField label="Senha atual" required>
+                      <Input type="password" value={senhaAtual} onChange={(e) => setSenhaAtual(e.target.value)} autoComplete="current-password" />
+                    </FormField>
+                  </FormGrid>
+                  <FormGrid>
+                    <FormField label="Nova senha" required>
+                      <Input type="password" value={novaSenha} onChange={(e) => setNovaSenha(e.target.value)} autoComplete="new-password" />
+                      <RequisitosSenha senha={novaSenha} className="pt-1.5" />
+                    </FormField>
+                    <FormField label="Confirmar nova senha" required>
+                      <Input type="password" value={confirmar} onChange={(e) => setConfirmar(e.target.value)} autoComplete="new-password" />
+                    </FormField>
+                  </FormGrid>
+                </Bloco>
+                <Bloco titulo="Sessões e aparelhos" descricao="Onde esta conta está conectada." data-bloco="sessoes">
+                  <div className="flex items-start gap-3">
+                    <MonitorSmartphone className="w-5 h-5 text-ink-muted shrink-0 mt-0.5" aria-hidden />
+                    <div className="text-sm">
+                      <p className="text-ink">Este aparelho está conectado.</p>
+                      {initial.ultimoAcesso && <p className="text-xs text-ink-muted mt-0.5" data-ultimo-acesso>Último acesso: {formatarDataHora(initial.ultimoAcesso)}</p>}
+                      <p className="text-xs text-ink-muted mt-1">Para desconectar os outros aparelhos, troque a senha acima.</p>
+                    </div>
+                  </div>
+                </Bloco>
+              </>
+            )}
 
-          {/* Barra de ações no rodapé */}
-          {acao && (
-            <div className="flex items-center justify-end gap-3 px-5 sm:px-6 lg:px-8 py-4 bg-surface-alt/40 border-t border-surface-border">
-              <BotaoSalvar />
-            </div>
-          )}
-        </div>
-      </div>
+            {ativa === "preferencias" && notificacoes && (
+              <Bloco titulo="Notificações" descricao="Avisos deste aparelho, mesmo com o Frivo fechado." data-bloco="notificacoes">
+                <NotificacoesAparelho modo="escritorio" />
+              </Bloco>
+            )}
+          </div>
+        )}
+      </Tabs>
     </div>
   );
 }

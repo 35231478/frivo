@@ -21,6 +21,7 @@ const Ferramenta = dynamic(() => import("@/components/anotacoes/ferramenta").the
   loading: () => null,
 });
 
-export function AnotacoesCarregador() {
-  return <Ferramenta />;
+/** `usuarioId`: a posição do botão arrastável fica guardada neste navegador por usuário */
+export function AnotacoesCarregador({ usuarioId }: { usuarioId: string }) {
+  return <Ferramenta usuarioId={usuarioId} />;
 }
