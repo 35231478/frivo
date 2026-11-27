@@ -2,12 +2,13 @@ import Link from "next/link";
 import {
   AlertTriangle, CalendarClock, CalendarDays, CheckCircle2, ClipboardCheck, ClipboardList, Clock, FileSignature,
   FileText, Headset, HardHat, Inbox, PlayCircle, ShieldCheck, ShoppingCart, Thermometer, Timer, TrendingUp,
-  Truck, Wallet, Wrench, QrCode, Banknote, CalendarRange, FileBadge, ShieldAlert, ShieldX,
+  Truck, Wallet, Wrench, QrCode, Banknote, CalendarRange, FileBadge, ShieldAlert, ShieldX, Gauge,
 } from "lucide-react";
 import { cn, LABELS_PRIORIDADE } from "@/lib/utils";
 import { chaveDiaBR, horaBR, partesBR } from "@/lib/fuso";
 import { URL_SOLICITACOES } from "@/lib/solicitacoes";
 import type { DadosBloco } from "@/lib/dashboard/dados";
+import { DIAS_FORA_DA_FAIXA, textoFaixa } from "@/lib/checklist/faixas";
 import { Bloco, GradeKpi, Kpi, Vazio } from "@/components/dashboard/ui";
 
 /** Blocos do dashboard (Server Components). Cada um recebe só os agregados do seu bloco. */
@@ -199,7 +200,28 @@ export function BlocoEquipamentos({ d, temQr = true }: { d: DadosBloco["equipame
           detalhe={d.garantiaVencendo ? "nos próximos 60 dias" : `${d.garantiaVigente} em garantia`} />
         {/* Campo-ponte: a contagem "Sem QR Code" só faz sentido para quem usa o módulo QR Codes */}
         {temQr && <Kpi rotulo="Sem QR Code" valor={d.semQr} icone={QrCode} tom={d.semQr ? "atencao" : "ok"} href="/qrcodes" detalhe="sem etiqueta vinculada" />}
+        {/* Medição fora da faixa esperada (app de campo): só alerta; o gestor abre a OS e decide */}
+        {d.foraDaFaixa && (
+          <Kpi rotulo="Fora do esperado" valor={d.foraDaFaixa.equipamentos} icone={Gauge} tom={d.foraDaFaixa.equipamentos ? "atencao" : "ok"}
+            href={d.foraDaFaixa.ultimas[0] ? `/ordens/${d.foraDaFaixa.ultimas[0].os.id}?aba=relatorios` : "/equipamentos"}
+            detalhe={`${d.foraDaFaixa.equipamentos === 1 ? "equipamento" : "equipamentos"} · ${DIAS_FORA_DA_FAIXA} dias`} />
+        )}
       </GradeKpi>
+      {(d.foraDaFaixa?.ultimas.length ?? 0) > 0 && (
+        <ul className="divide-y divide-surface-border mt-3" data-fora-da-faixa-painel>
+          {d.foraDaFaixa!.ultimas.map((u) => (
+            <li key={u.id}>
+              <Link href={`/ordens/${u.os.id}?aba=relatorios`} className="py-2 flex items-start gap-3 hover:bg-surface-alt -mx-2 px-2 rounded-lg">
+                <Gauge className="w-4 h-4 text-atencao mt-0.5 shrink-0" aria-hidden />
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm text-ink truncate">{u.equipamento} · {u.item} {u.valor !== null ? `${String(u.valor).replace(".", ",")} ${u.unidade ?? ""}` : ""}</p>
+                  <p className="text-xs text-ink-subtle truncate">{u.os.numero} · esperado {textoFaixa(u.faixa, u.unidade)}</p>
+                </div>
+              </Link>
+            </li>
+          ))}
+        </ul>
+      )}
     </Bloco>
   );
 }

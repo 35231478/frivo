@@ -89,7 +89,7 @@ export async function marcarAtendido(vinculo: { id: string; feito: boolean }) {
 export async function itemDoEquipamento(empresaId: string, atividadeId: string, equipamento: { id: string; tipoEquipamentoId: string | null }, itemId: string) {
   const item = await prisma.checklistTipoItem.findFirst({
     where: { id: itemId, empresaId },
-    select: { id: true, texto: true, ativo: true, tipoEquipamentoId: true, tipoResposta: true, unidade: true },
+    select: { id: true, texto: true, ativo: true, tipoEquipamentoId: true, tipoResposta: true, unidade: true, grandeza: true, valorMin: true, valorMax: true },
   });
   if (!item) return null;
   if (item.ativo && item.tipoEquipamentoId === equipamento.tipoEquipamentoId) return item;

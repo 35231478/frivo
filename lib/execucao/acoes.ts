@@ -17,6 +17,8 @@ import { validarDataUrl } from "@/lib/anexos-server";
 import { carregarExecucao } from "@/lib/execucao/dados";
 import { itemDoEquipamento, marcarAtendido, type ContextoExecucao } from "@/lib/execucao/contexto";
 import { validarAudio } from "@/lib/execucao/audio";
+import { alimentaCalculo, fotoDaFaixa, recalcularCalculadas } from "@/lib/execucao/faixas-server";
+import { ehCalculada, grandezaDoItem } from "@/lib/checklist/faixas";
 import { equipamentosDoCliente, nomeEquipamento } from "@/lib/execucao/vinculos";
 import { temModulo } from "@/lib/modulos/servidor";
 import { MSG_MODULO_DESLIGADO } from "@/lib/modulos/catalogo";
@@ -65,6 +67,11 @@ export async function responderItem(ctx: ContextoExecucao, itemId: string, d: Re
   if (!item) return erro(400, "Este item não é do checklist deste equipamento.");
 
   const medicao = item.tipoResposta === "MEDICAO";
+  const grandeza = grandezaDoItem(item);
+  // ΔT e afins: o app calcula a partir das leituras; ninguém digita (a observação continua livre)
+  if (ehCalculada(grandeza) && (d.valor !== undefined || d.status !== undefined || d.unidade !== undefined)) {
+    return erro(400, "Este valor é calculado a partir das outras medições.");
+  }
   let { status, valor, unidade } = d;
   if (medicao) {
     if (status === "OK" || status === "ATENCAO") return erro(400, "Item de medição: informe o número (ou “Não se aplica”).");
@@ -85,17 +92,21 @@ export async function responderItem(ctx: ContextoExecucao, itemId: string, d: Re
   const observacao = d.observacao === undefined ? undefined : (d.observacao ?? "").trim() || null;
   const atual = await prisma.checklistResposta.findUnique({
     where: { atividadeId_equipamentoId_itemId: { atividadeId, equipamentoId, itemId } },
-    select: { unidade: true },
+    select: { unidade: true, valor: true },
   });
   // Mediu sem dizer a unidade: fica a que já estava, senão a padrão do item
   if (medicao && valor !== undefined && valor !== null && unidade === undefined) unidade = atual?.unidade ?? item.unidade ?? null;
+  // A faixa do momento, na unidade da resposta (o relatório continua fiel se a faixa mudar depois)
+  const faixa = medicao && (valor !== undefined || unidade !== undefined)
+    ? fotoDaFaixa(item, valor !== undefined ? valor : atual?.valor?.toNumber() ?? null, unidade !== undefined ? unidade : atual?.unidade ?? item.unidade ?? null)
+    : {};
 
   const agora = new Date();
   const r = await prisma.checklistResposta.upsert({
     where: { atividadeId_equipamentoId_itemId: { atividadeId, equipamentoId, itemId } },
     create: {
       empresaId: ctx.empresaId, atividadeId, equipamentoId, itemId, textoItem: item.texto,
-      status: status ?? null, observacao: observacao ?? null, valor: valor ?? null, unidade: unidade ?? null,
+      status: status ?? null, observacao: observacao ?? null, valor: valor ?? null, unidade: unidade ?? null, ...faixa,
       respondidoPorId: ctx.usuarioId, respondidoEm: agora,
     },
     update: {
@@ -103,12 +114,17 @@ export async function responderItem(ctx: ContextoExecucao, itemId: string, d: Re
       ...(observacao !== undefined && { observacao }),
       ...(valor !== undefined && { valor }),
       ...(unidade !== undefined && { unidade }),
+      ...faixa,
       textoItem: item.texto, respondidoPorId: ctx.usuarioId, respondidoEm: agora,
     },
-    select: { itemId: true, status: true, observacao: true, valor: true, unidade: true },
+    select: { itemId: true, status: true, observacao: true, valor: true, unidade: true, foraDaFaixa: true },
   });
   if (r.status || r.observacao || r.valor !== null) await marcarAtendido(vinculo);
-  return ok({ ...r, valor: r.valor === null ? null : r.valor.toNumber(), feito: vinculo.feito });
+  // Insuflamento, retorno (ou água): o ΔT do equipamento se refaz
+  const calculadas = alimentaCalculo(grandeza) && (valor !== undefined || status !== undefined || unidade !== undefined)
+    ? await recalcularCalculadas({ empresaId: ctx.empresaId, atividadeId, equipamentoId, tipoEquipamentoId: vinculo.equipamento.tipoEquipamentoId, usuarioId: ctx.usuarioId })
+    : [];
+  return ok({ ...r, valor: r.valor === null ? null : r.valor.toNumber(), feito: vinculo.feito, ...(calculadas.length && { calculadas }) });
 }
 
 /** Observação em ÁUDIO de um item (null tira o áudio). Vale como a observação do item. */

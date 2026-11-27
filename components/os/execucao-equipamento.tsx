@@ -8,9 +8,13 @@ import { Select } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 import { ROTULO_STATUS, STATUS_ITEM, respondido, textoFaltas, type FaltasEquipamento, type RespostaItem, type StatusItem } from "@/lib/execucao/pendencias";
 import { InputData } from "@/components/ui/input-data";
+import { avaliarFaixa, avisoFaixa, ehCalculada, faixaNaUnidade, grandezaDoItem, textoFaixa } from "@/lib/checklist/faixas";
 
 /* ───────── Tipos (o JSON de GET .../execucao) ───────── */
-export interface ItemTela { id: string; texto: string; pedirFoto: boolean; pedirObservacao: boolean; ativo: boolean; ordem: number; tipoResposta: "OK_ATENCAO_NA" | "MEDICAO"; unidade: string | null }
+export interface ItemTela {
+  id: string; texto: string; pedirFoto: boolean; pedirObservacao: boolean; ativo: boolean; ordem: number; tipoResposta: "OK_ATENCAO_NA" | "MEDICAO"; unidade: string | null;
+  grandeza?: string | null; valorMin?: number | null; valorMax?: number | null;
+}
 export interface CampoTela { id: string; label: string; tipo: string; obrigatorio: boolean; ordem: number; opcoes: unknown; ativo: boolean }
 export interface EquipamentoTela {
   vinculoId: string;
@@ -316,7 +320,7 @@ export function CampoFormulario({ campo: c, valor, somenteLeitura, onSalvar }: {
   );
 }
 
-/** Item de MEDIÇÃO: número + unidade (o técnico só registra; quem interpreta é o escritório). */
+/** Item de MEDIÇÃO: número + unidade, com a faixa esperada (fora dela: só alerta). O ΔT é calculado. */
 function MedicaoItem({ it, r, somenteLeitura, onMedir }: {
   it: ItemTela; r?: RespostaItem; somenteLeitura: boolean;
   onMedir: (d: { valor?: number | null; unidade?: string | null; status?: "NAO_SE_APLICA" | null }) => void;
@@ -324,6 +328,23 @@ function MedicaoItem({ it, r, somenteLeitura, onMedir }: {
   const [erro, setErro] = useState<string | null>(null);
   const na = r?.status === "NAO_SE_APLICA";
   const unidade = r?.unidade ?? it.unidade ?? "";
+  const grandeza = grandezaDoItem(it);
+  const faixa = faixaNaUnidade({ valorMin: it.valorMin ?? null, valorMax: it.valorMax ?? null, unidade: it.unidade, grandeza }, unidade);
+  const aviso = na ? null : avisoFaixa(avaliarFaixa(r?.valor, faixa), faixa, unidade);
+  const rodape = (
+    <>
+      {aviso ? <p className="text-xs font-semibold text-atencao-texto inline-flex items-center gap-1" data-fora-da-faixa><AlertTriangle className="w-3.5 h-3.5" /> {aviso}</p>
+        : faixa && <p className="text-[11px] text-ink-subtle" data-faixa>Esperado: {textoFaixa(faixa, unidade)}</p>}
+    </>
+  );
+  if (ehCalculada(grandeza)) {
+    return (
+      <div className="pl-7 space-y-1" data-medicao={it.id} data-calculada>
+        <p className="text-sm font-semibold text-ink tabular-nums">{na ? "Não se aplica" : r?.valor !== null && r?.valor !== undefined ? `${String(r.valor).replace(".", ",")} ${unidade}` : "—"} <span className="text-xs font-normal text-ink-subtle">calculado</span></p>
+        {rodape}
+      </div>
+    );
+  }
   return (
     <div className="pl-7 space-y-1" data-medicao={it.id}>
       <div className="flex items-center gap-1.5">
@@ -344,6 +365,7 @@ function MedicaoItem({ it, r, somenteLeitura, onMedir }: {
         </button>
       </div>
       {erro && <p className="text-[11px] text-atrasado">{erro}</p>}
+      {rodape}
     </div>
   );
 }

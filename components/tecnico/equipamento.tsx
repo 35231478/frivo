@@ -12,6 +12,7 @@ import { SeloGarantia } from "@/components/tecnico/garantia";
 import { novoClientId } from "@/lib/tecnico/offline/motor";
 import { proximoEquipamento } from "@/lib/tecnico/offline/estado";
 import { UNIDADES_SUGERIDAS } from "@/lib/checklist/tipo";
+import { avaliarFaixa, avisoFaixa, ehCalculada, faixaNaUnidade, GRANDEZA, grandezaDoItem, textoFaixa } from "@/lib/checklist/faixas";
 import { listaCurta, respondido, type StatusItem } from "@/lib/execucao/pendencias";
 import type { EquipamentoTela, ExecucaoTela, FotoTela, ItemTela, NovaOperacao, RespostaTela } from "@/lib/tecnico/offline/tipos";
 
@@ -186,7 +187,8 @@ export function TelaEquipamento({ x, e, registrar, endereco, qr }: Props) {
           {e.itens.map((it) => (
             <li key={it.id} data-item={it.id} className={cn("rounded-card border p-3 space-y-2 bg-white", mostrarFaltas && faltando.has(it.texto) ? "border-atrasado ring-2 ring-atrasado/20" : "border-surface-border", !it.ativo && "opacity-70")}>
               {it.tipoResposta === "MEDICAO"
-                ? <ItemMedicao item={it} r={e.respostas[it.id]} so={so} onResponder={(d) => responder(it.id, d)} />
+                ? <ItemMedicao item={it} r={e.respostas[it.id]} so={so} onResponder={(d) => responder(it.id, d)}
+                  onAudio={(a) => registrar([op({ tipo: "audio", itemId: it.id, dataUrl: a })])} audio={srcAudio(e.respostas[it.id])} />
                 : <ItemChips item={it} r={e.respostas[it.id]} so={so} onStatus={(s) => tocarStatus(it, s)} onEditarAtencao={() => setAtencao(it)} />}
               {(it.pedirFoto || e.respostas[it.id]?.status === "ATENCAO" || fotosDe(it.id, null).length > 0) && e.respostas[it.id]?.status !== "NAO_SE_APLICA" && (
                 <div className="flex flex-wrap items-center gap-2">
@@ -331,13 +333,41 @@ function ItemChips({ item, r, so, onStatus, onEditarAtencao }: {
   );
 }
 
-function ItemMedicao({ item, r, so, onResponder }: { item: ItemTela; r?: RespostaTela; so: boolean; onResponder: (d: Record<string, unknown>) => void }) {
+function ItemMedicao({ item, r, so, onResponder, audio, onAudio }: {
+  item: ItemTela; r?: RespostaTela; so: boolean; onResponder: (d: Record<string, unknown>) => void; audio?: string | null; onAudio?: (a: string | null) => void;
+}) {
   const [texto, setTexto] = useState(mostrarNumero(r?.valor ?? null));
   const [erro, setErro] = useState<string | null>(null);
   const [focado, setFocado] = useState(false);
+  const [abrirObs, setAbrirObs] = useState(false);
   const atual = mostrarNumero(r?.valor ?? null);
   const unidade = r?.unidade ?? item.unidade ?? "";
   const na = r?.status === "NAO_SE_APLICA";
+  const grandeza = grandezaDoItem(item);
+  // Faixa esperada na unidade em uso; enquanto digita, o alerta já acompanha o número
+  const faixa = faixaNaUnidade({ valorMin: item.valorMin ?? null, valorMax: item.valorMax ?? null, unidade: item.unidade, grandeza }, unidade);
+  const digitado = focado ? lerNumero(texto) : r?.valor ?? null;
+  const situacao = na ? null : avaliarFaixa(Number.isNaN(digitado) ? null : digitado, faixa);
+  const aviso = avisoFaixa(situacao, faixa, unidade);
+  const obs = (r?.observacao ?? "").trim();
+  // ΔT: calculado das leituras do equipamento — só mostra
+  if (ehCalculada(grandeza)) {
+    const [a, b] = GRANDEZA[grandeza!].calculo!;
+    return (
+      <div className="space-y-2" data-medicao data-calculada>
+        <p className="text-[15px] font-semibold text-ink leading-snug inline-flex items-center gap-1.5"><Ruler className="w-4 h-4 text-primary-600" /> {item.texto}</p>
+        <div className={cn("rounded-card border-2 px-3 py-3 flex items-baseline justify-between gap-2", aviso ? "border-atencao bg-atencao-claro" : "border-surface-border bg-surface-alt")}>
+          <span className="text-xl font-bold text-ink tabular-nums" data-valor-calculado>{na ? "Não se aplica" : r?.valor !== null && r?.valor !== undefined ? `${mostrarNumero(r.valor)} ${unidade}` : "—"}</span>
+          <span className="text-xs text-ink-muted text-right">{GRANDEZA[a].nome.replace("Temperatura de ", "")} − {GRANDEZA[b].nome.replace("Temperatura de ", "")}</span>
+        </div>
+        {faixa && <p className="text-xs text-ink-muted" data-faixa>Esperado: {textoFaixa(faixa, unidade)}</p>}
+        {aviso && <AvisoFaixa aviso={aviso} obs={obs} so={so} aberto={abrirObs} onAbrir={() => setAbrirObs(true)} />}
+        {aviso && abrirObs && !item.pedirObservacao && (
+          <ObservacaoVoz rotulo="Observação" valor={r?.observacao ?? ""} desabilitado={so} autoFocus onSalvar={(t) => onResponder({ observacao: t })} audio={audio} onAudio={onAudio} />
+        )}
+      </div>
+    );
+  }
   // O valor gravado mudou (sincronizou, N/A…): o campo acompanha — mas nunca enquanto o técnico digita
   useEffect(() => { if (!focado) { setTexto(atual); setErro(null); } }, [atual]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -366,6 +396,25 @@ function ItemMedicao({ item, r, so, onResponder }: { item: ItemTela; r?: Respost
           className={cn("rounded-card border-2 px-3 text-sm font-bold touch-target", na ? CHIP.NAO_SE_APLICA.ativo : "bg-white border-surface-border text-ink-muted")}>N/A</button>
       </div>
       {erro && <p className="text-xs text-atrasado">{erro}</p>}
+      {faixa && !aviso && <p className="text-xs text-ink-muted" data-faixa>Esperado: {textoFaixa(faixa, unidade)}</p>}
+      {aviso && <AvisoFaixa aviso={aviso} obs={obs} so={so} aberto={abrirObs || !!obs || item.pedirObservacao} onAbrir={() => setAbrirObs(true)} />}
+      {/* Observação opcional em 1 toque ao lado do alerta (o item que já pede observação mostra o campo dele) */}
+      {aviso && (abrirObs || !!obs) && !item.pedirObservacao && (
+        <ObservacaoVoz rotulo="Observação" valor={r?.observacao ?? ""} desabilitado={so} autoFocus={abrirObs && !obs} onSalvar={(t) => onResponder({ observacao: t })} audio={audio} onAudio={onAudio} />
+      )}
+    </div>
+  );
+}
+
+/** Fora da faixa: só alerta (não bloqueia, não exige observação). A observação fica a 1 toque. */
+function AvisoFaixa({ aviso, obs, so, aberto, onAbrir }: { aviso: string; obs: string; so: boolean; aberto: boolean; onAbrir: () => void }) {
+  return (
+    <div className="flex items-center gap-2 rounded-card bg-atencao-claro px-3 py-2" data-fora-da-faixa role="status">
+      <AlertTriangle className="w-5 h-5 shrink-0 text-atencao-texto" />
+      <span className="flex-1 text-sm font-semibold text-atencao-texto" data-aviso-faixa>{aviso}</span>
+      {!so && !aberto && !obs && (
+        <button type="button" onClick={onAbrir} data-observar-faixa className="shrink-0 rounded-card border-2 border-atencao-texto/40 bg-white px-3 text-sm font-bold text-atencao-texto touch-target">Observação</button>
+      )}
     </div>
   );
 }

@@ -52,6 +52,10 @@ export async function GET(_: NextRequest, { params }: Params) {
     prisma.servicoAdicionalFoto.findMany({ where: { empresaId, servico: { ordemServicoId: id } }, select: { servico: { select: { atividadeId: true } } } }),
     prisma.osAnexo.findMany({ where: { ordemServicoId: id, atividadeId: { not: null }, tipo: { startsWith: "image/" } }, select: { atividadeId: true } }),
   ]);
+  // Medições fora da faixa esperada, por atividade (destaque no cartão)
+  const foraDaFaixa = new Map((await prisma.checklistResposta.groupBy({
+    by: ["atividadeId"], where: { empresaId, foraDaFaixa: true, atividade: { ordemServicoId: id } }, _count: { _all: true },
+  })).map((g) => [g.atividadeId, g._count._all]));
   const fotosDaAtividade = new Map<string | null, number>();
   const somar = (atividadeId: string | null, n = 1) => fotosDaAtividade.set(atividadeId, (fotosDaAtividade.get(atividadeId) ?? 0) + n);
   for (const g of porExecucao) somar(g.atividadeId, g._count._all);
@@ -71,7 +75,7 @@ export async function GET(_: NextRequest, { params }: Params) {
     return {
       id: a.id, titulo: a.titulo, status: a.status, criadoEm: a.criadoEm, duracaoMin: a.duracaoMin,
       tipoOsNome: a.tipoOs?.nome ?? null, tipoOsCor: a.tipoOs?.cor ?? null, tecnicoNome: textoTecnicosAtividade(a),
-      resumo, fotos, respostas: respostasPreenchidas, linkRelatorio: linkRelatorioAtividade(a),
+      resumo, fotos, respostas: respostasPreenchidas, foraDaFaixa: foraDaFaixa.get(a.id) ?? 0, linkRelatorio: linkRelatorioAtividade(a),
     };
   });
 

@@ -123,7 +123,14 @@ export function AtividadeExecucao({ osId, atividadeId, titulo, osNumero, tipoOs 
       },
       async medir(itemId, dados) {
         const d = await enviar(`${urlEq}/itens/${itemId}`, { method: "PUT", body: JSON.stringify(dados) });
-        if (d) mudarEquip(eq, (x) => ({ ...x, feito: d.feito ?? x.feito, respostas: { ...x.respostas, [itemId]: { ...(x.respostas[itemId] ?? RESPOSTA_VAZIA), status: d.status, valor: d.valor, unidade: d.unidade } } }));
+        if (d) mudarEquip(eq, (x) => {
+          const respostas = { ...x.respostas, [itemId]: { ...(x.respostas[itemId] ?? RESPOSTA_VAZIA), status: d.status, valor: d.valor, unidade: d.unidade } };
+          // ΔT recalculado pelo servidor (insuflamento/retorno mudaram)
+          for (const c of (d.calculadas ?? []) as { itemId: string; valor: number | null; unidade: string | null; status: StatusItem | null }[]) {
+            respostas[c.itemId] = { ...(respostas[c.itemId] ?? RESPOSTA_VAZIA), status: c.status, valor: c.valor, unidade: c.unidade };
+          }
+          return { ...x, feito: d.feito ?? x.feito, respostas };
+        });
       },
       async observarItem(itemId: string, texto: string) {
         const d = await enviar(`${urlEq}/itens/${itemId}`, { method: "PUT", body: JSON.stringify({ observacao: texto }) });
