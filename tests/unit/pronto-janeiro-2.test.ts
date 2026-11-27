@@ -307,7 +307,7 @@ describe("Implantação — itens que levam a uma tela têm cara de clicável", 
       id: "empresa", numero: 1, titulo: "Dados da empresa", descricao: "Nome, CNPJ, endereço e logo", feita: false, dispensada: false,
       itens: [{ rotulo: "Logo", valor: false, secao: "empresa" }, { rotulo: "Usuários", valor: 2 }], importacoes: [],
     }] as any;
-    await montar(createElement(ModulosProvider, { desligados: [] }, createElement(PainelImplantacao, { etapas, progresso: progresso(etapas) })));
+    await montar(createElement(ModulosProvider as any, { desligados: [] }, createElement(PainelImplantacao, { etapas, progresso: progresso(etapas) })));
     const logo = $("[data-item-etapa='Logo'] a[data-item-clicavel]")!;
     expect(logo).toBeTruthy();
     expect(logo.getAttribute("title")).toBe("Abrir Logo em Configurações");
