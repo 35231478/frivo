@@ -69,6 +69,9 @@ describe.skipIf(!URL_PG)("notas de compra 2 (PostgreSQL real)", () => {
     } })).id;
     // A 4521 lançada no dia 16/10 às 00h30 de Brasília (03h30 UTC), com a entrada no estoque feita pelo Bruno
     await prisma.notaCompra.update({ where: { id: ids.n4521 }, data: { status: "LANCADA", lancadaEm: new Date("2026-10-16T03:30:00Z") } });
+    // Uma movimentação de OUTRA empresa com a mesma referência, mais antiga: não pode virar "quem lançou"
+    await prisma.produto.create({ data: { id: "pOutra", empresaId: "e2", nome: "Gás", unidade: "un" } });
+    await prisma.movimentacaoEstoque.create({ data: { empresaId: "e2", produtoId: "pOutra", tipo: "ENTRADA", origem: "COMPRA", refId: ids.n4521, quantidade: 1, saldoApos: 1, usuarioId: "u2", criadoEm: new Date("2026-01-01T00:00:00Z") } });
     await prisma.movimentacaoEstoque.create({ data: { empresaId: "e1", produtoId: "pGas", tipo: "ENTRADA", origem: "COMPRA", refId: ids.n4521, quantidade: 2, saldoApos: 2, usuarioId: "uL" } });
     // A 4610 atende um pedido de compra
     await prisma.pedidoCompraInterno.create({ data: { id: "pc1", empresaId: "e1", numero: "PC-2026-0007", solicitanteId: "u1" } }).catch(async () => {

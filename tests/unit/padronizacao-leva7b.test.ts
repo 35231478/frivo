@@ -86,7 +86,8 @@ describe("o ⓘ e o vocabulário", () => {
 describe("as duas listas na tabela da casa", () => {
   for (const [arq, tela] of [[NOTAS, "notas-compra"], [PEDIDOS, "pedidos-compra"]] as const) {
     it(`${tela}: TabelaProUrl com cartões no celular, e nenhuma <table> à mão`, () => {
-      const src = ler(arq);
+      // A lista de notas é desenhada em components/compras/notas-lista (a linha abre a visualização rápida): lê os dois
+      const src = arq === NOTAS ? ler(arq) + ler("components/compras/notas-lista.tsx") : ler(arq);
       expect(src, arq).toContain('from "@/components/listagem/lista-url"');
       expect(src, arq).toContain(`<TabelaProUrl`);
       expect(src, arq).toContain(`tela="${tela}"`);

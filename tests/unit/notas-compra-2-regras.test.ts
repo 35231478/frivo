@@ -108,6 +108,10 @@ describe("a DANFE lida do XML", () => {
   it("não lê o que não é NF-e: vazio, só o envelope, lixo, DOCTYPE/ENTITY (sem XXE) e grande demais", () => {
     for (const x of [null, undefined, "", "   ", "<nfeProc/>", "não é xml <<<", "<NFe><outra/></NFe>"]) expect(lerDanfe(x as never), String(x)).toBeNull();
     expect(lerDanfe(`<?xml version="1.0"?><!DOCTYPE x [<!ENTITY e SYSTEM "file:///etc/passwd">]>${XML_4521}`)).toBeNull();
+    // entidade interna (o leitor aceitaria sozinho — a trava é nossa: nada de DOCTYPE/ENTITY)
+    const comEntidade = XML_4521.replace('<?xml version="1.0" encoding="UTF-8"?>', '<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE nfeProc [<!ENTITY nome "X">]>');
+    expect(comEntidade).toContain("<!ENTITY");
+    expect(lerDanfe(comEntidade)).toBeNull();
     expect(lerDanfe(XML_4521 + " ".repeat(2 * 1024 * 1024))).toBeNull();
     expect(valoresDaNota("<nfeProc/>")).toBeNull();
   });

@@ -259,9 +259,9 @@ describe("lista de notas: a visualização rápida", () => {
 
   it("o período diz qual data: Emissão (padrão) ou Entrada (?data=entrada)", async () => {
     await lista();
-    expect(document.body.textContent).toContain("Emissão");
+    expect(txt($("[data-periodo-rotulo-tela]"))).toBe("Emissão");
     nav.qs = "data=entrada";
     await lista();
-    expect(document.body.textContent).toContain("Entrada");
+    expect(txt($("[data-periodo-rotulo-tela]"))).toBe("Entrada");
   });
 });
