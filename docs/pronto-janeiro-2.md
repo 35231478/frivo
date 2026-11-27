@@ -84,4 +84,22 @@ A empresa de demonstração é "Refrigeração Nova Era Ltda (fictícia)".
 
 ## Prints (dados fictícios)
 
-`docs/prints/pronto-janeiro-2/`, desktop e celular.
+`docs/prints/pronto-janeiro-2/`, desktop e celular:
+
+| Print | O que mostra |
+|---|---|
+| `b1`, `b4` | Empresas (Frivo): a lista mínima e o item "Empresas (Frivo)" no rodapé do menu, só para o dono |
+| `b2`, `b5` | Modal Nova empresa (empresa + 1º administrador, checagem da senha ao vivo) |
+| `b3` | Empresa criada: o aviso de entrega do login e da troca da senha em Meu perfil › Senha |
+| `a1` | A empresa nova já nasce com os 5 perfis padrão |
+| `c1` | A empresa nova já nasce com os 6 tipos de OS |
+| `c2`, `c3` | Empresa sem tipos de OS: "Usar modelos sugeridos", e depois de usar |
+| `d1` | Modal "Registrar aprovação do cliente" |
+| `d2`, `d3` | Orçamento aprovado pela equipe e o bloco "Aprovação registrada pela equipe" no documento. O título mostra o nome automático inteiro (H) |
+| `f1` | Item executado com "Desmarcar" (aba Comercial da OS) |
+| `h2`, `h3` | Lista de orçamentos: o nome corta só na tela, inteiro no hover |
+| `k1` | Painel com o nome da empresa lido do cadastro |
+| `l1` | Implantação: os itens que levam a uma tela têm cara de clicável |
+
+Nos prints aparece, no console, o aviso "Only plain objects… Decimal" da página da OS. É o item **I**, que fica
+para a leva técnica própria.
