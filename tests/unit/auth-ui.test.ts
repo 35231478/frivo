@@ -79,6 +79,20 @@ const loginForm = async () => { const { LoginForm } = await import("@/components
 const lembrar = () => $<HTMLInputElement>('input[name="lembrar"]')!;
 
 describe("login", () => {
+  it("sessão encerrada: a mensagem do outro aparelho (app de campo) ou a de sempre", async () => {
+    nav.sp = new URLSearchParams("sessao=encerrada&motivo=outro-aparelho");
+    await montar(loginForm);
+    expect($('[role="status"]')?.textContent?.trim()).toBe("Sua sessão foi encerrada porque você entrou em outro aparelho.");
+    nav.sp = new URLSearchParams("sessao=encerrada");
+    await montar(loginForm);
+    expect($('[role="status"]')?.textContent?.trim()).toBe("Sua sessão foi encerrada. Entre novamente para continuar.");
+    // o motivo sozinho (sem a sessão encerrada) não mostra nada
+    nav.sp = new URLSearchParams("motivo=outro-aparelho");
+    await montar(loginForm);
+    expect($('[role="status"]')).toBeNull();
+    nav.sp = new URLSearchParams();
+  });
+
   it("“Manter conectado” vem desmarcado e explica a duração; marcado manda lembrar=true", async () => {
     await montar(loginForm);
     expect(lembrar().checked).toBe(false);
