@@ -32,6 +32,7 @@ describe("garantia visível no app", () => {
     expect(seloGarantia(null, HOJE)).toBeNull();
     expect(seloGarantia(undefined, HOJE)).toBeNull();
     expect(seloGarantia("", HOJE)).toBeNull();
+    expect(seloGarantia("lixo", HOJE)).toBeNull(); // data que não se lê: sem selo
   });
 });
 

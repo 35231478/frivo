@@ -153,6 +153,14 @@ describe.skipIf(!URL_PG)("app de campo, leva 2 (PR A): garantia e comentários (
       expect((await sino()).comentariosCampo).toBe(1);
       expect((await chamar("ordens/[id]/comentarios", "POST", { id: "osA" }, { texto: "  " })).status).toBe(400);
     });
+    it("OS só com respostas do ESCRITÓRIO não acende o sino de ninguém (nem de quem nunca leu)", async () => {
+      comoEscritorio();
+      await chamar("ordens/[id]/comentarios", "POST", { id: "osM" }, { texto: "Lembrete: levar a escada grande." });
+      comoEscritorio(permissoesTotais(), "uB");
+      const s = await sino();
+      expect(s.comentariosCampo).toBe(2); // continua só osA e osC (a osM só tem resposta do escritório)
+      expect(s.comentarioCampoOsId).not.toBe("osM");
+    });
     it("um comentário novo do campo depois da leitura acende de novo; comentário antigo (fora da janela) não", async () => {
       comoTecnico();
       await sync([comentar("aA", "k6", "Peça recebida, obrigado.")]);

@@ -56,8 +56,13 @@ depois da leitura.
 
 ### Testes (PR A)
 
-- `app-campo-leva2` (10, regra pura), `app-campo-leva2-ui` (7, tela), `app-campo-leva2-pg` (9, PostgreSQL real),
+- `app-campo-leva2` (10, regra pura), `app-campo-leva2-ui` (7, tela), `app-campo-leva2-pg` (10, PostgreSQL real),
   `sql-app-comentarios-os` (5).
+- **Mutação: 29 de 29 mortos.** Na 1ª rodada sobraram 2:
+  - "o sino conta resposta do escritório": faltava a prova de que uma OS só com respostas do escritório não acende o
+    sino de quem nunca leu. Ganhou teste;
+  - "garantia sem situação": era equivalente, mas mostrou que uma data que não se lê viraria "Garantia vence em —".
+    O selo agora só sai com data válida, e isso tem teste.
 
 ### Prints (PR A)
 

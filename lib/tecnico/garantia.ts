@@ -10,8 +10,9 @@ export interface SeloGarantia { situacao: SituacaoGarantia; texto: string }
 
 /** "Em garantia até 12/03/2027" · "Garantia vence em 12/03/2027" · "Garantia vencida em 12/03/2025"; sem data = null */
 export function seloGarantia(fim: Date | string | null | undefined, hoje: Date = new Date()): SeloGarantia | null {
-  const situacao = situacaoGarantia(fim, hoje);
-  if (!situacao || !fim) return null;
+  // Sem data, ou data que não se lê: sem selo (nunca "Garantia vence em —")
+  const situacao = fim && !Number.isNaN(new Date(fim).getTime()) ? situacaoGarantia(fim, hoje) : null;
+  if (!situacao) return null;
   const data = formatarData(fim);
   const texto = situacao === "vigente" ? `Em garantia até ${data}` : situacao === "vencendo" ? `Garantia vence em ${data}` : `Garantia vencida em ${data}`;
   return { situacao, texto };
