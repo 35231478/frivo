@@ -260,7 +260,13 @@ e conclusão. Conta alvos com menos de 44 px (inclusive a área invisível) e te
 
 ### Testes (PR C)
 
-- `app-campo-leva3-velocidade-ui` (15, tela com o banco do aparelho e o motor reais), `app-campo-leva3-velocidade`
+- `app-campo-leva3-velocidade-ui` (18, tela com o banco do aparelho e o motor reais), `app-campo-leva3-velocidade`
   (8, contraste calculado das cores e alvos).
 - **4 testes antigos atualizados de propósito:** `aviso-cliente-ui` (2: o "Cheguei" pede à OS o 1º equipamento,
   `&primeiro=1`) e `app-tecnico-ui` (2: a legenda do progresso virou dica; o último equipamento volta com `&fim=1`).
+- **Mutação: 34 mutantes, 34 mortos.** Na 1ª rodada sobraram 4, e cada um virou prova: câmera em uso por outro app
+  não fica lembrada como recusada; o X da sequência não desce a tela; a foto depois já tirada não se repete; o fim da
+  sequência desce até a 1ª medição ainda vazia.
+- Suíte completa: 559 arquivos, 8326 testes, verde (antes das 3 provas acima, que passam). Typecheck e build ok.
+- Achado no caminho: com a nova ordem, "Concluir" logo depois de digitar a última medição conferia o equipamento antes
+  de o número chegar e acusava "Falta 1". Corrigido e provado.
