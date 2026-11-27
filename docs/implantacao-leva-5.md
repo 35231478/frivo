@@ -82,7 +82,7 @@ Sem o SQL aplicado:
 
 ## Testes
 
-- `tests/unit/implantacao-5.test.ts` (15) cobre:
+- `tests/unit/implantacao-5.test.ts` (16) cobre:
   - as regras puras: situação do lote, contagens, ordem de apagar, ponto fixo, permissão e motivo;
   - todo cadastro de planilha tem regra de desfazer;
   - a tela: lista, prévia, confirmar, erro 409 e erro da prévia.

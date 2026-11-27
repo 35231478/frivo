@@ -108,6 +108,13 @@ describe("quem pode desfazer cada cadastro", () => {
     expect(semPermissao("outra")).toBe("você não tem permissão para excluir outra");
   });
 
+  it("toda relação de uso dos cadastros do lote tem nome no motivo (relação nova no schema precisa de nome aqui)", async () => {
+    const { relacoesDeUso } = await import("@/lib/importacao/lotes");
+    const { NOMES_VINCULO } = await import("@/lib/importacao/lotes-regras");
+    const sem = Object.values(CADASTROS_DO_LOTE).flatMap((c) => relacoesDeUso(c.model).relacoes.filter((r) => !NOMES_VINCULO[r.campo]).map((r) => `${c.model}.${r.campo}`));
+    expect(sem).toEqual([]);
+  });
+
   it("todo cadastro que uma planilha cria tem regra de desfazer (o estoque só atualiza produtos)", async () => {
     const { IMPORTACOES } = await import("@/lib/importacao/entidades");
     const { ENTIDADE_DO_ITEM } = await import("@/lib/importacao/servidor");

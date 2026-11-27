@@ -71,7 +71,7 @@ export const NOMES_VINCULO: Record<string, string> = {
   posicao: "localização no mapa", pmocsResponsavel: "PMOC", desempenhoParticipante: "desempenho",
   desempenhoFechamentoLinhas: "fechamentos de desempenho", admissoes: "admissão digital", documentosEmitidos: "documentos emitidos",
   documentacaoItens: "envios de documentação", dependentes: "dependentes", formTypeMappings: "formulários do tipo",
-  checklistItens: "itens de checklist do tipo",
+  checklistItens: "itens de checklist do tipo", materiaisCampo: "materiais usados em campo",
 };
 
 export const nomeVinculo = (campo: string) =>
