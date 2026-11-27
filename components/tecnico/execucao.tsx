@@ -29,6 +29,7 @@ import { textoFaltas } from "@/lib/execucao/pendencias";
 import { LEGENDA_MAX, limparLegenda, REFERENCIA_GERAL } from "@/lib/os/galeria";
 import type { AdicionalTela, EquipamentoTela, ExecucaoTela, FotoServicoTela, NovaOperacao, OperacaoFila, RetratoAtividade } from "@/lib/tecnico/offline/tipos";
 import { Dica } from "@/components/ui/dica";
+import { InputHora } from "@/components/ui/input-hora";
 import { FaixaAndamento, inicioLocal } from "@/components/tecnico/andamento";
 import { descricaoParaApp } from "@/lib/tecnico/cartao";
 import { detalhesDaOs, linkTelefone, linkWhatsapp, PRIORIDADE_DESTAQUE, resumoEquipamentos } from "@/lib/tecnico/topo-os";
@@ -175,7 +176,7 @@ function ResumoOs({ r, x, fila, aEnviar, registrar, camera, incluir }: { r: Retr
           {problema && (
             <div className="rounded-lg bg-surface-alt p-3" data-problema>
               <h2 className="text-[11px] font-bold uppercase tracking-wide text-ink-muted">{c.chamado ? "Problema relatado" : "O que fazer"}</h2>
-              <p className="text-base text-ink whitespace-pre-line break-words">{problema}</p>
+              <p className="text-base text-ink whitespace-pre-line break-words" data-descricao>{problema}</p>
             </div>
           )}
           <p className="text-sm text-ink inline-flex items-center gap-1.5" data-resumo-equipamentos><HardDrive className="w-4 h-4 text-ink-subtle" /> {resumoEquipamentos(x.equipamentos.length, atendidos)}</p>
@@ -200,7 +201,7 @@ function ResumoOs({ r, x, fila, aEnviar, registrar, camera, incluir }: { r: Retr
                 {detalhes.map((d) => (
                   <div key={d.rotulo} className="contents" data-detalhe={d.rotulo}>
                     <dt className="text-ink-muted">{d.rotulo}</dt>
-                    <dd className="text-ink whitespace-pre-line break-words">{d.valor}</dd>
+                    <dd className="text-ink whitespace-pre-line break-words" {...(d.rotulo === "Orientação do escritório" && { "data-orientacao": "" })}>{d.valor}</dd>
                   </div>
                 ))}
               </dl>
@@ -218,7 +219,7 @@ function ResumoOs({ r, x, fila, aEnviar, registrar, camera, incluir }: { r: Retr
             className="w-full rounded-card bg-primary-600 text-white py-4 text-base font-bold shadow-card inline-flex items-center justify-center gap-2 touch-target">
             <Camera className="w-6 h-6" /> Câmera rápida
           </button>
-          <p className="text-xs text-ink-muted inline-flex items-center gap-1">Fotos com a etiqueta QR <Dica rotulo="Câmera rápida" texto="Fotografe à vontade, com a etiqueta QR junto: o app põe cada foto no equipamento certo. As sem etiqueta você confere depois." /></p>
+          <p className="text-xs text-ink-muted inline-flex items-center gap-1">Fotos com a etiqueta QR <Dica rotulo="Câmera rápida" texto="Fotografe com a etiqueta QR junto: o app põe cada foto no equipamento certo. As fotos sem etiqueta ficam para conferir no fim." /></p>
         </section>
       )}
       {aConferir > 0 && (
@@ -677,8 +678,9 @@ export function ModalConcluir({ x, tempo, onFechar, onConcluir, onJustificado }:
               <OpcaoTermino ativo={escolha === "agora"} onClick={() => setEscolha("agora")} chave="agora">{horaBR(abertoEm)} <span className="font-normal text-ink-muted">· agora</span></OpcaoTermino>
               <OpcaoTermino ativo={escolha === "outro"} onClick={() => setEscolha("outro")} chave="outro">Outro horário</OpcaoTermino>
               {escolha === "outro" && (
-                <input type="time" value={outro} onChange={(e) => setOutro(e.target.value)} aria-label="Horário de término" data-termino-outro
-                  className={cn("w-full rounded-card border px-3 py-3 text-lg tabular-nums", outro && !outroOk ? "border-atrasado" : "border-surface-border")} />
+                <div data-termino-outro>
+                  <InputHora value={outro} onChange={setOutro} aria-label="Horário de término" invalido={!!outro && !outroOk} className="text-lg" />
+                </div>
               )}
               {escolha === "outro" && outro && !outroOk && <p className="text-xs text-atrasado-texto" data-termino-invalido>{MSG_TERMINO_FORA}</p>}
             </fieldset>

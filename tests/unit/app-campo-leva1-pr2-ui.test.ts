@@ -213,12 +213,12 @@ describe("concluir com tempo suspeito", () => {
     await abrirOs();
     await clicar($("[data-concluir-atividade]"));
     await clicar($('[data-opcao-termino="outro"]'));
-    await digitar($("[data-termino-outro]") as HTMLInputElement, "08:00"); // antes do início (09:30)
+    await digitar($("[data-termino-outro] input") as HTMLInputElement, "08:00"); // antes do início (09:30)
     expect(($("[data-confirmar-conclusao]") as HTMLButtonElement).disabled).toBe(true);
     expect(texto($("[data-termino-invalido]"))).toBe("O horário de término precisa ficar entre o início da atividade e agora.");
-    await digitar($("[data-termino-outro]") as HTMLInputElement, "16:00"); // depois de agora (15:00)
+    await digitar($("[data-termino-outro] input") as HTMLInputElement, "16:00"); // depois de agora (15:00)
     expect(($("[data-confirmar-conclusao]") as HTMLButtonElement).disabled).toBe(true);
-    await digitar($("[data-termino-outro]") as HTMLInputElement, "12:15");
+    await digitar($("[data-termino-outro] input") as HTMLInputElement, "12:15");
     expect(($("[data-confirmar-conclusao]") as HTMLButtonElement).disabled).toBe(false);
     await clicar($("[data-confirmar-conclusao]"));
     expect((await gravadas("concluir"))[0].dados.terminoEm).toBe(new Date(br(`${HOJE} 12:15`)).toISOString());
