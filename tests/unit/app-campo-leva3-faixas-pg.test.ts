@@ -163,6 +163,8 @@ describe.skipIf(!URL_PG)("app de campo, leva 3 (PR A): faixa esperada (PostgreSQ
       expect(await r("iDt")).toMatchObject({ valor: 4, fora: true });
       await sync([resp("iRet", { status: "NAO_SE_APLICA" })]);
       expect(await r("iDt")).toMatchObject({ valor: null, status: "NAO_SE_APLICA", fora: false });
+      await sync([resp("iRet", { status: null })]); // desfaz o "Não se aplica": falta a leitura, o ΔT fica vazio
+      expect(await r("iDt")).toMatchObject({ valor: null, status: null });
       await sync([resp("iRet", { valor: 75.2, unidade: "°F" })]); // 24 °C
       expect(await r("iDt")).toMatchObject({ valor: 4, unidade: "°C", status: null, fora: true });
       await sync([resp("iIns", { valor: 12.5, unidade: "°C" })]);
@@ -209,9 +211,11 @@ describe.skipIf(!URL_PG)("app de campo, leva 3 (PR A): faixa esperada (PostgreSQ
       comoTecnico();
       await sync([{ ...resp("iSuc", { valor: 50 }, "eq3"), atividadeId: "a2" }]);
       await prisma.checklistResposta.updateMany({ where: { equipamentoId: "eq2", itemId: "iIns" }, data: { respondidoEm: new Date(Date.now() - 31 * 24 * H) } });
+      // Duas leituras fora no MESMO equipamento contam como um equipamento
+      await prisma.checklistResposta.updateMany({ where: { equipamentoId: "eq1", itemId: "iCor" }, data: { foraDaFaixa: true, respondidoEm: new Date(Date.now() - H) } });
       const p = await medicoesForaDaFaixa("e1");
-      expect(p.equipamentos).toBe(2); // eq1 (sucção) e eq2 (ΔT)
-      expect(p.ultimas).toHaveLength(2);
+      expect(p.equipamentos).toBe(2); // eq1 (sucção e corrente) e eq2 (ΔT)
+      expect(p.ultimas).toHaveLength(3);
       expect(p.ultimas.map((u: any) => [u.equipamento, u.item, u.os.numero])).toEqual(expect.arrayContaining([
         ["Split sala 1", "Pressão de sucção", "OS-1"], ["Split sala 2", "Diferença de temperatura do ar (ΔT)", "OS-1"],
       ]));

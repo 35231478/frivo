@@ -140,6 +140,9 @@ describe("app: medição com faixa", () => {
     await focar(campo("iDes")); await valor(campo("iDes"), "500"); await sair(campo("iDes"));
     expect(item("iDes")!.querySelector("[data-fora-da-faixa]")).not.toBeNull();
     expect(item("iDes")!.querySelector("[data-observar-faixa]")).toBeNull();
+    const obsDes = item("iDes")!.querySelector("textarea") as HTMLTextAreaElement;
+    await valor(obsDes, "Condensadora suja."); await sair(obsDes);
+    expect(item("iDes")!.querySelectorAll("textarea")).toHaveLength(1); // nunca dois campos de observação
   });
 
   it("ΔT: só mostra, calculado das leituras (sem sinal), com a faixa e o alerta", async () => {

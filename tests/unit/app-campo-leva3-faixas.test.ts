@@ -228,5 +228,8 @@ describe("pendências e o aparelho", () => {
     const eq = (ops: OperacaoFila[]) => estadoDaAtividade(retrato, ops).equipamentos[0];
     expect(eq([op("r", { valor: 24 }, 1), op("i", { valor: 12.5 }, 2)]).respostas.d).toMatchObject({ valor: 11.5 });
     expect(eq([op("r", { valor: 24 }, 1), op("i", { valor: 12.5 }, 2), op("d", { valor: 99 }, 3)]).respostas.d).toMatchObject({ valor: 11.5 });
+    // Só o ΔT "digitado" (sem leituras): nada muda, nem o equipamento conta como atendido
+    const so = eq([op("d", { valor: 99 }, 1), op("d", { status: "NAO_SE_APLICA" }, 2)]);
+    expect([so.feito, so.respostas.d]).toEqual([false, undefined]);
   });
 });
