@@ -114,7 +114,8 @@ export function Dica({ texto, rotulo, className, lado = "centro" }: {
           // Mouse: o hover já abriu, o clique não fecha. Toque ou teclado (Enter/Espaço): alterna
           setAberta((v) => tipo === "mouse" || !v);
         }}
-        className="p-0.5 rounded-full text-ink-subtle hover:text-acento focus:outline-none focus-visible:ring-2 focus-visible:ring-acento/40"
+        // Alvo de toque ≥ 44 px (hitbox invisível em volta do ícone de 18 px), sem mudar o desenho
+        className="p-0.5 rounded-full text-ink-subtle hover:text-acento focus:outline-none focus-visible:ring-2 focus-visible:ring-acento/40 relative before:absolute before:-inset-[13px] before:content-['']"
       >
         <Info className="w-3.5 h-3.5" aria-hidden />
       </button>

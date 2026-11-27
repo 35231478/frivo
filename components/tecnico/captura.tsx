@@ -37,10 +37,11 @@ export async function processarFoto(arquivo: Blob, config: ConfigApp, marca: Mar
   return config.marcaDagua ? aplicarMarcaDagua(imagem.dataUrl, await montarLinhasMarca(config, marca)) : imagem.dataUrl;
 }
 
-export function BotaoFoto({ onFoto, rotulo = "Tirar foto", grande, desabilitado, className, marca }: {
+export function BotaoFoto({ onFoto, rotulo = "Tirar foto", grande, desabilitado, className, marca, icone: Icone = Camera }: {
   onFoto: (dataUrl: string) => void | Promise<void>; rotulo?: string; grande?: boolean; desabilitado?: boolean; className?: string;
   /** Dados da OS para a marca d'água (quando ligada na empresa) */
   marca?: MarcaFoto;
+  icone?: typeof Camera;
 }) {
   const { config } = useTecnico();
   const ref = useRef<HTMLInputElement>(null);
@@ -51,7 +52,7 @@ export function BotaoFoto({ onFoto, rotulo = "Tirar foto", grande, desabilitado,
       <button type="button" disabled={desabilitado || lendo} onClick={() => ref.current?.click()}
         className={cn("inline-flex items-center justify-center gap-2 rounded-card border-2 border-dashed border-primary-300 bg-primary-50 text-primary-700 font-semibold touch-target disabled:opacity-50",
           grande ? "px-4 py-4 text-base w-full" : "px-3 py-2 text-sm", className)}>
-        {lendo ? <Loader2 className="w-5 h-5 animate-spin" /> : <Camera className="w-5 h-5" />} {rotulo}
+        {lendo ? <Loader2 className="w-5 h-5 animate-spin" /> : <Icone className="w-5 h-5" />} {rotulo}
       </button>
       {erro && <p className="text-xs text-atrasado mt-1" role="alert" data-erro-foto>{erro}</p>}
       {/* "Foto somente pela câmera" ligado: capture=environment força a câmera e tira a galeria no
@@ -78,7 +79,7 @@ export function Miniatura({ src, alt, pendente, onRemover }: { src: string; alt:
     <div className="relative w-20 h-20 shrink-0" data-miniatura>
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img src={src} alt={alt} className="w-20 h-20 rounded-lg object-cover border border-surface-border bg-surface-alt" />
-      {pendente && <span className="absolute bottom-1 left-1 rounded bg-black/60 px-1 text-[10px] font-semibold text-white">no aparelho</span>}
+      {pendente && <span className="absolute bottom-1 left-1 rounded bg-black/80 px-1 text-[10px] font-semibold text-white">no aparelho</span>}
       {onRemover && (
         // Y10: "Excluir" (não "Tirar", que soa como fotografar) e alvo de toque ≥44px (hitbox invisível)
         <button type="button" aria-label={`Excluir ${alt}`} onClick={onRemover}

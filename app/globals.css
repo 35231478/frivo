@@ -257,6 +257,16 @@
     min-width: 44px;
     min-height: 44px;
   }
+  /* App do técnico no SOL (classe na raiz do app): a mesma paleta, um tom mais escura onde se lê na rua.
+     Texto de apoio 8:1, alerta 8:1, botões principais com texto branco ≥ 7:1 (WCAG AAA). Só dentro do app. */
+  .campo-sol .text-ink-muted { color: #434B58; }
+  .campo-sol .text-atencao-texto { color: #7A3505; }
+  .campo-sol .text-ok-texto, .campo-sol .text-success-700 { color: theme("colors.success.700"); }
+  .campo-sol .bg-acento, .campo-sol .bg-primary-600 { background-color: theme("colors.primary.700"); }
+  .campo-sol .bg-success-600 { background-color: theme("colors.success.700"); }
+  .campo-sol .bg-atencao { background-color: #8A3D05; }
+  .campo-sol .text-acento, .campo-sol .text-primary-600 { color: theme("colors.primary.700"); }
+  .campo-sol .text-atrasado-texto { color: #861A12; }
   /* Áreas seguras (notch / barra inferior) */
   .safe-bottom {
     padding-bottom: env(safe-area-inset-bottom);

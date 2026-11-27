@@ -467,7 +467,8 @@ describe("execução guiada", () => {
     expect($("[data-item=i1] [data-miniatura]")!.textContent).toContain("no aparelho");
     // UX-7 (Y9): depois de anexar, o botão confirma — e (G11) o progresso tem legenda
     expect($$("[data-item=i1] button").some((b) => b.textContent!.includes("Foto registrada (1)"))).toBe(true);
-    expect($("[data-progresso-legenda]")!.textContent).toContain("Itens do checklist e medições");
+    // App-campo 3 (PR C): a legenda do progresso foi para a dica ao lado do número (tela curta: o TUDO OK sobe)
+    expect($("[data-dica][aria-label='Ajuda: Progresso']")).toBeTruthy();
     await clicar($("[data-concluir-equipamento]"));
     await esperarAte(() => window.location.search === "?ver=os&a=aA&e=eqB", "foi para o próximo");
     // o sinal volta: sobe tudo, em ordem, e o indicador fica Sincronizado
@@ -692,7 +693,8 @@ describe("execução guiada — lapidada (Etapa 2b)", () => {
     await clicar($("[data-nav-equipamento=proximo]"));
     await esperarAte(() => window.location.search === "?ver=os&a=aA&e=eqB", "avançou pela seta");
     await clicar(rodape());
-    await esperarAte(() => window.location.search === "?ver=os&a=aA", "voltou para a OS");
+    // App-campo 3 (PR C): o último volta à OS pedindo a confirmação da conclusão (fim=1; a OS abre o modal e limpa o endereço)
+    await esperarAte(() => window.location.search === "?ver=os&a=aA&fim=1", "voltou para a OS");
   });
 
   it("5 · Fotos ANTES e DEPOIS por equipamento: cada uma na sua seção, com a contagem, gravadas com o momento (sem mudança de banco)", async () => {
