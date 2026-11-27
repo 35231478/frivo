@@ -8,6 +8,7 @@ import { Prisma } from "@prisma/client";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { momentoDaConclusao, type RelogioDaConclusao } from "@/lib/os/conclusao-atividade";
+import { historicoTermino, inicioDaAtividade, MSG_TERMINO_FORA, terminoValido } from "@/lib/tecnico/andamento";
 import { prisma } from "@/lib/prisma";
 import { marcarComparecimento } from "@/lib/atendimento/prazo-server";
 import { horarioDoToque } from "@/lib/tecnico/aviso-cliente";
@@ -560,7 +561,9 @@ export async function removerFotoAdicional(ctx: ContextoExecucao, ref: { fotoId?
  */
 export async function iniciarAtividade(ctx: ContextoExecucao, relogio: { em?: string | null; agoraAparelho?: string | null } = {}) {
   if (ctx.atividade.status !== "AGENDADA") return ok({ status: ctx.atividade.status });
-  const { count } = await prisma.atividadeOs.updateMany({ where: { id: ctx.atividade.id, status: "AGENDADA" }, data: { status: "EM_ANDAMENTO" } });
+  // A hora do início (atividade esquecida em andamento): a do toque no aparelho, mesmo que a fila chegue depois
+  const iniciadaEm = momentoDaConclusao(relogio);
+  const { count } = await prisma.atividadeOs.updateMany({ where: { id: ctx.atividade.id, status: "AGENDADA" }, data: { status: "EM_ANDAMENTO", iniciadaEm } });
   if (count) {
     await prisma.osHistorico.create({
       data: { ordemServicoId: ctx.atividade.ordemServico.id, usuarioId: ctx.usuarioId, acao: "Status da atividade alterado", detalhes: `"${ctx.atividade.titulo}": AGENDADA → EM_ANDAMENTO (app do técnico)` },
@@ -582,7 +585,11 @@ export async function travaConclusao(empresaId: string, osId: string, atividadeI
   return null;
 }
 
-export const concluirSchema = z.object({ resumo: z.string().trim().max(4000, "Resumo com no máximo 4.000 caracteres.").nullable().optional() }).strict();
+export const concluirSchema = z.object({
+  resumo: z.string().trim().max(4000, "Resumo com no máximo 4.000 caracteres.").nullable().optional(),
+  /** Tempo suspeito: o término real que o técnico confirmou ou corrigiu (entre o início e o toque de concluir) */
+  terminoEm: z.string().datetime({ offset: true, message: "Horário de término inválido." }).optional(),
+}).strict();
 
 /**
  * Conclui a atividade com a trava da Etapa 1 (a mensagem diz o que falta, equipamento por
@@ -596,11 +603,21 @@ export async function concluirAtividade(ctx: ContextoExecucao, d: z.infer<typeof
   if (trava) return trava;
   const resumo = d.resumo === undefined ? undefined : d.resumo || null;
   // A data da conclusão (Desempenho: "no prazo"): a hora do toque no aparelho, mesmo que a fila chegue depois
-  const concluidaEm = momentoDaConclusao(relogio);
+  const toque = momentoDaConclusao(relogio);
+  // Tempo suspeito (esqueceu de concluir): vale o término que o técnico confirmou, se ficou entre o início e o toque
+  let concluidaEm = toque;
+  if (d.terminoEm) {
+    const a = await prisma.atividadeOs.findUnique({ where: { id: atividade.id }, select: { iniciadaEm: true, dataAgendada: true } });
+    if (!terminoValido(d.terminoEm, inicioDaAtividade(a ?? {}), toque)) return erro(422, MSG_TERMINO_FORA);
+    concluidaEm = new Date(Math.min(new Date(d.terminoEm).getTime(), toque.getTime()));
+  }
   await prisma.atividadeOs.update({ where: { id: atividade.id }, data: { status: "CONCLUIDA", concluidaEm, ...(resumo !== undefined && { resumo }) } });
   await prisma.osHistorico.create({
     data: { ordemServicoId: atividade.ordemServico.id, usuarioId: ctx.usuarioId, acao: "Status da atividade alterado", detalhes: `"${atividade.titulo}": ${atividade.status} → CONCLUIDA` },
   });
+  if (d.terminoEm) {
+    await prisma.osHistorico.create({ data: { ordemServicoId: atividade.ordemServico.id, usuarioId: ctx.usuarioId, acao: "Horário de término informado", detalhes: `"${atividade.titulo}": ${historicoTermino(concluidaEm, toque)}` } });
+  }
   atividade.status = "CONCLUIDA";
   await sincronizarStatusOs(atividade.ordemServico.id, ctx.empresaId, ctx.usuarioId);
   return ok({ status: "CONCLUIDA", jaEstava: false });

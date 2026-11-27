@@ -702,6 +702,8 @@ model Configuracao {
   /// Rastrear a localização dos técnicos (Operações › Mapa). DESLIGADO por padrão: é dado sensível
   /// (LGPD) — sem ligar, o app não captura nada e o servidor recusa o que chegar
   appRastrearLocalizacao   Boolean @default(false) @map("app_rastrear_localizacao")
+  /// Atividade esquecida em andamento: depois de quantas horas o app avisa o técnico e o sino avisa o gestor (1 a 24)
+  appAlertaAndamentoHoras  Int     @default(4) @map("app_alerta_andamento_horas")
 
   // Notificações
   notifEmailAbrirOs       Boolean @default(false) @map("notif_email_abrir_os")
@@ -2107,6 +2109,9 @@ model AtividadeOs {
   /// "no prazo" = concluída até o fim do dia do prazo ou, sem prazo, do dia agendado. Atividades
   /// concluídas antes desta coluna existir ficam sem data (sem medição, nunca zero).
   concluidaEm    DateTime?       @map("concluida_em")
+  /// Quando a atividade COMEÇOU (a 1ª gravação no app, pela hora do toque; reabrir recomeça). Mede a atividade
+  /// esquecida em andamento (aviso ao técnico e ao gestor). Antes desta coluna: vazio — vale a hora agendada.
+  iniciadaEm     DateTime?       @map("iniciada_em")
   duracaoMin     Int?            @map("duracao_min")
   observacao     String?
   resumo         String?         @db.Text
