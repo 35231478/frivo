@@ -79,6 +79,8 @@ export function whereOrdens(empresaId: string, sp: SP, agora = new Date(), idsAt
       { chamadoNumero: { contains: sp.busca, mode: "insensitive" } },
       { descricao: { contains: sp.busca, mode: "insensitive" } },
       { cliente: { nome: { contains: sp.busca, mode: "insensitive" } } },
+      // o nome que a equipe usa no dia a dia costuma ser o fantasia ("Mercado do Zé"), não a razão social
+      { cliente: { nomeFantasia: { contains: sp.busca, mode: "insensitive" } } },
     ];
   }
   return where;
@@ -127,6 +129,8 @@ export function whereOrcamentos(empresaId: string, sp: SP, agora = new Date()) {
       { codigo: { contains: sp.busca, mode: "insensitive" } },
       { nome: { contains: sp.busca, mode: "insensitive" } },
       { cliente: { nome: { contains: sp.busca, mode: "insensitive" } } },
+      // o nome que a equipe usa no dia a dia costuma ser o fantasia ("Mercado do Zé"), não a razão social
+      { cliente: { nomeFantasia: { contains: sp.busca, mode: "insensitive" } } },
     ];
   }
   return where;
@@ -141,6 +145,8 @@ export function whereContratos(empresaId: string, sp: SP, agora = new Date()) {
     where.OR = [
       { numero: { contains: sp.busca, mode: "insensitive" } },
       { cliente: { nome: { contains: sp.busca, mode: "insensitive" } } },
+      // o nome que a equipe usa no dia a dia costuma ser o fantasia ("Mercado do Zé"), não a razão social
+      { cliente: { nomeFantasia: { contains: sp.busca, mode: "insensitive" } } },
     ];
   }
   if (sp.frequencia) where.periodicidade = sp.frequencia;

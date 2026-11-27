@@ -1,7 +1,7 @@
 import {
   Boxes, Building2, CalendarClock, Clock, Cog, FileBadge, FileSignature, FileSpreadsheet, Headset, IdCard, Landmark, ListChecks, Mail, Package, Printer, QrCode, ScrollText, ShieldCheck, Tags,
   Target, Thermometer, UserCog, Wallet, Wrench, type LucideIcon,
-  Hash, CaseSensitive, UserPlus, Blocks,
+  Hash, CaseSensitive, UserPlus, Blocks, Rocket,
 } from "lucide-react";
 import { moduloDaRota, pode, podeEntrarNoModulo, type Acao, type Permissoes } from "@/lib/permissoes";
 
@@ -111,6 +111,9 @@ export const SECOES_CONFIGURACOES: SecaoConfig[] = [
       {
         titulo: "Empresa",
         itens: [
+          // Implantação: o passo a passo de quem está começando (sempre aqui; no painel, em destaque até 100%).
+          // Mesma permissão dos Módulos: quem configura a empresa
+          { id: "implantacao", href: "/configuracoes", modulo: "configuracoes", acao: "gerenciar", icone: Rocket, label: "Implantação", dica: "Passo a passo para começar: o que já está cadastrado e as planilhas de importação" },
           { id: "empresa", href: "/configuracoes", icone: Building2, label: "Dados da empresa", dica: "Razão social, CNPJ, endereço e logo" },
           { id: "preferencias", href: "/configuracoes", icone: Cog, label: "Preferências", dica: "Regras de cadastro, OS, notificações e ISS" },
           { id: "numeracao", href: "/configuracoes/numeracao", icone: Hash, label: "Numeração de documentos", dica: "Próximo número de orçamento, OS, contrato, fatura, pedido e contas" },

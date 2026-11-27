@@ -13,6 +13,7 @@ import { SaldoQtd, SeloSituacao } from "@/components/estoque/situacao";
 import { avisosEstoque } from "@/lib/estoque/regras";
 import { ConteudoUrl, LimparBuscaUrl, ListaUrl, PaginacaoUrl, TabelaProUrl } from "@/components/listagem/lista-url";
 import { Dica } from "@/components/ui/dica";
+import { ImportarPlanilha } from "@/components/importacao/importar-planilha";
 
 export const metadata: Metadata = { title: "Estoque" };
 
@@ -42,6 +43,8 @@ export default async function EstoquePage({ searchParams }: { searchParams: Prom
             <h1 className="page-title flex items-center gap-1.5">Estoque <Dica texto={AJUDA} rotulo="Estoque" lado="direita" /></h1>
             <span className="text-xs font-semibold text-ink-muted bg-surface-alt border border-surface-border px-2.5 py-1 rounded-full">{total}</span>
           </div>
+          <div className="flex items-center gap-2">
+          {podeLancar && <ImportarPlanilha entidade="estoque" />}
           <Link
             href="/estoque/notas" data-ir-notas
             className={cn(
@@ -53,6 +56,7 @@ export default async function EstoquePage({ searchParams }: { searchParams: Prom
           >
             <FileUp className="w-4 h-4" /> {podeLancar ? "Importar NF de compra" : "Notas de compra"}
           </Link>
+          </div>
         </div>
 
         {/* Barra enxuta (padrão da casa): busca por produto + "Mais filtros" (situação, inativos) */}

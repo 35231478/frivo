@@ -45,7 +45,7 @@ describe("período da lista de OS", () => {
   it("o período convive com os outros filtros (status, busca) sem derrubá-los", () => {
     const w = whereOrdens("e1", { periodo: "hoje", status: "ABERTA,AGENDADA", busca: "split" }, AGORA);
     expect(w.status).toEqual({ in: ["ABERTA", "AGENDADA"] });
-    expect(w.OR).toHaveLength(4); // a busca
+    expect(w.OR).toHaveLength(5); // a busca (leva 4 de cadastros: + o nome fantasia do cliente)
     expect(w.AND).toHaveLength(1); // o período
   });
 });

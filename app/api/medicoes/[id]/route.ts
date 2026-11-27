@@ -6,6 +6,7 @@ import { prisma } from "@/lib/prisma";
 import { respostaRefEmpresa, validarRefsEmpresa } from "@/lib/ref-empresa";
 import { medicaoSchema } from "@/lib/validations";
 import { calcularTotaisMedicao } from "@/lib/medicao-helpers";
+import { motivoNaoExcluirMedicao } from "@/lib/cadastros/regras-arquivar";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -121,8 +122,15 @@ export async function DELETE(_: NextRequest, { params }: Params) {
   const { id } = await params;
   const empresaId = session.user!.empresaId;
 
-  const existente = await prisma.medicao.findFirst({ where: { id, empresaId } });
+  const existente = await prisma.medicao.findFirst({
+    where: { id, empresaId },
+    select: { status: true, nfNumero: true, _count: { select: { contasReceber: true, notasFiscais: true } } },
+  });
   if (!existente) return NextResponse.json({ erro: "Não encontrado" }, { status: 404 });
+
+  // Excluir de verdade só o rascunho que não gerou conta nem nota; o resto é documento e se cancela
+  const motivo = motivoNaoExcluirMedicao({ status: existente.status, nfNumero: existente.nfNumero, ...existente._count });
+  if (motivo) return NextResponse.json({ erro: motivo }, { status: 409 });
 
   await prisma.medicao.delete({ where: { id } });
   return NextResponse.json({ ok: true });

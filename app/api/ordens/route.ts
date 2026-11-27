@@ -60,6 +60,7 @@ export async function GET(req: NextRequest) {
       { numero: { contains: busca, mode: "insensitive" } },
       { descricao: { contains: busca, mode: "insensitive" } },
       { cliente: { nome: { contains: busca, mode: "insensitive" } } },
+      { cliente: { nomeFantasia: { contains: busca, mode: "insensitive" } } },
     ];
   }
 

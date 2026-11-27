@@ -6,6 +6,7 @@ import { recalcularContaPagar } from "@/lib/financeiro-server";
 import { categoriaParaGravar, centroCustoParaGravar, fornecedorParaGravar, respostaRefEmpresa } from "@/lib/ref-empresa";
 import { boletoParaGravar } from "@/lib/financeiro/boleto-conta";
 import { editarOcorrenciaComEscopo, ErroRecorrencia } from "@/lib/financeiro/conta-pagar-recorrencia-server";
+import { motivoNaoCancelarContaPagar, motivoNaoEditarContaPagar } from "@/lib/cadastros/regras-arquivar";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -30,6 +31,9 @@ export async function PUT(req: NextRequest, { params }: Params) {
 
   const existente = await prisma.contaPagar.findFirst({ where: { id, empresaId } });
   if (!existente) return NextResponse.json({ erro: "Não encontrada" }, { status: 404 });
+  // Paga ou cancelada está encerrada (a tela já não oferece "Editar")
+  const travada = motivoNaoEditarContaPagar(existente);
+  if (travada) return NextResponse.json({ erro: travada }, { status: 409 });
 
   const parsed = contaPagarUpdateSchema.safeParse(await req.json());
   if (!parsed.success) return NextResponse.json({ erro: "Dados inválidos" }, { status: 400 });
@@ -97,7 +101,9 @@ export async function DELETE(_: NextRequest, { params }: Params) {
   const existente = await prisma.contaPagar.findFirst({ where: { id, empresaId } });
   if (!existente) return NextResponse.json({ erro: "Não encontrada" }, { status: 404 });
 
-  // Cancelar (não excluir) para preservar histórico
+  // Cancelar (não excluir) para preservar histórico; paga não cancela (sumiria com a saída do caixa)
+  const motivo = motivoNaoCancelarContaPagar(existente);
+  if (motivo) return NextResponse.json({ erro: motivo }, { status: 409 });
   await prisma.contaPagar.update({ where: { id }, data: { status: "CANCELADO" } });
   return NextResponse.json({ ok: true });
 }

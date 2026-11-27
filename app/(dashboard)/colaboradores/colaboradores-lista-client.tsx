@@ -20,6 +20,7 @@ import { TabelaPro, type ColunaPro } from "@/components/listagem/tabela-pro";
 import { PLANILHA } from "@/lib/planilha";
 import { toast } from "@/components/ui/avisos";
 import type { FiltrosColaboradores, OrdemColaboradores } from "@/lib/colaborador-listagem";
+import { ImportarPlanilha } from "@/components/importacao/importar-planilha";
 
 export type ColaboradorLinha = {
   id: string; nome: string; funcao: string; funcaoLabel: string; cargo: string | null;
@@ -92,6 +93,7 @@ export function ColaboradoresListaClient({ itens, total, filtros: f, opcoes, res
         </div>
         <div className="flex items-center gap-2">
           <AlternarVisao visao={visao} onTrocar={trocarVisao} />
+          {podeGerenciar && <ImportarPlanilha entidade="colaboradores" />}
           {podeGerenciar && (
             <button onClick={() => setNovoAberto(true)} data-novo-colaborador
               className="inline-flex items-center gap-2 bg-primary-500 hover:bg-primary-600 text-white px-4 py-2.5 rounded-lg text-sm font-semibold transition-all shadow-sm hover:shadow">

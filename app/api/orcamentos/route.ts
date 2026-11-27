@@ -37,6 +37,7 @@ export async function GET(req: NextRequest) {
       { codigo: { contains: busca, mode: "insensitive" } },
       { nome: { contains: busca, mode: "insensitive" } },
       { cliente: { nome: { contains: busca, mode: "insensitive" } } },
+      { cliente: { nomeFantasia: { contains: busca, mode: "insensitive" } } },
     ];
   }
 

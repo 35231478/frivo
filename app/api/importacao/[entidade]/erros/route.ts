@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { gerarXlsx } from "@/lib/folha/planilha";
-import { IMPORTACOES } from "@/lib/importacao/entidades";
+import { defPara } from "@/lib/importacao/entidades";
 import { linhasErros, MAX_LINHAS_IMPORTACAO } from "@/lib/importacao/motor";
 import { anexo, exigirImportacao, XLSX, type Ctx } from "@/lib/importacao/rotas";
 
@@ -8,7 +8,7 @@ import { anexo, exigirImportacao, XLSX, type Ctx } from "@/lib/importacao/rotas"
 export async function POST(req: NextRequest, ctx: Ctx) {
   const g = await exigirImportacao(ctx);
   if (!g.ok) return g.resposta;
-  const def = IMPORTACOES[g.entidade];
+  const def = defPara(g.entidade, g.permitido, g.papel);
   const corpo = await req.json().catch(() => null);
   const erros = Array.isArray(corpo?.erros) ? corpo.erros.slice(0, MAX_LINHAS_IMPORTACAO) : null;
   if (!erros) return NextResponse.json({ erro: "Nada para exportar." }, { status: 400 });

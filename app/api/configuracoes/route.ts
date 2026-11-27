@@ -118,6 +118,8 @@ export async function PUT(req: NextRequest) {
     id: _id, empresaId: _empresaId, qrConfig: _qr, relatorioOsConfig: _rel, horarioComercial: _horario,
     // Checklist obrigatório no app: rota própria (/api/checklist-diario/config)
     checklistDiarioAtivo: _cdA, checklistDiarioDias: _cdD, checklistDiarioTemplateId: _cdT, checklistDiarioTodos: _cdTo, checklistDiarioTecnicos: _cdTe,
+    // Implantação ("não se aplica / fazer depois"): rota própria (/api/implantacao/etapas); a tela geral não sobrescreve
+    implantacaoDispensadas: _impl,
     ...entrada
   } = semCampoMorto(body);
   const parsed = configuracaoSchema.safeParse(entrada);

@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { exigirAlgumaPermissao } from "@/lib/permissoes-server";
 import { checklistTemplateEditarSchema } from "@/lib/validations";
 import { mesmoConteudo, planejarFilhos } from "@/lib/sincronizar-filhos";
+import { motivoNaoInativarModeloChecklist } from "@/lib/cadastros/regras-arquivar";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -79,6 +80,10 @@ export async function DELETE(_: NextRequest, { params }: Params) {
 
   const existente = await prisma.checklistTemplate.findFirst({ where: { id, empresaId } });
   if (!existente) return NextResponse.json({ erro: "Não encontrado" }, { status: 404 });
+  // O modelo do checklist diário obrigatório não sai: o app do técnico exige que ele esteja ativo
+  const cfg = await prisma.configuracao.findUnique({ where: { empresaId }, select: { checklistDiarioAtivo: true, checklistDiarioTemplateId: true } });
+  const motivo = motivoNaoInativarModeloChecklist(id, cfg);
+  if (motivo) return NextResponse.json({ erro: motivo }, { status: 409 });
 
   await prisma.checklistTemplate.update({ where: { id }, data: { ativo: false } });
   return NextResponse.json({ ok: true });

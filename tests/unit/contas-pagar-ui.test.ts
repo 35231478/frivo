@@ -187,7 +187,9 @@ describe("cara de planilha (desktop) e cartões (celular)", () => {
     // Quitada: nem pagar nem editar. "Tornar recorrente" continua, e de propósito — "esta despesa
     // que acabei de pagar se repete todo mês" é o caso comum, e virar regra não mexe em um centavo
     // da conta paga (ela mantém número, pagamentos e histórico e vira a primeira ocorrência).
-    expect(await itens("cp3")).toEqual(["detalhes", "historico", "tornar-recorrente", "cancelar"]);
+    // (leva 4 de cadastros) Quitada também não CANCELA: o dinheiro já saiu, e cancelar sumiria com a
+    // saída do caixa. Antes o menu oferecia "Cancelar" e a rota aceitava; agora os dois recusam.
+    expect(await itens("cp3")).toEqual(["detalhes", "historico", "tornar-recorrente"]);
     await clicar($("[data-linha-conta=cp1] [data-acao=menu]"));
     expect($<HTMLAnchorElement>("[data-menu-acoes] [data-item=detalhes]")!.getAttribute("href")).toBe("/financeiro/contas-pagar/cp1");
     expect($<HTMLAnchorElement>("[data-menu-acoes] [data-item=editar]")!.getAttribute("href")).toBe("/financeiro/contas-pagar/cp1/editar");

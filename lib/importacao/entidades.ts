@@ -5,7 +5,7 @@
  */
 import type { Celula } from "@/lib/folha/planilha";
 import { CADASTROS, camposSemPermissao, mensagemValidacao, type DefCadastro, type Requisito } from "@/lib/cadastros/registro";
-import { rotuloPermissao } from "@/lib/permissoes";
+import { rotuloPermissao, type Acao } from "@/lib/permissoes";
 import { digitos, formatarDocumento, tipoDocumento } from "@/lib/documento";
 import { LABELS_ORIGEM, LABELS_SEGMENTO, LABELS_TIPO_CONTATO, LABELS_TIPO_EQUIPAMENTO } from "@/lib/utils";
 import { normalizarCodigoProduto, normalizarCodigoServico } from "@/lib/cadastros/codigos";
@@ -13,12 +13,16 @@ import {
   chaveNome, numero, opcao, texto, tipoChave, type ColunaImportacao, type ContextoImportacao, type DefImportacao, type LinhaAnalisada, type OpcaoRef, type ResultadoLinha,
 } from "@/lib/importacao/motor";
 import { padronizarNome, padronizarEmail, apararTextoLivre } from "@/lib/texto/normalizar";
+import { cpfValido } from "@/lib/documento";
+import { arred } from "@/lib/estoque/regras";
+import { podeVerCustoDeCompra } from "@/lib/estoque/custo-acesso";
+import { LABELS_FUNCAO } from "@/lib/colaborador-listagem";
 
 /** Padroniza um texto opcional da planilha; mantém undefined quando ausente. */
 const pNome = (s: string | undefined) => (s ? padronizarNome(s) : s);
 const pLivre = (s: string | undefined) => (s ? apararTextoLivre(s) : s);
 
-export const ENTIDADES_IMPORTACAO = ["clientes", "unidades", "contatos", "equipamentos", "fornecedores", "servicos", "produtos"] as const;
+export const ENTIDADES_IMPORTACAO = ["clientes", "unidades", "contatos", "equipamentos", "fornecedores", "servicos", "produtos", "estoque", "colaboradores", "veiculos"] as const;
 export type EntidadeImportacao = (typeof ENTIDADES_IMPORTACAO)[number];
 export const ehEntidadeImportacao = (v: string): v is EntidadeImportacao => (ENTIDADES_IMPORTACAO as readonly string[]).includes(v);
 
@@ -31,7 +35,7 @@ export const FAMILIAS_IMPORTACAO: Partial<Record<EntidadeImportacao, EntidadeImp
 };
 
 /** Planilhas de um MÓDULO de produto: com o módulo desligado na empresa, nem aparecem nem importam. */
-export const MODULO_DA_IMPORTACAO: Partial<Record<EntidadeImportacao, string>> = { equipamentos: "equipamentos" };
+export const MODULO_DA_IMPORTACAO: Partial<Record<EntidadeImportacao, string>> = { equipamentos: "equipamentos", estoque: "estoque", veiculos: "veiculos" };
 export const familiaDe = (e: EntidadeImportacao): EntidadeImportacao[] => FAMILIAS_IMPORTACAO[e] ?? [e];
 
 /**
@@ -617,7 +621,267 @@ const produtos: DefImportacao = {
   },
 };
 
-export const IMPORTACOES: Record<EntidadeImportacao, DefImportacao> = { clientes, unidades, contatos, equipamentos, fornecedores, servicos, produtos };
+/* ───────── Estoque inicial (o saldo de um produto JÁ cadastrado: código → id_sistema → nome) ───────── */
+const fmtQtd = (n: number) => n.toLocaleString("pt-BR", { maximumFractionDigits: 3 });
+/** Ver custo (último custo de compra): a coluna de custo só existe para quem tem a permissão — e nunca para o papel TECNICO (usuarioVeCustoDeCompra). */
+const veCusto = (permitido: (m: string, a: Acao) => boolean, papel?: string) => papel !== "TECNICO" && podeVerCustoDeCompra(permitido);
+
+const estoque: DefImportacao = {
+  entidade: "estoque", singular: "produto", plural: "saldos de estoque", chaveDescricao: "código, id_sistema ou nome do produto",
+  baixar: "Baixar o estoque atual (para conferir e ajustar)",
+  avisoPrevia: "Cada linha leva o saldo do produto à quantidade informada: lança só a diferença (subindo, uma entrada de inventário; descendo, um ajuste). O produto precisa estar cadastrado e controlar estoque.",
+  colunas: [
+    { chave: "codigo", titulo: "codigo", ajuda: "Código do produto no Frivo (o mais seguro para casar). Vazio = pelo nome.", exemplo: "12", apelidos: ["cod", "codigo_produto"] },
+    // Nem código nem nome são obrigatórios sozinhos: a planilha de outro sistema pode trazer só um dos dois (a linha exige um)
+    { chave: "produto", titulo: "produto", ajuda: "Nome do produto, como está cadastrado (obrigatório quando não há código)", exemplo: "Gás R410A cilindro 11 kg", apelidos: ["nome", "nome_produto", "descricao", "item"] },
+    { chave: "quantidade", titulo: "quantidade", obrig: true, ajuda: "Saldo contado, na unidade do produto (ex.: 3 ou 2,5). É o saldo FINAL, não o que entra.", exemplo: "3", apelidos: ["saldo", "qtd", "qtde", "estoque", "quantidade_em_estoque", "saldo_atual"] },
+    { chave: "custo_unitario", titulo: "custo_unitario", ajuda: "Opcional: custo de compra por unidade, em R$. Entra como o último custo do produto (alimenta custo e margem do orçamento).", exemplo: "389,90", apelidos: ["custo", "custo_unit", "preco_custo", "valor_custo", "custo_medio"], restrita: veCusto },
+    COLUNA_ID,
+  ],
+  chavesQueExistem: [
+    { prefixo: "id:", erro: (id) => `id_sistema “${id}” não é de nenhum produto desta empresa. Não altere essa coluna.` },
+    { prefixo: "cod:", erro: (c) => `codigo: não há produto com o código ${c} nesta empresa. Confira o código ou deixe vazio para casar pelo nome.` },
+    { prefixo: "nome:", erro: (n) => `produto “${n}” não está cadastrado. Importe a planilha de produtos antes (Configurações › Produtos).` },
+  ],
+  exportar: (p) => ({
+    codigo: txt(p.codigo), produto: txt(p.nome), quantidade: num(p.saldo), custo_unitario: num(p.ultimoCusto), id_sistema: txt(p.id),
+  }),
+  validar(v, ctx) {
+    const erros: string[] = [];
+    const avisos: string[] = [];
+    const nome = texto(v.produto);
+    const id = lerId(v.id_sistema, erros);
+    const cod = normalizarCodigoProduto(texto(v.codigo));
+    if (cod.erro) erros.push(`codigo: ${cod.erro}`);
+    const rotulo = nome ?? (cod.codigo != null ? `código ${cod.codigo}` : "");
+    if (!nome && cod.codigo == null && !id) erros.push("produto: informe o nome ou o código do produto.");
+    const qtd = lerNumero(v.quantidade, "quantidade", erros);
+    if (qtd === undefined && !erros.some((e) => e.startsWith("quantidade"))) erros.push("quantidade: obrigatória (o saldo contado; 0 se não há nenhum).");
+    if (qtd !== undefined && qtd < 0) erros.push("quantidade: o saldo não pode ser negativo.");
+    const custo = lerNumero(v.custo_unitario, "custo_unitario", erros);
+    if (custo !== undefined && custo < 0) erros.push("custo_unitario: o custo não pode ser negativo.");
+    if (custo !== undefined && !veCusto(ctx.permitido ?? (() => false))) erros.push("custo_unitario: exige a permissão de ver o custo dos produtos. Deixe a coluna vazia.");
+    // Nome repetido em mais de um produto: não dá para saber qual (use o código)
+    const kNome = nome ? `nome:${chaveNome(nome)}` : undefined;
+    if (!id && cod.codigo == null && kNome && ctx.mapas?.ambiguas?.has(kNome))
+      erros.push(`produto: há ${ctx.mapas.ambiguas.get(kNome)} produtos com o nome “${nome}”. Use o código do produto.`);
+    const chaves = chavesItem(id, cod.codigo, nome ?? "");
+    const produtoId = chaves.map((k) => ctx.existentes.get(k)).find(Boolean);
+    // Pelo nome e não achou: a mensagem mostra o nome como a pessoa digitou (o motor só teria o normalizado)
+    if (!produtoId && !id && cod.codigo == null && nome && !ctx.mapas?.ambiguas?.has(kNome!))
+      erros.push(`produto “${nome}” não está cadastrado. Importe a planilha de produtos antes (Configurações › Produtos).`);
+    if (produtoId && ctx.mapas?.semControle?.has(produtoId))
+      erros.push("produto: este produto não controla estoque. Marque “Controla estoque” no cadastro dele antes.");
+    if (produtoId && ctx.mapas?.inativos?.has(produtoId))
+      erros.push("produto: este produto está inativo. Reative-o no cadastro antes de lançar o saldo.");
+    if (erros.length) return { ok: false, erros, rotulo };
+    const quantidade = arred(qtd!);
+    if (produtoId) {
+      const atual = Number(ctx.mapas?.saldos?.get(produtoId) ?? 0);
+      if (quantidade === atual) avisos.push(`O saldo já é ${fmtQtd(atual)}: nada a lançar${custo !== undefined ? " (o custo só entra junto com uma entrada de quantidade)" : ""}.`);
+      else if (quantidade < atual) avisos.push(`O saldo cai de ${fmtQtd(atual)} para ${fmtQtd(quantidade)} (ajuste de inventário)${custo !== undefined ? "; numa baixa o custo não entra" : ""}.`);
+      else if (ctx.mapas?.comMovimento?.has(produtoId)) avisos.push(`Este produto já tem movimentações: entra só a diferença (+${fmtQtd(arred(quantidade - atual))}).`);
+    }
+    return { ok: true, rotulo, chaves, avisos, dados: { quantidade, custoUnitario: custo } };
+  },
+};
+
+/* ───────── Colaboradores (id_sistema → CPF). Só o cadastro operacional: nunca salário, acesso ou dados bancários ───────── */
+const OPCOES_FUNCAO: OpcaoRef[] = Object.entries(LABELS_FUNCAO).map(([valor, rotulo]) => ({
+  valor, rotulo, aceitos: ({ TECNICO_CAMPO: ["tecnico", "técnico", "tecnico de refrigeracao", "campo"], RESPONSAVEL_TECNICO: ["rt", "responsavel"], ADMINISTRATIVO: ["adm", "escritorio"], MOTORISTA: [], OUTRO: [] } as Record<string, string[]>)[valor] ?? [],
+}));
+const OPCOES_TIPO_EQUIPE: OpcaoRef[] = [{ valor: "CAMPO", rotulo: "Campo", aceitos: ["externo"] }, { valor: "ADMINISTRATIVO", rotulo: "Administrativo", aceitos: ["interno", "escritorio", "adm"] }];
+/** Mesma regra da importação da folha: técnico de campo e motorista são equipe de campo; o resto, administrativa. */
+const equipeDaFuncao = (f: string) => (f === "TECNICO_CAMPO" || f === "MOTORISTA" ? "CAMPO" : "ADMINISTRATIVO");
+const formatarCpf = (d: string) => d.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, "$1.$2.$3-$4");
+const minimoDigitos = (t: string, n: number) => t.replace(/\D/g, "").length >= n;
+
+const colaboradores: DefImportacao = {
+  entidade: "colaboradores", singular: "colaborador", plural: "colaboradores", chaveDescricao: "id_sistema ou CPF",
+  baixar: "Baixar colaboradores já cadastrados (para editar em massa)",
+  avisoPrevia: "Só o cadastro operacional. Salário, acesso ao app, perfil e dados bancários não entram por aqui (salário e benefícios: Financeiro › Custo de pessoal).",
+  colunas: [
+    { chave: "nome", titulo: "nome", obrig: true, ajuda: "Nome completo", exemplo: "Rafael Teixeira", apelidos: ["nome_completo", "colaborador", "funcionario", "tecnico"] },
+    { chave: "cpf", titulo: "cpf", obrig: true, ajuda: "CPF, com ou sem pontuação (chave para não duplicar)", exemplo: "529.982.247-25", apelidos: ["documento", "cpf_colaborador", "n_cpf"] },
+    { chave: "telefone", titulo: "telefone", ajuda: "Telefone ou celular (o app e o WhatsApp precisam dele; vazio entra com aviso)", exemplo: "(31) 98888-0101", apelidos: ["celular", "fone", "whatsapp", "telefone_celular"] },
+    { chave: "email", titulo: "email", ajuda: "E-mail", exemplo: "rafael@empresa.com.br", apelidos: ["e_mail"] },
+    { chave: "funcao", titulo: "funcao", ajuda: "Função no Frivo (vazio = Técnico de campo, ao cadastrar)", exemplo: "Técnico de campo", opcoes: Object.values(LABELS_FUNCAO), apelidos: ["tipo", "funcao_no_sistema"] },
+    { chave: "equipe", titulo: "equipe", ajuda: "Campo ou Administrativo (vazio = pela função)", exemplo: "Campo", opcoes: OPCOES_TIPO_EQUIPE.map((o) => o.rotulo), apelidos: ["tipo_equipe", "lotacao"] },
+    { chave: "cargo", titulo: "cargo", ajuda: "Cargo (Configurações › Cargos). Se não existir, é criado e aparece no resultado para revisar.", exemplo: "Técnico de refrigeração", apelidos: ["funcao_cargo", "cargo_funcao"] },
+    { chave: "crea", titulo: "crea", ajuda: "CREA/CFT (responsável técnico)", exemplo: "", apelidos: ["cft", "registro_profissional"] },
+    { chave: "endereco", titulo: "endereco", ajuda: "Rua / avenida", exemplo: "", apelidos: ["logradouro", "rua"] },
+    { chave: "numero", titulo: "numero", ajuda: "Número", exemplo: "" },
+    { chave: "complemento", titulo: "complemento", ajuda: "Complemento", exemplo: "" },
+    { chave: "bairro", titulo: "bairro", ajuda: "Bairro", exemplo: "" },
+    { chave: "cidade", titulo: "cidade", ajuda: "Cidade", exemplo: "Belo Horizonte", apelidos: ["municipio"] },
+    { chave: "estado", titulo: "estado", ajuda: "UF (2 letras)", exemplo: "MG", apelidos: ["uf"] },
+    { chave: "cep", titulo: "cep", ajuda: "CEP", exemplo: "" },
+    { chave: "observacoes", titulo: "observacoes", ajuda: "Observações", exemplo: "", apelidos: ["obs", "observacao"] },
+    COLUNA_ID,
+  ],
+  chavesQueExistem: [chaveIdQueExiste("colaborador")],
+  exportar: (t, refs) => ({
+    nome: txt(t.nome), cpf: txt(t.cpf), telefone: txt(t.telefone), email: txt(t.email), funcao: LABELS_FUNCAO[t.tipo as string] ?? txt(t.tipo),
+    equipe: rotuloDe(OPCOES_TIPO_EQUIPE, t.tipoEquipe), cargo: t.cargoId ? rotuloDe(refs.cargo ?? [], t.cargoId) : "", crea: txt(t.crea),
+    endereco: txt(t.endereco), numero: txt(t.numero), complemento: txt(t.complemento), bairro: txt(t.bairro), cidade: txt(t.cidade),
+    estado: txt(t.estado), cep: txt(t.cep), observacoes: txt(t.observacoes), id_sistema: txt(t.id),
+  }),
+  validar(v, ctx) {
+    const erros: string[] = [];
+    const nome = texto(v.nome);
+    const rotulo = nome ?? "";
+    if (!nome) erros.push("nome: obrigatório.");
+    const id = lerId(v.id_sistema, erros);
+    const cpfTxt = texto(v.cpf);
+    const cpf = cpfTxt ? digitos(cpfTxt) : undefined;
+    if (!cpfTxt) erros.push("cpf: obrigatório.");
+    else if (cpf!.length !== 11) erros.push(`cpf: “${cpfTxt}” não tem 11 dígitos.`);
+    const kCpf = cpf?.length === 11 ? `cpf:${cpf}` : undefined;
+    const doCpf = kCpf ? ctx.existentes.get(kCpf) : undefined;
+    const doId = id ? ctx.existentes.get(`id:${id}`) : undefined;
+    // CPF que já está em 2 ou mais colaboradores (escrito de jeitos diferentes): sem o id_sistema, não dá
+    // para saber qual; com ele, é o id que decide e o CPF não serve de chave
+    const ambiguo = !!kCpf && !!ctx.mapas?.ambiguas?.has(kCpf);
+    if (ambiguo && !id)
+      erros.push(`cpf: “${cpfTxt}” está em ${ctx.mapas!.ambiguas!.get(kCpf!)} colaboradores desta empresa. Baixe a planilha de colaboradores e use o id_sistema.`);
+    // CPF novo precisa ser válido (os dígitos verificadores); o que já está no cadastro casa como está
+    if (kCpf && !doCpf && !ambiguo && !cpfValido(cpf!)) erros.push(`cpf: “${cpfTxt}” não é um CPF válido (confira os dígitos).`);
+    // O CPF é a identidade do colaborador: não muda pela planilha
+    if (doId && kCpf && !doCpf && !ambiguo) erros.push("cpf: diferente do CPF deste colaborador. O CPF não muda pela planilha — corrija na ficha do colaborador.");
+    const novo = !doId && !doCpf;
+    const avisos: string[] = [];
+    const telefone = texto(v.telefone);
+    if (telefone && !minimoDigitos(telefone, 8)) erros.push(`telefone: “${telefone}” está incompleto.`);
+    // Sem telefone o colaborador entra (não trava a implantação), mas o app e o WhatsApp precisam dele
+    else if (!telefone && novo) avisos.push("Sem telefone: o colaborador entra, mas o app e o WhatsApp precisam do telefone. Complete na ficha.");
+    const email = texto(v.email);
+    if (email && !EMAIL.test(email)) erros.push(`email: “${email}” não é um e-mail válido.`);
+    const funcao = opcao(v.funcao, OPCOES_FUNCAO, "funcao");
+    if (funcao.erro) erros.push(funcao.erro);
+    const equipe = opcao(v.equipe, OPCOES_TIPO_EQUIPE, "equipe");
+    if (equipe.erro) erros.push(equipe.erro);
+    // Cargo: um ativo da empresa; o que não existe é CRIADO na gravação (como na planilha da folha) e listado no
+    // resultado para o gestor revisar; o inativo não é recriado nem reativado
+    const nomeCargo = livre(v.cargo);
+    const cargo = opcao(v.cargo, ctx.refs.cargo ?? [], "cargo");
+    let cargoNovo: string | undefined;
+    if (cargo.erro && nomeCargo) {
+      if (ctx.mapas?.cargosInativos?.has(chaveNome(nomeCargo))) erros.push(`cargo “${nomeCargo}” está inativo. Reative em Configurações › Cargos (ou use outro).`);
+      else if (nomeCargo.length > 100) erros.push("cargo: no máximo 100 letras.");
+      else { cargoNovo = nomeCargo; avisos.push(`cargo “${nomeCargo}” não existe: será criado em Configurações › Cargos.`); }
+    }
+    const uf = texto(v.estado)?.toUpperCase();
+    if (uf && !UFS.includes(uf)) erros.push(`estado: “${texto(v.estado)}” não é uma UF.`);
+    if (erros.length) return { ok: false, erros, rotulo };
+    const chaves = [...(id ? [`id:${id}`] : []), ...(kCpf && !ambiguo ? [kCpf] : [])];
+    return {
+      ok: true, rotulo, chaves, avisos,
+      dados: {
+        nome: pNome(nome), cpf: formatarCpf(cpf!), telefone, email: email ? padronizarEmail(email) : undefined,
+        tipo: funcao.valor ?? (novo ? "TECNICO_CAMPO" : undefined),
+        tipoEquipe: equipe.valor ?? (novo ? equipeDaFuncao(funcao.valor ?? "TECNICO_CAMPO") : undefined),
+        cargoId: cargo.valor, cargoNovo, crea: livre(v.crea),
+        endereco: pNome(texto(v.endereco)), numero: texto(v.numero), complemento: livre(v.complemento), bairro: pNome(texto(v.bairro)),
+        cidade: pNome(texto(v.cidade)), estado: uf, cep: texto(v.cep), observacoes: pLivre(texto(v.observacoes)),
+      },
+    };
+  },
+};
+
+/* ───────── Veículos (id_sistema → placa) ───────── */
+const OPCOES_TIPO_VEICULO: OpcaoRef[] = [
+  { valor: "CARRO", rotulo: "Carro", aceitos: ["automovel", "passeio", "utilitario"] }, { valor: "VAN", rotulo: "Van", aceitos: ["furgao", "furgão"] },
+  { valor: "MOTO", rotulo: "Moto", aceitos: ["motocicleta"] }, { valor: "CAMINHAO", rotulo: "Caminhão", aceitos: ["caminhonete"] }, { valor: "OUTRO", rotulo: "Outro" },
+];
+/** Placa sem espaço, hífen ou ponto, em maiúsculas: "frv-9a11" = "FRV9A11" */
+export const chavePlaca = (t: string) => t.replace(/[\s\-.]+/g, "").toUpperCase();
+/** Antiga (ABC1234) ou Mercosul (ABC1D23) */
+export const placaValida = (p: string) => /^[A-Z]{3}\d[A-Z0-9]\d{2}$/.test(p);
+const anoMaximo = () => new Date().getFullYear() + 1;
+function lerAno(v: Celula, campo: string, erros: string[]) {
+  const t = texto(v);
+  if (!t) return undefined;
+  const n = Number(t);
+  if (!/^\d{4}$/.test(t) || n < 1950 || n > anoMaximo()) { erros.push(`${campo}: “${t}” não é um ano (ex.: 2022).`); return undefined; }
+  return t;
+}
+
+const veiculos: DefImportacao = {
+  entidade: "veiculos", singular: "veículo", plural: "veículos", chaveDescricao: "id_sistema ou placa",
+  baixar: "Baixar veículos já cadastrados (para editar em massa)",
+  colunas: [
+    { chave: "placa", titulo: "placa", obrig: true, ajuda: "Placa antiga (ABC-1234) ou Mercosul (ABC1D23) — chave para não duplicar", exemplo: "FRV1A23", apelidos: ["placa_veiculo"] },
+    { chave: "modelo", titulo: "modelo", obrig: true, ajuda: "Modelo", exemplo: "Fiorino", apelidos: ["veiculo", "descricao"] },
+    { chave: "marca", titulo: "marca", ajuda: "Marca", exemplo: "Fiat", apelidos: ["fabricante", "montadora"] },
+    { chave: "ano", titulo: "ano", ajuda: "Ano de fabricação", exemplo: "2022", apelidos: ["ano_fabricacao", "ano_fab"] },
+    { chave: "ano_modelo", titulo: "ano_modelo", ajuda: "Ano do modelo", exemplo: "2023", apelidos: ["ano_mod"] },
+    { chave: "tipo", titulo: "tipo", ajuda: "Carro, Van, Moto, Caminhão ou Outro (vazio = Carro, ao cadastrar)", exemplo: "Van", opcoes: OPCOES_TIPO_VEICULO.map((o) => o.rotulo), apelidos: ["tipo_veiculo", "categoria"] },
+    { chave: "combustivel", titulo: "combustivel", ajuda: "Combustível", exemplo: "Flex", apelidos: ["combustível"] },
+    { chave: "cor", titulo: "cor", ajuda: "Cor", exemplo: "Branca" },
+    { chave: "chassi", titulo: "chassi", ajuda: "Chassi", exemplo: "" },
+    { chave: "renavam", titulo: "renavam", ajuda: "Renavam", exemplo: "" },
+    { chave: "quilometragem", titulo: "quilometragem", ajuda: "Quilometragem atual (número inteiro)", exemplo: "45300", apelidos: ["km", "km_atual", "hodometro", "odometro", "quilometragem_atual"] },
+    { chave: "responsavel_cpf", titulo: "responsavel_cpf", ajuda: "CPF do colaborador responsável (já cadastrado)", exemplo: "", apelidos: ["cpf_responsavel", "responsavel", "motorista_cpf", "cpf_motorista"] },
+    { chave: "observacoes", titulo: "observacoes", ajuda: "Observações", exemplo: "", apelidos: ["obs", "observacao"] },
+    COLUNA_ID,
+  ],
+  chavesQueExistem: [chaveIdQueExiste("veículo")],
+  exportar: (x) => {
+    const r = x.responsavel as { cpf?: string } | null | undefined;
+    return {
+      placa: txt(x.placa), modelo: txt(x.modelo), marca: txt(x.marca), ano: txt(x.ano), ano_modelo: txt(x.anoModelo),
+      tipo: rotuloDe(OPCOES_TIPO_VEICULO, x.tipo), combustivel: txt(x.combustivel), cor: txt(x.cor), chassi: txt(x.chassi), renavam: txt(x.renavam),
+      quilometragem: num(x.quilometragemAtual), responsavel_cpf: txt(r?.cpf), observacoes: txt(x.observacoes), id_sistema: txt(x.id),
+    };
+  },
+  validar(v, ctx) {
+    const erros: string[] = [];
+    const placaTxt = texto(v.placa);
+    const placa = placaTxt ? chavePlaca(placaTxt) : undefined;
+    const modelo = livre(v.modelo);
+    const rotulo = [placa, modelo].filter(Boolean).join(" — ");
+    if (!placaTxt) erros.push("placa: obrigatória.");
+    else if (!placaValida(placa!)) erros.push(`placa: “${placaTxt}” não é uma placa (ex.: ABC-1234 ou ABC1D23).`);
+    if (!modelo) erros.push("modelo: obrigatório.");
+    const id = lerId(v.id_sistema, erros);
+    const kPlaca = placa && placaValida(placa) ? `placa:${placa}` : undefined;
+    const doPlaca = kPlaca ? ctx.existentes.get(kPlaca) : undefined;
+    const doId = id ? ctx.existentes.get(`id:${id}`) : undefined;
+    const placaAmbigua = !!kPlaca && !!ctx.mapas?.ambiguas?.has(kPlaca);
+    if (placaAmbigua && !id)
+      erros.push(`placa: “${placaTxt}” está em ${ctx.mapas!.ambiguas!.get(kPlaca!)} veículos desta empresa (escrita de jeitos diferentes). Use o id_sistema.`);
+    if (doId && kPlaca && !doPlaca && !placaAmbigua) erros.push("placa: diferente da placa deste veículo. A placa não muda pela planilha — corrija na ficha do veículo.");
+    const ano = lerAno(v.ano, "ano", erros);
+    const anoModelo = lerAno(v.ano_modelo, "ano_modelo", erros);
+    const tipo = opcao(v.tipo, OPCOES_TIPO_VEICULO, "tipo");
+    if (tipo.erro) erros.push(tipo.erro);
+    const km = lerNumero(v.quilometragem, "quilometragem", erros, { inteiro: true });
+    if (km !== undefined && km < 0) erros.push("quilometragem: não pode ser negativa.");
+    const combustivel = livre(v.combustivel);
+    if (combustivel && combustivel.length > 30) erros.push("combustivel: no máximo 30 letras.");
+    // Responsável: um colaborador DESTA empresa, pelo CPF
+    const respTxt = texto(v.responsavel_cpf);
+    let responsavelId: string | undefined;
+    if (respTxt) {
+      const d = digitos(respTxt);
+      const k = `cpf:${d}`;
+      if (d.length !== 11) erros.push(`responsavel_cpf: “${respTxt}” não tem 11 dígitos.`);
+      else if (ctx.mapas?.colaboradoresAmbiguos?.has(k)) erros.push(`responsavel_cpf: “${respTxt}” está em mais de um colaborador. Corrija o cadastro dos colaboradores.`);
+      else if (!(responsavelId = ctx.mapas?.colaboradores?.get(k))) erros.push(`responsavel_cpf: nenhum colaborador com o CPF ${respTxt} nesta empresa. Importe os colaboradores antes.`);
+    }
+    if (erros.length) return { ok: false, erros, rotulo };
+    const novo = !doId && !doPlaca;
+    return {
+      ok: true, rotulo, chaves: [...(id ? [`id:${id}`] : []), ...(placaAmbigua ? [] : [kPlaca!])],
+      dados: {
+        placa, modelo, marca: livre(v.marca), ano, anoModelo, tipo: tipo.valor ?? (novo ? "CARRO" : undefined), combustivel, cor: livre(v.cor),
+        chassi: texto(v.chassi)?.toUpperCase(), renavam: texto(v.renavam), quilometragemAtual: km, responsavelId, observacoes: pLivre(texto(v.observacoes)),
+      },
+    };
+  },
+};
+
+export const IMPORTACOES: Record<EntidadeImportacao, DefImportacao> = { clientes, unidades, contatos, equipamentos, fornecedores, servicos, produtos, estoque, colaboradores, veiculos };
 
 /**
  * Baixar a planilha (exportar): ver o módulo da lista (tela e servidor usam esta tabela). Produtos e
@@ -631,5 +895,37 @@ export const PERMISSOES_EXPORTACAO: Record<EntidadeImportacao, Requisito> = {
   fornecedores: [["financeiro", "visualizar"], ["configuracoes", "visualizar"]],
   servicos: [["configuracoes", "visualizar"]],
   produtos: [["configuracoes", "visualizar"]],
+  estoque: [["estoque", "visualizar"]],
+  // Dados pessoais (CPF, telefone, endereço) saindo do sistema: só quem gerencia a equipe
+  colaboradores: [["equipes", "gerenciar"]],
+  veiculos: [["veiculos", "visualizar"]],
 };
+
+/**
+ * Criar = importar; editar = poder ATUALIZAR os duplicados. Mesmas permissões das telas. Aqui (puro), para
+ * a tela de Implantação mostrar só os atalhos que a pessoa pode usar; o servidor usa a MESMA tabela.
+ */
+export const PERMISSOES_IMPORTACAO: Record<EntidadeImportacao, { criar: Requisito; editar: Requisito }> = {
+  clientes: { criar: [["clientes", "criar"]], editar: [["clientes", "editar"]] },
+  unidades: { criar: REQUISITO_FAMILIA.unidades!, editar: REQUISITO_FAMILIA.unidades! },
+  contatos: { criar: REQUISITO_FAMILIA.contatos!, editar: REQUISITO_FAMILIA.contatos! },
+  equipamentos: { criar: [["equipamentos", "criar"]], editar: [["equipamentos", "editar"]] },
+  fornecedores: { criar: CADASTROS.fornecedores.permissoes.criar, editar: CADASTROS.fornecedores.permissoes.editar },
+  servicos: { criar: CADASTROS.servicos.permissoes.criar, editar: CADASTROS.servicos.permissoes.editar },
+  produtos: { criar: CADASTROS.produtos.permissoes.criar, editar: CADASTROS.produtos.permissoes.editar },
+  // Estoque: toda linha ajusta o saldo de um produto que já existe — lançar estoque é "gerenciar"
+  estoque: { criar: [["estoque", "gerenciar"]], editar: [["estoque", "gerenciar"]] },
+  colaboradores: { criar: [["equipes", "gerenciar"]], editar: [["equipes", "gerenciar"]] },
+  veiculos: { criar: [["veiculos", "gerenciar"]], editar: [["veiculos", "gerenciar"]] },
+};
+
+/**
+ * O modelo DESTA pessoa: as colunas restritas (ex.: custo, para quem não vê custo) somem do modelo, da
+ * exportação, do ligar colunas e da leitura — a planilha nem lê a coluna de quem não pode.
+ */
+export function defPara(entidade: EntidadeImportacao, permitido: (m: string, a: Acao) => boolean, papel?: string): DefImportacao {
+  const def = IMPORTACOES[entidade];
+  if (!def.colunas.some((c) => c.restrita)) return def;
+  return { ...def, colunas: def.colunas.filter((c) => !c.restrita || c.restrita(permitido, papel)) };
+}
 export type { ContextoImportacao };
