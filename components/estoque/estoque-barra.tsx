@@ -5,8 +5,8 @@ import { BuscaUrl, FiltroCheckUrl, FiltroSelectUrl, useListaUrl } from "@/compon
 import { BarraPeriodo, type PeriodoTela } from "@/components/listagem/periodo-cards";
 import { CampoBusca, type Opcao } from "@/components/listagem/listagem-ui";
 
-/** A barra enxuta da tela Estoque (padrão da casa): busca por produto + "Mais filtros" (situação, inativos). */
-export function BarraEstoque({ situacoes }: { situacoes: Opcao[] }) {
+/** A barra enxuta da tela Estoque (padrão da casa): busca por produto + "Mais filtros" (situação, uso, inativos). */
+export function BarraEstoque({ situacoes, usos }: { situacoes: Opcao[]; usos: Opcao[] }) {
   const { navegar } = useListaUrl();
   return (
     <BarraFiltros
@@ -14,6 +14,7 @@ export function BarraEstoque({ situacoes }: { situacoes: Opcao[] }) {
       paramBusca="busca" navegar={navegar}
       filtros={[
         { id: "situacao", label: "Situação", params: ["situacao"], render: () => <FiltroSelectUrl param="situacao" vazio="Todas as situações" opcoes={situacoes} rotulo="Situação" className="w-full" /> },
+        { id: "uso", label: "Uso", params: ["uso"], render: () => <FiltroSelectUrl param="uso" vazio="Material e Peça" opcoes={usos} rotulo="Uso" className="w-full" /> },
         { id: "inativos", label: "Inativos", params: ["inativos"], render: () => <FiltroCheckUrl param="inativos" rotulo="Mostrar inativos" /> },
       ]}
     />

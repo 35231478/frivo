@@ -13,6 +13,7 @@ import { SaldoQtd, SeloSituacao } from "@/components/estoque/situacao";
 import { avisosEstoque } from "@/lib/estoque/regras";
 import { ConteudoUrl, LimparBuscaUrl, ListaUrl, PaginacaoUrl, TabelaProUrl } from "@/components/listagem/lista-url";
 import { Dica } from "@/components/ui/dica";
+import { LABEL_USO, USOS } from "@/lib/estoque/categoria";
 import { ImportarPlanilha } from "@/components/importacao/importar-planilha";
 
 export const metadata: Metadata = { title: "Estoque" };
@@ -59,8 +60,8 @@ export default async function EstoquePage({ searchParams }: { searchParams: Prom
           </div>
         </div>
 
-        {/* Barra enxuta (padrão da casa): busca por produto + "Mais filtros" (situação, inativos) */}
-        <BarraEstoque situacoes={Object.entries(FILTROS_SITUACAO).map(([value, label]) => ({ value, label }))} />
+        {/* Barra enxuta (padrão da casa): busca por produto + "Mais filtros" (situação, uso, inativos) */}
+        <BarraEstoque situacoes={Object.entries(FILTROS_SITUACAO).map(([value, label]) => ({ value, label }))} usos={USOS.map((value) => ({ value, label: LABEL_USO[value] }))} />
 
         {/* Aviso no topo: quantos sem estoque, abaixo do mínimo e negativos — cada frase filtra a lista */}
         {avisos.length > 0 && (
@@ -98,6 +99,7 @@ export default async function EstoquePage({ searchParams }: { searchParams: Prom
                           <SaldoQtd saldo={p.saldo} unidade={p.unidade} situacao={p.situacao} />
                           {p.estoqueMinimo != null && <span className="text-ink-subtle">mín. {formatarQtd(p.estoqueMinimo)}</span>}
                           {p.situacao !== "ok" && <SeloSituacao situacao={p.situacao} />}
+                          <span className="text-ink-subtle" data-uso-produto={p.uso}>{LABEL_USO[p.uso]}</span>
                         </div>
                       </div>
                       {podeLancar && <LancarEstoque compacto produto={{ id: p.id, nome: p.nome, unidade: p.unidade, saldo: p.saldo }} />}
@@ -110,6 +112,7 @@ export default async function EstoquePage({ searchParams }: { searchParams: Prom
                     tela="estoque" padrao="nome"
                     colunas={[
                       { id: "nome", titulo: "Produto", ordenar: "nome", obrigatoria: true, classe: "truncate" },
+                      { id: "uso", titulo: "Uso", largura: 90 },
                       { id: "unidade", titulo: "Un.", largura: 64, ordenar: "unidade" },
                       { id: "saldo", titulo: "Saldo", alinhar: "direita", largura: 110, ordenar: "saldo", obrigatoria: true },
                       { id: "minimo", titulo: "Mínimo", alinhar: "direita", largura: 90, ordenar: "minimo" },
@@ -130,6 +133,7 @@ export default async function EstoquePage({ searchParams }: { searchParams: Prom
                             {p.descricao && <span className="hidden xl:inline text-xs text-ink-subtle truncate">{p.descricao}</span>}
                           </span>
                         ),
+                        uso: <span className="text-ink-muted" data-uso-produto={p.uso}>{LABEL_USO[p.uso]}</span>,
                         unidade: <span className="text-ink-muted">{p.unidade}</span>,
                         saldo: <SaldoQtd saldo={p.saldo} unidade="" situacao={p.situacao} />,
                         minimo: <span className={cn(PLANILHA.numero, "text-ink-muted")}>{p.estoqueMinimo != null ? formatarQtd(p.estoqueMinimo) : "—"}</span>,

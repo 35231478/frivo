@@ -13,6 +13,7 @@ import { temModulo } from "@/lib/modulos/servidor";
 import { janela, lerOrdem, lerPaginacao, ordemPrisma, paginaValida, um, type MapaOrdem, type ParamsUrl } from "@/lib/listagem";
 import { lerPeriodo, type Periodo } from "@/lib/periodo";
 import { arred, avisoSaldo, calcularMovimento, situacaoEstoque, type Operacao, type OrigemMov, type Situacao, type TipoMov } from "@/lib/estoque/regras";
+import { ehUso, USO_PADRAO, type Uso } from "@/lib/estoque/categoria";
 
 /** Regra de negócio recusada (vira 400 na API). */
 export class ErroEstoque extends Error {}
@@ -121,28 +122,32 @@ export type FiltroSituacao = keyof typeof FILTROS_SITUACAO;
 export interface LinhaEstoque {
   id: string; nome: string; descricao: string | null; unidade: string; ativo: boolean; controlaEstoque: boolean;
   saldo: number; estoqueMinimo: number | null; situacao: Situacao;
+  /** "Orçamento E": Material (vai dentro do serviço) ou Peça (vendida à parte) */
+  uso: Uso;
 }
 
 /** A tela Estoque é dos produtos que CONTROLAM estoque (ativos; inativos sob pedido). */
-export function whereEstoque(empresaId: string, f: { busca?: string; inativos?: string }): Prisma.ProdutoWhereInput {
+export function whereEstoque(empresaId: string, f: { busca?: string; inativos?: string; uso?: string }): Prisma.ProdutoWhereInput {
   const q = (f.busca ?? "").trim().slice(0, 100);
   return {
     empresaId, controlaEstoque: true,
     ...(f.inativos === "1" ? {} : { ativo: true }),
+    // Filtro por Uso: só os dois valores do tipo (qualquer outra coisa na URL = sem filtro)
+    ...(ehUso(f.uso) && { uso: f.uso }),
     ...(q && { OR: [{ nome: { contains: q, mode: "insensitive" } }, { descricao: { contains: q, mode: "insensitive" } }] }),
   };
 }
 
-const linha = (p: { id: string; nome: string; descricao: string | null; unidade: string; ativo: boolean; controlaEstoque: boolean; saldo: unknown; estoqueMinimo: number | null }): LinhaEstoque => {
+const linha = (p: { id: string; nome: string; descricao: string | null; unidade: string; ativo: boolean; controlaEstoque: boolean; saldo: unknown; estoqueMinimo: number | null; uso: string }): LinhaEstoque => {
   const saldo = arred(Number(p.saldo));
-  return { id: p.id, nome: p.nome, descricao: p.descricao, unidade: p.unidade, ativo: p.ativo, controlaEstoque: p.controlaEstoque, saldo, estoqueMinimo: p.estoqueMinimo, situacao: situacaoEstoque(saldo, p.estoqueMinimo) };
+  return { id: p.id, nome: p.nome, descricao: p.descricao, unidade: p.unidade, ativo: p.ativo, controlaEstoque: p.controlaEstoque, saldo, estoqueMinimo: p.estoqueMinimo, situacao: situacaoEstoque(saldo, p.estoqueMinimo), uso: ehUso(p.uso) ? p.uso : USO_PADRAO };
 };
-const SELECT_LINHA = { id: true, nome: true, descricao: true, unidade: true, ativo: true, controlaEstoque: true, saldo: true, estoqueMinimo: true } as const;
+const SELECT_LINHA = { id: true, nome: true, descricao: true, unidade: true, ativo: true, controlaEstoque: true, saldo: true, estoqueMinimo: true, uso: true } as const;
 
 export async function listarEstoque(empresaId: string, sp: ParamsUrl) {
-  const busca = um(sp.busca), inativos = um(sp.inativos), sit = um(sp.situacao);
+  const busca = um(sp.busca), inativos = um(sp.inativos), sit = um(sp.situacao), uso = um(sp.uso);
   const situacao = (Object.prototype.hasOwnProperty.call(FILTROS_SITUACAO, sit) ? sit : "") as FiltroSituacao | "";
-  const where = whereEstoque(empresaId, { busca, inativos });
+  const where = whereEstoque(empresaId, { busca, inativos, uso });
   const { pagina: pedida, porPagina } = lerPaginacao(sp);
   const orderBy = ordemPrisma(lerOrdem(sp, ORDEM_ESTOQUE), ORDEM_ESTOQUE, ORDEM_PADRAO_ESTOQUE) as Prisma.ProdutoOrderByWithRelationInput[];
 

@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { corDado } from "@/lib/ui/tokens";
-import { COMPORTAMENTOS, OPCOES_COMPORTAMENTO } from "@/lib/estoque/categoria";
+import { COMPORTAMENTOS, LABEL_USO, OPCOES_COMPORTAMENTO, OPCOES_USO, USOS } from "@/lib/estoque/categoria";
 import { erroDasLinhas, erroDosItensDoKit } from "@/lib/estoque/composicao";
 import type { Acao } from "@/lib/permissoes";
 import { REGIMES, REGIME_LABEL } from "@/lib/folha/calculo";
@@ -96,6 +96,8 @@ export interface ColunaCadastro {
   formato?: "texto" | "moeda" | "cor-nome" | "codigo";
   /** Coluna de texto longo (descrição): fica elástica na tabela, em vez da largura fixa das demais */
   larga?: boolean;
+  /** Valor gravado → rótulo na tela (ex.: uso MATERIAL → "Material"); o que não estiver aqui aparece como veio */
+  rotulos?: Record<string, string>;
   /**
    * Ordenar clicando no cabeçalho: nome do campo (escalar) ou o orderBy do Prisma para a direção
    * (relação/contagem). Sem isto a coluna não é ordenável — o servidor só aceita a lista branca.
@@ -256,7 +258,7 @@ export const CAMPOS_RETENCAO_SERVICO: CampoCadastro[] = RETENCOES_FEDERAIS_SERVI
 /** Seção "Materiais padrão" do serviço (E3.2): desenho próprio (components/servicos/secao-materiais-servico.tsx) */
 export const GRUPO_MATERIAIS = "Materiais padrão";
 /** O que a composição precisa saber do produto (nome, unidade, categoria → comportamento) */
-export const PRODUTO_DA_COMPOSICAO = { id: true, nome: true, unidade: true, ativo: true, categoriaProduto: { select: { id: true, nome: true, comportamento: true } } } as const;
+export const PRODUTO_DA_COMPOSICAO = { id: true, nome: true, unidade: true, ativo: true, uso: true, categoriaProduto: { select: { id: true, nome: true, comportamento: true } } } as const;
 const ITENS_DO_KIT = { orderBy: { ordem: "asc" }, select: { produtoId: true, quantidade: true, produto: { select: PRODUTO_DA_COMPOSICAO } } } as const;
 
 const SO_GESTOR: Requisito = [["configuracoes", "gerenciar"]];
@@ -350,10 +352,15 @@ export const CADASTROS: Record<EntidadeCadastro, DefCadastro> = {
         ajuda: "Diz como o produto entra na cobrança (venda à parte ou incluso no serviço). Sem categoria, é tratado como incluso no serviço — defina para não deixar de cobrar uma peça.",
       },
       { key: "controlaEstoque", label: "Controla estoque", tipo: "booleano", ajuda: "Desmarcado, o produto sai da tela Estoque e dos alertas (item sob encomenda, serviço embalado…). O histórico de movimentações fica." },
+      {
+        key: "uso", label: "Uso", tipo: "select", opcoes: OPCOES_USO,
+        ajuda: "Material vai dentro do serviço, sem valor para o cliente. Peça é vendida à parte, em linha própria. No orçamento dá para trocar só naquele orçamento.",
+      },
     ],
     colunas: [
       { key: "codigo", label: "Cód.", formato: "codigo", ordenar: "codigo" },
-      { key: "nome", label: "Nome", ordenar: "nome" }, { key: "categoriaProduto", label: "Categoria", ordenar: (dir) => ({ categoriaProduto: { nome: dir } }) },
+      { key: "nome", label: "Nome", ordenar: "nome" }, { key: "uso", label: "Uso", rotulos: LABEL_USO, ordenar: "uso" },
+      { key: "categoriaProduto", label: "Categoria", ordenar: (dir) => ({ categoriaProduto: { nome: dir } }) },
       { key: "unidade", label: "Unidade", ordenar: "unidade" },
       { key: "valorPadrao", label: "Valor padrão", formato: "moeda", ordenar: "valorPadrao" }, { key: "estoqueMinimo", label: "Est. mín.", ordenar: "estoqueMinimo" },
     ],
@@ -365,6 +372,8 @@ export const CADASTROS: Record<EntidadeCadastro, DefCadastro> = {
       valorPadrao: numero(), estoqueMinimo: numero({ inteiro: true }), controlaEstoque: booleanoPadraoVerdadeiro,
       // Vínculo por id (da empresa e ativa — regra em especificos.ts); vazio = sem categoria
       categoriaProdutoId: textoOpcional(40),
+      // "Orçamento E": vazio ao criar = o que a categoria sugere (especificos.ts); vazio ao editar = não muda
+      uso: z.preprocess((v) => (vazio(v) ? undefined : v), z.enum(USOS, { errorMap: () => ({ message: "Uso inválido: Material ou Peça." }) }).optional()),
     }, { descricao: null, unidade: "un", valorPadrao: null, estoqueMinimo: null, controlaEstoque: true, categoriaProdutoId: null }),
   },
   servicos: {

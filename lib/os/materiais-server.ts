@@ -6,6 +6,7 @@ import { materiaisPadraoDoServico, precosDeVendaParaCliente, produtoComoMaterial
 import { prepararItemOs, type EntradaItemOs, type ItemOsPreparado } from "@/lib/os/materiais";
 import { custoDoMaterialOs } from "@/lib/os/custo";
 import { ultimosCustos } from "@/lib/estoque/custo";
+import { comportamentoDoProduto } from "@/lib/estoque/categoria";
 
 /**
  * Estoque E3.3b — lado do servidor dos itens da OS com materiais/peças. A regra é a pura (lib/os/materiais +
@@ -43,7 +44,7 @@ export async function catalogoParaItemOs(empresaId: string, clienteId: string | 
   if (p.produtoId) {
     const r = await produtoComoMaterial(empresaId, p.produtoId, clienteId);
     if (!r) return null;
-    const m = materialAvulso({ produtoId: r.produto.id, nome: r.produto.nome, unidade: r.produto.unidade, comportamento: r.produto.categoriaProduto?.comportamento, valorVendaUnit: r.valorVendaUnit, custoUnit: r.custoUnit });
+    const m = materialAvulso({ produtoId: r.produto.id, nome: r.produto.nome, unidade: r.produto.unidade, comportamento: comportamentoDoProduto(r.produto), valorVendaUnit: r.valorVendaUnit, custoUnit: r.custoUnit });
     const precos = await precosDeVendaParaCliente(empresaId, clienteId, [r.produto.id]);
     return { tipo: "PRODUTO" as const, produtoId: r.produto.id, descricao: r.produto.nome, unidade: r.produto.unidade, valorUnitario: precos.get(r.produto.id) ?? 0, origemPreco: "padrao" as const, material: m };
   }
