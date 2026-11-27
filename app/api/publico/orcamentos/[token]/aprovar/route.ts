@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { agendarPush, notificarRespostaOrcamento } from "@/lib/push/eventos";
 import { prisma } from "@/lib/prisma";
 import { aprovacaoPublicaSchema } from "@/lib/validations";
 import { diaCivilPassou } from "@/lib/fuso";
@@ -53,6 +54,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tok
   });
   if (r.count !== 1) return NextResponse.json({ erro: "Este orçamento não está disponível para aprovação" }, { status: 400 });
   await registrarEvento({ empresaId: orcamento.empresaId, orcamentoId: orcamento.id, tipo: "APROVADO", detalhe: nome, ip });
+  // O escritório recebe o push "Orçamento aprovado" (depois da resposta)
+  agendarPush(() => notificarRespostaOrcamento(orcamento.empresaId, orcamento.id));
 
   // Opção A (P2): aprovar NÃO cria conta a receber. O orçamento aprovado fica "a faturar" (calculado:
   // lib/financeiro/a-faturar.ts) e entra na previsão do painel; a cobrança nasce no "Faturar".

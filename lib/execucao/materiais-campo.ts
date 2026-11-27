@@ -15,6 +15,7 @@
  */
 import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
+import { agendarPush, notificarEstoqueNegativo } from "@/lib/push/eventos";
 import { movimentar } from "@/lib/estoque/servidor";
 import { arred } from "@/lib/estoque/regras";
 import { sincronizarStatusOs } from "@/lib/os/sincronizar-status";
@@ -59,6 +60,8 @@ async function acertarEstoque(tx: Prisma.TransactionClient, l: Linha, novaQtd: n
     if (!(Math.abs(valor) > 0)) return null;
     const r = await movimentar({ ...base, operacao, valor: Math.abs(valor), observacao: obs }, tx);
     if (r.aviso) acerto.avisos.push(`${l.descricao}: ${r.aviso}`);
+    // Ficou negativo: o escritório (quem vê o Estoque) recebe o push — um por produto por dia; relê o saldo depois
+    if (r.saldo < 0) agendarPush(() => notificarEstoqueNegativo(l.empresaId, l.produtoId!, osNumero));
     return r;
   };
 

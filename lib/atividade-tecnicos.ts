@@ -16,6 +16,8 @@ import { sugerirVeiculo } from "@/lib/veiculo-sugestao";
  * só ao salvar a edição é que o executor passa a ser exigido.
  */
 
+import { agendarPush, notificarAtribuicao } from "@/lib/push/eventos";
+
 export class ErroTecnicos extends Error {}
 
 export const MSG_SEM_EXECUTOR = "Escolha quem executa: uma equipe ou um ou mais colaboradores.";
@@ -87,13 +89,22 @@ export async function resolverTecnicos(
   return { responsavel, outros: ids.filter((i) => i !== responsavel), equipeId: equipe?.id ?? null };
 }
 
-/** Grava a composição (substitui a lista anterior de técnicos adicionais). */
+/**
+ * Grava a composição (substitui a lista anterior de técnicos adicionais). Quem ENTROU na atividade recebe o
+ * push "Nova OS para você" depois da resposta (lib/push/eventos › notificarAtribuicao, que relê a atividade:
+ * transação desfeita ou técnico que saiu de novo não recebe nada). Devolve os técnicos novos.
+ */
 export async function gravarTecnicos(
   tx: Prisma.TransactionClient, atividadeId: string, r: { responsavel: string | null; outros: string[]; equipeId: string | null },
-) {
+): Promise<string[]> {
+  const antes = await tx.atividadeOs.findUnique({ where: { id: atividadeId }, select: { tecnicoId: true, tecnicosEquipe: { select: { tecnicoId: true } } } });
+  const jaEstavam = new Set([antes?.tecnicoId, ...(antes?.tecnicosEquipe ?? []).map((t) => t.tecnicoId)].filter(Boolean));
   await tx.atividadeOs.update({ where: { id: atividadeId }, data: { tecnicoId: r.responsavel, equipeId: r.equipeId } });
   await tx.atividadeTecnico.deleteMany({ where: { atividadeId } });
   if (r.outros.length) await tx.atividadeTecnico.createMany({ data: r.outros.map((tecnicoId) => ({ atividadeId, tecnicoId })) });
+  const novos = [r.responsavel, ...r.outros].filter((t): t is string => !!t && !jaEstavam.has(t));
+  if (novos.length) agendarPush(() => notificarAtribuicao(atividadeId, novos));
+  return novos;
 }
 
 /**

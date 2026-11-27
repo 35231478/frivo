@@ -20,6 +20,7 @@
 import { randomBytes } from "node:crypto";
 import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
+import { agendarPush, notificarAceite } from "@/lib/push/eventos";
 import { NOTA_BAIXA_ACEITE } from "@/lib/alertas/sino";
 import { whatsappLink } from "@/lib/utils";
 import { emailConfigAtiva, enviarEmail } from "@/lib/email";
@@ -123,6 +124,8 @@ export async function registrarAceiteLocal(
     },
   });
   if (count) await prisma.osHistorico.create({ data: { ordemServicoId: os.id, usuarioId: quem.usuarioId, acao: ACAO_ACEITE, detalhes: `No local, por ${dados.nome} (assinatura colhida na tela)${notaNoHistorico(avaliacao.avaliacao)}`.slice(0, 500) } });
+  // Com comentário ou nota baixa: o técnico da OS e o escritório recebem o push (menos quem colheu)
+  if (count) agendarPush(() => notificarAceite(quem.empresaId, os.id));
   return { aceite: (await aceiteDaOs(os.id, quem.empresaId))!, jaEstava: !count };
 }
 
@@ -227,6 +230,8 @@ export async function confirmarAceitePublico(
     data: { situacao: "CONFIRMADO", metodo: "REMOTO", nome: dados.nome, ressalva: dados.ressalva, confirmadoEm: agora, vistoEm: null, ip: origem.ip ?? null, userAgent: navegador(origem.userAgent), contatoId: doCliente, ...avaliacao },
   });
   if (count !== 1) throw new ErroAceite(MSG_JA_CONFIRMADO, 409);
+  // Com ressalva, comentário ou nota baixa: o técnico da OS e o escritório recebem o push
+  agendarPush(() => notificarAceite(a.empresaId, os.id));
   await prisma.osHistorico.create({
     data: {
       ordemServicoId: os.id, usuarioId: os.criadoPorId, acao: dados.ressalva ? ACAO_ACEITE_RESSALVA : ACAO_ACEITE,

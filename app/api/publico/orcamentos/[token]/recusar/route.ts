@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { agendarPush, notificarRespostaOrcamento } from "@/lib/push/eventos";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { diaCivilPassou } from "@/lib/fuso";
@@ -34,6 +35,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tok
   });
   if (r.count !== 1) return NextResponse.json({ erro: "Este orçamento não está disponível para resposta" }, { status: 400 });
   await registrarEvento({ empresaId: orcamento.empresaId, orcamentoId: orcamento.id, tipo: "RECUSADO", detalhe: `${parsed.data.nome}: ${parsed.data.motivo}`, ip });
+  // O escritório recebe o push "Orçamento recusado" (depois da resposta)
+  agendarPush(() => notificarRespostaOrcamento(orcamento.empresaId, orcamento.id));
   await avisarResponsavel(orcamento.id, "RECUSADO");
 
   return NextResponse.json({ ok: true, status: "REPROVADO" });

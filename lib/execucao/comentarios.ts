@@ -6,6 +6,7 @@
  *  - sino: `contarComentariosNovos` (OS com comentário do campo depois da última leitura da pessoa).
  */
 import { prisma } from "@/lib/prisma";
+import { agendarPush, notificarComentarioOS } from "@/lib/push/eventos";
 import type { ContextoExecucao } from "@/lib/execucao/contexto";
 import { DIAS_SINO_COMENTARIOS, MSG_COMENTARIO_DUPLICADO, osComNovidade, ordenarComentarios, type ComentarioTela, type DadosComentario, type OrigemComentario } from "@/lib/tecnico/comentarios";
 
@@ -37,6 +38,8 @@ export async function comentarDoApp(ctx: ContextoExecucao, d: DadosComentario): 
       data: { empresaId, ordemServicoId: osId, atividadeId: ctx.atividade.id, usuarioId, autorNome: await nomeDe(empresaId, usuarioId), origem: "APP", texto: d.texto.trim(), clientId: d.clientId },
       select: SELECT,
     });
+    // Push "Comentário novo na OS": os outros técnicos da OS e o escritório (menos o autor), depois da resposta
+    agendarPush(() => notificarComentarioOS(osId, usuarioId, { comentarioId: c.id, texto: c.texto }));
     return { ok: true, status: 201, dados: { comentario: apresentar(c, usuarioId) } };
   } catch (e) {
     // Dois envios simultâneos da mesma gravação: o segundo perde na chave única e devolve o primeiro
@@ -74,6 +77,8 @@ export async function comentarDoEscritorio(empresaId: string, osId: string, usua
     data: { empresaId, ordemServicoId: osId, usuarioId, autorNome: await nomeDe(empresaId, usuarioId), origem: "ESCRITORIO", texto: texto.trim() },
     select: SELECT,
   });
+  // Push "Comentário novo na OS": os técnicos da OS e o resto do escritório (menos o autor), depois da resposta
+  agendarPush(() => notificarComentarioOS(osId, usuarioId, { comentarioId: c.id, texto: c.texto }));
   // Quem respondeu leu tudo até aqui
   await prisma.osComentarioLeitura.upsert({
     where: { usuarioId_ordemServicoId: { usuarioId, ordemServicoId: osId } },
