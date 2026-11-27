@@ -15,11 +15,12 @@ import type { MaterialPrevisto } from "@/lib/tecnico/o-que-levar";
 import { prazoDefinido } from "@/lib/os/prazo-execucao";
 
 const SELECT_CARTAO = {
-  id: true, titulo: true, status: true, dataAgendada: true, duracaoMin: true, observacao: true, planoVisitasId: true, prazo: true,
+  id: true, titulo: true, status: true, dataAgendada: true, duracaoMin: true, observacao: true, planoVisitasId: true, prazo: true, iniciadaEm: true,
   tipoOs: { select: { nome: true, cor: true } },
   ordemServico: {
     select: {
       id: true, numero: true, prioridade: true, descricao: true, origem: true, observacoes: true, prazoExecucao: true,
+      criadoPor: { select: { nome: true } },
       cliente: { select: { nome: true, nomeFantasia: true, telefone: true, endereco: true, numero: true, bairro: true, cidade: true, estado: true, cep: true } },
       unidade: { select: { nome: true, logradouro: true, numero: true, complemento: true, bairro: true, cidade: true, estado: true, cep: true, latitude: true, longitude: true, telefone: true } },
     },
@@ -69,6 +70,11 @@ export interface CartaoAtividade {
    * lib/tecnico/o-que-levar-server). Ausente = opção desligada
    */
   materiais?: MaterialPrevisto[];
+  /** Quando começou (ISO); a atividade em andamento antiga, sem a coluna, usa a hora agendada. null = não começou */
+  iniciadaEm: string | null;
+  /** Quem abriu a OS e como ela chegou (dado de escritório: fica em "Detalhes") */
+  criadoPor: string | null;
+  origem: string;
 }
 
 /** Junta os textos do escritório (sem repetir o mesmo texto), um parágrafo cada. */
@@ -91,6 +97,10 @@ export function montarCartao(a: AtividadeCartao): CartaoAtividade {
     chamado: os.origem === "PORTAL_CLIENTE", orientacao: juntarTextos(a.observacao, os.observacoes),
     prazo: prazoDefinido({ prazoAtividade: a.prazo, prazoOs: os.prazoExecucao }),
     equipamentos: a._count.equipamentos, atendidos: a.equipamentos.length, adicionais: a._count.servicosAdicionais,
+    // Atividade esquecida em andamento: o início (as antigas, sem a coluna, usam a hora agendada)
+    iniciadaEm: (a.iniciadaEm ?? (a.status === "EM_ANDAMENTO" ? a.dataAgendada : null))?.toISOString() ?? null,
+    // Dado de escritório (vai para "Detalhes" no topo da OS)
+    criadoPor: os.criadoPor?.nome ?? null, origem: os.origem,
   };
 }
 

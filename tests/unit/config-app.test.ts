@@ -29,12 +29,13 @@ describe("ConfigApp — padrões (espelham os @default do schema)", () => {
       avisarCliente: true, // "A caminho" / "Cheguei": nasce LIGADO
       oQueLevar: true, // "O que levar" (materiais previstos): nasce LIGADO
       rastrearLocalizacao: false, // mapa dos técnicos: dado sensível, nasce DESLIGADO
+      alertaAndamentoHoras: 4, // atividade esquecida em andamento: avisa depois de 4 h
     });
   });
 
-  it("SELECT_CONFIG_APP cobre exatamente as 15 colunas app*", () => {
+  it("SELECT_CONFIG_APP cobre exatamente as 16 colunas app*", () => {
     expect(Object.keys(SELECT_CONFIG_APP).sort()).toEqual([
-      "appAvisarCliente", "appCadastrarEquipamento", "appConclusaoObrigatoria", "appEsconderValores", "appExibirContatosCliente", "appExibirDadosCliente",
+      "appAlertaAndamentoHoras", "appAvisarCliente", "appCadastrarEquipamento", "appConclusaoObrigatoria", "appEsconderValores", "appExibirContatosCliente", "appExibirDadosCliente",
       "appExigirLocalizacao", "appFotoSomenteCamera", "appMarcaDagua", "appMarcaDaguaCoordenadas",
       "appMarcaDaguaEndereco", "appMarcaDaguaOs", "appOQueLevar", "appRastrearLocalizacao", "appUmDispositivo",
     ]);

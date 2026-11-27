@@ -532,7 +532,9 @@ describe("execução guiada", () => {
     await motor.baixarRetrato("aA");
     online = false;
     await abrirOs("aA");
-    expect($("[data-fotos-servico]")!.textContent).toContain("Cada foto vai com o equipamento (ou “Geral da OS”) e uma legenda");
+    // A explicação saiu da tela e foi para a dica (ⓘ) do título — o balão fica no DOM, mesmo fechado
+    expect(document.body.textContent).toContain("Cada foto vai com o equipamento (ou “Geral da OS”) e uma legenda");
+    expect($("[data-fotos-servico]")!.textContent).not.toContain("Cada foto vai com o equipamento");
     const escolher = async (el: Element | null, v: string) => {
       await act(async () => { Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, "value")!.set!.call(el, v); el!.dispatchEvent(new Event("change", { bubbles: true })); });
       await esperar();

@@ -41,6 +41,8 @@ import { lerBoleto } from "@/lib/financeiro/boleto";
 import { validarRefEmpresa } from "@/lib/ref-empresa";
 import { sugestoesDaNota, vincularNota } from "@/lib/compras/conciliacao-server";
 import { reservarNumeros } from "@/lib/numeracao-server";
+import { whereNotasCompra } from "@/lib/listas/filtros";
+import { motivoNaoDescartarNota } from "@/lib/cadastros/regras-arquivar";
 
 /** Recusa com status HTTP e dados extras (ex.: a nota que já existe). */
 export { LABEL_STATUS_NOTA };
@@ -163,8 +165,9 @@ export async function carregarNota(empresaId: string, id: string) {
   });
 }
 
-export async function listarNotas(empresaId: string, { pagina = 1, porPagina = 25 } = {}) {
-  const where = { empresaId };
+/** A lista de notas, com a busca e o filtro de situação da URL (lib/listas/filtros › whereNotasCompra). */
+export async function listarNotas(empresaId: string, { pagina = 1, porPagina = 25 } = {}, sp: Record<string, string | undefined> = {}) {
+  const where = whereNotasCompra(empresaId, sp);
   const [total, notas] = await Promise.all([
     prisma.notaCompra.count({ where }),
     prisma.notaCompra.findMany({
@@ -173,6 +176,45 @@ export async function listarNotas(empresaId: string, { pagina = 1, porPagina = 2
     }),
   ]);
   return { total, notas };
+}
+
+/* ───────── Descartar (a importada por engano, antes de lançar) ───────── */
+
+/** O bloqueio do descarte (GET …/impacto e DELETE usam o mesmo): a lançada não se descarta. */
+export async function impactoDescarteNota(empresaId: string, id: string) {
+  const n = await prisma.notaCompra.findFirst({ where: { id, empresaId }, select: { status: true, _count: { select: { contasPagar: true } } } });
+  if (!n) return null;
+  return { bloqueio: motivoNaoDescartarNota({ status: n.status, contasPagar: n._count.contasPagar }), avisos: [] as string[] };
+}
+
+/**
+ * Apaga a nota (os itens e os vínculos com pedido vão junto, em cascata) e grava o registro de qual era,
+ * quem descartou, quando e por quê. Na mesma transação: ou fica o registro e some a nota, ou nada muda.
+ * A trava é conferida de novo na gravação (outra pessoa pode ter lançado no meio do caminho).
+ */
+export async function descartarNota({ empresaId, usuarioId, id, motivo }: { empresaId: string; usuarioId: string | null; id: string; motivo: string }) {
+  return prisma.$transaction(async (tx) => {
+    const n = await tx.notaCompra.findFirst({ where: { id, empresaId }, include: { _count: { select: { contasPagar: true } } } });
+    if (!n) throw new ErroNota("Nota não encontrada.", 404);
+    const bloqueio = motivoNaoDescartarNota({ status: n.status, contasPagar: n._count.contasPagar });
+    if (bloqueio) throw new ErroNota(bloqueio, 409);
+    const registro = await tx.notaCompraDescarte.create({ data: {
+      empresaId, notaId: n.id, chaveAcesso: n.chaveAcesso, numero: n.numero, serie: n.serie, emitenteNome: n.emitenteNome,
+      emitenteCnpj: n.emitenteCnpj, valorTotal: n.valorTotal, dataEmissao: n.dataEmissao, statusNaHora: n.status,
+      motivo: motivo || null, usuarioId,
+    } });
+    const apagadas = await tx.notaCompra.deleteMany({ where: { id, empresaId, status: { not: "LANCADA" } } });
+    if (!apagadas.count) throw new ErroNota("Nota já lançada não se descarta: o estorno é pela conta a pagar e pelo ajuste de estoque.", 409);
+    return registro;
+  });
+}
+
+/** Os descartes recentes (a lista de notas mostra quem descartou o quê e quando). */
+export function descartesRecentes(empresaId: string, take = 20) {
+  return prisma.notaCompraDescarte.findMany({
+    where: { empresaId }, orderBy: { descartadoEm: "desc" }, take,
+    select: { id: true, numero: true, serie: true, emitenteNome: true, valorTotal: true, motivo: true, descartadoEm: true, usuario: { select: { nome: true } } },
+  });
 }
 
 /* ───────── Conciliar (de-para) ───────── */

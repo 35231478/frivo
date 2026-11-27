@@ -8,7 +8,8 @@ import { aplicarPrivacidade } from "@/lib/tecnico/cartao";
 import { carregarConfigApp } from "@/lib/tecnico/config-app-server";
 import { temModulo } from "@/lib/modulos/servidor";
 import { cadastroParaRetrato } from "@/lib/execucao/cadastro-campo";
-import { avisoParaRetrato, avisosDeHoje } from "@/lib/execucao/aviso-cliente";
+import { avisoParaRetrato, avisosDeHoje, whatsappDoCliente } from "@/lib/execucao/aviso-cliente";
+import { andamentoParaRetrato } from "@/lib/execucao/andamento-server";
 import { aceiteParaRetrato } from "@/lib/os/aceite-server";
 import { pode, type Permissoes } from "@/lib/permissoes";
 import { comMateriaisPrevistos } from "@/lib/tecnico/o-que-levar-server";
@@ -68,7 +69,10 @@ export async function GET(_: NextRequest, { params }: Params) {
   // "O que levar": os materiais previstos desta OS (opção da empresa desligada = nada sai)
   const [comMateriais] = await comMateriaisPrevistos(empresaId, [cartao], config.oQueLevar);
   // Materiais usados em campo nesta atividade (sem valores; "meu" = lançado por quem está com o aparelho)
-  const materiais = await materiaisDaAtividade(empresaId, atividadeId, guard.session.user.id);
+  // Atividade esquecida em andamento (limite, jornada, última gravação) e o WhatsApp do topo da OS (1 toque)
+  const [materiais, andamento, whatsapp] = await Promise.all([
+    materiaisDaAtividade(empresaId, atividadeId, guard.session.user.id), andamentoParaRetrato(empresaId, atividadeId), whatsappDoCliente(empresaId, config, cartao.osId),
+  ]);
   return NextResponse.json({
     cartao: aplicarPrivacidade(comMateriais, config),
     execucao: {
@@ -86,6 +90,8 @@ export async function GET(_: NextRequest, { params }: Params) {
     avisoCliente,
     aceite,
     // Campos-ponte do app: sem Equipamentos some o vínculo pela lista; sem QR Codes, a leitura de etiqueta
+    andamento,
+    whatsapp,
     modulos: { equipamentos: await temModulo(empresaId, "equipamentos"), qrcodes: await temModulo(empresaId, "qrcodes") },
     geradoEm: new Date().toISOString(),
   }, { headers: { "Cache-Control": "private, no-store" } });

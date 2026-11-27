@@ -30,6 +30,7 @@ import {
   FileText, ClipboardList, HardHat, MapPin, TrendingUp, BellRing, Settings2,
   Paperclip, Repeat, StickyNote, Building2, FileCheck, AlertCircle, Wand2, DollarSign,
   Plus, CalendarDays, ChevronDown, CheckCircle2, PauseCircle, RefreshCw, XCircle, History, User, Trash2, SlidersHorizontal, Timer,
+  Loader2,
 } from "lucide-react";
 import { chaveDiaCivil, diaCivilDeChave, diasAteDiaCivil, partesBR } from "@/lib/fuso";
 import { PLANILHA, valorSemMoeda } from "@/lib/planilha";
@@ -37,6 +38,7 @@ import { InputData } from "@/components/ui/input-data";
 import { SeletorCadastro } from "@/components/cadastros/seletor-cadastro";
 import { PreviaCobrancaContrato } from "@/components/contratos/previa-cobranca";
 import { usePermissoes } from "@/components/providers/permissoes-provider";
+import { AvisosImpacto } from "@/components/ui/inativar-registro";
 import { AtalhoDocumentacao } from "@/components/documentacao/atalho-documentacao";
 import { SomenteLeitura } from "@/components/config/permissao-config";
 import { PERIODICIDADES_COBRANCA, passoCobranca, textoFrequencia } from "@/lib/financeiro/contrato-previsao";
@@ -153,6 +155,8 @@ export function ContratoForm({ initialData, somenteLeitura = false, horarioComer
   const [statusMenuOpen, setStatusMenuOpen] = useState(false);
   const [statusAlvo, setStatusAlvo] = useState<string | null>(null);
   const [motivoStatus, setMotivoStatus] = useState("");
+  // O que a troca faria agora (saída de Ativo: OS agendadas e previsões canceladas), antes de confirmar
+  const [impactoStatus, setImpactoStatus] = useState<{ avisos: string[] } | "carregando" | null>(null);
   const [salvandoStatus, setSalvandoStatus] = useState(false);
   const [historicoStatus, setHistoricoStatus] = useState<HistoricoStatusItem[]>(initialData?.historicoStatus ?? []);
 
@@ -344,6 +348,10 @@ export function ContratoForm({ initialData, somenteLeitura = false, horarioComer
     setStatusMenuOpen(false);
     setMotivoStatus("");
     setStatusAlvo(status);
+    setImpactoStatus("carregando");
+    fetch(`/api/contratos/${initialData!.id}/impacto?status=${encodeURIComponent(status)}`, { cache: "no-store" })
+      .then(async (r) => { const d = await r.json().catch(() => null); setImpactoStatus(r.ok && d ? { avisos: d.avisos ?? [] } : { avisos: [] }); })
+      .catch(() => setImpactoStatus({ avisos: [] }));
   }
 
   async function confirmarStatus() {
@@ -534,13 +542,16 @@ export function ContratoForm({ initialData, somenteLeitura = false, horarioComer
           <div className="bg-white rounded-card shadow-card-hover w-full max-w-md p-5 space-y-4" onClick={(e) => e.stopPropagation()}>
             <h3 className="text-base font-bold text-ink">Mudar status para “{LABELS_STATUS_CONTRATO[statusAlvo] ?? statusAlvo}”?</h3>
             <p className="text-sm text-ink-muted">{STATUS_OPCOES.find((o) => o.valor === statusAlvo)?.descricao}</p>
+            {impactoStatus === "carregando"
+              ? <p className="flex items-center gap-2 text-sm text-ink-muted"><Loader2 className="w-4 h-4 animate-spin" /> Verificando o que muda…</p>
+              : <AvisosImpacto avisos={impactoStatus?.avisos} />}
             <div>
               <label className="text-xs font-semibold text-ink">Motivo (opcional)</label>
               <Textarea value={motivoStatus} onChange={(e) => setMotivoStatus(e.target.value)} rows={3} placeholder="Ex: distrato solicitado pelo cliente, pausa por inadimplência…" />
             </div>
             <div className="flex justify-end gap-2">
               <Button type="button" variant="secondary" onClick={() => setStatusAlvo(null)} disabled={salvandoStatus}>Cancelar</Button>
-              <Button type="button" variant="primary" loading={salvandoStatus} onClick={confirmarStatus}>Confirmar</Button>
+              <Button type="button" variant="primary" loading={salvandoStatus} disabled={impactoStatus === "carregando"} onClick={confirmarStatus}>Confirmar</Button>
             </div>
           </div>
         </div>
@@ -566,7 +577,8 @@ export function ContratoForm({ initialData, somenteLeitura = false, horarioComer
                     <>
                       <div className="fixed inset-0 z-40" onClick={() => setStatusMenuOpen(false)} />
                       <div className="absolute left-0 mt-2 z-50 w-72 bg-white border border-surface-border rounded-card shadow-card-hover p-1.5">
-                        {STATUS_OPCOES.map((o) => {
+                        {/* Cancelar tem permissão própria (Contratos › Excluir): sem ela, a opção não aparece */}
+                        {STATUS_OPCOES.filter((o) => o.valor !== "CANCELADO" || podePerm("contratos", "excluir")).map((o) => {
                           const atual = o.valor === statusVal;
                           return (
                             <button

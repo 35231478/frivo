@@ -1,6 +1,6 @@
 "use client";
 
-import { confirmar, toast } from "@/components/ui/avisos";
+import { toast } from "@/components/ui/avisos";
 import { useState, useEffect, useMemo } from "react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { FormField, FormGrid } from "@/components/ui/form-field";
 import { Dica } from "@/components/ui/dica";
+import { InativarRegistro } from "@/components/ui/inativar-registro";
 import { Drawer } from "@/components/ui/drawer";
 import { SelectCadastroRapido } from "@/components/ui/select-cadastro-rapido";
 import { TIPO_OS } from "@/components/cadastro-rapido/definicoes";
@@ -19,7 +20,7 @@ import { TabelaPro, type ColunaPro } from "@/components/listagem/tabela-pro";
 import { PLANILHA } from "@/lib/planilha";
 import { formatarData } from "@/lib/utils";
 import {
-  Plus, Pencil, Ban, Check, Trash2, ArrowUp, RotateCcw,
+  Plus, Pencil, Check, Trash2, ArrowUp,
   ListChecks, Link2, History, Loader2, ExternalLink, Boxes, Wrench, AlertTriangle,
 } from "lucide-react";
 
@@ -127,37 +128,6 @@ export function TelaFormularios() {
     } catch { setErro("Sem conexão. Tente de novo."); } finally { setSalvando(false); }
   }
 
-  async function inativar(f: Formulario) {
-    // O impacto antes de decidir: em quantas combinações de equipamento e tipo de OS ele é usado
-    const vinculos = await fetch(`/api/formularios/${f.id}/vinculos`).then((r) => (r.ok ? r.json() : [])).catch(() => []);
-    const n = Array.isArray(vinculos) ? vinculos.length : 0;
-    const uso = n === 0 ? "Não está vinculado a nenhum equipamento." : `Em uso em ${n} ${n === 1 ? "combinação" : "combinações"} de equipamento e tipo de OS.`;
-    if (!(await confirmar({
-      titulo: `Inativar o formulário "${f.nome}"?`,
-      mensagem: `${uso} Ele deixa de aparecer nas próximas OS; as respostas já dadas continuam no histórico.`,
-      perigo: true, confirmarTexto: "Inativar",
-    }))) return;
-    try {
-      const res = await fetch(`/api/formularios/${f.id}`, { method: "DELETE" });
-      if (!res.ok) { toast(await erroDaResposta(res, "Não foi possível inativar o formulário."), "erro"); return; }
-      setFormularios((p) => (p ?? []).filter((x) => x.id !== f.id));
-      setInativos((p) => [...(p ?? []), f].sort(porNome));
-      toast("Formulário inativado. Está na aba Inativos.");
-    } catch { toast("Sem conexão. Tente de novo.", "erro"); }
-  }
-
-  async function reativar(f: Formulario) {
-    try {
-      const res = await fetch(`/api/formularios/${f.id}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ativo: true }) });
-      // Recusado: as duas abas ficam como estão e a tela diz por quê
-      if (!res.ok) { toast(await erroDaResposta(res, "Não foi possível reativar o formulário."), "erro"); return; }
-      const salvo: Formulario = await res.json();
-      setInativos((p) => (p ?? []).filter((x) => x.id !== f.id));
-      setFormularios((p) => [...(p ?? []), { ...f, ...salvo }].sort(porNome));
-      toast("Formulário reativado.");
-    } catch { toast("Sem conexão. Tente de novo.", "erro"); }
-  }
-
   const q = busca.trim().toLowerCase();
   const daAba = aba === "inativos" ? inativos : formularios;
   const filtrados = useMemo(() => (q ? (daAba ?? []).filter((f) => f.nome.toLowerCase().includes(q)) : daAba ?? []), [daAba, q]);
@@ -172,18 +142,21 @@ export function TelaFormularios() {
         className="p-1.5 text-ink-muted hover:text-primary-600 hover:bg-primary-50 rounded transition-colors">
         {podeGerenciar ? <Pencil className="w-4 h-4" aria-hidden /> : <ListChecks className="w-4 h-4" aria-hidden />}
       </button>
-      {podeGerenciar && aba === "ativos" && (
-        <button type="button" onClick={() => void inativar(f)} aria-label={`Inativar ${f.nome}`} title="Inativar" data-inativar-formulario={f.id}
-          className="p-1.5 text-ink-muted hover:text-atrasado hover:bg-atrasado-claro rounded transition-colors">
-          <Ban className="w-4 h-4" aria-hidden />
-        </button>
-      )}
-      {podeGerenciar && aba === "inativos" && (
-        <button type="button" onClick={() => void reativar(f)} aria-label={`Reativar ${f.nome}`} title="Reativar" data-reativar-formulario={f.id}
-          className="p-1.5 text-ink-muted hover:text-ok-texto hover:bg-ok-claro rounded transition-colors">
-          <RotateCcw className="w-4 h-4" aria-hidden />
-        </button>
-      )}
+      {/* Inativar e reativar: o botão padrão dos cadastros (impacto: em quantas combinações é usado) */}
+      <InativarRegistro url={`/api/formularios/${f.id}`} modulo="configuracoes" acaoReativar="gerenciar" permitido={podeGerenciar}
+        ativo={aba !== "inativos"} nome={f.nome} entidade="formulário" comMotivo={false}
+        atributos={aba !== "inativos" ? { "data-inativar-formulario": f.id } : { "data-reativar-formulario": f.id }}
+        reativarCom={{ metodo: "PUT", corpo: { ativo: true } }}
+        avisoConcluido={aba !== "inativos" ? "Formulário inativado. Está na aba Inativos." : "Formulário reativado."}
+        aoConcluir={(ativo, salvo) => {
+          if (ativo) {
+            setInativos((p) => (p ?? []).filter((x) => x.id !== f.id));
+            setFormularios((p) => [...(p ?? []), { ...f, ...salvo }].sort(porNome));
+          } else {
+            setFormularios((p) => (p ?? []).filter((x) => x.id !== f.id));
+            setInativos((p) => [...(p ?? []), f].sort(porNome));
+          }
+        }} />
     </span>
   );
 

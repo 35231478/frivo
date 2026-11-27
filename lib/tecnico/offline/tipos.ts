@@ -10,6 +10,7 @@ import type { AvisoClienteRetrato, AvisosTela } from "@/lib/tecnico/aviso-client
 import type { AceiteRetrato } from "@/lib/os/aceite";
 import type { MaterialPrevisto } from "@/lib/tecnico/o-que-levar";
 import type { MaterialTela } from "@/lib/tecnico/materiais";
+import type { Jornada } from "@/lib/atendimento/prazo";
 
 export type { Operacao };
 export type TipoOperacao = Operacao["tipo"];
@@ -31,6 +32,19 @@ export interface CartaoTela {
   materiais?: MaterialPrevisto[];
   /** O prazo DEFINIDO ("AAAA-MM-DD") da atividade ou da OS. null/ausente = sem prazo definido (ou lista antiga) */
   prazo?: string | null;
+  /** Quando começou (ISO), para o aviso de atividade esquecida em andamento. Ausente em listas antigas */
+  iniciadaEm?: string | null;
+  /** Dado de escritório (vai para "Detalhes"): quem abriu a OS e como ela chegou. Ausentes em listas antigas */
+  criadoPor?: string | null;
+  origem?: string;
+}
+
+/** Atividade esquecida em andamento: o limite da empresa e a jornada (para o "fim do expediente"), no aparelho */
+export interface AndamentoRetrato {
+  limiteHoras: number;
+  jornada: Jornada;
+  /** A última gravação da atividade no servidor (resposta, foto, material…): base do término sugerido */
+  ultimaGravacaoEm?: string | null;
 }
 
 export interface EquipamentoInfo {
@@ -113,6 +127,10 @@ export interface RetratoAtividade {
   avisoCliente?: AvisoClienteRetrato | null;
   /** Aceite do cliente na conclusão da OS: null = não se aplica a quem está logado; ausente em retratos antigos */
   aceite?: AceiteRetrato | null;
+  /** Atividade esquecida em andamento (limite, jornada, última gravação); ausente em retratos antigos */
+  andamento?: AndamentoRetrato;
+  /** WhatsApp do cliente para o toque de 1 botão no topo da OS; só com "Exibir contatos do cliente". Ausente em retratos antigos */
+  whatsapp?: string | null;
   /** Módulos da empresa que o app usa (campo-ponte); ausente em retratos antigos = tudo ligado */
   modulos?: { equipamentos: boolean; qrcodes: boolean };
   geradoEm: string;

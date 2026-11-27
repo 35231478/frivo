@@ -516,6 +516,7 @@ model Empresa {
   kitsMaterial           KitMaterial[]
   movimentacoesEstoque   MovimentacaoEstoque[]
   notasCompra            NotaCompra[]
+  notasCompraDescartes   NotaCompraDescarte[]
   deParasProduto         DeParaProdutoFornecedor[]
   orcamentos             Orcamento[]
   orcamentoAnexos        OrcamentoAnexo[]
@@ -703,6 +704,8 @@ model Configuracao {
   /// Rastrear a localização dos técnicos (Operações › Mapa). DESLIGADO por padrão: é dado sensível
   /// (LGPD) — sem ligar, o app não captura nada e o servidor recusa o que chegar
   appRastrearLocalizacao   Boolean @default(false) @map("app_rastrear_localizacao")
+  /// Atividade esquecida em andamento: depois de quantas horas o app avisa o técnico e o sino avisa o gestor (1 a 24)
+  appAlertaAndamentoHoras  Int     @default(4) @map("app_alerta_andamento_horas")
 
   // Notificações
   notifEmailAbrirOs       Boolean @default(false) @map("notif_email_abrir_os")
@@ -923,6 +926,7 @@ model Usuario {
   osMateriaisConsumidos  OsMaterial[]              @relation("OsMaterialConsumidoPor")
   osMateriaisDevolvidos  OsMaterial[]              @relation("OsMaterialDevolvidoPor")
   notasCompra            NotaCompra[]
+  notasCompraDescartadas NotaCompraDescarte[]
   modulosAlterados       EmpresaModulo[]           @relation("ModuloAlteradoPor")
   checklistRespostas     ChecklistResposta[]
   fotosAtendimento       FotoAtendimento[]
@@ -2111,6 +2115,9 @@ model AtividadeOs {
   /// "no prazo" = concluída até o fim do dia do prazo ou, sem prazo, do dia agendado. Atividades
   /// concluídas antes desta coluna existir ficam sem data (sem medição, nunca zero).
   concluidaEm    DateTime?       @map("concluida_em")
+  /// Quando a atividade COMEÇOU (a 1ª gravação no app, pela hora do toque; reabrir recomeça). Mede a atividade
+  /// esquecida em andamento (aviso ao técnico e ao gestor). Antes desta coluna: vazio — vale a hora agendada.
+  iniciadaEm     DateTime?       @map("iniciada_em")
   duracaoMin     Int?            @map("duracao_min")
   observacao     String?
   resumo         String?         @db.Text
@@ -4581,6 +4588,34 @@ model NotaCompra {
   @@index([categoriaId])
   @@index([centroCustoId])
   @@map("notas_compra")
+}
+
+/// Nota de compra DESCARTADA (importada por engano e ainda não lançada): a nota sai do banco com os
+/// itens, e fica aqui o registro de qual era, quem descartou, quando e por quê. A lançada não se
+/// descarta (o estorno é pela conta a pagar e pelo ajuste de estoque).
+model NotaCompraDescarte {
+  id           String   @id @default(cuid())
+  empresaId    String   @map("empresa_id")
+  /// A nota como era (a linha dela não existe mais)
+  notaId       String   @map("nota_id")
+  chaveAcesso  String   @map("chave_acesso")
+  numero       String
+  serie        String
+  emitenteNome String   @map("emitente_nome")
+  emitenteCnpj String   @map("emitente_cnpj")
+  valorTotal   Decimal  @map("valor_total") @db.Decimal(12, 2)
+  dataEmissao  DateTime @map("data_emissao")
+  /// IMPORTADA ou CONCILIADA no momento do descarte
+  statusNaHora String   @map("status_na_hora")
+  motivo       String?
+  usuarioId    String?  @map("usuario_id")
+  descartadoEm DateTime @default(now()) @map("descartado_em")
+
+  empresa Empresa  @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  usuario Usuario? @relation(fields: [usuarioId], references: [id], onDelete: SetNull)
+
+  @@index([empresaId, descartadoEm])
+  @@map("notas_compra_descartes")
 }
 
 /// Item da NF (det/prod). `produtoId` é preenchido na conciliação (de-para).

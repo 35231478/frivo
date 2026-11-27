@@ -66,6 +66,13 @@ export async function whatsappParaAviso(os: {
   return whatsappContatoPrincipal(os.clienteId, os.cliente.celular);
 }
 
+/** O WhatsApp do cliente desta OS (para o toque de 1 botão no topo da OS); só com "Exibir contatos do cliente". */
+export async function whatsappDoCliente(empresaId: string, config: { exibirContatosCliente: boolean }, osId: string): Promise<string | null> {
+  if (!config.exibirContatosCliente) return null;
+  const os = await prisma.ordemServico.findFirst({ where: { id: osId, empresaId }, select: SELECT_OS });
+  return os ? whatsappParaAviso(os) : null;
+}
+
 /** O que foi registrado HOJE (Brasília) em cada uma destas atividades, por evento (uma consulta só). */
 export async function avisosDeHojePorAtividade(atividadeIds: string[], agora: Date = new Date()): Promise<Map<string, AvisosTela>> {
   const porAtividade = new Map<string, AvisosTela>();

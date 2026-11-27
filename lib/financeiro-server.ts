@@ -625,6 +625,40 @@ export async function sincronizarPrevisoesDoContrato(contratoId: string, antes: 
 }
 
 /**
+ * OS futuras e intocadas do contrato: AGENDADA, nenhuma atividade fora de AGENDADA, nenhuma atividade
+ * passada, nada no financeiro (a trava osJaFaturada é por medição viva — aqui basta nenhum item).
+ * São as que a saída de ATIVO cancela; o impacto mostrado antes usa o MESMO filtro.
+ */
+const osFuturasIntocadasDoContrato = (contratoId: string, agora: Date): Prisma.OrdemServicoWhereInput => ({
+  contratoId,
+  status: "AGENDADA",
+  medicaoItens: { none: {} },
+  atividades: { none: { OR: [{ status: { not: "AGENDADA" } }, { dataAgendada: { lt: agora } }] } },
+});
+
+/**
+ * O que a saída de ATIVO faria AGORA (o modal de troca de status mostra antes de confirmar): as OS
+ * futuras e intocadas que seriam canceladas, as previsões em aberto (quantas e quanto) e as OS que
+ * já andaram e seguem. Mesmos filtros de `encerrarFinanceiroDoContrato`, só que sem gravar nada.
+ */
+export async function impactoSaidaDoContrato(contratoId: string, agora = new Date()) {
+  const [osACancelar, previsoes, osSeguem] = await Promise.all([
+    prisma.ordemServico.findMany({ where: osFuturasIntocadasDoContrato(contratoId, agora), select: { numero: true }, orderBy: { numero: "asc" } }),
+    prisma.contaReceber.aggregate({ where: previsoesAbertasDoContrato(contratoId), _count: { _all: true }, _sum: { valor: true } }),
+    prisma.ordemServico.findMany({
+      where: { contratoId, status: { notIn: ["CONCLUIDA", "CANCELADA"] }, NOT: osFuturasIntocadasDoContrato(contratoId, agora) },
+      select: { numero: true }, orderBy: { numero: "asc" },
+    }),
+  ]);
+  return {
+    osACancelar: osACancelar.map((o) => o.numero),
+    previsoes: previsoes._count._all,
+    valorPrevisoes: Number(previsoes._sum.valor ?? 0),
+    osSeguem: osSeguem.map((o) => o.numero),
+  };
+}
+
+/**
  * CO2: quando o contrato deixa de estar ATIVO (cancelado, encerrado, suspenso, vencido, excluído…),
  * a receita fantasma é limpa: cancela as previsões (PREVISTO) ainda não faturadas do
  * contrato — com motivo e evento na linha do tempo — e as OS AGENDADAS futuras e intocadas
@@ -638,17 +672,7 @@ export async function encerrarFinanceiroDoContrato(contratoId: string, motivo = 
     if (await cancelarPrevisaoDoContrato(c, motivo, usuarioId)) previsoesCanceladas++;
   }
 
-  // OS futuras e intocadas: AGENDADA, nenhuma atividade fora de AGENDADA, nenhuma atividade
-  // passada, nada no financeiro (a trava osJaFaturada é por medição viva — aqui basta nenhum item)
-  const candidatas = await prisma.ordemServico.findMany({
-    where: {
-      contratoId,
-      status: "AGENDADA",
-      medicaoItens: { none: {} },
-      atividades: { none: { OR: [{ status: { not: "AGENDADA" } }, { dataAgendada: { lt: agora } }] } },
-    },
-    select: { id: true },
-  });
+  const candidatas = await prisma.ordemServico.findMany({ where: osFuturasIntocadasDoContrato(contratoId, agora), select: { id: true } });
   for (const os of candidatas) {
     await prisma.ordemServico.update({ where: { id: os.id }, data: { status: "CANCELADA" } });
     if (usuarioId) {

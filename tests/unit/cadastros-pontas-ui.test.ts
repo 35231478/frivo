@@ -2,7 +2,7 @@
 /**
  * PONTAS SOLTAS DE CADASTRO (leva 4) — as telas:
  *  - a ficha do cliente (consulta e edição) inativa e reativa pelo botão padrão, com o mesmo texto da lista;
- *  - endereço e contato: "Inativar" (não "Excluir"), com o texto padrão sem prometer reativação;
+ *  - endereço e contato: "Inativar" (não "Excluir"), com o texto padrão (na leva 5, com reativação);
  *  - conta a pagar paga: sem "Cancelar conta" (nem no menu nem nos ícones da ficha);
  *  - colaborador: a opção "Inativo" do status só para quem pode inativar.
  */
@@ -145,16 +145,16 @@ describe("endereço e contato: Inativar, com o texto padrão", () => {
     await montar(createElement(UnidadesManager, { clienteId: "cl1", unidadesIniciais: [u("u1", "Loja Centro", true), u("u2", "Depósito", false)] } as any), permissoesTotais());
     await clicar([...document.querySelectorAll("button")].find((b) => txt(b).startsWith("Depósito")));
     expect(botao("Excluir")).toBeNull();
-    await clicar($("[data-inativar-endereco]"));
-    expect(txt($("[data-inativar-endereco]"))).toBe("Inativar");
-    const d = $("[data-confirmacao]")!;
+    // Leva 5: o botão padrão dos cadastros, e o texto voltou a prometer a reativação (agora existe pela tela)
+    expect(txt($('[data-inativar-registro="inativar"]'))).toBe("Inativar");
+    await clicar($('[data-inativar-registro="inativar"]'));
+    const d = $('[role="dialog"]')!;
     expect(txt(d)).toContain("Inativar endereço Depósito?");
-    expect(txt(d)).toContain("Tem certeza? O endereço sai das listas e seletores; nada é apagado.");
-    expect(txt(d)).not.toContain("reativ");
+    expect(txt(d)).toContain("Tem certeza? O endereço sai das listas e seletores; nada é apagado e pode ser reativado depois.");
     expect(txt(d)).toContain("Voltar");
-    await clicar($("[data-confirmar-sim]"));
-    expect(gravacoes()).toEqual([{ url: "/api/unidades/u2", metodo: "DELETE", corpo: null }]);
-    expect(txt(caixa)).not.toContain("Depósito");
+    await clicar(botao("Sim, inativar", d));
+    expect(gravacoes()).toEqual([{ url: "/api/unidades/u2", metodo: "DELETE", corpo: { motivo: "" } }]);
+    expect([...document.querySelectorAll("button")].some((b) => txt(b).startsWith("Depósito"))).toBe(false);
   });
 
   it("contato: o mesmo texto; voltar não grava", async () => {
@@ -162,11 +162,11 @@ describe("endereço e contato: Inativar, com o texto padrão", () => {
     const c = { id: "k1", nome: "Marta Souza", cargo: "Compras", telefone: null, celular: null, email: "marta@x.com", principal: false, recebeOs: false, recebeFinanceiro: false, observacoes: null };
     await montar(createElement(ContatosManager, { clienteId: "cl1", contatosIniciais: [c] } as any), permissoesTotais());
     await clicar([...document.querySelectorAll("button")].find((b) => txt(b).includes("Marta Souza")));
-    await clicar($("[data-inativar-contato]"));
-    const d = $("[data-confirmacao]")!;
+    await clicar($('[data-inativar-registro="inativar"]'));
+    const d = $('[role="dialog"]')!;
     expect(txt(d)).toContain("Inativar contato Marta Souza?");
-    expect(txt(d)).toContain("Tem certeza? O contato sai das listas e seletores; nada é apagado.");
-    await clicar($("[data-confirmar-nao]"));
+    expect(txt(d)).toContain("Tem certeza? O contato sai das listas e seletores; nada é apagado e pode ser reativado depois.");
+    await clicar(botao("Voltar", d));
     expect(gravacoes()).toEqual([]);
     expect(txt(caixa)).toContain("Marta Souza");
   });

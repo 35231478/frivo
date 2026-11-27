@@ -13,6 +13,7 @@ import { descricaoParaApp } from "@/lib/tecnico/cartao";
 import { guardadoDoRetrato, situacaoDoCartao, type EstadoCartao, type Guardado } from "@/lib/tecnico/chegada";
 import { toqueLeve } from "@/lib/haptico";
 import { BotaoQrEquipamento } from "@/components/tecnico/qr-equipamento";
+import { AvisosDoDia, type DadosAndamento } from "@/components/tecnico/andamento";
 import { chaveDiaBR, diaCivilDeChave, diasAteDiaCivil, horaBR, partesBR } from "@/lib/fuso";
 import { prazoParaOTecnico } from "@/lib/os/prazo-execucao";
 
@@ -255,7 +256,11 @@ function useGuardados(ids: string[]): Map<string, Guardado> {
   return guardados;
 }
 
-interface RespostaMeuDia { tecnico: { id: string; nome: string } | null; aviso?: string; dia: string | null; atividades: CartaoTela[]; anteriores: CartaoTela[] }
+interface RespostaMeuDia {
+  tecnico: { id: string; nome: string } | null; aviso?: string; dia: string | null; atividades: CartaoTela[]; anteriores: CartaoTela[];
+  /** Atividade esquecida em andamento: limite da empresa e jornada (ausente em listas antigas) */
+  andamento?: DadosAndamento;
+}
 interface RespostaAgenda { tecnico: { id: string; nome: string } | null; aviso?: string; dias: { dia: string; atividades: CartaoTela[] }[] }
 
 function useFila() {
@@ -351,6 +356,9 @@ export function MeuDia() {
         </div>
       )}
       {d?.aviso && <p className="rounded-card bg-atencao-claro border border-atencao/20 p-4 text-sm text-atencao-texto" data-aviso>{d.aviso}</p>}
+
+      {/* Atividade esquecida em andamento: um toque abre a OS para concluir */}
+      {d && <AvisosDoDia cartoes={[...d.anteriores, ...d.atividades]} fila={fila} andamento={d.andamento} />}
 
       {/* Aponta a câmera para a etiqueta: abre o equipamento na OS de hoje, ou a ficha com o histórico */}
       {d && d.tecnico && <BotaoQrEquipamento atividadeIds={[...d.anteriores, ...d.atividades].map((c) => c.atividadeId)} />}

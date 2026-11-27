@@ -601,3 +601,48 @@ describe("prazo de atendimento do contrato (aba Escopo e locais)", () => {
     expect(sp($("[data-horario-comercial]")!.textContent!)).toContain("sábado, das 8h às 12h");
   });
 });
+
+// ═════════════════════════ Cancelar: permissão própria e impacto antes ═════════════════════════
+describe("troca de status: cancelar pede Contratos › Excluir; o que cai aparece antes de confirmar", () => {
+  const EDITAR = { id: "ct1", clienteId: "c1", numero: "CT-1", tipo: "MANUTENCAO_PREVENTIVA", status: "ATIVO", periodicidade: "MENSAL",
+    dataInicio: new Date("2026-11-01"), valorMensal: 1000, unidades: [], anexos: [], reajustes: [], historicoStatus: [], recorrenciasLocais: [] };
+  const opcoesMenu = () => $$("div.absolute button");
+  const opcoesStatus = async () => {
+    await clicar($('button[title="Mudar status do contrato"]'));
+    return opcoesMenu().map((b) => b.querySelector("span span")?.textContent?.trim());
+  };
+  const modal = () => [...document.querySelectorAll("h3")].find((h) => h.textContent?.startsWith("Mudar status para"))?.parentElement ?? null;
+  const confirmarBtn = () => [...modal()!.querySelectorAll("button")].find((b) => b.textContent?.trim() === "Confirmar") as HTMLButtonElement;
+
+  it("sem Contratos › Excluir, a opção Cancelado não aparece (as outras sim)", async () => {
+    const semExcluir = { ...permissoesVazias(), contratos: { visualizar: true, criar: true, editar: true }, clientes: { visualizar: true } } as Permissoes;
+    await montar(semExcluir, EDITAR);
+    expect(await opcoesStatus()).toEqual(["Ativo (atual)", "Suspenso", "Em renovação", "Encerrado"]);
+  });
+
+  it("com a permissão: Cancelado abre o modal com o impacto; confirmar manda o status e o motivo", async () => {
+    rotas["GET /api/contratos/ct1/impacto?status=CANCELADO"] = { bloqueio: null, avisos: ["Cancela 1 OS agendada que ainda não começou (OS-7): sai da agenda.", "Cancela 6 previsões de cobrança em aberto (R$ 6.000,00): o que já foi faturado ou recebido não muda."] };
+    rotas["PATCH /api/contratos/ct1/status"] = { ok: true, status: "CANCELADO", historico: { id: "h1", statusAnterior: "ATIVO", statusNovo: "CANCELADO", motivo: "Distrato", createdAt: "2026-11-27T12:00:00Z", usuario: { id: "u1", nome: "Ana" } } };
+    await montar(permissoesTotais(), EDITAR);
+    expect(await opcoesStatus()).toEqual(["Ativo (atual)", "Suspenso", "Em renovação", "Encerrado", "Cancelado"]);
+    await clicar(opcoesMenu().find((b) => b.textContent?.startsWith("Cancelado"))!);
+    expect(chamadas.map((c) => `${c.metodo} ${c.url}`)).toContain("GET /api/contratos/ct1/impacto?status=CANCELADO");
+    expect([...modal()!.querySelectorAll("[data-avisos] li")].map((l) => sp(l.textContent!))).toEqual([
+      "Cancela 1 OS agendada que ainda não começou (OS-7): sai da agenda.",
+      "Cancela 6 previsões de cobrança em aberto (R$ 6.000,00): o que já foi faturado ou recebido não muda.",
+    ]);
+    await digitar(modal()!.querySelector("textarea")!, "Distrato");
+    await clicar(confirmarBtn());
+    expect(chamadas.filter((c) => c.metodo === "PATCH")).toEqual([{ url: "/api/contratos/ct1/status", metodo: "PATCH", corpo: { status: "CANCELADO", motivo: "Distrato" } }]);
+    expect($('button[title="Mudar status do contrato"]')!.textContent).toContain("Cancelado");
+  });
+
+  it("voltar a Ativo: sem avisos (nada é cancelado) e o Confirmar liberado", async () => {
+    rotas["GET /api/contratos/ct1/impacto?status=ATIVO"] = { bloqueio: null, avisos: [] };
+    await montar(permissoesTotais(), { ...EDITAR, status: "SUSPENSO" });
+    await opcoesStatus();
+    await clicar(opcoesMenu().find((b) => b.textContent?.startsWith("Ativo"))!);
+    expect(modal()!.querySelector("[data-avisos]")).toBeNull();
+    expect(confirmarBtn().disabled).toBe(false);
+  });
+});
