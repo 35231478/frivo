@@ -16,17 +16,21 @@ describe("nome automático do orçamento (curto: o quê — cliente)", () => {
     expect(nomeAutomaticoOrcamento({ cliente: "Padaria", itens: ["Limpeza de split", "Capacitor"] })).toBe("Limpeza de split +1 — Padaria");
     expect(nomeAutomaticoOrcamento({ cliente: "Padaria", itens: ["Limpeza de split"] })).toBe("Limpeza de split — Padaria");
   });
-  it("descrição longa de item é cortada na palavra, com reticências", () => {
+  // "Pronto pra janeiro 2" (H): as partes vão INTEIRAS — o nome sai no documento do cliente, na OS e no app,
+  // e "Limpeza completa de split…" ali parecia erro. A lista corta só na tela. (Antes: teto de 34 + 30 com "…".)
+  it("descrição longa de item vai inteira (o corte é visual, na lista)", () => {
     const n = nomeAutomaticoOrcamento({ cliente: "Hospital Santa Clara", itens: ["Instalação de condensadora com suporte de piso e interligação elétrica completa", "Gás"] });
-    expect(n).toBe("Instalação de condensadora com… +1 — Hospital Santa Clara");
+    expect(n).toBe("Instalação de condensadora com suporte de piso e interligação elétrica completa +1 — Hospital Santa Clara");
+    expect(nomeAutomaticoOrcamento({ cliente: "Padaria Pão Quente", itens: ["Limpeza completa de split (fictício)"] })).toBe("Limpeza completa de split (fictício) — Padaria Pão Quente");
     expect(n.length).toBeLessThanOrEqual(NOME_AUTO_MAX);
   });
-  it("sem nada: 'Orçamento' (+ cliente se houver); nunca passa do teto", () => {
+  it("sem nada: 'Orçamento' (+ cliente se houver); só o teto de segurança (o do nome digitado) corta", () => {
+    expect(NOME_AUTO_MAX).toBe(NOME_MAX);
     expect(nomeAutomaticoOrcamento({})).toBe("Orçamento");
     expect(nomeAutomaticoOrcamento({ cliente: "  Escola   Horizonte " })).toBe("Orçamento — Escola Horizonte");
-    const longo = nomeAutomaticoOrcamento({ tipoOs: "Manutenção Preventiva Programada Mensal do Sistema Central", cliente: "Associação Beneficente Hospitalar Santa Casa de Misericórdia" });
+    const longo = nomeAutomaticoOrcamento({ tipoOs: "Manutenção Preventiva Programada Mensal do Sistema Central", cliente: "Associação Beneficente Santa Casa" });
+    expect(longo).toBe("Manutenção Preventiva Programada Mensal do Sistema Central — Associação Beneficente Santa Casa");
     expect(longo.length).toBeLessThanOrEqual(NOME_AUTO_MAX);
-    expect(longo).toBe("Manutenção Preventiva Programada… — Associação Beneficente…");
     const semEspaco = nomeAutomaticoOrcamento({ tipoOs: "X".repeat(80), cliente: "Z".repeat(80) });
     expect(semEspaco.length).toBeLessThanOrEqual(NOME_AUTO_MAX);
     expect(semEspaco.endsWith("…")).toBe(true);

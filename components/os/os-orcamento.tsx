@@ -106,8 +106,8 @@ export function OsOrcamento({ osId, itens: iniciais, clienteId = null, situacao 
     const d = await chamar(`/api/ordens/${osId}/orcamento/${item.id}`, { method: "DELETE" });
     if (d) setItens((prev) => prev.filter((i) => i.id !== item.id && i.material?.osItemId !== item.id));
   }
-  async function marcarExecutado(itemId: string) {
-    const d = await chamar(`/api/ordens/${osId}/orcamento/${itemId}`, { method: "PUT", body: JSON.stringify({ executado: true }) });
+  async function marcarExecutado(itemId: string, executado = true) {
+    const d = await chamar(`/api/ordens/${osId}/orcamento/${itemId}`, { method: "PUT", body: JSON.stringify({ executado }) });
     if (d) setItens((p) => p.map((i) => (i.id === itemId ? { ...i, ...d } : i)));
   }
   async function doCatalogo(p: { servicoId?: string; produtoId?: string }) {
@@ -202,7 +202,13 @@ export function OsOrcamento({ osId, itens: iniciais, clienteId = null, situacao 
                 <span className="font-medium text-ink tabular-nums" data-total-item><span className="text-[10px] uppercase text-ink-subtle mr-1">Total</span>{" "}{formatarMoeda(num(i.valorTotal))}</span>
                 <span className="text-center">
                   {i.executado ? (
-                    <span className="inline-flex items-center gap-0.5 text-[10px] font-medium text-ok-texto bg-ok-claro px-1.5 py-0.5 rounded-full"><CheckCircle className="w-3 h-3" /> Executado</span>
+                    <span className="inline-flex items-center gap-1">
+                      <span className="inline-flex items-center gap-0.5 text-[10px] font-medium text-ok-texto bg-ok-claro px-1.5 py-0.5 rounded-full"><CheckCircle className="w-3 h-3" /> Executado</span>
+                      {/* Desmarcar: corrige o "executado" (inclusive o marcado ao concluir a última atividade no app). Registro fechado não desmarca */}
+                      {podeEditar && !motivo && (
+                        <button type="button" onClick={() => marcarExecutado(i.id, false)} className="text-[10px] text-ink-muted hover:text-atrasado underline-offset-2 hover:underline" data-desmarcar-executado>Desmarcar</button>
+                      )}
+                    </span>
                   ) : podeEditar && (
                     <Button type="button" variant="ghost" onClick={() => marcarExecutado(i.id)} className="text-[10px] h-6 px-2 text-acento">Marcar executado</Button>
                   )}

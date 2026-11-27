@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { nomeDaEmpresa } from "@/lib/empresa/nome";
 import { pedidoCompraEnvioSchema } from "@/lib/validations";
 import { formatarData, whatsappLink } from "@/lib/utils";
 import { emailConfigAtiva, enviarPedidoCompra } from "@/lib/email";
@@ -54,7 +55,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       detalhe = `${f.nome} · ${f.email}`;
     } else {
       // Sem o Resend configurado: abre o e-mail do usuário, já com o link do PC
-      const assunto = `Pedido de Compra ${pedido.numero} — ${u.empresaNome ?? ""}`.trim();
+      const assunto = `Pedido de Compra ${pedido.numero} — ${await nomeDaEmpresa(empresaId)}`.trim();
       const texto = `Olá, ${f.nome}!\n\nSegue o Pedido de Compra ${pedido.numero} para cotação${pedido.prazoNecessario ? ` (necessário até ${formatarData(pedido.prazoNecessario)})` : ""}:\n${publicUrl}\n\nPor favor, informe preço, validade e prazo de entrega de cada item.`;
       mailtoUrl = `mailto:${encodeURIComponent(f.email.trim())}?subject=${encodeURIComponent(assunto)}&body=${encodeURIComponent(texto)}`;
       detalhe = `pelo e-mail do usuário, para ${f.email}`;
@@ -64,7 +65,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     if (!f.telefone?.trim()) return NextResponse.json({ erro: `O fornecedor ${f.nome} não tem telefone no cadastro.` }, { status: 400 });
     tipo = "ENVIADO_WHATSAPP";
     whatsappUrl = whatsappLink(f.telefone, mensagemFornecedor({
-      numero: pedido.numero, empresa: u.empresaNome ?? "", contato: null,
+      numero: pedido.numero, empresa: await nomeDaEmpresa(empresaId), contato: null,
       prazo: pedido.prazoNecessario ? formatarData(pedido.prazoNecessario) : null, link: publicUrl,
     }));
     detalhe = `${f.nome} · ${f.telefone}`;

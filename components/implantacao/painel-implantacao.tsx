@@ -104,7 +104,14 @@ export function PainelImplantacao({ etapas, progresso }: { etapas: Etapa[]; prog
                   const cls = "inline-flex items-center gap-1.5 rounded-full border border-surface-border bg-surface-alt/40 px-2.5 py-1 text-xs text-ink";
                   return (
                     <li key={it.rotulo} data-item-etapa={it.rotulo}>
-                      {it.secao ? <Link href={hrefSecaoConfig(it.secao)} scroll={false} className={cn(cls, "hover:border-primary-300")}>{conteudo}</Link> : <span className={cls}>{conteudo}</span>}
+                      {it.secao ? (
+                        // Item que leva à tela onde se resolve: tem cara de botão (borda e texto de link, seta,
+                        // realce no passar do mouse e foco visível) — o item só informativo fica como etiqueta
+                        <Link href={hrefSecaoConfig(it.secao)} scroll={false} title={`Abrir ${it.rotulo} em Configurações`} data-item-clicavel
+                          className="inline-flex items-center gap-1.5 rounded-full border border-primary-200 bg-surface px-2.5 py-1 text-xs text-primary-700 shadow-sm transition-colors hover:border-primary-400 hover:bg-primary-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:ring-offset-1">
+                          {conteudo}<ChevronRight className="w-3.5 h-3.5 -mr-1" aria-hidden />
+                        </Link>
+                      ) : <span className={cls}>{conteudo}</span>}
                     </li>
                   );
                 })}

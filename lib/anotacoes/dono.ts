@@ -13,7 +13,8 @@
  *
  *   SUPER_ADMIN NÃO É CHAVE-MESTRA ENTRE EMPRESAS.
  *
- * Ele abre esta ferramenta e nada mais. O isolamento multiempresa do Frivo não passa por papel
+ * Ele abre esta ferramenta e, desde a leva "Pronto pra janeiro 2", a área de Empresas
+ * (/admin/empresas: criar uma empresa nova com os padrões). Nada mais. O isolamento multiempresa do Frivo não passa por papel
  * nenhum: ele vem de toda consulta ficar presa ao `empresaId` da SESSÃO (`where: { id, empresaId }`,
  * repetido em cada rota). Um SUPER_ADMIN da empresa A continua recebendo "não encontrado" ao pedir
  * um cliente, uma OS ou um equipamento da empresa B — igualzinho a qualquer outro usuário. E as
@@ -36,6 +37,14 @@ export const PAPEL_DONO = "SUPER_ADMIN";
 export function ehDonoDoFrivo(usuario: { role?: string | null } | null | undefined): boolean {
   return usuario?.role === PAPEL_DONO;
 }
+
+/**
+ * A área de Empresas (/admin/empresas) é a ÚNICA capacidade entre empresas deste papel, e é estreita
+ * de propósito: CRIAR uma empresa nova (com perfis, tipos de OS, configuração e 1º administrador) e
+ * LISTAR só o cadastro mínimo de cada uma (nome, CNPJ, data, nº de usuários). Nenhum dado de dentro
+ * de outra empresa (clientes, OS, financeiro) é lido por ela.
+ */
+export const MSG_SO_O_DONO_EMPRESAS = "A área de Empresas é do administrador do Frivo.";
 
 /** Mensagem única da recusa, para a API e a página dizerem a mesma coisa. */
 export const MSG_SO_O_DONO = "Esta ferramenta é do administrador do Frivo.";

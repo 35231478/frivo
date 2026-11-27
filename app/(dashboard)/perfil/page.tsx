@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { nomeDaEmpresa } from "@/lib/empresa/nome";
 import { PerfilClient } from "@/components/perfil/perfil-client";
 import { pushLigado } from "@/lib/push/config";
 
@@ -16,7 +17,10 @@ const ROLE_LABELS: Record<string, string> = {
 export default async function PerfilPage() {
   const session = await auth();
   const u = session!.user;
-  const db = await prisma.usuario.findUnique({ where: { id: u.id }, select: { avatar: true } });
+  const [db, empresaNome] = await Promise.all([
+    prisma.usuario.findUnique({ where: { id: u.id }, select: { avatar: true } }),
+    nomeDaEmpresa(u.empresaId),
+  ]);
 
   return (
     <PerfilClient
@@ -24,7 +28,7 @@ export default async function PerfilPage() {
         nome: u.name ?? "",
         email: u.email ?? "",
         avatar: db?.avatar ?? null,
-        empresaNome: (u as any).empresaNome ?? "",
+        empresaNome,
         perfilNome: (u as any).perfilNome ?? null,
         cargo: ROLE_LABELS[u.role] ?? u.role,
       }}

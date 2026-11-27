@@ -498,6 +498,24 @@ export function OrcamentoDocumento({ orcamento, empresa, cliente, anexos = [], v
           </div>
         </section>
       )}
+      {/* Aprovação registrada pela equipe ("Cliente aprovou" por telefone, WhatsApp...): sem assinatura nem CPF */}
+      {orcamento.status === "APROVADO" && !orcamento.assinaturaUrl && orcamento.assinadoPor && (
+        <section className="py-5 border-t-2 border-success-500 break-inside-avoid" data-aprovacao-equipe>
+          <p className="text-xs uppercase tracking-wider text-success-700 mb-2 font-bold">Aprovação registrada pela equipe</p>
+          <div className="space-y-1 text-sm">
+            <div>
+              <span className="text-ink-muted">Aprovado por:</span>{" "}
+              <span className="font-semibold text-ink">{orcamento.assinadoPor}</span>
+            </div>
+            {orcamento.assinadoEm && (
+              <div>
+                <span className="text-ink-muted">Data:</span>{" "}
+                <span className="text-ink">{formatarData(orcamento.assinadoEm, "dd/MM/yyyy 'às' HH:mm")}</span>
+              </div>
+            )}
+          </div>
+        </section>
+      )}
 
       {/* Rodapé */}
       <footer className="mt-6 pt-4 border-t border-surface-border text-center text-xs text-ink-subtle break-inside-avoid">

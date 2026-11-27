@@ -19,6 +19,7 @@ import { modulosDesligados } from "@/lib/modulos/servidor";
 import { ehDonoDoFrivo } from "@/lib/anotacoes/dono";
 import { AnotacoesCarregador } from "@/components/anotacoes/carregador";
 import { SincronizarAcesso } from "@/components/acesso/sincronizar-acesso";
+import { nomeDaEmpresa } from "@/lib/empresa/nome";
 
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
   const session = await auth();
@@ -41,14 +42,18 @@ export default async function DashboardLayout({ children }: { children: React.Re
   // Avatar vem do banco (fora do JWT, para não estourar o cookie com base64) e, junto, os MÓDULOS
   // que a empresa desligou: a permissão do usuário também é a do cadastro de agora (lib/sessao-ativa),
   // e o que a empresa tem é lido aqui a cada navegação — desligar um módulo vale na hora, sem derrubar sessão de ninguém.
-  const [dbUser, desligados] = await Promise.all([
+  const [dbUser, desligados, empresaNome] = await Promise.all([
     prisma.usuario.findUnique({ where: { id: session.user.id }, select: { avatar: true } }),
     modulosDesligados(session.user.empresaId),
+    nomeDaEmpresa(session.user.empresaId),
   ]);
   const avatarUrl = dbUser?.avatar ?? null;
+  // O nome da empresa no menu e no cabeçalho vem do cadastro (lib/empresa/nome), não do token do login:
+  // renomear em Configurações › Empresa aparece na próxima navegação, e empresa sem nome fantasia mostra a razão social
+  const sessao = { ...session, user: { ...session.user, empresaNome: empresaNome || session.user.empresaNome } };
 
   return (
-    <AuthSessionProvider session={session}>
+    <AuthSessionProvider session={sessao}>
       <PermissoesProvider role={session.user.role} permissoes={session.user.permissoes}>
        <ModulosProvider desligados={[...desligados]}>
         <div className="flex h-screen overflow-hidden bg-surface-page">
@@ -58,10 +63,10 @@ export default async function DashboardLayout({ children }: { children: React.Re
           <SincronizarAcesso mudou={session.user.acessoMudou === true} />
           <SplashScreen />
           <RecarregarAoVoltar />
-          <Sidebar session={session} avatarUrl={avatarUrl} />
-          <MobileShell session={session} avatarUrl={avatarUrl} />
+          <Sidebar session={sessao} avatarUrl={avatarUrl} />
+          <MobileShell session={sessao} avatarUrl={avatarUrl} />
           <div className="flex flex-col flex-1 min-w-0 overflow-hidden">
-            <Header session={session} avatarUrl={avatarUrl} />
+            <Header session={sessao} avatarUrl={avatarUrl} />
             <InstallBanner />
             <main id="conteudo-scroll" className="relative flex-1 overflow-y-auto scroller-mobile p-4 sm:p-6 pb-24 lg:pb-6">
               <PullToRefresh scrollTargetId="conteudo-scroll" />

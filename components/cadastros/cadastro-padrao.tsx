@@ -57,8 +57,8 @@ export interface CadastroPadraoProps {
   acoesLinha?: (item: Item, recarregar: () => void) => ReactNode;
   /** Explicação do cadastro: vai para o ⓘ ao lado das abas (Princípio 7) */
   ajuda?: ReactNode;
-  /** Mensagem que precisa ficar VISÍVEL acima da lista (erro, alerta) */
-  aviso?: ReactNode;
+  /** Mensagem que precisa ficar VISÍVEL acima da lista (erro, alerta). Como função, recebe o "recarregar a lista" */
+  aviso?: ReactNode | ((recarregar: () => void) => ReactNode);
   /** Seções do formulário com desenho próprio, pelo nome do grupo (ex.: "Dados fiscais (NFS-e)" do serviço) */
   grupos?: Partial<Record<string, ComponentType<GrupoFormProps>>>;
 }
@@ -219,7 +219,7 @@ function Conteudo({ entidade, Editor, celula, acoesLinha, ajuda, aviso, grupos }
   return (
     <ComSelecao ativo={!!def.massa} entidade={entidade} ids={itens.map((i) => i.id)} total={dados?.total ?? 0}>
       <div className="space-y-4" data-cadastro={entidade}>
-        {aviso}
+        {typeof aviso === "function" ? aviso(() => void carregar()) : aviso}
         {/* Abas + busca + Novo */}
         <div className="flex flex-col sm:flex-row sm:flex-wrap sm:items-center gap-3">
           <div className="flex items-center gap-1.5 w-full sm:w-auto">

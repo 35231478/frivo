@@ -93,7 +93,8 @@ export interface Execucao {
 
 /**
  * A atividade pode concluir sem equipamento atendido? Nesta ordem: a empresa não usa o módulo
- * Equipamentos; o tipo de OS dela não exige equipamento; a OS é recorrente de contrato e não tem
+ * Equipamentos; a atividade não tem tipo de OS (o equipamento só é obrigatório quando o TIPO exige —
+ * decisão "Pronto pra janeiro 2"); o tipo de OS dela não exige equipamento; a OS é recorrente de contrato e não tem
  * equipamento vinculado em nenhuma atividade; a OS tem a exceção justificada. null = a trava vale.
  *
  * A primeira saída é a degradação graciosa do módulo: sem Equipamentos não há o que vincular, e
@@ -105,6 +106,7 @@ export async function dispensaDaAtividade(
   os: { origem: string; semEquipamentoMotivo: string | null },
 ): Promise<DispensaEquipamento | null> {
   if (!(await temModulo(empresaId, "equipamentos"))) return { motivo: "MODULO", texto: textoDispensa("MODULO") };
+  if (!a.tipoOs) return { motivo: "SEM_TIPO", texto: textoDispensa("SEM_TIPO") };
   if (a.tipoOs?.exigeEquipamento === false) return { motivo: "TIPO", texto: textoDispensa("TIPO", a.tipoOs.nome) };
   if (os.origem === "RECORRENTE" && !(await temEquipamentoVinculado(empresaId, osId)))
     return { motivo: "RECORRENTE", texto: textoDispensa("RECORRENTE") };

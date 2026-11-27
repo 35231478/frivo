@@ -3,8 +3,9 @@
  *
  * O banco guarda quatro status (AGENDADA, EM_ANDAMENTO, CONCLUIDA, CANCELADA). O técnico, no app,
  * toca "A caminho" e "Cheguei": isso vai para `atividade_avisos` (um por atividade, evento e DIA,
- * lib/tecnico/aviso-cliente) e NÃO muda o status — o status só vira EM_ANDAMENTO quando a execução
- * começa (o app inicia a atividade ao abrir a OS, logo depois do "Cheguei").
+ * lib/tecnico/aviso-cliente). "A caminho" não muda o status; "Cheguei" INICIA a atividade no servidor
+ * (AGENDADA → EM_ANDAMENTO, e a OS vai para Em execução — lib/execucao/aviso-cliente, "Pronto pra
+ * janeiro 2"), como o app já fazia ao abrir a OS.
  *
  * "Em deslocamento" é um estado DERIVADO do que já é gravado, sem status novo no banco: a atividade
  * ainda AGENDADA cujo técnico tocou "A caminho" HOJE (dia de Brasília) e ainda não tocou "Cheguei".
