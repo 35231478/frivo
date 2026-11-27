@@ -1,7 +1,7 @@
 import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { ErroRefEmpresa, validarRefEmpresa, validarRefsEmpresa } from "@/lib/ref-empresa";
-import { erroDosMateriais, materialAvulso, type MaterialOrcamento } from "@/lib/orcamentos/materiais";
+import { erroDosMateriais, materialAvulso, regraDeCobranca, type CobrancaMateriais, type MaterialOrcamento } from "@/lib/orcamentos/materiais";
 import { materiaisPadraoDoServico, precosDeVendaParaCliente, produtoComoMaterial } from "@/lib/orcamentos/materiais-server";
 import { prepararItemOs, type EntradaItemOs, type ItemOsPreparado } from "@/lib/os/materiais";
 import { custoDoMaterialOs } from "@/lib/os/custo";
@@ -51,8 +51,22 @@ export async function catalogoParaItemOs(empresaId: string, clienteId: string | 
   return null;
 }
 
+/**
+ * "Orçamento E2" — a regra de cobrança dos materiais da OS: a gravada nela (copiada do orçamento ao gerar, ou fixada
+ * antes); sem regra ainda, a da EMPRESA hoje — e, se o item tem materiais (`fixar`), ela fica gravada na OS daqui em
+ * diante (mudar a configuração depois não altera esta OS).
+ */
+export async function regraDaOs(osId: string, empresaId: string, fixar: boolean): Promise<CobrancaMateriais> {
+  const os = await prisma.ordemServico.findFirst({ where: { id: osId, empresaId }, select: { cobrancaMateriais: true } });
+  if (os?.cobrancaMateriais) return os.cobrancaMateriais;
+  const cfg = await prisma.configuracao.findUnique({ where: { empresaId }, select: { orcamentoCobrancaMateriais: true } });
+  const regra = regraDeCobranca(cfg?.orcamentoCobrancaMateriais);
+  if (fixar && os) await prisma.ordemServico.updateMany({ where: { id: osId, empresaId, cobrancaMateriais: null }, data: { cobrancaMateriais: regra } });
+  return regra;
+}
+
 /** Confere (400 via ErroRefEmpresa) e monta o item: catálogo e produtos dos materiais da empresa da sessão. */
-export async function prepararItemOsConferido(empresaId: string, e: EntradaItemOs): Promise<ItemOsPreparado> {
+export async function prepararItemOsConferido(empresaId: string, e: EntradaItemOs, regra?: CobrancaMateriais | null): Promise<ItemOsPreparado> {
   const erro = erroDosMateriais(e.materiais ?? []);
   if (erro) throw new ErroRefEmpresa(erro);
   await Promise.all([
@@ -60,7 +74,7 @@ export async function prepararItemOsConferido(empresaId: string, e: EntradaItemO
     validarRefEmpresa("produto", e.tipo === "PRODUTO" ? e.produtoId : null, empresaId, "Produto do catálogo"),
     validarRefsEmpresa("produto", (e.materiais ?? []).map((m) => m.produtoId), empresaId, "Produto do material"),
   ]);
-  return prepararItemOs(e);
+  return prepararItemOs(e, regra);
 }
 
 const linha = (p: ItemOsPreparado) => ({

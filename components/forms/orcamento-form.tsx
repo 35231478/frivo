@@ -21,7 +21,7 @@ import type { TipoDesconto, TipoOrcamento } from "@prisma/client";
 import { AlertCircle, Tags, Sparkles, RefreshCw } from "lucide-react";
 import { chaveDiaCivil, chaveHojeBR } from "@/lib/fuso";
 import { calcularOrcamento, DIAS_VALIDADE_PADRAO, totalDoItem, validadePadrao } from "@/lib/orcamentos/calculo";
-import { pecasDosMateriais, valorDaLinha } from "@/lib/orcamentos/materiais";
+import { pecasDosMateriais, regraDeCobranca, valorDaLinha } from "@/lib/orcamentos/materiais";
 import { MateriaisLinha } from "@/components/orcamento/materiais-linha";
 import { InfoProduto, ResumoCustoMargem, useSituacaoProdutos } from "@/components/orcamento/estoque-margem";
 import { custosDoOrcamento, resumoMargem } from "@/lib/orcamentos/estoque-margem";
@@ -112,6 +112,8 @@ interface OrcamentoInicial {
   osPreCarregadas?: OsItem[];
   codigo?: string;
   proposta?: PropostaInicial;
+  /** "Orçamento E2": a regra de cobrança dos materiais com que este orçamento nasceu */
+  cobrancaMateriais?: string | null;
 }
 
 interface OrcamentoFormProps {
@@ -150,6 +152,8 @@ export interface PadroesOrcamentoForm {
   naoIncluso: string | null;
   normas: string[];
   responsavelTecnicoId: string | null;
+  /** "Orçamento E2": como a empresa cobra os materiais (o orçamento novo nasce com ela) */
+  cobrancaMateriais?: string | null;
 }
 
 interface OpcoesDestinatario {
@@ -353,11 +357,14 @@ export function OrcamentoForm({
     valorUnitario: s.valorUnitario, valorTotal: s.valorUnitario,
   });
 
-  const pecasDerivadas = useMemo<ItemTabela[]>(() => servicos.flatMap((s) => pecasDosMateriais(s.materiais).map((p, i) => ({
+  // "Orçamento E2": a regra de cobrança dos materiais — a do orçamento (edição) ou a da empresa (novo); o servidor
+  // decide de novo ao gravar (o navegador não escolhe), aqui é só para a tela mostrar o mesmo que vai ser gravado
+  const regraMateriais = regraDeCobranca(inicial ? inicial.cobrancaMateriais : padroes?.cobrancaMateriais);
+  const pecasDerivadas = useMemo<ItemTabela[]>(() => servicos.flatMap((s) => pecasDosMateriais(s.materiais, regraMateriais).map((p, i) => ({
     id: `peca:${s.id}:${i}`, catalogoId: p.material.produtoId ?? null, descricao: p.descricao, quantidade: p.quantidade,
-    valorUnitario: p.valorUnitario, valorTotal: p.valorTotal, derivada: { deServico: s.descricao || "serviço" },
+    valorUnitario: p.valorUnitario, valorTotal: p.valorTotal, derivada: { deServico: s.descricao || "serviço", material: p.ehMaterial },
     ...("custoUnit" in p.material ? { custoUnit: p.material.custoUnit } : {}),
-  }))), [servicos]);
+  }))), [servicos, regraMateriais]);
 
   // Leva B: disponível em estoque (módulo Estoque ligado) e custo/margem (só com "Orçamentos › Ver custo e margem").
   // O servidor decide o que vem (lib/orcamentos/estoque-margem-server): sem a permissão, o custo nem chega aqui.
@@ -370,12 +377,12 @@ export function OrcamentoForm({
   const verCusto = pode("orcamentos", "verCusto") && situacao?.verCusto !== false;
   const totais = useMemo(() => calcularOrcamento({
     // Serviço com materiais: base + ajuste dos inclusos (ou o manual) — lib/orcamentos/materiais.ts
-    servicos: servicos.filter((s) => s.descricao.trim()).map((s) => (s.materiais?.length ? { quantidade: s.quantidade, valorUnitario: valorDaLinha(s).valorUnitario, valorTotal: valorDaLinha(s).valorTotal } : s)),
+    servicos: servicos.filter((s) => s.descricao.trim()).map((s) => (s.materiais?.length ? { quantidade: s.quantidade, valorUnitario: valorDaLinha(s, regraMateriais).valorUnitario, valorTotal: valorDaLinha(s, regraMateriais).valorTotal } : s)),
     produtos: [...produtos.filter((p) => p.descricao.trim()), ...pecasDerivadas],
     descontoServicos: descontoServicos.valor, tipoDescontoServicos: descontoServicos.tipo,
     descontoProdutos: descontoProdutos.valor, tipoDescontoProdutos: descontoProdutos.tipo,
     issAliquota,
-  }), [servicos, produtos, pecasDerivadas, descontoServicos, descontoProdutos, issAliquota]);
+  }), [servicos, produtos, pecasDerivadas, descontoServicos, descontoProdutos, issAliquota, regraMateriais]);
 
   // Serviço do catálogo com composição (E3.2): materializa os materiais/peças com os preços deste cliente
   async function materializarServico(item: ItemTabela, c: CatalogoItem) {
@@ -464,7 +471,7 @@ export function OrcamentoForm({
     const servPayload = servicos.filter((s) => s.descricao.trim()).map((s) => ({
       ...limpar(s),
       ...(s.materiais?.length ? {
-        valorTotal: valorDaLinha(s).valorTotal, valorManual: !!s.valorManual,
+        valorTotal: valorDaLinha(s, regraMateriais).valorTotal, valorManual: !!s.valorManual,
         materiais: s.materiais.map((m) => ({
           produtoId: m.produtoId ?? null, descricao: m.descricao, unidade: m.unidade, comportamento: m.comportamento, quantidade: m.quantidade,
           quantidadePadrao: m.quantidadePadrao, valorVendaUnit: m.valorVendaUnit, custoUnit: m.custoUnit ?? null, origem: m.origem, kitNome: m.kitNome ?? null,
@@ -716,9 +723,10 @@ export function OrcamentoForm({
           tabela={tabelaPreco}
           cadastro={cadastroServico}
           totalEditavel
+          regraMateriais={regraMateriais}
           onAdicionadoDoCatalogo={(it, c) => void materializarServico(it, c)}
           extraLinha={(it) => (it.materiais ? (
-            <MateriaisLinha item={it} clienteId={clienteId || null} catalogoProdutos={catalogoProdutos as any} verCusto={verCusto} situacao={situacao?.produtos}
+            <MateriaisLinha item={it} clienteId={clienteId || null} catalogoProdutos={catalogoProdutos as any} verCusto={verCusto} situacao={situacao?.produtos} regra={regraMateriais}
               onChange={(patch) => setServicos((prev) => prev.map((s) => (s.id === it.id ? { ...s, ...patch } : s)))} />
           ) : (
             <button type="button" onClick={() => setServicos((prev) => prev.map((s) => (s.id === it.id ? { ...s, materiais: [] } : s)))}

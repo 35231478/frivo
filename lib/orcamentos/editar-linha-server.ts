@@ -70,7 +70,7 @@ export async function editarLinhaDoOrcamento(empresaId: string, orcamentoId: str
   const valores = montarValoresOrcamento({
     servicos, produtos, desconto: 0, tipoDesconto: "VALOR",
     descontoServicos: n(o.descontoServicos), tipoDescontoServicos: o.tipoDescontoServicos, descontoProdutos: n(o.descontoProdutos), tipoDescontoProdutos: o.tipoDescontoProdutos,
-  } as unknown as OrcamentoInput, n(o.issAliquota));
+  } as unknown as OrcamentoInput, n(o.issAliquota), o.cobrancaMateriais);
 
   const tipo = servico ? "SERVICO" as const : "PRODUTO" as const;
   const novo = servico ? valores.servicos[o.servicos.indexOf(servico)] : valores.produtos[doUsuario.indexOf(produto!)];

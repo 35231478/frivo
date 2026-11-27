@@ -25,10 +25,12 @@ export async function contarImplantacao(empresaId: string): Promise<Contagens> {
     prisma.contrato.count({ where: { empresaId } }),
     prisma.pmoc.count({ where: { empresaId } }),
   ]);
+  const cfg = await prisma.configuracao.findUnique({ where: { empresaId }, select: { orcamentoCobrancaMateriais: true } });
   return {
     dadosEmpresa: !!empresa && preenchido(empresa.nome) && preenchido(empresa.cnpj) && preenchido(empresa.endereco) && preenchido(empresa.cidade),
     logo: preenchido(empresa?.logo),
     tiposOs, usuarios, clientes, unidades, contatos, equipamentos, produtosEstoque, produtosComSaldo, colaboradores, veiculos, contratos, pmocs,
+    cobrancaMateriais: cfg?.orcamentoCobrancaMateriais ?? null,
   };
 }
 

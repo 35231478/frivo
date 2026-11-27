@@ -4,7 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { osDaEmpresa } from "@/lib/os-server";
 import { respostaRefEmpresa } from "@/lib/ref-empresa";
 import { itemOsSchema, linhaOsContextoSchema } from "@/lib/validations";
-import { atualizarValoresDoItemOs, fixarCustosDosMateriaisOs, INCLUIR_ITEM_OS, prepararItemOsConferido, regravarItemOs } from "@/lib/os/materiais-server";
+import { atualizarValoresDoItemOs, fixarCustosDosMateriaisOs, INCLUIR_ITEM_OS, prepararItemOsConferido, regraDaOs, regravarItemOs } from "@/lib/os/materiais-server";
 import { usuarioVeCustoDeCompra } from "@/lib/estoque/custo-acesso";
 import { semCustoNosItensOs } from "@/lib/os/custo";
 import { prepararItemOs, unitarioParaEdicao } from "@/lib/os/materiais";
@@ -77,7 +77,8 @@ export async function PUT(req: NextRequest, { params }: Params) {
   // O custo vindo do navegador é ignorado (quem não vê custo nem o recebe; quem vê não o forja).
   await fixarCustosDosMateriaisOs(empresaId, itemId, parsed.data.materiais);
   let prep;
-  try { prep = await prepararItemOsConferido(empresaId, parsed.data); } catch (e) { const r = respostaRefEmpresa(e); if (r) return r; throw e; }
+  const regra = await regraDaOs(id, empresaId, !!parsed.data.materiais?.length);
+  try { prep = await prepararItemOsConferido(empresaId, parsed.data, regra); } catch (e) { const r = respostaRefEmpresa(e); if (r) return r; throw e; }
   await prisma.$transaction((tx) => regravarItemOs(tx, id, itemId, prep));
   const atualizado = await prisma.osItemOrcamento.findUnique({ where: { id: itemId }, include: INCLUIR_ITEM_OS });
   const pecas = await prisma.osItemOrcamento.findMany({ where: { ordemServicoId: id, material: { osItemId: itemId } }, orderBy: { ordem: "asc" }, include: INCLUIR_ITEM_OS });
@@ -122,7 +123,7 @@ export async function PATCH(req: NextRequest, { params }: Params) {
     descricao: m.descricao ?? item.descricao, quantidade: m.quantidade ?? Number(item.quantidade),
     valorUnitario: m.valorUnitario ?? unitarioParaEdicao(item),
     ...(materiais.length ? { valorManual: item.valorManual, valorTotal: item.valorManual ? Number(item.valorTotal) : undefined, materiais } : {}),
-  });
+  }, await regraDaOs(id, session.user!.empresaId, materiais.length > 0));
   const mudou = [
     p.descricao !== item.descricao && `descrição: ${item.descricao} → ${p.descricao}`,
     p.quantidade !== Number(item.quantidade) && `quantidade: ${Number(item.quantidade)} → ${p.quantidade}`,

@@ -6,6 +6,8 @@ import { toast } from "@/components/ui/avisos";
 import { SomenteLeitura } from "@/components/config/permissao-config";
 import { Input } from "@/components/ui/input";
 import { ToggleSwitch } from "@/components/ui/toggle-switch";
+import { EscolhaCobrancaMateriais } from "@/components/orcamento/escolha-cobranca-materiais";
+import { regraDeCobranca, type CobrancaMateriais } from "@/lib/orcamentos/materiais";
 import { FormField, FormGrid, FormSection } from "@/components/ui/form-field";
 import {
   GARANTIAS_PECAS_SUGERIDAS, GARANTIAS_SERVICO_SUGERIDAS, NaoInclusoCampo, NormasCampo,
@@ -19,6 +21,8 @@ export interface PadroesOrcamentoTela {
   orcamentoNormas: string[];
   /** Leva D: padrão de "mostrar materiais" no documento do cliente */
   orcamentoMostrarMateriais?: boolean;
+  /** "Orçamento E2": como a empresa cobra os materiais */
+  orcamentoCobrancaMateriais?: string | null;
 }
 
 /**
@@ -33,6 +37,7 @@ export function OrcamentoPadroesClient({ inicial, podeEditar }: { inicial: Padro
   const [naoIncluso, setNaoIncluso] = useState(inicial.orcamentoNaoIncluso ?? "");
   const [normas, setNormas] = useState<string[]>(inicial.orcamentoNormas ?? []);
   const [mostrarMateriais, setMostrarMateriais] = useState(inicial.orcamentoMostrarMateriais !== false);
+  const [cobranca, setCobranca] = useState<CobrancaMateriais>(regraDeCobranca(inicial.orcamentoCobrancaMateriais));
   const [salvando, setSalvando] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
   const mudou = <T,>(f: (v: T) => void) => (v: T) => { f(v); setMsg(null); };
@@ -50,6 +55,7 @@ export function OrcamentoPadroesClient({ inicial, podeEditar }: { inicial: Padro
           orcamentoNaoIncluso: naoIncluso,
           orcamentoNormas: normas,
           orcamentoMostrarMateriais: mostrarMateriais,
+          orcamentoCobrancaMateriais: cobranca,
         }),
       });
       const j = await r.json().catch(() => ({}));
@@ -83,14 +89,22 @@ export function OrcamentoPadroesClient({ inicial, podeEditar }: { inicial: Padro
           <NaoInclusoCampo id="padrao-nao-incluso" valor={naoIncluso} onChange={mudou(setNaoIncluso)} />
         </FormSection>
 
-        <FormSection title="Documento do cliente" dica="O que cada novo orçamento já traz ligado no link, na impressão e no PDF. Em cada orçamento dá para mudar. Material vai incluso no serviço, sem valor; peça sai em linha própria, com valor.">
-          <div data-padrao-mostrar-materiais>
-            <ToggleSwitch
-              label="Mostrar materiais ao cliente"
-              description="Dentro de cada serviço, os materiais dele, sem valor."
-              checked={mostrarMateriais} disabled={!podeEditar}
-              onChange={mudou(setMostrarMateriais)}
-            />
+        <FormSection title="Materiais" dica="Vale para os orçamentos e as OS novos; os que já existem ficam como nasceram. A peça vai sempre à parte. Em cada orçamento dá para trocar um item entre Material e Peça.">
+          <div className="space-y-4" data-padroes-materiais>
+            <FormField label="Como os materiais entram na cobrança">
+              <EscolhaCobrancaMateriais valor={cobranca} onChange={mudou(setCobranca)} disabled={!podeEditar} />
+            </FormField>
+            {/* Cobrado à parte: os materiais já aparecem ao cliente em linha própria, com valor — a lista não se aplica */}
+            {cobranca === "INCLUSO" && (
+              <div data-padrao-mostrar-materiais>
+                <ToggleSwitch
+                  label="Mostrar a lista de materiais ao cliente"
+                  description="Dentro de cada serviço, sem valor."
+                  checked={mostrarMateriais} disabled={!podeEditar}
+                  onChange={mudou(setMostrarMateriais)}
+                />
+              </div>
+            )}
           </div>
         </FormSection>
 

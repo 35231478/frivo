@@ -13,6 +13,7 @@
  *    a Implantação fica só em Configurações.
  */
 import type { EntidadeImportacao } from "@/lib/importacao/entidades";
+import { LABEL_COBRANCA, regraDeCobranca, type CobrancaMateriais } from "@/lib/orcamentos/materiais";
 
 export type EtapaId = "empresa" | "clientes" | "equipamentos" | "estoque" | "colaboradores" | "veiculos" | "contratos";
 
@@ -35,12 +36,16 @@ export interface Contagens {
   veiculos: number;
   contratos: number;
   pmocs: number;
+  /** "Orçamento E2": como a empresa cobra os materiais (sem a configuração gravada, o padrão: Incluso) */
+  cobrancaMateriais?: CobrancaMateriais | null;
 }
 
 export interface ItemEtapa {
   rotulo: string;
   /** Número contado, ou "ok"/"falta" para um requisito sim/não */
   valor: number | boolean;
+  /** Em vez do número/ok: a escolha atual (ex.: "Incluso no serviço") — o item é uma decisão, não uma contagem */
+  texto?: string;
   /** Seção de Configurações que resolve o item (abre na gaveta) */
   secao?: string;
 }
@@ -89,6 +94,8 @@ export function montarEtapas(c: Contagens, temModulo: (m: string) => boolean, di
         { rotulo: "Logo", valor: c.logo, secao: "empresa" },
         { rotulo: "Tipos de OS", valor: c.tiposOs, secao: "tipos-os" },
         { rotulo: "Usuários com acesso", valor: c.usuarios, secao: "usuarios" },
+        // "Orçamento E2": a empresa nova decide no começo como cobra os materiais (sempre há uma escolha: o padrão vale)
+        { rotulo: "Como você cobra materiais?", valor: true, texto: LABEL_COBRANCA[regraDeCobranca(c.cobrancaMateriais)], secao: "orcamento" },
       ],
       importacoes: [],
     },

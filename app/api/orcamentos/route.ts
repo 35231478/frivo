@@ -100,11 +100,12 @@ export async function POST(req: NextRequest) {
   const tokenPublico = crypto.randomUUID();
   // ISS: a alíquota da empresa HOJE fica congelada no orçamento
   const cfg = await prisma.configuracao.findUnique({ where: { empresaId }, select: { issAliquota: true } });
-  const valores = montarValoresOrcamento(data, Number(cfg?.issAliquota ?? 0));
-  // O custo dos materiais é decidido aqui (último custo de compra), nunca o que veio do navegador
-  await fixarCustosDosMateriais(empresaId, null, valores.servicos);
   // Campo que não veio = padrão de Configurações (validade, garantias, não incluso, normas, RT padrão)
   const padroes = await padroesOrcamento(empresaId);
+  // "Orçamento E2": a regra de cobrança dos materiais é a da EMPRESA hoje, congelada no orçamento (o navegador não escolhe)
+  const valores = montarValoresOrcamento(data, Number(cfg?.issAliquota ?? 0), padroes.cobrancaMateriais);
+  // O custo dos materiais é decidido aqui (último custo de compra), nunca o que veio do navegador
+  await fixarCustosDosMateriais(empresaId, null, valores.servicos);
   const proposta = montarCamposProposta(
     data.responsavelTecnicoId === undefined ? { ...data, responsavelTecnicoId: padroes.responsavelTecnicoId } : data,
   );
@@ -124,6 +125,8 @@ export async function POST(req: NextRequest) {
           ...camposCondicoes(data, padroes),
           // Leva D: as opções do documento do cliente nascem com o padrão da empresa
           mostrarMateriais: padroes.mostrarMateriais,
+          // "Orçamento E2": a regra com que o orçamento nasce (mudar a configuração depois não o altera)
+          cobrancaMateriais: padroes.cobrancaMateriais,
           clienteId: data.clienteId,
           unidadeId: data.unidadeId === undefined ? sugerido!.unidadeId : data.unidadeId || null,
           contatoClienteId: data.contatoClienteId === undefined ? sugerido!.contatoClienteId : data.contatoClienteId || null,

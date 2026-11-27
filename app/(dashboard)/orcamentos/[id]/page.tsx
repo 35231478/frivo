@@ -125,7 +125,8 @@ export default async function OrcamentoDetalhePage({
           etapa={etapaCiclo(orcamento)}
         />
         {/* Leva D: o que o cliente vê no link, na impressão e no PDF (materiais dentro do serviço, com/sem valores) */}
-        {!ehProposta && (
+        {/* "Orçamento E2": com "Cobrado à parte" os materiais já são linhas com valor — a lista não se aplica */}
+        {!ehProposta && orcamento.cobrancaMateriais !== "A_PARTE" && (
           <div className="mt-4">
             <OpcoesDocumento
               orcamentoId={orcamento.id}

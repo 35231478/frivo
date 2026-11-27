@@ -117,6 +117,8 @@ export interface OrcamentoDocumentoProps {
     ordensServico?: OsVinculadaComLink[] | null;
     /** "Mostrar materiais ao cliente" (Leva D; ligado por padrão desde o "Orçamento E"). Só a lista, nunca valor */
     mostrarMateriais?: boolean | null;
+    /** "Orçamento E2": como os materiais entram na cobrança deste orçamento (INCLUSO | A_PARTE) */
+    cobrancaMateriais?: string | null;
   };
   empresa: {
     nome: string;
@@ -311,7 +313,7 @@ export function OrcamentoDocumento({ orcamento, empresa, cliente, anexos = [], v
       </section>
 
       {orcamento.servicos.length > 0 && (
-        <TabelaGrupo titulo="Serviços" rotulo="serviços" itens={orcamento.servicos} grupo={grupoServicos} edicao={edicao} opcoes={opcoes} />
+        <TabelaGrupo titulo="Serviços" rotulo="serviços" itens={orcamento.servicos} grupo={grupoServicos} edicao={edicao} opcoes={opcoes} regraMateriais={orcamento.cobrancaMateriais} />
       )}
 
       {orcamento.produtos.length > 0 && (
@@ -563,10 +565,12 @@ interface GrupoDoc {
  * é cortada ao meio; os subtotais ficam FORA da tabela (num tfoot o navegador repetiria o
  * "Subtotal" em toda página) e não se separam da última linha.
  */
-function TabelaGrupo({ titulo, rotulo, itens, grupo, edicao, opcoes }: {
+function TabelaGrupo({ titulo, rotulo, itens, grupo, edicao, opcoes, regraMateriais }: {
   titulo: string; rotulo: string; itens: ItemDoc[]; grupo: GrupoDoc; edicao?: { orcamentoId: string; faturado: boolean; status: string };
   /** Só nos serviços: os materiais de cada um, conforme as opções do documento */
   opcoes?: OpcoesDocumentoOrcamento;
+  /** "Orçamento E2": a regra de cobrança dos materiais do orçamento ("A_PARTE" = já são linhas com valor) */
+  regraMateriais?: string | null;
 }) {
   const comIss = (grupo.valorIss ?? 0) > 0;
   const mostrarTotal = grupo.desconto > 0 || comIss;
@@ -599,7 +603,7 @@ function TabelaGrupo({ titulo, rotulo, itens, grupo, edicao, opcoes }: {
                   <TextoItemDocumento item={it} />
                   <p className="sm:hidden text-[11px] text-ink-muted tabular-nums" data-qtd-unitario-celular>{qtds[i]} × {formatarMoeda(grupo.itens[i]?.valorUnitario ?? 0)}</p>
                   {/* Os materiais vêm depois da linha do serviço (no celular, depois de "2 × R$ 220,00"): ficam claramente dentro dele */}
-                  {opcoes && <MateriaisDoServico materiais={materiaisNoDocumento(it.materiais, opcoes)} />}
+                  {opcoes && <MateriaisDoServico materiais={materiaisNoDocumento(it.materiais, opcoes, regraMateriais)} />}
                 </td>
                 <td className={cn(td, "hidden sm:table-cell text-right text-ink-muted tabular-nums whitespace-nowrap")} data-qtd>{qtds[i]}</td>
                 <td className={cn(td, "hidden sm:table-cell text-right text-ink-muted tabular-nums whitespace-nowrap")} data-unitario>{valorSemMoeda(grupo.itens[i]?.valorUnitario ?? 0)}</td>
