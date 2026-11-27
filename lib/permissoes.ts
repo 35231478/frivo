@@ -8,7 +8,7 @@ import { corDado } from "@/lib/ui/tokens";
 export type Acao =
   | "visualizar" | "criar" | "editar" | "excluir" | "concluir" | "aprovar"
   | "gerenciar" | "medicoes" | "contasReceber" | "fluxoCaixa" | "folha" | "fiscal" | "perdas" | "checklist" | "exportar"
-  | "separar" | "revisar" | "disciplinar" | "enviar" | "verCusto";
+  | "separar" | "revisar" | "disciplinar" | "enviar" | "verCusto" | "alterarPrecoTabela";
 
 export type Permissoes = Record<string, Partial<Record<Acao, boolean>>>;
 
@@ -41,6 +41,7 @@ export const ACOES_LABEL: Record<Acao, string> = {
   disciplinar: "Advertência e suspensão",
   enviar: "Enviar ao cliente",
   verCusto: "Ver custo e margem",
+  alterarPrecoTabela: "Alterar preço de tabela",
 };
 
 /** Matriz de permissões agrupada por seção (fonte da verdade da UI e dos defaults). */
@@ -64,7 +65,10 @@ export const SECOES: SecaoDef[] = [
     id: "comercial", label: "Comercial", modulos: [
       // verCusto: custo dos produtos/materiais, lucro e margem no Editar orçamento. Nunca vai ao PDF nem ao link do
       // cliente; sem ela, o custo nem chega ao navegador (lib/orcamentos/estoque-margem-server). Padrão: só administrador.
-      { id: "orcamentos", label: "Orçamentos", icone: "Calculator", acoes: ["visualizar", "criar", "editar", "aprovar", "excluir", "verCusto"] },
+      // alterarPrecoTabela: o preço que vem da tabela de preço do cliente fica travado no orçamento E na OS; com
+      // esta permissão a pessoa altera, informando o motivo (vai para a trilha). Perfil gravado antes não a tem
+      // (fica travado); o administrador tem sempre (lib/precos/trava-tabela).
+      { id: "orcamentos", label: "Orçamentos", icone: "Calculator", acoes: ["visualizar", "criar", "editar", "aprovar", "excluir", "verCusto", "alterarPrecoTabela"] },
       // excluir = CANCELAR o contrato (nada é apagado), como em OS e orçamentos. Perfil gravado antes desta
       // permissão não a tem: o administrador marca em Configurações › Perfis de acesso (o SQL opcional está
       // em docs/sql-opcional/contratos-excluir.sql). Administrador e super admin podem tudo, sem nada no banco.

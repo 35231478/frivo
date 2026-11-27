@@ -12,6 +12,12 @@ import { motivoDaLinhaDaOs } from "@/lib/edicao-contexto";
 import { situacaoDaOsNoBanco, travaDasLinhasDaOs } from "@/lib/os/trava-edicao-server";
 import { formatarMoeda } from "@/lib/utils";
 import { ERRO_ITEM_SEPARADO, itemTemMaterialSeparado } from "@/lib/estoque/separacao-server";
+import { precoComparavelDoServico, verificarItemDaOs } from "@/lib/precos/trava-tabela-server";
+import { textoDaTrilha } from "@/lib/precos/trava-tabela";
+
+/** O preço comparável já gravado no item (a edição não pede de novo o que já estava) */
+const anteriorDoItem = (it: { quantidade: unknown; valorUnitario: unknown; valorBase: unknown; valorManual: boolean }) =>
+  precoComparavelDoServico({ valorUnitario: Number(it.valorUnitario), quantidade: Number(it.quantidade), valorBase: it.valorBase == null ? null : Number(it.valorBase), valorManual: it.valorManual });
 
 type Params = { params: Promise<{ id: string; itemId: string }> };
 
@@ -79,7 +85,13 @@ export async function PUT(req: NextRequest, { params }: Params) {
   let prep;
   const regra = await regraDaOs(id, empresaId, !!parsed.data.materiais?.length);
   try { prep = await prepararItemOsConferido(empresaId, parsed.data, regra); } catch (e) { const r = respostaRefEmpresa(e); if (r) return r; throw e; }
-  await prisma.$transaction((tx) => regravarItemOs(tx, id, itemId, prep));
+  const trava = await verificarItemDaOs({ user: session.user!, empresaId, osId: id, item: { ...parsed.data, ...prep }, anterior: anteriorDoItem(item), motivo: parsed.data.motivoPrecoTabela });
+  if (!trava.veredito.ok) return NextResponse.json({ erro: trava.veredito.erro, precoTabela: true }, { status: trava.veredito.status });
+  await prisma.$transaction(async (tx) => {
+    await regravarItemOs(tx, id, itemId, prep);
+    if (trava.alteracoes.length && trava.veredito.ok && trava.veredito.motivo)
+      await tx.osHistorico.create({ data: { ordemServicoId: id, usuarioId: session.user!.id, acao: "Preço de tabela alterado", detalhes: textoDaTrilha(trava.alteracoes, trava.veredito.motivo).slice(0, 500) } });
+  });
   const atualizado = await prisma.osItemOrcamento.findUnique({ where: { id: itemId }, include: INCLUIR_ITEM_OS });
   const pecas = await prisma.osItemOrcamento.findMany({ where: { ordemServicoId: id, material: { osItemId: itemId } }, orderBy: { ordem: "asc" }, include: INCLUIR_ITEM_OS });
   const ver = usuarioVeCustoDeCompra(session.user);
@@ -129,7 +141,15 @@ export async function PATCH(req: NextRequest, { params }: Params) {
     p.quantidade !== Number(item.quantidade) && `quantidade: ${Number(item.quantidade)} → ${p.quantidade}`,
     p.valorTotal !== Number(item.valorTotal) && `total: ${formatarMoeda(Number(item.valorTotal))} → ${formatarMoeda(p.valorTotal)}`,
   ].filter(Boolean);
+  const trava = await verificarItemDaOs({
+    user: session.user!, empresaId: session.user!.empresaId, osId: id,
+    item: { tipo: item.tipo, servicoId: item.servicoId, produtoId: item.produtoId, descricao: p.descricao, quantidade: p.quantidade, valorUnitario: p.valorUnitario, valorBase: p.valorBase, valorManual: p.valorManual },
+    anterior: anteriorDoItem(item), motivo: m.motivoPrecoTabela,
+  });
+  if (!trava.veredito.ok) return NextResponse.json({ erro: trava.veredito.erro, precoTabela: true }, { status: trava.veredito.status });
   await prisma.$transaction(async (tx) => {
+    if (trava.alteracoes.length && trava.veredito.ok && trava.veredito.motivo)
+      await tx.osHistorico.create({ data: { ordemServicoId: id, usuarioId: session.user!.id, acao: "Preço de tabela alterado", detalhes: textoDaTrilha(trava.alteracoes, trava.veredito.motivo).slice(0, 500) } });
     await atualizarValoresDoItemOs(tx, itemId, p);
     if (mudou.length) await tx.osHistorico.create({ data: { ordemServicoId: id, usuarioId: session.user!.id, acao: "Item da OS editado", detalhes: `${item.descricao} — ${mudou.join("; ")}`.slice(0, 500) } });
   });
