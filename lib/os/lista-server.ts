@@ -58,7 +58,7 @@ export async function carregarListaOs(empresaId: string, sp: SPOrdens, agora: Da
     prisma.contrato.findMany({ where: { empresaId }, select: { id: true, numero: true }, orderBy: { numero: "asc" } }),
     // Pedido do cliente (lib/pedido-cliente): a empresa usa? e o filtro rápido "Aguardando pedido" (contagem e R$)
     usaPedidoCliente(empresaId),
-    resumoOsAguardando(where),
+    usaPedidoCliente(empresaId).then((u) => (u ? resumoOsAguardando(where) : null)),
   ]);
   const pagina = paginaValida(pedida, porPagina, total);
   // Página pedida além da última (filtro mudou o total): busca a página válida — o caso raro

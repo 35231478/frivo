@@ -161,8 +161,12 @@ describe.skipIf(!URL_PG)("lista de OS e sessão: o mesmo resultado, menos idas a
     for (const sp of CASOS) {
       const novo = await lista.carregarListaOs("e1", sp, AGORA);
       const antigo = await listaAntiga("e1", sp);
-      const { opcoes, ...semOpcoes } = novo;
-      expect(semOpcoes, JSON.stringify(sp)).toEqual(antigo);
+      // O pedido do cliente (PC-1) chegou depois: esta empresa não exige pedido, então nada disso aparece
+      const { opcoes, resumoPedido, ...semOpcoes } = novo;
+      expect(resumoPedido).toBeNull();
+      expect(semOpcoes.linhas.every((l) => l.pedidoCliente === null), JSON.stringify(sp)).toBe(true);
+      const semPedido = { ...semOpcoes, linhas: semOpcoes.linhas.map(({ pedidoCliente, ...l }) => l) };
+      expect(semPedido, JSON.stringify(sp)).toEqual(antigo);
     }
     // o cenário cobre o que importa: equipe com técnico repetido, técnicos em ordem pt-BR, faturada, sem atividade, outra empresa fora
     const todas = await lista.carregarListaOs("e1", { periodo: "todos", sort: "numero", dir: "asc", por: "25" }, AGORA);

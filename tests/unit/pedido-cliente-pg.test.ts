@@ -31,7 +31,7 @@ vi.mock("next/server", async (orig) => ({ ...(await orig<typeof import("next/ser
 const comoAdmin = () => { sessao.atual = { user: { id: "uA", name: "Ana", email: "ana@x.com", empresaId: "e1", role: "ADMIN", permissoes: permissoesTotais(), tecnicoId: null } }; };
 const comoOperador = (permissoes: Permissoes, id = "uO") => { sessao.atual = { user: { id, name: "Otávio", email: `${id}@x.com`, empresaId: "e1", role: "OPERADOR", permissoes, tecnicoId: null } }; };
 const comoTecnico = () => { sessao.atual = { user: { id: "uT", name: "João", email: "joao@x.com", empresaId: "e1", role: "TECNICO", permissoes: PRESETS.TECNICO, tecnicoId: "t1" } }; };
-const DIA = (d: number) => new Date(Date.UTC(2026, 10, d, 15));
+const DIA = (d: number, h = 15) => new Date(Date.UTC(2026, 10, d, h));
 
 async function chamar(rota: string, metodo: string, params: Record<string, string>, corpo?: unknown, query = "") {
   const mod = await import(/* @vite-ignore */ `@/app/api/${rota}/route`);
@@ -54,7 +54,7 @@ describe.skipIf(!URL_PG)("pedido do cliente (PostgreSQL real)", () => {
     (globalThis as any).prisma = undefined;
     ({ prisma } = await import("@/lib/prisma"));
     srv = await import("@/lib/pedido-cliente/server");
-    await Promise.all(["configuracoes", "pedidos-cliente", "pedidos-cliente/[id]", "pedidos-cliente/[id]/anexo", "pedidos-cliente/liberar", "pedidos-cliente/alvos", "tecnico/sync", "ordens/[id]/atividades/[atividadeId]", "ordens/[id]/faturar", "medicoes/[id]/acao"]
+    await Promise.all(["ordens/[id]", "configuracoes", "pedidos-cliente", "pedidos-cliente/[id]", "pedidos-cliente/[id]/anexo", "pedidos-cliente/liberar", "pedidos-cliente/alvos", "tecnico/sync", "ordens/[id]/atividades/[atividadeId]", "ordens/[id]/faturar", "medicoes/[id]/acao"]
       .map((r) => import(/* @vite-ignore */ `@/app/api/${r}/route`)));
 
     await prisma.empresa.createMany({ data: [
@@ -304,5 +304,35 @@ describe.skipIf(!URL_PG)("pedido do cliente (PostgreSQL real)", () => {
     r = await chamar("configuracoes", "PUT", {}, { pedidoClienteDiasAlerta: 0 });
     expect(r.status).toBe(400);
     await prisma.configuracao.update({ where: { empresaId: "e1" }, data: { pedidoClienteDiasAlerta: 7 } });
+  });
+
+  it("o início pelo escritório (OS em andamento) trava; o Meu dia do técnico avisa no cartão antes do 'Cheguei'", async () => {
+    await prisma.ordemServico.createMany({ data: [
+      { id: "oExe2", empresaId: "e1", numero: "OS-E2", clienteId: "cExe", unidadeId: "unExe", criadoPorId: "uA", descricao: "x", status: "AGENDADA" },
+      { id: "oNao2", empresaId: "e1", numero: "OS-N2", clienteId: "cNao", criadoPorId: "uA", descricao: "x", status: "AGENDADA" },
+    ] });
+    await prisma.atividadeOs.createMany({ data: [
+      { id: "aExe2", empresaId: "e1", ordemServicoId: "oExe2", titulo: "Visita", status: "AGENDADA", tecnicoId: "t1", dataAgendada: DIA(27, 13) },
+      { id: "aNao2", empresaId: "e1", ordemServicoId: "oNao2", titulo: "Visita", status: "AGENDADA", tecnicoId: "t1", dataAgendada: DIA(27, 14) },
+    ] });
+    comoAdmin();
+    const r = await chamar("ordens/[id]", "PUT", { id: "oExe2" }, { status: "EM_ANDAMENTO" });
+    expect([r.status, r.json.erro]).toEqual([409, MSG_TRAVA_INICIAR]);
+    expect((await prisma.ordemServico.findUnique({ where: { id: "oExe2" } })).status).toBe("AGENDADA");
+    const { meuDia } = await import("@/lib/tecnico/dia");
+    const dia = await meuDia("e1", "t1", DIA(27));
+    const por = Object.fromEntries(dia.atividades.map((c: any) => [c.atividadeId, c.aguardandoPedido ?? false]));
+    expect(por).toMatchObject({ aExe2: true, aNao2: false });
+  });
+
+  it("a fatura que nasce do relatório: com a OS esperando o pedido, nasce 'Aguardando pedido' (a NFS-e espera); sem exigência, segue", async () => {
+    await prisma.ordemServico.create({ data: { id: "oNao3", empresaId: "e1", numero: "OS-N3", clienteId: "cNao", criadoPorId: "uA", descricao: "x", status: "CONCLUIDA" } });
+    const rel = (id: string, ordemServicoId: string) => ({ id, empresaId: "e1", ordemServicoId, numero: `REL-${id}`, mesReferencia: 11, anoReferencia: 2026, tokenPublico: `tk-${id}`, escopo: "MEDICAO_COMPLETA", valorFinanceiro: 800 });
+    await prisma.relatorioOs.createMany({ data: [rel("rFat", "sFatAberta"), rel("rNao", "oNao3")] });
+    const { criarMedicaoDeRelatorio } = await import("@/lib/financeiro-server");
+    await criarMedicaoDeRelatorio("rFat");
+    await criarMedicaoDeRelatorio("rNao");
+    const status = async (osId: string) => (await prisma.medicao.findFirst({ where: { itens: { some: { ordemServicoId: osId } } } }))?.status;
+    expect([await status("sFatAberta"), await status("oNao3")]).toEqual(["AGUARDANDO_PC", "PC_RECEBIDO"]);
   });
 });

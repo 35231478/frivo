@@ -72,7 +72,7 @@ export default async function OrcamentosPage({
     Promise.all(CARDS_PERIODO_ORCAMENTOS.map(soma)),
     // Pedido do cliente (lib/pedido-cliente): a empresa usa? e o filtro rápido "Aguardando pedido"
     usaPedidoCliente(empresaId),
-    resumoOrcamentosAguardando(where),
+    usaPedidoCliente(empresaId).then((u) => (u ? resumoOrcamentosAguardando(where) : null)),
   ]);
   const resumo = Object.fromEntries(CARDS_PERIODO_ORCAMENTOS.map((k, i) => {
     const a = aggCards[i] as { _sum?: { totalGeral?: unknown }; _count: number };

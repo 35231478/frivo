@@ -51,7 +51,7 @@ export default async function MedicoesPage({
     }),
     // Pedido do cliente (lib/pedido-cliente): a empresa usa? e o filtro rápido "Aguardando pedido"
     usaPedidoCliente(empresaId),
-    resumoMedicoesAguardando(where),
+    usaPedidoCliente(empresaId).then((u) => (u ? resumoMedicoesAguardando(where) : null)),
   ]);
   const pagina = paginaValida(paginaPedida, porPagina, total);
   const medicoes = total
