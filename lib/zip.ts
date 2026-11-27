@@ -48,8 +48,9 @@ const TABELA_CRC = (() => {
   return t;
 })();
 
-export function crc32(bytes: Uint8Array): number {
-  let c = 0xffffffff;
+/** CRC-32 de `bytes`. Com `anterior`, continua um CRC já começado (arquivo lido em pedaços: lib/zip-stream). */
+export function crc32(bytes: Uint8Array, anterior = 0): number {
+  let c = (anterior ^ 0xffffffff) >>> 0;
   for (let i = 0; i < bytes.length; i++) c = TABELA_CRC[(c ^ bytes[i]) & 0xff] ^ (c >>> 8);
   return (c ^ 0xffffffff) >>> 0;
 }
@@ -95,7 +96,7 @@ export function semRepetir(nomes: readonly string[]): string[] {
  * A data do MS-DOS, que é o que o zip guarda: 7 bits de ano desde 1980, e o segundo com 2 de
  * resolução. Antes de 1980 não existe no formato — vira 01/01/1980.
  */
-function dataDos(d: Date): { hora: number; dia: number } {
+export function dataDos(d: Date): { hora: number; dia: number } {
   const ano = d.getFullYear();
   if (!Number.isFinite(ano) || ano < 1980) return { hora: 0, dia: (1 << 5) | 1 };
   return {

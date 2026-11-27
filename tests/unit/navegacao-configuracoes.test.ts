@@ -66,7 +66,8 @@ describe("estrutura: 3 abas com cartões; cada item tem id, tela e a rota antiga
       // empresa, não permissão de usuário —, atrás de "Configurações › Gerenciar"
       // "Implantação" (levas 3 e 4 da implantação) abre o grupo: o passo a passo de quem está começando,
       // atrás da mesma permissão dos Módulos (Configurações › Gerenciar)
-      ["Empresa", ["Implantação", "Dados da empresa", "Preferências", "Numeração de documentos", "Módulos"]],
+      // "Exportar dados" (backup portátil) fecha o grupo: só o administrador vê (soAdmin; a rota confere o papel no banco)
+      ["Empresa", ["Implantação", "Dados da empresa", "Preferências", "Numeração de documentos", "Módulos", "Exportar dados"]],
       // "Admissão digital" entrou aqui na leva da admissão: é configuração de pessoas (contrato,
       // documentos pedidos e orientações do link), atrás da permissão "Admissão digital › gerenciar"
       // "Modelos de documento" entrou ao lado da Admissão digital: também é configuração de pessoas
@@ -128,7 +129,10 @@ describe("página /configuracoes: aba, gaveta e permissão conferida no servidor
     const el = await pagina({});
     expect(el.props).toMatchObject({ abaInicial: null, secaoAberta: null, secaoNegada: null });
     expect(el.props.children).toBeNull();
-    expect(el.props.visiveis).toEqual(ITENS_CONFIGURACOES.map((i) => i.id));
+    // O operador com TODAS as permissões vê tudo, menos o que é só do administrador (Exportar dados)
+    expect(el.props.visiveis).toEqual(ITENS_CONFIGURACOES.filter((i) => !i.soAdmin).map((i) => i.id));
+    logar(permissoesTotais(), "ADMIN");
+    expect((await pagina({})).props.visiveis).toEqual(ITENS_CONFIGURACOES.map((i) => i.id));
   }, 60_000);
 
   it("?secao=… abre a tela daquele item na gaveta, na aba dele (refresh reabre)", async () => {
