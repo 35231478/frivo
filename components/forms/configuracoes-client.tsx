@@ -200,7 +200,8 @@ export function ConfiguracoesClient({ empresa: initialEmpresa, config: initialCo
 
         {/* Logo */}
         <FormSection title="Logomarca">
-          <input ref={logoInputRef} type="file" accept="image/*" onChange={handleLogoUpload} className="hidden" />
+          {/* A logo grava sozinha no envio: não arma o "Sair sem salvar?" */}
+          <input ref={logoInputRef} type="file" accept="image/*" onChange={handleLogoUpload} className="hidden" data-sem-aviso />
           {logo ? (
             <div className="flex items-center gap-4">
               <img src={logo} alt="Logo" className="w-20 h-20 object-contain rounded-lg border border-surface-border bg-white p-1" />

@@ -169,6 +169,12 @@ export async function faturarOrcamento(p: { empresaId: string; usuarioId: string
   // O cliente exige o pedido dele e o orçamento ainda não tem (nem foi liberado): não fatura (lib/pedido-cliente)
   const semPedido = await travaFaturarOrcamento(p.empresaId, orc.id);
   if (semPedido) return { tipo: "bloqueado", erro: semPedido };
+  // Leva I.2: com a OS gerada, o material lançado em campo ("Cobrado à parte") espera a conferência — a mesma trava da OS
+  const osGerada = await prisma.ordemServico.findFirst({ where: { orcamentoOrigemId: orc.id, empresaId: p.empresaId }, select: { id: true } });
+  if (osGerada) {
+    const campo = await travaFaturarCampoDaOs(osGerada.id);
+    if (campo) return { tipo: "bloqueado", erro: campo };
+  }
   if (!fatura.linhas.length || fatura.valorLiquido <= 0) return { tipo: "vazio", erro: "Nada a faturar: o orçamento não tem itens com valor." };
   return criarFatura({
     empresaId: p.empresaId, usuarioId: p.usuarioId, clienteId: orc.clienteId, vendedorId: orc.vendedorId, diaFaturamento: orc.cliente.diaFaturamento,

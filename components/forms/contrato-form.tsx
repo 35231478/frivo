@@ -492,12 +492,13 @@ export function ContratoForm({ initialData, somenteLeitura = false, horarioComer
     <div className="flex items-center gap-3 flex-wrap">
       {atalhoDocumentacao(compact)}
       <SomenteLeitura permissao="Contratos › editar" />
-      <Button type="button" variant="secondary" size={compact ? "sm" : "md"} onClick={() => router.push("/contratos")}>Voltar</Button>
+      <Link href="/contratos" className={cn("btn-secondary", compact && "px-3 py-1.5 text-xs")} data-voltar-contratos>Voltar</Link>
     </div>
   ) : (
     <div className="flex items-center gap-2 flex-wrap">
       {atalhoDocumentacao(compact)}
-      <Button type="button" variant="secondary" size={compact ? "sm" : "md"} onClick={() => router.push("/contratos")}>Cancelar</Button>
+      {/* Link (não router.push): o aviso de sair sem salvar (components/ui/proteger-saida) só pergunta nos links */}
+      <Link href="/contratos" className={cn("btn-secondary", compact && "px-3 py-1.5 text-xs")} data-cancelar-contrato>Cancelar</Link>
       <Button type="button" variant="outline" size={compact ? "sm" : "md"} loading={isSubmitting} onClick={salvarEContinuar}>
         <span className={compact ? "hidden lg:inline" : ""}>Salvar e continuar</span>
         <span className={compact ? "lg:hidden" : "hidden"}>Continuar</span>

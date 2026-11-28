@@ -190,8 +190,8 @@ describe.skipIf(!URL_PG)("Leva I.2 — grupo C (PostgreSQL real)", () => {
     comoEscritorio();
     expect(await chamar("ordens/[id]/orcamento/[itemId]/conferir-campo", "POST", { id: "osA", itemId: fora.id }, { acao: "confirmar" })).toEqual({ status: 400, json: { erro: MSG_PRECO_CAMPO } });
     expect((await chamar("ordens/[id]/orcamento/[itemId]/conferir-campo", "POST", { id: "osA", itemId: "iSrv" }, { acao: "confirmar" })).status).toBe(404);
-    const r = await chamar("ordens/[id]/orcamento/[itemId]/conferir-campo", "POST", { id: "osA", itemId: cap.id }, { acao: "confirmar", quantidade: 2, valorUnitario: 55 });
-    expect(r.status).toBe(200);
+    const r = await chamar("ordens/[id]/orcamento/[itemId]/conferir-campo", "POST", { id: "osA", itemId: cap.id }, { acao: "confirmar", quantidade: 2, valorUnitario: 55, motivoPrecoTabela: "Desconto negociado" });
+    expect(r.status).toBe(200); // pj4 F07: 55 foge da tabela do cliente (60) — a trava do preço de tabela pede o motivo
     const c = await prisma.osItemOrcamento.findUnique({ where: { id: cap.id } });
     expect([Number(c.quantidade), Number(c.valorUnitario), Number(c.valorTotal), c.conferirCampo, c.conferidoCampoPorId, !!c.conferidoCampoEm]).toEqual([2, 55, 110, false, "uA", true]);
     expect((await chamar("ordens/[id]/orcamento/[itemId]/conferir-campo", "POST", { id: "osA", itemId: cap.id }, { acao: "remover" })).status).toBe(409);

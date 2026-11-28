@@ -68,8 +68,9 @@ export function PortalContatos({ clienteId, ativo, onGerenciar, onAcessoLiberado
     );
   }
 
+  // Grava sozinho (cada acesso na hora): não arma o "Sair sem salvar?" do formulário em volta
   return (
-    <div className="space-y-2">
+    <div className="space-y-2" data-sem-aviso>
       <p className="text-xs text-ink-muted mb-1">
         Acesso de cada contato ao portal. A senha provisória aparece uma vez, para repassar.
       </p>

@@ -457,7 +457,8 @@ describe("colaborador: inativar o usuário de login junto (função real de Usu�
 
 describe("select de status passa pela função única (impacto, motivo e anotação)", () => {
   const tecnico = () => import("@/app/api/tecnicos/[id]/route");
-  const base = { nome: "Caio", cpf: "11111111111", telefone: "11999999999", perfilAcessoId: "p-tec" };
+  // pj4 (F22): o Caio tem login (teo@x.com): a ficha manda o e-mail dele — salvar sem e-mail agora é recusado
+  const base = { nome: "Caio", cpf: "11111111111", telefone: "11999999999", perfilAcessoId: "p-tec", email: "teo@x.com" };
   it("colaborador: status INATIVO inativa com anotação e motivo; sair de INATIVO reativa", async () => {
     const r = await chamar(tecnico, "PUT", { id: "t1" }, { ...base, statusColaborador: "INATIVO", motivoInativacao: "Pediu demissão" });
     expect(r.status).toBe(200);

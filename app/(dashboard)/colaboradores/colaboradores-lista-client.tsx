@@ -21,6 +21,7 @@ import { PLANILHA } from "@/lib/planilha";
 import { toast } from "@/components/ui/avisos";
 import type { FiltrosColaboradores, OrdemColaboradores } from "@/lib/colaborador-listagem";
 import { ImportarPlanilha } from "@/components/importacao/importar-planilha";
+import { MSG_RT_SEM_CREA, ROTULO_CAMPO, ROTULO_RT, gravarFuncao } from "@/lib/colaborador/funcao";
 
 export type ColaboradorLinha = {
   id: string; nome: string; funcao: string; funcaoLabel: string; cargo: string | null;
@@ -74,10 +75,12 @@ export function ColaboradoresListaClient({ itens, total, filtros: f, opcoes, res
   const filtrosAtivos = [f.q, f.funcoes.length, f.cargo, f.equipe, f.status !== "ativo", f.aviso].filter(Boolean).length;
   const alternarAviso = (a: FiltrosColaboradores["aviso"]) => navegar({ aviso: f.aviso === a ? null : a, ...(f.status === "inativo" ? { status: null } : {}) });
 
-  // Cadastro direto (mesmo mini-cadastro do #9/#10) + função e cargo
+  // Cadastro direto (mesmo mini-cadastro do #9/#10) + a função (as duas chaves da ficha, lib/colaborador/funcao) e cargo
   const camposNovo: CampoRapido[] = [
     ...TECNICO.campos,
-    { nome: "tipo", label: "Função", tipo: "select", colunas: 3, placeholder: "Técnico de campo", opcoes: opcoes.funcoes },
+    { nome: "campo", label: ROTULO_CAMPO, tipo: "select", colunas: 3, placeholder: "Sim", opcoes: [{ value: "nao", label: "Não" }] },
+    { nome: "rt", label: ROTULO_RT, tipo: "select", colunas: 3, placeholder: "Não", opcoes: [{ value: "sim", label: "Sim" }] },
+    { nome: "crea", label: "CREA (do responsável técnico)", colunas: 3, placeholder: "Ex: 5012345-D/SP", maxLength: 60 },
     ...(opcoes.cargos.length ? [{ nome: "cargoId", label: "Cargo", tipo: "select", colunas: 3, placeholder: "Sem cargo", opcoes: opcoes.cargos } as CampoRapido] : []),
   ];
 
@@ -184,11 +187,14 @@ export function ColaboradoresListaClient({ itens, total, filtros: f, opcoes, res
           criar={async (v) => {
             const cpf = (v.cpf ?? "").replace(/\D/g, "");
             if (cpf.length !== 11) throw new Error("CPF deve ter 11 dígitos.");
+            const funcao = gravarFuncao({ campo: v.campo !== "nao", rt: v.rt === "sim" });
+            const crea = (v.crea ?? "").trim();
+            if (funcao.tipo === "RESPONSAVEL_TECNICO" && !crea) throw new Error(MSG_RT_SEM_CREA);
             const res = await fetch("/api/tecnicos", {
               method: "POST", headers: { "Content-Type": "application/json" },
               body: JSON.stringify({
                 nome: v.nome, cpf: `${cpf.slice(0, 3)}.${cpf.slice(3, 6)}.${cpf.slice(6, 9)}-${cpf.slice(9)}`, telefone: v.telefone,
-                ...(v.tipo && { tipo: v.tipo }), ...(v.cargoId && { cargoId: v.cargoId }), competenciaIds: [],
+                ...funcao, ...(crea && { crea }), ...(v.cargoId && { cargoId: v.cargoId }), competenciaIds: [],
               }),
             });
             const d = await res.json().catch(() => ({}));

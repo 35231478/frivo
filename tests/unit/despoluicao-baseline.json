@@ -13,7 +13,7 @@
   "hex": 0,
   "informal": 0,
   "exclamacao": 0,
-  "titleCase": 11,
+  "titleCase": 8,
   "textoLongo": 9
  },
  "arquivos": {
@@ -37,10 +37,6 @@
    "components/forms/colaborador-form.tsx": {
     "n": 2,
     "motivo": "Especialidades sugeridas são gravadas como valor (tag/texto) no cadastro; mudar a caixa mudaria o dado salvo nas próximas escolhas. Os tipos de documento saíram daqui: viraram CATEGORIAS em lib/colaborador/documentos.ts, com id e rótulo separados."
-   },
-   "components/forms/tecnico-form.tsx": {
-    "n": 3,
-    "motivo": "Mesmas especialidades/tipo do colaborador-form: texto gravado como valor no cadastro do técnico."
    }
   },
   "textoLongo": {

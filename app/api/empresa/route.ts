@@ -3,7 +3,10 @@ import { auth } from "@/lib/auth";
 import { pode } from "@/lib/permissoes";
 import { prisma } from "@/lib/prisma";
 import { z } from "zod";
+import { Prisma } from "@prisma/client";
 import { normalizarCnae } from "@/lib/nfse/servico";
+import { cnpjValido, digitos } from "@/lib/documento";
+import { formatarCnpj, MSG_CNPJ_EM_USO } from "@/lib/empresa/criar-empresa";
 
 const textoBanco = (max: number) =>
   z.string().trim().max(max).transform((v) => v || null).optional().nullable();
@@ -102,10 +105,24 @@ export async function PUT(req: NextRequest) {
     }
   }
 
-  const empresa = await prisma.empresa.update({
-    where: { id: session.user!.empresaId },
-    data: parsed.data,
-  });
+  // CNPJ: trocado, precisa ser válido (o de antes, mesmo que antigo e inválido, continua salvando os outros campos)
+  // e único entre as empresas (a mesma regra da área do dono do Frivo)
+  const data = { ...parsed.data };
+  if (data.cnpj !== undefined) {
+    const atual = await prisma.empresa.findUnique({ where: { id: session.user!.empresaId }, select: { cnpj: true } });
+    if (digitos(data.cnpj) === digitos(atual?.cnpj ?? "")) delete data.cnpj;
+    else if (!cnpjValido(data.cnpj)) return NextResponse.json({ erro: "CNPJ inválido." }, { status: 400 });
+    else data.cnpj = formatarCnpj(data.cnpj);
+  }
 
-  return NextResponse.json(empresa);
+  try {
+    const empresa = await prisma.empresa.update({
+      where: { id: session.user!.empresaId },
+      data,
+    });
+    return NextResponse.json(empresa);
+  } catch (e) {
+    if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002") return NextResponse.json({ erro: MSG_CNPJ_EM_USO }, { status: 409 });
+    throw e;
+  }
 }

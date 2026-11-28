@@ -30,9 +30,18 @@ export function useAvisoSairSemSalvar(container: RefObject<HTMLElement | null>) 
       const alvo = ev.target as HTMLElement | null;
       if (!alvo || alvo.closest("[data-sem-aviso]")) return;
       e.sujo = true;
+      // Mexeu depois de enviar: o salvar não saiu da tela (a validação recusou) — volta a perguntar
+      e.enviadoEm = null;
       armarGuarda();
     };
     const enviou = () => { e.enviadoEm = Date.now(); };
+    // O envio que a validação recusou não segura o aviso: o campo inválido (do navegador) ou o foco que o
+    // formulário leva ao 1º campo com erro, logo depois do envio
+    const recusou = () => { e.enviadoEm = null; };
+    const focou = (ev: FocusEvent) => {
+      if (e.enviadoEm == null || !(ev.target as HTMLElement | null)?.matches?.("input, select, textarea")) return;
+      e.enviadoEm = null;
+    };
     const salvo = () => { e.sujo = false; e.enviadoEm = null; };
 
     const clique = (ev: MouseEvent) => {
@@ -72,6 +81,8 @@ export function useAvisoSairSemSalvar(container: RefObject<HTMLElement | null>) 
     el.addEventListener("input", mudou, true);
     el.addEventListener("change", mudou, true);
     el.addEventListener("submit", enviou, true);
+    el.addEventListener("invalid", recusou, true);
+    el.addEventListener("focusin", focou, true);
     window.addEventListener(EVENTO_FORMULARIO_SALVO, salvo);
     document.addEventListener("click", clique, true);
     window.addEventListener("popstate", voltou);
@@ -80,6 +91,8 @@ export function useAvisoSairSemSalvar(container: RefObject<HTMLElement | null>) 
       el.removeEventListener("input", mudou, true);
       el.removeEventListener("change", mudou, true);
       el.removeEventListener("submit", enviou, true);
+      el.removeEventListener("invalid", recusou, true);
+      el.removeEventListener("focusin", focou, true);
       window.removeEventListener(EVENTO_FORMULARIO_SALVO, salvo);
       document.removeEventListener("click", clique, true);
       window.removeEventListener("popstate", voltou);
