@@ -27,7 +27,6 @@ import {
 } from "@/lib/tecnico/comentarios";
 import { lidasPelaResposta, MSG_CITADA_NAO_ENCONTRADA, MSG_OS_CANCELADA, ROTULO_CITACAO_INDISPONIVEL, somenteLeitura, trechoDaCitacao } from "@/lib/chat/regras";
 import type { RefCitacao } from "@/lib/tecnico/comentarios";
-import type { Prisma } from "@prisma/client";
 
 type Resultado<T> = { ok: true; status: number; dados: T } | { ok: false; status: number; erro: string };
 
