@@ -146,6 +146,8 @@ export async function PUT(req: NextRequest) {
     comissaoQuando: _comQuando, comissaoLiquidaImpostos: _comLiq,
     // COM-1.1 — o vencimento da conta a pagar do fechamento: também da rota própria (/api/comissoes)
     comissaoVencimentoTipo: _comVencTipo, comissaoVencimentoDia: _comVencDia,
+    // Leva J — "Mostrar especialidades do técnico": rota própria (/api/configuracoes/impressao-os); a tela geral não sobrescreve
+    mostrarEspecialidadesTecnico: _espTec,
     ...entrada
   } = semCampoMorto(body);
   const parsed = configuracaoSchema.safeParse(entrada);

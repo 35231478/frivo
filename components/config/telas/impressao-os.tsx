@@ -1,6 +1,7 @@
 import { auth } from "@/lib/auth";
 import { pode } from "@/lib/permissoes";
 import { getConfigRelatorio } from "@/lib/relatorio-os/config-server";
+import { mostrarEspecialidades } from "@/lib/relatorio-os/dados";
 import { PageHeader } from "@/components/ui/page-header";
 import { ImpressaoOsClient } from "@/components/config/impressao-os-client";
 
@@ -8,7 +9,7 @@ import { ImpressaoOsClient } from "@/components/config/impressao-os-client";
 export async function TelaImpressaoOs() {
   const session = await auth();
   const u = session!.user!;
-  const config = await getConfigRelatorio(u.empresaId);
+  const [config, especialidades] = await Promise.all([getConfigRelatorio(u.empresaId), mostrarEspecialidades(u.empresaId)]);
   return (
     <div className="max-w-3xl mx-auto">
       <PageHeader
@@ -17,7 +18,7 @@ export async function TelaImpressaoOs() {
         dica="Define o que é impresso no relatório da OS e o que é exibido ao cliente ou apenas à equipe interna."
         backHref="/configuracoes/operacionais"
       />
-      <ImpressaoOsClient inicial={config} podeEditar={pode(u.permissoes, "configuracoes", "gerenciar", u.role)} />
+      <ImpressaoOsClient inicial={config} especialidadesInicial={especialidades} podeEditar={pode(u.permissoes, "configuracoes", "gerenciar", u.role)} />
     </div>
   );
 }

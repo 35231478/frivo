@@ -1,8 +1,8 @@
 // @vitest-environment happy-dom
 /**
  * Consulta de CNPJ no cadastro de cliente NOVO: a mesma resposta já traz o endereço completo e o
- * contato — e eles são aproveitados (sem 2ª chamada ao ViaCEP). Cria o endereço principal e um
- * contato preenchidos; não duplica contato já existente.
+ * contato — e eles são aproveitados (sem 2ª chamada ao ViaCEP). Leva H: o endereço vai para os CAMPOS do
+ * endereço principal (não vira card); um contato preenchido; não duplica contato já existente.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act, createElement } from "react";
@@ -58,19 +58,28 @@ async function consultar() {
   await clicar($$("button").find((b) => b.textContent!.includes("Consultar")));
 }
 
-const contarPrincipais = () => ((caixa.textContent ?? "").match(/Principal/g) ?? []).length;
+// Selos "Principal" dos contatos (fora a frase da aba Endereços que avisa do local "Principal" automático)
+const contarPrincipais = () => {
+  const aviso = caixa.querySelector("[data-principal-automatico]")?.textContent ?? "";
+  return (((caixa.textContent ?? "").replace(aviso, "")).match(/Principal/g) ?? []).length;
+};
+const valor = (nome: string) => ($(`[name="${nome}"]`) as HTMLInputElement | null)?.value;
 
 describe("Autofill do CNPJ no cliente novo", () => {
-  it("Consultar preenche razão social e um contato, sem criar endereço", async () => {
+  it("Consultar preenche razão social, o endereço principal (em campos) e um contato", async () => {
     await montar();
     expect(contarPrincipais()).toBe(0); // nada ainda
     await consultar();
     const corpo = caixa.textContent ?? "";
     // razão social preenchida
     expect(($('input[name="nome"]') as HTMLInputElement).value).toBe("Termofrio Engenharia Ltda");
-    // o endereço NÃO é criado pela consulta: sem caixa "Matriz", a seção fica vazia
+    // Leva H (mudança intencional): o endereço da consulta vai para os campos do endereço principal — não
+    // vira card "Matriz" nem local; ao salvar, o servidor cria o local "Principal" com ele
+    expect([valor("cep"), valor("endereco"), valor("numero"), valor("complemento"), valor("bairro"), valor("cidade"), valor("estado")])
+      .toEqual(["74000-000", "Avenida Central", "1000", "Sala 2", "Setor Central", "Goiânia", "GO"]);
     expect(corpo).not.toContain("Matriz");
-    expect(corpo).toContain("Nenhum endereço adicionado");
+    expect(caixa.querySelector("[data-endereco]")).toBeNull();
+    expect(caixa.querySelector("[data-principal-automatico]")).toBeTruthy();
     // só o contato principal da consulta → 1 selo "Principal"
     expect(contarPrincipais()).toBe(1);
     // e o contato leva o nome da consulta (card colapsado mostra o nome + selo Principal)

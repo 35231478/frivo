@@ -78,7 +78,7 @@ describe("PIS/NIS: dígito verificador de verdade, não só o tamanho", () => {
 const completo = (): FormAdmissao => ({
   ...formVazio(),
   nome: "Maria Souza", cpf: "529.982.247-25", rg: "12.345.678-9", dataNascimento: "1990-05-10",
-  nomeMae: "Ana Souza", telefone: "(11) 98888-7777", pis: "120.4567.890-5",
+  nomeMae: "Ana Souza", telefone: "(11) 98888-7777", email: "maria@exemplo.com", pis: "120.4567.890-5",
   cep: "01310-100", endereco: "Av. Paulista", numero: "1000", bairro: "Bela Vista",
   cidade: "São Paulo", estado: "SP",
   banco: "Itaú", agencia: "1234", conta: "56789-0",
@@ -86,10 +86,14 @@ const completo = (): FormAdmissao => ({
 const SEM_DOCS = { enviados: [], obrigatorios: [] };
 
 describe("o que falta em cada etapa", () => {
-  it("DADOS: nome, CPF com dígito, nascimento, mãe, RG e telefone; o PIS só é conferido quando preenchido", () => {
+  it("DADOS: nome, CPF com dígito, nascimento, mãe, RG, celular e e-mail (Leva J); o PIS só é conferido quando preenchido", () => {
     expect(faltaNaEtapa("DADOS", completo(), SEM_DOCS)).toEqual([]);
     expect(faltaNaEtapa("DADOS", formVazio(), SEM_DOCS))
-      .toEqual(["Nome completo", "CPF válido", "Data de nascimento", "Nome da mãe", "RG", "Telefone"]);
+      .toEqual(["Nome completo", "CPF válido", "Data de nascimento", "Nome da mãe", "RG", "Celular com DDD", "E-mail"]);
+    // Leva J: telefone fixo não é celular; com o 55 do país vale; e-mail precisa ter cara de e-mail
+    for (const tel of ["(11) 3333-4444", "1198888777", "(11) 88888-7777", "(01) 98888-7777", "abc"]) expect(faltaNaEtapa("DADOS", { ...completo(), telefone: tel }, SEM_DOCS), tel).toEqual(["Celular com DDD"]);
+    expect(faltaNaEtapa("DADOS", { ...completo(), telefone: "+55 (11) 98888-7777" }, SEM_DOCS)).toEqual([]);
+    for (const email of ["", "maria", "maria@exemplo", "maria @exemplo.com", `${"a".repeat(160)}@x.com`]) expect(faltaNaEtapa("DADOS", { ...completo(), email }, SEM_DOCS), email).toEqual(["E-mail"]);
     // CPF com 11 dígitos mas inválido não passa
     expect(faltaNaEtapa("DADOS", { ...completo(), cpf: "111.111.111-11" }, SEM_DOCS)).toContain("CPF válido");
     // PIS vazio é aceito (nem todo mundo tem em mãos na hora); errado, não
@@ -97,7 +101,9 @@ describe("o que falta em cada etapa", () => {
     expect(faltaNaEtapa("DADOS", { ...completo(), pis: "12045678900" }, SEM_DOCS)).toContain("PIS/NIS válido");
   });
 
-  it("ENDERECO: CEP com 8 dígitos e o endereço inteiro", () => {
+  it("ENDERECO: CEP com 8 dígitos e o endereço inteiro; a UF tem de ser uma das 27 (Leva J)", () => {
+    for (const estado of ["", "XX", "São Paulo"]) expect(faltaNaEtapa("ENDERECO", { ...completo(), estado }, SEM_DOCS), estado).toEqual(["Estado (UF)"]);
+    expect(faltaNaEtapa("ENDERECO", { ...completo(), estado: "go" }, SEM_DOCS)).toEqual([]);
     expect(faltaNaEtapa("ENDERECO", completo(), SEM_DOCS)).toEqual([]);
     expect(faltaNaEtapa("ENDERECO", { ...completo(), cep: "0131" }, SEM_DOCS)).toContain("CEP");
     expect(faltaNaEtapa("ENDERECO", { ...completo(), numero: "" }, SEM_DOCS)).toContain("Número");

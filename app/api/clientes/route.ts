@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { locaisDoClienteNovo } from "@/lib/clientes/endereco-principal";
 import { auth } from "@/lib/auth";
 import { pode } from "@/lib/permissoes";
 import { prisma } from "@/lib/prisma";
@@ -113,14 +114,21 @@ export async function POST(req: NextRequest) {
     anexosValidos.push(v.arquivo);
   }
 
+  // Leva H: o endereço principal (o da consulta do CNPJ, nos campos do cadastro) vira o local "Principal" — as
+  // OS, os equipamentos e o PMOC precisam de um local; os outros locais informados entram como secundários.
+  const novos = locaisDoClienteNovo(resto, unidades ?? []);
+  const locais: z.infer<typeof unidadeInlineSchema>[] = novos.principal
+    ? [{ ...novos.principal, telefone: resto.telefone ?? undefined }, ...novos.locais]
+    : novos.locais;
+
   const cliente = await prisma.cliente.create({
     data: {
       ...resto,
       empresaId,
       responsavelTecnicoId: responsavelTecnicoId || null,
-      unidades: unidades && unidades.length > 0
+      unidades: locais.length > 0
         ? {
-            create: unidades.map((u) => ({
+            create: locais.map((u) => ({
               ...u,
               empresaId,
               latitude: u.latitude ?? null,
