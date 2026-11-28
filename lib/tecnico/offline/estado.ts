@@ -251,6 +251,8 @@ export function aplicar(r: RetratoAtividade, x: ExecucaoTela, op: OperacaoFila):
       return { ...x, comentarios: aplicarComentario(x.comentarios ?? [], op.dados, op.em ?? op.criadoEm) };
 
     case "despesa":
+    case "despesaEditar":
+    case "despesaExcluir":
       // A despesa não muda a execução: aparece em "Minhas despesas" (lida da fila e do servidor)
       return x;
 

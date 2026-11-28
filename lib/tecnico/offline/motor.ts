@@ -334,7 +334,7 @@ export class MotorSync {
       if (atividadeId !== SEM_OS) { await this.baixarRetrato(atividadeId); continue; }
       const pedidoEm = this.agora();
       if (semOs.has("comentario")) await this.banco.limparEnviadas(SEM_OS, pedidoEm, "comentario");
-      if (!semOs.has("despesa")) continue;
+      if (!semOs.has("despesa") && !semOs.has("despesaEditar") && !semOs.has("despesaExcluir")) continue;
       const r = await this.baixarLista("despesas", "/api/tecnico/despesas");
       if (!r.doAparelho) await this.banco.limparEnviadas(SEM_OS, pedidoEm);
     }

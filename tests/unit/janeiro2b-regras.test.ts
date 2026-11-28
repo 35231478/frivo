@@ -79,3 +79,49 @@ describe("D4: legenda das fotos antes/depois", () => {
     expect(y.equipamentos[0].fotos.map((f: any) => f.legenda)).toEqual(["Antes da limpeza", null, "Fica"]);
   });
 });
+
+describe("D7: corrigir e excluir a despesa (regras)", async () => {
+  const { despesaEdicaoSchema, despesaExclusaoSchema, mudancasDaDespesa, resumoDaDespesa, podeCorrigirDespesa } = await import("@/lib/tecnico/despesas");
+  const { minhasDespesas } = await import("@/components/tecnico/despesas");
+  const base = { categoria: "COMBUSTIVEL" as const, valor: 187.4, data: "2026-11-10", pagamento: "PROPRIO" as const, descricao: "Van" };
+  it("o que mudou, campo a campo (a foto só 'trocada'); nada mudou = []", () => {
+    expect(mudancasDaDespesa(base, base)).toEqual([]);
+    expect(mudancasDaDespesa(base, { ...base, descricao: "  Van " })).toEqual([]);
+    expect(mudancasDaDespesa(base, { ...base, valor: 187.40000001 })).toEqual([]);
+    expect(mudancasDaDespesa(base, { categoria: "PEDAGIO", valor: 1234.5, data: "2026-11-09", pagamento: "EMPRESA", descricao: null }, true)).toEqual([
+      "Tipo: Combustível → Pedágio", "Valor: R$ 187,40 → R$ 1.234,50", "Dia: 10/11/2026 → 09/11/2026",
+      "Pagamento: Do meu bolso → Cartão ou dinheiro da empresa", "Descrição: “Van” → (sem)", "Foto do cupom trocada",
+    ]);
+    expect(mudancasDaDespesa({ ...base, descricao: null }, base)).toEqual(["Descrição: (sem) → “Van”"]);
+    expect(resumoDaDespesa(base)).toBe("Combustível · R$ 187,40 · 10/11/2026 · Do meu bolso · Van");
+    expect(resumoDaDespesa({ ...base, descricao: " " })).toBe("Combustível · R$ 187,40 · 10/11/2026 · Do meu bolso");
+  });
+  it("o schema: os campos do lançamento, a foto opcional; Outros pede descrição; a exclusão só com o clientId", () => {
+    expect(despesaEdicaoSchema.safeParse({ clientId: "c", ...base }).success).toBe(true);
+    expect(despesaEdicaoSchema.safeParse({ clientId: "c", ...base, foto: "x" }).success).toBe(false);
+    expect(despesaEdicaoSchema.safeParse({ clientId: "c", ...base, categoria: "OUTROS", descricao: "ab" }).success).toBe(false);
+    expect(despesaEdicaoSchema.safeParse({ clientId: "c", ...base, valor: 0 }).success).toBe(false);
+    expect(despesaEdicaoSchema.safeParse({ clientId: "c", ...base, status: "APROVADA" }).success).toBe(false);
+    expect(despesaExclusaoSchema.safeParse({ clientId: "c" }).success).toBe(true);
+    expect(despesaExclusaoSchema.safeParse({ clientId: "c", id: "x" }).success).toBe(false);
+  });
+  it("só a que aguarda aprovação e que subiu sem erro", () => {
+    expect(podeCorrigirDespesa({ situacao: "PENDENTE" })).toBe(true);
+    for (const s of ["APROVADA", "RECUSADA", "REEMBOLSADA"] as const) expect(podeCorrigirDespesa({ situacao: s })).toBe(false);
+    expect(podeCorrigirDespesa({ situacao: "PENDENTE", erroEnvio: "x" })).toBe(false);
+  });
+  it("a lista com a fila: correção e exclusão na ordem; a recusada não se aplica e diz por quê", () => {
+    const s = (clientId: string, valor: number) => ({ id: clientId, clientId, ...base, valor, osNumero: null, situacao: "PENDENTE", motivoRecusa: null }) as any;
+    const op = (seq: number, tipo: string, dados: any, estado = "pendente", erro?: string) => ({ seq, tipo, atividadeId: "sem-os", dados, estado, erro }) as any;
+    const l = minhasDespesas([
+      op(3, "despesaEditar", { clientId: "a", ...base, valor: 50 }),
+      op(1, "despesaEditar", { clientId: "a", ...base, valor: 40 }),
+      op(2, "despesaExcluir", { clientId: "b" }),
+      op(4, "despesaEditar", { clientId: "c", ...base, valor: 1 }, "erro", "O escritório já decidiu."),
+      op(5, "despesaEditar", { clientId: "d", ...base, valor: 9 }, "enviada"),
+    ], [s("a", 10), s("b", 20), s("c", 30), s("d", 9)]);
+    expect(l.map((d) => [d.clientId, d.valor, !!d.corrigidaNoAparelho, d.erroCorrecao ?? null])).toEqual([
+      ["a", 50, true, null], ["c", 30, false, "Correção não enviada: O escritório já decidiu."], ["d", 9, false, null],
+    ]);
+  });
+});

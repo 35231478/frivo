@@ -2924,6 +2924,28 @@ model DespesaCampo {
   @@map("despesas_campo")
 }
 
+/// D7 — a TRILHA da despesa de campo corrigida ou excluída pelo colaborador no app (só enquanto o escritório não decidiu).
+/// Sem chave estrangeira para a despesa, de propósito: a linha da exclusão fica depois de a despesa sair. O `client_id`
+/// também barra a despesa excluída de voltar por um reenvio atrasado da fila.
+model DespesaCampoHistorico {
+  id        String   @id @default(cuid())
+  empresaId String   @map("empresa_id")
+  despesaId String   @map("despesa_id")
+  clientId  String   @map("client_id")
+  tecnicoId String   @map("tecnico_id")
+  usuarioId String?  @map("usuario_id")
+  /// EDITADA | EXCLUIDA
+  acao      String
+  /// Corrigida: o que mudou ("Valor: R$ 50,00 → R$ 45,00 · …"). Excluída: o que ela era.
+  detalhes  String   @db.Text
+  criadoEm  DateTime @default(now()) @map("criado_em")
+
+  @@index([empresaId, despesaId])
+  @@index([empresaId, clientId])
+  @@index([empresaId, acao, criadoEm])
+  @@map("despesas_campo_historico")
+}
+
 /// A FOTO DO CUPOM (1-1), em tabela separada de propósito: a lista lê só a despesa e nunca arrasta a imagem.
 model DespesaCampoFoto {
   despesaId String @id @map("despesa_id")

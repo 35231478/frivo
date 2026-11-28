@@ -300,4 +300,128 @@ describe.skipIf(!URL_PG)("app de campo, leva 2 (PR B): despesas de campo (Postgr
       expect((await chamar("ordens/[id]/despesas-campo", "GET", { id: "osA" })).status).toBe(404);
     });
   });
+
+  /* ═════════════ D7 (App pronto pra janeiro 2): corrigir e excluir enquanto o escritório não decidiu ═════════════ */
+  describe("D7: o colaborador corrige ou exclui antes da decisão (com trilha)", () => {
+    const editar = (clientId: string, extra: Record<string, unknown> = {}, atividadeId = "sem-os") => ({
+      id: randomUUID(), tipo: "despesaEditar", atividadeId, em: new Date().toISOString(),
+      dados: { clientId, categoria: "COMBUSTIVEL", valor: 187.4, data: HOJE, pagamento: "PROPRIO", ...extra },
+    });
+    const excluir = (clientId: string, atividadeId = "sem-os") => ({ id: randomUUID(), tipo: "despesaExcluir", atividadeId, em: new Date().toISOString(), dados: { clientId } });
+    const trilha = async (clientId: string) => (await prisma.despesaCampoHistorico.findMany({ where: { clientId }, orderBy: { criadoEm: "asc" } })).map((h: any) => [h.acao, h.detalhes, h.usuarioId, h.tecnicoId]);
+
+    it("corrige (também sem OS e com a despesa da OS); grava o que mudou; reenviar ou corrigir para o mesmo não grava de novo", async () => {
+      comoTecnico();
+      await sync([despesa("sem-os", "e7a", { descricao: "Posto" }), despesa("aA", "e7b", { categoria: "PEDAGIO", valor: 12.5, pagamento: "EMPRESA" })]);
+      const op = editar("e7a", { valor: 178.9, descricao: "Posto Shell" });
+      const [r] = await sync([op]);
+      expect(r).toMatchObject({ ok: true, status: 200, dados: { mudou: true } });
+      expect(await sync([op])).toMatchObject([{ ok: true }]); // a mesma operação: idempotente
+      expect((await sync([editar("e7a", { valor: 178.9, descricao: "Posto Shell" })]))[0]).toMatchObject({ ok: true, dados: { mudou: false } });
+      const d = await prisma.despesaCampo.findFirst({ where: { clientId: "e7a" } });
+      expect([Number(d.valor), d.descricao, d.status]).toEqual([178.9, "Posto Shell", "PENDENTE"]);
+      expect(await trilha("e7a")).toEqual([["EDITADA", "Valor: R$ 187,40 → R$ 178,90 · Descrição: “Posto” → “Posto Shell”", "uT", "t1"]]);
+      // a da OS: pela fila da atividade (atrás do lançamento), troca a foto e o pagamento; continua na OS
+      const NOVA = FOTO.replace("ggg==", "ggA==");
+      expect((await sync([editar("e7b", { categoria: "PEDAGIO", valor: 12.5, pagamento: "PROPRIO", foto: NOVA }, "aA")]))[0]).toMatchObject({ ok: true });
+      const b = await prisma.despesaCampo.findFirst({ where: { clientId: "e7b" }, include: { foto: true } });
+      expect([b.pagamento, b.ordemServicoId, b.foto.conteudo]).toEqual(["PROPRIO", "osA", NOVA]);
+      expect((await trilha("e7b"))[0][1]).toBe("Pagamento: Cartão ou dinheiro da empresa → Do meu bolso · Foto do cupom trocada");
+      // o escritório vê o que mudou, na despesa
+      comoEscritorio();
+      const lista = (await chamar("despesas-campo", "GET")).json.despesas;
+      expect(lista.find((x: any) => x.id === d.id).correcoes).toEqual([{ em: expect.any(String), detalhes: "Valor: R$ 187,40 → R$ 178,90 · Descrição: “Posto” → “Posto Shell”" }]);
+    });
+
+    it("as regras: só a sua; a decidida não muda (aprovada ou recusada); o dia novo também precisa valer; Outros pede a descrição", async () => {
+      comoTecnico();
+      await sync([despesa("sem-os", "e7c"), despesa("sem-os", "e7d")]);
+      comoTecnico("t2", "uT2", "maria@clima.com");
+      expect((await sync([editar("e7c", { valor: 1 })]))[0]).toMatchObject({ ok: false, status: 403, erro: "Só quem lançou corrige ou exclui a despesa." });
+      expect((await sync([excluir("e7c")]))[0]).toMatchObject({ ok: false, status: 403 });
+      comoEscritorio();
+      expect((await recusar(await idDe("e7c"), { motivo: "Cupom ilegível" })).status).toBe(200);
+      expect((await aprovar(await idDe("e7d"), { vencimento: chaveHojeBR(7) })).status).toBe(200);
+      comoTecnico();
+      for (const cid of ["e7c", "e7d"]) {
+        expect((await sync([editar(cid, { valor: 1 })]))[0]).toMatchObject({ ok: false, status: 409, erro: "O escritório já decidiu esta despesa: não dá mais para corrigir nem excluir." });
+        expect((await sync([excluir(cid)]))[0]).toMatchObject({ ok: false, status: 409 });
+      }
+      expect(Number((await prisma.despesaCampo.findFirst({ where: { clientId: "e7d" } })).valor)).toBe(187.4);
+      await sync([despesa("sem-os", "e7e")]);
+      expect((await sync([editar("e7e", { data: chaveHojeBR(-90) })]))[0]).toMatchObject({ ok: false, status: 422 });
+      expect((await sync([editar("e7e", { data: chaveHojeBR(1) })]))[0]).toMatchObject({ ok: false, status: 422 });
+      expect((await sync([editar("e7e", { categoria: "OUTROS" })]))[0]).toMatchObject({ ok: false, status: 400 });
+      expect((await sync([editar("nao-existe")]))[0]).toMatchObject({ ok: false, status: 404 });
+      expect(await trilha("e7c")).toEqual([]);
+    });
+
+    it("corrigida entre a tela do escritório e o clique: a aprovação usa o valor gravado agora; virou 'do bolso' sem vencimento: recusa e desfaz", async () => {
+      comoTecnico();
+      await sync([despesa("sem-os", "e7f", { pagamento: "EMPRESA", valor: 50 })]);
+      const id = await idDe("e7f");
+      await sync([editar("e7f", { pagamento: "PROPRIO", valor: 45 })]);
+      comoEscritorio();
+      // a tela mostrava "pela empresa" (sem vencimento): agora é do bolso
+      const r = await aprovar(id);
+      expect(r.status).toBe(400); // a conferência antes da trava já lê a corrigida
+      expect((await prisma.despesaCampo.findUnique({ where: { id } })).status).toBe("PENDENTE");
+      const ok = await aprovar(id, { vencimento: chaveHojeBR(7) });
+      expect(ok.status).toBe(200);
+      const conta = await prisma.contaPagar.findUnique({ where: { id: ok.json.contaPagarId } });
+      expect(Number(conta.valorTotal)).toBe(45);
+    });
+
+    it("exclui: sai da lista do app, do escritório e do sino; a trilha guarda o que era; um reenvio atrasado do lançamento não a traz de volta", async () => {
+      comoTecnico();
+      const lanc = despesa("sem-os", "e7g", { categoria: "ESTACIONAMENTO", valor: 22, descricao: "Shopping" });
+      await sync([lanc]);
+      comoEscritorio();
+      const sinoAntes = (await chamar("alertas", "GET")).json.despesasCampo;
+      comoTecnico();
+      const op = excluir("e7g");
+      expect((await sync([op]))[0]).toMatchObject({ ok: true });
+      expect((await sync([excluir("e7g")]))[0]).toMatchObject({ ok: true }); // de novo: nada a fazer
+      expect(await prisma.despesaCampo.count({ where: { clientId: "e7g" } })).toBe(0);
+      expect((await minhas()).despesas.map((d: any) => d.clientId)).not.toContain("e7g");
+      // o lançamento reenviado depois (outra operação, o mesmo clientId): não volta
+      expect((await sync([{ ...lanc, id: randomUUID() }]))[0]).toMatchObject({ ok: true, dados: { repetida: true } });
+      expect(await prisma.despesaCampo.count({ where: { clientId: "e7g" } })).toBe(0);
+      expect((await sync([editar("e7g")]))[0]).toMatchObject({ ok: false, status: 404, erro: "Esta despesa foi excluída." });
+      expect(await trilha("e7g")).toEqual([["EXCLUIDA", `Estacionamento · R$ 22,00 · ${HOJE.split("-").reverse().join("/")} · Do meu bolso · Shopping`, "uT", "t1"]]);
+      comoEscritorio();
+      expect((await chamar("alertas", "GET")).json.despesasCampo).toBe(sinoAntes - 1);
+      const ex = (await chamar("despesas-campo", "GET", {}, undefined, "?status=EXCLUIDAS")).json;
+      expect(ex.despesas).toEqual([]);
+      expect(ex.excluidas[0]).toMatchObject({ colaborador: "João Silva", detalhes: expect.stringContaining("Estacionamento · R$ 22,00") });
+      // outra empresa não vê
+      comoEscritorio(permissoesTotais(), "uE2", "e2");
+      expect((await chamar("despesas-campo", "GET", {}, undefined, "?status=EXCLUIDAS")).json.excluidas).toEqual([]);
+    });
+
+    it("corrigir e aprovar ao mesmo tempo: uma das duas vale inteira (nunca a conta com um valor e a despesa com outro)", async () => {
+      const { editarDespesa, aprovarDespesa } = await import("@/lib/execucao/despesas");
+      const { atorDaSessao } = await import("@/lib/execucao/contexto");
+      comoTecnico();
+      const ator = atorDaSessao(sessao.atual);
+      for (let i = 0; i < 6; i++) {
+        const cid = `e7h${i}`;
+        await sync([despesa("sem-os", cid, { valor: 100 })]);
+        const id = await idDe(cid);
+        // as duas de verdade ao mesmo tempo (sem a sessão do teste no meio), alternando quem sai primeiro
+        const dados = { clientId: cid, categoria: "COMBUSTIVEL" as const, valor: 80, data: HOJE, pagamento: "PROPRIO" as const };
+        const corr = () => editarDespesa(ator, dados);
+        const apr = () => aprovarDespesa("e1", id, "uA", { vencimento: chaveHojeBR(7) });
+        const [a, b] = await Promise.all(i % 2 ? [corr(), apr()] : [apr(), corr()]);
+        const [rc, ra] = i % 2 ? [a, b] : [b, a];
+        expect(ra.ok).toBe(true);
+        const d = await prisma.despesaCampo.findUnique({ where: { id }, include: { contaPagar: true } });
+        expect(d.status).toBe("APROVADA");
+        expect(Number(d.contaPagar.valorTotal)).toBe(Number(d.valor));
+        // a correção passou (antes da aprovação: a conta é de 80) ou foi recusada (depois: fica 100)
+        expect(Number(d.valor)).toBe(rc.ok ? 80 : 100);
+        if (!rc.ok) expect(rc.status).toBe(409);
+      }
+    });
+  });
 });

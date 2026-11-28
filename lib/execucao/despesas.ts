@@ -19,8 +19,9 @@ import { tecnicoDoUsuario } from "@/lib/tecnico/escopo";
 import { agendarPush, notificarDespesa, URL_DESPESAS_APP, URL_DESPESAS_ESCRITORIO } from "@/lib/push/eventos";
 import type { Ator, ContextoExecucao } from "@/lib/execucao/contexto";
 import {
-  categoriaFinanceiraDe, dataDespesaValida, descricaoReembolso, lerMapa, MSG_DESPESAS_DESLIGADAS, MSG_JA_DECIDIDA, MSG_SEM_COLABORADOR, NOME_CATEGORIA,
-  situacaoDespesa, type CategoriaDespesa, type DadosDespesa, type DespesaTela, type MapaCategorias, type Pagamento, type StatusDespesa,
+  categoriaFinanceiraDe, dataDespesaValida, descricaoReembolso, lerMapa, MSG_DESPESA_DECIDIDA_CORRIGIR, MSG_DESPESA_DE_OUTRO, MSG_DESPESA_EXCLUIDA,
+  MSG_DESPESAS_DESLIGADAS, MSG_JA_DECIDIDA, MSG_SEM_COLABORADOR, mudancasDaDespesa, NOME_CATEGORIA, resumoDaDespesa,
+  situacaoDespesa, type CategoriaDespesa, type DadosDespesa, type DespesaTela, type EdicaoDespesa, type MapaCategorias, type Pagamento, type StatusDespesa,
 } from "@/lib/tecnico/despesas";
 
 type Resultado<T> = { ok: true; status: number; dados: T } | { ok: false; status: number; erro: string };
@@ -45,6 +46,9 @@ export async function lancarDespesa(ator: Ator, d: DadosDespesa, ctx: ContextoEx
   if (!tecnicoId) return erro(403, MSG_SEM_COLABORADOR);
   const ja = await prisma.despesaCampo.findUnique({ where: { empresaId_clientId: { empresaId: ator.empresaId, clientId: d.clientId } }, select: { id: true, tecnicoId: true } });
   if (ja) return ja.tecnicoId === tecnicoId ? { ok: true, status: 200, dados: { id: ja.id, repetida: true } } : erro(409, "Identificador de despesa já usado.");
+  // D7: a excluída pelo colaborador não volta por um reenvio atrasado da fila
+  const excluida = await prisma.despesaCampoHistorico.findFirst({ where: { empresaId: ator.empresaId, clientId: d.clientId, acao: "EXCLUIDA" }, select: { despesaId: true, tecnicoId: true } });
+  if (excluida) return excluida.tecnicoId === tecnicoId ? { ok: true, status: 200, dados: { id: excluida.despesaId, repetida: true } } : erro(409, "Identificador de despesa já usado.");
   const invalida = dataDespesaValida(d.data, hoje);
   if (invalida) return erro(422, invalida);
   const v = validarDataUrl(d.foto, "cupom.jpg", { tipos: TIPOS_IMAGEM, tamanhoMax: TAMANHO_MAX_CUPOM, mensagemTipo: "Envie a foto do cupom (JPG, PNG, WEBP ou HEIC)." });
@@ -73,6 +77,73 @@ export async function lancarDespesa(ator: Ator, d: DadosDespesa, ctx: ContextoEx
     }
     throw e;
   }
+}
+
+/* ───────── D7: o colaborador corrige ou exclui (enquanto o escritório não decidiu) ───────── */
+
+const SELECT_COMPARAR = { id: true, tecnicoId: true, status: true, categoria: true, valor: true, data: true, pagamento: true, descricao: true } as const;
+type LinhaComparar = Prisma.DespesaCampoGetPayload<{ select: typeof SELECT_COMPARAR }>;
+const comparavel = (d: LinhaComparar) => ({ categoria: d.categoria as CategoriaDespesa, valor: Number(d.valor), data: chaveDiaCivil(d.data), pagamento: d.pagamento as Pagamento, descricao: d.descricao });
+
+/** A despesa do colaborador da sessão pelo clientId (ou o motivo de não poder mexer nela). */
+async function despesaParaCorrigir(ator: Ator, clientId: string): Promise<{ ok: true; d: LinhaComparar; tecnicoId: string } | { ok: false; r: Resultado<never> } | { ok: "excluida" }> {
+  const tecnicoId = await colaboradorDoAtor(ator);
+  if (!tecnicoId) return { ok: false, r: erro(403, MSG_SEM_COLABORADOR) };
+  const d = await prisma.despesaCampo.findUnique({ where: { empresaId_clientId: { empresaId: ator.empresaId, clientId } }, select: SELECT_COMPARAR });
+  if (!d) {
+    const ex = await prisma.despesaCampoHistorico.findFirst({ where: { empresaId: ator.empresaId, clientId, acao: "EXCLUIDA", tecnicoId }, select: { id: true } });
+    return ex ? { ok: "excluida" } : { ok: false, r: erro(404, "Despesa não encontrada.") };
+  }
+  if (d.tecnicoId !== tecnicoId) return { ok: false, r: erro(403, MSG_DESPESA_DE_OUTRO) };
+  if (d.status !== "PENDENTE") return { ok: false, r: erro(409, MSG_DESPESA_DECIDIDA_CORRIGIR) };
+  return { ok: true, d, tecnicoId };
+}
+
+/**
+ * Corrige a despesa (os mesmos campos do lançamento; a foto só se trocou). Só a do colaborador da sessão e só enquanto o
+ * escritório não decidiu — a trava é a mesma da aprovação (a linha PENDENTE): quem chega primeiro vale. A trilha guarda
+ * o que mudou. Reenviada (nada mudou): ok, sem trilha nova.
+ */
+export async function editarDespesa(ator: Ator, d: EdicaoDespesa, hoje: string = chaveHojeBR()): Promise<Resultado<{ id: string; mudou: boolean }>> {
+  const achou = await despesaParaCorrigir(ator, d.clientId);
+  if (achou.ok === "excluida") return erro(404, MSG_DESPESA_EXCLUIDA);
+  if (!achou.ok) return achou.r;
+  const { d: atual, tecnicoId } = achou;
+  const invalida = dataDespesaValida(d.data, hoje);
+  // Corrigir não pode mover a despesa para fora da janela; o dia que já estava (antigo) continua valendo
+  if (invalida && d.data !== chaveDiaCivil(atual.data)) return erro(422, invalida);
+  if (d.foto) {
+    const v = validarDataUrl(d.foto, "cupom.jpg", { tipos: TIPOS_IMAGEM, tamanhoMax: TAMANHO_MAX_CUPOM, mensagemTipo: "Envie a foto do cupom (JPG, PNG, WEBP ou HEIC)." });
+    if (!v.ok) return erro(400, v.erro);
+  }
+  const depois = { categoria: d.categoria, valor: d.valor, data: d.data, pagamento: d.pagamento, descricao: (d.descricao ?? "").trim() || null };
+  const fotoAtual = d.foto ? (await prisma.despesaCampoFoto.findUnique({ where: { despesaId: atual.id }, select: { conteudo: true } }))?.conteudo ?? null : null;
+  const mudancas = mudancasDaDespesa(comparavel(atual), depois, !!d.foto && d.foto !== fotoAtual);
+  if (!mudancas.length) return { ok: true, status: 200, dados: { id: atual.id, mudou: false } };
+  return prisma.$transaction(async (tx) => {
+    const { count } = await tx.despesaCampo.updateMany({
+      where: { id: atual.id, empresaId: ator.empresaId, status: "PENDENTE" },
+      data: { categoria: depois.categoria, valor: depois.valor, data: diaCivilDeChave(depois.data)!, pagamento: depois.pagamento, descricao: depois.descricao },
+    });
+    if (!count) return erro(409, MSG_DESPESA_DECIDIDA_CORRIGIR);
+    if (d.foto && d.foto !== fotoAtual) await tx.despesaCampoFoto.upsert({ where: { despesaId: atual.id }, create: { despesaId: atual.id, conteudo: d.foto }, update: { conteudo: d.foto } });
+    await tx.despesaCampoHistorico.create({ data: { empresaId: ator.empresaId, despesaId: atual.id, clientId: d.clientId, tecnicoId, usuarioId: ator.usuarioId, acao: "EDITADA", detalhes: mudancas.join(" · ") } });
+    return { ok: true as const, status: 200, dados: { id: atual.id, mudou: true } };
+  });
+}
+
+/** Exclui a despesa (a do colaborador, ainda não decidida). Reenviada: ok. A trilha guarda o que ela era. */
+export async function excluirDespesa(ator: Ator, clientId: string): Promise<Resultado<{ excluida: true }>> {
+  const achou = await despesaParaCorrigir(ator, clientId);
+  if (achou.ok === "excluida") return { ok: true, status: 200, dados: { excluida: true } };
+  if (!achou.ok) return achou.r;
+  const { d, tecnicoId } = achou;
+  return prisma.$transaction(async (tx) => {
+    const { count } = await tx.despesaCampo.deleteMany({ where: { id: d.id, empresaId: ator.empresaId, status: "PENDENTE" } });
+    if (!count) return erro(409, MSG_DESPESA_DECIDIDA_CORRIGIR);
+    await tx.despesaCampoHistorico.create({ data: { empresaId: ator.empresaId, despesaId: d.id, clientId, tecnicoId, usuarioId: ator.usuarioId, acao: "EXCLUIDA", detalhes: resumoDaDespesa(comparavel(d)) } });
+    return { ok: true as const, status: 200, dados: { excluida: true as const } };
+  });
 }
 
 const SELECT_TELA = {
@@ -114,7 +185,11 @@ export interface DespesaEscritorio {
   id: string; colaborador: string; categoria: CategoriaDespesa; categoriaNome: string; valor: number; data: string; pagamento: Pagamento;
   descricao: string | null; os: { id: string; numero: string } | null; status: StatusDespesa; motivoRecusa: string | null;
   decididoPor: string | null; decididoEm: string | null; contaPagar: { id: string; numero: string; status: string } | null; criadoEm: string;
+  /** D7 — o que o colaborador corrigiu pelo app antes da decisão (a mais recente primeiro) */
+  correcoes: { em: string; detalhes: string }[];
 }
+/** D7 — a despesa que o colaborador excluiu pelo app antes da decisão (o que ela era) */
+export interface DespesaExcluida { id: string; colaborador: string; em: string; detalhes: string }
 
 export async function listarDespesas(empresaId: string, f: { status?: StatusDespesa | "TODAS"; osId?: string } = {}): Promise<DespesaEscritorio[]> {
   const l = await prisma.despesaCampo.findMany({
@@ -126,14 +201,29 @@ export async function listarDespesas(empresaId: string, f: { status?: StatusDesp
     },
   });
   const ids = [...new Set(l.map((d) => d.decididoPorId).filter((x): x is string => !!x))];
-  const nomes = new Map((ids.length ? await prisma.usuario.findMany({ where: { id: { in: ids }, empresaId }, select: { id: true, nome: true } }) : []).map((u) => [u.id, u.nome]));
+  const [nomes, trilha] = await Promise.all([
+    ids.length ? prisma.usuario.findMany({ where: { id: { in: ids }, empresaId }, select: { id: true, nome: true } }).then((us) => new Map(us.map((u) => [u.id, u.nome]))) : new Map<string, string>(),
+    l.length ? prisma.despesaCampoHistorico.findMany({ where: { empresaId, acao: "EDITADA", despesaId: { in: l.map((d) => d.id) } }, orderBy: { criadoEm: "desc" }, select: { despesaId: true, criadoEm: true, detalhes: true } }) : [],
+  ]);
+  const correcoes = new Map<string, { em: string; detalhes: string }[]>();
+  for (const t of trilha) (correcoes.get(t.despesaId) ?? correcoes.set(t.despesaId, []).get(t.despesaId)!).push({ em: t.criadoEm.toISOString(), detalhes: t.detalhes });
   return l.map((d) => ({
     id: d.id, colaborador: d.tecnico.nome, categoria: d.categoria as CategoriaDespesa, categoriaNome: NOME_CATEGORIA[d.categoria as CategoriaDespesa] ?? d.categoria,
     valor: Number(d.valor), data: chaveDiaCivil(d.data), pagamento: d.pagamento as Pagamento, descricao: d.descricao,
     os: d.ordemServico ? { id: d.ordemServico.id, numero: d.ordemServico.chamadoNumero ?? d.ordemServico.numero } : null,
     status: d.status as StatusDespesa, motivoRecusa: d.motivoRecusa, decididoPor: d.decididoPorId ? nomes.get(d.decididoPorId) ?? null : null,
     decididoEm: d.decididoEm?.toISOString() ?? null, contaPagar: d.contaPagar, criadoEm: d.criadoEm.toISOString(),
+    correcoes: correcoes.get(d.id) ?? [],
   }));
+}
+
+/** D7 — as excluídas pelo colaborador nos últimos 90 dias (a trilha), da mais recente */
+export async function despesasExcluidas(empresaId: string): Promise<DespesaExcluida[]> {
+  const desde = new Date(Date.now() - 90 * 86_400_000);
+  const l = await prisma.despesaCampoHistorico.findMany({ where: { empresaId, acao: "EXCLUIDA", criadoEm: { gte: desde } }, orderBy: { criadoEm: "desc" }, take: 100, select: { despesaId: true, tecnicoId: true, criadoEm: true, detalhes: true } });
+  const tecs = [...new Set(l.map((x) => x.tecnicoId))];
+  const nomes = new Map((tecs.length ? await prisma.tecnico.findMany({ where: { id: { in: tecs }, empresaId }, select: { id: true, nome: true } }) : []).map((t) => [t.id, t.nome]));
+  return l.map((x) => ({ id: x.despesaId, colaborador: nomes.get(x.tecnicoId) ?? "Colaborador", em: x.criadoEm.toISOString(), detalhes: x.detalhes }));
 }
 
 async function mapaDaEmpresa(empresaId: string, db: Prisma.TransactionClient | typeof prisma = prisma): Promise<MapaCategorias> {
@@ -156,11 +246,16 @@ export async function aprovarDespesa(empresaId: string, id: string, usuarioId: s
     empresaId, despesaId: id, situacao: "APROVADA", autorUsuarioId: d.usuarioId,
     descricao: d.descricao || NOME_CATEGORIA[d.categoria as CategoriaDespesa], valor: Number(d.valor), url: URL_DESPESAS_APP,
   }));
-  return prisma.$transaction(async (tx) => {
+  return prisma.$transaction(async (tx): Promise<Resultado<{ contaPagarId: string | null }>> => {
     // Trava: só a primeira aprovação passa (dois cliques ou duas pessoas ao mesmo tempo não geram duas contas)
     const { count } = await tx.despesaCampo.updateMany({ where: { id, empresaId, status: "PENDENTE" }, data: { status: "APROVADA", decididoPorId: usuarioId, decididoEm: new Date() } });
     if (!count) return erro(409, MSG_JA_DECIDIDA);
-    if (!doBolso) return { ok: true as const, status: 200, dados: { contaPagarId: null } };
+    // D7: o colaborador pode ter corrigido entre a tela e o clique — a conta usa o que está gravado AGORA (a linha já
+    // está travada pela aprovação: nenhuma correção entra depois daqui)
+    const agora = await tx.despesaCampo.findUniqueOrThrow({ where: { id }, select: { pagamento: true, categoria: true, valor: true, data: true, descricao: true } });
+    Object.assign(d, agora);
+    if (agora.pagamento === "PROPRIO" && !op.vencimento) throw new ErroCorrigidaNaHora();
+    if (agora.pagamento !== "PROPRIO") return { ok: true as const, status: 200, dados: { contaPagarId: null } };
     const categoria = d.categoria as CategoriaDespesa;
     const ativas = await tx.categoriaFinanceira.findMany({ where: { empresaId, ativo: true }, select: { id: true, nome: true } });
     let categoriaId = categoriaFinanceiraDe(categoria, { escolhida: op.categoriaId, mapa: await mapaDaEmpresa(empresaId, tx), ativas });
@@ -177,8 +272,12 @@ export async function aprovarDespesa(empresaId: string, id: string, usuarioId: s
     });
     await tx.despesaCampo.update({ where: { id }, data: { contaPagarId: conta.id } });
     return { ok: true as const, status: 200, dados: { contaPagarId: conta.id } };
-  });
+  }).catch((e) => { if (e instanceof ErroCorrigidaNaHora) return erro(409, MSG_CORRIGIDA_NA_HORA); throw e; });
 }
+
+/** D7 — a despesa virou "do bolso" por uma correção do colaborador entre a tela e o clique (a aprovação é desfeita) */
+class ErroCorrigidaNaHora extends Error {}
+export const MSG_CORRIGIDA_NA_HORA = "O colaborador acabou de corrigir esta despesa (agora é do bolso dele). Confira e aprove de novo, com o vencimento do reembolso.";
 
 export async function recusarDespesa(empresaId: string, id: string, usuarioId: string, motivo: string): Promise<Resultado<{ recusada: true }>> {
   const d = await prisma.despesaCampo.findFirst({ where: { id, empresaId }, select: { status: true, usuarioId: true, categoria: true, descricao: true, valor: true } });

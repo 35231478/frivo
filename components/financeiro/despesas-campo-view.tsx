@@ -20,11 +20,13 @@ import {
   CATEGORIAS_DESPESA, DIAS_VENCIMENTO_REEMBOLSO, PAGAMENTO_ESCRITORIO, resumoDespesas,
   type CategoriaDespesa, type MapaCategorias, type StatusDespesa,
 } from "@/lib/tecnico/despesas";
-import type { DespesaEscritorio } from "@/lib/execucao/despesas";
+import type { DespesaEscritorio, DespesaExcluida } from "@/lib/execucao/despesas";
 
-type Filtro = StatusDespesa | "TODAS";
+type Filtro = StatusDespesa | "TODAS" | "EXCLUIDAS";
 const FILTROS: { id: Filtro; nome: string }[] = [
   { id: "PENDENTE", nome: "A aprovar" }, { id: "APROVADA", nome: "Aprovadas" }, { id: "RECUSADA", nome: "Recusadas" }, { id: "TODAS", nome: "Todas" },
+  // D7: o colaborador exclui pelo app enquanto não houve decisão; aqui fica o que ela era
+  { id: "EXCLUIDAS", nome: "Excluídas pelo colaborador" },
 ];
 const TOM: Record<StatusDespesa, TomStatus> = { PENDENTE: "atencao", APROVADA: "ok", RECUSADA: "atrasado" };
 const ROTULO: Record<StatusDespesa, string> = { PENDENTE: "A aprovar", APROVADA: "Aprovada", RECUSADA: "Recusada" };
@@ -42,6 +44,7 @@ export function DespesasCampoView({ podeDecidir }: { podeDecidir: boolean }) {
   const filtro: Filtro = FILTROS.some((f) => f.id === situacao) ? (situacao as Filtro) : "PENDENTE";
   const setFiltro = (f: Filtro) => setSituacao(f);
   const [lista, setLista] = useState<DespesaEscritorio[] | null>(null);
+  const [excluidas, setExcluidas] = useState<DespesaExcluida[]>([]);
   const [cats, setCats] = useState<Categorias | null>(null);
   const [cupom, setCupom] = useState<DespesaEscritorio | null>(null);
   const [aprovando, setAprovando] = useState<DespesaEscritorio | null>(null);
@@ -51,7 +54,9 @@ export function DespesasCampoView({ podeDecidir }: { podeDecidir: boolean }) {
   const carregar = useCallback(async () => {
     setLista(null);
     const r = await fetch(`/api/despesas-campo?status=${filtro}`, { cache: "no-store" });
-    setLista(r.ok ? (await r.json()).despesas : []);
+    const j = r.ok ? await r.json() : { despesas: [] };
+    setExcluidas(j.excluidas ?? []);
+    setLista(j.despesas ?? []);
   }, [filtro]);
   const carregarCats = useCallback(async () => {
     const r = await fetch("/api/despesas-campo/categorias", { cache: "no-store" });
@@ -65,7 +70,7 @@ export function DespesasCampoView({ podeDecidir }: { podeDecidir: boolean }) {
   return (
     <div data-tela="despesas-campo">
       <PageHeader title="Despesas de campo" backHref="/financeiro"
-        dica="Despesas que os técnicos lançaram pelo app, com a foto do cupom. Aprovar a paga do bolso do colaborador gera a conta a pagar de reembolso; a paga pela empresa fica registrada como custo da OS."
+        dica="Despesas que os técnicos lançaram pelo app, com a foto do cupom. Aprovar a paga do bolso do colaborador gera a conta a pagar de reembolso; a paga pela empresa fica registrada como custo da OS. Até a decisão, o colaborador pode corrigir ou excluir pelo app: o que mudou fica na despesa; as excluídas, na aba “Excluídas pelo colaborador”."
         actions={podeDecidir && (
           <Button variant="secondary" onClick={() => setMapaAberto(true)} data-abrir-mapa>
             <Settings2 className="w-4 h-4" /> Categorias
@@ -89,7 +94,18 @@ export function DespesasCampoView({ podeDecidir }: { podeDecidir: boolean }) {
       </div>
 
       {lista === null && <div className="flex justify-center py-12"><Loader2 className="w-6 h-6 animate-spin text-ink-subtle" /></div>}
-      {lista && !lista.length && (
+      {lista && filtro === "EXCLUIDAS" && (excluidas.length ? (
+        <ul className="space-y-2" data-excluidas>
+          {excluidas.map((x, i) => (
+            <li key={`${x.id}-${i}`} className="rounded-card bg-white border border-surface-border p-4 space-y-1" data-despesa-excluida={x.id}>
+              <p className="font-semibold text-ink">{x.colaborador}</p>
+              <p className="text-sm text-ink-muted">{x.detalhes}</p>
+              <p className="text-xs text-ink-subtle">Excluída pelo colaborador no app em {formatarDataHora(x.em)}</p>
+            </li>
+          ))}
+        </ul>
+      ) : <p className="rounded-card bg-white border border-surface-border p-6 text-sm text-ink-muted text-center" data-vazio>Nenhuma despesa excluída nos últimos 90 dias.</p>)}
+      {lista && !lista.length && filtro !== "EXCLUIDAS" && (
         <p className="rounded-card bg-white border border-surface-border p-6 text-sm text-ink-muted text-center" data-vazio>
           {filtro === "PENDENTE" ? "Nenhuma despesa esperando aprovação." : "Nenhuma despesa."}
         </p>
@@ -111,6 +127,11 @@ export function DespesasCampoView({ podeDecidir }: { podeDecidir: boolean }) {
                   {d.descricao && <> · {d.descricao}</>}
                 </p>
                 {d.status === "RECUSADA" && d.motivoRecusa && <p className="text-sm text-atrasado-texto" data-motivo>Motivo: {d.motivoRecusa}</p>}
+                {(d.correcoes ?? []).length > 0 && (
+                  <ul className="text-xs text-atencao-texto space-y-0.5" data-correcoes>
+                    {d.correcoes.map((c) => <li key={c.em}>Corrigida pelo colaborador em {formatarDataHora(c.em)}: {c.detalhes}</li>)}
+                  </ul>
+                )}
                 {d.status !== "PENDENTE" && d.decididoEm && (
                   <p className="text-xs text-ink-subtle">{d.status === "APROVADA" ? "Aprovada" : "Recusada"}{d.decididoPor ? ` por ${d.decididoPor}` : ""} em {formatarDataHora(d.decididoEm)}</p>
                 )}

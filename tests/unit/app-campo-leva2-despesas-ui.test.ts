@@ -37,6 +37,8 @@ let online = true;
 let enviadas: any[] = [];
 let servidor: DespesaTela[] = [];
 let recusarNoServidor = false;
+/** D7: as que o escritório já decidiu (a correção/exclusão é recusada) */
+let decididas = new Set<string>();
 const cartao = (): CartaoTela => ({
   atividadeId: "aA", osId: "osA", osNumero: "OS-1", titulo: "Preventiva", tipoOs: null, status: "EM_ANDAMENTO", prioridade: "NORMAL", dataAgendada: null, dia: HOJE, hora: "09:00",
   duracaoMin: 60, cliente: "Hospital", telefone: null, unidade: "Matriz", endereco: "Av. Paulista", rota: null, descricao: "Preventiva", equipamentos: 0, atendidos: 0, adicionais: 0, avisos: {},
@@ -62,6 +64,10 @@ const fetchFalso = vi.fn(async (url: string, init?: RequestInit) => {
     enviadas.push(...corpo.operacoes);
     const resultados = corpo.operacoes.map((o: any) => {
       if (o.tipo === "despesa" && recusarNoServidor) return { id: o.id, ok: false, status: 422, erro: "A data não pode ser no futuro." };
+      if ((o.tipo === "despesaEditar" || o.tipo === "despesaExcluir") && decididas.has(o.dados.clientId))
+        return { id: o.id, ok: false, status: 409, erro: "O escritório já decidiu esta despesa: não dá mais para corrigir nem excluir." };
+      if (o.tipo === "despesaEditar") servidor = servidor.map((d) => (d.clientId === o.dados.clientId ? { ...d, ...o.dados, foto: undefined, descricao: o.dados.descricao || null } as DespesaTela : d));
+      if (o.tipo === "despesaExcluir") servidor = servidor.filter((d) => d.clientId !== o.dados.clientId);
       if (o.tipo === "despesa") servidor = [{ ...o.dados, id: `s-${o.dados.clientId}`, descricao: o.dados.descricao ?? null, osNumero: o.atividadeId === SEM_OS ? null : "OS-1", situacao: "PENDENTE", motivoRecusa: null, foto: undefined } as DespesaTela, ...servidor];
       return { id: o.id, ok: true, status: 201, dados: {} };
     });
@@ -79,7 +85,7 @@ beforeEach(async () => {
   vi.useFakeTimers({ toFake: ["Date"] });
   vi.setSystemTime(MEIO_DIA);
   (globalThis as any).indexedDB = new IDBFactory();
-  online = true; enviadas = []; servidor = []; recusarNoServidor = false;
+  online = true; enviadas = []; servidor = []; recusarNoServidor = false; decididas = new Set();
   vi.stubGlobal("fetch", fetchFalso);
   Object.defineProperty(window.navigator, "onLine", { configurable: true, get: () => online });
   banco = await BancoTecnico.abrir("uT");
@@ -345,5 +351,124 @@ describe("escritório: as despesas na OS", () => {
     fechar();
     await montarOs([]);
     expect($("[data-secao-despesas-campo]")).toBeNull();
+  });
+});
+
+/* ───────── D7 (App pronto pra janeiro 2): corrigir e excluir antes da decisão ───────── */
+
+describe("D7: técnico corrige ou exclui a despesa que o escritório não decidiu", () => {
+  const S = (x: Record<string, unknown>): DespesaTela => ({ id: "1", clientId: "a", categoria: "COMBUSTIVEL", valor: 187.4, data: "2026-11-10", pagamento: "PROPRIO", descricao: "Van", osNumero: null, situacao: "PENDENTE", motivoRecusa: null, ...x } as DespesaTela);
+
+  it("os botões só na que aguarda aprovação (alvos de 44 px); a decidida não tem", async () => {
+    servidor = [S({}), S({ id: "2", clientId: "b", situacao: "APROVADA" }), S({ id: "3", clientId: "c", situacao: "RECUSADA", motivoRecusa: "Ilegível" }), S({ id: "4", clientId: "d", situacao: "REEMBOLSADA" })];
+    await abrirApp("/tecnico?ver=despesas");
+    await esperarAte(() => $$("[data-despesa]").length === 4, "lista");
+    expect($$("[data-corrigir-despesa]").map((b) => b.getAttribute("data-corrigir-despesa"))).toEqual(["a"]);
+    expect($$("[data-excluir-despesa]").map((b) => b.getAttribute("data-excluir-despesa"))).toEqual(["a"]);
+    expect([...$$("[data-corrigir-despesa]"), ...$$("[data-excluir-despesa]")].every((b) => b.className.includes("min-h-[44px]"))).toBe(true);
+  });
+
+  it("corrigir sem sinal: a tela vem preenchida (a foto já enviada vale); a lista mostra o novo e 'Correção no aparelho'; com sinal sobe", async () => {
+    servidor = [S({})];
+    await abrirApp("/tecnico?ver=despesas");
+    await esperarAte(() => !!$("[data-corrigir-despesa]"), "lista");
+    online = false;
+    await clicar($("[data-corrigir-despesa=a]"));
+    expect(texto(document.querySelector("[role=dialog]"))).toContain("Corrigir despesa");
+    expect($<HTMLInputElement>("[data-valor-despesa-campo]")!.value).toBe("187,40");
+    expect($('[data-categoria="COMBUSTIVEL"]')!.getAttribute("aria-checked")).toBe("true");
+    expect($('[data-modal-despesa] [data-pagamento="PROPRIO"]')!.getAttribute("aria-checked")).toBe("true");
+    expect($<HTMLInputElement>("[data-descricao-despesa]")!.value).toBe("Van");
+    expect(texto($("[data-foto-ja-enviada]"))).toContain("A foto do cupom já enviada continua valendo.");
+    expect(salvar().disabled).toBe(false);
+    expect(texto(salvar())).toBe("Salvar correção");
+    await digitar($("[data-valor-despesa-campo]"), "178,90");
+    await clicar(salvar());
+    const [op] = (await banco.fila()).filter((o) => o.tipo === "despesaEditar");
+    expect([op.atividadeId, (op as any).dados]).toEqual([SEM_OS, { clientId: "a", categoria: "COMBUSTIVEL", valor: 178.9, data: "2026-11-10", pagamento: "PROPRIO", descricao: "Van" }]);
+    await esperarAte(() => texto($("[data-despesa] [data-valor-despesa]")) === "R$ 178,90", "mostra o corrigido");
+    expect($("[data-correcao-no-aparelho]")).not.toBeNull();
+    online = true;
+    await act(async () => { await motor.sincronizar(true); });
+    await esperarAte(() => !$("[data-correcao-no-aparelho]") && texto($("[data-despesa] [data-valor-despesa]")) === "R$ 178,90", "subiu (a lista do servidor já com o corrigido)");
+    expect(enviadas.map((o) => o.tipo)).toEqual(["despesaEditar"]);
+  });
+
+  it("excluir pede confirmação e some na hora (também sem sinal); a fila manda a exclusão", async () => {
+    const avisos = await import("@/components/ui/avisos");
+    const conf = vi.spyOn(avisos, "confirmar").mockResolvedValue(true);
+    servidor = [S({}), S({ id: "2", clientId: "b", valor: 12.5, categoria: "PEDAGIO" })];
+    await abrirApp("/tecnico?ver=despesas");
+    await esperarAte(() => $$("[data-despesa]").length === 2, "lista");
+    online = false;
+    await clicar($("[data-excluir-despesa=b]"));
+    expect(conf).toHaveBeenCalledTimes(1);
+    expect(conf.mock.calls[0][0]).toMatchObject({ titulo: "Excluir despesa?", perigo: true, confirmarTexto: "Excluir" });
+    expect((conf.mock.calls[0][0] as any).mensagem.replace(/\s/g, " ")).toBe("Pedágio · R$ 12,50 · 10/11/2026");
+    await esperarAte(() => $$("[data-despesa]").length === 1, "sumiu");
+    expect((await banco.fila()).map((o) => [o.tipo, (o as any).dados.clientId])).toEqual([["despesaExcluir", "b"]]);
+    online = true;
+    await act(async () => { await motor.sincronizar(true); });
+    expect(servidor.map((d) => d.clientId)).toEqual(["a"]);
+    // não confirmou: nada acontece
+    conf.mockResolvedValue(false);
+    await clicar($("[data-excluir-despesa=a]"));
+    expect((await banco.fila()).filter((o) => o.tipo === "despesaExcluir" && o.estado === "pendente")).toHaveLength(0);
+  });
+
+  it("a ainda no aparelho (não enviada): a correção vai na MESMA fila, atrás do lançamento (a da OS, pela atividade)", async () => {
+    await abrirApp("/tecnico?ver=os&a=aA");
+    online = false;
+    await clicar($('[data-lancar-despesa="aA"]'));
+    await clicar($('[data-categoria="ESTACIONAMENTO"]'));
+    await digitar($("[data-valor-despesa-campo]"), "18");
+    await clicar($('[data-modal-despesa] [data-pagamento="EMPRESA"]'));
+    await clicar($("[data-foto-falsa]"));
+    await clicar(salvar());
+    fechar();
+    await abrirApp("/tecnico?ver=despesas");
+    await esperarAte(() => !!$("[data-corrigir-despesa]"), "no aparelho");
+    await clicar($("[data-corrigir-despesa]"));
+    expect($("[data-foto-ja-enviada] [data-miniatura]")).not.toBeNull(); // a foto ainda é a do aparelho
+    expect(texto($("[data-foto-ja-enviada]"))).toContain("A foto do cupom continua esta.");
+    await digitar($("[data-valor-despesa-campo]"), "20");
+    await clicar(salvar());
+    const fila = await banco.fila();
+    expect(fila.map((o) => [o.tipo, o.atividadeId])).toEqual([["despesa", "aA"], ["despesaEditar", "aA"]]);
+    await esperarAte(() => texto($("[data-despesa] [data-valor-despesa]")) === "R$ 20,00", "mostra o corrigido");
+  });
+
+  it("o escritório decidiu antes de a correção subir: a linha diz por quê e os botões somem", async () => {
+    servidor = [S({})];
+    await abrirApp("/tecnico?ver=despesas");
+    await esperarAte(() => !!$("[data-corrigir-despesa]"), "lista");
+    online = false;
+    await clicar($("[data-corrigir-despesa=a]"));
+    await digitar($("[data-valor-despesa-campo]"), "100");
+    await clicar(salvar());
+    decididas.add("a");
+    online = true;
+    await act(async () => { await motor.sincronizar(true); });
+    await esperarAte(() => !!$("[data-erro-correcao]"), "recusada");
+    expect(texto($("[data-erro-correcao]"))).toBe("Correção não enviada: O escritório já decidiu esta despesa: não dá mais para corrigir nem excluir.");
+    expect(texto($("[data-despesa] [data-valor-despesa]"))).toBe("R$ 187,40"); // a correção não entrou
+    expect($("[data-corrigir-despesa]")).toBeNull();
+  });
+});
+
+describe("D7: o escritório vê a trilha", () => {
+  it("a despesa corrigida mostra o que mudou; a aba 'Excluídas pelo colaborador' mostra o que ela era", async () => {
+    lista = [D({ correcoes: [{ em: "2026-11-12T14:00:00.000Z", detalhes: "Valor: R$ 187,40 → R$ 178,90" }] })];
+    await montarEscritorio();
+    expect(texto($("[data-despesa-campo=d1] [data-correcoes]"))).toContain("Corrigida pelo colaborador em");
+    expect(texto($("[data-despesa-campo=d1] [data-correcoes]"))).toContain("Valor: R$ 187,40 → R$ 178,90");
+    vi.stubGlobal("fetch", vi.fn(async (u: string) => (u.includes("status=EXCLUIDAS")
+      ? json({ despesas: [], excluidas: [{ id: "dx", colaborador: "João Silva", em: "2026-11-12T13:00:00.000Z", detalhes: "Pedágio · R$ 12,50 · 10/11/2026 · Cartão ou dinheiro da empresa" }] })
+      : json(u.includes("categorias") ? CATS : { despesas: lista }))));
+    await clicar($("[data-filtro=EXCLUIDAS]"));
+    await esperarAte(() => !!$("[data-despesa-excluida]"), "excluídas");
+    expect(texto($("[data-despesa-excluida=dx]"))).toContain("Pedágio · R$ 12,50 · 10/11/2026");
+    expect(texto($("[data-despesa-excluida=dx]"))).toContain("Excluída pelo colaborador no app em");
+    expect($("[data-aprovar]")).toBeNull();
   });
 });

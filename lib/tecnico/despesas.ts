@@ -50,8 +50,7 @@ export const DESCRICAO_MAX = 200;
 const DIA = /^\d{4}-\d{2}-\d{2}$/;
 const temAteDuasCasas = (n: number) => Math.abs(n * 100 - Math.round(n * 100)) < 1e-6;
 
-/** O que a fila manda ao lançar. A foto vai junto (data URL já comprimida no aparelho). */
-export const despesaSchema = z.object({
+const camposDespesa = {
   clientId: z.string().min(1).max(64),
   categoria: z.enum(IDS, { errorMap: () => ({ message: "Escolha a categoria." }) }),
   valor: z.number({ invalid_type_error: "Informe o valor." })
@@ -63,8 +62,46 @@ export const despesaSchema = z.object({
   pagamento: z.enum(["PROPRIO", "EMPRESA"], { errorMap: () => ({ message: "Diga como foi paga." }) }),
   descricao: z.string().trim().max(DESCRICAO_MAX).optional(),
   foto: z.string().min(30, "Tire a foto do cupom.").startsWith("data:image/", "Tire a foto do cupom."),
-}).strict().refine((d) => d.categoria !== "OUTROS" || (d.descricao ?? "").trim().length >= 3, { message: "Em Outros, descreva a despesa.", path: ["descricao"] });
+};
+const outrosDescrita = (d: { categoria: CategoriaDespesa; descricao?: string }) => d.categoria !== "OUTROS" || (d.descricao ?? "").trim().length >= 3;
+const MSG_OUTROS = { message: "Em Outros, descreva a despesa.", path: ["descricao"] };
+/** O que a fila manda ao lançar. A foto vai junto (data URL já comprimida no aparelho). */
+export const despesaSchema = z.object(camposDespesa).strict().refine(outrosDescrita, MSG_OUTROS);
 export type DadosDespesa = z.infer<typeof despesaSchema>;
+/**
+ * D7 — CORRIGIR a despesa enquanto o escritório não decidiu: os mesmos campos (pelo clientId do aparelho), a foto só
+ * quando trocou. Vazia a descrição = sem descrição.
+ */
+export const despesaEdicaoSchema = z.object({ ...camposDespesa, foto: camposDespesa.foto.optional() }).strict().refine(outrosDescrita, MSG_OUTROS);
+export type EdicaoDespesa = z.infer<typeof despesaEdicaoSchema>;
+/** D7 — EXCLUIR a despesa enquanto o escritório não decidiu (pelo clientId do aparelho) */
+export const despesaExclusaoSchema = z.object({ clientId: camposDespesa.clientId }).strict();
+
+export const MSG_DESPESA_DECIDIDA_CORRIGIR = "O escritório já decidiu esta despesa: não dá mais para corrigir nem excluir.";
+export const MSG_DESPESA_EXCLUIDA = "Esta despesa foi excluída.";
+export const MSG_DESPESA_DE_OUTRO = "Só quem lançou corrige ou exclui a despesa.";
+
+const moeda = (v: number) => `R$ ${v.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+const diaBR = (dia: string) => dia.split("-").reverse().join("/");
+type CamposComparados = { categoria: CategoriaDespesa; valor: number; data: string; pagamento: Pagamento; descricao: string | null };
+/** D7 — a trilha da correção: o que mudou, "campo: antes → depois" (a foto, só "trocada"). Nada mudou = []. */
+export function mudancasDaDespesa(antes: CamposComparados, depois: CamposComparados, fotoTrocada = false): string[] {
+  const m: string[] = [];
+  if (antes.categoria !== depois.categoria) m.push(`Tipo: ${NOME_CATEGORIA[antes.categoria] ?? antes.categoria} → ${NOME_CATEGORIA[depois.categoria] ?? depois.categoria}`);
+  if (Math.round(antes.valor * 100) !== Math.round(depois.valor * 100)) m.push(`Valor: ${moeda(antes.valor)} → ${moeda(depois.valor)}`);
+  if (antes.data !== depois.data) m.push(`Dia: ${diaBR(antes.data)} → ${diaBR(depois.data)}`);
+  if (antes.pagamento !== depois.pagamento) m.push(`Pagamento: ${PAGAMENTOS[antes.pagamento]} → ${PAGAMENTOS[depois.pagamento]}`);
+  const da = (antes.descricao ?? "").trim(), dd = (depois.descricao ?? "").trim();
+  if (da !== dd) m.push(`Descrição: ${da ? `“${da}”` : "(sem)"} → ${dd ? `“${dd}”` : "(sem)"}`);
+  if (fotoTrocada) m.push("Foto do cupom trocada");
+  return m;
+}
+/** D7 — o que a despesa excluída era (fica na trilha) */
+export function resumoDaDespesa(d: CamposComparados): string {
+  return [NOME_CATEGORIA[d.categoria] ?? d.categoria, moeda(d.valor), diaBR(d.data), PAGAMENTOS[d.pagamento], (d.descricao ?? "").trim() || null].filter(Boolean).join(" · ");
+}
+/** D7 — o técnico ainda pode corrigir/excluir? Só a dele que o escritório não decidiu (e que não deu erro ao enviar). */
+export const podeCorrigirDespesa = (d: Pick<DespesaTela, "situacao" | "erroEnvio">) => d.situacao === "PENDENTE" && !d.erroEnvio;
 
 /** O dia da despesa vale? Não pode ser no futuro nem mais antiga que DIAS_MAX_ATRAS (dias civis em Brasília). */
 export function dataDespesaValida(dia: string, hoje: string): string | null {
@@ -134,6 +171,12 @@ export interface DespesaTela {
   pendente?: boolean; fotoLocal?: string;
   /** O servidor recusou o envio (fica no aparelho, com o motivo, até o técnico ver na fila) */
   erroEnvio?: string | null;
+  /** D7 — a atividade da fila em que a despesa entrou (a correção vai atrás dela, na mesma ordem) */
+  atividadeFila?: string;
+  /** D7 — correção/exclusão ainda no aparelho */
+  corrigidaNoAparelho?: boolean;
+  /** D7 — a correção ou exclusão que o servidor recusou (ex.: o escritório já tinha decidido) */
+  erroCorrecao?: string | null;
 }
 
 /** Resumo do topo da tela do escritório: o que espera decisão e quanto disso é reembolso */

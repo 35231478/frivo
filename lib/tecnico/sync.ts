@@ -37,10 +37,10 @@ async function comentarELer<T extends { ok: boolean }>(ator: { empresaId: string
   if (res.ok) await lerAoResponderTecnico(ator.empresaId, ator.usuarioId, ator.escopo.tecnicoId);
   return res;
 }
-import { despesaSchema, SEM_OS } from "@/lib/tecnico/despesas";
+import { despesaEdicaoSchema, despesaExclusaoSchema, despesaSchema, SEM_OS } from "@/lib/tecnico/despesas";
 import { restaurarLegendaFoto, editarLegendaFoto } from "@/lib/os/legenda-foto-server";
 import { LEGENDA_MAX } from "@/lib/os/galeria";
-import { lancarDespesa } from "@/lib/execucao/despesas";
+import { editarDespesa, excluirDespesa, lancarDespesa } from "@/lib/execucao/despesas";
 
 export const MAX_OPERACOES = 100;
 /** Quanto tempo a marca de "já aplicada" fica guardada (reenvio depois disso é raríssimo) */
@@ -83,6 +83,9 @@ export const operacaoSchema = z.discriminatedUnion("tipo", [
   z.object({ ...base, tipo: z.literal("comentario"), dados: comentarioSchema }).strict(),
   // Despesa de campo com a foto do cupom: numa atividade (vai para a OS dela) ou fora de OS (atividadeId = "sem-os")
   z.object({ ...base, tipo: z.literal("despesa"), dados: despesaSchema }).strict(),
+  // D7: corrigir ou excluir a despesa que o escritório ainda não decidiu (vai na mesma fila da despesa, atrás dela)
+  z.object({ ...base, tipo: z.literal("despesaEditar"), dados: despesaEdicaoSchema }).strict(),
+  z.object({ ...base, tipo: z.literal("despesaExcluir"), dados: despesaExclusaoSchema }).strict(),
   z.object({ ...base, tipo: z.literal("concluir"), dados: concluirSchema }).strict(),
   // Aceite do cliente no local: nome + assinatura desenhada no aparelho, depois de concluir
   z.object({ ...base, tipo: z.literal("aceite"), dados: aceiteLocalSchema }).strict(),
@@ -121,6 +124,9 @@ const MSG_ADIADA = "Aguardando a gravação anterior desta OS.";
 async function executar(ator: Ator, op: Operacao, lote: OpcoesLote): Promise<ResultadoAcao<unknown>> {
   // Despesa fora de OS: não há atividade a conferir (o servidor só aceita a do próprio colaborador)
   if (op.tipo === "despesa" && op.atividadeId === SEM_OS) return lancarDespesa(ator, op.dados, null);
+  // D7: a despesa já existe (com ou sem OS): a regra é só "a sua, ainda não decidida" — não depende da atividade
+  if (op.tipo === "despesaEditar") return editarDespesa(ator, op.dados);
+  if (op.tipo === "despesaExcluir") return excluirDespesa(ator, op.dados.clientId);
   // CHAT-1: mensagem SEM OS ("chego em 10 minutos"): só na conversa do técnico com o escritório
   if (op.tipo === "comentario" && op.atividadeId === SEM_OS) return comentarELer(ator, comentarSemOsDoApp(ator, op.dados));
   const equipamentoId = "equipamentoId" in op ? op.equipamentoId : undefined;
