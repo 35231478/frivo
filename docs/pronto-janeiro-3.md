@@ -261,3 +261,13 @@ Em `docs/prints/leva-i/` (`antes-*` e `depois-*`, desktop e celular):
 | `leva-i` | posição do menu flutuante; a ordem das camadas e que cada componente usa a sua (e nenhum modal solto em z-50); a regra do menu lateral; quando um link sai da tela e a janela do envio; o CEP (ViaCEP, reserva, prazo, inexistente × fora do ar, o endereço aplicado); as ligações (telas com o aviso, formulários com o `CampoCep`, a chave, o veículo) |
 | `leva-i-ui` | o menu "Colunas" em portal fora da tabela; o modal por cima da gaveta; sair sem salvar (sem alteração, com alteração, busca não conta, depois do envio, salvo na tela, fechar a aba); o `CampoCep`; a chave copiando |
 | `leva-i-pg` (PostgreSQL real) | novembro mostra as agendadas, executadas ou previstas para novembro (não as só abertas nele); outubro vazio; "Sem agendamento" mostra e conta a OS sem data em qualquer período; o padrão é o mês atual |
+
+## Leva I.2 — grupo C
+
+- **7. Material de campo "Cobrado à parte":** o uso lançado no app vira item cobrado a conferir (preço de venda da
+  tabela do cliente ou do catálogo; fora do catálogo, R$ 0). Conferência em Comercial › Itens da OS (Confirmar /
+  Excluir da cobrança); faturar a OS espera a conferência. Incluso não muda. Detalhes em `docs/orcamento-e2.md`.
+- **8. "Resolvido por outro meio":** o pedido do portal que nada mais espera encerra sozinho, na leitura (um ponto só).
+- **9. Lembrete sem portal:** outro e-mail, com o link do relatório de cada OS, pedindo a resposta com o pedido.
+- **10. Recusa por e-mail:** com o motivo, ao contato e ao e-mail de compras; a falha não desfaz a recusa.
+- Detalhes de 8–10 em `docs/pedido-cliente-portal.md`. Testes: `leva-i2c`, `leva-i2c-ui`, `leva-i2c-pg`.

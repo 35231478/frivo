@@ -25,6 +25,7 @@ export const VARIAVEIS_DISPONIVEIS = [
   "colaborador_nome", "cargo_nome", "link_admissao", "codigo",
   "quantidade_colaboradores",
   "contato_nome", "quantidade_pendente", "total_pendente", "lista_pendencias", "link_portal",
+  "motivo_recusa",
 ] as const;
 
 export const TEMPLATES_PADRAO: DefTemplate[] = [
@@ -99,6 +100,13 @@ export const TEMPLATES_PADRAO: DefTemplate[] = [
   { tipo: "PEDIDO_CLIENTE_LEMBRETE", nome: "Lembrete de pedido de compra pendente", assunto: "Pedido de compra pendente — {{cliente_nome}} — {{empresa_nome}}",
     corpo: "<p>Prezado(a) <strong>{{contato_nome}}</strong>,</p><p>Os serviços abaixo, prestados à <strong>{{cliente_nome}}</strong>, aguardam o pedido de compra para faturamento ({{quantidade_pendente}} item(ns), total de <strong>{{total_pendente}}</strong>):</p>{{lista_pendencias}}<p>O pedido pode ser anexado pelo portal do cliente, no botão abaixo. Um pedido pode cobrir mais de um serviço.</p><p style=\"color:#64748b;font-size:13px\">Caso o pedido já tenha sido enviado, desconsidere esta mensagem.</p>",
     botaoLabel: "Enviar o pedido de compra", botaoVar: "link_portal" },
+  // Leva I.2: o mesmo lembrete ao cliente SEM acesso ao portal — o relatório de cada OS pelo link e a resposta por e-mail
+  { tipo: "PEDIDO_CLIENTE_LEMBRETE_SEM_PORTAL", nome: "Lembrete de pedido de compra pendente (cliente sem portal)", assunto: "Pedido de compra pendente — {{cliente_nome}} — {{empresa_nome}}",
+    corpo: "<p>Prezado(a) <strong>{{contato_nome}}</strong>,</p><p>Os serviços abaixo, prestados à <strong>{{cliente_nome}}</strong>, aguardam o pedido de compra para faturamento ({{quantidade_pendente}} item(ns), total de <strong>{{total_pendente}}</strong>). O relatório de cada serviço está no link ao lado dele:</p>{{lista_pendencias}}<p>Para seguir com o faturamento, responda a este e-mail com o pedido de compra em anexo, informando os serviços que ele cobre. Um pedido pode cobrir mais de um serviço.</p><p style=\"color:#64748b;font-size:13px\">Caso o pedido já tenha sido enviado, desconsidere esta mensagem.</p>" },
+  // Leva I.2: o pedido de compra enviado pelo portal e recusado pela equipe, com o motivo
+  { tipo: "PEDIDO_CLIENTE_RECUSADO", nome: "Pedido de compra recusado", assunto: "Pedido de compra nº {{numero_pedido}} recusado — {{empresa_nome}}",
+    corpo: "<p>Prezado(a) <strong>{{contato_nome}}</strong>,</p><p>O pedido de compra nº <strong>{{numero_pedido}}</strong>, enviado pelo portal para os serviços prestados à <strong>{{cliente_nome}}</strong>, não foi aceito pelo seguinte motivo:</p><p style=\"padding:10px 14px;background:#f8fafc;border-left:3px solid #94a3b8\">{{motivo_recusa}}</p><p>Serviços do pedido:</p>{{lista_pendencias}}<p>Um novo pedido de compra pode ser enviado pelo portal do cliente, no botão abaixo.</p>",
+    botaoLabel: "Enviar novo pedido de compra", botaoVar: "link_portal" },
   { tipo: "ADMISSAO_CODIGO", nome: "Código de verificação da admissão", assunto: "Código de verificação: {{codigo}}",
     corpo: "<p>Olá <strong>{{colaborador_nome}}</strong>,</p><p>O código para confirmar este e-mail na admissão da <strong>{{empresa_nome}}</strong> é:</p><p style=\"font-size:28px;font-weight:700;letter-spacing:6px;text-align:center;margin:20px 0\">{{codigo}}</p><p style=\"color:#64748b;font-size:13px\">O código vale por {{validade_link}}. Se não foi pedido por quem está lendo, basta ignorar este e-mail.</p>" },
 ];

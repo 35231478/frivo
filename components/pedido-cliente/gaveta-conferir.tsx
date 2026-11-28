@@ -9,7 +9,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { FormField } from "@/components/ui/form-field";
 import { toast } from "@/components/ui/avisos";
 import { reais } from "@/lib/pedido-cliente/regra";
-import { MSG_MOTIVO_RECUSA, limparMotivoRecusa } from "@/lib/pedido-cliente/lembretes";
+import { MSG_MOTIVO_RECUSA, MSG_PEDIDO_RESOLVIDO, limparMotivoRecusa } from "@/lib/pedido-cliente/lembretes";
 
 interface PedidoConferir {
   id: string; numero: string; data: string; valor: number | null; observacao: string | null; situacao: string;
@@ -57,9 +57,11 @@ export function GavetaConferir({ aberto, onFechar, pedidoId }: { aberto: boolean
     setEnviando(false);
     if (!res?.ok) { setErro(j?.erro ?? "Não foi possível concluir a conferência."); return; }
     // Confirmado sem nada novo para ligar (os itens já tinham pedido): não diz que liberou o faturamento
-    toast(acao === "recusar" ? "Pedido recusado. O cliente vê o motivo no portal."
+    toast(acao === "recusar" ? (j?.email?.ok ? "Pedido recusado. O cliente recebeu o motivo por e-mail e o vê no portal." : "Pedido recusado. O cliente vê o motivo no portal.")
       : j?.ligadas && (j.ligadas.os || j.ligadas.orcamentos) ? "Pedido do cliente confirmado. O faturamento foi liberado." : "Pedido do cliente confirmado.");
     if (acao === "confirmar" && j?.alerta) toast(j.alerta, "info");
+    // Leva I.2: a recusa vale mesmo sem o e-mail; o escritório fica sabendo (e a trilha da OS registra)
+    if (acao === "recusar" && j?.email && !j.email.ok) toast(`O e-mail da recusa não foi enviado: ${j.email.erro ?? "erro no envio"}`, "info");
     router.refresh();
     onFechar();
   }
@@ -89,7 +91,7 @@ export function GavetaConferir({ aberto, onFechar, pedidoId }: { aberto: boolean
             <p className="text-sm text-ink-muted">
               {conferindo
                 ? <>O comprador do cliente anexou este pedido no portal. Confira o número, o valor e o arquivo. Ao confirmar, as OS ficam com o pedido e o faturamento segue.</>
-                : <>Este pedido já foi conferido.</>}
+                : p.situacao === "RESOLVIDO" ? <>{MSG_PEDIDO_RESOLVIDO}</> : <>Este pedido já foi conferido.</>}
             </p>
             <dl className="rounded-lg bg-surface-page px-3 py-2.5 text-sm grid grid-cols-[auto,1fr] gap-x-3 gap-y-1.5" data-pedido-conferir>
               <dt className="text-ink-muted">Cliente</dt><dd className="text-ink font-semibold">{p.cliente}</dd>

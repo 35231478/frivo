@@ -7,7 +7,8 @@ import { AlertCircle, CheckCircle2, ExternalLink, FileText, Paperclip, Send } fr
 import { cn } from "@/lib/utils";
 import { InputData } from "@/components/ui/input-data";
 import { limparNumeroPedido, reais } from "@/lib/pedido-cliente/regra";
-import { ROTULO_SITUACAO_PORTAL, ehSituacaoPedido } from "@/lib/pedido-cliente/lembretes";
+import { DICA_RESOLVIDO_PORTAL, ROTULO_SITUACAO_PORTAL, ehSituacaoPedido } from "@/lib/pedido-cliente/lembretes";
+import { Dica } from "@/components/ui/dica";
 
 export interface ItemPortal {
   tipo: "os" | "orcamento"; id: string; numero: string; concluidoEm: string | null; valor: number;
@@ -210,10 +211,14 @@ export function PedidoCompraPortal({ itens, enviados }: { itens: ItemPortal[]; e
                       <p className="text-sm font-semibold text-ink">Pedido nº {p.numero} <span className="font-normal text-ink-muted">· {diaBR(p.data)}{p.valor != null ? ` · ${reais(p.valor)}` : ""}</span></p>
                       <p className="text-xs text-ink-muted">{p.itens.join(", ") || "—"} · enviado em {dataBR(p.enviadoEm)}</p>
                     </div>
-                    <span className={cn("shrink-0 text-xs font-semibold rounded-full px-2.5 py-1",
-                      situacao === "CONFIRMADO" ? "bg-ok-claro text-ok-texto" : situacao === "RECUSADO" ? "bg-atrasado-claro text-atrasado-texto" : "bg-primary-50 text-primary-700")}
-                      data-situacao-pedido>
-                      {ROTULO_SITUACAO_PORTAL[situacao]}
+                    <span className="shrink-0 inline-flex items-center gap-1">
+                      <span className={cn("text-xs font-semibold rounded-full px-2.5 py-1",
+                        situacao === "CONFIRMADO" ? "bg-ok-claro text-ok-texto" : situacao === "RECUSADO" ? "bg-atrasado-claro text-atrasado-texto"
+                          : situacao === "RESOLVIDO" ? "bg-surface-alt text-ink-muted" : "bg-primary-50 text-primary-700")}
+                        data-situacao-pedido>
+                        {ROTULO_SITUACAO_PORTAL[situacao]}
+                      </span>
+                      {situacao === "RESOLVIDO" && <Dica texto={DICA_RESOLVIDO_PORTAL} rotulo={ROTULO_SITUACAO_PORTAL.RESOLVIDO} lado="esquerda" />}
                     </span>
                   </div>
                   {situacao === "RECUSADO" && p.motivoRecusa && <p className="text-xs text-atrasado-texto mt-1" data-motivo-recusa-portal>Motivo: {p.motivoRecusa}</p>}
