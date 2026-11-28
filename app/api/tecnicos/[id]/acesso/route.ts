@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { erroNoCampo } from "@/lib/forms/erros-server";
 import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/prisma";
 import { exigirPermissao } from "@/lib/permissoes-server";
@@ -68,28 +69,28 @@ export async function PUT(req: NextRequest, { params }: Params) {
 
   // Ligar o acesso precisa de e-mail (é a identidade de login).
   if (!email) {
-    return NextResponse.json({ erro: "Defina o e-mail do colaborador (Dados pessoais) antes de liberar o acesso ao app." }, { status: 400 });
+    return erroNoCampo("email", "Defina o e-mail do colaborador (Dados pessoais) antes de liberar o acesso ao app.");
   }
   // E-mail único por empresa: outro colaborador ativo com o mesmo e-mail deixaria o vínculo ambíguo.
   const outro = await prisma.tecnico.findFirst({
     where: { empresaId, ativo: true, id: { not: tecnico.id }, email: { equals: email, mode: "insensitive" } },
     select: { id: true },
   });
-  if (outro) return NextResponse.json({ erro: "Outro colaborador ativo já usa este e-mail. Use um e-mail único por colaborador." }, { status: 409 });
+  if (outro) return erroNoCampo("email", "Outro colaborador ativo já usa este e-mail. Use um e-mail único por colaborador.", 409);
 
   // O login procura o e-mail em TODAS as empresas: o deste acesso não pode ser login de outro usuário do
   // Frivo (o próprio login ligado, se já existe, não conflita consigo) — lib/acesso/email-unico
-  if (await emailDeLoginEmUso(email, usuario?.id)) return NextResponse.json({ erro: MSG_EMAIL_LOGIN_EM_USO }, { status: 409 });
+  if (await emailDeLoginEmUso(email, usuario?.id)) return erroNoCampo("email", MSG_EMAIL_LOGIN_EM_USO, 409);
 
   if (senha) {
     const prob = problemaSenha(senha);
-    if (prob) return NextResponse.json({ erro: prob }, { status: 400 });
+    if (prob) return erroNoCampo("senha", prob);
   }
 
   if (usuario) {
     // Não sequestra uma conta de PAINEL com o mesmo e-mail: isso é login de gestão, não do app.
     if (usuario.role !== "TECNICO") {
-      return NextResponse.json({ erro: "Já existe um usuário de painel com este e-mail. Use um e-mail só para o acesso do técnico (ou gerencie em Configurações › Usuários)." }, { status: 409 });
+      return erroNoCampo("email", "Já existe um usuário de painel com este e-mail. Use um e-mail só para o acesso do técnico (ou gerencie em Configurações › Usuários).", 409);
     }
     await prisma.usuario.update({
       where: { id: usuario.id },
@@ -100,7 +101,7 @@ export async function PUT(req: NextRequest, { params }: Params) {
   }
 
   // Primeiro acesso: cria o login com senha inicial (obrigatória), papel TECNICO e o perfil de Técnico.
-  if (!senha) return NextResponse.json({ erro: "Defina uma senha inicial para liberar o acesso." }, { status: 400 });
+  if (!senha) return erroNoCampo("senha", "Defina uma senha inicial para liberar o acesso.");
   const perfil = await prisma.perfilAcesso.findFirst({
     where: { empresaId, tipo: "TECNICO" },
     orderBy: [{ padraoSistema: "desc" }, { criadoEm: "asc" }],

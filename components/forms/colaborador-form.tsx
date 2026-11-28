@@ -14,6 +14,7 @@ import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { FormField, FormSection, FormGrid } from "@/components/ui/form-field";
+import { ErrosDoFormulario, IndicadorErroAba, ResumoDeErros, useErrosDoFormulario } from "@/components/ui/formulario-erros";
 import { rotuloVeiculo, sufixoStatusVeiculo, type VeiculoResumo } from "@/lib/veiculo-sugestao";
 import { useModulos } from "@/components/providers/modulos-provider";
 import { usePermissoes } from "@/components/providers/permissoes-provider";
@@ -32,7 +33,7 @@ import type { AdmissaoDoRh } from "@/lib/admissao/admissao-server";
 import { SeletorCadastro, useCadastro } from "@/components/cadastros/seletor-cadastro";
 import { AvisoInativacaoStatus } from "@/components/ui/aviso-inativacao-status";
 import {
-  X, Plus, Upload, Trash2, AlertCircle, CalendarClock, User, Briefcase, ListChecks, FileText, Wallet, KeyRound, UserPlus,
+  X, Plus, Upload, Trash2, CalendarClock, User, Briefcase, ListChecks, FileText, Wallet, KeyRound, UserPlus,
 } from "lucide-react";
 import { InputData } from "@/components/ui/input-data";
 import { ToggleSwitch } from "@/components/ui/toggle-switch";
@@ -53,6 +54,16 @@ interface ColaboradorFormProps {
 
 type Aba = "pessoais" | "profissionais" | "competencias" | "documentos" | "folha" | "acesso" | "admissao";
 
+// Cada campo na aba onde ele está: o ponto vermelho da aba e o "abre a aba sozinha" (ERRO NO CAMPO)
+const CAMPO_ABA: Record<string, Aba> = {
+  nome: "pessoais", cpf: "pessoais", rg: "pessoais", dataNascimento: "pessoais", email: "pessoais", telefone: "pessoais",
+  celular: "pessoais", whatsapp: "pessoais", cep: "pessoais", endereco: "pessoais", numero: "pessoais", complemento: "pessoais",
+  bairro: "pessoais", cidade: "pessoais", estado: "pessoais", avatar: "pessoais",
+  cargoId: "profissionais", perfilAcessoId: "profissionais", veiculoId: "profissionais", crea: "profissionais", tipo: "profissionais",
+  dataAdmissao: "profissionais", statusColaborador: "profissionais", jornadaFaixas: "profissionais", observacoes: "profissionais",
+  competenciaIds: "competencias", especialidades: "competencias",
+};
+
 interface EstadoAcessoInicial { email: string | null; temLogin: boolean; acessoAtivo: boolean; role: string | null }
 
 /**
@@ -67,7 +78,6 @@ export function ColaboradorForm({ initialData, somenteLeitura = false, podeFolha
   // "Inativo" no status = inativar (exige "Equipes › Excluir", como o botão; o servidor confere de novo)
   const podeInativarColab = usePermissoes().pode("equipes", "excluir");
   const [aba, setAba] = useState<Aba>("pessoais");
-  const [erroGlobal, setErroGlobal] = useState("");
 
   const [avatar, setAvatar] = useState<string | null>(initialData?.avatar ?? null);
   const [erroFoto, setErroFoto] = useState("");
@@ -124,6 +134,8 @@ export function ColaboradorForm({ initialData, somenteLeitura = false, podeFolha
     formState: { errors, isSubmitting },
   } = useForm<TecnicoInput>({
     resolver: zodResolver(tecnicoSchema),
+    // O foco no 1º erro é do padrão do formulário (abre a aba certa antes de focar)
+    shouldFocusError: false,
     defaultValues: initialData
       ? {
           nome: initialData.nome, cpf: initialData.cpf, rg: initialData.rg ?? "",
@@ -146,6 +158,12 @@ export function ColaboradorForm({ initialData, somenteLeitura = false, podeFolha
   const inativandoPeloStatus = isEditing && watch("statusColaborador") === "INATIVO" && initialData?.ativo !== false && initialData?.statusColaborador !== "INATIVO";
 
   const jornadaOk = jornadaValida(faixas);
+  // ERRO NO CAMPO: os erros do zod + os da tela/servidor no mesmo lugar; o 1º erro abre a aba e recebe o foco
+  const erros = useErrosDoFormulario({ rhf: errors, abaDoCampo: CAMPO_ABA, abrirAba: (a) => setAba(a as Aba) });
+  // A jornada voltou a fechar: o erro dela some (as faixas já mostram o problema de cada uma)
+  useEffect(() => { if (jornadaOk) erros.limpar("jornadaFaixas"); }, [jornadaOk, erros]);
+  // Desmarcou "Responsável técnico": o CREA deixa de ser exigido
+  useEffect(() => { if (!rt) erros.limpar("crea"); }, [rt, erros]);
   const tiposOsVisiveis = tiposOs.filter((t) => t.ativo !== false || competenciaIds.includes(t.id));
   function toggleCompetencia(id: string) {
     setCompetenciaIds((p) => (p.includes(id) ? p.filter((c) => c !== id) : [...p, id]));
@@ -174,15 +192,15 @@ export function ColaboradorForm({ initialData, somenteLeitura = false, podeFolha
   }
 
   async function onSubmit(data: TecnicoInput) {
-    setErroGlobal("");
+    erros.limparTudo();
+    const daTela: Record<string, string> = {};
     if (!jornadaOk) {
       const p = problemasDaJornada(faixas);
-      setErroGlobal(`Jornada: ${[...p.geral, ...p.faixas.flatMap((x, i) => x.map((m) => `faixa ${i + 1}: ${m}`))][0] ?? "confira as faixas."}`);
-      setAba("profissionais");
-      return;
+      daTela.jornadaFaixas = `Jornada: ${[...p.geral, ...p.faixas.flatMap((x, i) => x.map((m) => `faixa ${i + 1}: ${m}`))][0] ?? "confira as faixas."}`;
     }
-    // RT sem CREA: a rota recusa (MSG_RT_SEM_CREA); a ficha avisa antes, na aba do campo
-    if (rt && !(data.crea ?? "").trim()) { setErroGlobal(MSG_RT_SEM_CREA); setAba("profissionais"); return; }
+    // RT sem CREA: a rota recusa (MSG_RT_SEM_CREA); a ficha avisa antes, no próprio campo
+    if (rt && !(data.crea ?? "").trim()) daTela.crea = MSG_RT_SEM_CREA;
+    if (!erros.validar(daTela)) return;
     try {
       const url = isEditing ? `/api/tecnicos/${initialData.id}` : "/api/tecnicos";
       const res = await fetch(url, {
@@ -198,27 +216,20 @@ export function ColaboradorForm({ initialData, somenteLeitura = false, podeFolha
           ...(inativandoPeloStatus && { motivoInativacao }),
         }),
       });
-      if (!res.ok) {
-        const err = await res.json();
-        setErroGlobal(err.erro ?? "Erro ao salvar colaborador.");
-        return;
-      }
+      // O erro do servidor cai no campo certo ({ erro, campos }: CPF já cadastrado, e-mail em uso, CREA…)
+      if (!res.ok) { erros.erroDaApi(await res.json().catch(() => ({})), "Erro ao salvar colaborador."); return; }
       router.push("/colaboradores");
       router.refresh();
     } catch {
-      setErroGlobal("Erro de conexão. Tente novamente.");
+      erros.definirGeral("Erro de conexão. Tente novamente.");
+      erros.focar();
     }
   }
 
-  // As abas com erro (a mesma marca da ficha do cliente): o salvar recusado leva à primeira
-  const CAMPOS_PESSOAIS = ["nome", "cpf", "email", "telefone", "rg", "dataNascimento", "cep", "endereco", "numero", "bairro", "cidade", "estado"] as const;
-  const abasErro = new Set<Aba>([
-    ...(CAMPOS_PESSOAIS.some((c) => (errors as Record<string, unknown>)[c]) ? ["pessoais" as const] : []),
-    ...(!jornadaOk ? ["profissionais" as const] : []),
-  ]);
-  function invalido(e: Record<string, unknown>) {
-    if (CAMPOS_PESSOAIS.some((c) => e[c])) setAba("pessoais");
-    else setAba("profissionais");
+  // Zod recusou: os erros já estão nos campos (rhf); rola e foca o primeiro, abrindo a aba dele
+  function invalido() {
+    erros.definir({});
+    erros.focar();
   }
 
   // `curto`: o rótulo no celular (as abas ficam 3 por linha em vez de uma por linha)
@@ -235,12 +246,10 @@ export function ColaboradorForm({ initialData, somenteLeitura = false, podeFolha
   const inputCls = "w-full bg-white border border-surface-border rounded-lg px-3 py-2.5 text-sm text-ink focus:outline-none focus:border-primary-500 focus:ring-4 focus:ring-primary-500/10 transition-all";
 
   return (
-    <form onSubmit={handleSubmit(onSubmit, invalido)} className="space-y-5">
-      {erroGlobal && (
-        <div className="flex items-center gap-2 bg-atrasado-claro border border-atrasado/20 text-atrasado-texto text-sm rounded-lg px-4 py-3">
-          <AlertCircle className="w-4 h-4 shrink-0" /> {erroGlobal}
-        </div>
-      )}
+    <ErrosDoFormulario valor={erros}>
+    <form ref={erros.ref} onSubmit={handleSubmit(onSubmit, invalido)} className="space-y-5" noValidate>
+      {/* A faixa do topo é só o resumo: o erro mora no campo (ERRO NO CAMPO) */}
+      <ResumoDeErros />
 
       {/* Documento vencido é sinal da FICHA, não só da aba: aparece em qualquer aba, com o atalho.
           Dentro da própria aba, não: lá a seção já avisa, e com mais detalhe — dois avisos iguais
@@ -263,14 +272,14 @@ export function ColaboradorForm({ initialData, somenteLeitura = false, podeFolha
         <nav className="flex flex-wrap gap-1 sm:gap-1.5 px-3 sm:px-4 py-3 sm:py-4 border-b border-surface-border" data-abas-colaborador>
           {ABAS.map((t) => {
             const ativa = aba === t.id;
-            const comErro = abasErro.has(t.id);
+            // A jornada errada marca a aba já enquanto se edita (as faixas mostram o problema); o salvar conta igual
+            const nErros = (erros.porAba[t.id] ?? 0) + (t.id === "profissionais" && !jornadaOk && !erros.erroDe("jornadaFaixas") ? 1 : 0);
             return (
               <button
                 key={t.id} type="button" onClick={() => setAba(t.id)} data-aba={t.id} aria-current={ativa ? "page" : undefined} title={t.label}
                 className={cn(
                   "flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-4 py-2 sm:py-2.5 text-[13px] sm:text-sm font-medium rounded-card whitespace-nowrap transition-all",
                   ativa ? "bg-primary-500 text-white shadow-sm" : "text-ink-muted hover:text-ink hover:bg-surface-alt",
-                  comErro && !ativa && "text-atrasado bg-atrasado-claro",
                 )}
               >
                 <t.icone className="w-4 h-4 shrink-0" />
@@ -279,7 +288,7 @@ export function ColaboradorForm({ initialData, somenteLeitura = false, podeFolha
                 {t.badge != null && t.badge > 0 && (
                   <span className={cn("text-[10px] font-semibold px-1.5 py-0.5 rounded-full", ativa ? "bg-white/25 text-white" : "bg-surface-alt text-ink-muted")}>{t.badge}</span>
                 )}
-                {comErro && <AlertCircle className={cn("w-3.5 h-3.5", ativa ? "text-white" : "text-atrasado")} aria-label="Tem erro" />}
+                <IndicadorErroAba n={nErros} />
               </button>
             );
           })}
@@ -287,7 +296,7 @@ export function ColaboradorForm({ initialData, somenteLeitura = false, podeFolha
 
         <fieldset disabled={somenteLeitura} className={cn("min-w-0 p-5 sm:p-6 lg:p-8 space-y-8", (aba === "folha" || aba === "acesso" || aba === "admissao" || aba === "documentos") && "hidden")}>
           {/* ABA 1 — Dados Pessoais */}
-          <div className={cn("space-y-8", aba !== "pessoais" && "hidden")}>
+          <div className={cn("space-y-8", aba !== "pessoais" && "hidden")} data-aba-painel="pessoais">
             <FormSection title="Identificação">
               <FormField label="Foto do colaborador" hint="Aparece no calendário, equipes e ordens de serviço">
                 <div className="flex items-center gap-4">
@@ -308,32 +317,32 @@ export function ColaboradorForm({ initialData, somenteLeitura = false, podeFolha
                 </div>
               </FormField>
               <FormGrid>
-                <FormField label="Nome completo" required error={errors.nome?.message}>
-                  <Input {...register("nome")} caixa="nome" error={!!errors.nome} />
+                <FormField label="Nome completo" required name="nome">
+                  <Input {...register("nome")} caixa="nome" />
                 </FormField>
-                <FormField label="CPF" required error={errors.cpf?.message}>
-                  <Input {...register("cpf")} placeholder="000.000.000-00" error={!!errors.cpf} />
+                <FormField label="CPF" required name="cpf" formato="cpf">
+                  <Input {...register("cpf")} placeholder="000.000.000-00" inputMode="numeric" />
                 </FormField>
               </FormGrid>
               <FormGrid cols={3}>
-                <FormField label="RG">
+                <FormField label="RG" name="rg">
                   <Input {...register("rg")} placeholder="00.000.000-0" />
                 </FormField>
-                <FormField label="Data de nascimento">
+                <FormField label="Data de nascimento" name="dataNascimento" formato="data">
                   <Controller name="dataNascimento" control={control} render={({ field }) => <InputData value={(field.value as string) ?? ""} onChange={field.onChange} aria-label="Data de nascimento" />} />
                 </FormField>
-                <FormField label="E-mail" error={errors.email?.message}>
-                  <Input {...register("email")} caixa="email" type="email" placeholder="colaborador@empresa.com.br" error={!!errors.email} />
+                <FormField label="E-mail" name="email" formato="email">
+                  <Input {...register("email")} caixa="email" type="email" placeholder="colaborador@empresa.com.br" />
                 </FormField>
               </FormGrid>
               <FormGrid cols={3}>
-                <FormField label="Telefone" required error={errors.telefone?.message}>
-                  <Input {...register("telefone")} placeholder="(00) 0000-0000" error={!!errors.telefone} />
+                <FormField label="Telefone" required name="telefone" formato="telefone">
+                  <Input {...register("telefone")} placeholder="(00) 0000-0000" inputMode="tel" />
                 </FormField>
-                <FormField label="Celular">
-                  <Input {...register("celular")} placeholder="(00) 00000-0000" />
+                <FormField label="Celular" name="celular" formato="celular">
+                  <Input {...register("celular")} placeholder="(00) 00000-0000" inputMode="tel" />
                 </FormField>
-                <FormField label="WhatsApp">
+                <FormField label="WhatsApp" name="whatsapp" formato="telefone">
                   <Input {...register("whatsapp")} placeholder="(00) 00000-0000" />
                 </FormField>
               </FormGrid>
@@ -341,43 +350,43 @@ export function ColaboradorForm({ initialData, somenteLeitura = false, podeFolha
 
             <FormSection title="Endereço">
               <FormGrid cols={3}>
-                <CampoCep valor={watch("cep") ?? ""} onValor={(v) => setValue("cep", v, { shouldDirty: true })}
+                <CampoCep nome="cep" valor={watch("cep") ?? ""} onValor={(v) => setValue("cep", v, { shouldDirty: true })}
                   onEndereco={(d) => {
                     // O mesmo jeito de toda tela (lib/cep › enderecoDoCep): o logradouro do colaborador é "endereco"
                     const novo = enderecoDoCep({ endereco: watch("endereco"), bairro: watch("bairro"), cidade: watch("cidade"), estado: watch("estado") }, d, { logradouro: "endereco", bairro: "bairro", cidade: "cidade", estado: "estado" });
                     for (const [k, v] of Object.entries(novo)) setValue(k as "endereco", (v as string) ?? "", { shouldDirty: true });
                   }} />
-                <FormField label="Logradouro" className="sm:col-span-2"><Input {...register("endereco")} caixa="endereco" placeholder="Rua, avenida…" /></FormField>
+                <FormField label="Logradouro" className="sm:col-span-2" name="endereco"><Input {...register("endereco")} caixa="endereco" placeholder="Rua, avenida…" /></FormField>
               </FormGrid>
               <FormGrid cols={3}>
-                <FormField label="Número"><Input {...register("numero")} /></FormField>
+                <FormField label="Número" name="numero"><Input {...register("numero")} /></FormField>
                 <FormField label="Complemento"><Input {...register("complemento")} /></FormField>
                 <FormField label="Bairro"><Input {...register("bairro")} caixa="endereco" /></FormField>
               </FormGrid>
               <FormGrid>
-                <FormField label="Cidade"><Input {...register("cidade")} caixa="cidade" /></FormField>
-                <FormField label="Estado"><Input {...register("estado")} placeholder="UF" maxLength={2} /></FormField>
+                <FormField label="Cidade" name="cidade"><Input {...register("cidade")} caixa="cidade" /></FormField>
+                <FormField label="Estado" name="estado"><Input {...register("estado")} placeholder="UF" maxLength={2} /></FormField>
               </FormGrid>
             </FormSection>
           </div>
 
           {/* ABA 2 — Dados Profissionais */}
-          <div className={cn("space-y-8", aba !== "profissionais" && "hidden")}>
+          <div className={cn("space-y-8", aba !== "profissionais" && "hidden")} data-aba-painel="profissionais">
             <FormSection title="Função">
               <FormGrid>
-                <FormField label="Cargo">
+                <FormField label="Cargo" name="cargoId" valor={watch("cargoId") ?? ""}>
                   {/* Só cargos ativos para nova escolha; o cargo atual segue visível mesmo inativo */}
                   <SeletorCadastro
                     entidade="cargos" valor={watch("cargoId") ?? ""} placeholder="Selecione…"
                     onChange={(v) => setValue("cargoId", v, { shouldDirty: true })}
                   />
                 </FormField>
-                <FormField label="Perfil de acesso" hint="Permissões no sistema (Configurações › Perfis)">
+                <FormField label="Perfil de acesso" hint="Permissões no sistema (Configurações › Perfis)" name="perfilAcessoId" valor={perfilAcessoId}>
                   <SeletorCadastro entidade="perfis-acesso" itens={perfis} valor={perfilAcessoId} vazio="Sem perfil" onChange={setPerfilAcessoId} />
                 </FormField>
               </FormGrid>
               {temFrota && (
-                <FormField label="Veículo padrão" hint="Opcional — puxado automaticamente na OS quando este colaborador executa (dá para trocar na OS)">
+                <FormField label="Veículo padrão" name="veiculoId" hint="Opcional — puxado automaticamente na OS quando este colaborador executa (dá para trocar na OS)">
                   <Select aria-label="Veículo padrão" value={veiculoId} onChange={(e) => setVeiculoId(e.target.value)}>
                     <option value="">Sem veículo padrão</option>
                     {veiculos.filter((v) => v.status === "ATIVO" || v.id === veiculoId).map((v) => (
@@ -392,15 +401,15 @@ export function ColaboradorForm({ initialData, somenteLeitura = false, podeFolha
                 <div data-responsavel-tecnico={rt ? "sim" : "nao"}><ToggleSwitch label={ROTULO_RT} dica={DICA_RT} checked={rt} onChange={setRt} disabled={somenteLeitura} /></div>
               </div>
               {rt && (
-                <FormField label="CREA / Registro profissional" required hint="Obrigatório para responsáveis técnicos">
+                <FormField label="CREA / Registro profissional" required hint="Obrigatório para responsáveis técnicos" name="crea">
                   <Input {...register("crea")} placeholder="Ex: 5012345-D/SP" data-campo-crea />
                 </FormField>
               )}
               <FormGrid>
-                <FormField label="Data de admissão">
+                <FormField label="Data de admissão" name="dataAdmissao" formato="data">
                   <Controller name="dataAdmissao" control={control} render={({ field }) => <InputData value={(field.value as string) ?? ""} onChange={field.onChange} aria-label="Data de admissão" />} />
                 </FormField>
-                <FormField label="Status">
+                <FormField label="Status" name="statusColaborador">
                   <Select {...register("statusColaborador")}>
                     <option value="ATIVO">Ativo</option>
                     {mostrarOpcaoInativo(podeInativarColab, initialData?.statusColaborador) && <option value="INATIVO">Inativo</option>}
@@ -413,18 +422,21 @@ export function ColaboradorForm({ initialData, somenteLeitura = false, podeFolha
             </FormSection>
 
             <FormSection title="Jornada de trabalho" dica="Uma faixa por grupo de dias com o mesmo horário (ex.: Seg–Qui 07:30–17:30 e Sex 07:30–16:30). O intervalo é descontado das horas. Vai para o contrato e os documentos.">
-              <JornadaFaixas faixas={faixas} onChange={setFaixas} disabled={somenteLeitura} />
+              {/* A jornada é um campo do formulário (jornadaFaixas): o erro dela leva até aqui; cada faixa diz o seu problema */}
+              <div data-campo-nome="jornadaFaixas" data-campo-com-erro={erros.erroDe("jornadaFaixas") ? "" : undefined}>
+                <JornadaFaixas faixas={faixas} onChange={setFaixas} disabled={somenteLeitura} />
+              </div>
             </FormSection>
 
             <FormSection title="Observações">
-              <FormField label="Observações internas">
+              <FormField label="Observações internas" name="observacoes">
                 <Textarea {...register("observacoes")} placeholder="Informações adicionais…" rows={3} />
               </FormField>
             </FormSection>
           </div>
 
           {/* ABA 3 — Competências */}
-          <div className={cn("space-y-8", aba !== "competencias" && "hidden")}>
+          <div className={cn("space-y-8", aba !== "competencias" && "hidden")} data-aba-painel="competencias">
             <FormSection title="Competências para execução">
               <p className="text-sm text-ink-muted -mt-1">
                 Tipos de OS que este colaborador pode executar; só eles são sugeridos ao criar a OS.
@@ -558,5 +570,6 @@ export function ColaboradorForm({ initialData, somenteLeitura = false, podeFolha
         </div>
       )}
     </form>
+    </ErrosDoFormulario>
   );
 }

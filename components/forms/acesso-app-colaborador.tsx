@@ -5,6 +5,7 @@ import { toast } from "@/components/ui/avisos";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { FormField } from "@/components/ui/form-field";
+import { ErrosDoFormulario, ResumoDeErros, useErrosDoFormulario } from "@/components/ui/formulario-erros";
 import { ToggleSwitch } from "@/components/ui/toggle-switch";
 import { REQUISITOS_SENHA } from "@/lib/acesso/senha";
 import { cn } from "@/lib/utils";
@@ -25,7 +26,8 @@ export function AcessoAppColaborador({ tecnicoId, emailSalvo, inicial }: Props) 
   const [senha, setSenha] = useState("");
   const [redefinindo, setRedefinindo] = useState(false);
   const [salvando, setSalvando] = useState(false);
-  const [erro, setErro] = useState("");
+  // ERRO NO CAMPO: o e-mail (que vem de Dados pessoais) e a senha ganham o erro no próprio campo
+  const erros = useErrosDoFormulario();
 
   const email = (emailSalvo ?? "").trim();
   const semEmail = !email;
@@ -34,9 +36,9 @@ export function AcessoAppColaborador({ tecnicoId, emailSalvo, inicial }: Props) 
   const mudou = ativo !== estado.acessoAtivo || (precisaSenha && senha.length > 0);
 
   async function salvar() {
-    setErro("");
-    if (ativo && semEmail) { setErro("Defina o e-mail do colaborador (Dados pessoais) e salve antes de liberar o acesso."); return; }
-    if (precisaSenha && senha.length === 0) { setErro("Defina uma senha inicial para liberar o acesso."); return; }
+    erros.limparTudo();
+    if (ativo && semEmail) { erros.validar({ email: "Defina o e-mail do colaborador (Dados pessoais) e salve antes de liberar o acesso." }); return; }
+    if (precisaSenha && senha.length === 0) { erros.validar({ senha: "Defina uma senha inicial para liberar o acesso." }); return; }
     setSalvando(true);
     try {
       const res = await fetch(`/api/tecnicos/${tecnicoId}/acesso`, {
@@ -45,17 +47,18 @@ export function AcessoAppColaborador({ tecnicoId, emailSalvo, inicial }: Props) 
         body: JSON.stringify({ acessoAtivo: ativo, ...(senha ? { senha } : {}) }),
       });
       const data = await res.json().catch(() => ({}));
-      if (!res.ok) { setErro(data?.erro ?? "Não foi possível salvar o acesso."); return; }
+      if (!res.ok) { erros.erroDaApi(data, "Não foi possível salvar o acesso."); return; }
       setEstado({ temLogin: data.temLogin, acessoAtivo: data.acessoAtivo, role: data.role });
       setAtivo(data.acessoAtivo);
       setSenha(""); setRedefinindo(false);
       toast(data.acessoAtivo ? "Acesso ao app liberado." : "Acesso ao app bloqueado.");
-    } catch { setErro("Erro de conexão. Tente novamente."); } finally { setSalvando(false); }
+    } catch { erros.definirGeral("Erro de conexão. Tente novamente."); erros.focar(); } finally { setSalvando(false); }
   }
 
   // Grava sozinho (o acesso na hora): não arma o "Sair sem salvar?" da ficha em volta
   return (
-    <div className="space-y-5" data-acesso-app data-sem-aviso>
+    <ErrosDoFormulario valor={erros}>
+    <div ref={erros.ref} className="space-y-5" data-acesso-app data-sem-aviso>
       <p className="text-sm text-ink-muted -mt-1">
         Dá a este colaborador um login (e-mail e senha) para o <strong>app do técnico</strong>: ele
         entra direto em “Meu dia”, vê só as OS atribuídas a ele e não acessa o painel de gestão.
@@ -68,13 +71,13 @@ export function AcessoAppColaborador({ tecnicoId, emailSalvo, inicial }: Props) 
             ? (ativo ? "Login liberado: o colaborador entra no app com o e-mail abaixo." : "Login bloqueado: o colaborador não consegue entrar.")
             : "Ligue para criar o login de técnico deste colaborador."}
           checked={ativo}
-          onChange={(v) => { setAtivo(v); setErro(""); if (!v) { setRedefinindo(false); setSenha(""); } }}
+          onChange={(v) => { setAtivo(v); erros.limparTudo(); if (!v) { setRedefinindo(false); setSenha(""); } }}
           disabled={semEmail && !estado.temLogin}
           dica="A permissão é lida no login. Ativar ou bloquear vale a partir do próximo login do colaborador."
         />
       </div>
 
-      <FormField label="E-mail de login" hint="É o e-mail do colaborador (Dados pessoais). Para trocar, altere lá e salve.">
+      <FormField label="E-mail de login" hint="É o e-mail do colaborador (Dados pessoais). Para trocar, altere lá e salve." name="email">
         <Input value={email} readOnly data-acesso-email
           className="bg-surface-linha text-ink-muted"
           placeholder="Sem e-mail — defina em Dados pessoais" />
@@ -92,8 +95,8 @@ export function AcessoAppColaborador({ tecnicoId, emailSalvo, inicial }: Props) 
       )}
 
       {precisaSenha && !semEmail && (
-        <FormField label={estado.temLogin ? "Nova senha" : "Senha inicial"} error={undefined}>
-          <Input type="password" value={senha} onChange={(e) => { setSenha(e.target.value); setErro(""); }}
+        <FormField label={estado.temLogin ? "Nova senha" : "Senha inicial"} name="senha">
+          <Input type="password" value={senha} onChange={(e) => setSenha(e.target.value)}
             placeholder="Defina a senha" autoComplete="new-password" data-acesso-senha />
           <div className="flex flex-wrap gap-x-4 gap-y-1 mt-1.5">
             {REQUISITOS_SENHA.map((r) => {
@@ -108,11 +111,8 @@ export function AcessoAppColaborador({ tecnicoId, emailSalvo, inicial }: Props) 
         </FormField>
       )}
 
-      {erro && (
-        <div className="flex items-center gap-2 bg-atrasado-claro border border-atrasado/20 text-atrasado-texto text-sm rounded-lg px-4 py-3">
-          <AlertCircle className="w-4 h-4 shrink-0" /> {erro}
-        </div>
-      )}
+      {/* A faixa é só o resumo (o erro de campo fica no campo) */}
+      <ResumoDeErros />
 
       <div className="flex items-center gap-2 text-xs text-ink-muted">
         <Info className="w-3.5 h-3.5 shrink-0" />
@@ -125,5 +125,6 @@ export function AcessoAppColaborador({ tecnicoId, emailSalvo, inicial }: Props) 
         </Button>
       </div>
     </div>
+    </ErrosDoFormulario>
   );
 }

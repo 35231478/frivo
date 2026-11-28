@@ -247,7 +247,7 @@ export const contratoSchema = z.object({
   periodicidade: z.nativeEnum(Periodicidade).default(Periodicidade.MENSAL),
   valorMensal: valorOpcional,
   valorTotal: valorOpcional,
-  dataInicio: z.string().min(1, "Data de início é obrigatória"),
+  dataInicio: z.string({ required_error: "Data de início é obrigatória" }).min(1, "Data de início é obrigatória"),
   dataFim: z.string().optional(),
   diaVencimento: z.preprocess(
     (v) => (v === "" || v === null || v === undefined ? undefined : Number(v)),
