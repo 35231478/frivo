@@ -138,15 +138,15 @@ describe("barra inferior do app: Meu dia · Agenda · Perfil", () => {
     await esperarAte(() => !!$("[data-nav]"), "app carregado");
   }
 
-  it("'Desempenho' só entra na barra de quem PARTICIPA do Desempenho (antes do Perfil); os outros continuam com três botões", async () => {
+  it("'Desempenho' só entra na barra de quem PARTICIPA do Desempenho (antes do Perfil); os outros ficam com quatro botões (CHAT-1: + Chat)", async () => {
     const botoes = () => [...document.body.querySelectorAll("[data-nav]")].map((b) => b.getAttribute("data-nav"));
     await abrirApp();
-    expect(botoes()).toEqual(["dia", "agenda", "perfil"]);
-    expect(nav("dia").parentElement!.className).toContain("grid-cols-3");
+    expect(botoes()).toEqual(["dia", "agenda", "chat", "perfil"]);
+    expect(nav("dia").parentElement!.className).toContain("grid-cols-4");
     act(() => root.unmount()); caixa.remove();
     await abrirApp({ ...USUARIO, desempenho: true });
-    expect(botoes()).toEqual(["dia", "agenda", "desempenho", "perfil"]);
-    expect(nav("dia").parentElement!.className).toContain("grid-cols-4");
+    expect(botoes()).toEqual(["dia", "agenda", "chat", "desempenho", "perfil"]);
+    expect(nav("dia").parentElement!.className).toContain("grid-cols-5");
     expect(nav("desempenho").textContent).toBe("Desempenho");
     expect(nav("desempenho").className).toContain("touch-target");
     await tocar("desempenho");
