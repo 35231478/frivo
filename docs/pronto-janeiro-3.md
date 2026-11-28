@@ -206,3 +206,58 @@ Também ficaram os da jornada do cliente novo: `antes-empresas-*` e `antes-prime
 | `leva-g-ui` | catálogo que não carrega, foto vai para Dados, lápis sem a permissão |
 | `tabela-preco-seletor-ui` | trocar o cliente com item lançado (preço da tabela, destrava) |
 | `pedido-cliente-portal-ui` | recusa só enquanto espera, arquivo enviado, "1.500", 3 MB e 413, conferir sem permissão, aviso do confirmar |
+
+---
+
+# Leva I — correções gerais (anotações do Zé)
+
+Vai num segundo PR, sobre a varredura. Sem SQL.
+
+| # | Tela / onde | O que fazia | Agora | Situação |
+|---|---|---|---|---|
+| 1 | **Todas as tabelas** (`TabelaPro`): menu "Colunas" | ficava cortado pela altura da tabela (em /veiculos com 1 veículo, quase não aparecia) | abre em portal, fixo na tela, para baixo se couber e senão para cima, com a altura do espaço que sobra e rolagem. O ⋮ de ações usa o mesmo cálculo (`lib/ui/flutuante`) | **corrigido** |
+| 2 | **Camadas** (z-index) | o modal de confirmação (ex.: inativar cargo pelo ⊘ em Configurações › Cargos) abria atrás da gaveta, sem dar para clicar; o botão Anotações ficava atrás da gaveta | uma escala só, em `lib/ui/camadas`: gaveta 60 < modal 70 < foto 75 < menus e dicas 80 < anotações 84–89 < confirmação 95 < toast 100. Os modais "soltos" (calendário, anexos, contrato, ações em massa, montador de equipes, scanner) entraram na camada do modal | **corrigido** |
+| 3 | **Menu lateral** | o recolhido ficava no navegador (igual para todo usuário), e o mouse não fazia nada | o clique **fixa** (aberto/fechado), lembrado **por usuário**. Sem escolha: tela larga (≥ 1280 px) abre; notebook começa recolhido e o mouse expande **por cima** (temporário, sem empurrar a página). Quem clicou para fechar não vê o menu abrir com o mouse (`lib/layout/menu-lateral`) | **corrigido** |
+| 4 | **Sair sem salvar** (todas as telas de edição) | saía e perdia o que foi digitado | `components/ui/proteger-saida` (detalhes abaixo) | **corrigido** |
+| 5 | **CEP** (todos os formulários com CEP) | cada tela de um jeito (lupa, só a ViaCEP, sem prazo) | um campo só, `CampoCep` (detalhes abaixo) | **corrigido** |
+| 6 | **Notas de compra**: chave de acesso | botão "Copiar" ao lado | clicar no número copia os 44 dígitos e mostra "Chave copiada."; o botão saiu (lista, gaveta e página da nota) | **corrigido** |
+| 7 | **/ordens**: filtro de mês | olhava também a data de **abertura** (a OS aberta em outubro e agendada para novembro aparecia em outubro) | olha a data **agendada / de execução** (atividade agendada, iniciada ou concluída) e a previsão da OS. A OS sem data nenhuma aparece no filtro rápido **"Sem agendamento"** (com a contagem, em qualquer período). O padrão continua o mês atual | **corrigido** |
+| 8 | **Veículo**: responsável e equipe | botões "editar no contexto" (editar o colaborador ali dentro) | o nome do escolhido vira **link** que abre o cadastro em outra aba; o formulário do veículo continua aberto | **corrigido** |
+
+**Item 4, sair sem salvar.** Envolve as 22 páginas de novo/editar (cliente, colaborador, contrato, equipamento, equipe, conta a pagar, cobrança, fatura, orçamento, veículo, pedido avulso, PMOC, envio de documentação), a nova OS, Meu perfil e os dados da empresa.
+- **Quando pergunta**, só se algo foi digitado dentro do formulário:
+  - num link interno;
+  - no voltar do navegador;
+  - ao fechar ou recarregar a aba (o aviso do navegador).
+- **O texto:** "Sair sem salvar? As alterações deste formulário ainda não foram salvas", com os botões "Continuar editando" e "Sair sem salvar".
+- **Não pergunta depois de salvar:** o envio segura o aviso enquanto o salvar navega, e quem salva e fica na tela avisa com `marcarFormularioSalvo()`.
+- **Campos de busca** marcados com `data-sem-aviso` não contam como alteração.
+
+**Item 5, o CEP.** O `CampoCep` está em unidade (nas duas telas), colaborador, admissão, dados da empresa, cadastro rápido de unidade e na edição da unidade no contexto.
+- **Sem lupa:** completou os 8 dígitos, consulta. O endereço preenche logradouro, bairro, cidade e UF; número e complemento ficam com a pessoa.
+- **Consulta:** ViaCEP; se ela cair, a BrasilAPI. Cada uma espera no máximo 4 s, então nunca trava (`lib/cep`).
+- **CEP inexistente ou consulta fora do ar:** diz e deixa digitar à mão.
+
+Neste ambiente de teste não há acesso à internet, por isso o print mostra a mensagem "A consulta de CEP não respondeu". A consulta que preenche está provada nos testes.
+
+**Por que os modais "soltos" mudaram de camada.** Um modal aberto de dentro de uma gaveta ficava atrás dela. Agora qualquer modal (z-70) fica acima de qualquer gaveta (z-60). O app do técnico e o painel da IA não foram tocados.
+
+## Prints da Leva I (dados fictícios)
+
+Em `docs/prints/leva-i/` (`antes-*` e `depois-*`, desktop e celular):
+- `veiculos-colunas`: o menu cortado × inteiro;
+- `cargo-inativar`: a confirmação atrás × na frente da gaveta;
+- `menu-lateral-notebook` e `menu-lateral-hover`: a 1180 px, o mouse expande por cima;
+- `sair-sem-salvar`: saía × "Sair sem salvar?";
+- `colaborador-cep`: o campo com a dica;
+- `nota-chave`: sem o botão Copiar;
+- `ordens`: o chip "Sem agendamento";
+- `veiculo-form`: o lápis × o nome como link.
+
+## Testes da Leva I
+
+| Arquivo | O que prova |
+|---|---|
+| `leva-i` | posição do menu flutuante; a ordem das camadas e que cada componente usa a sua (e nenhum modal solto em z-50); a regra do menu lateral; quando um link sai da tela e a janela do envio; o CEP (ViaCEP, reserva, prazo, inexistente × fora do ar, o endereço aplicado); as ligações (telas com o aviso, formulários com o `CampoCep`, a chave, o veículo) |
+| `leva-i-ui` | o menu "Colunas" em portal fora da tabela; o modal por cima da gaveta; sair sem salvar (sem alteração, com alteração, busca não conta, depois do envio, salvo na tela, fechar a aba); o `CampoCep`; a chave copiando |
+| `leva-i-pg` (PostgreSQL real) | novembro mostra as agendadas, executadas ou previstas para novembro (não as só abertas nele); outubro vazio; "Sem agendamento" mostra e conta a OS sem data em qualquer período; o padrão é o mês atual |
