@@ -325,7 +325,7 @@ describe.skipIf(!URL_PG)("push (PostgreSQL real)", () => {
     await ev.notificarComentarioOS("os1", "uAdmin", { comentarioId: "cm1", texto: "Levar escada" });
     const por = Object.fromEntries(h.enviados.map((e) => [e.endpoint.replace("https://push.exemplo/", ""), e.msg]));
     expect(Object.keys(por).sort()).toEqual(["carlos-cel", "carlos-tab", "fin", "rosa"]);
-    expect([por.rosa.url, por.fin.url, por.fin.corpo]).toEqual(["/tecnico?ver=chat&os=os1", "/conversas?os=os1", "uAdmin · Levar escada"]); // CHAT-1: o toque abre a conversa
+    expect([por.rosa.url, por.fin.url, por.fin.corpo]).toEqual(["/tecnico?ver=chat", "/conversas?os=os1", "uAdmin · Levar escada"]); // CHAT-1: o toque abre a conversa (no app, a conversa Escritório)
     limpar();
     await ev.notificarComentarioOS("os1", "uAdmin", { comentarioId: "cm1", texto: "Levar escada" });
     expect(recebidos()).toEqual([]); // o mesmo comentário não repete
