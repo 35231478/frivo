@@ -26,8 +26,8 @@ export async function noEscopo(u: QuemVe & { empresaId?: string | null }, tipo: 
 export async function escopoBarra(tipo: "orcamento" | "ordem", id: string): Promise<NextResponse | null> {
   // Fora de uma requisição (rotinas chamando o handler direto) não há sessão a limitar: quem responde é o guarda de
   // permissão da rota, que roda antes e já exige a sessão.
-  let session: Awaited<ReturnType<typeof auth>> | null = null;
-  try { session = await auth(); } catch { session = null; }
+  let session: { user?: unknown } | null = null;
+  try { session = (await auth()) as { user?: unknown } | null; } catch { session = null; }
   const u = session?.user as (QuemVe & { empresaId?: string }) | undefined;
   if (!u) return null;
   return (await noEscopo(u, tipo, id)) ? null : NextResponse.json({ erro: MSG_FORA_DO_ESCOPO }, { status: 404 });
