@@ -98,7 +98,7 @@ describe("os textos", () => {
     expect(msgAceite({ osNumero: "OS-1", comentario: "Ótimo atendimento", avaliacao: 5 }, "/u")).toMatchObject({ titulo: "Aceite com comentário: OS-1", corpo: "Ótimo atendimento" });
   });
   it("comentário, despesa, portal, orçamento e estoque", () => {
-    expect(msgComentario({ osNumero: "OS-1", autor: "Ana", texto: "Levar escada" }, "/x")).toMatchObject({ titulo: "Comentário novo na OS OS-1", corpo: "Ana · Levar escada" });
+    expect(msgComentario({ osNumero: "OS-1", autor: "Ana", texto: "Levar escada" }, "/x")).toMatchObject({ titulo: "Mensagem nova na OS OS-1", corpo: "Ana · Levar escada", acao: "Abrir conversa" } /* CHAT-1 */);
     expect(sp(msgDespesa({ situacao: "ENVIADA", autor: "Carlos", descricao: "Pedágio", valor: 12.5 }, "/d").corpo)).toBe("Carlos · Pedágio · R$ 12,50");
     expect(msgDespesa({ situacao: "RECUSADA", descricao: "Almoço", motivo: "Sem nota", autor: "Carlos" }, "/d")).toMatchObject({ titulo: "Despesa recusada", corpo: "Almoço · Motivo: Sem nota" });
     expect(msgDespesa({ situacao: "APROVADA" }, "/d").titulo).toBe("Despesa aprovada");

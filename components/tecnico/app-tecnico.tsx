@@ -2,7 +2,7 @@
 
 import { useEffect } from "react";
 import { SincronizarPush } from "@/components/push/sincronizar-push";
-import { CalendarDays, Loader2, Sun, Trophy, UserRound } from "lucide-react";
+import { CalendarDays, Loader2, MessageCircle, Sun, Trophy, UserRound } from "lucide-react";
 import { Avisos, toast } from "@/components/ui/avisos";
 import { cn } from "@/lib/utils";
 import { toqueLeve } from "@/lib/haptico";
@@ -18,6 +18,7 @@ import { VistaFichaEquipamento } from "@/components/tecnico/qr-equipamento";
 import { VistaDespesas } from "@/components/tecnico/despesas";
 import { PerfilTecnico } from "@/components/tecnico/perfil";
 import { DesempenhoTecnico } from "@/components/tecnico/desempenho";
+import { SeloNaoLidas, useNaoLidasChat, VistaChat } from "@/components/tecnico/chat";
 import { BloqueioLocalizacao, useLocalizacaoObrigatoria } from "@/components/tecnico/localizacao-gate";
 import type { PerfilClient } from "@/components/perfil/perfil-client";
 import { AtalhoChecklist, PorteiroChecklist, usePorteiro } from "@/components/tecnico/porteiro";
@@ -28,13 +29,15 @@ type PerfilInicial = React.ComponentProps<typeof PerfilClient>["initial"];
 const NAV = [
   { ver: "dia" as const, rotulo: "Meu dia", Icone: Sun },
   { ver: "agenda" as const, rotulo: "Agenda", Icone: CalendarDays },
+  /** CHAT-1: a conversa com o Escritório, com o contador de não lidas */
+  { ver: "chat" as const, rotulo: "Chat", Icone: MessageCircle },
   { ver: "perfil" as const, rotulo: "Perfil", Icone: UserRound },
 ];
 /** Só para quem participa do Desempenho (entra antes do Perfil) */
 const NAV_DESEMPENHO = { ver: "desempenho" as const, rotulo: "Desempenho", Icone: Trophy };
 
 /**
- * App do TÉCNICO (PWA, offline-first): uma página só, com as vistas Meu dia · Agenda · Perfil e a
+ * App do TÉCNICO (PWA, offline-first): uma página só, com as vistas Meu dia · Agenda · Chat · Perfil e a
  * execução da OS. Navegação mínima — sem o menu do sistema. Tudo o que ele grava fica no aparelho e
  * sobe sozinho; o indicador no topo diz se está offline, sincronizando ou sincronizado.
  */
@@ -62,7 +65,9 @@ function Casca({ perfilInicial, resumoPorteiro }: { perfilInicial: PerfilInicial
   // Checklist do veículo obrigatório: nos dias de checklist, a única tela até fazer (ou "não vou usar")
   const porteiro = usePorteiro(resumoPorteiro);
   const travadoPorteiro = !travadoLoc && !!resumoPorteiro && (porteiro.aberto || porteiro.carregando);
-  const nav = usuario.desempenho ? [NAV[0], NAV[1], NAV_DESEMPENHO, NAV[2]] : NAV;
+  const nav = usuario.desempenho ? [NAV[0], NAV[1], NAV[2], NAV_DESEMPENHO, NAV[3]] : NAV;
+  // O contador do Chat acompanha em tempo real em qualquer vista (o mesmo laço de novidades que a conversa assina)
+  const naoLidas = useNaoLidasChat();
 
   // G12/UX-3: quem clicou num link do escritório foi trazido para cá — avisa em vez de só "piscar"
   useEffect(() => {
@@ -113,13 +118,16 @@ function Casca({ perfilInicial, resumoPorteiro }: { perfilInicial: PerfilInicial
       </main>
       {/* No porteiro, a navegação some: a única tela é o checklist do veículo */}
       {!travadoPorteiro && <nav className="fixed bottom-0 inset-x-0 z-30 bg-white border-t border-surface-border safe-bottom" aria-label="Navegação do técnico">
-        <div className={cn("grid max-w-2xl mx-auto", nav.length === 4 ? "grid-cols-4" : "grid-cols-3")}>
+        <div className={cn("grid max-w-2xl mx-auto", nav.length === 5 ? "grid-cols-5" : "grid-cols-4")}>
           {nav.map(({ ver, rotulo, Icone }) => (
             // Pulso tátil curtinho no toque (Android; onde não há suporte, nada acontece)
             <button key={ver} type="button" onClick={() => { toqueLeve(); irPara({ ver } as Vista); }} aria-current={ativa === ver ? "page" : undefined} data-nav={ver}
               className={cn("flex flex-col items-center justify-center gap-0.5 py-2.5 touch-target", ativa === ver ? "text-acento" : "text-ink-muted")}>
-              <Icone className="w-6 h-6" />
-              <span className="text-xs font-semibold">{rotulo}</span>
+              <span className="relative inline-flex">
+                <Icone className="w-6 h-6" />
+                {ver === "chat" && <SeloNaoLidas n={naoLidas} className="absolute -top-1.5 left-4" />}
+              </span>
+              <span className="text-xs font-semibold truncate max-w-full">{rotulo}</span>
             </button>
           ))}
         </div>
@@ -136,6 +144,7 @@ function Conteudo({ vista, perfilInicial }: { vista: Vista; perfilInicial: Perfi
     case "os": return <VistaOs key={vista.a} atividadeId={vista.a} equipamentoId={vista.e} camera={vista.cam} incluir={vista.inc} fim={vista.fim} primeiro={vista.primeiro} />;
     case "equipamento": return <VistaFichaEquipamento key={vista.q} valor={vista.q} />;
     case "despesas": return <VistaDespesas />;
+    case "chat": return <VistaChat />;
     default: return <MeuDia />;
   }
 }

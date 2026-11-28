@@ -325,7 +325,7 @@ describe.skipIf(!URL_PG)("push (PostgreSQL real)", () => {
     await ev.notificarComentarioOS("os1", "uAdmin", { comentarioId: "cm1", texto: "Levar escada" });
     const por = Object.fromEntries(h.enviados.map((e) => [e.endpoint.replace("https://push.exemplo/", ""), e.msg]));
     expect(Object.keys(por).sort()).toEqual(["carlos-cel", "carlos-tab", "fin", "rosa"]);
-    expect([por.rosa.url, por.fin.url, por.fin.corpo]).toEqual(["/tecnico?ver=os&a=at1", "/ordens/os1", "uAdmin · Levar escada"]);
+    expect([por.rosa.url, por.fin.url, por.fin.corpo]).toEqual(["/tecnico?ver=chat", "/conversas?os=os1", "uAdmin · Levar escada"]); // CHAT-1: o toque abre a conversa (no app, a conversa Escritório)
     limpar();
     await ev.notificarComentarioOS("os1", "uAdmin", { comentarioId: "cm1", texto: "Levar escada" });
     expect(recebidos()).toEqual([]); // o mesmo comentário não repete
@@ -333,11 +333,11 @@ describe.skipIf(!URL_PG)("push (PostgreSQL real)", () => {
 
   it("comentário gravado pelo escritório (lib/execucao/comentarios) dispara o aviso de verdade, depois da resposta", async () => {
     const { comentarDoEscritorio } = await import("@/lib/execucao/comentarios");
-    const c = await comentarDoEscritorio("e1", "os1", "uFin", "Cliente pediu para ligar antes");
-    expect(c).not.toBeNull();
+    const c = await comentarDoEscritorio("e1", "os1", "uFin", { clientId: "esc-1", texto: "Cliente pediu para ligar antes" });
+    expect(c.ok).toBe(true);
     expect(h.enviados).toEqual([]); // nada antes da resposta
     await depoisDaResposta();
-    expect(recebidos().sort()).toEqual([["admin", "Comentário novo na OS OS-0001"], ["carlos-cel", "Comentário novo na OS OS-0001"], ["carlos-tab", "Comentário novo na OS OS-0001"], ["rosa", "Comentário novo na OS OS-0001"]]);
+    expect(recebidos().sort()).toEqual([["admin", "Mensagem nova na OS OS-0001"], ["carlos-cel", "Mensagem nova na OS OS-0001"], ["carlos-tab", "Mensagem nova na OS OS-0001"], ["rosa", "Mensagem nova na OS OS-0001"]]);
     expect(h.enviados.find((e) => e.endpoint.endsWith("admin"))!.msg.corpo).toBe("uFin · Cliente pediu para ligar antes");
   });
 

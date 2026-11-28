@@ -199,8 +199,8 @@ export class MotorSync {
     }
   }
 
-  /** Baixa uma lista (Meu dia / Agenda), guarda no aparelho e devolve; sem sinal, devolve a guardada. */
-  async baixarLista<T>(chave: "meuDia" | "agenda" | "catalogo" | "despesas", url: string): Promise<{ dados: T | null; baixadoEm: number | null; doAparelho: boolean }> {
+  /** Baixa uma lista (Meu dia / Agenda / Chat), guarda no aparelho e devolve; sem sinal, devolve a guardada. */
+  async baixarLista<T>(chave: "meuDia" | "agenda" | "catalogo" | "despesas" | "conversas", url: string): Promise<{ dados: T | null; baixadoEm: number | null; doAparelho: boolean }> {
     const guardada = await this.banco.ler<{ dados: T; baixadoEm: number }>(chave);
     if (!this.online()) this.publicar(); // o indicador já mostra "Offline"
     else {
@@ -256,6 +256,8 @@ export class MotorSync {
     for (const o of toda) if (o.estado === "erro" && !travada.has(o.atividadeId)) travada.set(o.atividadeId, o.seq!);
     const fila = toda.filter((o) => o.estado === "pendente" && !(travada.has(o.atividadeId) && o.seq! > travada.get(o.atividadeId)!));
     const enviadas = new Set<string>();
+    /** Os tipos que subiram sem OS (SEM_OS): despesa fora de OS e, no CHAT-1, a mensagem sem OS */
+    const semOs = new Set<string>();
     let falhouRede = false;
     const paraEnviar = fila.map(({ seq: _s, criadoEm: _c, estado: _e, tentativas: _t, erro: _er, status: _st, enviadaEm: _en, ...op }) => op);
     for (const lote of emLotes(paraEnviar, undefined, this.umPorVez ? 1 : MAX_LOTE)) {
@@ -273,6 +275,7 @@ export class MotorSync {
         if (!r || r.adiada) continue;
         if (r.ok) {
           mudadas.push({ ...op, estado: "enviada", enviadaEm: this.agora(), erro: null, status: r.status }); enviadas.add(op.atividadeId);
+          if (op.atividadeId === SEM_OS) semOs.add(op.tipo);
           // O servidor gravou, mas tem algo a dizer ao técnico (ex.: a série já existia em outro equipamento)
           const aviso = !r.repetida && r.dados && typeof r.dados === "object" ? (r.dados as { aviso?: unknown }).aviso : null;
           if (typeof aviso === "string" && aviso) this.aoAvisar?.(aviso);
@@ -292,11 +295,15 @@ export class MotorSync {
       this.falhas = 0; this.proximaTentativa = 0;
       this.estado = { ...this.estado, ultimoSync: this.agora() };
     }
-    // Retrato novo de cada atividade que subiu: a tela passa a mostrar o que o servidor gravou. Despesa fora de OS
-    // não tem retrato: baixa "Minhas despesas" e tira da fila o que já subiu antes de a lista ser pedida
+    // Retrato novo de cada atividade que subiu: a tela passa a mostrar o que o servidor gravou. Sem OS não há retrato:
+    // a mensagem sem OS (CHAT-1) sai da fila assim que o servidor confirma (a tela Chat segura o "Enviando…" até a
+    // conversa trazê-la — baixar a conversa aqui a marcaria como lida); a despesa fora de OS baixa "Minhas despesas" e
+    // sai da fila o que já subiu antes de a lista ser pedida
     for (const atividadeId of enviadas) {
       if (atividadeId !== SEM_OS) { await this.baixarRetrato(atividadeId); continue; }
       const pedidoEm = this.agora();
+      if (semOs.has("comentario")) await this.banco.limparEnviadas(SEM_OS, pedidoEm, "comentario");
+      if (!semOs.has("despesa")) continue;
       const r = await this.baixarLista("despesas", "/api/tecnico/despesas");
       if (!r.doAparelho) await this.banco.limparEnviadas(SEM_OS, pedidoEm);
     }

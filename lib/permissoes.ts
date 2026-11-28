@@ -16,7 +16,7 @@ export type Permissoes = Record<string, Partial<Record<Acao, boolean>>>;
 export type IconeModulo =
   | "ClipboardList" | "Users" | "Thermometer" | "CalendarDays" | "QrCode" | "Package" | "ShoppingCart" | "Calculator"
   | "FileText" | "Wallet" | "UsersRound" | "Truck" | "Settings" | "BarChart3" | "LayoutDashboard" | "FileBadge" | "Trophy"
-  | "UserPlus" | "FileSignature";
+  | "UserPlus" | "FileSignature" | "MessageCircle";
 export interface ModuloDef { id: string; label: string; icone: IconeModulo; acoes: Acao[] }
 export interface SecaoDef { id: string; label: string; modulos: ModuloDef[] }
 
@@ -63,6 +63,10 @@ export const SECOES: SecaoDef[] = [
       // na trilha. Perfil gravado antes não a tem (nenhum UPDATE em perfis); o administrador tem sempre.
       // verSoProprios (COM-1, restritiva): vê e busca só as OS ligadas aos orçamentos em que é o vendedor (ou criadas por ele)
       { id: "ordens", label: "Ordens de serviço", icone: "ClipboardList", acoes: ["visualizar", "criar", "editar", "concluir", "excluir", "liberarSemPedido", "verSoProprios"] },
+      // CHAT-1: a tela Conversas por PESSOA (a conversa com cada técnico, com e sem OS): ver e enviar. As mensagens com
+      // OS seguem também a permissão de OS e o "Ver só os próprios"; a visão por OS pede só "OS › Visualizar". Perfil
+      // gravado antes não a tem (nenhum UPDATE em perfis): o administrador liga na tela; o administrador tem sempre.
+      { id: "conversas", label: "Conversas", icone: "MessageCircle", acoes: ["visualizar", "enviar"] },
       { id: "clientes", label: "Clientes", icone: "Users", acoes: ["visualizar", "criar", "editar", "excluir"] },
       { id: "equipamentos", label: "Equipamentos", icone: "Thermometer", acoes: ["visualizar", "criar", "editar", "excluir"] },
       { id: "pmoc", label: "PMOC", icone: "FileBadge", acoes: ["visualizar", "criar", "editar", "excluir"] },
@@ -309,6 +313,9 @@ export function moduloDaRota(pathname: string): string | null {
   // o endereço mora em /ordens, mas quem lê o relatório do SLA não precisa ver a lista de OS.
   // A página confere a permissão sozinha (e manda para /ordens quem não a tem).
   if (seg === "ordens" && segs[1] === "cumprimento") return null;
+  // CHAT-1: Conversas entra com "OS › Visualizar" (a visão por OS) OU "Conversas" (a por pessoa). A página confere
+  // sozinha (e manda para /sem-permissao quem não tem nenhuma das duas).
+  if (seg === "conversas") return null;
   return ROTA_MODULO[seg] ?? null;
 }
 
