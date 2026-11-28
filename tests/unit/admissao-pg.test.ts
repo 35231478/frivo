@@ -355,7 +355,7 @@ describe.skipIf(!URL_PG)("Admissão digital (PostgreSQL real)", () => {
   it("link vencido não escreve nada: nem rascunho, nem documento, nem conclusão, nem assinatura", async () => {
     const a = await convidar();
     await chamar("consentir", "POST", { token: a.token });
-    await chamar("rascunho", "PUT", { token: a.token, corpo: { form: { ...FORM, email: "" }, etapa: "DADOS" } });
+    await chamar("rascunho", "PUT", { token: a.token, corpo: { form: FORM, etapa: "DADOS" } });
     for (const docId of ["rg", "cpf", "comprovante_residencia", "ctps"]) {
       await chamar("docs", "POST", { token: a.token, corpo: { docId, nome: `${docId}.png`, arquivoUrl: FOTO } });
     }
@@ -378,7 +378,7 @@ describe.skipIf(!URL_PG)("Admissão digital (PostgreSQL real)", () => {
 
   it("dois cliques ao mesmo tempo no \"Assinar\": uma assinatura só, e a prova é de quem chegou primeiro", async () => {
     const a = await convidar();
-    await atePronta(a.token, { email: "" });
+    await atePronta(a.token);
     const [um, dois] = await Promise.all([
       chamar("assinar", "POST", { token: a.token, corpo: { nome: FORM.nome, selfie: FOTO }, ip: "191.7.7.7" }),
       chamar("assinar", "POST", { token: a.token, corpo: { nome: "Outra Pessoa Qualquer", selfie: FOTO }, ip: "191.7.7.8" }),
@@ -532,17 +532,20 @@ describe.skipIf(!URL_PG)("Admissão digital (PostgreSQL real)", () => {
   it("concluir exige o que falta, o CPF do convite e o e-mail verificado — depois passa tudo ao cadastro", async () => {
     const a = await convidar();
     await chamar("consentir", "POST", { token: a.token });
-    await chamar("rascunho", "PUT", { token: a.token, corpo: { form: { ...FORM, email: "", nomeMae: "" } } });
+    await chamar("rascunho", "PUT", { token: a.token, corpo: { form: { ...FORM, nomeMae: "" } } });
     expect(await erro(chamar("concluir", "POST", { token: a.token }))).toBe("400 Ainda falta: Nome da mãe");
-    await chamar("rascunho", "PUT", { token: a.token, corpo: { form: { ...FORM, email: "" } } });
+    await chamar("rascunho", "PUT", { token: a.token, corpo: { form: FORM } });
     expect(await erro(chamar("concluir", "POST", { token: a.token }))).toContain("400 Ainda falta: rg, cpf, comprovante_residencia, ctps");
     for (const docId of ["rg", "cpf", "comprovante_residencia", "ctps"]) {
       await chamar("docs", "POST", { token: a.token, corpo: { docId, nome: `${docId}.png`, arquivoUrl: FOTO } });
     }
     // CPF que não é o do convite: é a conferência de identidade do link
-    await chamar("rascunho", "PUT", { token: a.token, corpo: { form: { ...FORM, email: "", cpf: CPF_CARLOS } } });
+    await chamar("rascunho", "PUT", { token: a.token, corpo: { form: { ...FORM, cpf: CPF_CARLOS } } });
     expect(await erro(chamar("concluir", "POST", { token: a.token }))).toBe("409 O CPF não confere com o do convite. Confira o número.");
-    // e-mail digitado sem verificar não passa
+    // Leva J: sem e-mail (ou com um que não é e-mail) não passa
+    await chamar("rascunho", "PUT", { token: a.token, corpo: { form: { ...FORM, email: "" } } });
+    expect(await erro(chamar("concluir", "POST", { token: a.token }))).toBe("400 Ainda falta: E-mail");
+    // e-mail digitado sem verificar não passa (a empresa envia e-mail)
     await chamar("rascunho", "PUT", { token: a.token, corpo: { form: FORM } });
     expect(await erro(chamar("concluir", "POST", { token: a.token }))).toBe("409 Confirme o e-mail com o código antes de continuar.");
     await chamar("codigo", "POST", { token: a.token, corpo: { email: FORM.email } });
@@ -573,10 +576,25 @@ describe.skipIf(!URL_PG)("Admissão digital (PostgreSQL real)", () => {
 
   /* ───────── a assinatura ───────── */
 
+  it("Leva J: empresa sem o envio de e-mail configurado — o e-mail é obrigatório, mas a confirmação por código não trava", async () => {
+    correio.ativo = false;
+    const a = await convidar();
+    await chamar("consentir", "POST", { token: a.token });
+    await chamar("rascunho", "PUT", { token: a.token, corpo: { form: { ...FORM, email: "nao-e-email" } } });
+    for (const docId of ["rg", "cpf", "comprovante_residencia", "ctps"]) {
+      await chamar("docs", "POST", { token: a.token, corpo: { docId, nome: `${docId}.png`, arquivoUrl: FOTO } });
+    }
+    expect(await erro(chamar("concluir", "POST", { token: a.token }))).toBe("400 Ainda falta: E-mail");
+    await chamar("rascunho", "PUT", { token: a.token, corpo: { form: FORM } });
+    const r = await chamar("concluir", "POST", { token: a.token });
+    expect(r.status, JSON.stringify(r.json)).toBe(200);
+    expect((await colaborador(a.colaborador.id))!.email).toBe(FORM.email);
+  });
+
   it("sem modelo de contrato o sistema NÃO assina (não inventa cláusula)", async () => {
     await chamar("config", "PUT", { corpo: { contratoModelo: "" } });
     const a = await convidar();
-    await atePronta(a.token, { email: "" });
+    await atePronta(a.token);
     expect((await chamar("pub", "GET", { token: a.token })).json.contrato).toBeNull();
     expect(await erro(chamar("assinar", "POST", { token: a.token, corpo: { nome: FORM.nome, selfie: FOTO } })))
       .toBe("409 A empresa ainda não cadastrou o modelo de contrato. Fale com o RH.");
@@ -617,7 +635,7 @@ describe.skipIf(!URL_PG)("Admissão digital (PostgreSQL real)", () => {
 
   it("depois de assinado o link abre nas orientações, mas não aceita mais rascunho nem documento", async () => {
     const a = await convidar();
-    await atePronta(a.token, { email: "" });
+    await atePronta(a.token);
     await chamar("assinar", "POST", { token: a.token, corpo: { nome: FORM.nome, selfie: FOTO } });
     const r = await chamar("pub", "GET", { token: a.token });
     expect(r.json).toMatchObject({ situacao: "ASSINADO" });
@@ -644,8 +662,11 @@ describe.skipIf(!URL_PG)("Admissão digital (PostgreSQL real)", () => {
     expect(a.expiraEm.slice(0, 10)).toBe("2026-11-18"); // 2 dias
     expect(a.documentosObrigatorios).toBe(1);
     await chamar("consentir", "POST", { token: a.token });
-    await chamar("rascunho", "PUT", { token: a.token, corpo: { form: { ...FORM, email: "" } } });
+    await chamar("rascunho", "PUT", { token: a.token, corpo: { form: FORM } });
     await chamar("docs", "POST", { token: a.token, corpo: { docId: "rg", nome: "rg.png", arquivoUrl: FOTO } });
+    // o e-mail é obrigatório desde a Leva J: confirmado pelo código
+    await chamar("codigo", "POST", { token: a.token, corpo: { email: FORM.email } });
+    await chamar("conferir", "POST", { token: a.token, corpo: { email: FORM.email, codigo: correio.enviados.at(-1)!.variaveis.codigo } });
     expect((await chamar("concluir", "POST", { token: a.token })).status).toBe(200); // só o RG era obrigatório
     const ass = await chamar("assinar", "POST", { token: a.token, corpo: { nome: FORM.nome, selfie: FOTO } });
     expect(ass.json.contrato).toContain("Experiência de 30 dias, prorrogável por 60.");
@@ -660,7 +681,7 @@ describe.skipIf(!URL_PG)("Admissão digital (PostgreSQL real)", () => {
     const { contarAdmissoesAssinadas } = await import("@/lib/admissao/admissao-server");
     expect(await contarAdmissoesAssinadas("e1")).toEqual({ admissoesAssinadas: 0, admissaoAssinadaId: null });
     const a = await convidar();
-    await atePronta(a.token, { email: "" });
+    await atePronta(a.token);
     await chamar("assinar", "POST", { token: a.token, corpo: { nome: FORM.nome, selfie: FOTO } });
     expect(await contarAdmissoesAssinadas("e1")).toEqual({ admissoesAssinadas: 1, admissaoAssinadaId: a.id });
     await chamar("contador", "POST", { id: a.id });
@@ -670,7 +691,7 @@ describe.skipIf(!URL_PG)("Admissão digital (PostgreSQL real)", () => {
   it("quem gerou o convite é avisado por e-mail quando a admissão é assinada", async () => {
     const { avisarRh } = await import("@/lib/admissao/admissao-server");
     const a = await convidar();
-    await atePronta(a.token, { email: "" });
+    await atePronta(a.token);
     await chamar("assinar", "POST", { token: a.token, corpo: { nome: FORM.nome, selfie: FOTO } });
     expect(await avisarRh(a.id, "https://app.exemplo.com")).toEqual({ ok: true });
     expect(correio.internos).toHaveLength(1);

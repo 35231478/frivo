@@ -280,7 +280,7 @@ describe("o link do colaborador", () => {
     const inicial = PUBLICA({
       form: {
         ...formVazio(), nome: "Marina Alves Pereira", cpf: "52998224725", rg: "33.444.555-6",
-        dataNascimento: "1995-04-12", nomeMae: "Rosa Alves", telefone: "11988887777",
+        dataNascimento: "1995-04-12", nomeMae: "Rosa Alves", telefone: "11988887777", email: "marina@exemplo.com",
       },
     });
     resposta = (url) => ({ status: 200, dados: { ...inicial, etapa: url.includes("rascunho") ? "ENDERECO" : null } });
