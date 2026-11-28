@@ -52,6 +52,8 @@ let naoLidas = 0;
 let atividadesDasOs: OsDoDia[] = [];
 /** As mensagens antigas que só vêm com ?ate= (ir até uma citada fora do que foi carregado) */
 let antigas: ComentarioTela[] = [];
+/** CHAT-1.1: os equipamentos de cada OS da conversa (corrigir o da foto) */
+let equipamentosDasOs: Record<string, { equipamentos: { id: string; titulo: string }[]; emAndamento: string | null }> = {};
 
 const OS_A = { id: "osA", numero: "OS-1", cliente: "Hospital Central" };
 const OS_B = { id: "osB", numero: "OS-2", cliente: "Mercado Bom Preço" };
@@ -68,6 +70,7 @@ function cenario() {
   naoLidas = 2;
   atividadesDasOs = [];
   antigas = [];
+  equipamentosDasOs = {};
   mensagens = [
     msg("m1", "Bom dia, a peça atrasou.", "Ana Souza", "2026-11-12T15:00:00.000Z", OS_A),
     msg("m2", "Peça chega amanhã.", "Carlos Lima", "2026-11-12T15:30:00.000Z", OS_A),
@@ -115,7 +118,7 @@ const fetchFalso = vi.fn(async (url: string, init?: RequestInit): Promise<Respon
   if (u.pathname === "/api/tecnico/conversas") {
     // Ler marca como lidas: a leitura do técnico avança (muda a 3ª parte da marca) e o contador zera
     naoLidas = 0; leitura += 1; acordar();
-    return json({ mensagens: u.searchParams.get("ate") ? [...antigas, ...mensagens] : mensagens, osDoDia, osPadrao, atividadesDasOs });
+    return json({ mensagens: u.searchParams.get("ate") ? [...antigas, ...mensagens] : mensagens, osDoDia, osPadrao, atividadesDasOs, equipamentosDasOs });
   }
   if (url === "/api/tecnico/meu-dia") return json({ tecnico: { id: "t1", nome: "João Silva" }, dia: HOJE, atividades: [cartao("aA", OS_A), cartao("aB", OS_B)], anteriores: [] });
   if (url.startsWith("/api/tecnico/atividades/")) return json(retrato(decodeURIComponent(url.split("/").pop()!)));
@@ -556,5 +559,41 @@ describe("responder (app): arrastar ou segurar o balão, a OS herdada, a fila", 
     await esperarAte(() => !!$("[data-mensagem-id='m0']"), "a antiga");
     expect(pedidos).toContain("GET /api/tecnico/conversas?ate=m0");
     await esperarAte(() => $("[data-mensagem-id='m0']")!.getAttribute("data-destacada") === "true", "destaque");
+  });
+});
+
+/* ───────── CHAT-1.1: o equipamento da foto no app ───────── */
+describe("o equipamento da foto (app): corrigir pela fila, sem sinal também", () => {
+  const A = { id: "eA", titulo: "Split sala 3" }, B = { id: "eB", titulo: "Split sala 4" };
+  beforeEach(() => {
+    equipamentosDasOs = { osB: { equipamentos: [A, B], emAndamento: null } };
+    mensagens.push(msg("m7", "", "João Silva", "2026-11-12T17:40:00.000Z", OS_B,
+      { origem: "APP", meu: true, clientId: "c7", foto: { id: "f7", miniatura: "data:image/jpeg;base64,TUlOSQ==", equipamento: A, origemEquipamento: "ESCOLHA" } }));
+  });
+
+  it("tocar na etiqueta e escolher: a correção entra na fila (pela atividade dele naquela OS) e a foto já mostra o novo", async () => {
+    await abrirVistas("/tecnico?ver=chat");
+    await esperarAte(() => !!balao("Compressor trocado.") && !!$("[data-mensagem-id='m7'] [data-equipamento-foto]"), "a foto");
+    online = false; // fica na fila do aparelho para conferir
+    await clicar($("[data-mensagem-id='m7'] [data-equipamento-foto]"));
+    await clicar($("[data-mensagem-id='m7'] [data-equipamento-opcao='eB']"));
+    const [op] = (await banco.fila()).filter((o) => o.tipo === "fotoChatEquipamento");
+    expect(op).toMatchObject({ atividadeId: "aB", dados: { comentario: { id: "m7" }, equipamentoId: "eB" } });
+    await esperarAte(() => texto($("[data-mensagem-id='m7'] [data-equipamento-foto]")) === "Split sala 4", "a correção na tela");
+    // o sinal voltou: a correção sobe
+    online = true;
+    await act(async () => { await motor.sincronizar(true); });
+    expect(enviadas.some((o) => o.tipo === "fotoChatEquipamento" && o.dados.equipamentoId === "eB")).toBe(true);
+  });
+
+  it("sem atividade dele na OS da foto (neste aparelho): não corrige e diz que o escritório corrige", async () => {
+    mensagens[mensagens.length - 1] = { ...mensagens[mensagens.length - 1], os: OS_V };
+    equipamentosDasOs = { osV: { equipamentos: [A, B], emAndamento: null } };
+    await abrirVistas("/tecnico?ver=chat");
+    await esperarAte(() => !!$("[data-mensagem-id='m7'] [data-equipamento-foto]"), "a foto");
+    await clicar($("[data-mensagem-id='m7'] [data-equipamento-foto]"));
+    await clicar($("[data-mensagem-id='m7'] [data-equipamento-opcao='eB']"));
+    expect(texto($("[data-mensagem-id='m7'] [data-aviso-balao]"))).toMatch(/o escritório corrige o equipamento/);
+    expect((await banco.fila()).filter((o) => o.tipo === "fotoChatEquipamento")).toEqual([]);
   });
 });
