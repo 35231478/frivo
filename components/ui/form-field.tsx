@@ -138,6 +138,10 @@ export function FormField({ label, error, name, formato, valor, required, hint, 
   // Ao SAIR do campo: confere o formato óbvio (vazio não acusa; o obrigatório é só ao salvar)
   const aoSair = (e: FocusEvent<HTMLDivElement>) => {
     if (!formato) return;
+    // Saiu do campo apertando um botão (Salvar, Consultar…): a mensagem surgindo agora empurraria o botão entre o apertar
+    // e o soltar e o clique se perderia. Quem confere é a ação do botão (o salvar confere o formato do que foi digitado).
+    const proximo = e.relatedTarget as HTMLElement | null;
+    if (proximo && (proximo.tagName === "BUTTON" || proximo.getAttribute("role") === "button")) return;
     const v = valorDoAlvo(e.target);
     if (v === null) return;
     const msg = validarFormato(formato, v);

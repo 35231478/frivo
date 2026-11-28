@@ -142,9 +142,14 @@ export function useErrosDoFormulario(opcoes: OpcoesErros = {}): ErrosFormulario 
   }, [campos]);
 
   const [resumoVisivel, setResumoVisivel] = useState(false);
-  // Tudo corrigido: a faixa volta a esperar a próxima tentativa
-  const semErro = !geral && !Object.keys(campos).length;
-  useEffect(() => { if (semErro && resumoVisivel) setResumoVisivel(false); }, [semErro, resumoVisivel]);
+  // Tudo corrigido (havia erro e agora não há): a faixa volta a esperar a próxima tentativa. Pela TRANSIÇÃO, e não
+  // pelo "sem erro": o react-hook-form entrega os erros dele um render depois do pedido de foco
+  const temAlgum = !!geral || Object.keys(campos).length > 0;
+  const tinha = useRef(temAlgum);
+  useEffect(() => {
+    if (tinha.current && !temAlgum) setResumoVisivel(false);
+    tinha.current = temAlgum;
+  }, [temAlgum]);
   const focar = useCallback((alvo?: string) => { setResumoVisivel(true); setPedido((p) => ({ n: p.n + 1, alvo })); }, []);
 
   // O foco acontece depois de a tela mostrar os erros; abrir aba/seção pede mais uma volta
@@ -187,7 +192,12 @@ export function useErrosDoFormulario(opcoes: OpcoesErros = {}): ErrosFormulario 
     return () => { cancelado = true; if (timer) clearTimeout(timer); };
   }, [pedido, abaDoMapa]);
 
-  const definir = useCallback((c: ErrosDeCampo, g: string | null = null) => { setProprios(limparCampos(c)); setGeral(g?.trim() || null); setResumoVisivel(true); }, []);
+  const definir = useCallback((c: ErrosDeCampo, g: string | null = null) => {
+    const limpos = limparCampos(c);
+    setProprios(limpos); setGeral(g?.trim() || null);
+    // Sem erro nenhum (ex.: salvou certo), a faixa não fica "armada" para um formato acusado ao sair depois
+    setResumoVisivel(Object.keys(limpos).length > 0 || !!g?.trim());
+  }, []);
   const definirCampo = useCallback((nome: string, m: string | null) => {
     setProprios((p) => {
       if (m) return p[nome] === m ? p : { ...p, [nome]: m };

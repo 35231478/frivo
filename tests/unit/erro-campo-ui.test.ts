@@ -230,6 +230,47 @@ describe("formato ao sair do campo", () => {
     expect($("[data-resumo-erros]")).toBeNull();
   });
 
+  it("saiu do campo apertando um botão: não acusa na hora (não empurra o botão); o salvar confere", async () => {
+    act(() => root.render(h(Exemplo)));
+    const cep = $<HTMLInputElement>('[data-t="cep"]')!;
+    digitar(cep, "1301");
+    act(() => { cep.dispatchEvent(new FocusEvent("focusout", { bubbles: true, relatedTarget: $("[data-salvar]") })); });
+    expect(cep.getAttribute("aria-invalid")).toBeNull();
+    act(() => $("[data-salvar]")!.click());
+    await flush();
+    expect(cep.getAttribute("aria-invalid")).toBe("true");
+  });
+
+  it("react-hook-form entrega os erros um render depois do pedido de foco: a faixa aparece mesmo assim", async () => {
+    let setRhf: (v: unknown) => void = () => {};
+    function ComRhf() {
+      const [rhf, set] = useState<unknown>({});
+      setRhf = set;
+      const f = useErrosDoFormulario({ rhf });
+      api = f;
+      return h(ErrosDoFormulario, { valor: f }, h("form", { ref: f.ref }, h(ResumoDeErros),
+        h(FormField, { label: "Nome", name: "nome" }, h(Input, { "data-t": "nome" }))));
+    }
+    act(() => root.render(h(ComRhf)));
+    act(() => { api.definir({}); api.focar(); }); // o onError do formulário
+    act(() => setRhf({ nome: { type: "min", message: "Informe o nome." } })); // o rhf, no render seguinte
+    await flush();
+    expect($("[data-resumo-erros]")!.textContent).toBe("Informe o nome.");
+    expect($('[data-t="nome"]')!.getAttribute("aria-invalid")).toBe("true");
+  });
+
+  it("salvou certo: a faixa não fica armada para um formato acusado ao sair depois", async () => {
+    act(() => root.render(h(Exemplo)));
+    act(() => { api.validar({}); });
+    await flush();
+    const cep = $<HTMLInputElement>('[data-t="cep"]')!;
+    digitar(cep, "1301");
+    sair(cep);
+    await flush();
+    expect(cep.getAttribute("aria-invalid")).toBe("true");
+    expect($("[data-resumo-erros]")).toBeNull();
+  });
+
   it("sem formulário em volta (FormField solto), o formato também marca o campo", () => {
     act(() => root.render(h(FormField, { label: "E-mail", formato: "email" }, h(Input, { defaultValue: "", "data-t": "email" }))));
     const el = $<HTMLInputElement>('[data-t="email"]')!;
