@@ -4,6 +4,7 @@ import { exigirPermissao } from "@/lib/permissoes-server";
 import { proximoNumero } from "@/lib/numeracao-server";
 import { regrasDaProposta } from "@/lib/atendimento/prazo";
 import { salvarRegrasDoContrato } from "@/lib/atendimento/prazo-server";
+import { escopoBarra } from "@/lib/escopo/proprios-server";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -17,6 +18,8 @@ export async function POST(_req: NextRequest, { params }: Params) {
   const { session } = guard;
   const empresaId = session.user!.empresaId;
   const { id } = await params;
+  const foraDoEscopo = await escopoBarra("orcamento", id); // COM-1: "Ver só os próprios" → 404
+  if (foraDoEscopo) return foraDoEscopo;
 
   const orcamento = await prisma.orcamento.findFirst({
     where: { id, empresaId },

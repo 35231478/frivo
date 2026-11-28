@@ -7,6 +7,8 @@
  * afirma. Nenhum outro recorte faria a mesma frase ser verdadeira.
  */
 import { prisma } from "@/lib/prisma";
+import { comEscopo, filtroOrdens, type QuemVe } from "@/lib/escopo/proprios";
+import type { Prisma } from "@prisma/client";
 import { linhaDoCumprimento, linhaRelata, resumoCumprimento, type LinhaCumprimento, type ResumoCumprimento } from "./cumprimento";
 
 /** Os campos que as duas libs de prazo leem, mais os que a tela e o papel mostram. */
@@ -55,10 +57,11 @@ export interface RelatorioCumprimento {
  * mas o total fica registrado para a tela poder dizer isso em voz alta.
  */
 export async function relatorioCumprimento(
-  empresaId: string, filtro: FiltroCumprimento, agora: Date = new Date(),
+  empresaId: string, filtro: FiltroCumprimento, agora: Date = new Date(), quem?: QuemVe,
 ): Promise<RelatorioCumprimento> {
   const ordens = await prisma.ordemServico.findMany({
-    where: whereCumprimento(empresaId, filtro),
+    // COM-1: "Ver só os próprios" — o relatório (tela e PDF) só com as OS do escopo de quem pede
+    where: comEscopo(whereCumprimento(empresaId, filtro) as Prisma.OrdemServicoWhereInput, filtroOrdens(quem)),
     select: SELECT_CUMPRIMENTO,
     orderBy: [{ chamadoAbertoEm: "asc" }, { criadoEm: "asc" }],
     take: TETO_LINHAS,

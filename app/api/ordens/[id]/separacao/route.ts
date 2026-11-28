@@ -4,6 +4,7 @@ import { respostaRefEmpresa } from "@/lib/ref-empresa";
 import { ErroEstoque } from "@/lib/estoque/servidor";
 import { mensagemSeparacao, separacaoSchema } from "@/lib/estoque/separacao";
 import { ErroSeparacao, separacaoDaOs, separarMateriais } from "@/lib/estoque/separacao-server";
+import { escopoBarra } from "@/lib/escopo/proprios-server";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -12,6 +13,8 @@ export async function GET(_: NextRequest, { params }: Params) {
   const guard = await exigirPermissao("estoque", "separar");
   if (guard.erro) return guard.resposta;
   const { id } = await params;
+  const foraDoEscopo = await escopoBarra("ordem", id); // COM-1: "Ver só os próprios" → 404
+  if (foraDoEscopo) return foraDoEscopo;
   const r = await separacaoDaOs(guard.session.user!.empresaId, id);
   if (!r) return NextResponse.json({ erro: "OS não encontrada" }, { status: 404 });
   return NextResponse.json(r);
@@ -27,6 +30,8 @@ export async function POST(req: NextRequest, { params }: Params) {
   if (guard.erro) return guard.resposta;
   const { session } = guard;
   const { id } = await params;
+  const foraDoEscopo = await escopoBarra("ordem", id); // COM-1: "Ver só os próprios" → 404
+  if (foraDoEscopo) return foraDoEscopo;
   const parsed = separacaoSchema.safeParse(await req.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ erro: mensagemSeparacao(parsed.error) }, { status: 400 });
   try {

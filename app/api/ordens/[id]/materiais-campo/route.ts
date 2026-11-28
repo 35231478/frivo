@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { exigirPermissao } from "@/lib/permissoes-server";
 import { materiaisCampoDaOs } from "@/lib/execucao/materiais-campo";
+import { escopoBarra } from "@/lib/escopo/proprios-server";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -12,6 +13,8 @@ export async function GET(_: NextRequest, { params }: Params) {
   const guard = await exigirPermissao("ordens", "visualizar");
   if (guard.erro) return guard.resposta;
   const { id } = await params;
+  const foraDoEscopo = await escopoBarra("ordem", id); // COM-1: "Ver só os próprios" → 404
+  if (foraDoEscopo) return foraDoEscopo;
   const linhas = await materiaisCampoDaOs(guard.session.user.empresaId, id);
   if (!linhas) return NextResponse.json({ erro: "OS não encontrada" }, { status: 404 });
   return NextResponse.json({ linhas }, { headers: { "Cache-Control": "private, no-store" } });

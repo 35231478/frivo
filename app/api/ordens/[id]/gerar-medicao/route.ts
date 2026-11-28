@@ -6,6 +6,7 @@ import { partesBR } from "@/lib/fuso";
 import { proximoNumero } from "@/lib/numeracao-server";
 import { respostaPortaoPrestacao } from "@/lib/estoque/devolucao-server";
 import { faturaDaOs } from "@/lib/faturamento/fatura";
+import { escopoBarra } from "@/lib/escopo/proprios-server";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -22,6 +23,8 @@ export async function POST(_: NextRequest, { params }: Params) {
   if (guard.erro) return guard.resposta;
   const { session } = guard;
   const { id } = await params;
+  const foraDoEscopo = await escopoBarra("ordem", id); // COM-1: "Ver só os próprios" → 404
+  if (foraDoEscopo) return foraDoEscopo;
   const empresaId = session.user!.empresaId;
 
   const os = await prisma.ordemServico.findFirst({

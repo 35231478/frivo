@@ -10,6 +10,7 @@ import { semCustoNosItensOs } from "@/lib/os/custo";
 import { travaDasLinhasDaOs } from "@/lib/os/trava-edicao-server";
 import { verificarItemDaOs } from "@/lib/precos/trava-tabela-server";
 import { textoDaTrilha } from "@/lib/precos/trava-tabela";
+import { escopoBarra } from "@/lib/escopo/proprios-server";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -24,6 +25,8 @@ export async function POST(req: NextRequest, { params }: Params) {
   const { session } = guard;
   const empresaId = session.user!.empresaId;
   const { id } = await params;
+  const foraDoEscopo = await escopoBarra("ordem", id); // COM-1: "Ver só os próprios" → 404
+  if (foraDoEscopo) return foraDoEscopo;
   if (!(await osDaEmpresa(id, empresaId))) return NextResponse.json({ erro: "OS não encontrada" }, { status: 404 });
   // Registro fechado (OS assinada pelo cliente, faturada ou com nota): não entra linha nova
   const fechada = await travaDasLinhasDaOs(id);

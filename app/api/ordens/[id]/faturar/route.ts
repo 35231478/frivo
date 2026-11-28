@@ -4,6 +4,7 @@ import { faturarOs } from "@/lib/faturamento/faturar-server";
 import { lerCorpoFaturar, respostaFaturar } from "@/lib/faturamento/resposta";
 import { sincronizarStatusOs } from "@/lib/os/sincronizar-status";
 import { respostaPortaoPrestacao } from "@/lib/estoque/devolucao-server";
+import { escopoBarra } from "@/lib/escopo/proprios-server";
 
 /**
  * "Faturar" a OS concluída (sem contrato): itens executados + adicionais "Cobrar" viram a fatura
@@ -14,6 +15,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const guard = await exigirPermissao("financeiro", "medicoes");
   if (guard.erro) return guard.resposta;
   const { id } = await params;
+  const foraDoEscopo = await escopoBarra("ordem", id); // COM-1: "Ver só os próprios" → 404
+  if (foraDoEscopo) return foraDoEscopo;
   const empresaId = guard.session.user!.empresaId;
   const usuarioId = guard.session.user!.id;
   // E4.3 — Portões 2/3: com "Exigir prestação de contas de material" ligado, só fatura com o material 100% prestado contas

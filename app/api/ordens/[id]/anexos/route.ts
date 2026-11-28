@@ -5,6 +5,7 @@ import { osDaEmpresa } from "@/lib/os-server";
 import { validarArquivoUpload } from "@/lib/anexos-server";
 import { documentoDeAnexo, equipamentosDaOs, fotoDeAnexo, SELECT_ANEXO_GALERIA } from "@/lib/os/galeria-server";
 import { ehImagem, limparLegenda, MSG_EQUIPAMENTO_FORA, MSG_LEGENDA, MSG_REFERENCIA, REFERENCIA_GERAL } from "@/lib/os/galeria";
+import { escopoBarra } from "@/lib/escopo/proprios-server";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -19,6 +20,8 @@ export async function POST(req: NextRequest, { params }: Params) {
   const { session } = guard;
   const empresaId = session.user!.empresaId;
   const { id } = await params;
+  const foraDoEscopo = await escopoBarra("ordem", id); // COM-1: "Ver só os próprios" → 404
+  if (foraDoEscopo) return foraDoEscopo;
   if (!(await osDaEmpresa(id, empresaId))) return NextResponse.json({ erro: "OS não encontrada" }, { status: 404 });
 
   const formData = await req.formData();

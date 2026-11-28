@@ -4,6 +4,7 @@ import { exigirPermissao } from "@/lib/permissoes-server";
 import { escopoDaSessao } from "@/lib/tecnico/escopo";
 import { pedidoVisitasSchema } from "@/lib/os/visitas";
 import { ErroVisitas, estadoDasVisitas, executarVisitas } from "@/lib/os/visitas-server";
+import { escopoBarra } from "@/lib/escopo/proprios-server";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -18,6 +19,8 @@ export async function GET(_: NextRequest, { params }: Params) {
   const fora = soEscritorio(guard.session);
   if (fora) return fora;
   const { id } = await params;
+  const foraDoEscopo = await escopoBarra("ordem", id); // COM-1: "Ver só os próprios" → 404
+  if (foraDoEscopo) return foraDoEscopo;
   const estado = await estadoDasVisitas(id, guard.session.user!.empresaId);
   if (!estado) return NextResponse.json({ erro: "Ordem de serviço não encontrada" }, { status: 404 });
   return NextResponse.json(estado);
@@ -34,6 +37,8 @@ export async function POST(req: NextRequest, { params }: Params) {
   const fora = soEscritorio(session);
   if (fora) return fora;
   const { id } = await params;
+  const foraDoEscopo = await escopoBarra("ordem", id); // COM-1: "Ver só os próprios" → 404
+  if (foraDoEscopo) return foraDoEscopo;
   const parsed = pedidoVisitasSchema.safeParse(await req.json().catch(() => ({})));
   if (!parsed.success) {
     const e = parsed.error.issues[0];

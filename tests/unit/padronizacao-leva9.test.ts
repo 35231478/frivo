@@ -274,7 +274,8 @@ describe("a leva não tocou na lógica", () => {
     // atraso justificado sai da conta (regras e medição), a linha do painel leva os atrasos e a OS
     // pergunta se o mês já fechou; no servidor, só o que o colaborador recebe no app (o motivo do atraso
     // justificado, sem a explicação nem o autor). Fechamento, penalidades, premiação e as rotas seguem intocados.
-    const mudouDeProposito = ["lib/desempenho/regras.ts", "lib/desempenho/painel.ts", "lib/desempenho/medicao-server.ts", "lib/desempenho/fechamento-estado.ts", "lib/desempenho/servidor.ts"];
+    // COM-1: o fechamento ganha as comissões e a conta a pagar por pessoa (fechamento.ts e fechamento-server.ts, de propósito)
+    const mudouDeProposito = ["lib/desempenho/regras.ts", "lib/desempenho/painel.ts", "lib/desempenho/medicao-server.ts", "lib/desempenho/fechamento-estado.ts", "lib/desempenho/servidor.ts", "lib/desempenho/fechamento.ts", "lib/desempenho/fechamento-server.ts"];
     expect(mudados.filter((arq) => !mudouDeProposito.includes(arq))).toEqual([]);
   });
 

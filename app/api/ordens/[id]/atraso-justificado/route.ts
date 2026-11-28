@@ -8,6 +8,7 @@ import {
   podeJustificarAtraso, rotuloMotivoAtraso, rotuloResponsabilidadeAtraso,
 } from "@/lib/os/prazo-execucao";
 import { haDescumprimentoParaJustificar } from "@/lib/prazos/cumprimento";
+import { escopoBarra } from "@/lib/escopo/proprios-server";
 
 /**
  * ATRASO JUSTIFICADO da OS: o gestor diz por que atrasou (cliente ausente, peça faltando, acesso
@@ -50,6 +51,8 @@ const SELECT_RESPOSTA = {
 /** Justifica (ou corrige a justificativa de) o atraso desta OS. */
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
+  const foraDoEscopo = await escopoBarra("ordem", id); // COM-1: "Ver só os próprios" → 404
+  if (foraDoEscopo) return foraDoEscopo;
   const e = await entrar(id);
   if (e.resposta) return e.resposta;
 
@@ -82,6 +85,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 /** Desfaz a justificativa: o atraso volta a contar. */
 export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
+  const foraDoEscopo = await escopoBarra("ordem", id); // COM-1: "Ver só os próprios" → 404
+  if (foraDoEscopo) return foraDoEscopo;
   const e = await entrar(id);
   if (e.resposta) return e.resposta;
   if (!atrasoJustificado(e.os)) return NextResponse.json({ erro: "Esta OS não tem atraso justificado." }, { status: 409 });

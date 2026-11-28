@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { comEscopo, filtroOrdens } from "@/lib/escopo/proprios";
 import { exigirPermissao } from "@/lib/permissoes-server";
 import { bloqueioPainelTecnico } from "@/lib/tecnico/painel";
 import { prisma } from "@/lib/prisma";
@@ -65,7 +66,7 @@ export async function GET(req: NextRequest) {
   }
 
   const ordens = await prisma.ordemServico.findMany({
-    where,
+    where: comEscopo(where, filtroOrdens(session.user)), // COM-1: "Ver só os próprios"
     include: {
       cliente: { select: { id: true, nome: true, nomeFantasia: true } },
       unidade: { select: { id: true, nome: true } },

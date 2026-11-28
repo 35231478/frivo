@@ -14,6 +14,7 @@
  * O resultado é o mesmo de antes (o teste no PostgreSQL compara linha a linha).
  */
 import { prisma } from "@/lib/prisma";
+import type { QuemVe } from "@/lib/escopo/proprios";
 import type { Prisma } from "@prisma/client";
 import { periodoOrdens } from "@/lib/listas/filtros";
 import { whereOrdensDaLista } from "@/lib/listas/filtros-server";
@@ -38,10 +39,10 @@ export const SORT_ORDENS: Record<string, (dir: "asc" | "desc") => Prisma.OrdemSe
 
 const porId = <T extends { id: string }>(xs: T[]) => new Map(xs.map((x) => [x.id, x]));
 
-export async function carregarListaOs(empresaId: string, sp: SPOrdens, agora: Date = new Date()) {
+export async function carregarListaOs(empresaId: string, sp: SPOrdens, agora: Date = new Date(), quem?: QuemVe) {
   const sort = sp.sort && SORT_ORDENS[sp.sort] ? sp.sort : "criadoEm";
   const dir: "asc" | "desc" = sp.dir === "asc" ? "asc" : "desc";
-  const where = await whereOrdensDaLista(empresaId, sp, agora);
+  const where = await whereOrdensDaLista(empresaId, sp, agora, quem);
   const periodo = periodoTela(periodoOrdens(sp, agora));
   const { pagina: pedida, porPagina } = lerPaginacao(sp);
   // `id` no fim: desempate estável (a paginação não repete nem pula OS)
@@ -85,6 +86,13 @@ export async function carregarListaOs(empresaId: string, sp: SPOrdens, agora: Da
     pedidoDasOs(empresaId, ids),
   ]) : [[], [], [], [], [], [], [], [], new Map()];
 
+  // COM-1: o vendedor da OS (gravado ao gerar do orçamento) ou, na OS antiga, o do orçamento de origem
+  const origens = ordens.filter((o) => !o.vendedorId && o.orcamentoOrigemId).map((o) => o.orcamentoOrigemId!);
+  const vendasOrigem = origens.length ? await prisma.orcamento.findMany({ where: { id: { in: origens }, empresaId }, select: { id: true, vendedorId: true } }) : [];
+  const vendedorDaOrigem = new Map(vendasOrigem.map((v) => [v.id, v.vendedorId]));
+  const vendedorDa = (o: (typeof ordens)[number]) => o.vendedorId ?? (o.orcamentoOrigemId ? vendedorDaOrigem.get(o.orcamentoOrigemId) ?? null : null);
+  const idsVendedores = [...new Set(ordens.map(vendedorDa).filter((x): x is string => !!x))];
+  const vendedores = porId(idsVendedores.length ? await prisma.usuario.findMany({ where: { id: { in: idsVendedores } }, select: { id: true, nome: true } }) : []);
   const cliente = porId(clientesOs), unidade = porId(unidades), responsavel = porId(responsaveis), tecnico = porId(tecnicos);
   const medicao = porId(medicoes);
   const equipeDa = new Map<string, string[]>();
@@ -114,6 +122,7 @@ export async function carregarListaOs(empresaId: string, sp: SPOrdens, agora: Da
       clienteLogo: cli?.logo ?? null,
       unidade: (o.unidadeId && unidade.get(o.unidadeId)?.nome) || null,
       responsavel: (o.responsavelId && responsavel.get(o.responsavelId)?.nome) || null,
+      vendedor: (vendedorDa(o) && vendedores.get(vendedorDa(o)!)?.nome) || null,
       atividades: ats.length,
       tecnicos: tecnicosOs.map((t) => ({ id: t.id, nome: t.nome, avatar: t.avatar ?? null })),
       status: o.status,

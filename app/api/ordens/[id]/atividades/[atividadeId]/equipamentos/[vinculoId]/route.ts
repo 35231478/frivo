@@ -3,6 +3,7 @@ import { exigirPermissao } from "@/lib/permissoes-server";
 import { prisma } from "@/lib/prisma";
 import { STATUS_BLOQUEADOS } from "@/lib/execucao/dados";
 import { MSG_BLOQUEADA } from "@/lib/execucao/contexto";
+import { escopoBarra } from "@/lib/escopo/proprios-server";
 
 type Params = { params: Promise<{ id: string; atividadeId: string; vinculoId: string }> };
 
@@ -16,6 +17,8 @@ export async function DELETE(_: NextRequest, { params }: Params) {
   if (guard.erro) return guard.resposta;
   const { session } = guard;
   const { id, atividadeId, vinculoId } = await params;
+  const foraDoEscopo = await escopoBarra("ordem", id); // COM-1: "Ver só os próprios" → 404
+  if (foraDoEscopo) return foraDoEscopo;
 
   const vinculo = await prisma.atividadeEquipamento.findFirst({
     where: { id: vinculoId, atividadeId, atividade: { ordemServicoId: id, empresaId: session.user!.empresaId } },

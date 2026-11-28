@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { comEscopo, filtroOrcamentos } from "@/lib/escopo/proprios";
 import { janela, lerPaginacao, paginaValida } from "@/lib/listagem";
 import { ConteudoUrl, ListaUrl, PaginacaoUrl, TabelaProUrl } from "@/components/listagem/lista-url";
 import { ListaVazia } from "@/components/listagem/listagem-ui";
@@ -59,20 +60,22 @@ export default async function LeadsSitePage({
     nome: { startsWith: NOME_PREFIXO },
   };
   if (filtro.status) where.status = { in: filtro.status };
+  // COM-1: "Ver só os próprios" — só os leads (orçamentos) em que a pessoa é o vendedor
+  const escopo = filtroOrcamentos(session!.user);
 
   const desde = new Date(Date.now() - 24 * 60 * 60 * 1000);
   // UX-4 (Y5): paginação de servidor no lugar do corte fixo de 200
   const { pagina: paginaPedida, porPagina } = lerPaginacao(sp);
   const [total, novos24h] = await Promise.all([
-    prisma.orcamento.count({ where: where as object }),
+    prisma.orcamento.count({ where: comEscopo(where as object, escopo) }),
     prisma.orcamento.count({
-      where: { empresaId, nome: { startsWith: NOME_PREFIXO }, criadoEm: { gte: desde } },
+      where: comEscopo({ empresaId, nome: { startsWith: NOME_PREFIXO }, criadoEm: { gte: desde } }, escopo),
     }),
   ]);
   const pagina = paginaValida(paginaPedida, porPagina, total);
   const orcamentos = total
     ? await prisma.orcamento.findMany({
-        where: where as object,
+        where: comEscopo(where as object, escopo),
         include: { cliente: { select: { id: true, nome: true, celular: true, cidade: true } } },
         orderBy: [{ criadoEm: "desc" }, { id: "asc" }],
         ...janela(pagina, porPagina),

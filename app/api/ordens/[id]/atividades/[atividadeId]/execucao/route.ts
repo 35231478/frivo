@@ -3,6 +3,7 @@ import { exigirPermissao } from "@/lib/permissoes-server";
 import { carregarExecucao } from "@/lib/execucao/dados";
 import { prisma } from "@/lib/prisma";
 import { MSG_FORA_DO_ESCOPO, escopoDaSessao, filtroEscopo } from "@/lib/tecnico/escopo";
+import { escopoBarra } from "@/lib/escopo/proprios-server";
 
 type Params = { params: Promise<{ id: string; atividadeId: string }> };
 
@@ -11,6 +12,8 @@ export async function GET(_: NextRequest, { params }: Params) {
   const guard = await exigirPermissao("ordens", "visualizar");
   if (guard.erro) return guard.resposta;
   const { id, atividadeId } = await params;
+  const foraDoEscopo = await escopoBarra("ordem", id); // COM-1: "Ver só os próprios" → 404
+  if (foraDoEscopo) return foraDoEscopo;
   // Modo técnico: só as atividades dele
   const escopo = escopoDaSessao(guard.session);
   if (escopo.restrito && !(await prisma.atividadeOs.findFirst({ where: { id: atividadeId, ...filtroEscopo(escopo) }, select: { id: true } })))
