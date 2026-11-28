@@ -407,6 +407,8 @@ describe.skipIf(!URL_PG)("app de campo, leva 1: QR e materiais usados (PostgreSQ
       expect((await sync([material({ clientId: "semest", produtoId: "pCap", quantidade: 1 })]))[0].ok).toBe(true);
       expect(await prisma.movimentacaoEstoque.count()).toBe(n);
       expect(Number((await linha("semest")).baixado)).toBe(0);
+      // D5: sem Estoque, nem separado no retrato (o app não tem saldo para avisar)
+      expect((await chamar("tecnico/atividades/[atividadeId]", "GET", { atividadeId: "aA" })).json.execucao.separado).toEqual({});
       await definirModulo("e1", "estoque", true, "uA");
     });
   });

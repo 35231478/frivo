@@ -346,6 +346,8 @@ describe.skipIf(!URL_PG)("app de campo, leva 2 (PR B): despesas de campo (Postgr
       for (const cid of ["e7c", "e7d"]) {
         expect((await sync([editar(cid, { valor: 1 })]))[0]).toMatchObject({ ok: false, status: 409, erro: "O escritório já decidiu esta despesa: não dá mais para corrigir nem excluir." });
         expect((await sync([excluir(cid)]))[0]).toMatchObject({ ok: false, status: 409 });
+        // "corrigir" sem mudar nada também é recusado (não responde "ok" para a decidida)
+        expect((await sync([editar(cid)]))[0]).toMatchObject({ ok: false, status: 409 });
       }
       expect(Number((await prisma.despesaCampo.findFirst({ where: { clientId: "e7d" } })).valor)).toBe(187.4);
       await sync([despesa("sem-os", "e7e")]);
@@ -366,6 +368,30 @@ describe.skipIf(!URL_PG)("app de campo, leva 2 (PR B): despesas de campo (Postgr
       const r = await aprovar(id);
       expect(r.status).toBe(400); // a conferência antes da trava já lê a corrigida
       expect((await prisma.despesaCampo.findUnique({ where: { id } })).status).toBe("PENDENTE");
+      // a corrida de verdade: a tela (e a conferência antes da trava) ainda viam "pela empresa"; dentro da trava, já é do
+      // bolso — recusa e desfaz (nada aprovado, nenhuma conta)
+      // (feito com uma trava de verdade: o "colaborador" segura a linha, a aprovação lê "pela empresa" e espera na trava;
+      // ele grava "do bolso" e solta)
+      await prisma.despesaCampo.update({ where: { id }, data: { pagamento: "EMPRESA" } });
+      let soltar = () => {};
+      const portao = new Promise<void>((r) => { soltar = r; });
+      const travou = new Promise<void>((r) => {
+        void prisma.$transaction(async (tx: any) => {
+          await tx.$queryRaw`SELECT id FROM despesas_campo WHERE id = ${id} FOR UPDATE`;
+          r(); await portao;
+          await tx.despesaCampo.update({ where: { id }, data: { pagamento: "PROPRIO" } });
+        }, { timeout: 20_000 }).then(() => liberada.r());
+      });
+      const liberada = { r: () => {}, p: null as unknown as Promise<void> };
+      liberada.p = new Promise<void>((r) => { liberada.r = r; });
+      await travou;
+      const pedido = aprovar(id);
+      await new Promise((r) => setTimeout(r, 400)); // a aprovação já leu e está esperando a trava
+      soltar(); await liberada.p;
+      const corrida = await pedido;
+      expect(corrida).toEqual({ status: 409, tipo: expect.any(String), json: { erro: "O colaborador acabou de corrigir esta despesa (agora é do bolso dele). Confira e aprove de novo, com o vencimento do reembolso." } });
+      expect((await prisma.despesaCampo.findUnique({ where: { id } })).status).toBe("PENDENTE");
+      expect(await prisma.contaPagar.count({ where: { despesaCampo: { id } } })).toBe(0);
       const ok = await aprovar(id, { vencimento: chaveHojeBR(7) });
       expect(ok.status).toBe(200);
       const conta = await prisma.contaPagar.findUnique({ where: { id: ok.json.contaPagarId } });
