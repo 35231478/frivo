@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { idsNoEscopo } from "@/lib/escopo/proprios-server";
 import { z } from "zod";
 import { auth } from "@/lib/auth";
 import type { Permissoes } from "@/lib/permissoes";
@@ -63,10 +64,11 @@ export async function POST(req: NextRequest) {
   // ── Ids do filtro atual ──
   if (acao === "ids-do-filtro") {
     if (!podeVerLista(permissoes, user.role, entidade)) return NextResponse.json({ erro: "Sem permissão para esta lista" }, { status: 403 });
-    return NextResponse.json(await idsDoFiltro(entidade, parsed.data.filtro ?? "", empresaId));
+    return NextResponse.json(await idsDoFiltro(entidade, parsed.data.filtro ?? "", empresaId, user));
   }
 
-  const ids = [...new Set(parsed.data.ids ?? [])];
+  // COM-1: "Ver só os próprios" — id de outro vendedor some da seleção (não exporta nem altera)
+  const ids = await idsNoEscopo(user, entidade, [...new Set(parsed.data.ids ?? [])]);
   if (ids.length === 0) return NextResponse.json({ erro: "Nenhum registro selecionado" }, { status: 400 });
 
   // ── Exportar ──

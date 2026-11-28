@@ -5,6 +5,7 @@ import { respostaRefEmpresa, validarRefEmpresa } from "@/lib/ref-empresa";
 import { z } from "zod";
 import { ErroTecnicos, INCLUDE_TECNICOS_ATIVIDADE, MSG_SEM_EXECUTOR, gravarTecnicos, lerDefinicao, lerVeiculo, resolverTecnicos, resolverVeiculo } from "@/lib/atividade-tecnicos";
 import { sincronizarStatusOs } from "@/lib/os/sincronizar-status";
+import { escopoBarra } from "@/lib/escopo/proprios-server";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -25,6 +26,8 @@ export async function POST(req: NextRequest, { params }: Params) {
   if (guard.erro) return guard.resposta;
   const { session } = guard;
   const { id } = await params;
+  const foraDoEscopo = await escopoBarra("ordem", id); // COM-1: "Ver só os próprios" → 404
+  if (foraDoEscopo) return foraDoEscopo;
   const empresaId = session.user!.empresaId;
 
   const os = await prisma.ordemServico.findFirst({ where: { id, empresaId }, select: { id: true } });

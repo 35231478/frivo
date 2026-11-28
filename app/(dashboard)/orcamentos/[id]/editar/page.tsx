@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { ProtegerSaida } from "@/components/ui/proteger-saida";
+import { noEscopo } from "@/lib/escopo/proprios-server";
 import { notFound, redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
@@ -17,6 +18,8 @@ export default async function EditarOrcamentoPage({
 }) {
   const { id } = await params;
   const session = await auth();
+  // COM-1: "Ver só os próprios" — o registro de outro vendedor não existe para esta pessoa
+  if (session?.user && !(await noEscopo(session.user, "orcamento", id))) notFound();
   const empresaId = session!.user!.empresaId;
 
   const orcamento = await prisma.orcamento.findFirst({

@@ -7,6 +7,8 @@
  * em `foraDoNumero`, e só o painel os mostra.
  */
 import { prisma } from "@/lib/prisma";
+import type { Prisma } from "@prisma/client";
+import { comEscopo, filtroOrcamentos, filtroOrdens, type QuemVe } from "@/lib/escopo/proprios";
 import { DIAS_USO_CAMPO_SINO, type EscopoDoSino } from "@/lib/alertas/sino";
 import { totalDoSino } from "@/lib/alertas/lidos";
 import { contarAtividadesEsquecidas } from "@/lib/execucao/andamento-server";
@@ -39,6 +41,8 @@ export interface EntradaSino {
   escopo: EscopoDoSino;
   /** O filtro do escopo do técnico (lib/tecnico/escopo › filtroEscopo) para os aceites */
   filtroTecnico: Parameters<typeof avisosDeAceite>[1];
+  /** COM-1: quem vê ("Ver só os próprios" em Orçamentos/OS): as contagens de orçamento e de OS ficam no escopo */
+  quem?: QuemVe;
   agora?: Date;
 }
 
@@ -51,7 +55,8 @@ export const SP_CONTAS_HOJE = { card: "VENCE_HOJE", periodo: "hoje" } as const;
 const SEM_NFSE = { nfseAutorizadas: 0, nfseAutorizadaMedicaoId: null, nfseRejeitadas: 0, nfseRejeitadaMedicaoId: null, nfseAguardando: 0, nfseAguardandoMedicaoId: null };
 const SEM_VEICULOS = { checklistPendente: 0, checklistsComAlertas: 0, checklistNaoVaiUsar: 0, documentosVencendo: 0, veiculosManutencao: 0, revisaoChegando: 0 };
 
-export async function contarSino({ empresaId, usuarioId, escopo: e, filtroTecnico, agora = new Date() }: EntradaSino) {
+export async function contarSino({ empresaId, usuarioId, escopo: e, filtroTecnico, quem, agora = new Date() }: EntradaSino) {
+  const eo = filtroOrdens(quem), ec = filtroOrcamentos(quem);
   // MÓDULOS DA EMPRESA (Loja de Módulos): o sino é tela do núcleo, mas conta coisa de módulo.
   // O que é de um módulo desligado não vira aviso — some do sino como sumiu do menu (degradação graciosa).
   const desligados = await modulosDesligados(empresaId);
@@ -68,19 +73,19 @@ export async function contarSino({ empresaId, usuarioId, escopo: e, filtroTecnic
   const verVencendo = e.orcamentosVencendo && temOrcamentos;
   // O prazo do aviso vem junto com as outras contagens (antes era esperado sozinho, uma ida ao banco a mais em fila)
   const contarVencendo = async (): Promise<readonly [number, { id: string } | null]> => {
-    const where = whereOrcamentos(empresaId, { validade: FILTRO_VENCENDO }, agora, await diasOrcamentoVencendo(empresaId));
+    const where = comEscopo(whereOrcamentos(empresaId, { validade: FILTRO_VENCENDO }, agora, await diasOrcamentoVencendo(empresaId)), ec);
     return Promise.all([prisma.orcamento.count({ where }), prisma.orcamento.findFirst({ where, orderBy: { validadeEm: "asc" }, select: { id: true } })]);
   };
-  const whereSemTecnico = { empresaId, ...whereOsSemTecnico() };
+  const whereSemTecnico = comEscopo({ empresaId, ...whereOsSemTecnico() } as Prisma.OrdemServicoWhereInput, eo);
   // Pedido do cliente: o painel conta as OS que esperam (e o R$); o sino, só as que passaram do prazo da empresa.
-  // Empresa sem cliente que exige o pedido: nem consulta
+  // Empresa sem cliente que exige o pedido: nem consulta. COM-1: as contagens de OS respeitam o "Ver só os próprios"
   const contarPedidos = async () => (e.pedidosCliente && await usaPedidoCliente(empresaId)
-    ? Promise.all([resumoAguardandoEmpresa(empresaId), contarPedidosAtrasados(empresaId, agora), contarPedidosConferir(empresaId)])
+    ? Promise.all([resumoAguardandoEmpresa(empresaId, eo), contarPedidosAtrasados(empresaId, agora, eo), contarPedidosConferir(empresaId)])
     : [{ quantidade: 0, total: 0 }, { pedidosAtrasados: 0, pedidoAtrasadoOsId: null, diasAlertaPedido: 0 }, { pedidosConferir: 0, pedidoConferirId: null, pedidoConferirOsId: null, pedidoConferirOrcamentoId: null }] as const);
-  const whereRespondidos = { empresaId, status: { in: ["APROVADO" as const, "REPROVADO" as const] }, respostaVistaEm: null };
+  const whereRespondidos = comEscopo({ empresaId, status: { in: ["APROVADO" as const, "REPROVADO" as const] }, respostaVistaEm: null } as Prisma.OrcamentoWhereInput, ec);
 
   const [prazosBrutos, veiculosBrutos, boletosPagos, respondidos, leadsSite, nfsDoPedido, nfse, faturamentoContratos, reajustesContrato, separacoesPendentes, devolucoesPendentes, pmoc, aceites, admissoes, estoqueNegativoCampo, esquecidas, comentarios, despesasCampo, semTecnico, vencendo, contasPagarHoje, contasReceberHoje, pedidos] = await Promise.all([
-    e.prazos || e.comprasPendentes ? contarAlertasPrazos(empresaId) : Promise.resolve(null),
+    e.prazos || e.comprasPendentes ? contarAlertasPrazos(empresaId, eo) : Promise.resolve(null),
     e.veiculos && temFrota ? contarAlertasVeiculos(empresaId) : Promise.resolve(null),
     e.boletos
       ? prisma.contaReceber.count({ where: { empresaId, boletoStatus: "PAGO", dataRecebimento: { gte: inicioHoje } } })
@@ -93,7 +98,7 @@ export async function contarSino({ empresaId, usuarioId, escopo: e, filtroTecnic
     // Novos leads do site (calculadora de BTU) nas últimas 24h — o sino não deixa o lead passar
     // despercebido (destino: /leads-site). Mesma permissão de ver orçamentos.
     e.orcamentos
-      ? prisma.orcamento.count({ where: { empresaId, nome: { startsWith: "Lead do site" }, criadoEm: { gte: desde24h } } })
+      ? prisma.orcamento.count({ where: comEscopo({ empresaId, nome: { startsWith: "Lead do site" }, criadoEm: { gte: desde24h } } as Prisma.OrcamentoWhereInput, ec) })
       : Promise.resolve(0),
     // Chegou NF num pedido de compra que ESTE usuário pediu e ele ainda não abriu (Compras 2/2).
     // Não depende de permissão: quem pediu sempre vê o próprio pedido (lib/compras/pedido podeVerPedido).

@@ -3,6 +3,7 @@ import { exigirPermissao } from "@/lib/permissoes-server";
 import { prepararExecucao } from "@/lib/os/abertura";
 import { sincronizarStatusOs } from "@/lib/os/sincronizar-status";
 import { gerarOsDoOrcamento, osDoOrcamento } from "@/lib/orcamentos/gerar-os-server";
+import { escopoBarra } from "@/lib/escopo/proprios-server";
 
 /**
  * "Gerar OS" a partir do orçamento aprovado. Permissão: criar OS. Empresa da sessão.
@@ -14,6 +15,8 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
   const guard = await exigirPermissao("ordens", "visualizar");
   if (guard.erro) return guard.resposta;
   const { id } = await params;
+  const foraDoEscopo = await escopoBarra("orcamento", id); // COM-1: "Ver só os próprios" → 404
+  if (foraDoEscopo) return foraDoEscopo;
   return NextResponse.json({ os: await osDoOrcamento(guard.session.user!.empresaId, id) });
 }
 
@@ -21,6 +24,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const guard = await exigirPermissao("ordens", "criar");
   if (guard.erro) return guard.resposta;
   const { id } = await params;
+  const foraDoEscopo = await escopoBarra("orcamento", id); // COM-1: "Ver só os próprios" → 404
+  if (foraDoEscopo) return foraDoEscopo;
   const empresaId = guard.session.user!.empresaId;
   const usuarioId = guard.session.user!.id;
   const body = await req.json().catch(() => ({}));

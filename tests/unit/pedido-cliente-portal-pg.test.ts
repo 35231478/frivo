@@ -190,7 +190,7 @@ describe.skipIf(!URL_PG)("PC-2 — pedido do cliente no portal + lembretes (Post
     expect((await prisma.orcamentoEvento.findMany({ where: { orcamentoId: "orcA" } })).map((e: any) => [e.tipo, e.usuarioId])).toEqual([["PEDIDO_CLIENTE", null]]);
     await rodarDepois();
     expect(fila.push.map((x) => [x.tipo, x.alcance, x.chave, x.mensagem.titulo, x.mensagem.url])).toEqual([["PEDIDO_CLIENTE", "escritorio", `pedido-cliente:${pedido1}`, "Pedido do cliente recebido: nº 4500123", "/ordens?pedido=conferir&periodo=todos"]]);
-    expect(await ps.contarPedidosConferir("e1")).toEqual({ pedidosConferir: 1, pedidoConferirId: pedido1, pedidoConferirOsId: "oA1" });
+    expect(await ps.contarPedidosConferir("e1")).toEqual({ pedidosConferir: 1, pedidoConferirId: pedido1, pedidoConferirOsId: "oA1", pedidoConferirOrcamentoId: null });
     expect((await ps.contarPedidosConferir("e2")).pedidosConferir).toBe(0);
     expect(await ps.osEmConferencia("e1")).toEqual(["oA1"]);
     // em conferência: o portal mostra e não deixa escolher de novo
@@ -280,7 +280,7 @@ describe.skipIf(!URL_PG)("PC-2 — pedido do cliente no portal + lembretes (Post
     // os clientes da rotina: só quem exige, tem e-mail de compras e lembretes ligados (cA, cB, cL e o da outra empresa)
     expect(r).toMatchObject({ clientes: 4, enviados: 3, erros: 0 });
     const [l] = emailsPara("compras@l.test");
-    expect(l.variaveis).toMatchObject({ contato_nome: "Lia", cliente_nome: "Logística L (fictícia)", quantidade_pendente: "3", total_pendente: "R$ 3.500,00", link_portal: "https://app.exemplo.test/portal/pedidos-compra" });
+    expect(l.variaveis).toMatchObject({ contato_nome: "Lia", cliente_nome: "Logística L (fictícia)", quantidade_pendente: "3", total_pendente: "R$ 3.500,00", link_portal: "https://app.exemplo.test/portal/login?destino=%2Fportal%2Fpedidos-compra" });
     // oL1: 3 dias (etapa 3); oL2: 1 dia (vai na lista, antes da 1ª etapa); orcL: 8 dias (etapa 7); oL3 ainda em execução: fora
     expect(l.variaveis.lista_pendencias).toMatch(/^<ul><li>Orçamento ORC-L · aprovado em 05\/11\/2026 · R\$ 2\.000,00 · há 8 dias<\/li><li>OS-oL1 · concluída em 10\/11\/2026 · R\$ 1\.000,00 · há 3 dias<\/li><li>OS-oL2 · concluída em 12\/11\/2026 · R\$ 500,00 · há 1 dia<\/li><\/ul>$/);
     const linhas = await prisma.pedidoClienteLembrete.findMany({ where: { clienteId: "cL" }, orderBy: { chave: "asc" } });

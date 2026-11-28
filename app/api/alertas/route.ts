@@ -39,7 +39,7 @@ export async function GET() {
   // O que a pessoa já leu hoje (lib/alertas/lidos) vem junto, em paralelo: o número do sino é só o não lido
   const usuarioId = session.user!.id;
   const [{ foraDoNumero: _soNoPainel, ...sino }, guardado] = await Promise.all([
-    contarSino({ empresaId, usuarioId, escopo: e, filtroTecnico: filtroEscopo(escopoTecnico) }),
+    contarSino({ empresaId, usuarioId, escopo: e, filtroTecnico: filtroEscopo(escopoTecnico), quem: session.user }),
     prisma.preferenciaUsuario.findUnique({ where: { usuarioId_chave: { usuarioId, chave: CHAVE_SINO_LIDOS } }, select: { valor: true } }),
   ]);
   const hoje = chaveHojeBR();

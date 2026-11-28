@@ -94,9 +94,11 @@ describe("app do técnico › Perfil › Meus dados › Segurança (o único lug
   beforeEach(() => {
     chamadas = [];
     responder = () => new Response(JSON.stringify({ ok: true }), { status: 200, headers: { "content-type": "application/json" } });
-    // O bloco "Notificações" do Perfil (leva push) consulta /api/push/*: não é a troca de senha, fica fora da conta
+    // O bloco "Notificações" do Perfil (leva push) consulta /api/push/*: não é a troca de senha, fica fora da conta.
+    // Idem a consulta da COM-1 "a empresa usa comissão?" (/api/perfil/comissoes), que o Perfil do app faz ao abrir.
     vi.stubGlobal("fetch", vi.fn(async (url: string, init: RequestInit) => {
       if (String(url).startsWith("/api/push/")) return new Response(JSON.stringify({ ligado: false, chave: null }), { status: 200, headers: { "content-type": "application/json" } });
+      if (String(url).startsWith("/api/perfil/comissoes")) return new Response(JSON.stringify({ ativo: false }), { status: 200, headers: { "content-type": "application/json" } });
       chamadas.push({ url, init }); return responder();
     }));
   });

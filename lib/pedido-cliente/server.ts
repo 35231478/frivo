@@ -372,16 +372,17 @@ export async function travaIniciarAtividade(empresaId: string, atividadeId: stri
 /* ───────── painel e sino ───────── */
 
 /** As OS aguardando da empresa (o painel de pendências): quantas e o total, para a lista filtrada */
-export async function resumoAguardandoEmpresa(empresaId: string) {
-  return resumoOsAguardando({ empresaId });
+/** `escopoOs` (COM-1, "Ver só os próprios"): vazio = sem limite */
+export async function resumoAguardandoEmpresa(empresaId: string, escopoOs: Prisma.OrdemServicoWhereInput = {}) {
+  return resumoOsAguardando(Object.keys(escopoOs).length ? { AND: [{ empresaId }, escopoOs] } : { empresaId });
 }
 
 /** O sino: OS aguardando há mais que os dias da empresa (desde a conclusão; no "para executar", desde a aprovação) */
-export async function contarPedidosAtrasados(empresaId: string, agora: Date = new Date()) {
+export async function contarPedidosAtrasados(empresaId: string, agora: Date = new Date(), escopoOs: Prisma.OrdemServicoWhereInput = {}) {
   const [cfg, oss] = await Promise.all([
     prisma.configuracao.findUnique({ where: { empresaId }, select: { pedidoClienteDiasAlerta: true } }),
     prisma.ordemServico.findMany({
-      where: { empresaId, ...whereOsAguardando() },
+      where: Object.keys(escopoOs).length ? { AND: [{ empresaId, ...whereOsAguardando() }, escopoOs] } : { empresaId, ...whereOsAguardando() },
       select: { id: true, criadoEm: true, dataConclusao: true, ...SELECT_MODO, orcamentoOrigem: { select: { assinadoEm: true } } },
       orderBy: { criadoEm: "asc" }, take: 2000,
     }),

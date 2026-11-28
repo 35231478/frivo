@@ -34,7 +34,7 @@ export async function GET(req: NextRequest) {
   // O MESMO filtro da lista (lib/listas/filtros.ts): o arquivo traz o que a tela está mostrando —
   // período, busca, status, prazo (atrasadas, vencem hoje, justificadas) e os demais.
   const agora = new Date();
-  const where = await whereOrdensDaLista(empresaId, Object.fromEntries(sp), agora);
+  const where = await whereOrdensDaLista(empresaId, Object.fromEntries(sp), agora, session.user); // COM-1: escopo
 
   const ordens = await prisma.ordemServico.findMany({
     where,

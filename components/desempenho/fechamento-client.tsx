@@ -16,10 +16,12 @@ import { Textarea } from "@/components/ui/textarea";
 import { MOTIVO_REABERTURA_MIN, MSG_MOTIVO_REABERTURA, TEXTO_CRITERIO, type Folha, type PremioFechado } from "@/lib/desempenho/fechamento";
 import type { FechamentoResumo, FolhaDoFechamento, PreviaDoFechamento } from "@/lib/desempenho/fechamento-server";
 import { competenciaCurta, formatarEscore, rotuloCompetencia } from "@/lib/desempenho/regras";
+import { RelatorioDeComissoes } from "@/components/comissoes/relatorio-comissoes";
 import { CabecalhoDesempenho, Erro, JSON_HEADERS, SeletorDeMes, posicaoTexto, type PodeDesempenho } from "./comum";
 
 interface Dados { mes: PreviaDoFechamento; historico: FechamentoResumo[] }
 const AJUDA_FOLHA = "Só o valor do bônus é registrado aqui: pagamento, imposto e encargo são lançados no financeiro. Enquanto o mês está aberto, o valor é projeção e muda com atividade, avaliação e revisão novas.";
+const AJUDA_FOLHA_COMISSAO = "Bônus do Desempenho e comissões liberadas até o fim do mês. Fechar gera uma conta a pagar por pessoa com o total e marca as comissões como pagas. Reabrir cancela essas contas (se nenhuma tiver pagamento) e as comissões voltam a liberadas.";
 const AJUDA_PREMIACAO = "O prêmio do mês vai para quem tem o maior escore na disputa. Empate divide o prêmio; ninguém acima da meta mínima deixa o prêmio sem ganhador.";
 const AJUDA_HISTORICO = "Cada fechamento do mês fica guardado, inclusive os reabertos: a folha daquele momento, quem fechou, quem reabriu e o motivo.";
 
@@ -86,7 +88,8 @@ export function FechamentoDesempenho({ mesInicial, mesAtual, pode }: { mesInicia
             )}
           </section>
 
-          <TabelaDaFolha folha={previa.folha} definitiva={!!fechado} />
+          <TabelaDaFolha folha={previa.folha} definitiva={!!fechado} comissoes={previa.comissoes} />
+          {previa.comissoes && <RelatorioDeComissoes key={mes} mes={mes} />}
           <Premiados premios={previa.premios} definitivo={!!fechado} />
           <Historico historico={dados.historico} aoVer={setVendo} />
         </>
@@ -99,12 +102,18 @@ export function FechamentoDesempenho({ mesInicial, mesAtual, pode }: { mesInicia
   );
 }
 
-function TabelaDaFolha({ folha, definitiva }: { folha: Folha; definitiva: boolean }) {
+function TabelaDaFolha({ folha, definitiva, comissoes = false }: { folha: Folha; definitiva: boolean; comissoes?: boolean }) {
   const rotuloValor = definitiva ? "Bônus" : "Bônus projetado";
+  // COM-1: com comissão na empresa, a folha mostra Comissão e Total (bônus + comissão = a conta a pagar da pessoa)
+  const totalComissao = folha.totalComissao ?? 0;
+  const totalGeral = Math.round((folha.total + totalComissao) * 100) / 100;
+  const totalDa = (l: Folha["linhas"][number]) => Math.round((l.valor + (l.comissao ?? 0)) * 100) / 100;
   return (
     <section className="bg-white border border-surface-border rounded-xl overflow-hidden" data-folha data-folha-definitiva={definitiva ? "sim" : "nao"}>
       <div className="px-4 py-3 border-b border-surface-border">
-        <h2 className="font-semibold text-ink flex items-center gap-1.5">Folha de bônus <Dica texto={AJUDA_FOLHA} rotulo="Folha de bônus" /></h2>
+        <h2 className="font-semibold text-ink flex items-center gap-1.5">
+          {comissoes ? "Folha de bônus e comissões" : "Folha de bônus"} <Dica texto={comissoes ? AJUDA_FOLHA_COMISSAO : AJUDA_FOLHA} rotulo={comissoes ? "Folha de bônus e comissões" : "Folha de bônus"} />
+        </h2>
       </div>
       {folha.linhas.length === 0 ? <ListaVazia mensagem="Nenhum colaborador nesta folha." /> : (
         <TabelaPro
@@ -113,7 +122,8 @@ function TabelaDaFolha({ folha, definitiva }: { folha: Folha; definitiva: boolea
           barra={
             <p data-folha-resumo-barra>
               {folha.linhas.length === 1 ? "1 colaborador" : `${folha.linhas.length} colaboradores`}
-              {" · "}Total do mês <strong className="text-ink" data-folha-total>{formatarMoeda(folha.total)}</strong>
+              {" · "}Total do mês <strong className="text-ink" data-folha-total>{formatarMoeda(comissoes ? totalGeral : folha.total)}</strong>
+              {comissoes && <span data-folha-total-comissao>{" · "}Comissões {formatarMoeda(totalComissao)}</span>}
             </p>
           }
           cartoes={
@@ -124,12 +134,19 @@ function TabelaDaFolha({ folha, definitiva }: { folha: Folha; definitiva: boolea
                     <p className="text-sm font-medium text-ink break-words" data-folha-nome>{l.nome}</p>
                     <p className="text-xs text-ink-muted" data-folha-resumo>{l.perfil} · {posicaoTexto(l.posicao)} · {formatarEscore(l.escore)}{l.faixa ? ` · ${l.faixa}` : ""}</p>
                   </div>
-                  <span className={cn(PLANILHA.numero, "text-sm font-semibold text-ink")} data-folha-valor>{formatarMoeda(l.valor)}</span>
+                  {comissoes ? (
+                    <span className="text-right shrink-0">
+                      <span className={cn(PLANILHA.numero, "block text-sm font-semibold text-ink")} data-folha-total-linha>{formatarMoeda(totalDa(l))}</span>
+                      <span className="block text-xs text-ink-muted tabular-nums">Bônus {formatarMoeda(l.valor)} · Comissão {formatarMoeda(l.comissao ?? 0)}</span>
+                    </span>
+                  ) : (
+                    <span className={cn(PLANILHA.numero, "text-sm font-semibold text-ink")} data-folha-valor>{formatarMoeda(l.valor)}</span>
+                  )}
                 </li>
               ))}
               <li className="px-4 py-3 flex items-center justify-between gap-3 bg-surface-alt/60">
                 <span className="text-sm font-semibold text-ink">Total do mês</span>
-                <span className={cn(PLANILHA.numero, "text-sm font-semibold text-ink")}>{formatarMoeda(folha.total)}</span>
+                <span className={cn(PLANILHA.numero, "text-sm font-semibold text-ink")}>{formatarMoeda(comissoes ? totalGeral : folha.total)}</span>
               </li>
             </ul>
           }
@@ -140,6 +157,10 @@ function TabelaDaFolha({ folha, definitiva }: { folha: Folha; definitiva: boolea
             { id: "escore", titulo: "Escore", alinhar: "direita", largura: 90 },
             { id: "faixa", titulo: "Faixa", largura: 120 },
             { id: "valor", titulo: rotuloValor, alinhar: "direita", largura: 130, obrigatoria: true },
+            ...(comissoes ? [
+              { id: "comissao", titulo: "Comissão", alinhar: "direita" as const, largura: 130, obrigatoria: true },
+              { id: "total", titulo: "Total", alinhar: "direita" as const, largura: 130, obrigatoria: true },
+            ] : []),
           ]}
           linhas={folha.linhas.map((l, i) => ({
             id: `${l.tecnicoId ?? l.nome}-${i}`,
@@ -152,6 +173,8 @@ function TabelaDaFolha({ folha, definitiva }: { folha: Folha; definitiva: boolea
               escore: <span className={PLANILHA.numero} data-folha-escore>{formatarEscore(l.escore)}</span>,
               faixa: <span data-folha-faixa>{l.faixa ?? "—"}</span>,
               valor: <span className={cn(PLANILHA.numero, "font-medium")} data-folha-valor>{formatarMoeda(l.valor)}</span>,
+              comissao: <span className={cn(PLANILHA.numero, "font-medium")} data-folha-comissao>{formatarMoeda(l.comissao ?? 0)}</span>,
+              total: <span className={cn(PLANILHA.numero, "font-semibold text-ink")} data-folha-total-linha>{formatarMoeda(totalDa(l))}</span>,
             },
           }))}
         />
@@ -252,7 +275,8 @@ function Fechar({ previa, aoFechar, aoSalvar }: PropsDialogo & { previa: PreviaD
       if (!r.ok) { setErro(d.erro ?? "Não foi possível fechar o mês."); return; }
       // Sucesso é toast (padrão da casa); o erro fica no diálogo
       const total = formatarMoeda(d?.folha?.total ?? previa.folha.total);
-      toast(`${rotuloCompetencia(previa.competencia)} fechado. Bônus: ${total}.`);
+      const comissao = d?.folha?.totalComissao ?? previa.folha.totalComissao ?? 0;
+      toast(`${rotuloCompetencia(previa.competencia)} fechado. Bônus: ${total}.${previa.comissoes ? ` Comissões: ${formatarMoeda(comissao)}.` : ""}`);
       aoSalvar();
     } catch { setErro("Erro de conexão."); } finally { setSalvando(false); }
   }
@@ -266,7 +290,12 @@ function Fechar({ previa, aoFechar, aoSalvar }: PropsDialogo & { previa: PreviaD
         <dl className="text-sm grid grid-cols-2 gap-2 rounded-lg bg-surface-alt px-3 py-2">
           <dt className="text-ink-muted">Colaboradores na folha</dt><dd className="text-right font-medium text-ink tabular-nums" data-fechar-colaboradores>{previa.folha.linhas.length}</dd>
           <dt className="text-ink-muted">Total de bônus</dt><dd className="text-right font-semibold text-ink tabular-nums" data-fechar-total>{formatarMoeda(previa.folha.total)}</dd>
+          {previa.comissoes && (<>
+            <dt className="text-ink-muted">Total de comissões</dt>
+            <dd className="text-right font-semibold text-ink tabular-nums" data-fechar-total-comissao>{formatarMoeda(previa.folha.totalComissao ?? 0)}</dd>
+          </>)}
         </dl>
+        {previa.comissoes && <p className="text-sm text-ink-muted" data-fechar-contas>Cada pessoa vira uma conta a pagar com o bônus e a comissão.</p>}
         {precisaConfirmar && (
           <div className="rounded-lg border border-atencao/30 bg-atencao-claro px-3 py-2 space-y-2" data-avisos-fechar>
             <ul className="text-sm text-atencao-texto list-disc pl-4 space-y-1">{previa.avisos.map((a) => <li key={a}>{a}</li>)}</ul>
@@ -347,7 +376,7 @@ function FolhaAntiga({ resumo, aoFechar }: { resumo: FechamentoResumo; aoFechar:
         <Erro texto={erro} />
         {!folha ? (!erro && <p className="text-sm text-ink-muted flex items-center gap-2"><Loader2 className="w-4 h-4 animate-spin" /> Carregando…</p>) : (
           <>
-            <TabelaDaFolha folha={folha.folha} definitiva />
+            <TabelaDaFolha folha={folha.folha} definitiva comissoes={(folha.folha.totalComissao ?? 0) !== 0} />
             <Premiados premios={folha.premios} definitivo />
           </>
         )}

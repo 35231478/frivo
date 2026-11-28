@@ -12,7 +12,7 @@ export const metadata: Metadata = { title: "Ordens de serviço" };
 export default async function OrdensPage({ searchParams }: { searchParams: Promise<SPOrdens> }) {
   const sp = await searchParams;
   const session = await auth();
-  const { total, pagina, porPagina, periodo, linhas, opcoes, resumoPedido, semAgendamento } = await carregarListaOs(session!.user!.empresaId, sp);
+  const { total, pagina, porPagina, periodo, linhas, opcoes, resumoPedido, semAgendamento } = await carregarListaOs(session!.user!.empresaId, sp, new Date(), session!.user); // COM-1: escopo
 
   return (
     <SelecaoMassaProvider entidade="ordens" idsPagina={linhas.map((o) => o.id)} total={total}>

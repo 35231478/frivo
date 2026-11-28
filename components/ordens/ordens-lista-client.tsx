@@ -34,7 +34,7 @@ import { PLANILHA } from "@/lib/planilha";
 interface TecnicoView { id: string; nome: string; avatar: string | null }
 interface OrdemView {
   id: string; numero: string; chamadoNumero: string | null; origem: string;
-  cliente: string; clienteLogo: string | null; unidade: string | null; responsavel: string | null; atividades: number;
+  cliente: string; clienteLogo: string | null; unidade: string | null; responsavel: string | null; /** COM-1: quem vendeu */ vendedor?: string | null; atividades: number;
   tecnicos: TecnicoView[];
   status: string; prioridade: string; criadoEm: string; previsaoConclusao: string | null;
   /** O estágio da OS (o mesmo da barra de andamento): Aberta › Agendada › Em execução › Concluída › Faturada, ou Cancelada */
@@ -327,6 +327,8 @@ export function OrdensListaClient({ ordens, total, pagina, porPagina, opcoes, pe
               // O estágio (e o aviso de prazo) logo depois do cliente: é o que se olha primeiro
               { id: "status", titulo: "Status", largura: 232, ordenar: "status" },
               { id: "tecnico", titulo: "Técnico", largura: 140, classe: "truncate" },
+              // COM-1: quem vendeu (escondida por padrão; liga em "Colunas")
+              { id: "vendedor", titulo: "Vendedor", largura: 140, oculta: true, classe: "truncate" },
               { id: "abertura", titulo: "Abertura", largura: 96, ordenar: "criadoEm" },
               { id: "previsao", titulo: "Prevista", largura: 96, ordenar: "previsaoConclusao" },
               // Escondida por padrão: quase sempre é a própria data prevista (quem liga em Colunas vê a diferença explicada)
@@ -354,6 +356,7 @@ export function OrdensListaClient({ ordens, total, pagina, porPagina, opcoes, pe
                   </div>
                 ),
                 tecnico: <span className={PLANILHA.apagado}>{os.responsavel ?? "—"}</span>,
+                vendedor: <span className={PLANILHA.apagado} data-vendedor-os>{os.vendedor ?? "—"}</span>,
                 abertura: <span className={cn(PLANILHA.data, PLANILHA.apagado)}>{formatarData(os.criadoEm)}</span>,
                 previsao: <span className={cn(PLANILHA.data, PLANILHA.apagado)}>{formatarDiaCivil(os.previsaoConclusao)}</span>,
                 prazo: <PrazoDaOs os={os} />,

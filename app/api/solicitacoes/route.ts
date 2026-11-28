@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { comEscopo, filtroOrdens } from "@/lib/escopo/proprios";
 import { exigirAlgumaPermissao } from "@/lib/permissoes-server";
 import { prisma } from "@/lib/prisma";
 import { SOLICITACAO_PENDENTE, separarDescricao } from "@/lib/solicitacoes";
@@ -10,7 +11,7 @@ export async function GET() {
   const empresaId = guard.session.user!.empresaId;
 
   const lista = await prisma.ordemServico.findMany({
-    where: { empresaId, ...SOLICITACAO_PENDENTE },
+    where: comEscopo({ empresaId, ...SOLICITACAO_PENDENTE }, filtroOrdens(guard.session.user)), // COM-1: escopo
     select: {
       id: true, numero: true, chamadoNumero: true, prioridade: true, descricao: true, criadoEm: true,
       cliente: { select: { id: true, nome: true, nomeFantasia: true } },

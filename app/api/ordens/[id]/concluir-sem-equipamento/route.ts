@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { atorDaSessao, carregarContexto } from "@/lib/execucao/contexto";
 import { concluirAtividade, respostaAcao } from "@/lib/execucao/acoes";
 import { sincronizarStatusOs } from "@/lib/os/sincronizar-status";
+import { escopoBarra } from "@/lib/escopo/proprios-server";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -24,6 +25,8 @@ export async function POST(req: NextRequest, { params }: Params) {
   if (guard.erro) return guard.resposta;
   const { session } = guard;
   const { id } = await params;
+  const foraDoEscopo = await escopoBarra("ordem", id); // COM-1: "Ver só os próprios" → 404
+  if (foraDoEscopo) return foraDoEscopo;
   const empresaId = session.user!.empresaId;
   const usuarioId = session.user!.id;
 
