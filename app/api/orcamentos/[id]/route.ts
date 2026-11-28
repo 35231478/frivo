@@ -18,6 +18,7 @@ import { pode } from "@/lib/permissoes";
 import { cancelarPrevistasDoOrcamento, impactoOrcamento } from "@/lib/inativacao-server";
 import { cancelarOrcamento, reativarOrcamento, statusHttp } from "@/lib/acoes-massa/regras";
 import { apagarItensOrcamento, gravarItensOrcamento, validarMateriaisDoOrcamento } from "@/lib/orcamentos/materiais-server";
+import { escopoBarra } from "@/lib/escopo/proprios-server";
 
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const guard = await exigirPermissao("orcamentos", "visualizar");
@@ -25,6 +26,8 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
   const { session } = guard;
   const empresaId = session.user!.empresaId;
   const { id } = await params;
+  const foraDoEscopo = await escopoBarra("orcamento", id); // COM-1: "Ver só os próprios" → 404
+  if (foraDoEscopo) return foraDoEscopo;
 
   const orcamento = await prisma.orcamento.findFirst({
     where: { id, empresaId },
@@ -54,6 +57,8 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
   const { session } = guard;
   const empresaId = session.user!.empresaId;
   const { id } = await params;
+  const foraDoEscopo = await escopoBarra("orcamento", id); // COM-1: "Ver só os próprios" → 404
+  if (foraDoEscopo) return foraDoEscopo;
 
   const existente = await prisma.orcamento.findFirst({ where: { id, empresaId } });
   if (!existente) return NextResponse.json({ erro: "Orçamento não encontrado" }, { status: 404 });
@@ -218,6 +223,8 @@ export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ 
   if (guard.erro) return guard.resposta;
   const empresaId = guard.session.user!.empresaId;
   const { id } = await params;
+  const foraDoEscopo = await escopoBarra("orcamento", id); // COM-1: "Ver só os próprios" → 404
+  if (foraDoEscopo) return foraDoEscopo;
 
   // Mesma regra da ação em massa (lib/acoes-massa/regras.ts)
   const r = await cancelarOrcamento(id, { empresaId, usuarioId: guard.session.user!.id, usuarioNome: guard.session.user!.name ?? "usuário" });
@@ -233,6 +240,8 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   if (guard.erro) return guard.resposta;
   const empresaId = guard.session.user!.empresaId;
   const { id } = await params;
+  const foraDoEscopo = await escopoBarra("orcamento", id); // COM-1: "Ver só os próprios" → 404
+  if (foraDoEscopo) return foraDoEscopo;
   const body = await req.json().catch(() => ({}));
   if (body?.ativo !== true) return NextResponse.json({ erro: "Ação inválida" }, { status: 400 });
 

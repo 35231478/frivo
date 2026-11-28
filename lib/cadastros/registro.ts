@@ -387,6 +387,8 @@ export const CADASTROS: Record<EntidadeCadastro, DefCadastro> = {
       { key: "descricao", label: "Descrição", tipo: "textarea" },
       { key: "unidade", label: "Unidade", tipo: "select", opcoes: UNIDADES_SERVICO },
       { key: "valorPadrao", label: "Valor padrão (R$)", tipo: "moeda", placeholder: "0,00" },
+      // COM-1: categoria livre (ex.: "Instalação") — as regras de comissão podem valer para uma categoria inteira
+      { key: "categoria", label: "Categoria", placeholder: "Ex.: Instalação, Manutenção", ajuda: "Agrupa serviços parecidos. As regras de comissão podem valer para uma categoria inteira." },
       // E3.2: composição (produto solto ou kit + quantidade; override opcional). Viaja como JSON; serviço sem composição = como sempre
       { key: "materiais", label: "Materiais padrão", tipo: "estruturado", grupo: GRUPO_MATERIAIS,
         ajuda: "Produtos e kits que este serviço costuma consumir. No orçamento/OS eles entram pré-preenchidos (e editáveis). Peça (venda à parte) é cobrada do cliente; material (incluso) só baixa o estoque." },
@@ -407,7 +409,7 @@ export const CADASTROS: Record<EntidadeCadastro, DefCadastro> = {
     },
     ...schemas({
       // Código: normalizado e conferido (único na empresa) pela regra do cadastro (especificos.ts)
-      nome, codigo: textoOpcional(40), descricao: textoOpcional(), unidade, valorPadrao: numero(), materiais: materiaisSchema,
+      nome, codigo: textoOpcional(40), descricao: textoOpcional(), unidade, valorPadrao: numero(), categoria: textoOpcional(60), materiais: materiaisSchema,
       codigoMunicipal: textoOpcional(50), codigoLc116: lc116,
       aliquotaISS: aliquotaIss, aliquotaPIS: aliquota("PIS"), aliquotaCOFINS: aliquota("COFINS"), aliquotaCSLL: aliquota("CSLL"),
       aliquotaIR: aliquota("IR"), aliquotaINSS: aliquota("INSS"),
@@ -415,7 +417,7 @@ export const CADASTROS: Record<EntidadeCadastro, DefCadastro> = {
       observacaoFiscal: textoOpcional(),
       nfseTributacao, issRetido: booleano, cnae, discriminacaoPadrao: textoOpcional(),
     }, {
-      codigo: null, descricao: null, unidade: "un", valorPadrao: null, materiais: [], codigoMunicipal: null, codigoLc116: null,
+      codigo: null, descricao: null, unidade: "un", valorPadrao: null, categoria: null, materiais: [], codigoMunicipal: null, codigoLc116: null,
       aliquotaISS: null, aliquotaPIS: null, aliquotaCOFINS: null, aliquotaCSLL: null, aliquotaIR: null, aliquotaINSS: null, observacaoFiscal: null,
       nfseTributacao: null, cnae: null, discriminacaoPadrao: null,
     }),

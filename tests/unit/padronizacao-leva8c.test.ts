@@ -246,7 +246,10 @@ describe("a leva não tocou no cálculo, na emissão nem nos vínculos", () => {
   it.skipIf(!base)("cálculo da folha, importação, emissão de NFS-e e CSV do Desempenho continuam como no master", () => {
     const mudados = execFileSync("git", ["diff", "--name-only", base!, "--", ...arquivosIntocados], { cwd: RAIZ, encoding: "utf8" })
       .split("\n").filter(Boolean);
-    expect(mudados).toEqual([]);
+    // COM-1 mudou o fechamento do Desempenho DE PROPÓSITO: a folha ganha a comissão e o fechamento gera a conta a
+    // pagar por pessoa (o CSV ganha "Comissão" e "Total" só quando há comissão). Folha, importação e NFS-e intocadas.
+    const mudouDeProposito = ["lib/desempenho/fechamento.ts", "lib/desempenho/fechamento-server.ts"];
+    expect(mudados.filter((arq) => !mudouDeProposito.includes(arq))).toEqual([]);
   });
 
   it("os arquivos do cálculo, da emissão e do vínculo existem com o nome que a guarda cobra", () => {

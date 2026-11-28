@@ -9,6 +9,7 @@ import { emailConfigAtiva, enviarOrcamento } from "@/lib/email";
 import { numeroFormalOrcamento } from "@/lib/orcamentos/proposta";
 import { registrarEvento } from "@/lib/orcamentos/ciclo-server";
 import { bloqueioEnvio } from "@/lib/orcamentos/ciclo";
+import { escopoBarra } from "@/lib/escopo/proprios-server";
 
 const corpoSchema = z.object({ canal: z.enum(["EMAIL", "WHATSAPP", "LINK"]).optional() }).nullable();
 
@@ -27,6 +28,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const empresaId = session.user!.empresaId;
   const empresaNome = await nomeDaEmpresa(empresaId);
   const { id } = await params;
+  const foraDoEscopo = await escopoBarra("orcamento", id); // COM-1: "Ver só os próprios" → 404
+  if (foraDoEscopo) return foraDoEscopo;
   const corpo = corpoSchema.safeParse(await req.json().catch(() => null));
   if (!corpo.success) return NextResponse.json({ erro: "Canal de envio inválido." }, { status: 400 });
   const canal = corpo.data?.canal;

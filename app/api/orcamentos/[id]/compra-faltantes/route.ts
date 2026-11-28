@@ -5,6 +5,7 @@ import {
   compraFaltantesLigada, podeSolicitarCompraDoOrcamento, situacaoDosFaltantes, solicitarCompraDosFaltantes,
 } from "@/lib/orcamentos/compra-faltantes-server";
 import { orcamentoAceitaSolicitacao } from "@/lib/orcamentos/compra-faltantes";
+import { escopoBarra } from "@/lib/escopo/proprios-server";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -18,6 +19,8 @@ export async function GET(_req: NextRequest, { params }: Params) {
   if (guard.erro) return guard.resposta;
   const u = guard.session.user!;
   const { id } = await params;
+  const foraDoEscopo = await escopoBarra("orcamento", id); // COM-1: "Ver só os próprios" → 404
+  if (foraDoEscopo) return foraDoEscopo;
   if (!(await compraFaltantesLigada(u.empresaId))) return NextResponse.json({ disponivel: false });
   const s = await situacaoDosFaltantes(u.empresaId, id);
   if (!s) return NextResponse.json({ erro: "Orçamento não encontrado" }, { status: 404 });
@@ -45,6 +48,8 @@ export async function POST(_req: NextRequest, { params }: Params) {
     if (semModulo) return semModulo;
   }
   const { id } = await params;
+  const foraDoEscopo = await escopoBarra("orcamento", id); // COM-1: "Ver só os próprios" → 404
+  if (foraDoEscopo) return foraDoEscopo;
   const r = await solicitarCompraDosFaltantes(u.empresaId, u.id, id);
   if (!r.ok) return NextResponse.json({ erro: r.erro }, { status: r.status });
   return NextResponse.json(r, { status: r.acao === "criado" ? 201 : 200 });

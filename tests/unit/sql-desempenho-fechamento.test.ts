@@ -161,6 +161,14 @@ describe.skipIf(!URL)("SQL de produção: Desempenho PR 2 — fechamento e folha
   });
 
   it("dá EXATAMENTE o que o Prisma espera nas duas tabelas (comparado com `prisma db push`)", () => {
+    // COM-1 (prisma/sql/2027-02-11_comissoes.sql) acrescentou colunas nestas duas tabelas (comissão, usuário e conta a
+    // pagar da linha; total de comissões do fechamento): roda por cima, com o mínimo que ele referencia, e a comparação
+    // continua exata — agora também para o que a COM-1 trouxe.
+    sql(`CREATE TABLE IF NOT EXISTS "orcamentos" ("id" TEXT PRIMARY KEY, "empresa_id" TEXT NOT NULL, "criado_por_id" TEXT NOT NULL);
+      CREATE TABLE IF NOT EXISTS "medicoes" ("id" TEXT PRIMARY KEY); CREATE TABLE IF NOT EXISTS "servicos" ("id" TEXT PRIMARY KEY);
+      CREATE TABLE IF NOT EXISTS "configuracoes" ("id" TEXT PRIMARY KEY); CREATE TABLE IF NOT EXISTS "cargos" ("id" TEXT PRIMARY KEY);
+      CREATE TABLE IF NOT EXISTS "contas_pagar" ("id" TEXT PRIMARY KEY);`);
+    psql(["-f", path.join(RAIZ, "prisma/sql/2027-02-11_comissoes.sql")]);
     const url = `${URL}${URL!.includes("?") ? "&" : "?"}schema=${PRISMA}`;
     execFileSync(path.join(RAIZ, "node_modules/.bin/prisma"), ["db", "push", "--skip-generate", "--schema", "prisma/schema.prisma"], { cwd: RAIZ, env: { ...process.env, DATABASE_URL: url }, stdio: "pipe" });
     for (const t of NOVAS) {

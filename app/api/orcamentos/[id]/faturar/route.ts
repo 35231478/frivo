@@ -2,6 +2,7 @@ import { NextRequest } from "next/server";
 import { exigirPermissao } from "@/lib/permissoes-server";
 import { faturarOrcamento } from "@/lib/faturamento/faturar-server";
 import { lerCorpoFaturar, respostaFaturar } from "@/lib/faturamento/resposta";
+import { escopoBarra } from "@/lib/escopo/proprios-server";
 
 /**
  * "Faturar" o orçamento aprovado (com ou sem OS): cria a fatura (medição avulsa) já liberada para
@@ -13,6 +14,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const guard = await exigirPermissao("financeiro", "medicoes");
   if (guard.erro) return guard.resposta;
   const { id } = await params;
+  const foraDoEscopo = await escopoBarra("orcamento", id); // COM-1: "Ver só os próprios" → 404
+  if (foraDoEscopo) return foraDoEscopo;
   const corpo = await lerCorpoFaturar(req);
   if (!corpo.ok) return corpo.resposta;
   const { parcelamento, parcial } = corpo;

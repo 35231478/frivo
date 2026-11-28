@@ -87,7 +87,8 @@ describe("Perfis e tipos de OS padrão (regra pura)", () => {
   });
 
   it("Vendas: clientes e orçamentos sem aprovar, contratos só ver; nada de financeiro, custo ou configurações", () => {
-    expect(PRESET_VENDAS).toEqual(montarPermissoes({ dashboard: ["visualizar"], clientes: ["visualizar", "criar", "editar"], orcamentos: ["visualizar", "criar", "editar"], contratos: ["visualizar"] }));
+    // COM-1: nasce com "Ver só os próprios" em Orçamentos e OS (marca que LIMITA: OS continua sem "visualizar")
+    expect(PRESET_VENDAS).toEqual(montarPermissoes({ dashboard: ["visualizar"], clientes: ["visualizar", "criar", "editar"], orcamentos: ["visualizar", "criar", "editar", "verSoProprios"], ordens: ["verSoProprios"], contratos: ["visualizar"] }));
     const v = PRESET_VENDAS as any;
     expect(v.orcamentos?.aprovar).toBeFalsy();
     expect(v.orcamentos?.verCusto).toBeFalsy();

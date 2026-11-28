@@ -28,7 +28,7 @@ export async function GET(req: NextRequest) {
   const contratoId = sp.contratoId || null;
 
   const [{ linhas, resumo }, { cliente, contrato }, empresa] = await Promise.all([
-    relatorioCumprimento(empresaId, { gte: periodo.gte ?? undefined, lt: periodo.lt ?? undefined, clienteId, contratoId }, agora),
+    relatorioCumprimento(empresaId, { gte: periodo.gte ?? undefined, lt: periodo.lt ?? undefined, clienteId, contratoId }, agora, guard.session.user),
     alvoDoRelatorio(empresaId, { clienteId, contratoId }),
     prisma.empresa.findUnique({ where: { id: empresaId }, select: { nome: true, nomeFantasia: true, cnpj: true } }),
   ]);

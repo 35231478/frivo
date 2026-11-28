@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { exigirPermissao } from "@/lib/permissoes-server";
 import { linhaOrcamentoContextoSchema } from "@/lib/validations";
 import { editarLinhaDoOrcamento } from "@/lib/orcamentos/editar-linha-server";
+import { escopoBarra } from "@/lib/escopo/proprios-server";
 
 type Params = { params: Promise<{ id: string; linhaId: string }> };
 
@@ -15,6 +16,8 @@ export async function PATCH(req: NextRequest, { params }: Params) {
   const guard = await exigirPermissao("orcamentos", "editar");
   if (guard.erro) return guard.resposta;
   const { id, linhaId } = await params;
+  const foraDoEscopo = await escopoBarra("orcamento", id); // COM-1: "Ver só os próprios" → 404
+  if (foraDoEscopo) return foraDoEscopo;
   const parsed = linhaOrcamentoContextoSchema.safeParse(await req.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ erro: parsed.error.issues[0]?.message ?? "Dados inválidos" }, { status: 400 });
   const u = guard.session.user!;
