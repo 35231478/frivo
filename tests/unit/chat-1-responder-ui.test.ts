@@ -134,6 +134,22 @@ describe("responder: o balão e a caixa de escrever (computador e celular)", () 
     expect($("[data-citando]")).toBeNull();
   });
 
+  it("perto do fim da conversa o menu abre PARA CIMA (embaixo a lista o cortaria); com espaço, abre para baixo", async () => {
+    await conversa();
+    const caixa = (top: number, bottom: number) => () => ({ top, bottom, left: 0, right: 300, width: 300, height: bottom - top, x: 0, y: top, toJSON: () => ({}) }) as DOMRect;
+    $("[data-mensagens]")!.getBoundingClientRect = caixa(0, 600);
+    const li = (id: string) => $(`[data-mensagem='${id}']`)!;
+    li("c").getBoundingClientRect = caixa(520, 560); // 40 px até o fim da lista
+    await act(async () => { corpoDe("c").dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, cancelable: true })); });
+    expect($("[data-menu-mensagem]")!.hasAttribute("data-menu-acima")).toBe(true);
+    expect($("[data-menu-mensagem]")!.className).toContain("bottom-full");
+    li("a").getBoundingClientRect = caixa(10, 60); // muito espaço embaixo
+    await act(async () => { corpoDe("a").dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, cancelable: true })); });
+    const menu = li("a").querySelector("[data-menu-mensagem]")!;
+    expect(menu.hasAttribute("data-menu-acima")).toBe(false);
+    expect(menu.className).toContain("top-full");
+  });
+
   it("celular: arrastar o balão para a direita responde (pouco não); rolar a conversa na vertical não", async () => {
     await conversa();
     const el = corpoDe("c");

@@ -10,6 +10,8 @@ import { MOTIVO_EQUIPAMENTO, ROTULO_SEM_EQUIPAMENTO, type EquipamentoFotoTela } 
 import { ARRASTE_RESPONDER_PX, estadoDaMensagem, podeResponder, ROTULO_ESTADO, TOQUE_LONGO_MS } from "@/lib/chat/regras";
 import type { ComentarioTela } from "@/lib/tecnico/comentarios";
 
+/** O espaço que o menu do balão precisa embaixo (três ações); menos que isso, abre para cima */
+const ALTURA_MENU_PX = 150;
 const ITEM_MENU = "flex w-full items-center gap-2 px-3 py-2 text-sm text-ink hover:bg-surface-alt touch-target";
 
 /** O "porquê" do estado, na dica do ✓ (quem leu e quando) */
@@ -50,7 +52,17 @@ export function Balao({ m, mostrarAutor, onAmpliar, onTentarDeNovo, onResponder,
 }) {
   const estado = m.meu ? estadoDaMensagem(m) : null;
   const IconeEstado = estado === "lida" ? CheckCheck : estado === "enviada" ? Check : estado === "enviando" ? Clock : AlertCircle;
-  const [menu, setMenu] = useState(false);
+  const [menu, setMenuAberto] = useState(false);
+  // Perto do fim da conversa o menu abre PARA CIMA (abaixo, a borda da lista o cortaria)
+  const [menuAcima, setMenuAcima] = useState(false);
+  const setMenu = (aberto: boolean) => {
+    if (aberto) {
+      const li = raiz.current?.getBoundingClientRect();
+      const lista = raiz.current?.closest("[data-mensagens]")?.getBoundingClientRect();
+      setMenuAcima(!!li && !!lista && lista.bottom - li.bottom < ALTURA_MENU_PX);
+    }
+    setMenuAberto(aberto);
+  };
   const [arraste, setArraste] = useState(0);
   const toque = useRef<{ x: number; y: number; dx: number; timer: ReturnType<typeof setTimeout> } | null>(null);
   // O toque longo abriu o menu: o "clique" que vem ao soltar não abre a foto
@@ -183,7 +195,7 @@ export function Balao({ m, mostrarAutor, onAmpliar, onTentarDeNovo, onResponder,
       )}
       {menu && temAcoes && (
         <div role="menu" aria-label="Ações da mensagem" data-menu-mensagem
-          className={cn("absolute z-20 top-full mt-1 min-w-44 rounded-lg border border-surface-border bg-white py-1 shadow-lg", m.meu ? "right-0" : "left-0")}>
+          className={cn("absolute z-20 min-w-44 rounded-lg border border-surface-border bg-white py-1 shadow-lg", menuAcima ? "bottom-full mb-1" : "top-full mt-1", m.meu ? "right-0" : "left-0")} data-menu-acima={menuAcima || undefined}>
           {responder && (
             <button type="button" role="menuitem" onClick={responder} autoFocus data-menu-responder className={ITEM_MENU}>
               <Reply className="w-4 h-4 text-ink-muted" aria-hidden /> Responder
