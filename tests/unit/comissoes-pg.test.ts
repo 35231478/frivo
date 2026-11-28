@@ -391,7 +391,7 @@ describe.skipIf(!URL_PG)("COM-1 — comissões (PostgreSQL real)", () => {
     logar("uAdm");
     expect((await chamar("comissoes/regras", "POST", {}, { quemTipo: "TODOS", sobreTipo: "PECAS", base: "PERC_VENDA", valor: 3 })).status).toBe(409);
     expect((await chamar("comissoes/regras", "POST", {}, { quemTipo: "TODOS", sobreTipo: "CATEGORIA", categoria: "Outra", base: "PERC_VENDA", valor: 101 })).status).toBe(400);
-    expect((await chamar("comissoes/regras", "POST", {}, { quemTipo: "PESSOA", sobreTipo: "TODOS_SERVICOS", base: "PERC_VENDA", valor: 3, papel: "EXECUTOR", usuarioId: "uP" })).status).toBe(400);
+    expect((await chamar("comissoes/regras", "POST", {}, { quemTipo: "PESSOA", sobreTipo: "TODOS_SERVICOS", base: "PERC_VENDA", valor: 3, papel: "RESPONSAVEL", usuarioId: "uP" })).status).toBe(400); // COM-2 ligou o Executor; o Responsável não
   });
 
   it("isolamento entre empresas: regras, comissões, extrato e fechamento de uma nunca tocam a outra", async () => {

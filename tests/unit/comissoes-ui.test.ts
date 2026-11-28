@@ -130,12 +130,12 @@ describe("Configurações › Comissões", () => {
     expect(texto($("[data-sem-regras]"))).toMatch(/Sem regra, ninguém ganha comissão/);
   });
 
-  it("nova regra: campos conforme o tipo; Executor e Responsável ainda desligados; manda o POST; erro do servidor no diálogo", async () => {
+  it("nova regra: campos conforme o tipo; Executor ligado (COM-2), Responsável ainda desligado; manda o POST; erro do servidor no diálogo", async () => {
     await abrir();
     await clicar($("[data-nova-regra]"));
     expect($("[data-campo-cargo]")).toBeNull();
     const papeis = $$<HTMLOptionElement>("[data-campo-papel] option").map((o) => [o.textContent, o.disabled]);
-    expect(papeis).toEqual([["Vendedor", false], ["Executor (em breve)", true], ["Responsável (em breve)", true]]);
+    expect(papeis).toEqual([["Vendedor", false], ["Executor", false], ["Responsável (em breve)", true]]);
     await escolher($("[data-campo-quem]"), "CARGO");
     await escolher($("[data-campo-cargo]"), "cg");
     await escolher($("[data-campo-sobre]"), "SERVICO");
@@ -168,7 +168,7 @@ describe("Meu perfil — Minhas comissões", () => {
   const initial = { nome: "Vitor Vendas", email: "v@ficticio.test", telefone: "", avatar: null, empresaNome: "Clima Fictícia", perfilNome: null, cargo: "Operador", ultimoAcesso: null };
   const EXTRATO = {
     ativo: true, totais: { prevista: 30, liberada: 20, paga: 50 },
-    vendas: [{ orcamentoId: "o1", codigo: "ORC-1", nome: "Instalação fictícia", cliente: "Hospital Fictício", osNumero: "OS-7", prevista: 30, liberada: 20, paga: 50, itens: [{ descricao: "Instalação split", regra: "Vendedores (cargo) · Instalação (categoria) · 5% do lucro", valor: 100 }] }],
+    vendas: [{ chave: "o1", tipo: "VENDA", orcamentoId: "o1", codigo: "ORC-1", nome: "Instalação fictícia", cliente: "Hospital Fictício", osNumero: "OS-7", prevista: 30, liberada: 20, paga: 50, itens: [{ descricao: "Instalação split", regra: "Vendedores (cargo) · Instalação (categoria) · 5% do lucro", valor: 100 }] }],
   };
 
   it("empresa sem comissão: nada de aba Comissões", async () => {
@@ -223,7 +223,7 @@ describe("folha do mês com comissões", () => {
   it("comissões do mês por data de emissão ou de recebimento: abre na vista da configuração; trocar pede a outra; diz o que o fechamento paga", async () => {
     const relatorio = (vista: string, valor: number) => ({
       competencia: "2026-10", vista, quando: "RECEBIMENTO", total: valor,
-      pessoas: [{ usuarioId: "uA", nome: "Ana Dias", valor, vendas: [{ orcamentoId: "o1", codigo: "ORC-1", nome: "Venda fictícia", cliente: "Cliente Fictício", data: "2026-10-12T12:00:00.000Z", valor }] }],
+      pessoas: [{ usuarioId: "uA", nome: "Ana Dias", valor, vendas: [{ chave: "o1", orcamentoId: "o1", codigo: "ORC-1", nome: "Venda fictícia", cliente: "Cliente Fictício", data: "2026-10-12T12:00:00.000Z", valor }] }],
     });
     respostas["GET /api/comissoes/relatorio?mes=2026-10"] = { status: 200, corpo: relatorio("RECEBIMENTO", 5) };
     respostas["GET /api/comissoes/relatorio?mes=2026-10&vista=EMISSAO"] = { status: 200, corpo: relatorio("EMISSAO", 50) };

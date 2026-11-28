@@ -18,7 +18,7 @@ import type { Prisma } from "@prisma/client";
 import type { z } from "zod";
 import { gerarCsv } from "@/lib/folha/planilha";
 import { proximoNumeroContaPagar } from "@/lib/financeiro-server";
-import { comissoesDoMes, empresaUsaComissao, movimentosAbertos, sincronizarComissoes } from "@/lib/comissoes/servidor";
+import { comissoesDoMes, empresaUsaComissao, lancamentosDoTeto, movimentosAbertos, sincronizarComissoes, tetosAtivos, type ExcedenteDoMes } from "@/lib/comissoes/servidor";
 import { competenciaAtual, competenciaCurta } from "./regras";
 import { ErroDesempenho, type Ator } from "./erros";
 import {
@@ -128,13 +128,16 @@ async function folhaAoVivo(empresaId: string, competencia: string, o: { ativo: b
   const [painel, pendentes] = o.ativo ? await Promise.all([aoVivo(empresaId, competencia), pendentesDoMes(empresaId, competencia)]) : [painelVazio(competencia), 0];
   let folha = folhaDoPainel(painel);
   let idsComissao: string[] = [];
+  let excedentes: ExcedenteDoMes[] = [];
   if (o.comissoes) {
     await sincronizarComissoes(empresaId, {}, agora);
-    const doMes = comissoesDoMes(await movimentosAbertos(empresaId, competencia));
+    // COM-2: com teto, a pessoa recebe até o teto; o excedente vai para o mês seguinte (o par −/+ é gravado ao fechar)
+    const doMes = comissoesDoMes(await movimentosAbertos(empresaId, competencia), await tetosAtivos(empresaId));
     folha = folhaComComissoes(folha, doMes.pessoas);
     idsComissao = doMes.ids;
+    excedentes = doMes.excedentes;
   }
-  return { painel, pendentes, folha, idsComissao };
+  return { painel, pendentes, folha, idsComissao, excedentes };
 }
 
 export async function previaDoFechamento(empresaId: string, competencia: string, agora: Date = new Date()): Promise<PreviaDoFechamento> {
@@ -187,7 +190,7 @@ export async function fecharMes(autor: Autor, d: z.infer<typeof fecharSchema>, a
 
   // O que ainda não entrou na lista "a revisar" entra antes de fechar (depois, o mês não recebe item novo);
   // as comissões são recalculadas pelo que aconteceu de fato (recebimentos, estornos, cancelamentos)
-  const { painel, pendentes, folha, idsComissao } = await folhaAoVivo(empresaId, competencia, { ativo, comissoes }, agora);
+  const { painel, pendentes, folha, idsComissao, excedentes } = await folhaAoVivo(empresaId, competencia, { ativo, comissoes }, agora);
   if (!folha.linhas.length) throw new ErroDesempenho(ativo ? MSG_NADA_A_FECHAR : MSG_NADA_A_FECHAR_COMISSAO, 409);
   const avisos = avisosDoFechamento(competencia, atual, pendentes);
   if (avisos.length && !d.ciente) throw new ErroDesempenho(`${avisos.join(" ")} ${MSG_CONFIRMAR}`, 409);
@@ -210,6 +213,8 @@ export async function fecharMes(autor: Autor, d: z.infer<typeof fecharSchema>, a
         const { count } = await tx.comissaoLancamento.updateMany({ where: { id: { in: idsComissao }, empresaId, fechamentoId: null }, data: { fechamentoId: f.id } });
         if (count !== idsComissao.length) throw new ErroDesempenho(MSG_COMISSOES_MUDARAM, 409);
       }
+      // COM-2: o teto — o excedente sai deste mês e entra no 1º dia do mês seguinte
+      if (excedentes.length) await tx.comissaoLancamento.createMany({ data: lancamentosDoTeto(empresaId, competencia, f.id, excedentes) });
       // Uma linha da folha e UMA conta a pagar por pessoa (bônus + comissão)
       const vencimento = vencimentoDoFechamento(competencia, agora);
       for (const l of folha.linhas) {
@@ -237,6 +242,8 @@ export async function fecharMes(autor: Autor, d: z.infer<typeof fecharSchema>, a
   }
 }
 
+export const MSG_TETO_JA_FECHADO = "O excedente do teto deste mês já entrou no fechamento do mês seguinte. Reabra aquele mês primeiro.";
+
 /** REABRE o mês: o fechamento fica registrado como "REABERTO" (quem, quando, por quê) e o mês volta a ser calculado. */
 export async function reabrirMes(autor: Autor, id: string, motivo: string, agora: Date = new Date()): Promise<FechamentoResumo> {
   const f = await prisma.desempenhoFechamento.findFirst({ where: { id, empresaId: autor.empresaId }, select: { id: true } });
@@ -250,6 +257,11 @@ export async function reabrirMes(autor: Autor, id: string, motivo: string, agora
     const contas = linhas.map((l) => l.contaPagar).filter((c): c is NonNullable<typeof c> => !!c);
     const paga = contas.find((c) => Number(c.valorPago) > 0 || c.status === "PAGO_PARCIAL" || c.status === "PAGO_TOTAL");
     if (paga) throw new ErroDesempenho(MSG_CONTA_PAGA(paga.numero), 409);
+    // COM-2: o par do teto deste mês sai junto. Se o excedente já entrou no fechamento de um mês seguinte, reabra aquele antes
+    const { competencia: compReaberta } = await tx.desempenhoFechamento.findUniqueOrThrow({ where: { id }, select: { competencia: true } });
+    const parDoTeto = await tx.comissaoLancamento.findMany({ where: { empresaId: autor.empresaId, tetoCompetencia: compReaberta }, select: { id: true, fechamentoId: true } });
+    if (parDoTeto.some((l) => l.fechamentoId && l.fechamentoId !== id)) throw new ErroDesempenho(MSG_TETO_JA_FECHADO, 409);
+    if (parDoTeto.length) await tx.comissaoLancamento.deleteMany({ where: { id: { in: parDoTeto.map((l) => l.id) } } });
     // Só reabre o que está fechado (dois cliques não registram duas reaberturas)
     const { count } = await tx.desempenhoFechamento.updateMany({
       where: { id, empresaId: autor.empresaId, situacao: "FECHADO" },

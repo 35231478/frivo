@@ -9,6 +9,7 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { medicoesDaOrigem } from "@/lib/faturamento-os";
+import { aplicarTetos, inicioDoMesSeguinte, type Excedente, type TetoComissao } from "./executor";
 import { ultimosCustos } from "@/lib/estoque/custo";
 import { valorDesconto } from "@/lib/orcamentos/calculo";
 import {
@@ -298,7 +299,11 @@ function motivoDoEstorno(quando: Quando, status: string): string {
 
 /* ───────── o que entra no fechamento do mês ───────── */
 
-export interface MovimentoAberto { id: string; usuarioId: string | null; nome: string; tecnicoId: string | null; valor: number }
+export interface MovimentoAberto {
+  id: string; usuarioId: string | null; nome: string; tecnicoId: string | null; valor: number;
+  /** COM-2: a comissão do movimento (o par do teto se prende a uma delas) e o cargo da pessoa (o teto por cargo) */
+  comissaoId: string; cargoId: string | null;
+}
 
 /**
  * Os movimentos ainda não pagos até o fim da competência (os de meses anteriores que ficaram para trás também
@@ -307,21 +312,55 @@ export interface MovimentoAberto { id: string; usuarioId: string | null; nome: s
 export async function movimentosAbertos(empresaId: string, competencia: string, db: Db = prisma): Promise<MovimentoAberto[]> {
   const movs = await db.comissaoLancamento.findMany({
     where: { empresaId, fechamentoId: null, data: { lt: fimDaCompetencia(competencia) } },
-    select: { id: true, usuarioId: true, valor: true, comissao: { select: { beneficiarioNome: true } } },
+    select: { id: true, usuarioId: true, valor: true, comissaoId: true, comissao: { select: { beneficiarioNome: true } } },
   });
   const pessoas = new Map<string, Awaited<ReturnType<typeof colaboradorDoUsuario>>>();
   for (const uid of new Set(movs.map((m) => m.usuarioId).filter(Boolean) as string[])) pessoas.set(uid, await colaboradorDoUsuario(empresaId, uid, db));
   return movs.map((m) => {
     const p = m.usuarioId ? pessoas.get(m.usuarioId) : null;
-    return { id: m.id, usuarioId: m.usuarioId, nome: p?.nome ?? m.comissao.beneficiarioNome, tecnicoId: p?.tecnicoId ?? null, valor: num(m.valor) };
+    return { id: m.id, usuarioId: m.usuarioId, nome: p?.nome ?? m.comissao.beneficiarioNome, tecnicoId: p?.tecnicoId ?? null, valor: num(m.valor), comissaoId: m.comissaoId, cargoId: p?.cargoId ?? null };
   });
 }
 
-/** Por pessoa, o que entra no mês (saldo negativo fica para o mês seguinte) e os ids dos movimentos que entram */
-export function comissoesDoMes(movs: readonly MovimentoAberto[]) {
-  const pessoas = comissoesPorPessoa(movs);
-  const quem = new Set(pessoas.map((p) => p.usuarioId));
-  return { pessoas, ids: movs.filter((m) => m.usuarioId && quem.has(m.usuarioId)).map((m) => m.id) };
+/** O excedente do teto de uma pessoa, com a comissão a que o par −/+ se prende */
+export interface ExcedenteDoMes extends Excedente { comissaoId: string }
+
+/**
+ * Por pessoa, o que entra no mês (saldo negativo fica para o mês seguinte) e os ids dos movimentos que entram.
+ * COM-2: com teto, a pessoa recebe até o teto e o EXCEDENTE vai para o mês seguinte (o fechamento grava o par −/+).
+ */
+export function comissoesDoMes(movs: readonly MovimentoAberto[], tetos: readonly TetoComissao[] = []) {
+  const todas = comissoesPorPessoa(movs);
+  const quem = new Set(todas.map((p) => p.usuarioId));
+  const ids = movs.filter((m) => m.usuarioId && quem.has(m.usuarioId)).map((m) => m.id);
+  if (!tetos.length) return { pessoas: todas, ids, excedentes: [] as ExcedenteDoMes[] };
+  const cargoDe = new Map(movs.filter((m) => m.usuarioId).map((m) => [m.usuarioId!, m.cargoId]));
+  const { pessoas, excedentes } = aplicarTetos(todas, tetos, cargoDe);
+  return {
+    pessoas, ids,
+    excedentes: excedentes.map((e) => ({ ...e, comissaoId: movs.find((m) => m.usuarioId === e.usuarioId && m.valor > 0)!.comissaoId })),
+  };
+}
+
+/** Os tetos ativos da empresa, no formato da regra pura */
+export async function tetosAtivos(empresaId: string, db: Db = prisma): Promise<TetoComissao[]> {
+  const ts = await db.comissaoTeto.findMany({ where: { empresaId, ativo: true }, select: { quemTipo: true, usuarioId: true, cargoId: true, valor: true } });
+  return ts.map((t) => ({ quemTipo: t.quemTipo as TetoComissao["quemTipo"], usuarioId: t.usuarioId, cargoId: t.cargoId, valor: num(t.valor) }));
+}
+
+export const MOTIVO_TETO_SAI = "Teto mensal: o excedente passa para o mês seguinte";
+export const MOTIVO_TETO_ENTRA = "Excedente do teto do mês anterior";
+
+/**
+ * O par do teto, gravado AO FECHAR o mês: −excedente dentro do mês (pago junto com o fechamento: a pessoa recebe o
+ * teto) e +excedente no 1º dia do mês seguinte (entra no próximo fechamento). Os dois levam a competência.
+ */
+export function lancamentosDoTeto(empresaId: string, competencia: string, fechamentoId: string, excedentes: readonly ExcedenteDoMes[]): Prisma.ComissaoLancamentoCreateManyInput[] {
+  const ultimoInstante = new Date(fimDaCompetencia(competencia).getTime() - 1);
+  return excedentes.flatMap((e) => [
+    { empresaId, comissaoId: e.comissaoId, usuarioId: e.usuarioId, tipo: "ESTORNO", valor: -e.excedente, data: ultimoInstante, motivo: MOTIVO_TETO_SAI, fechamentoId, tetoCompetencia: competencia },
+    { empresaId, comissaoId: e.comissaoId, usuarioId: e.usuarioId, tipo: "LIBERACAO", valor: e.excedente, data: inicioDoMesSeguinte(competencia), motivo: MOTIVO_TETO_ENTRA, fechamentoId: null, tetoCompetencia: competencia },
+  ]);
 }
 
 /* ───────── o extrato da própria pessoa ───────── */

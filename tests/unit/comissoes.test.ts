@@ -204,20 +204,23 @@ describe("fechamento do mês com comissões", () => {
 });
 
 describe("o que a tela manda", () => {
-  it("regra: pessoa/cargo/categoria/serviço exigidos conforme o tipo; % até 100; só o papel Vendedor; valor > 0", () => {
+  it("regra: pessoa/cargo/categoria/serviço exigidos conforme o tipo; % até 100; Vendedor e Executor (COM-2); valor > 0", () => {
     expect(regraSchema.safeParse({ quemTipo: "PESSOA", sobreTipo: "TODOS_SERVICOS", base: "PERC_VENDA", valor: 5 }).success).toBe(false);
     expect(regraSchema.safeParse({ quemTipo: "CARGO", cargoId: "c", sobreTipo: "CATEGORIA", base: "PERC_VENDA", valor: 5 }).success).toBe(false);
     expect(regraSchema.safeParse({ quemTipo: "TODOS", sobreTipo: "SERVICO", base: "PERC_VENDA", valor: 5 }).success).toBe(false);
     expect(regraSchema.safeParse({ quemTipo: "TODOS", sobreTipo: "TODOS_SERVICOS", base: "PERC_VENDA", valor: 100.01 }).success).toBe(false);
     expect(regraSchema.safeParse({ quemTipo: "TODOS", sobreTipo: "PECAS", base: "FIXO_ITEM", valor: 150 }).success).toBe(true);
     expect(regraSchema.safeParse({ quemTipo: "TODOS", sobreTipo: "TODOS_SERVICOS", base: "PERC_VENDA", valor: 0 }).success).toBe(false);
-    expect(regraSchema.safeParse({ quemTipo: "TODOS", sobreTipo: "TODOS_SERVICOS", base: "PERC_VENDA", valor: 3, papel: "EXECUTOR" }).success).toBe(false);
+    // COM-2 ligou o Executor; o Responsável segue desligado
+    expect(regraSchema.safeParse({ quemTipo: "TODOS", sobreTipo: "TODOS_SERVICOS", base: "PERC_VENDA", valor: 3, papel: "EXECUTOR" }).success).toBe(true);
+    expect(regraSchema.safeParse({ quemTipo: "TODOS", sobreTipo: "TODOS_SERVICOS", base: "PERC_VENDA", valor: 3, papel: "RESPONSAVEL" }).success).toBe(false);
     expect(regraSchema.safeParse({ quemTipo: "TODOS", sobreTipo: "TODOS_SERVICOS", base: "PERC_VENDA", valor: 3, outro: 1 }).success).toBe(false);
   });
 
   it("normalizar: o que não vale para o tipo escolhido vai nulo", () => {
     const d = regraSchema.parse({ quemTipo: "TODOS", usuarioId: "u", cargoId: "c", sobreTipo: "TODOS_SERVICOS", categoria: "X", servicoId: "s", base: "PERC_VENDA", valor: "2,5".replace(",", ".") });
-    expect(normalizarRegra(d)).toEqual({ quemTipo: "TODOS", papel: "VENDEDOR", sobreTipo: "TODOS_SERVICOS", base: "PERC_VENDA", valor: 2.5, ativo: true, usuarioId: null, cargoId: null, categoria: null, servicoId: null });
+    // COM-2: o vendedor não tem divisão (fica "Igual", sem os % por cargo)
+    expect(normalizarRegra(d)).toEqual({ quemTipo: "TODOS", papel: "VENDEDOR", sobreTipo: "TODOS_SERVICOS", base: "PERC_VENDA", valor: 2.5, ativo: true, usuarioId: null, cargoId: null, categoria: null, servicoId: null, divisao: "IGUAL", divisaoCargos: null });
   });
 
   it("trocar vendedor: exige a pessoa e o motivo (mínimo 5 caracteres)", () => {

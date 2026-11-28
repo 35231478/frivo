@@ -18,6 +18,8 @@ const URL = process.env.PG_TESTE_URL;
 vi.setConfig({ testTimeout: 120_000 });
 const RAIZ = path.resolve(__dirname, "../..");
 const ARQUIVO = path.join(RAIZ, "prisma/sql/2027-02-11_comissoes.sql");
+/** A COM-2 vem por cima (o catálogo final é o do schema.prisma de hoje) */
+const ARQUIVO_COM2 = path.join(RAIZ, "prisma/sql/2027-02-14_comissao_executor.sql");
 const SCHEMA = `teste_comissoes_${process.pid}`;
 const ESPERADO = `teste_comissoes_prisma_${process.pid}`;
 const PRISMA_BIN = path.join(RAIZ, "node_modules/.bin/prisma");
@@ -30,8 +32,10 @@ function psql(args: string[]) {
 const sql = (q: string) => psql(["-c", q]);
 const urlDoSchema = (schema = SCHEMA) => { const u = new globalThis.URL(URL!); u.searchParams.set("schema", schema); return u.toString(); };
 
-/** Desfaz o que a COM-1 acrescenta: o banco fica como a produção está hoje */
+/** Desfaz o que a COM-1 acrescenta (e a COM-2, que vem por cima): o banco fica como a produção estava antes da COM-1 */
 const REBOBINAR = `
+  DROP TABLE "comissao_revisoes"; DROP TABLE "comissao_tetos";
+  ALTER TABLE "configuracoes" DROP COLUMN "comissao_executor_quando", DROP COLUMN "comissao_retorno_dias";
   DROP TABLE "comissao_lancamentos"; DROP TABLE "comissoes"; DROP TABLE "comissao_regras";
   ALTER TABLE "orcamentos" DROP COLUMN "vendedor_id"; ALTER TABLE "ordens_servico" DROP COLUMN "vendedor_id"; ALTER TABLE "medicoes" DROP COLUMN "vendedor_id";
   ALTER TABLE "servicos" DROP COLUMN "categoria";
@@ -105,6 +109,7 @@ describe.skipIf(!URL)("SQL de produção: COM-1 — comissões do vendedor (Post
   });
 
   it("dá EXATAMENTE o que o Prisma espera (o catálogo inteiro igual ao do `prisma db push` do schema.prisma)", () => {
+    psql(["-f", ARQUIVO_COM2]);
     execFileSync(PRISMA_BIN, ["db", "push", "--skip-generate", "--schema", "prisma/schema.prisma"], { cwd: RAIZ, env: { ...process.env, DATABASE_URL: urlDoSchema(ESPERADO) }, stdio: "pipe" });
     const catalogo = (schema: string) => [
       sql(`SELECT table_name || '.' || column_name || ' ' || data_type || ' ' || udt_name || ' ' || is_nullable || ' ' || coalesce(column_default, '-') || ' ' || coalesce(numeric_precision::text, '-') || ',' || coalesce(numeric_scale::text, '-')

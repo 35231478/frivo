@@ -26,17 +26,22 @@ export const JANELA_GERACAO_DIAS = 180;
 
 const travarEmpresa = (tx: Prisma.TransactionClient, empresaId: string) => tx.$queryRaw`SELECT 1 AS ok FROM pg_advisory_xact_lock(hashtext(${`comissoes:${empresaId}`}))`;
 
-/** O usuário (login) de cada colaborador, pelo e-mail — o mesmo vínculo da COM-1, ao contrário */
-async function usuariosDosTecnicos(db: Prisma.TransactionClient, empresaId: string, tecnicoIds: string[]): Promise<Map<string, Participante>> {
+/** Prefixo do "usuário" de quem não tem login: entra na divisão (a parte dele não vai para os colegas), mas não recebe */
+const SEM_LOGIN = "sem-login:";
+
+/**
+ * Cada colaborador da atividade como participante da divisão: o usuário (login) pelo e-mail — o mesmo vínculo da
+ * COM-1, ao contrário. Quem não tem login entra na conta da divisão com um id que não recebe nada.
+ */
+async function participantesDosTecnicos(db: Prisma.TransactionClient, empresaId: string, tecnicoIds: string[]): Promise<Map<string, Participante>> {
   const r = new Map<string, Participante>();
   if (!tecnicoIds.length) return r;
-  const tecnicos = await db.tecnico.findMany({ where: { empresaId, id: { in: tecnicoIds } }, select: { id: true, email: true, cargoId: true } });
+  const tecnicos = await db.tecnico.findMany({ where: { empresaId, id: { in: tecnicoIds } }, select: { id: true, nome: true, email: true, cargoId: true } });
   const emails = [...new Set(tecnicos.map((t) => (t.email ?? "").trim().toLowerCase()).filter(Boolean))];
-  if (!emails.length) return r;
-  const usuarios = await db.usuario.findMany({ where: { empresaId, ativo: true, email: { in: emails, mode: "insensitive" } }, select: { id: true, nome: true, email: true } });
+  const usuarios = emails.length ? await db.usuario.findMany({ where: { empresaId, ativo: true, email: { in: emails, mode: "insensitive" } }, select: { id: true, nome: true, email: true } }) : [];
   for (const t of tecnicos) {
-    const u = usuarios.find((x) => x.email.trim().toLowerCase() === (t.email ?? "").trim().toLowerCase());
-    if (u) r.set(t.id, { usuarioId: u.id, tecnicoId: t.id, cargoId: t.cargoId, nome: u.nome });
+    const u = usuarios.find((x) => !!t.email && x.email.trim().toLowerCase() === t.email.trim().toLowerCase());
+    r.set(t.id, u ? { usuarioId: u.id, tecnicoId: t.id, cargoId: t.cargoId, nome: u.nome } : { usuarioId: `${SEM_LOGIN}${t.id}`, tecnicoId: t.id, cargoId: t.cargoId, nome: t.nome });
   }
   return r;
 }
@@ -162,7 +167,7 @@ async function sincronizarOs(tx: Prisma.TransactionClient, c: CtxOs): Promise<Re
     const semEquipamento = vinculados.size === 0;
     const unidades = semEquipamento ? (os.status === "CONCLUIDA" ? unidadesDaOs(linhas, 0, []) : []) : unidadesDaOs(linhas, vinculados.size, atendidos);
     const tecnicosDe = (a: (typeof os.atividades)[number]) => [a.tecnicoId, ...a.tecnicosEquipe.map((t) => t.tecnicoId)].filter((x): x is string => !!x);
-    const pessoas = await usuariosDosTecnicos(tx, c.empresaId, [...new Set(os.atividades.flatMap(tecnicosDe))]);
+    const pessoas = await participantesDosTecnicos(tx, c.empresaId, [...new Set(os.atividades.flatMap(tecnicosDe))]);
     const participantesDe = (atividadeId: string | null): Participante[] => {
       const ids = atividadeId ? tecnicosDe(os.atividades.find((a) => a.id === atividadeId)!) : os.atividades.flatMap(tecnicosDe);
       const vistos = new Set<string>();
@@ -170,6 +175,7 @@ async function sincronizarOs(tx: Prisma.TransactionClient, c: CtxOs): Promise<Re
     };
     for (const u of unidades) {
       for (const k of comissoesDaUnidade(u, participantesDe(u.atividadeId), c.regras, c.liquida)) {
+        if (k.participante.usuarioId.startsWith(SEM_LOGIN)) continue; // sem login não recebe (e a parte dele não muda de dono)
         const chave = chaveDoExecutor(os.id, u, k.participante.usuarioId);
         desejadas.set(chave, {
           empresaId: c.empresaId, orcamentoId: null, ordemServicoId: os.id, atividadeId: u.atividadeId, equipamentoId: u.equipamentoId, chave,
@@ -235,7 +241,8 @@ async function sincronizarOs(tx: Prisma.TransactionClient, c: CtxOs): Promise<Re
  * Retorno: outra OS no MESMO equipamento, aberta até N dias depois do serviço, que "volta" deste serviço (o último
  * antes dela). Fica de fora o que é serviço previsto (OS de orçamento ou de ocorrência do PMOC), e o técnico que
  * REGISTROU o problema no serviço (Atenção no checklist, ocorrência ou serviço adicional) — como no Desempenho.
- * Com tipos de retorno configurados no Desempenho, só eles contam. Uma revisão por comissão × OS do retorno.
+ * Só contam as OS dos TIPOS DE RETORNO (a mesma lista do Desempenho, editável também em Configurações › Comissões):
+ * sem nenhum tipo marcado, a revisão de retorno fica desligada. Uma revisão por comissão × OS do retorno.
  */
 async function abrirRevisoes(
   tx: Prisma.TransactionClient, c: CtxOs, os: { id: string; numero: string },
@@ -253,12 +260,13 @@ async function abrirRevisoes(
   if (!deste.length) return 0;
   const primeiro = Math.min(...deste.map((s) => s.feitoEm!.getTime()));
   const tiposRetorno = (await tx.desempenhoTipoRetorno.findMany({ where: { empresaId: c.empresaId }, select: { tipoOsId: true } })).map((t) => t.tipoOsId);
+  if (!tiposRetorno.length) return 0;
   const candidatas = await tx.ordemServico.findMany({
     where: {
       empresaId: c.empresaId, id: { not: os.id }, status: { not: "CANCELADA" }, orcamentoOrigemId: null, pmocOcorrenciasCorretivas: { none: {} },
       criadoEm: { gt: new Date(primeiro), lte: new Date(c.agora.getTime()) },
       OR: [{ equipamentoId: { in: equipIds } }, { atividades: { some: { status: { not: "CANCELADA" }, equipamentos: { some: { equipamentoId: { in: equipIds } } } } } }],
-      ...(tiposRetorno.length ? { atividades: { some: { tipoOsId: { in: tiposRetorno }, status: { not: "CANCELADA" } } } } : {}),
+      atividades: { some: { tipoOsId: { in: tiposRetorno }, status: { not: "CANCELADA" } } },
     },
     select: { id: true, numero: true, criadoEm: true, equipamentoId: true, atividades: { where: { status: { not: "CANCELADA" } }, select: { equipamentos: { select: { equipamentoId: true } } } } },
   });
