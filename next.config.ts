@@ -71,7 +71,16 @@ const withPWA = withPWAInit({
   },
 });
 
+// Na Vercel (VERCEL definido) o `next build` NÃO repete a checagem de tipos nem o lint: a etapa de tipos é a que mais
+// consome memória (passa de 4 GB) e estourava a máquina de 8 GB da Vercel (SIGKILL por falta de memória). Quem garante
+// os tipos é o job Typecheck do CI (`tsc --noEmit`, portão obrigatório do PR). No CI e local o next build continua
+// checando. Ver docs/build-memoria.md.
+const naVercel = !!process.env.VERCEL;
+
 const nextConfig: NextConfig = {
+  typescript: { ignoreBuildErrors: naVercel },
+  eslint: { ignoreDuringBuilds: naVercel },
+  experimental: { webpackMemoryOptimizations: process.env.FRIVO_MEDIR_MEMOPT === "1" },
   // Cabeçalhos de segurança em todas as respostas (páginas e APIs):
   // - nosniff: o navegador nunca "adivinha" um tipo diferente do declarado;
   // - frame-ancestors 'self' / SAMEORIGIN: nenhum site de terceiro embute o Frivo em iframe
