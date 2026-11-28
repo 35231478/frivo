@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Check, Plus, Search, Trash2 } from "lucide-react";
+import { Check, Percent, Plus, Search, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -12,14 +12,22 @@ import { cn, formatarMoeda, LABELS_TIPO_TABELA_PRECO } from "@/lib/utils";
 import { calcularValorFinalTabela } from "@/lib/tabela-preco-helpers";
 import { salvarCadastro, type EditorCadastroProps } from "@/components/cadastros/cadastro-padrao";
 import { alternarTodos, escolhidos, estadoDeTodos, filtrarCatalogo, type FiltroTipo } from "@/lib/tabela-preco-selecao";
+import { usePermissoes } from "@/components/providers/permissoes-provider";
+import { Dica } from "@/components/ui/dica";
+import { CADASTROS } from "@/lib/cadastros/registro";
+import { DesfazerReajuste, ModalReajuste, type LoteResumo } from "@/components/cadastros/editores/reajuste-tabela";
 
 interface CatalogoItem { id: string; nome: string; valorPadrao: number; kind: "SERVICO" | "PRODUTO"; codigo?: string | number | null }
 interface ItemEdit {
-  _id: string; catalogoId: string; kind: "SERVICO" | "PRODUTO"; nome: string; valorPadrao: number; inativo: boolean;
+  /** `dbId`: a linha gravada (o reajuste em massa escolhe por ela); item recém-adicionado não tem */
+  _id: string; dbId?: string; catalogoId: string; kind: "SERVICO" | "PRODUTO"; nome: string; valorPadrao: number; inativo: boolean;
   tipoPreco: "VALOR_FIXO" | "DESCONTO_PERCENTUAL"; valorFixo: string; descontoPercent: string;
 }
 
 function uid() { return Math.random().toString(36).slice(2); }
+
+/** Os preços dos itens, para saber se a lista mudou desde que carregou (o reajuste exige a tabela salva) */
+const assinatura = (itens: ItemEdit[]) => JSON.stringify(itens.map((i) => [i.catalogoId, i.tipoPreco, i.valorFixo, i.descontoPercent]));
 
 /** Itens gravados → edição (o serviço/produto vem junto, mesmo inativo no catálogo). */
 function paraEdicao(itens: unknown): ItemEdit[] {
@@ -27,6 +35,7 @@ function paraEdicao(itens: unknown): ItemEdit[] {
     const cat = it.servico ?? it.produto;
     return {
       _id: uid(),
+      dbId: it.id,
       catalogoId: it.servicoId ?? it.produtoId ?? "",
       kind: it.servicoId ? "SERVICO" : "PRODUTO",
       nome: cat?.nome ?? "(item removido)",
@@ -59,21 +68,45 @@ export function EditorTabelaPreco({ item, aberto, onFechar, onSalvo }: EditorCad
   // Só grava os itens depois de carregá-los: salvar com a lista vazia apagaria os preços da tabela
   const [itensOk, setItensOk] = useState(false);
 
+  // Reajuste em massa (lib/precos/reajuste-tabela): só na tabela já criada, para quem edita tabela de preço
+  const { pode } = usePermissoes();
+  const reqEditar = CADASTROS["tabelas-preco"].permissoes.editar;
+  const podeReajustar = !!item && (!reqEditar || reqEditar.some(([m, a]) => pode(m, a)));
+  const [carregados, setCarregados] = useState("");
+  const [selReajuste, setSelReajuste] = useState<Set<string>>(new Set());
+  const [reajustando, setReajustando] = useState(false);
+  const [ultimoLote, setUltimoLote] = useState<LoteResumo | null>(null);
+  const [recarga, setRecarga] = useState(0);
+  const sujo = itensOk && assinatura(itens) !== carregados;
+
   useEffect(() => {
     if (!aberto) return;
     setErro("");
     setNome(item?.nome ?? ""); setDescricao((item?.descricao as string | null) ?? ""); setTipo(item?.tipo ?? "PERSONALIZADA");
-    setItens([]); setItensOk(!item);
-    if (!item) return;
-    // A lista não traz os itens: busca o registro completo
+    setItens([]); setItensOk(!item); setSelReajuste(new Set()); setUltimoLote(null); setCarregados(assinatura([])); setRecarga(0);
+  }, [aberto, item]);
+
+  // Os itens (a lista não os traz: busca o registro completo) e o último reajuste. `recarga`: depois de reajustar ou
+  // desfazer, vêm de novo do servidor (nome, tipo e descrição digitados ficam)
+  useEffect(() => {
+    if (!aberto || !item) return;
     let cancelado = false;
     setCarregando(true);
     fetch(`/api/cadastros/tabelas-preco/${item.id}`, { cache: "no-store" })
-      .then(async (r) => { const d = await r.json().catch(() => null); if (cancelado) return; if (r.ok && d) { setItens(paraEdicao(d.itens)); setItensOk(true); } else setErro(d?.erro ?? "Não foi possível carregar os itens da tabela."); })
+      .then(async (r) => { const d = await r.json().catch(() => null); if (cancelado) return; if (r.ok && d) { const lista = paraEdicao(d.itens); setItens(lista); setCarregados(assinatura(lista)); setItensOk(true); } else setErro(d?.erro ?? "Não foi possível carregar os itens da tabela."); })
       .catch(() => { if (!cancelado) setErro("Erro de conexão ao carregar os itens."); })
       .finally(() => { if (!cancelado) setCarregando(false); });
+    if (podeReajustar) {
+      fetch(`/api/cadastros/tabelas-preco/${item.id}/reajustes`, { cache: "no-store" })
+        .then((r) => (r.ok ? r.json() : null)).then((d) => { if (!cancelado) setUltimoLote(d?.ultimo ?? null); }).catch(() => {});
+    }
     return () => { cancelado = true; };
-  }, [aberto, item]);
+  }, [aberto, item, recarga, podeReajustar]);
+
+  const aposReajuste = () => { setReajustando(false); setRecarga((n) => n + 1); };
+  const alternarReajuste = (dbId: string) => setSelReajuste((s) => { const n = new Set(s); if (n.has(dbId)) n.delete(dbId); else n.add(dbId); return n; });
+  const idsReajuste = itens.filter((i) => i.dbId && selReajuste.has(i.dbId)).map((i) => i.dbId!);
+  const dicaSujo = "Salve as alterações da tabela antes de reajustar ou desfazer: o reajuste vale sobre os preços gravados.";
 
   useEffect(() => {
     if (!aberto || catalogo.length) return;
@@ -148,7 +181,18 @@ export function EditorTabelaPreco({ item, aberto, onFechar, onSalvo }: EditorCad
         <FormField label="Descrição"><Textarea value={descricao} onChange={(e) => setDescricao(e.target.value)} rows={2} /></FormField>
 
         <div>
-          <h5 className="text-xs font-bold text-ink-muted uppercase tracking-wider mb-2">Itens da tabela</h5>
+          <div className="flex items-center justify-between gap-2 flex-wrap mb-2">
+            <h5 className="text-xs font-bold text-ink-muted uppercase tracking-wider">Itens da tabela</h5>
+            {podeReajustar && itensOk && itens.some((i) => i.dbId) && (
+              <div className="flex items-center gap-2" data-acoes-reajuste>
+                {sujo && <Dica texto={dicaSujo} rotulo="Reajuste" />}
+                {ultimoLote && <DesfazerReajuste tabelaId={item!.id} lote={ultimoLote} disabled={sujo} onDesfeito={aposReajuste} />}
+                <Button type="button" size="sm" variant="secondary" disabled={sujo} onClick={() => setReajustando(true)} data-reajustar-precos>
+                  <Percent className="w-4 h-4" /> {idsReajuste.length ? `Reajustar selecionados (${idsReajuste.length})` : "Reajustar preços"}
+                </Button>
+              </div>
+            )}
+          </div>
           <SeletorCatalogo catalogo={catalogo} erroCatalogo={erroCatalogo} jaAdicionados={itens.map((i) => i.catalogoId)} onAdicionar={adicionarDoCatalogo} />
 
           <div className="space-y-2 mt-3">
@@ -160,6 +204,10 @@ export function EditorTabelaPreco({ item, aberto, onFechar, onSalvo }: EditorCad
                 <div key={it._id} className="border border-surface-border rounded-lg p-3 bg-white space-y-2">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2 min-w-0 flex-wrap">
+                      {podeReajustar && it.dbId && (
+                        <input type="checkbox" className="w-4 h-4" checked={selReajuste.has(it.dbId)} onChange={() => alternarReajuste(it.dbId!)}
+                          aria-label={`Selecionar ${it.nome} para o reajuste`} data-sel-reajuste={it.dbId} />
+                      )}
                       <span className={cn("text-[10px] font-semibold px-1.5 py-0.5 rounded", it.kind === "SERVICO" ? "bg-primary-50 text-primary-700" : "bg-acento-claro text-acento-hover")}>{it.kind === "SERVICO" ? "Serviço" : "Produto"}</span>
                       <span className="text-sm font-medium text-ink truncate">{it.nome}</span>
                       {it.inativo && <span className="text-[10px] font-semibold bg-atencao-claro text-atencao-texto px-1.5 py-0.5 rounded" title="Inativo no catálogo: o preço continua valendo nesta tabela">inativo</span>}
@@ -189,6 +237,9 @@ export function EditorTabelaPreco({ item, aberto, onFechar, onSalvo }: EditorCad
           </div>
         </div>
       </div>
+      {podeReajustar && item && (
+        <ModalReajuste aberto={reajustando} tabelaId={item.id} itemIds={idsReajuste} onFechar={() => setReajustando(false)} onAplicado={() => { setSelReajuste(new Set()); aposReajuste(); }} />
+      )}
     </Drawer>
   );
 }
