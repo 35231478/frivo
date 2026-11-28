@@ -40,7 +40,8 @@ import { descricaoParaApp } from "@/lib/tecnico/cartao";
 import { detalhesDaOs, linkTelefone, linkWhatsapp, PRIORIDADE_DESTAQUE, resumoEquipamentos } from "@/lib/tecnico/topo-os";
 import { horarioNoDia, MSG_TERMINO_FORA, situacaoAndamento, sugerirTermino, tempoSuspeito, terminoValido, ultimaDe } from "@/lib/tecnico/andamento";
 import { chaveDiaBR, horaBR } from "@/lib/fuso";
-import { LABELS_PRIORIDADE } from "@/lib/utils";
+import { LABELS_PRIORIDADE, formatarMoeda } from "@/lib/utils";
+import { ROTULO_SITUACAO_APP, comissoesDaTela } from "@/lib/tecnico/comissao";
 
 /** Situação do equipamento (chip da lista). */
 export function situacao(e: EquipamentoTela) {
@@ -98,7 +99,7 @@ export function VistaOs({ atividadeId, equipamentoId, camera, incluir, fim, prim
   }
   const e = equipamentoId ? tela.equipamentos.find((q) => q.equipamento.id === equipamentoId) : null;
   if (e) return <TelaEquipamento x={tela} e={e} registrar={registrar} endereco={retrato.cartao.endereco}
-    qr={retrato.equipamentosUnidade.find((u) => u.id === e.equipamento.id)?.qr?.codigo ?? null} />;
+    qr={retrato.equipamentosUnidade.find((u) => u.id === e.equipamento.id)?.qr?.codigo ?? null} comissao={retrato.comissao} />;
   return <ResumoOs r={retrato} x={tela} fila={fila} aEnviar={aEnviar} registrar={registrar} camera={camera} incluir={incluir} fim={fim} />;
 }
 
@@ -111,6 +112,8 @@ function Voltar() {
 }
 
 function ResumoOs({ r, x, fila, aEnviar, registrar, camera, incluir, fim }: { r: RetratoAtividade; x: ExecucaoTela; fila: OperacaoFila[]; aEnviar: number; registrar: (ops: NovaOperacao[]) => Promise<void>; camera?: boolean; incluir?: string | null; fim?: boolean }) {
+  // COM-2B: o valor de cada equipamento feito e completo (só o dele; a conta veio do servidor no retrato)
+  const comissoes = useMemo(() => comissoesDaTela(x.equipamentos, r.comissao), [x.equipamentos, r.comissao]);
   const c = r.cartao;
   const atividadeId = x.atividade.id;
   const { motor, config } = useTecnico();
@@ -271,6 +274,8 @@ function ResumoOs({ r, x, fila, aEnviar, registrar, camera, incluir, fim }: { r:
         <ul className="space-y-2">
           {x.equipamentos.map((e) => {
             const s = situacao(e);
+            // COM-2B: a comissão dele no equipamento feito e completo (aguardando envio até o servidor confirmar)
+            const com = comissoes.get(e.equipamento.id);
             return (
               <li key={e.equipamento.id}>
                 <button type="button" onClick={() => irPara({ ver: "os", a: atividadeId, e: e.equipamento.id })} data-equip-linha={e.equipamento.id} data-situacao={s.chave}
@@ -280,6 +285,12 @@ function ResumoOs({ r, x, fila, aEnviar, registrar, camera, incluir, fim }: { r:
                     <span className="block font-semibold text-ink truncate">{e.equipamento.titulo}</span>
                     <span className="block text-xs text-ink-muted truncate">{[e.equipamento.tipo?.nome, e.equipamento.tag && `TAG ${e.equipamento.tag}`, e.equipamento.local].filter(Boolean).join(" · ")}</span>
                     <SeloGarantia fim={e.equipamento.garantiaAte} className="mt-1" />
+                    {com && (
+                      <span key={com.situacao} data-comissao-equip={e.equipamento.id} data-situacao-comissao={com.situacao}
+                        className="anim-comissao mt-1 inline-flex items-center gap-1 rounded-full bg-success-50 px-2 py-0.5 text-xs font-semibold text-success-800">
+                        {formatarMoeda(com.valor)} · {ROTULO_SITUACAO_APP[com.situacao]}
+                      </span>
+                    )}
                   </span>
                   <span className={cn("text-xs font-semibold rounded-full px-2 py-0.5 shrink-0", s.classe)}>{s.rotulo}</span>
                   <ChevronRight className="w-5 h-5 text-ink-subtle shrink-0" />
