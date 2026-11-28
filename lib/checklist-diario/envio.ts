@@ -30,6 +30,8 @@ export const envioDiarioSchema = z.discriminatedUnion("situacao", [
     templateId: id,
     itens: z.array(itemEnviadoSchema).max(200),
     observacaoGeral: z.string().max(2000).nullable().optional(),
+    /** D13 — corrige o checklist feito HOJE (até o fim do dia): item sem foto nova mantém a que já estava */
+    correcao: z.literal(true).optional(),
   }).strict(),
   z.object({
     ...base,
@@ -41,5 +43,5 @@ export type EnvioDiario = z.infer<typeof envioDiarioSchema>;
 
 /** O que o servidor responde ao aparelho */
 export type RespostaEnvioDiario =
-  | { ok: true; acao: "criar" | "repetido" | "trocar" | "manter" | "ignorado"; registro: { dia: string; situacao: "FEITO" | "NAO_VAI_USAR" } | null }
+  | { ok: true; acao: "criar" | "repetido" | "trocar" | "manter" | "ignorado" | "corrigir"; registro: { dia: string; situacao: "FEITO" | "NAO_VAI_USAR" } | null }
   | { ok: false; erro: string };

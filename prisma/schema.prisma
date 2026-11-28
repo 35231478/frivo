@@ -4697,12 +4697,34 @@ model ChecklistPreenchido {
   itens        ChecklistItemPreenchido[]
   /// O registro do checklist obrigatório do app que gerou este checklist (se veio de lá)
   diario       ChecklistDiario?
+  /// D13 — as correções do colaborador pelo app (até o fim do dia), com o que mudou
+  correcoes    ChecklistCorrecao[]
 
   @@index([empresaId, criadoEm])
   @@index([empresaId, status, criadoEm])
   @@index([empresaId, inativadoEm, criadoEm])
   @@index([veiculoId])
   @@map("checklist_preenchidos")
+}
+
+/// D13 — a TRILHA da correção do checklist do veículo pelo colaborador no app (só no mesmo dia do checklist). O
+/// `client_id` do envio da correção faz o reenvio pela fila não aplicar duas vezes (nem um envio velho desfazer a correção).
+model ChecklistCorrecao {
+  id          String   @id @default(cuid())
+  empresaId   String   @map("empresa_id")
+  checklistId String   @map("checklist_id")
+  clientId    String   @unique @map("client_id")
+  usuarioId   String?  @map("usuario_id")
+  /// O que mudou ("Pneus: OK → NOK · Observação: …")
+  detalhes    String   @db.Text
+  /// Quando o colaborador tocou (relógio do aparelho, conferido)
+  feitoEm     DateTime @map("feito_em")
+  criadoEm    DateTime @default(now()) @map("criado_em")
+
+  checklist ChecklistPreenchido @relation(fields: [checklistId], references: [id], onDelete: Cascade)
+
+  @@index([checklistId])
+  @@map("checklist_correcoes")
 }
 
 model ChecklistItemPreenchido {

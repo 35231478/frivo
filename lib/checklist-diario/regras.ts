@@ -93,6 +93,8 @@ export interface ResumoPorteiro {
   modelo: { id: string; nome: string; itens: ItemDoModelo[] };
   /** O registro do servidor no dia `diaServidor` (null = nenhum ainda) */
   registro: { dia: string; situacao: SituacaoDiario } | null;
+  /** D13 — o checklist feito hoje, para corrigir até o fim do dia (as respostas; a foto só "tem"). Ausente = nenhum. */
+  feitoHoje?: { itens: { itemTemplateId: string; valor: string | null; temFoto: boolean }[]; observacaoGeral: string | null } | null;
 }
 
 /**
@@ -108,16 +110,44 @@ export function porteiroAberto(resumo: ResumoPorteiro | null | undefined, hoje: 
 }
 
 /** O que o servidor faz com um envio do aparelho, diante do que já existe naquele dia para o colaborador */
-export type DecisaoGravacao = "criar" | "repetido" | "trocar" | "manter";
+export type DecisaoGravacao = "criar" | "repetido" | "trocar" | "manter" | "corrigir";
 
 export function decidirGravacao(
   existente: { situacao: SituacaoDiario; clientId: string } | null | undefined,
-  nova: { situacao: SituacaoDiario; clientId: string },
+  nova: { situacao: SituacaoDiario; clientId: string; correcao?: boolean },
 ): DecisaoGravacao {
   if (!existente) return "criar";
   if (existente.clientId === nova.clientId) return "repetido";
   if (existente.situacao === "NAO_VAI_USAR" && nova.situacao === "FEITO") return "trocar";
+  // D13: o colaborador corrige o checklist feito (pedido explícito; um 2º checklist comum não passa por cima)
+  if (existente.situacao === "FEITO" && nova.situacao === "FEITO" && nova.correcao) return "corrigir";
   return "manter";
+}
+
+export const MSG_CORRECAO_FORA_DO_DIA = "O checklist do veículo só pode ser corrigido no mesmo dia.";
+export const MSG_CORRECAO_INATIVADO = "Este checklist foi excluído pelo escritório: não dá para corrigir.";
+
+/**
+ * D13 — a correção vale até o fim do dia do checklist: o toque (relógio do aparelho, já conferido com a chegada) tem
+ * de ser no mesmo dia civil (Brasília). Feita sem sinal às 23h50 e enviada de manhã: vale (o toque foi no dia).
+ */
+export const correcaoNoPrazo = (diaDoChecklist: string, diaDoToque: string) => diaDoChecklist === diaDoToque;
+
+/** D13 — o que mudou na correção, item a item (na ordem do modelo), e a observação. Nada mudou = []. */
+export function mudancasDoChecklist(
+  itens: readonly { id: string; descricao: string }[],
+  antes: { itens: Record<string, { valor: string | null; temFoto: boolean }>; observacao: string | null },
+  depois: { itens: Record<string, { valor: string | null; fotoNova: boolean }>; observacao: string | null },
+): string[] {
+  const m: string[] = [];
+  const v = (x: string | null | undefined) => (x ?? "").trim();
+  for (const it of itens) {
+    const a = antes.itens[it.id], d = depois.itens[it.id];
+    if (v(a?.valor) !== v(d?.valor)) m.push(`${it.descricao}: ${v(a?.valor) || "(sem)"} → ${v(d?.valor) || "(sem)"}`);
+    if (d?.fotoNova) m.push(a?.temFoto ? `${it.descricao}: foto trocada` : `${it.descricao}: foto incluída`);
+  }
+  if (v(antes.observacao) !== v(depois.observacao)) m.push(`Observação: ${v(antes.observacao) ? `“${v(antes.observacao)}”` : "(sem)"} → ${v(depois.observacao) ? `“${v(depois.observacao)}”` : "(sem)"}`);
+  return m;
 }
 
 /** Tolerância entre o toque e a chegada para não chamar de "sem sinal" um envio comum */

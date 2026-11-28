@@ -30,6 +30,8 @@ interface Detalhe extends Omit<Linha, "totalItens" | "alertas"> {
   colaborador: { id: string; nome: string } | null;
   editadoPor: { nome: string } | null;
   itens: { id: string; itemTemplateId: string; valor: string | null; foto: string | null; alerta: boolean; itemTemplate: ItemDoModelo }[];
+  /** D13 — corrigido pelo colaborador no app (até o fim do dia): o que mudou */
+  correcoes?: { feitoEm: string; detalhes: string }[];
 }
 type Aba = "ativos" | "inativos";
 const ABAS: readonly { id: Aba; label: string }[] = [{ id: "ativos", label: "Ativos" }, { id: "inativos", label: "Inativos" }];
@@ -323,6 +325,12 @@ export function PainelDoChecklist({ aberto, colaboradores, podeEditar, onFechar,
               <div><dt className="text-xs text-ink-muted">Preenchido em</dt><dd className="text-ink">{formatarDataHora(d.criadoEm)}</dd></div>
               <div><dt className="text-xs text-ink-muted">Status</dt><dd>{selo(d.status)}</dd></div>
               {d.editadoEm && <div className="col-span-2" data-editado><dt className="text-xs text-ink-muted">Última edição</dt><dd className="text-ink">{formatarDataHora(d.editadoEm)}{d.editadoPor ? ` · ${d.editadoPor.nome}` : ""}</dd></div>}
+              {!!d.correcoes?.length && (
+                <div className="col-span-2" data-correcoes-checklist>
+                  <dt className="text-xs text-ink-muted">Corrigido pelo colaborador no app</dt>
+                  <dd><ul className="text-ink space-y-0.5">{d.correcoes.map((c, i) => <li key={`${c.feitoEm}-${i}`}>{formatarDataHora(c.feitoEm)}: {c.detalhes}</li>)}</ul></dd>
+                </div>
+              )}
               {d.inativadoEm && <div className="col-span-2" data-inativado><dt className="text-xs text-ink-muted">Excluído em</dt><dd className="text-ink">{formatarDataHora(d.inativadoEm)}{d.inativadoPor ? ` · ${d.inativadoPor.nome}` : ""}</dd></div>}
             </dl>
 

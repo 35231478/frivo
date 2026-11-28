@@ -226,3 +226,91 @@ describe("a fila do aparelho (pura)", () => {
     expect(corpos.slice(-2)).toEqual(["a", "b"]);
   });
 });
+
+/* ───────── D13 (App pronto pra janeiro 2): corrigir o checklist do veículo de hoje ───────── */
+
+describe("D13: corrigir o checklist do veículo até o fim do dia", () => {
+  it("feito no aparelho: no Perfil, 'Corrigir o checklist de hoje' reabre com as respostas; salvar manda a correção (sem sinal também)", async () => {
+    await abrirApp(RESUMO());
+    await responderTudo();
+    await clicar($("[data-porteiro-enviar]"));
+    await ate(() => !$("[data-porteiro]") && enviados.length === 1, "feito e enviado");
+    expect($("[data-corrigir-checklist]")).toBeNull(); // no Meu dia, não (fica no Perfil)
+    await clicar($("[data-nav='perfil']"));
+    await ate(() => !!$("[data-corrigir-checklist]"), "atalho no Perfil");
+    expect($("[data-corrigir-checklist]")!.textContent).toContain("Até o fim do dia. O gestor vê o que mudou.");
+    await clicar($("[data-corrigir-checklist]"));
+    await ate(() => !!$("[data-porteiro]"), "reabre");
+    expect($("[data-porteiro-texto]")!.textContent).toContain("Corrigindo o checklist de hoje");
+    expect($("[data-porteiro-enviar]")!.textContent).toBe("Salvar correção");
+    expect($("[data-item-checklist='i-pneu'] [data-opcao='OK']")!.getAttribute("aria-pressed") ?? $("[data-item-checklist='i-pneu'] [data-opcao='OK']")!.getAttribute("aria-checked")).toBe("true");
+    online = false;
+    await clicar($("[data-item-checklist='i-pneu'] [data-opcao='NOK']"));
+    await clicar($("[data-porteiro-enviar]"));
+    await ate(() => !$("[data-porteiro]"), "fecha");
+    expect(toasts().join(" ")).toContain("Checklist corrigido, com alertas. O gestor vê o que mudou.");
+    online = true;
+    await act(async () => { window.dispatchEvent(new Event("online")); });
+    await ate(() => enviados.length === 2, "a correção sobe");
+    expect(enviados[1]).toMatchObject({ situacao: "FEITO", dia: HOJE, correcao: true, itens: [{ itemTemplateId: "i-pneu", valor: "NOK" }, { itemTemplateId: "i-oleo", valor: "Normal" }] });
+    expect(enviados[1].clientId).not.toBe(enviados[0].clientId);
+  });
+
+  it("feito em outro aparelho: o resumo da página traz as respostas de hoje; a foto já enviada vale para o item de foto obrigatório", async () => {
+    const itens = [...RESUMO().modelo.itens, { id: "i-foto", categoria: "Geral", descricao: "Foto do painel", tipo: "FOTO", opcoes: [], obrigatorio: true, ordem: 2 }];
+    await abrirApp(RESUMO({
+      registro: { dia: HOJE, situacao: "FEITO" }, modelo: { id: "tpl", nome: "Diário", itens: itens as any },
+      feitoHoje: { itens: [{ itemTemplateId: "i-pneu", valor: "OK", temFoto: false }, { itemTemplateId: "i-oleo", valor: "Baixo", temFoto: false }, { itemTemplateId: "i-foto", valor: null, temFoto: true }], observacaoGeral: "Arranhão na porta" },
+    }));
+    expect($("[data-porteiro]")).toBeNull();
+    await clicar($("[data-nav='perfil']"));
+    await ate(() => !!$("[data-corrigir-checklist]"), "atalho");
+    await clicar($("[data-corrigir-checklist]"));
+    await ate(() => !!$("[data-porteiro]"), "reabre");
+    expect(($("[data-porteiro-observacao]") as HTMLTextAreaElement).value).toBe("Arranhão na porta");
+    await clicar($("[data-item-checklist='i-oleo'] [data-opcao='Normal']"));
+    await clicar($("[data-porteiro-enviar]"));
+    expect($("[data-erro-porteiro]")).toBeNull(); // a foto obrigatória: a já enviada vale
+    await ate(() => enviados.length === 1, "sobe");
+    expect(enviados[0]).toMatchObject({ correcao: true, observacaoGeral: "Arranhão na porta" });
+    expect(enviados[0].itens).toEqual([{ itemTemplateId: "i-pneu", valor: "OK", foto: null }, { itemTemplateId: "i-oleo", valor: "Normal", foto: null }, { itemTemplateId: "i-foto", valor: null, foto: null }]);
+  });
+
+  it("'Voltar sem corrigir' fecha sem mandar nada; sem checklist feito hoje (ou o de ontem), nada para corrigir", async () => {
+    await abrirApp(RESUMO({ registro: { dia: HOJE, situacao: "FEITO" }, feitoHoje: { itens: [{ itemTemplateId: "i-pneu", valor: "OK", temFoto: false }], observacaoGeral: null } }));
+    await clicar($("[data-nav='perfil']"));
+    await ate(() => !!$("[data-corrigir-checklist]"), "atalho");
+    await clicar($("[data-corrigir-checklist]"));
+    await ate(() => !!$("[data-porteiro]"), "reabre");
+    await clicar($("[data-porteiro-voltar]"));
+    await ate(() => !$("[data-porteiro]"), "fecha");
+    expect(enviados).toHaveLength(0);
+    act(() => root!.unmount()); root = undefined; caixa.remove();
+    // o resumo é de ontem (a página ficou aberta): hoje não há o que corrigir
+    await abrirApp(RESUMO({ diaServidor: ONTEM, registro: { dia: ONTEM, situacao: "FEITO" }, feitoHoje: { itens: [], observacaoGeral: null }, dias: [] }));
+    await clicar($("[data-nav='perfil']"));
+    await esperar(10);
+    expect($("[data-corrigir-checklist]")).toBeNull();
+  });
+});
+
+describe("D13: as respostas que ficam no aparelho (pura)", () => {
+  it("o feito guarda as respostas sem a foto; a correção sem foto nova mantém 'tem foto'; 'não vou usar' não mexe", async () => {
+    const { feitoDoEnvio, feitoParaCorrigir } = await import("@/lib/checklist-diario/aparelho");
+    const base = { clientId: "c", dia: HOJE, feitoEm: "x", veiculoId: "v1", templateId: "tpl" };
+    const f1 = feitoDoEnvio(null, { ...base, situacao: "FEITO", itens: [{ itemTemplateId: "a", valor: "OK" }, { itemTemplateId: "f", foto: "data:image/jpeg;base64,AA" }], observacaoGeral: "obs" });
+    expect(f1).toEqual({ dia: HOJE, itens: [{ itemTemplateId: "a", valor: "OK", temFoto: false }, { itemTemplateId: "f", valor: null, temFoto: true }], observacaoGeral: "obs" });
+    expect(JSON.stringify(f1)).not.toContain("base64");
+    const f2 = feitoDoEnvio(f1, { ...base, situacao: "FEITO", correcao: true, itens: [{ itemTemplateId: "a", valor: "NOK" }, { itemTemplateId: "f" }] });
+    expect(f2!.itens).toEqual([{ itemTemplateId: "a", valor: "NOK", temFoto: false }, { itemTemplateId: "f", valor: null, temFoto: true }]);
+    // um checklist novo (não correção) de outro dia não herda a foto
+    expect(feitoDoEnvio(f1, { ...base, dia: "2027-01-05", situacao: "FEITO", itens: [{ itemTemplateId: "f" }] })!.itens).toEqual([{ itemTemplateId: "f", valor: null, temFoto: false }]);
+    expect(feitoDoEnvio(f1, { ...base, situacao: "NAO_VAI_USAR", motivo: null } as any)).toBe(f1);
+    // para corrigir: o do aparelho (hoje) vale sobre o da página; de outro dia, nenhum
+    const pag = { dia: HOJE, itens: [], observacaoGeral: "página" };
+    expect(feitoParaCorrigir({ ...GUARDADO_VAZIO, feito: f1 }, pag, HOJE)).toBe(f1);
+    expect(feitoParaCorrigir({ ...GUARDADO_VAZIO, feito: { ...f1!, dia: ONTEM } }, pag, HOJE)).toBe(pag);
+    expect(feitoParaCorrigir(null, { ...pag, dia: ONTEM }, HOJE)).toBeNull();
+    expect(comEnvio(GUARDADO_VAZIO, { ...base, situacao: "FEITO", itens: [] }).feito).toEqual({ dia: HOJE, itens: [], observacaoGeral: null });
+  });
+});

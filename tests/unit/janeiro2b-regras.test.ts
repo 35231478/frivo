@@ -125,3 +125,27 @@ describe("D7: corrigir e excluir a despesa (regras)", async () => {
     ]);
   });
 });
+
+describe("D13: corrigir o checklist do veículo (regras)", async () => {
+  const { decidirGravacao, mudancasDoChecklist, correcaoNoPrazo } = await import("@/lib/checklist-diario/regras");
+  it("a decisão: só com o pedido explícito, sobre um FEITO, com outro envio", () => {
+    const feito = { situacao: "FEITO" as const, clientId: "a" };
+    expect(decidirGravacao(feito, { situacao: "FEITO", clientId: "b", correcao: true })).toBe("corrigir");
+    expect(decidirGravacao(feito, { situacao: "FEITO", clientId: "b" })).toBe("manter");
+    expect(decidirGravacao(feito, { situacao: "FEITO", clientId: "a", correcao: true })).toBe("repetido");
+    expect(decidirGravacao(feito, { situacao: "NAO_VAI_USAR", clientId: "b", correcao: true })).toBe("manter");
+    expect(decidirGravacao({ situacao: "NAO_VAI_USAR", clientId: "a" }, { situacao: "FEITO", clientId: "b", correcao: true })).toBe("trocar");
+    expect(decidirGravacao(null, { situacao: "FEITO", clientId: "b", correcao: true })).toBe("criar");
+    expect(correcaoNoPrazo("2027-01-04", "2027-01-04")).toBe(true);
+    expect(correcaoNoPrazo("2027-01-04", "2027-01-05")).toBe(false);
+  });
+  it("o que mudou: na ordem do modelo; foto trocada ou incluída; a observação; nada mudou = []", () => {
+    const itens = [{ id: "p", descricao: "Calibragem" }, { id: "o", descricao: "Nível do óleo" }, { id: "f", descricao: "Foto do painel" }];
+    const antes = { itens: { p: { valor: "OK", temFoto: false }, o: { valor: "Normal", temFoto: false }, f: { valor: null, temFoto: true } }, observacao: null };
+    expect(mudancasDoChecklist(itens, antes, { itens: { p: { valor: "OK", fotoNova: false }, o: { valor: " Normal ", fotoNova: false }, f: { valor: null, fotoNova: false } }, observacao: " " })).toEqual([]);
+    expect(mudancasDoChecklist(itens, antes, { itens: { o: { valor: "Baixo", fotoNova: false }, p: { valor: "OK", fotoNova: true }, f: { valor: null, fotoNova: true } }, observacao: "Pneu" })).toEqual([
+      "Calibragem: foto incluída", "Nível do óleo: Normal → Baixo", "Foto do painel: foto trocada", "Observação: (sem) → “Pneu”",
+    ]);
+    expect(mudancasDoChecklist(itens, antes, { itens: { o: { valor: "Normal", fotoNova: false }, f: { valor: null, fotoNova: false } }, observacao: null })).toEqual(["Calibragem: OK → (sem)"]);
+  });
+});

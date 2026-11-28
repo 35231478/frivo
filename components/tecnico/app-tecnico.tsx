@@ -22,7 +22,7 @@ import { SeloNaoLidas, useNaoLidasChat, VistaChat } from "@/components/tecnico/c
 import { useAreaVisivel } from "@/components/tecnico/use-area-visivel";
 import { BloqueioLocalizacao, useLocalizacaoObrigatoria } from "@/components/tecnico/localizacao-gate";
 import type { PerfilClient } from "@/components/perfil/perfil-client";
-import { AtalhoChecklist, PorteiroChecklist, usePorteiro } from "@/components/tecnico/porteiro";
+import { AtalhoChecklist, AtalhoCorrigirChecklist, PorteiroChecklist, usePorteiro } from "@/components/tecnico/porteiro";
 import type { ResumoPorteiro } from "@/lib/checklist-diario/regras";
 
 type PerfilInicial = React.ComponentProps<typeof PerfilClient>["initial"];
@@ -139,6 +139,7 @@ function Casca({ perfilInicial, resumoPorteiro }: { perfilInicial: PerfilInicial
             : !vista || !motor ? <div className="flex justify-center py-16"><Loader2 className="w-6 h-6 animate-spin text-ink-subtle" /></div> : (
               <>
                 {resumoPorteiro && ativa === "dia" && <AtalhoChecklist porteiro={porteiro} />}
+                {resumoPorteiro && ativa === "perfil" && <AtalhoCorrigirChecklist porteiro={porteiro} />}
                 {resumoPorteiro && ativa === "perfil" && porteiro.erro && (
                   <p role="alert" className="mb-3 rounded-lg bg-atencao-claro px-3 py-2 text-sm text-atencao-texto" data-erro-envio-checklist>Checklist do veículo: {porteiro.erro}</p>
                 )}

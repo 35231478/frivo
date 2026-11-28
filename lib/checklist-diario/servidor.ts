@@ -14,7 +14,8 @@ import { temModulo } from "@/lib/modulos/servidor";
 import { diaCivilDeChave } from "@/lib/fuso";
 import { itemGeraAlerta, statusPelosAlertas, type ItemDoModelo } from "@/lib/veiculos/checklist";
 import {
-  colaboradorObrigado, decidirGravacao, diaAceito, hojeBR, horarioDoToque, linhasDoHistorico, normalizarConfigDiario, veiculoEmUso,
+  colaboradorObrigado, correcaoNoPrazo, decidirGravacao, diaAceito, hojeBR, horarioDoToque, linhasDoHistorico, MSG_CORRECAO_FORA_DO_DIA, MSG_CORRECAO_INATIVADO,
+  mudancasDoChecklist, normalizarConfigDiario, veiculoEmUso,
   type ConfigChecklistDiario, type LinhaHistorico, type ResumoPorteiro, type SituacaoDiario,
 } from "@/lib/checklist-diario/regras";
 import type { EnvioDiario, RespostaEnvioDiario } from "@/lib/checklist-diario/envio";
@@ -56,13 +57,19 @@ export async function resumoPorteiro(empresaId: string, tecnicoId: string | null
   const v = tecnico?.veiculoPadrao;
   if (!v || v.empresaId !== empresaId || !veiculoEmUso(v) || !modelo || !modelo.itens.length) return null;
   const hoje = hojeBR(agora);
-  const registro = await prisma.checklistDiario.findUnique({ where: { tecnicoId_dia: { tecnicoId, dia: diaCivilDeChave(hoje)! } }, select: { situacao: true } });
+  const registro = await prisma.checklistDiario.findUnique({
+    where: { tecnicoId_dia: { tecnicoId, dia: diaCivilDeChave(hoje)! } },
+    // D13: o checklist feito hoje vai junto (as respostas; a foto só "tem" — não pesa na página), para corrigir até o fim do dia
+    select: { situacao: true, checklist: { select: { inativadoEm: true, observacaoGeral: true, itens: { select: { itemTemplateId: true, valor: true, foto: true } } } } },
+  });
+  const feito = registro?.situacao === "FEITO" && registro.checklist && !registro.checklist.inativadoEm ? registro.checklist : null;
   return {
     dias: config.dias,
     diaServidor: hoje,
     veiculo: { id: v.id, placa: v.placa, modelo: v.modelo },
     modelo: { id: modelo.id, nome: modelo.nome, itens: modelo.itens as ItemDoModelo[] },
     registro: registro ? { dia: hoje, situacao: registro.situacao } : null,
+    feitoHoje: feito ? { itens: feito.itens.map((i) => ({ itemTemplateId: i.itemTemplateId, valor: i.valor, temFoto: !!i.foto })), observacaoGeral: feito.observacaoGeral } : null,
   };
 }
 
@@ -92,10 +99,20 @@ export async function registrarEnvioDiario(
     // client_id é único no banco inteiro: o mesmo envio (mesmo colaborador) é repetido; de outro colaborador, recusa
     const porCliente = await tx.checklistDiario.findUnique({ where: { clientId: envio.clientId }, select: { tecnicoId: true, dia: true, situacao: true } });
     if (porCliente && porCliente.tecnicoId !== tecnicoId) throw new ErroEnvioDiario("Envio inválido.");
-    const existente = await tx.checklistDiario.findUnique({ where: { tecnicoId_dia: { tecnicoId, dia } }, select: { id: true, situacao: true, clientId: true } });
-    const decisao = porCliente && existente ? "repetido" : decidirGravacao(existente, { situacao: envio.situacao, clientId: envio.clientId });
+    const existente = await tx.checklistDiario.findUnique({ where: { tecnicoId_dia: { tecnicoId, dia } }, select: { id: true, situacao: true, clientId: true, checklistId: true } });
+    // D13: a correção já aplicada (o mesmo envio de novo) não aplica outra vez
+    const correcaoJa = !porCliente && existente ? await tx.checklistCorrecao.findUnique({ where: { clientId: envio.clientId }, select: { id: true } }) : null;
+    const decisao = (porCliente && existente) || correcaoJa ? "repetido"
+      : decidirGravacao(existente, { situacao: envio.situacao, clientId: envio.clientId, correcao: envio.situacao === "FEITO" && !!envio.correcao });
     if (decisao === "repetido" || decisao === "manter") {
       return { ok: true, acao: decisao, registro: { dia: envio.dia, situacao: (existente?.situacao ?? porCliente!.situacao) as SituacaoDiario } };
+    }
+    if (decisao === "corrigir" && envio.situacao === "FEITO") {
+      if (!correcaoNoPrazo(envio.dia, hojeBR(feitoEm))) throw new ErroEnvioDiario(MSG_CORRECAO_FORA_DO_DIA);
+      if (!existente!.checklistId) throw new ErroEnvioDiario("Checklist não encontrado.");
+      await corrigirChecklist(tx, { empresaId, usuarioId, checklistId: existente!.checklistId, veiculoId: veiculo.id, envio, feitoEm });
+      await tx.checklistDiario.update({ where: { id: existente!.id }, data: { veiculoId: veiculo.id } });
+      return { ok: true, acao: "corrigir", registro: { dia: envio.dia, situacao: "FEITO" } };
     }
 
     let checklistId: string | null = null;
@@ -150,6 +167,60 @@ async function gravarChecklist(
     select: { id: true },
   });
   return c.id;
+}
+
+/**
+ * D13 — a correção do colaborador: as respostas novas no MESMO checklist (o alerta e o status decididos aqui, de novo);
+ * o item sem foto nova mantém a foto que já tinha; o item que ficou sem resposta sai. Guarda o que mudou (trilha) e
+ * quem/quando editou. Checklist excluído pelo escritório: não corrige.
+ */
+async function corrigirChecklist(
+  tx: Prisma.TransactionClient,
+  p: { empresaId: string; usuarioId: string; checklistId: string; veiculoId: string; envio: Extract<EnvioDiario, { situacao: "FEITO" }>; feitoEm: Date },
+): Promise<void> {
+  const { envio } = p;
+  const atual = await tx.checklistPreenchido.findFirst({
+    where: { id: p.checklistId, empresaId: p.empresaId },
+    select: { id: true, templateId: true, inativadoEm: true, observacaoGeral: true, itens: { select: { id: true, itemTemplateId: true, valor: true, foto: true } } },
+  });
+  if (!atual) throw new ErroEnvioDiario("Checklist não encontrado.");
+  if (atual.inativadoEm) throw new ErroEnvioDiario(MSG_CORRECAO_INATIVADO);
+  const modelo = await tx.checklistTemplate.findFirst({
+    where: { id: atual.templateId, empresaId: p.empresaId },
+    select: { itens: { orderBy: { ordem: "asc" }, select: { id: true, descricao: true, tipo: true, opcoes: true } } },
+  });
+  if (!modelo) throw new ErroEnvioDiario("Modelo de checklist não encontrado.");
+  const doModelo = new Map(modelo.itens.map((i) => [i.id, i]));
+  if (envio.itens.some((i) => !doModelo.has(i.itemTemplateId)) || new Set(envio.itens.map((i) => i.itemTemplateId)).size !== envio.itens.length) {
+    throw new ErroEnvioDiario("Item de checklist inválido.");
+  }
+  const antes = new Map(atual.itens.map((i) => [i.itemTemplateId, i]));
+  const novos = envio.itens.map((i) => {
+    const velho = antes.get(i.itemTemplateId);
+    return {
+      itemTemplateId: i.itemTemplateId, valor: i.valor?.trim() || null, foto: i.foto || velho?.foto || null, fotoNova: !!i.foto && i.foto !== velho?.foto,
+      alerta: itemGeraAlerta(doModelo.get(i.itemTemplateId)!, i.valor ?? null),
+    };
+  });
+  const mudancas = mudancasDoChecklist(
+    modelo.itens,
+    { itens: Object.fromEntries(atual.itens.map((i) => [i.itemTemplateId, { valor: i.valor, temFoto: !!i.foto }])), observacao: atual.observacaoGeral },
+    { itens: Object.fromEntries(novos.map((i) => [i.itemTemplateId, { valor: i.valor, fotoNova: i.fotoNova }])), observacao: envio.observacaoGeral ?? null },
+  );
+  // A correção fica registrada mesmo sem mudança (o mesmo envio de novo é barrado pelo client_id)
+  await tx.checklistCorrecao.create({
+    data: { empresaId: p.empresaId, checklistId: atual.id, clientId: envio.clientId, usuarioId: p.usuarioId, feitoEm: p.feitoEm, detalhes: mudancas.join(" · ") || "Sem mudança nas respostas." },
+  });
+  if (!mudancas.length) return;
+  await tx.checklistItemPreenchido.deleteMany({ where: { checklistId: atual.id } });
+  await tx.checklistPreenchido.update({
+    where: { id: atual.id },
+    data: {
+      veiculoId: p.veiculoId, status: statusPelosAlertas(novos.map((i) => i.alerta)), observacaoGeral: envio.observacaoGeral?.trim() || null,
+      editadoEm: new Date(), editadoPorId: p.usuarioId,
+      itens: { create: novos.map(({ fotoNova: _f, ...i }) => i) },
+    },
+  });
 }
 
 /** "Não vai usar o veículo" que o escritório ainda não viu (sino), dos últimos 7 dias */

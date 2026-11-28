@@ -338,4 +338,92 @@ describe.skipIf(!URL_PG)("Checklist obrigatório no app (PostgreSQL real)", () =
     GESTOR("e2");
     expect((await chamar("checklist-diario/config", "GET")).json).toMatchObject({ ativo: false, templateId: null });
   });
+
+  /* ═════════════ D13 (App pronto pra janeiro 2): corrigir o checklist do veículo até o fim do dia ═════════════ */
+  describe("D13: o colaborador corrige o checklist de hoje", () => {
+    const corrigir = (extra: Record<string, unknown> = {}) => feito({ correcao: true, ...extra });
+    const checklistDeHoje = async () => {
+      const [reg] = await registros();
+      return prisma.checklistPreenchido.findUnique({ where: { id: reg.checklistId }, include: { itens: { orderBy: { itemTemplateId: "asc" } }, correcoes: { orderBy: { criadoEm: "asc" } } } });
+    };
+
+    it("corrige o MESMO checklist: respostas novas, alerta e status de novo, a foto que não foi trocada fica; a trilha guarda o que mudou", async () => {
+      TECNICO();
+      const original = feito();
+      await enviar(original);
+      const antes = await checklistDeHoje();
+      expect(antes.status).toBe("CONCLUIDO");
+      const r = await enviar(corrigir({ itens: [{ itemTemplateId: "i-pneu", valor: "NOK" }, { itemTemplateId: "i-oleo", valor: "Baixo" }, { itemTemplateId: "i-foto" }], observacaoGeral: "Pneu traseiro murcho" }));
+      expect(r.json).toEqual({ ok: true, acao: "corrigir", registro: { dia: hoje, situacao: "FEITO" } });
+      const c = await checklistDeHoje();
+      expect(c.id).toBe(antes.id); // não cria outro
+      expect(await prisma.checklistPreenchido.count()).toBe(1);
+      expect(c.status).toBe("COM_ALERTAS");
+      expect(c.itens.map((i: any) => [i.itemTemplateId, i.valor, i.foto, i.alerta])).toEqual([
+        ["i-foto", null, "data:image/jpeg;base64,AAAA", false], ["i-oleo", "Baixo", null, true], ["i-pneu", "NOK", null, true],
+      ]);
+      expect([c.observacaoGeral, c.editadoPorId, !!c.editadoEm]).toEqual(["Pneu traseiro murcho", "u1", true]);
+      expect(c.correcoes.map((x: any) => [x.detalhes, x.usuarioId])).toEqual([["Calibragem: OK → NOK · Nível do óleo: Normal → Baixo · Observação: (sem) → “Pneu traseiro murcho”", "u1"]]);
+      // o gestor vê no detalhe do checklist (Veículos › Checklist)
+      GESTOR();
+      const { GET } = await import("@/app/api/checklists/[id]/route");
+      const det = await (await GET(new NextRequest("http://localhost/api/checklists/x"), { params: Promise.resolve({ id: c.id }) })).json();
+      expect(det.correcoes).toEqual([{ feitoEm: expect.any(String), detalhes: "Calibragem: OK → NOK · Nível do óleo: Normal → Baixo · Observação: (sem) → “Pneu traseiro murcho”" }]);
+    });
+
+    it("idempotente: a mesma correção de novo não aplica outra vez; um reenvio atrasado do ORIGINAL não desfaz a correção; um 2º checklist comum não passa por cima", async () => {
+      TECNICO();
+      const original = feito();
+      await enviar(original);
+      const corr = corrigir({ itens: [{ itemTemplateId: "i-pneu", valor: "NOK" }, { itemTemplateId: "i-oleo", valor: "Normal" }, { itemTemplateId: "i-foto" }] });
+      expect((await enviar(corr)).json.acao).toBe("corrigir");
+      expect((await enviar(corr)).json.acao).toBe("repetido");
+      expect((await enviar(original)).json.acao).toBe("repetido");
+      expect((await enviar(feito())).json.acao).toBe("manter"); // sem "correcao": como antes
+      const c = await checklistDeHoje();
+      expect(c.itens.find((i: any) => i.itemTemplateId === "i-pneu").valor).toBe("NOK");
+      expect(c.correcoes).toHaveLength(1);
+      // trocar a foto: a nova vale e a trilha diz
+      await enviar(corrigir({ itens: [{ itemTemplateId: "i-pneu", valor: "NOK" }, { itemTemplateId: "i-oleo", valor: "Normal" }, { itemTemplateId: "i-foto", foto: "data:image/jpeg;base64,BBBB" }] }));
+      const c2 = await checklistDeHoje();
+      expect(c2.itens.find((i: any) => i.itemTemplateId === "i-foto").foto).toBe("data:image/jpeg;base64,BBBB");
+      expect(c2.correcoes.at(-1).detalhes).toBe("Foto do painel: foto trocada");
+    });
+
+    it("só no mesmo dia (o toque, mesmo sem sinal); excluído pelo escritório não; item de outro modelo não; 'não vou usar' + correção = a troca de sempre", async () => {
+      TECNICO();
+      await enviar(feito());
+      // o toque da correção foi amanhã (fora do dia do checklist): recusa
+      const amanha = new Date(Date.now() + 26 * 3_600_000);
+      const { registrarEnvioDiario: reg } = await import("@/lib/checklist-diario/servidor");
+      const { envioDiarioSchema } = await import("@/lib/checklist-diario/envio");
+      await expect(reg({ empresaId: "e1", usuarioId: "u1", tecnicoId: "t1", envio: envioDiarioSchema.parse(corrigir({ feitoEm: amanha.toISOString() })), agora: amanha }))
+        .rejects.toThrow("O checklist do veículo só pode ser corrigido no mesmo dia.");
+      // corrigida sem sinal, hoje, e enviada depois (o toque foi hoje): vale
+      const tocouHoje = new Date();
+      expect((await reg({ empresaId: "e1", usuarioId: "u1", tecnicoId: "t1", envio: envioDiarioSchema.parse(corrigir({ feitoEm: tocouHoje.toISOString() })), agora: new Date(tocouHoje.getTime() + 60_000) })).acao).toBe("corrigir");
+      expect((await enviar(corrigir({ itens: [{ itemTemplateId: "i-outro", valor: "OK" }] }))).status).toBe(400);
+      const c = await checklistDeHoje();
+      await prisma.checklistPreenchido.update({ where: { id: c.id }, data: { inativadoEm: new Date() } });
+      const r = await enviar(corrigir());
+      expect([r.status, r.json.erro]).toEqual([400, "Este checklist foi excluído pelo escritório: não dá para corrigir."]);
+      // e o resumo da página não oferece corrigir o excluído
+      expect((await resumoPorteiro("e1", "t1"))!.feitoHoje).toBeNull();
+      await prisma.checklistDiario.deleteMany({}); await prisma.checklistPreenchido.deleteMany({});
+      await enviar(naoVou());
+      expect((await enviar(corrigir())).json.acao).toBe("trocar");
+    });
+
+    it("o resumo da página traz as respostas de hoje (a foto só 'tem', não a imagem) para corrigir também em outro aparelho", async () => {
+      TECNICO();
+      expect((await resumoPorteiro("e1", "t1"))!.feitoHoje).toBeNull();
+      await enviar(feito({ observacaoGeral: "Tudo certo" }));
+      const r = (await resumoPorteiro("e1", "t1"))!;
+      expect(r.feitoHoje).toEqual({
+        itens: expect.arrayContaining([{ itemTemplateId: "i-pneu", valor: "OK", temFoto: false }, { itemTemplateId: "i-oleo", valor: "Normal", temFoto: false }, { itemTemplateId: "i-foto", valor: null, temFoto: true }]),
+        observacaoGeral: "Tudo certo",
+      });
+      expect(JSON.stringify(r)).not.toContain("base64");
+    });
+  });
 });

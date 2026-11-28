@@ -10,7 +10,7 @@
  * aparelho). Nunca prende: qualquer erro do porteiro libera.
  */
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { AlertCircle, CarFront, ClipboardCheck } from "lucide-react";
+import { AlertCircle, CarFront, ClipboardCheck, Pencil } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "@/components/ui/avisos";
@@ -20,7 +20,7 @@ import { reduzirImagem } from "@/lib/imagem-cliente";
 import { novoId } from "@/lib/tecnico/offline/motor";
 import { itemGeraAlerta, primeiroObrigatorioFaltando, type RespostaDoItem } from "@/lib/veiculos/checklist";
 import { hojeBR, MAX_MOTIVO, NOMES_DIAS, diaDaSemana, porteiroAberto, type ResumoPorteiro, type SituacaoDiario } from "@/lib/checklist-diario/regras";
-import { FilaDiario, armazemDoBanco, armazemNaMemoria, situacaoLocal, type Guardado } from "@/lib/checklist-diario/aparelho";
+import { FilaDiario, armazemDoBanco, armazemNaMemoria, feitoParaCorrigir, situacaoLocal, type FeitoLocal, type Guardado } from "@/lib/checklist-diario/aparelho";
 import type { EnvioDiario } from "@/lib/checklist-diario/envio";
 
 export interface EstadoPorteiro {
@@ -37,6 +37,11 @@ export interface EstadoPorteiro {
   /** "Fazer checklist do veículo" depois do "não vou usar": reabre o formulário */
   reabrir: () => void;
   fechar: () => void;
+  /** D13 — o checklist de hoje que dá para corrigir (até o fim do dia); null = nenhum */
+  feitoHoje: FeitoLocal | null;
+  /** D13 — o formulário está aberto para corrigir o de hoje */
+  corrigindo: boolean;
+  corrigir: () => void;
 }
 
 /** Liga o porteiro ao aparelho: lê o que foi guardado, decide se abre, envia a fila quando há sinal. */
@@ -48,6 +53,7 @@ export function usePorteiro(resumo: ResumoPorteiro | null | undefined, opcoes: {
   const [guardado, setGuardado] = useState<Guardado | null>(null);
   const [hoje, setHoje] = useState(() => hojeBR(agora()));
   const [reaberto, setReaberto] = useState(false);
+  const [corrigindo, setCorrigindo] = useState(false);
 
   // A virada do dia com o app aberto: o porteiro do próximo dia aparece sem recarregar
   useEffect(() => {
@@ -73,7 +79,7 @@ export function usePorteiro(resumo: ResumoPorteiro | null | undefined, opcoes: {
       // Depois do envio (subiu, ficou para depois ou foi recusado), a tela mostra o que ficou guardado
       void fila.enviar().then(() => fila.ler()).then(setGuardado).catch(() => {});
     } catch { /* nunca prende: segue liberado */ setGuardado((g) => ({ ...(g ?? { pendentes: [], erro: null }), registros: [...(g?.registros ?? []), { dia: envio.dia, situacao: envio.situacao }] })); }
-    setReaberto(false);
+    setReaberto(false); setCorrigindo(false);
   }, [fila]);
 
   const local = guardado ? situacaoLocal(guardado, hoje) : null;
@@ -82,10 +88,13 @@ export function usePorteiro(resumo: ResumoPorteiro | null | undefined, opcoes: {
   // Enquanto o banco do aparelho abre (ou a fila é lida), nem trava nem libera às cegas; sem banco, segue sem esperar
   const carregando = !!resumo && !guardado && (fila ? true : !semBanco);
   const abertoPelaRegra = !!resumo && porteiroAberto(resumo, hoje, guardado?.registros.map((r) => r.dia) ?? []);
+  const servidorFeito = resumo?.feitoHoje && resumo.diaServidor === hoje ? { dia: hoje, ...resumo.feitoHoje } : null;
+  const feitoHoje = situacaoHoje === "FEITO" ? feitoParaCorrigir(guardado, servidorFeito, hoje) : null;
   return {
-    aberto: !carregando && (abertoPelaRegra || (reaberto && situacaoHoje === "NAO_VAI_USAR")),
+    aberto: !carregando && (abertoPelaRegra || (reaberto && situacaoHoje === "NAO_VAI_USAR") || (corrigindo && !!feitoHoje)),
     carregando, hoje, situacaoHoje, erro: guardado?.erro ?? null,
-    registrar, reabrir: () => setReaberto(true), fechar: () => setReaberto(false),
+    registrar, reabrir: () => setReaberto(true), fechar: () => { setReaberto(false); setCorrigindo(false); },
+    feitoHoje, corrigindo: corrigindo && !!feitoHoje, corrigir: () => setCorrigindo(true),
   };
 }
 
@@ -94,8 +103,12 @@ const reduzir = async (arquivo: File) => (await reduzirImagem(arquivo, 1280, 0.8
 
 /** A tela cheia do porteiro: o checklist do veículo padrão e a saída honesta "Hoje não vou usar o veículo". */
 export function PorteiroChecklist({ resumo, porteiro, trocando = false }: { resumo: ResumoPorteiro; porteiro: EstadoPorteiro; trocando?: boolean }) {
-  const [respostas, setRespostas] = useState<Record<string, RespostaDoItem>>({});
-  const [observacao, setObservacao] = useState("");
+  // D13: corrigindo o de hoje, o formulário vem com as respostas dele (as fotos já enviadas continuam)
+  const corrigir = porteiro.corrigindo ? porteiro.feitoHoje : null;
+  const [respostas, setRespostas] = useState<Record<string, RespostaDoItem>>(() =>
+    Object.fromEntries((corrigir?.itens ?? []).map((i) => [i.itemTemplateId, { valor: i.valor, foto: null }])));
+  const comFoto = useMemo(() => new Set((corrigir?.itens ?? []).filter((i) => i.temFoto).map((i) => i.itemTemplateId)), [corrigir]);
+  const [observacao, setObservacao] = useState(corrigir?.observacaoGeral ?? "");
   const [erro, setErro] = useState("");
   const [salvando, setSalvando] = useState(false);
   const [naoVou, setNaoVou] = useState(false);
@@ -106,16 +119,19 @@ export function PorteiroChecklist({ resumo, porteiro, trocando = false }: { resu
 
   async function enviar() {
     setErro("");
-    const falta = primeiroObrigatorioFaltando(modelo.itens, respostas);
+    // Na correção, a foto já enviada vale para o item obrigatório de foto
+    const conferir = corrigir ? Object.fromEntries(modelo.itens.map((it) => [it.id, { valor: respostas[it.id]?.valor ?? null, foto: respostas[it.id]?.foto ?? (comFoto.has(it.id) ? "mantida" : null) }])) : respostas;
+    const falta = primeiroObrigatorioFaltando(modelo.itens, conferir);
     if (falta) { setErro(falta); return; }
     setSalvando(true);
     try {
-      const itens = modelo.itens.filter((it) => respostas[it.id]?.valor || respostas[it.id]?.foto)
+      const itens = modelo.itens.filter((it) => respostas[it.id]?.valor || respostas[it.id]?.foto || comFoto.has(it.id))
         .map((it) => ({ itemTemplateId: it.id, valor: respostas[it.id]?.valor ?? null, foto: respostas[it.id]?.foto ?? null }));
       const comAlerta = modelo.itens.some((it) => itemGeraAlerta(it, respostas[it.id]?.valor ?? null));
-      await porteiro.registrar({ ...base(), situacao: "FEITO", templateId: modelo.id, itens, observacaoGeral: observacao.trim() || null });
+      await porteiro.registrar({ ...base(), situacao: "FEITO", templateId: modelo.id, itens, observacaoGeral: observacao.trim() || null, ...(corrigir && { correcao: true as const }) });
       const semSinal = typeof navigator !== "undefined" && navigator.onLine === false;
-      toast(comAlerta ? "Checklist registrado com alertas. O gestor vai ver os itens com problema." : "Checklist registrado.");
+      if (corrigir) toast(comAlerta ? "Checklist corrigido, com alertas. O gestor vê o que mudou." : "Checklist corrigido. O gestor vê o que mudou.");
+      else toast(comAlerta ? "Checklist registrado com alertas. O gestor vai ver os itens com problema." : "Checklist registrado.");
       if (semSinal) toast("Sem sinal agora: o checklist ficou no aparelho e sobe sozinho quando o sinal voltar.", "info");
     } finally { setSalvando(false); }
   }
@@ -137,8 +153,9 @@ export function PorteiroChecklist({ resumo, porteiro, trocando = false }: { resu
         <h1 className="flex items-center gap-2 text-lg font-bold text-ink" data-porteiro-veiculo>
           <CarFront className="w-5 h-5 text-ink-muted shrink-0" aria-hidden /> <span className="font-mono">{veiculo.placa}</span> <span className="font-medium text-ink-muted truncate">· {veiculo.modelo}</span>
         </h1>
-        <p className="text-sm text-ink-muted">
-          {trocando ? "Vai usar o veículo, afinal? Faça o checklist: ele substitui o “não vou usar” de hoje." : "Antes de começar o dia, confira o veículo. Feito o checklist, o app libera até o próximo dia de checklist."}
+        <p className="text-sm text-ink-muted" data-porteiro-texto>
+          {corrigir ? "Corrigindo o checklist de hoje: vale até o fim do dia e o gestor vê o que mudou. As fotos já enviadas continuam; tire outra só para trocar."
+            : trocando ? "Vai usar o veículo, afinal? Faça o checklist: ele substitui o “não vou usar” de hoje." : "Antes de começar o dia, confira o veículo. Feito o checklist, o app libera até o próximo dia de checklist."}
         </p>
       </header>
 
@@ -156,10 +173,14 @@ export function PorteiroChecklist({ resumo, porteiro, trocando = false }: { resu
           <span className="text-sm font-medium text-ink">Observação (opcional)</span>
           <Textarea value={observacao} onChange={(e) => setObservacao(e.target.value)} rows={2} maxLength={2000} placeholder="Algo mais sobre o veículo" data-porteiro-observacao />
         </label>
-        <Button type="button" className="w-full justify-center" size="lg" loading={salvando && !naoVou} onClick={enviar} data-porteiro-enviar>Enviar checklist</Button>
+        <Button type="button" className="w-full justify-center" size="lg" loading={salvando && !naoVou} onClick={enviar} data-porteiro-enviar>{corrigir ? "Salvar correção" : "Enviar checklist"}</Button>
       </div>
 
-      {trocando ? (
+      {corrigir ? (
+        <div className="text-center">
+          <button type="button" onClick={porteiro.fechar} className="text-sm text-ink-muted underline underline-offset-2 py-2 min-h-[44px] px-2" data-porteiro-voltar>Voltar sem corrigir</button>
+        </div>
+      ) : trocando ? (
         <div className="text-center">
           <button type="button" onClick={porteiro.fechar} className="text-sm text-ink-muted underline underline-offset-2 py-2 min-h-[44px] px-2" data-porteiro-voltar>Voltar sem fazer o checklist</button>
         </div>
@@ -189,5 +210,20 @@ export function AtalhoChecklist({ porteiro }: { porteiro: EstadoPorteiro }) {
       <span className="text-ink-muted">Hoje: sem o veículo.</span>
       <button type="button" onClick={porteiro.reabrir} className="font-semibold text-acento underline underline-offset-2" data-fazer-checklist>Fazer checklist do veículo</button>
     </div>
+  );
+}
+
+/** D13 — no Perfil, com o checklist de hoje feito: corrigir até o fim do dia (o gestor vê o que mudou) */
+export function AtalhoCorrigirChecklist({ porteiro }: { porteiro: EstadoPorteiro }) {
+  if (porteiro.situacaoHoje !== "FEITO" || !porteiro.feitoHoje) return null;
+  return (
+    <button type="button" onClick={porteiro.corrigir} data-corrigir-checklist
+      className="mb-3 w-full flex items-center gap-3 bg-white rounded-card border border-surface-border p-4 text-left touch-target">
+      <Pencil className="w-5 h-5 text-ink-muted shrink-0" aria-hidden />
+      <span className="min-w-0">
+        <span className="block font-semibold text-ink">Corrigir o checklist do veículo de hoje</span>
+        <span className="block text-xs text-ink-muted">Até o fim do dia. O gestor vê o que mudou.</span>
+      </span>
+    </button>
   );
 }

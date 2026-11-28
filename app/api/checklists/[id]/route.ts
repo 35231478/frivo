@@ -18,6 +18,8 @@ async function carregar(id: string, empresaId: string) {
       editadoPor: { select: { nome: true } },
       inativadoPor: { select: { nome: true } },
       itens: { include: { itemTemplate: { select: { id: true, categoria: true, descricao: true, tipo: true, opcoes: true, obrigatorio: true, ordem: true } } } },
+      // D13: as correções do colaborador pelo app (o que mudou), da mais recente
+      correcoes: { orderBy: { feitoEm: "desc" }, select: { feitoEm: true, detalhes: true } },
     },
   });
 }
