@@ -1,5 +1,6 @@
 "use client";
 
+import { pausaDoCartao } from "@/lib/pausas/regras";
 import { ComissoesDoDia } from "@/components/tecnico/comissoes-do-dia";
 import { useCallback, useEffect, useState } from "react";
 import { CalendarDays, Camera, Car, CheckCircle2, ChevronDown, ChevronRight, Clock, HardDrive, MapPin, MessageCircle, RefreshCw, Sun, WifiOff } from "lucide-react";
@@ -117,7 +118,10 @@ export function CartaoAtividade({ c, fila, mostrarDia, proxima, guardado, listaE
   const { status, aEnviar, estado, entra, aCaminho, chegou } = situacaoDoCartao(c, fila, { guardado, listaEm, agora });
   const { tocar, tocando } = useToqueAviso(c.atividadeId);
   const [aberto, setAberto] = useState(false);
-  const st = ROTULO_ESTADO[estado] ?? ROTULO_STATUS_ATIVIDADE[status] ?? { rotulo: status, classe: "bg-surface-linha text-ink" };
+  // D1: pausada (do servidor ou tocada sem sinal neste aparelho) — o chip diz o motivo
+  const pausa = status === "EM_ANDAMENTO" ? pausaDoCartao(c.atividadeId, c.pausa, fila) : null;
+  const st = pausa ? { rotulo: `Pausada — ${pausa.motivo}`, classe: "bg-atencao-claro text-atencao-texto" }
+    : ROTULO_ESTADO[estado] ?? ROTULO_STATUS_ATIVIDADE[status] ?? { rotulo: status, classe: "bg-surface-linha text-ink" };
   // Permissões do app (Equipes › App do colaborador): com "Exibir dados do cliente" desligado o cartão
   // não mostra nome, unidade, endereço nem rota.
   const verDados = config.exibirDadosCliente;

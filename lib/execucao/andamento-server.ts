@@ -53,6 +53,8 @@ export async function whereAtividadesEsquecidas(empresaId: string, agora: Date =
   const corte = new Date(Math.max(agora.getTime() - horas * 3_600_000, inicioHojeBR(agora).getTime()));
   return {
     empresaId, status: "EM_ANDAMENTO",
+    // D1: pausada não está "esquecida" (o relógio está parado; o impedimento tem aviso próprio)
+    pausas: { none: { fim: null } },
     OR: [{ iniciadaEm: { lt: corte } }, { iniciadaEm: null, dataAgendada: { lt: corte } }],
   };
 }

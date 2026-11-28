@@ -83,7 +83,7 @@ describe("catálogo do painel", () => {
 
   it("cada item tem o seu grupo do escopo do sino (a segunda trava da tela usa o mesmo)", () => {
     expect(Object.fromEntries((Object.keys(PENDENCIAS) as (keyof typeof PENDENCIAS)[]).map((id) => [id, escopoDoItem(id)]))).toEqual({
-      osSemTecnico: "osSemTecnico", osAtrasadas: "prazos", atividadesEsquecidas: "atividadesEsquecidas", comentariosCampo: "comentariosCampo",
+      osSemTecnico: "osSemTecnico", osAtrasadas: "prazos", atividadesEsquecidas: "atividadesEsquecidas", impedimentosAbertos: "impedimentos", visitasNaoConcluidas: "impedimentos", comentariosCampo: "comentariosCampo",
       pmocsVencendo: "pmoc", orcamentosVencendo: "orcamentosVencendo", despesasCampo: "despesasCampo", contasPagarHoje: "contasPagarHoje",
       contasReceberHoje: "contasReceberHoje", estoqueNegativoCampo: "estoqueNegativoCampo", pedidosCliente: "pedidosCliente",
       // PC-2: os pedidos do portal para conferir (quem vê OS, como o pedido do cliente)

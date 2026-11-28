@@ -534,6 +534,9 @@ model Empresa {
   tabelasPreco            TabelaPreco[]
   relatorios              RelatorioOs[]
   tiposProblema           TipoProblema[]
+  /// Motivos de pausa da atividade no app do técnico (Configurações › Motivos de pausa)
+  motivosPausa            MotivoPausa[]
+  atividadePausas         AtividadePausa[]
   termoTemplates          TermoReferenciaTemplate[]
   qrcodes                 Qrcode[]
   cargos                  Cargo[]
@@ -768,7 +771,7 @@ model Configuracao {
 
   /// Impressão do relatório da OS: seções ligadas/desligadas e quem vê (cliente × só interno).
   /// JSON { [secao]: { ativo, cliente } }; ausente = padrões de lib/relatorio-os/config.ts
-  relatorioOsConfig Json? @map("relatorio_os_config")
+  relatorioOsConfig            Json?   @map("relatorio_os_config")
   /// Leva J: as especialidades do técnico junto ao nome na OS, no relatório e no portal ("João — especialista em VRF")
   mostrarEspecialidadesTecnico Boolean @default(true) @map("mostrar_especialidades_tecnico")
 
@@ -948,6 +951,8 @@ model Usuario {
 
   empresa                Empresa                     @relation(fields: [empresaId], references: [id], onDelete: Cascade)
   checklistsDiarios      ChecklistDiario[]
+  pausasFeitas           AtividadePausa[]            @relation("PausaPausadoPor")
+  pausasRetomadas        AtividadePausa[]            @relation("PausaRetomadoPor")
   ordensEmitidas         OrdemServico[]              @relation("UsuarioCriador")
   ordensResponsavel      OrdemServico[]              @relation("OsResponsavel")
   osAtrasoJustificado    OrdemServico[]              @relation("OsAtrasoJustificadoPor")
@@ -1051,21 +1056,21 @@ model PreferenciaUsuario {
 /// Inscrição de push de UM aparelho (navegador) de um usuário. Revogar = apagar a linha; o navegador que
 /// recusa de vez (404/410) também é apagado no envio (lib/push/servidor).
 model PushSubscription {
-  id            String    @id @default(cuid())
-  userId        String    @map("user_id")
+  id             String    @id @default(cuid())
+  userId         String    @map("user_id")
   /// A empresa do usuário no momento da inscrição (as consultas de envio são por empresa)
-  empresaId     String?   @map("empresa_id")
-  endpoint      String    @unique
-  p256dh        String
-  auth          String
-  userAgent     String?   @map("user_agent")
-  criadoEm      DateTime  @default(now()) @map("criado_em")
-  ultimoEnvioEm DateTime? @map("ultimo_envio_em")
+  empresaId      String?   @map("empresa_id")
+  endpoint       String    @unique
+  p256dh         String
+  auth           String
+  userAgent      String?   @map("user_agent")
+  criadoEm       DateTime  @default(now()) @map("criado_em")
+  ultimoEnvioEm  DateTime? @map("ultimo_envio_em")
   /// Falhas seguidas que não são definitivas (rede, 5xx); volta a 0 no próximo envio que der certo
-  falhas        Int       @default(0)
+  falhas         Int       @default(0)
   /// Hotfix push: a IMPRESSÃO (sha-256, 12 hex) da chave pública VAPID com que o navegador se inscreveu — nunca a chave.
   /// Diferente da do servidor = o serviço de push recusa (403): o app reinscreve sozinho.
-  chaveImpressao String?  @map("chave_impressao")
+  chaveImpressao String?   @map("chave_impressao")
   /// O último resultado do serviço de push para este aparelho (201 = aceito) e o motivo da última recusa
   ultimoStatus   Int?      @map("ultimo_status")
   ultimoErro     String?   @map("ultimo_erro")
@@ -1080,19 +1085,19 @@ model PushSubscription {
 /// Registro das notificações push mandadas (uma linha por pessoa e evento): evita repetir o mesmo aviso
 /// (`chave` única por usuário — ex.: "esquecida:<atividade>:<início>") e deixa o rastro do que foi enviado.
 model PushEnvio {
-  id        String   @id @default(cuid())
-  empresaId String   @map("empresa_id")
-  usuarioId String   @map("usuario_id")
-  tipo      String
-  chave     String
-  titulo    String
-  url       String?
+  id         String   @id @default(cuid())
+  empresaId  String   @map("empresa_id")
+  usuarioId  String   @map("usuario_id")
+  tipo       String
+  chave      String
+  titulo     String
+  url        String?
   /// Quantos aparelhos aceitaram (0 = a pessoa não tem aparelho inscrito ou todos recusaram)
-  aparelhos Int      @default(0)
+  aparelhos  Int      @default(0)
   /// Hotfix push: quantos recusaram e o resultado de cada aparelho [{ aparelho, servico, ok, status, motivo }]
-  falhas     Int     @default(0)
+  falhas     Int      @default(0)
   resultados Json?
-  criadoEm  DateTime @default(now()) @map("criado_em")
+  criadoEm   DateTime @default(now()) @map("criado_em")
 
   empresa Empresa @relation(fields: [empresaId], references: [id], onDelete: Cascade)
   usuario Usuario @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
@@ -2203,8 +2208,8 @@ model OrdemServico {
 
   pmocExecucoes             PmocExecucao[]
   /// Ocorrências do PMOC detectadas nesta OS / que geraram esta OS corretiva
-  pmocOcorrencias           PmocOcorrencia[] @relation("PmocOcorrenciaOs")
-  pmocOcorrenciasCorretivas PmocOcorrencia[] @relation("PmocOcorrenciaOsCorretiva")
+  pmocOcorrencias           PmocOcorrencia[]  @relation("PmocOcorrenciaOs")
+  pmocOcorrenciasCorretivas PmocOcorrencia[]  @relation("PmocOcorrenciaOsCorretiva")
   /// COM-2: as comissões do técnico nascidas desta OS e as revisões em que ela é o retorno
   comissoesExecutor         Comissao[]        @relation("ComissaoOs")
   comissaoRevisoesRetorno   ComissaoRevisao[] @relation("ComissaoRevisaoOsRetorno")
@@ -2294,6 +2299,8 @@ model AtividadeOs {
   servicosAdicionais   ServicoAdicional[]
   anexosOs             OsAnexo[]
   avisosCliente        AtividadeAviso[]
+  /// Pausas / impedimentos (app do técnico): a aberta (fim nulo) deixa a atividade "Pausada"
+  pausas               AtividadePausa[]
   /// Materiais usados em campo nesta atividade (app do técnico)
   materiaisCampo       AtividadeMaterial[]
   /// Comentários feitos nesta atividade (técnico pelo app)
@@ -2782,11 +2789,11 @@ model AtividadeMaterial {
   removidoPorId  String?   @map("removido_por_id")
   removidoEm     DateTime? @map("removido_em")
 
-  ordemServico OrdemServico @relation(fields: [ordemServicoId], references: [id], onDelete: Cascade)
-  atividade    AtividadeOs  @relation(fields: [atividadeId], references: [id], onDelete: Cascade)
-  equipamento  Equipamento? @relation(fields: [equipamentoId], references: [id], onDelete: SetNull)
-  produto      Produto?     @relation(fields: [produtoId], references: [id], onDelete: SetNull)
-  osMaterial   OsMaterial?  @relation(fields: [osMaterialId], references: [id], onDelete: SetNull)
+  ordemServico OrdemServico     @relation(fields: [ordemServicoId], references: [id], onDelete: Cascade)
+  atividade    AtividadeOs      @relation(fields: [atividadeId], references: [id], onDelete: Cascade)
+  equipamento  Equipamento?     @relation(fields: [equipamentoId], references: [id], onDelete: SetNull)
+  produto      Produto?         @relation(fields: [produtoId], references: [id], onDelete: SetNull)
+  osMaterial   OsMaterial?      @relation(fields: [osMaterialId], references: [id], onDelete: SetNull)
   /// Leva I.2 — o item cobrado na OS que nasceu deste material (modo "Cobrado à parte")
   itemCobrado  OsItemOrcamento? @relation("OsItemMaterialCampo")
 
@@ -2802,19 +2809,19 @@ model AtividadeMaterial {
 /// das OS em que tem atividade; o escritório, todos da OS. `client_id` (gerado no aparelho) faz o comentário reenviado
 /// pela fila offline não duplicar. Nada se edita nem se apaga. `autor_nome` é o nome de quem escreveu na hora.
 model OsComentario {
-  id             String   @id @default(cuid())
-  empresaId      String   @map("empresa_id")
+  id             String    @id @default(cuid())
+  empresaId      String    @map("empresa_id")
   /// CHAT-1: vazio = mensagem SEM OS (só na conversa da pessoa)
-  ordemServicoId String?  @map("ordem_servico_id")
+  ordemServicoId String?   @map("ordem_servico_id")
   /// A atividade de onde o técnico escreveu (vazio = escritório)
-  atividadeId    String?  @map("atividade_id")
-  usuarioId      String   @map("usuario_id")
-  autorNome      String   @map("autor_nome")
+  atividadeId    String?   @map("atividade_id")
+  usuarioId      String    @map("usuario_id")
+  autorNome      String    @map("autor_nome")
   /// "APP" (técnico, pelo app) | "ESCRITORIO" — TEXT: a validação mora em lib/tecnico/comentarios.ts
   origem         String
   texto          String
-  clientId       String?  @map("client_id")
-  criadoEm       DateTime @default(now()) @map("criado_em")
+  clientId       String?   @map("client_id")
+  criadoEm       DateTime  @default(now()) @map("criado_em")
   /// CHAT-1: quando alguém que não o autor leu a mensagem pela 1ª vez (o ✓✓), e quem foi
   lidaEm         DateTime? @map("lida_em")
   lidaPorId      String?   @map("lida_por_id")
@@ -2822,8 +2829,8 @@ model OsComentario {
   /// escritório com OS = para todos os técnicos da OS (como era antes); a do técnico é sempre da conversa dele.
   paraUsuarioId  String?   @map("para_usuario_id")
 
-  ordemServico OrdemServico? @relation(fields: [ordemServicoId], references: [id], onDelete: Cascade)
-  atividade    AtividadeOs? @relation(fields: [atividadeId], references: [id], onDelete: SetNull)
+  ordemServico OrdemServico?     @relation(fields: [ordemServicoId], references: [id], onDelete: Cascade)
+  atividade    AtividadeOs?      @relation(fields: [atividadeId], references: [id], onDelete: SetNull)
   foto         OsComentarioFoto?
 
   @@unique([empresaId, clientId])
@@ -2969,40 +2976,40 @@ enum TipoItemOs {
 }
 
 model OsItemOrcamento {
-  id                 String     @id @default(cuid())
-  ordemServicoId     String     @map("ordem_servico_id")
+  id                  String     @id @default(cuid())
+  ordemServicoId      String     @map("ordem_servico_id")
   /// Item do orçamento de onde a linha foi copiada ("Gerar OS"): leva o serviço (dados fiscais) até a nota
-  orcamentoServicoId String?    @map("orcamento_servico_id")
-  descricao          String
-  quantidade         Decimal    @db.Decimal(10, 2)
-  valorUnitario      Decimal    @map("valor_unitario") @db.Decimal(10, 2)
-  valorTotal         Decimal    @map("valor_total") @db.Decimal(10, 2)
-  executado          Boolean    @default(false)
-  executadoEm        DateTime?  @map("executado_em")
+  orcamentoServicoId  String?    @map("orcamento_servico_id")
+  descricao           String
+  quantidade          Decimal    @db.Decimal(10, 2)
+  valorUnitario       Decimal    @map("valor_unitario") @db.Decimal(10, 2)
+  valorTotal          Decimal    @map("valor_total") @db.Decimal(10, 2)
+  executado           Boolean    @default(false)
+  executadoEm         DateTime?  @map("executado_em")
   /// E3.3b — serviço ou produto (peça); item antigo = SERVICO. Vínculo com o catálogo (opcional; linha livre = nenhum)
-  tipo               TipoItemOs @default(SERVICO)
-  servicoId          String?    @map("servico_id")
-  produtoId          String?    @map("produto_id")
+  tipo                TipoItemOs @default(SERVICO)
+  servicoId           String?    @map("servico_id")
+  produtoId           String?    @map("produto_id")
   /// Como na linha do orçamento (E3.3): valor ANTES dos materiais, ajuste dos inclusos e override manual
-  valorBase          Decimal?   @map("valor_base") @db.Decimal(10, 2)
-  ajusteMateriais    Decimal    @default(0) @map("ajuste_materiais") @db.Decimal(10, 2)
-  valorManual        Boolean    @default(false) @map("valor_manual")
+  valorBase           Decimal?   @map("valor_base") @db.Decimal(10, 2)
+  ajusteMateriais     Decimal    @default(0) @map("ajuste_materiais") @db.Decimal(10, 2)
+  valorManual         Boolean    @default(false) @map("valor_manual")
   /// Peça (venda à parte) derivada de um material de serviço desta OS: linha só de leitura
-  materialId         String?    @unique @map("material_id")
-  ordem              Int        @default(0)
+  materialId          String?    @unique @map("material_id")
+  ordem               Int        @default(0)
   /// Leva I.2 — material lançado em campo (app) que virou item cobrado no modo "Cobrado à parte"
-  materialCampoId     String?   @unique @map("material_campo_id")
+  materialCampoId     String?    @unique @map("material_campo_id")
   /// Leva I.2 — o escritório ainda precisa conferir este item de campo antes de faturar
-  conferirCampo       Boolean   @default(false) @map("conferir_campo")
-  conferidoCampoEm    DateTime? @map("conferido_campo_em")
-  conferidoCampoPorId String?   @map("conferido_campo_por_id")
+  conferirCampo       Boolean    @default(false) @map("conferir_campo")
+  conferidoCampoEm    DateTime?  @map("conferido_campo_em")
+  conferidoCampoPorId String?    @map("conferido_campo_por_id")
 
-  ordemServico     OrdemServico      @relation(fields: [ordemServicoId], references: [id], onDelete: Cascade)
-  orcamentoServico OrcamentoServico? @relation(fields: [orcamentoServicoId], references: [id], onDelete: SetNull)
-  servico          Servico?          @relation(fields: [servicoId], references: [id], onDelete: SetNull)
-  produto          Produto?          @relation(fields: [produtoId], references: [id], onDelete: SetNull)
-  material         OsMaterial?       @relation("OsPecaDerivada", fields: [materialId], references: [id], onDelete: Cascade)
-  materiais        OsMaterial[]      @relation("OsItemMateriais")
+  ordemServico     OrdemServico       @relation(fields: [ordemServicoId], references: [id], onDelete: Cascade)
+  orcamentoServico OrcamentoServico?  @relation(fields: [orcamentoServicoId], references: [id], onDelete: SetNull)
+  servico          Servico?           @relation(fields: [servicoId], references: [id], onDelete: SetNull)
+  produto          Produto?           @relation(fields: [produtoId], references: [id], onDelete: SetNull)
+  material         OsMaterial?        @relation("OsPecaDerivada", fields: [materialId], references: [id], onDelete: Cascade)
+  materiais        OsMaterial[]       @relation("OsItemMateriais")
   materialCampo    AtividadeMaterial? @relation("OsItemMaterialCampo", fields: [materialCampoId], references: [id], onDelete: SetNull)
 
   @@index([ordemServicoId])
@@ -4280,9 +4287,9 @@ model TabelaPreco {
   criadoEm         DateTime        @default(now()) @map("criado_em")
   atualizadoEm     DateTime        @updatedAt @map("atualizado_em")
 
-  empresa  Empresa           @relation(fields: [empresaId], references: [id], onDelete: Cascade)
-  itens    TabelaPrecoItem[]
-  clientes Cliente[]
+  empresa   Empresa               @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  itens     TabelaPrecoItem[]
+  clientes  Cliente[]
   reajustes TabelaPrecoReajuste[]
 
   @@map("tabelas_preco")
@@ -4946,22 +4953,22 @@ model NotaCompra {
 /// itens, e fica aqui o registro de qual era, quem descartou, quando e por quê. A lançada não se
 /// descarta (o estorno é pela conta a pagar e pelo ajuste de estoque).
 model NotaCompraDescarte {
-  id           String   @id @default(cuid())
-  empresaId    String   @map("empresa_id")
+  id               String    @id @default(cuid())
+  empresaId        String    @map("empresa_id")
   /// A nota como era (a linha dela não existe mais)
-  notaId       String   @map("nota_id")
-  chaveAcesso  String   @map("chave_acesso")
-  numero       String
-  serie        String
-  emitenteNome String   @map("emitente_nome")
-  emitenteCnpj String   @map("emitente_cnpj")
-  valorTotal   Decimal  @map("valor_total") @db.Decimal(12, 2)
-  dataEmissao  DateTime @map("data_emissao")
+  notaId           String    @map("nota_id")
+  chaveAcesso      String    @map("chave_acesso")
+  numero           String
+  serie            String
+  emitenteNome     String    @map("emitente_nome")
+  emitenteCnpj     String    @map("emitente_cnpj")
+  valorTotal       Decimal   @map("valor_total") @db.Decimal(12, 2)
+  dataEmissao      DateTime  @map("data_emissao")
   /// IMPORTADA ou CONCILIADA no momento do descarte
-  statusNaHora String   @map("status_na_hora")
-  motivo       String?
-  usuarioId    String?  @map("usuario_id")
-  descartadoEm DateTime @default(now()) @map("descartado_em")
+  statusNaHora     String    @map("status_na_hora")
+  motivo           String?
+  usuarioId        String?   @map("usuario_id")
+  descartadoEm     DateTime  @default(now()) @map("descartado_em")
   /// Leva I.2 — o XML da nota (para restaurar) e quem restaurou
   xml              String?   @db.Text
   restauradaEm     DateTime? @map("restaurada_em")
@@ -5764,36 +5771,36 @@ model DesempenhoFechamentoLinha {
 /// Uma regra de comissão. A mais específica vence: pessoa > cargo > todos; e, no mesmo "quem",
 /// um serviço > categoria > todos os serviços (peças só valem para as linhas de peça).
 model ComissaoRegra {
-  id           String   @id @default(cuid())
-  empresaId    String   @map("empresa_id")
+  id            String   @id @default(cuid())
+  empresaId     String   @map("empresa_id")
   /// PESSOA (usuarioId) | CARGO (cargoId, do colaborador ligado ao usuário pelo e-mail) | TODOS
-  quemTipo     String   @map("quem_tipo")
-  usuarioId    String?  @map("usuario_id")
-  cargoId      String?  @map("cargo_id")
+  quemTipo      String   @map("quem_tipo")
+  usuarioId     String?  @map("usuario_id")
+  cargoId       String?  @map("cargo_id")
   /// VENDEDOR (nesta leva) | EXECUTOR | RESPONSAVEL (o modelo já aceita; ainda não geram comissão)
-  papel        String   @default("VENDEDOR")
+  papel         String   @default("VENDEDOR")
   /// TODOS_SERVICOS | CATEGORIA (categoria do serviço) | SERVICO (servicoId) | PECAS (linhas de produto/peça)
   /// | CONTRATOS (COM-1.2: o contrato fechado; `tipoContrato` nulo = todos os contratos)
-  sobreTipo    String   @map("sobre_tipo")
-  categoria    String?
-  servicoId    String?  @map("servico_id")
+  sobreTipo     String   @map("sobre_tipo")
+  categoria     String?
+  servicoId     String?  @map("servico_id")
   /// COM-1.2 — CONTRATOS de um tipo só (TipoContrato); nulo = todos os contratos
-  tipoContrato String?  @map("tipo_contrato")
+  tipoContrato  String?  @map("tipo_contrato")
   /// PERC_VENDA (% do valor com desconto) | PERC_LUCRO (% do lucro: venda − custo, só no servidor) | FIXO_ITEM (R$ por unidade)
   /// | PERC_MENSALIDADE (COM-1.2: % de cada mensalidade recebida nos primeiros `meses`) | FIXO_CONTRATO (R$ no fechamento)
-  base         String
+  base          String
   /// COM-1.2 — PERC_MENSALIDADE: quantos meses desde o início (0 = enquanto o contrato estiver ativo)
-  meses        Int?
+  meses         Int?
   /// % (PERC_*) ou R$ por unidade (FIXO_ITEM)
-  valor        Decimal  @db.Decimal(12, 4)
+  valor         Decimal  @db.Decimal(12, 4)
   /// COM-2 (Executor): IGUAL | POR_EXECUTOR (quem marcou o equipamento como feito) | POR_CARGO (divisaoCargos)
-  divisao      String   @default("IGUAL")
+  divisao       String   @default("IGUAL")
   /// POR_CARGO: { [cargoId]: % } — normalizado sobre os cargos presentes
-  divisaoCargos Json?   @map("divisao_cargos")
-  ativo        Boolean  @default(true)
-  criadoPorId  String?  @map("criado_por_id")
-  criadoEm     DateTime @default(now()) @map("criado_em")
-  atualizadoEm DateTime @updatedAt @map("atualizado_em")
+  divisaoCargos Json?    @map("divisao_cargos")
+  ativo         Boolean  @default(true)
+  criadoPorId   String?  @map("criado_por_id")
+  criadoEm      DateTime @default(now()) @map("criado_em")
+  atualizadoEm  DateTime @updatedAt @map("atualizado_em")
 
   empresa   Empresa    @relation(fields: [empresaId], references: [id], onDelete: Cascade)
   usuario   Usuario?   @relation("ComissaoRegraUsuario", fields: [usuarioId], references: [id], onDelete: Cascade)
@@ -5850,14 +5857,14 @@ model Comissao {
   liquidaImpostos  Boolean  @default(false) @map("liquida_impostos")
   criadoEm         DateTime @default(now()) @map("criado_em")
 
-  empresa     Empresa              @relation(fields: [empresaId], references: [id], onDelete: Cascade)
-  orcamento   Orcamento?           @relation(fields: [orcamentoId], references: [id], onDelete: Cascade)
-  ordemServico OrdemServico?       @relation("ComissaoOs", fields: [ordemServicoId], references: [id], onDelete: Cascade)
-  contrato     Contrato?           @relation(fields: [contratoId], references: [id], onDelete: Cascade)
-  usuario     Usuario?             @relation("ComissaoUsuario", fields: [usuarioId], references: [id], onDelete: SetNull)
-  regra       ComissaoRegra?       @relation(fields: [regraId], references: [id], onDelete: SetNull)
-  lancamentos ComissaoLancamento[]
-  revisoes    ComissaoRevisao[]
+  empresa      Empresa              @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  orcamento    Orcamento?           @relation(fields: [orcamentoId], references: [id], onDelete: Cascade)
+  ordemServico OrdemServico?        @relation("ComissaoOs", fields: [ordemServicoId], references: [id], onDelete: Cascade)
+  contrato     Contrato?            @relation(fields: [contratoId], references: [id], onDelete: Cascade)
+  usuario      Usuario?             @relation("ComissaoUsuario", fields: [usuarioId], references: [id], onDelete: SetNull)
+  regra        ComissaoRegra?       @relation(fields: [regraId], references: [id], onDelete: SetNull)
+  lancamentos  ComissaoLancamento[]
+  revisoes     ComissaoRevisao[]
 
   @@unique([empresaId, chave])
   @@index([empresaId, usuarioId])
@@ -5871,21 +5878,21 @@ model Comissao {
 /// da OS) ou ESTORNO (−, o gatilho voltou atrás: fatura cancelada, recebimento estornado, orçamento cancelado).
 /// "Liberada" até entrar num fechamento do mês; "Paga" quando entra (fechamentoId).
 model ComissaoLancamento {
-  id           String   @id @default(cuid())
-  empresaId    String   @map("empresa_id")
-  comissaoId   String   @map("comissao_id")
-  usuarioId    String?  @map("usuario_id")
+  id              String   @id @default(cuid())
+  empresaId       String   @map("empresa_id")
+  comissaoId      String   @map("comissao_id")
+  usuarioId       String?  @map("usuario_id")
   /// LIBERACAO | ESTORNO
-  tipo         String
+  tipo            String
   /// + na liberação, − no estorno
-  valor        Decimal  @db.Decimal(12, 2)
+  valor           Decimal  @db.Decimal(12, 2)
   /// O dia que conta (o do recebimento, da aprovação, da conclusão ou do estorno): define o mês do fechamento
-  data         DateTime
-  motivo       String
-  fechamentoId String?  @map("fechamento_id")
+  data            DateTime
+  motivo          String
+  fechamentoId    String?  @map("fechamento_id")
   /// COM-2: o par −/+ do teto do mês ("AAAA-MM" da competência que estourou); reabrir o mês apaga o par
-  tetoCompetencia String? @map("teto_competencia")
-  criadoEm     DateTime @default(now()) @map("criado_em")
+  tetoCompetencia String?  @map("teto_competencia")
+  criadoEm        DateTime @default(now()) @map("criado_em")
 
   empresa    Empresa               @relation(fields: [empresaId], references: [id], onDelete: Cascade)
   comissao   Comissao              @relation(fields: [comissaoId], references: [id], onDelete: Cascade)
@@ -6496,4 +6503,62 @@ model TabelaPrecoReajuste {
 
   @@index([empresaId, tabelaPrecoId, criadoEm])
   @@map("tabela_preco_reajustes")
+}
+
+/// Tipo do motivo de pausa: IMPEDIMENTO avisa o escritório (sino/push) e permite encerrar a visita como
+/// "Não concluída — precisa voltar"; INTERVALO (almoço) só para o relógio.
+enum TipoMotivoPausa {
+  IMPEDIMENTO
+  INTERVALO
+}
+
+/// Motivo de pausa da atividade, configurável por empresa (criar/editar/inativar). Os padrões nascem na 1ª leitura.
+model MotivoPausa {
+  id        String          @id @default(cuid())
+  empresaId String          @map("empresa_id")
+  nome      String
+  tipo      TipoMotivoPausa @default(IMPEDIMENTO)
+  /// "Outro": o técnico escreve o motivo
+  pedeTexto Boolean         @default(false) @map("pede_texto")
+  ordem     Int             @default(0)
+  ativo     Boolean         @default(true)
+  criadoEm  DateTime        @default(now()) @map("criado_em")
+
+  empresa Empresa          @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  pausas  AtividadePausa[]
+
+  @@unique([empresaId, nome])
+  @@map("motivos_pausa")
+}
+
+/// Uma pausa da atividade (app do técnico). Aberta = fim nulo. O tempo entre início e fim NÃO conta como execução.
+/// O motivo fica gravado como texto (o cadastro pode mudar depois). naoConcluida = a visita foi encerrada pelo
+/// impedimento e a atividade voltou para reagendar.
+model AtividadePausa {
+  id            String    @id @default(cuid())
+  empresaId     String    @map("empresa_id")
+  atividadeId   String    @map("atividade_id")
+  motivoId      String?   @map("motivo_id")
+  motivo        String
+  impedimento   Boolean   @default(true)
+  observacao    String?
+  /// Relógio do aparelho
+  inicio        DateTime
+  fim           DateTime?
+  naoConcluida  Boolean   @default(false) @map("nao_concluida")
+  pausadoPorId  String?   @map("pausado_por_id")
+  retomadoPorId String?   @map("retomado_por_id")
+  /// Id do aparelho (idempotência do envio sem sinal)
+  clientId      String    @unique @map("client_id")
+  criadoEm      DateTime  @default(now()) @map("criado_em")
+
+  empresa     Empresa      @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  atividade   AtividadeOs  @relation(fields: [atividadeId], references: [id], onDelete: Cascade)
+  motivoRef   MotivoPausa? @relation(fields: [motivoId], references: [id], onDelete: SetNull)
+  pausadoPor  Usuario?     @relation("PausaPausadoPor", fields: [pausadoPorId], references: [id], onDelete: SetNull)
+  retomadoPor Usuario?     @relation("PausaRetomadoPor", fields: [retomadoPorId], references: [id], onDelete: SetNull)
+
+  @@index([atividadeId, inicio])
+  @@index([empresaId, fim])
+  @@map("atividade_pausas")
 }

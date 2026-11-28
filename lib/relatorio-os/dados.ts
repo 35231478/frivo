@@ -97,6 +97,8 @@ export interface RelatorioOsDados {
    */
   fotosServico: FotoRelatorio[];
   tempos: { atividade: string; status: string; inicio: Date | null; duracaoMin: number | null }[];
+  /** D1: as pausas do técnico — SÓ a versão interna mostra (o cliente nunca vê almoço nem impedimento) */
+  pausas: { atividade: string; motivo: string; impedimento: boolean; inicio: Date; fim: Date | null; naoConcluida: boolean; observacao: string | null }[];
   observacoes: string[];
   assinaturas: { coletadas: AssinaturaColetada[]; responsavel: { nome: string; crea: string | null } | null; clienteNome: string };
   /** O aceite do cliente, quando ele já confirmou (null = sem aceite ou ainda pendente) */
@@ -114,6 +116,8 @@ type Equip = {
 };
 export type AtividadeParaBlocos = Atividade;
 type Atividade = {
+  /** D1: pausas do técnico (opcional: chamadas antigas/testes sem o include) */
+  pausas?: { motivo: string; impedimento: boolean; inicio: Date; fim: Date | null; naoConcluida: boolean; observacao: string | null }[];
   id: string; titulo: string; status: string; criadoEm: Date; dataAgendada: Date | null; duracaoMin: number | null;
   observacao: string | null; resumo: string | null;
   tipoOs?: { nome: string } | null; tecnico?: { nome: string; especialidades?: string[] } | null; equipe?: { nome: string } | null;
@@ -385,6 +389,7 @@ export function montarRelatorioOs(os: OsParaRelatorio, relatorio: RelatorioRef |
     },
     fotosServico,
     tempos: ativs.map((a) => ({ atividade: a.titulo, status: a.status, inicio: a.dataAgendada ?? a.criadoEm, duracaoMin: a.duracaoMin })),
+    pausas: ativs.flatMap((a) => (a.pausas ?? []).map((p) => ({ atividade: a.titulo, motivo: p.motivo, impedimento: p.impedimento, inicio: p.inicio, fim: p.fim, naoConcluida: p.naoConcluida, observacao: p.observacao }))),
     observacoes: [os.observacoes, relatorio?.observacao].map((x) => (x ?? "").trim()).filter((x, i, arr) => x && arr.indexOf(x) === i),
     // Só o aceite CONFIRMADO entra no relatório (o pendente não é prova de nada)
     aceite: os.aceite?.situacao === "CONFIRMADO" ? {
@@ -453,6 +458,8 @@ export async function carregarOsParaRelatorio(osId: string, empresaId: string): 
       atividades: {
         orderBy: { criadoEm: "asc" },
         include: {
+          // D1: as pausas (só a versão interna mostra)
+          pausas: { orderBy: { inicio: "asc" }, select: { motivo: true, impedimento: true, inicio: true, fim: true, naoConcluida: true, observacao: true } },
           tipoOs: { select: { nome: true } },
           tecnico: { select: { nome: true, especialidades: true } },
           equipe: { select: { nome: true } },

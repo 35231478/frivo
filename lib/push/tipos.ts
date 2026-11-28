@@ -15,7 +15,7 @@ import { ehNotaBaixa } from "@/lib/alertas/sino";
 
 export type TipoPush =
   | "OS_NOVA" | "OS_REAGENDADA" | "OS_CANCELADA" | "ATIVIDADE_ESQUECIDA" | "OS_COMENTARIO" | "ACEITE"
-  | "DESPESA" | "SOLICITACAO_PORTAL" | "ORCAMENTO_RESPOSTA" | "ESTOQUE_NEGATIVO" | "PEDIDO_CLIENTE" | "TESTE";
+  | "DESPESA" | "SOLICITACAO_PORTAL" | "ORCAMENTO_RESPOSTA" | "ESTOQUE_NEGATIVO" | "PEDIDO_CLIENTE" | "IMPEDIMENTO" | "TESTE";
 
 export interface QuemRecebe {
   permissoes: Permissoes | null | undefined;
@@ -46,6 +46,7 @@ export const TIPOS_PUSH: DefTipo[] = [
   { id: "OS_NOVA", rotulo: "Nova OS para você", dica: "Uma atividade foi atribuída a você: cliente, data e hora. Tocar abre a OS no app.", podeReceber: tecnico },
   { id: "OS_REAGENDADA", rotulo: "OS reagendada", dica: "A data ou a hora de uma atividade sua mudou.", podeReceber: tecnico },
   { id: "OS_CANCELADA", rotulo: "OS cancelada", dica: "Uma OS em que você tem atividade foi cancelada.", podeReceber: tecnico },
+  { id: "IMPEDIMENTO", rotulo: "Atividade pausada por impedimento", dica: "O técnico pausou a atividade por um impedimento (falta de peça, cliente ausente, acesso negado…). Pausa de almoço não avisa.", podeReceber: (q) => escritorio(q) && veOrdens(q) },
   { id: "ATIVIDADE_ESQUECIDA", rotulo: "Atividade esquecida em andamento", dica: "Atividade em andamento além do limite da empresa ou desde outro dia. O técnico recebe a dele; o escritório, todas.", podeReceber: (q) => tecnico(q) || veOrdens(q) },
   { id: "OS_COMENTARIO", rotulo: "Mensagem nova na conversa da OS", dica: "Alguém escreveu na conversa (chat) de uma OS sua (técnico) ou ligada a esta pessoa (escritório).", podeReceber: (q) => tecnico(q) || veOrdens(q) },
   { id: "ACEITE", rotulo: "Ressalva, comentário ou nota baixa no aceite", dica: "O cliente confirmou o serviço com ressalva, comentário ou nota de 1 ou 2 estrelas. O técnico recebe só o da OS dele.", podeReceber: (q) => tecnico(q) || veOrdens(q) },
@@ -222,6 +223,10 @@ export function msgRespostaOrcamento(a: { id: string; codigo: string; cliente?: 
     corpo: juntar(a.cliente, a.aprovado ? "O cliente aprovou pelo link." : "O cliente recusou pelo link."),
     url: `/orcamentos/${encodeURIComponent(a.id)}`, tag: `orcamento-${a.id}`, acao: "Abrir",
   };
+}
+
+export function msgImpedimento(a: { osNumero: string; tecnico?: string | null; motivo: string; observacao?: string | null; osId: string }): MensagemPush {
+  return { titulo: `Atividade pausada: ${curto(a.motivo, 60)}`, corpo: juntar(`OS ${a.osNumero}`, a.tecnico, a.observacao ? curto(a.observacao, 80) : null), url: urlOs(a.osId), tag: `impedimento-${a.osId}`, acao: "Ver a OS" };
 }
 
 export function msgEstoqueNegativo(a: { produto: string; saldo: number; unidade?: string | null; osNumero?: string | null }): MensagemPush {
