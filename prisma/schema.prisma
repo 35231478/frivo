@@ -2795,7 +2795,8 @@ model AtividadeMaterial {
 model OsComentario {
   id             String   @id @default(cuid())
   empresaId      String   @map("empresa_id")
-  ordemServicoId String   @map("ordem_servico_id")
+  /// CHAT-1: vazio = mensagem SEM OS (só na conversa da pessoa)
+  ordemServicoId String?  @map("ordem_servico_id")
   /// A atividade de onde o técnico escreveu (vazio = escritório)
   atividadeId    String?  @map("atividade_id")
   usuarioId      String   @map("usuario_id")
@@ -2808,8 +2809,11 @@ model OsComentario {
   /// CHAT-1: quando alguém que não o autor leu a mensagem pela 1ª vez (o ✓✓), e quem foi
   lidaEm         DateTime? @map("lida_em")
   lidaPorId      String?   @map("lida_por_id")
+  /// CHAT-1: a conversa (o técnico, pelo usuário dele) para quem o escritório escreveu. Vazio numa mensagem do
+  /// escritório com OS = para todos os técnicos da OS (como era antes); a do técnico é sempre da conversa dele.
+  paraUsuarioId  String?   @map("para_usuario_id")
 
-  ordemServico OrdemServico @relation(fields: [ordemServicoId], references: [id], onDelete: Cascade)
+  ordemServico OrdemServico? @relation(fields: [ordemServicoId], references: [id], onDelete: Cascade)
   atividade    AtividadeOs? @relation(fields: [atividadeId], references: [id], onDelete: SetNull)
   foto         OsComentarioFoto?
 
@@ -2818,7 +2822,21 @@ model OsComentario {
   @@index([empresaId, origem, criadoEm])
   @@index([empresaId, criadoEm])
   @@index([empresaId, lidaEm])
+  @@index([empresaId, paraUsuarioId, criadoEm])
+  @@index([empresaId, usuarioId, criadoEm])
   @@map("os_comentarios")
+}
+
+/// CHAT-1: até quando cada pessoa leu a CONVERSA de um técnico (a lista por pessoa). O técnico, a dele mesmo
+/// (conversa_usuario_id = o próprio usuário). A leitura por OS continua em os_comentarios_lidos.
+model ConversaLeitura {
+  usuarioId         String   @map("usuario_id")
+  conversaUsuarioId String   @map("conversa_usuario_id")
+  lidoEm            DateTime @map("lido_em")
+
+  @@id([usuarioId, conversaUsuarioId])
+  @@index([conversaUsuarioId])
+  @@map("conversas_leituras")
 }
 
 /// CHAT-1: a foto de uma mensagem da conversa da OS. Guardada como os anexos da OS (data URL no banco, mesma validação),

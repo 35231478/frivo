@@ -6,7 +6,7 @@ import { cn } from "@/lib/utils";
 import { horaBR } from "@/lib/fuso";
 import { Balao } from "@/components/chat/balao";
 import { Lightbox, type ItemLightbox } from "@/components/ui/lightbox";
-import { rotuloDoDia, TEXTO_MAX } from "@/lib/chat/regras";
+import { mostraEtiquetaOs, rotuloDoDia, ROTULO_SEM_OS, TEXTO_MAX } from "@/lib/chat/regras";
 import { prepararFoto } from "@/lib/chat/foto-cliente";
 import type { ComentarioTela } from "@/lib/tecnico/comentarios";
 
@@ -19,7 +19,13 @@ export interface EnvioMensagem { texto: string; foto?: string; miniatura?: strin
  */
 export function ConversaChat({
   mensagens, carregando, erro, somenteLeitura, podeEscrever = true, semPermissao, onEnviar, urlFoto, onTentarDeNovo, className, placeholder = "Escreva uma mensagem",
+  mostrarOs = false, abrirOs, acimaDoTexto,
 }: {
+  /** Conversa da PESSOA: a etiqueta da OS (nº + cliente, abre a OS) quando a OS muda; seguidas da mesma OS agrupam */
+  mostrarOs?: boolean;
+  abrirOs?: (osId: string) => void;
+  /** O seletor de OS (1 toque) acima do campo de texto */
+  acimaDoTexto?: React.ReactNode;
   mensagens: ComentarioTela[];
   carregando?: boolean;
   erro?: string | null;
@@ -103,6 +109,18 @@ export function ConversaChat({
                       <span className="text-[11px] font-semibold text-ink-muted bg-white border border-surface-border rounded-full px-2.5 py-0.5">{dia}</span>
                     </li>
                   )}
+                  {mostrarOs && mostraEtiquetaOs(m, ant) && (
+                    <li className="flex items-center gap-2 pt-2 pb-0.5" data-etiqueta-os={m.os?.id ?? "sem-os"}>
+                      <span className="h-px flex-1 bg-surface-border" aria-hidden />
+                      {m.os ? (
+                        <button type="button" onClick={() => abrirOs?.(m.os!.id)} disabled={!abrirOs} title="Abrir a OS"
+                          className="text-[11px] font-semibold text-primary-700 hover:underline disabled:no-underline disabled:cursor-default truncate max-w-[80%]">
+                          {m.os.numero}{m.os.cliente ? ` · ${m.os.cliente}` : ""}
+                        </button>
+                      ) : <span className="text-[11px] font-semibold text-ink-subtle">{ROTULO_SEM_OS}</span>}
+                      <span className="h-px flex-1 bg-surface-border" aria-hidden />
+                    </li>
+                  )}
                   <Balao m={m} mostrarAutor={mostrarAutor} onTentarDeNovo={onTentarDeNovo}
                     onAmpliar={(x) => { const k = fotos.findIndex((f) => f.foto?.id === x.foto?.id); if (k >= 0) setAmpliar(k); }} />
                 </Fragment>
@@ -116,6 +134,7 @@ export function ConversaChat({
         <p className="border-t border-surface-border bg-white px-4 py-3 text-sm text-ink-muted text-center" data-somente-leitura>{bloqueio}</p>
       ) : (
         <div className="border-t border-surface-border bg-white p-2 space-y-2" data-escrever>
+          {acimaDoTexto}
           {aviso && <p className="text-xs text-atrasado px-1" role="alert" data-aviso-chat>{aviso}</p>}
           {foto && (
             <div className="relative inline-block" data-foto-escolhida>

@@ -51,7 +51,7 @@ export function Balao({ m, mostrarAutor, onAmpliar, onTentarDeNovo }: {
         <p className={cn("flex items-center justify-end gap-1 text-[11px]", estado === "falhou" ? "text-atrasado" : "text-ink-subtle")}>
           {estado === "falhou"
             ? <span data-falhou>{ROTULO_ESTADO.falhou}</span>
-            : <span>{m.pendente ? "" : horaBR(m.criadoEm)}</span>}
+            : <span>{m.para && <span className="mr-1" data-para>para {m.para.split(" ")[0]} ·</span>}{m.pendente ? "" : horaBR(m.criadoEm)}</span>}
           {estado && (
             <span title={dicaEstado(m)} aria-label={dicaEstado(m)} data-estado-icone={estado}
               className={cn("inline-flex", estado === "lida" && "text-primary-600")}>

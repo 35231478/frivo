@@ -61,6 +61,62 @@ export function ordenarConversas(lista: ConversaResumo[]): ConversaResumo[] {
 
 export const totalNaoLidas = (lista: ConversaResumo[]) => lista.reduce((n, c) => n + c.naoLidas, 0);
 
+// ── A conversa com uma PESSOA (o desenho principal) ─────────────────────────────────────────
+
+/**
+ * A lista do escritório é POR PESSOA (a gente pensa "preciso falar com o João", não "OS 1.234"); o REGISTRO continua
+ * na OS: cada mensagem leva a OS dela (ou nenhuma), e dentro da OS aparecem só as daquela OS — a mesma mensagem,
+ * filtrada, nada duplicado.
+ */
+export interface PessoaResumo {
+  /** O usuário do técnico (a chave da conversa) */
+  usuarioId: string;
+  tecnicoId: string;
+  nome: string;
+  avatar: string | null;
+  ultima: { texto: string; autor: string; criadoEm: string; minha: boolean; foto: boolean; osNumero: string | null } | null;
+  /** O que o técnico mandou depois da última leitura de quem vê */
+  naoLidas: number;
+}
+
+/** Não lidas primeiro; depois a mais recente; quem nunca conversou, pelo nome. */
+export function ordenarPessoas(lista: PessoaResumo[]): PessoaResumo[] {
+  return [...lista].sort((a, b) => Number(b.naoLidas > 0) - Number(a.naoLidas > 0)
+    || (b.ultima?.criadoEm ?? "").localeCompare(a.ultima?.criadoEm ?? "")
+    || a.nome.localeCompare(b.nome, "pt-BR"));
+}
+
+/** As iniciais (sem foto): "Carlos Oliveira" → "CO". */
+export function iniciais(nome: string): string {
+  const p = nome.trim().split(/\s+/).filter(Boolean);
+  return ((p[0]?.[0] ?? "") + (p.length > 1 ? p[p.length - 1][0] : "")).toUpperCase() || "?";
+}
+
+/** Uma OS que a pessoa tem no dia (o seletor de 1 toque acima do campo de texto). */
+export interface OsDoDia { osId: string; numero: string; cliente: string; emAndamento: boolean; atividadeId?: string | null }
+
+/**
+ * A OS que a mensagem leva SOZINHA: a da atividade em andamento do técnico; senão a última OS usada na conversa HOJE;
+ * senão nenhuma ("Sem OS"). A pessoa troca com um toque.
+ */
+export function osPadraoDaMensagem(a: { osDoDia: OsDoDia[]; mensagens: Pick<ComentarioTela, "os" | "criadoEm">[]; agora?: Date }): string | null {
+  const emAndamento = a.osDoDia.find((o) => o.emAndamento);
+  if (emAndamento) return emAndamento.osId;
+  const hoje = rotuloDoDia((a.agora ?? new Date()).toISOString(), a.agora);
+  const ultimaHoje = [...a.mensagens].reverse().find((m) => m.os && rotuloDoDia(m.criadoEm, a.agora) === hoje);
+  return ultimaHoje?.os?.id ?? null;
+}
+
+/** Na conversa da pessoa, a etiqueta da OS só aparece quando a OS muda (ou o dia): mensagens seguidas agrupam. */
+export function mostraEtiquetaOs(m: Pick<ComentarioTela, "os" | "criadoEm">, anterior: Pick<ComentarioTela, "os" | "criadoEm"> | undefined, agora?: Date): boolean {
+  if (!anterior) return true;
+  if (rotuloDoDia(m.criadoEm, agora) !== rotuloDoDia(anterior.criadoEm, agora)) return true;
+  return (m.os?.id ?? null) !== (anterior.os?.id ?? null);
+}
+
+export const ROTULO_SEM_OS = "Sem OS";
+export const MSG_SEM_PERMISSAO_CONVERSAS = "Sem permissão para Conversas. Peça ao administrador (Configurações › Perfis de acesso).";
+
 // ── A mensagem (um balão) ───────────────────────────────────────────────────────────────────
 
 export type EstadoMensagem = "falhou" | "enviando" | "enviada" | "lida";
@@ -140,4 +196,6 @@ export const esperaDepoisDeErro = (falhas: number) => Math.min(ESPERA_ERRO_MAX_M
 // ── Endereços ───────────────────────────────────────────────────────────────────────────────
 
 export const urlConversaEscritorio = (osId?: string | null) => (osId ? `/conversas?os=${encodeURIComponent(osId)}` : "/conversas");
+/** A conversa com uma pessoa no escritório (o padrão da tela Conversas) */
+export const urlConversaPessoa = (usuarioId?: string | null) => (usuarioId ? `/conversas?pessoa=${encodeURIComponent(usuarioId)}` : "/conversas");
 export const urlConversaApp = (osId?: string | null) => (osId ? `/tecnico?ver=chat&os=${encodeURIComponent(osId)}` : "/tecnico?ver=chat");

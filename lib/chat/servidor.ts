@@ -11,6 +11,7 @@ import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { filtroOrdens, type QuemVe } from "@/lib/escopo/proprios";
 import { atividadesDoTecnico } from "@/lib/tecnico/escopo";
+import { ondeConversaDoTecnico } from "@/lib/chat/pessoas-servidor";
 import { comentariosDaOs, comentariosParaEscritorio, marcarConversaLida } from "@/lib/execucao/comentarios";
 import { ESPERA_NOVIDADES_MS, PASSO_NOVIDADES_MS, marcaNovidades, ordenarConversas, type ConversaResumo } from "@/lib/chat/regras";
 import type { ComentarioTela } from "@/lib/tecnico/comentarios";
@@ -49,7 +50,7 @@ export async function resumosDasConversas(empresaId: string, usuarioId: string, 
     prisma.osComentario.groupBy({ by: ["ordemServicoId"], where: { empresaId, ordemServicoId: { in: osIds } }, _max: { criadoEm: true } }),
     prisma.osComentarioLeitura.findMany({ where: { usuarioId, ordemServicoId: { in: osIds } }, select: { ordemServicoId: true, lidoEm: true } }),
   ]);
-  const ultimoEm = new Map(ultimos.map((u) => [u.ordemServicoId, u._max.criadoEm!]));
+  const ultimoEm = new Map(ultimos.filter((u) => u.ordemServicoId).map((u) => [u.ordemServicoId!, u._max.criadoEm!]));
   const lidoEm = new Map(leituras.map((l) => [l.ordemServicoId, l.lidoEm]));
   const comMensagem = [...ultimoEm.keys()];
   const [ultimas, naoLidas] = await Promise.all([
@@ -64,8 +65,8 @@ export async function resumosDasConversas(empresaId: string, usuarioId: string, 
     }) : [],
   ]);
   const ultimaDe = new Map<string, (typeof ultimas)[number]>();
-  for (const u of ultimas) if (!ultimaDe.has(u.ordemServicoId)) ultimaDe.set(u.ordemServicoId, u);
-  const naoLidasDe = new Map(naoLidas.map((n) => [n.ordemServicoId, n._count._all]));
+  for (const u of ultimas) if (u.ordemServicoId && !ultimaDe.has(u.ordemServicoId)) ultimaDe.set(u.ordemServicoId, u);
+  const naoLidasDe = new Map(naoLidas.map((n) => [n.ordemServicoId ?? "", n._count._all]));
   return ordenarConversas(oss.map((os) => {
     const u = ultimaDe.get(os.id);
     const tecnicos = [...new Set(os.atividades.flatMap((a) => [a.tecnico?.nome, ...a.tecnicosEquipe.map((t) => t.tecnico.nome)]).filter((x): x is string => !!x?.trim()))]
@@ -94,7 +95,7 @@ export async function conversasDoEscritorio(u: QuemEscritorio, op: { busca?: str
     by: ["ordemServicoId"], where: { empresaId: u.empresaId, ordemServico: ondeOs },
     _max: { criadoEm: true }, orderBy: { _max: { criadoEm: "desc" } }, take: op.limite ?? LIMITE_CONVERSAS,
   });
-  const conversas = await resumosDasConversas(u.empresaId, u.id, grupos.map((g) => g.ordemServicoId));
+  const conversas = await resumosDasConversas(u.empresaId, u.id, grupos.map((g) => g.ordemServicoId).filter((x): x is string => !!x));
   const semConversa = (op.busca ?? "").trim()
     ? (await prisma.ordemServico.findMany({
       where: { ...ondeOs, comentarios: { none: {} } }, orderBy: { criadoEm: "desc" }, take: 5,
@@ -138,50 +139,26 @@ async function osDoTecnico(empresaId: string, tecnicoId: string, agora: Date): P
   return porOs;
 }
 
-/** App do técnico com "Exibir dados do cliente" desligado (Equipes › App do colaborador): o nome do cliente nem sai do servidor. */
-export const semCliente = <T extends { cliente: string }>(c: T, exibirDadosCliente: boolean): T => (exibirDadosCliente ? c : { ...c, cliente: "" });
-
-/** As conversas do técnico (as OS dele), cada uma com a atividade por onde a mensagem sobe na fila do aparelho. */
-export async function conversasDoTecnico(empresaId: string, usuarioId: string, tecnicoId: string, agora: Date = new Date()): Promise<ConversaResumo[]> {
-  const porOs = await osDoTecnico(empresaId, tecnicoId, agora);
-  const resumos = await resumosDasConversas(empresaId, usuarioId, [...porOs.keys()].slice(0, LIMITE_CONVERSAS));
-  return resumos.map((c) => ({ ...c, atividadeId: porOs.get(c.osId)?.[0] ?? null, atividadeIds: porOs.get(c.osId) ?? [] }));
-}
-
-/** A OS é do técnico (tem atividade dele)? As atividades dele nela (a mais recente primeiro). */
-export async function atividadesDoTecnicoNaOs(empresaId: string, tecnicoId: string, osId: string): Promise<string[]> {
-  const as = await prisma.atividadeOs.findMany({
-    where: { ordemServicoId: osId, ordemServico: { empresaId }, ...atividadesDoTecnico(tecnicoId) },
-    orderBy: [{ dataAgendada: "desc" }, { criadoEm: "desc" }], select: { id: true },
-  });
-  return as.map((a) => a.id);
-}
-
-/** A conversa aberta no app: só OS do técnico (senão null); ler marca como lidas. */
-export async function conversaDoTecnico(empresaId: string, usuarioId: string, tecnicoId: string, osId: string, agora: Date = new Date()):
-  Promise<{ conversa: ConversaResumo; mensagens: ComentarioTela[] } | null> {
-  const atividadeIds = await atividadesDoTecnicoNaOs(empresaId, tecnicoId, osId);
-  if (!atividadeIds.length) return null;
-  await marcarConversaLida(empresaId, osId, usuarioId, agora);
-  const [mensagens, [conversa]] = await Promise.all([comentariosDaOs(empresaId, osId, usuarioId), resumosDasConversas(empresaId, usuarioId, [osId])]);
-  return { conversa: { ...conversa, atividadeId: atividadeIds[0], atividadeIds }, mensagens };
-}
-
 // ── Tempo real ──────────────────────────────────────────────────────────────────────────────
 
 /** A marca atual de um conjunto de conversas para esta pessoa (mensagem mais nova, ✓✓ mais novo, a leitura dela). */
 export async function marcaAtual(onde: Prisma.OsComentarioWhereInput, usuarioId: string): Promise<string> {
-  const [a, minha] = await Promise.all([
+  const [a, minhaOs, minhaPessoa] = await Promise.all([
     prisma.osComentario.aggregate({ where: onde, _max: { criadoEm: true, lidaEm: true } }),
     prisma.osComentarioLeitura.aggregate({ where: { usuarioId }, _max: { lidoEm: true } }),
+    prisma.conversaLeitura.aggregate({ where: { usuarioId }, _max: { lidoEm: true } }),
   ]);
-  return marcaNovidades(a._max.criadoEm, a._max.lidaEm, minha._max.lidoEm);
+  // A minha leitura mais nova, pela OS ou pela conversa da pessoa
+  const os = minhaOs._max.lidoEm?.getTime() ?? 0;
+  const pessoa = minhaPessoa._max.lidoEm?.getTime() ?? 0;
+  return marcaNovidades(a._max.criadoEm, a._max.lidaEm, os || pessoa ? new Date(Math.max(os, pessoa)) : null);
 }
 
 /** Onde olhar: o escritório olha a empresa toda (só diz "mudou"; quem lê depois filtra); o técnico, as OS dele. */
 export const ondeNovidadesEscritorio = (empresaId: string): Prisma.OsComentarioWhereInput => ({ empresaId });
-export async function ondeNovidadesTecnico(empresaId: string, tecnicoId: string, agora: Date = new Date()): Promise<Prisma.OsComentarioWhereInput> {
-  return { empresaId, ordemServicoId: { in: [...(await osDoTecnico(empresaId, tecnicoId, agora)).keys()] } };
+/** O técnico olha a conversa dele com o escritório (com e sem OS) e as OS dele (o que se escreve dentro delas). */
+export async function ondeNovidadesTecnico(empresaId: string, tecnicoId: string, usuarioId: string, agora: Date = new Date()): Promise<Prisma.OsComentarioWhereInput> {
+  return { empresaId, OR: [ondeConversaDoTecnico(usuarioId, tecnicoId), { ordemServicoId: { in: [...(await osDoTecnico(empresaId, tecnicoId, agora)).keys()] } }] };
 }
 
 export interface OpcoesEspera { esperaMs?: number; passoMs?: number; dormir?: (ms: number) => Promise<void>; agora?: () => number; cancelado?: () => boolean }

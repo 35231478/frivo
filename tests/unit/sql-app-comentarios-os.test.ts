@@ -48,7 +48,7 @@ describe.skipIf(!URL)("SQL de produção: comentários na OS (PostgreSQL real)",
       expect(indices(SCHEMA, t), t).toBe(indices(PRISMA, t));
       expect(chaves(SCHEMA, t), t).toBe(chaves(PRISMA, t));
     }
-    expect(colunas(SCHEMA, "os_comentarios").split("\n")).toHaveLength(12);
+    expect(colunas(SCHEMA, "os_comentarios").split("\n")).toHaveLength(13);
   });
 
   it("a chave única (empresa, client_id) impede o comentário reenviado de duplicar; os do escritório (sem client_id) não colidem", () => {

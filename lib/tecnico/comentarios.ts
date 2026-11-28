@@ -46,6 +46,10 @@ export interface ComentarioTela {
   lida?: { por: string; em: string } | null;
   /** CHAT-1: a fila do aparelho recusou o envio (fica com o motivo até tentar de novo) */
   falhou?: string | null;
+  /** CHAT-1 (conversa por pessoa): a OS da mensagem (vazio = sem OS) — a etiqueta discreta que abre a OS */
+  os?: { id: string; numero: string; cliente: string } | null;
+  /** CHAT-1: o escritório escreveu para UMA pessoa (o nome); vazio = para todos os técnicos da OS */
+  para?: string | null;
 }
 
 /** Em ordem de criação (mais antigo primeiro); o que ainda está no aparelho vai por último. */

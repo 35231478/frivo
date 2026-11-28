@@ -7,7 +7,12 @@
 --  - os_comentarios_fotos: a foto de uma mensagem (data URL, como os anexos da OS, com a miniatura feita no aparelho).
 --    Tabela própria: a conversa é interna e a foto nunca entra na galeria, no relatório nem no portal do cliente.
 --
--- Nenhuma linha que já existe muda (as colunas novas nascem nulas). Nada é apagado. Nenhum perfil de acesso é alterado.
+--  - conversa POR PESSOA (o desenho aprovado): a mensagem pode não ter OS ("passa no escritório antes de ir embora") —
+--    a coluna da OS passa a aceitar vazio (só RELAXA a regra; nenhuma linha muda) —, o destinatário da mensagem do
+--    escritório (vazio = todos os técnicos da OS, como era) e até quando cada pessoa leu a conversa de cada técnico.
+--
+-- Nenhuma linha que já existe muda (as colunas novas nascem nulas). Nada é apagado. Nenhum perfil de acesso é alterado
+-- (a permissão nova "Conversas" o administrador liga nos perfis, na tela — ver docs/chat-1.md).
 -- ─────────────────────────────────────────────────────────────────────────────────────────────────────
 
 ALTER TABLE "os_comentarios" ADD COLUMN IF NOT EXISTS "lida_em" TIMESTAMP(3);
@@ -30,3 +35,17 @@ CREATE UNIQUE INDEX IF NOT EXISTS "os_comentarios_fotos_comentario_id_key" ON "o
 DO $$ BEGIN
   ALTER TABLE "os_comentarios_fotos" ADD CONSTRAINT "os_comentarios_fotos_comentario_id_fkey" FOREIGN KEY ("comentario_id") REFERENCES "os_comentarios"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+-- Conversa por pessoa: OS opcional, destinatário e a leitura da conversa
+ALTER TABLE "os_comentarios" ALTER COLUMN "ordem_servico_id" DROP NOT NULL;
+ALTER TABLE "os_comentarios" ADD COLUMN IF NOT EXISTS "para_usuario_id" TEXT;
+CREATE INDEX IF NOT EXISTS "os_comentarios_empresa_id_para_usuario_id_criado_em_idx" ON "os_comentarios"("empresa_id", "para_usuario_id", "criado_em");
+CREATE INDEX IF NOT EXISTS "os_comentarios_empresa_id_usuario_id_criado_em_idx" ON "os_comentarios"("empresa_id", "usuario_id", "criado_em");
+
+CREATE TABLE IF NOT EXISTS "conversas_leituras" (
+    "usuario_id" TEXT NOT NULL,
+    "conversa_usuario_id" TEXT NOT NULL,
+    "lido_em" TIMESTAMP(3) NOT NULL,
+    CONSTRAINT "conversas_leituras_pkey" PRIMARY KEY ("usuario_id", "conversa_usuario_id")
+);
+CREATE INDEX IF NOT EXISTS "conversas_leituras_conversa_usuario_id_idx" ON "conversas_leituras"("conversa_usuario_id");

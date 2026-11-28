@@ -185,12 +185,13 @@ export function msgAceite(a: AceiteResumo, url: string): MensagemPush {
   };
 }
 
-export function msgComentario(a: { osNumero: string; cliente?: string | null; autor?: string | null; texto?: string | null }, url: string): MensagemPush {
+export function msgComentario(a: { osNumero: string | null; cliente?: string | null; autor?: string | null; texto?: string | null }, url: string): MensagemPush {
   return {
-    titulo: `Mensagem nova na OS ${a.osNumero}`,
+    // CHAT-1: sem OS ("passa no escritório antes de ir embora"), o título diz de quem é
+    titulo: a.osNumero ? `Mensagem nova na OS ${a.osNumero}` : `Mensagem nova${a.autor ? ` de ${a.autor}` : ""}`,
     corpo: juntar(a.autor, curto(a.texto, 110) || a.cliente),
-    // CHAT-1: o toque abre a conversa da OS; a mesma conversa substitui o aviso anterior (tag por OS)
-    url, tag: `comentario-${a.osNumero}`, acao: "Abrir conversa",
+    // CHAT-1: o toque abre a conversa; a mesma conversa substitui o aviso anterior (tag pela OS, ou pela pessoa)
+    url, tag: a.osNumero ? `comentario-${a.osNumero}` : `conversa-${a.autor ?? ""}`, acao: "Abrir conversa",
   };
 }
 

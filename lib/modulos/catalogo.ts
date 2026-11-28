@@ -71,7 +71,7 @@ const NUCLEO: ModuloCatalogo[] = [
   {
     id: "ordens", nome: "Ordens de serviço", icone: "ClipboardList", categoria: "operacao", nucleo: true,
     descricao: "O coração da operação: abrir, executar e concluir o serviço.",
-    rotas: ["/ordens", "/prazos"], permissoes: [["ordens"]],
+    rotas: ["/ordens", "/prazos", "/conversas"], permissoes: [["ordens"]],
   },
   {
     id: "calendario", nome: "Calendário", icone: "CalendarDays", categoria: "operacao", nucleo: true,

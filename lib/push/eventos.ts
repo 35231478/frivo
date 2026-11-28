@@ -10,7 +10,7 @@
  * ressalva/comentário/nota baixa, chamado do portal, resposta de orçamento, saldo negativo em campo, comentário
  * na OS e despesa de campo (enviada, aprovada, recusada).
  */
-import { urlConversaApp, urlConversaEscritorio } from "@/lib/chat/regras";
+import { urlConversaApp, urlConversaEscritorio, urlConversaPessoa } from "@/lib/chat/regras";
 import { after } from "next/server";
 import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
@@ -165,24 +165,62 @@ export async function notificarAceite(empresaId: string, osId: string) {
  * quem está ligado à OS (sem ninguém ligado com aparelho, o escritório todo que vê OS), menos o autor; o mesmo
  * comentário não repete (chave pelo id).
  */
-export async function notificarComentarioOS(osId: string, autorId: string, opts: { comentarioId?: string; texto?: string | null } = {}) {
+export async function notificarComentarioOS(osId: string, autorId: string, opts: { comentarioId?: string; texto?: string | null; doTecnico?: boolean } = {}) {
   const os = await prisma.ordemServico.findUnique({ where: { id: osId }, select: { id: true, numero: true, empresaId: true, cliente: { select: { nome: true, nomeFantasia: true } } } });
   if (!os) return null;
   const autor = await prisma.usuario.findFirst({ where: { id: autorId, empresaId: os.empresaId }, select: { nome: true } });
   const sem = (xs: string[]) => xs.filter((u) => u !== autorId);
   const daOs = await tecnicosDaOs(os.empresaId, os.id);
   const tecnicos = sem(daOs.usuarios);
+  const tecnicoAutor = !!opts.doTecnico;
   const base = { osNumero: os.numero, cliente: nomeCliente(os.cliente), autor: autor?.nome ?? null, texto: opts.texto };
   const chave = `comentario:${opts.comentarioId ?? `${os.id}:${autorId}:${Date.now()}`}`;
   await enviarPush({ empresaId: os.empresaId, tipo: "OS_COMENTARIO", alcance: "pessoal", usuarios: tecnicos, chave,
-    // CHAT-1: o toque abre a conversa da OS (no app, a tela Chat; quem não está no modo técnico, a de Conversas)
-    mensagem: (q) => msgComentario(base, q.restrito ? urlConversaApp(os.id) : urlConversaEscritorio(os.id)) });
+    // CHAT-1: o toque abre a conversa (no app, o Chat com o escritório; quem não está no modo técnico, a de Conversas)
+    mensagem: (q) => msgComentario(base, q.restrito ? urlConversaApp() : urlConversaEscritorio(os.id)) });
   // Hotfix: no escritório, QUEM ESTÁ LIGADO À OS (responsável, quem abriu, quem já conversou ou leu a conversa); se
   // nenhum deles tem aparelho, o escritório todo que vê OS (como antes), para o aviso não se perder
   const comAparelho = sem(await usuariosComAparelho(os.empresaId)).filter((u) => !tecnicos.includes(u));
   const ligados = new Set(await usuariosLigadosAOs(os.empresaId, os.id));
   const alvo = comAparelho.filter((u) => ligados.has(u));
-  return enviarPush({ empresaId: os.empresaId, tipo: "OS_COMENTARIO", alcance: "escritorio", usuarios: alvo.length ? alvo : comAparelho, chave, mensagem: msgComentario(base, urlConversaEscritorio(os.id)) });
+  return enviarPush({ empresaId: os.empresaId, tipo: "OS_COMENTARIO", alcance: "escritorio", usuarios: alvo.length ? alvo : comAparelho, chave,
+    // CHAT-1: a do técnico abre a conversa COM ELE (a lista é por pessoa); a de outra pessoa do escritório, a da OS
+    mensagem: msgComentario(base, tecnicoAutor ? urlConversaPessoa(autorId) : urlConversaEscritorio(os.id)) });
+}
+
+/**
+ * CHAT-1 — o aviso de uma mensagem do chat, pelo tipo dela:
+ *  - com OS e sem destinatário (a do técnico, ou a do escritório para todos da OS): `notificarComentarioOS`;
+ *  - do escritório para UMA pessoa (com ou sem OS): só ela, no app (o Chat com o escritório);
+ *  - do técnico SEM OS: o escritório que conversa com ele (quem escreveu para ele ou leu a conversa dele); sem ninguém
+ *    com aparelho, o escritório que vê OS. O toque abre a conversa com ele.
+ */
+export async function notificarMensagem(m: { empresaId: string; comentarioId: string; osId: string | null; autorId: string; paraUsuarioId: string | null; origem: string; texto?: string | null }) {
+  if (m.osId && !m.paraUsuarioId) return notificarComentarioOS(m.osId, m.autorId, { comentarioId: m.comentarioId, texto: m.texto, doTecnico: m.origem === "APP" });
+  const [autor, os] = await Promise.all([
+    prisma.usuario.findFirst({ where: { id: m.autorId, empresaId: m.empresaId }, select: { nome: true } }),
+    m.osId ? prisma.ordemServico.findFirst({ where: { id: m.osId, empresaId: m.empresaId }, select: { numero: true, cliente: { select: { nome: true, nomeFantasia: true } } } }) : null,
+  ]);
+  const base = { osNumero: os?.numero ?? null, cliente: os ? nomeCliente(os.cliente) : null, autor: autor?.nome ?? null, texto: m.texto };
+  const chave = `comentario:${m.comentarioId}`;
+  if (m.origem === "ESCRITORIO" && m.paraUsuarioId && m.paraUsuarioId !== m.autorId) {
+    return enviarPush({ empresaId: m.empresaId, tipo: "OS_COMENTARIO", alcance: "pessoal", usuarios: [m.paraUsuarioId], chave,
+      mensagem: (q) => msgComentario(base, q.restrito ? urlConversaApp() : urlConversaPessoa(m.paraUsuarioId)) });
+  }
+  if (m.origem !== "APP") return null;
+  const comAparelho = (await usuariosComAparelho(m.empresaId)).filter((u) => u !== m.autorId);
+  const ligados = new Set(await usuariosLigadosAPessoa(m.empresaId, m.autorId));
+  const alvo = comAparelho.filter((u) => ligados.has(u));
+  return enviarPush({ empresaId: m.empresaId, tipo: "OS_COMENTARIO", alcance: "escritorio", usuarios: alvo.length ? alvo : comAparelho, chave, mensagem: msgComentario(base, urlConversaPessoa(m.autorId)) });
+}
+
+/** As pessoas do escritório ligadas à conversa de um técnico: quem escreveu para ele e quem leu a conversa dele */
+export async function usuariosLigadosAPessoa(empresaId: string, tecnicoUsuarioId: string): Promise<string[]> {
+  const [escreveram, leram] = await Promise.all([
+    prisma.osComentario.findMany({ where: { empresaId, paraUsuarioId: tecnicoUsuarioId, origem: "ESCRITORIO" }, select: { usuarioId: true }, distinct: ["usuarioId"] }),
+    prisma.conversaLeitura.findMany({ where: { conversaUsuarioId: tecnicoUsuarioId, usuarioId: { not: tecnicoUsuarioId } }, select: { usuarioId: true } }),
+  ]);
+  return [...new Set([...escreveram.map((c) => c.usuarioId), ...leram.map((l) => l.usuarioId)])];
 }
 
 /** As pessoas do escritório ligadas à OS: o responsável, quem abriu, quem comentou pelo escritório e quem leu a conversa */
