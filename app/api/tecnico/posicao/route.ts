@@ -3,6 +3,7 @@ import { exigirPermissao } from "@/lib/permissoes-server";
 import { tecnicoDaSessao } from "@/lib/tecnico/sessao";
 import { envioPosicoesSchema } from "@/lib/tecnico/posicao";
 import { registrarPosicoes } from "@/lib/tecnico/posicao-server";
+import { registrarContato } from "@/lib/chat/presenca-servidor";
 
 /**
  * O app do técnico envia a localização do aparelho (Operações › Mapa). É o ÚNICO ponto de entrada —
@@ -16,6 +17,8 @@ import { registrarPosicoes } from "@/lib/tecnico/posicao-server";
 export async function POST(req: NextRequest) {
   const guard = await exigirPermissao("ordens", "visualizar");
   if (guard.erro) return guard.resposta;
+  // CHAT-1.2: o app falou com o servidor (a presença que o escritório vê; a posição em si não entra na linha)
+  await registrarContato(guard.session.user.id);
   const parsed = envioPosicoesSchema.safeParse(await req.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ erro: "Posição inválida" }, { status: 400 });
   const { user } = guard.session;

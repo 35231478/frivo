@@ -939,6 +939,9 @@ model Usuario {
   telefone     String?
   ativo        Boolean   @default(true)
   ultimoAcesso DateTime? @map("ultimo_acesso")
+  /// CHAT-1.2: o último contato do APP do técnico com o servidor (sincronização, tempo real do chat, localização), gravado
+  /// no máximo 1 vez por minuto (lib/chat/presenca-servidor). O escritório vê a presença (ponto verde, visto por último).
+  ultimoContatoEm DateTime? @map("ultimo_contato_em")
   /// "Apenas um dispositivo ativo" (Configuracao.appUmDispositivo): nonce do login atual.
   /// Entrar em outro aparelho regrava o nonce; a sessão anterior cai na leitura seguinte (lib/sessao-ativa).
   sessaoAtiva  String?   @map("sessao_ativa")

@@ -376,4 +376,43 @@ describe("a tela Conversas por PESSOA (o desenho aprovado)", () => {
     expect($("[data-conversa-aberta='p:uC']")).not.toBeNull();
     expect($("[data-pessoa-item='uC'] [data-nao-lidas]")).toBeNull(); // abrir zera o contador dela
   });
+
+  it("CHAT-1.2: a linha de situação e o ponto (lista e cabeçalho); o tempo real atualiza sem recarregar a lista", async () => {
+    const agora = Date.now();
+    const atras = (min: number) => new Date(agora - min * 60_000).toISOString();
+    const hora = (iso: string) => new Date(iso).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit", timeZone: "America/Sao_Paulo" });
+    const comEstado = [
+      { ...PESSOAS[0], ultima: { ...PESSOAS[0].ultima, origem: "ESCRITORIO", lida: false },
+        estado: { usuarioId: "uM", contatoEm: atras(25), situacao: { tipo: "PAUSADA", motivo: "Falta de peça/material", impedimento: true, os: { id: "os1", numero: "OS-2026-0314" } } } },
+      { ...PESSOAS[1], estado: { usuarioId: "uC", contatoEm: atras(1), situacao: { tipo: "EM_EXECUCAO", os: { id: "os2", numero: "OS-2026-0315" } } } },
+    ];
+    respostas["GET /api/conversas/pessoas"] = { status: 200, corpo: { pessoas: comEstado, naoLidas: 1 } };
+    const { ConversasEscritorio } = await import("@/components/chat/conversas-escritorio");
+    respostas["GET /api/conversas/pessoas/uC"] = { status: 200, corpo: { pessoa: { usuarioId: "uC", nome: "Carlos Oliveira", avatar: null, estado: comEstado[1].estado }, mensagens: DA_PESSOA, osDoDia: DO_DIA, osPadrao: "os1" } };
+    respostas["GET /api/conversas"] = { status: 200, corpo: { conversas: [], semConversa: [], naoLidas: 0 } };
+    await montar(createElement(ConversasEscritorio, { osInicial: null, pessoaInicial: null, podeEscrever: true, podeConversas: true, podeEnviarConversas: true }));
+    // embaixo do nome: UMA linha; a Maria sem sinal com mensagem do escritório esperando; o Carlos no app agora (o ponto)
+    const maria = $("[data-pessoa-item='uM']")!;
+    expect(txt(maria.querySelector("[data-situacao]"))).toBe("Pausada — Falta de peça/material · OS-2026-0314 · Sem sinal há 25 min");
+    expect(maria.querySelector("[data-ponto-presenca]")).toBeNull();
+    expect(maria.querySelector("a")).toBeNull(); // na lista, o nº não é link (a linha já é o botão)
+    const carlos = $("[data-pessoa-item='uC']")!;
+    expect(txt(carlos.querySelector("[data-situacao]"))).toBe("Em execução · OS-2026-0315");
+    expect(carlos.querySelector("[data-ponto-presenca]")!.getAttribute("aria-label")).toBe("No app agora");
+    expect($("[data-legenda-situacao]")).not.toBeNull(); // a legenda no ⓘ
+    // o tempo real traz a situação nova (sem "mudou": a lista não é recarregada)
+    const pedidosAntes = chamadas.filter((c) => c.url === "/api/conversas/pessoas").length;
+    const visto = atras(40);
+    await act(async () => { tempoReal.ouvintes.forEach((o) => o({ marca: "1.0", mudou: false, tecnicos: [{ usuarioId: "uC", contatoEm: visto, situacao: { tipo: "SEM_ATIVIDADE" } }] })); });
+    expect(txt($("[data-pessoa-item='uC'] [data-situacao]"))).toBe(`Sem atividade agora · visto por último às ${hora(visto)}`);
+    expect($("[data-pessoa-item='uC'] [data-ponto-presenca]")).toBeNull();
+    expect(chamadas.filter((c) => c.url === "/api/conversas/pessoas").length).toBe(pedidosAntes);
+    // o cabeçalho da conversa: a mesma linha, com o nº da OS clicável e o ⓘ
+    await act(async () => { tempoReal.ouvintes.forEach((o) => o({ marca: "1.0", mudou: false, tecnicos: [{ usuarioId: "uC", contatoEm: atras(0), situacao: { tipo: "A_CAMINHO", os: { id: "os2", numero: "OS-2026-0315" } } }] })); });
+    await clicar($("[data-pessoa-item='uC']"));
+    const cab = $("[data-situacao-cabecalho]")!;
+    expect(txt(cab.querySelector("[data-situacao]"))).toBe("A caminho · OS-2026-0315");
+    expect(cab.querySelector("a[data-situacao-os]")!.getAttribute("href")).toBe("/ordens/os2");
+    expect(txt(document.body)).not.toMatch(/\bvocê\b/i);
+  });
 });

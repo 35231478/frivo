@@ -4,6 +4,7 @@ import { atorDaSessao } from "@/lib/execucao/contexto";
 import { limparOperacoesAntigas, loteSchema, processarLote } from "@/lib/tecnico/sync";
 import { ipDaRequisicao } from "@/lib/orcamentos/ciclo";
 import { pode, type Permissoes } from "@/lib/permissoes";
+import { registrarContato } from "@/lib/chat/presenca-servidor";
 
 /**
  * Recebe a fila de gravações do app do técnico (feitas com ou sem sinal) e aplica em ordem, cada uma
@@ -13,6 +14,8 @@ import { pode, type Permissoes } from "@/lib/permissoes";
 export async function POST(req: NextRequest) {
   const guard = await exigirAlgumaPermissao([["ordens", "editar"], ["ordens", "concluir"]]);
   if (guard.erro) return guard.resposta;
+  // CHAT-1.2: o app falou com o servidor (a presença que o escritório vê)
+  await registrarContato(guard.session.user.id);
   const parsed = loteSchema.safeParse(await req.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ erro: parsed.error.issues[0]?.message ?? "Dados inválidos" }, { status: 400 });
   const ator = atorDaSessao(guard.session);

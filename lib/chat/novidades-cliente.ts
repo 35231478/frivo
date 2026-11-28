@@ -8,8 +8,13 @@
  *  - `avisar()` força uma pergunta agora (ex.: a notificação push chegou, ou a pessoa acabou de enviar).
  */
 import { esperaDepoisDeErro, marcaValida } from "@/lib/chat/regras";
+import type { EstadoTecnico } from "@/lib/chat/presenca";
 
-export interface RespostaNovidades { marca: string; mudou: boolean; naoLidas?: number }
+export interface RespostaNovidades {
+  marca: string; mudou: boolean; naoLidas?: number;
+  /** CHAT-1.2 (só o escritório com "Conversas"): a situação e a presença dos técnicos */
+  tecnicos?: EstadoTecnico[];
+}
 type Ouvinte = (r: RespostaNovidades) => void;
 
 export interface AmbienteLaco {
