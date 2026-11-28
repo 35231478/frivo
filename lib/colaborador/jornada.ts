@@ -11,10 +11,11 @@
  * quem ainda os lê.
  */
 
+import { textoJornada } from "@/lib/admissao/admissao";
+
 export const DIAS_SEMANA = ["SEG", "TER", "QUA", "QUI", "SEX", "SAB", "DOM"] as const;
 export type DiaSemana = (typeof DIAS_SEMANA)[number];
 export const ROTULO_DIA: Record<DiaSemana, string> = { SEG: "Seg", TER: "Ter", QUA: "Qua", QUI: "Qui", SEX: "Sex", SAB: "Sáb", DOM: "Dom" };
-const NOME_DIA: Record<DiaSemana, string> = { SEG: "segunda", TER: "terça", QUA: "quarta", QUI: "quinta", SEX: "sexta", SAB: "sábado", DOM: "domingo" };
 export const ehDia = (v: unknown): v is DiaSemana => typeof v === "string" && (DIAS_SEMANA as readonly string[]).includes(v);
 
 export interface FaixaJornada {
@@ -137,27 +138,24 @@ export function gravarJornada(faixas: readonly FaixaJornada[]) {
   };
 }
 
-/** "segunda a quinta" · "segunda, quarta e sexta" · "sexta" */
-function textoDias(dias: readonly DiaSemana[]): string {
-  const idx = dias.map((d) => DIAS_SEMANA.indexOf(d)).sort((a, b) => a - b);
-  const nomes = idx.map((i) => NOME_DIA[DIAS_SEMANA[i]]);
-  if (idx.length > 2 && idx[idx.length - 1] - idx[0] === idx.length - 1) return `${nomes[0]} a ${nomes[nomes.length - 1]}`;
-  return nomes.length > 1 ? `${nomes.slice(0, -1).join(", ")} e ${nomes.at(-1)}` : nomes[0] ?? "";
-}
-
 /**
- * O texto do contrato e da ficha: "segunda a quinta, 07:30 às 17:30, com intervalo de 12:00 às 13:00; sexta, 07:30 às
- * 16:30, com intervalo de 12:00 às 13:00 — 44h semanais". Vazio quando não há jornada.
+ * O texto do contrato e dos documentos. Cada faixa no MESMO formato de antes ("08:00 às 18:00, de segunda a sexta"),
+ * com o intervalo quando há; as faixas separadas por ponto e vírgula. As horas da semana entram quando a jornada é
+ * das novas (mais de uma faixa ou com intervalo): a jornada antiga, de uma faixa sem intervalo, sai exatamente como
+ * saía — os modelos de contrato das empresas continuam lendo igual.
+ *   "07:30 às 17:30, de segunda a quinta, com intervalo de 12:00 às 13:00; 07:30 às 16:30, sexta, com intervalo de
+ *    12:00 às 13:00 — 44h semanais". Vazio quando não há jornada.
  */
 export function textoDaJornada(faixas: readonly FaixaJornada[]): string {
-  const partes = faixas.filter((f) => f.dias.length || f.entrada).map((f) => {
-    const horario = f.entrada && f.saida ? `${f.entrada} às ${f.saida}` : "";
+  const validas = faixas.filter((f) => f.dias.length || (f.entrada && f.saida));
+  const partes = validas.map((f) => {
     const intervalo = f.intervaloInicio && f.intervaloFim ? `com intervalo de ${f.intervaloInicio} às ${f.intervaloFim}` : "";
-    return [textoDias(f.dias), horario, intervalo].filter(Boolean).join(", ");
+    return [textoJornada({ entrada: f.entrada, saida: f.saida, dias: f.dias }), intervalo].filter(Boolean).join(", ");
   }).filter(Boolean);
   if (!partes.length) return "";
-  const { semana } = horasDaJornada(faixas);
-  return `${partes.join("; ")}${semana > 0 ? ` — ${textoHoras(semana)} semanais` : ""}`;
+  const nova = validas.length > 1 || validas.some((f) => f.intervaloInicio && f.intervaloFim);
+  const { semana } = horasDaJornada(validas);
+  return `${partes.join("; ")}${nova && semana > 0 ? ` — ${textoHoras(semana)} semanais` : ""}`;
 }
 
 /** Uma faixa nova: os dias que ainda estão livres (de segunda a sexta), no horário comercial */

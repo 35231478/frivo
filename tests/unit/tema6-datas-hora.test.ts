@@ -131,15 +131,17 @@ describe("jornada do colaborador", () => {
       return new Response("[]", { status: 200, headers: { "content-type": "application/json" } });
     }));
   });
+  // Leva J: a jornada é em faixas; a jornada antiga (um horário só) abre como a faixa 1
   async function abrir() {
     const { ColaboradorForm } = await import("@/components/forms/colaborador-form");
     await montar(createElement(ColaboradorForm, { initialData: COLAB } as any));
-    return { entrada: $<HTMLInputElement>('[aria-label="Horário de entrada"]')!, saida: $<HTMLInputElement>('[aria-label="Horário de saída"]')! };
+    return { entrada: $<HTMLInputElement>('[aria-label="Entrada da faixa 1"]')!, saida: $<HTMLInputElement>('[aria-label="Saída da faixa 1"]')! };
   }
   const salvar = async () => {
     await act(async () => { $("form")!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true })); });
     await esperar(60);
   };
+  const faixa1 = (i: number) => enviados[i].corpo.jornadaFaixas[0];
 
   it("entrada e saída aparecem em hh:mm de 24 horas, em campos de texto (não o relógio nativo)", async () => {
     const { entrada, saida } = await abrir();
@@ -152,18 +154,21 @@ describe("jornada do colaborador", () => {
     const { saida } = await abrir();
     await salvar();
     expect(enviados[0].url).toBe("/api/tecnicos/t1");
-    expect([enviados[0].corpo.jornadaEntrada, enviados[0].corpo.jornadaSaida]).toEqual(["08:00", "17:48"]);
+    expect([faixa1(0).entrada, faixa1(0).saida, faixa1(0).dias]).toEqual(["08:00", "17:48", ["SEG", "TER"]]);
     await digitar(saida, "1830");
     await salvar();
-    expect([enviados[1].corpo.jornadaEntrada, enviados[1].corpo.jornadaSaida]).toEqual(["08:00", "18:30"]);
+    expect([faixa1(1).entrada, faixa1(1).saida]).toEqual(["08:00", "18:30"]);
   });
 
-  it("jornada apagada vai vazia (o campo é opcional)", async () => {
+  it("faixa sem entrada não salva (diz o que falta); sem jornada nenhuma, salva vazio", async () => {
     const { entrada } = await abrir();
     await digitar(entrada, "");
     await salvar();
-    expect(enviados[0].corpo.jornadaEntrada).toBe("");
-    expect(enviados[0].corpo.jornadaSaida).toBe("17:48");
+    expect(enviados).toEqual([]);
+    expect(document.body.textContent).toContain("Jornada: faixa 1: Informe a entrada e a saída (hh:mm).");
+    await act(async () => { ($('[aria-label="Excluir a faixa 1"]') as HTMLElement).click(); });
+    await salvar();
+    expect(enviados[0].corpo.jornadaFaixas).toEqual([]);
   });
 });
 

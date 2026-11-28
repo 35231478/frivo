@@ -109,7 +109,7 @@ export function CamposDados({ form, set }: CamposProps) {
           <Input value={form.reservista} onChange={(e) => set("reservista", e.target.value)} data-campo="reservista" />
         </FormField>
       </FormGrid>
-      <FormField label="Celular (WhatsApp)" required hint="Com DDD." dica="É por onde a empresa fala com você: WhatsApp, avisos e o app de campo.">
+      <FormField label="Celular (WhatsApp)" required hint="Com DDD." dica="Canal da empresa com o colaborador: WhatsApp, avisos e o app de campo.">
         <Input value={formatarTelefone(form.telefone)} onChange={(e) => set("telefone", digitos(e.target.value).slice(0, 11))} inputMode="tel" data-campo="telefone" autoComplete="tel" placeholder="(00) 90000-0000" />
       </FormField>
     </div>

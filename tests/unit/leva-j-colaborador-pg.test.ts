@@ -44,7 +44,7 @@ describe.skipIf(!URL_PG)("Leva J — colaborador (PostgreSQL real)", () => {
     process.env.DATABASE_URL = url;
     (globalThis as any).prisma = undefined;
     ({ prisma } = await import("@/lib/prisma"));
-    await Promise.all(["api/tecnicos", "api/tecnicos/[id]", "api/configuracoes/impressao-os"].map((r) => import(/* @vite-ignore */ `@/app/${r}/route`)));
+    await Promise.all(["api/tecnicos", "api/tecnicos/[id]", "api/configuracoes/impressao-os", "api/configuracoes"].map((r) => import(/* @vite-ignore */ `@/app/${r}/route`)));
 
     for (const e of ["e1", "e2"]) await prisma.empresa.create({ data: { id: e, nome: `Clima ${e} (fictícia)`, cnpj: `12.345.678/000${e === "e1" ? 1 : 2}-90`, email: `${e}@x.test` } });
     await prisma.usuario.create({ data: { id: "uAdmin", empresaId: "e1", nome: "Admin", email: "admin@clima.exemplo", senha: "x", role: "ADMIN" } });
@@ -74,7 +74,7 @@ describe.skipIf(!URL_PG)("Leva J — colaborador (PostgreSQL real)", () => {
   it("o texto da jornada nos documentos do colaborador (o mesmo do contrato)", async () => {
     const { dadosAutomaticos } = await import("@/lib/documentos/documentos-server");
     const { valores } = await dadosAutomaticos(id, "e1");
-    expect(valores.jornada).toBe("segunda a quinta, 07:30 às 17:30, com intervalo de 12:00 às 13:00; sexta, 07:30 às 16:30, com intervalo de 12:00 às 13:00 — 44h semanais");
+    expect(valores.jornada).toBe("07:30 às 17:30, de segunda a quinta, com intervalo de 12:00 às 13:00; 07:30 às 16:30, sexta, com intervalo de 12:00 às 13:00 — 44h semanais");
   });
 
   it("faixa sobreposta: 400 com a faixa e o dia; nada muda no banco", async () => {
@@ -90,7 +90,7 @@ describe.skipIf(!URL_PG)("Leva J — colaborador (PostgreSQL real)", () => {
     const t = await prisma.tecnico.findUnique({ where: { id } });
     expect(t).toMatchObject({ jornadaFaixas: null, jornadaEntrada: "08:00", jornadaSaida: "18:00", jornadaDias: ["SEG", "TER"] });
     const { dadosAutomaticos } = await import("@/lib/documentos/documentos-server");
-    expect((await dadosAutomaticos(id, "e1")).valores.jornada).toBe("segunda e terça, 08:00 às 18:00 — 20h semanais");
+    expect((await dadosAutomaticos(id, "e1")).valores.jornada).toBe("08:00 às 18:00, segunda, terça");
   });
 
   it("a ficha sem jornada (todas as faixas removidas) grava vazio", async () => {
@@ -146,6 +146,14 @@ describe.skipIf(!URL_PG)("Leva J — colaborador (PostgreSQL real)", () => {
       // ligada, a tela antiga (sem a chave) também não desliga
       expect((await rota("api/configuracoes/impressao-os", "PUT", CONFIG_RELATORIO_PADRAO)).status).toBe(200);
       expect(await chave()).toBe(true);
+    });
+
+    it("a tela geral de Configurações (que manda a configuração INTEIRA de volta) continua salvando e não mexe na chave", async () => {
+      const lido = (await rota("api/configuracoes", "GET")).json;
+      expect(lido.mostrarEspecialidadesTecnico).toBe(true);
+      const r = await rota("api/configuracoes", "PUT", { ...lido, mostrarEspecialidadesTecnico: false });
+      expect(r.status, r.texto).toBe(200);
+      expect((await prisma.configuracao.findUnique({ where: { empresaId: "e1" } })).mostrarEspecialidadesTecnico).toBe(true);
     });
   });
 });

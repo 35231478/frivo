@@ -38,7 +38,7 @@ export function JornadaFaixas({ faixas, onChange, disabled = false }: { faixas: 
               <div className="flex items-center gap-2">
                 <span className="text-xs text-ink-muted" data-horas-faixa>{min !== null ? `${textoHoras(min)} por dia` : "—"}</span>
                 {!disabled && (
-                  <button type="button" onClick={() => onChange(faixas.filter((_, j) => j !== i))} aria-label={`Remover a faixa ${i + 1}`}
+                  <button type="button" onClick={() => onChange(faixas.filter((_, j) => j !== i))} aria-label={`Excluir a faixa ${i + 1}`}
                     className="p-2 -m-1 rounded-lg text-ink-muted hover:text-atrasado hover:bg-atrasado-claro min-w-[36px] min-h-[36px] inline-flex items-center justify-center" data-remover-faixa>
                     <Trash2 className="w-4 h-4" aria-hidden />
                   </button>

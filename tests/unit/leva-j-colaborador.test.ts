@@ -123,12 +123,17 @@ describe("jornada: compatível com o que está gravado", () => {
     expect(jornadaDoCorpo({ jornadaEntrada: "08:00", jornadaSaida: "", jornadaDias: ["TER", "SEG"] }))
       .toEqual({ jornadaFaixas: null, jornadaEntrada: "08:00", jornadaSaida: null, jornadaDias: ["SEG", "TER"] });
   });
-  it("o texto do contrato e dos documentos", () => {
+  it("o texto do contrato e dos documentos: cada faixa no formato de antes; a jornada antiga sai exatamente como saía", () => {
     expect(textoDaJornada([SEG_QUI, SEX])).toBe(
-      "segunda a quinta, 07:30 às 17:30, com intervalo de 12:00 às 13:00; sexta, 07:30 às 16:30, com intervalo de 12:00 às 13:00 — 44h semanais");
-    expect(textoDaJornada([F(["SEG", "QUA", "SEX"], "08:00", "12:00")])).toBe("segunda, quarta e sexta, 08:00 às 12:00 — 12h semanais");
-    expect(textoDaJornada([F(["SAB", "DOM"], "08:00", "12:00")])).toBe("sábado e domingo, 08:00 às 12:00 — 8h semanais");
+      "07:30 às 17:30, de segunda a quinta, com intervalo de 12:00 às 13:00; 07:30 às 16:30, sexta, com intervalo de 12:00 às 13:00 — 44h semanais");
+    // uma faixa sem intervalo (a jornada antiga): o texto de sempre, sem as horas da semana
+    expect(textoDaJornada([F(["SEG", "TER", "QUA", "QUI", "SEX"], "08:00", "18:00")])).toBe("08:00 às 18:00, de segunda a sexta");
+    expect(textoDaJornada([F(["SEG", "QUA", "SEX"], "08:00", "12:00")])).toBe("08:00 às 12:00, segunda, quarta, sexta");
+    // uma faixa com intervalo, ou mais de uma faixa: com as horas da semana
+    expect(textoDaJornada([F(["SAB", "DOM"], "08:00", "12:00", "10:00", "10:30")])).toBe("08:00 às 12:00, sábado, domingo, com intervalo de 10:00 às 10:30 — 7h semanais");
+    expect(textoDaJornada([F(["SEG", "TER"], "08:00", "12:00"), F(["SAB"], "08:00", "10:00")])).toBe("08:00 às 12:00, segunda, terça; 08:00 às 10:00, sábado — 10h semanais");
     expect(textoDaJornada([F(["SEG"], "", "")])).toBe("segunda");
+    expect(textoDaJornada([F([], "", "")])).toBe("");
     expect(textoDaJornada([])).toBe("");
     // os documentos e o contrato usam este texto (não montam o seu)
     for (const f of ["lib/admissao/admissao-server.ts", "lib/admissao/admissao-entrega-server.ts", "lib/documentos/documentos-server.ts"])
