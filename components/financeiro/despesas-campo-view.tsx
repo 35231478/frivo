@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { useFiltroUrl, useListagemUrl } from "@/components/listagem/use-listagem-url";
 import Link from "next/link";
 import { Check, Image as ImageIcon, Loader2, Settings2, X } from "lucide-react";
 import { cn, formatarDataHora, formatarMoeda } from "@/lib/utils";
@@ -35,7 +36,11 @@ interface Categorias { mapa: MapaCategorias; ativas: { id: string; nome: string 
  * conta a pagar de reembolso ao colaborador; a paga pela empresa fica só como custo da OS. Recusar pede o motivo.
  */
 export function DespesasCampoView({ podeDecidir }: { podeDecidir: boolean }) {
-  const [filtro, setFiltro] = useState<Filtro>("PENDENTE");
+  // A situação vai para a URL (`?situacao=`) e é lembrada ao voltar (o mesmo das outras listas); padrão: a aprovar
+  const { navegar } = useListagemUrl({ chave: "despesas-campo", qAtual: "" });
+  const [situacao, setSituacao] = useFiltroUrl("situacao", navegar, { vazio: "PENDENTE" });
+  const filtro: Filtro = FILTROS.some((f) => f.id === situacao) ? (situacao as Filtro) : "PENDENTE";
+  const setFiltro = (f: Filtro) => setSituacao(f);
   const [lista, setLista] = useState<DespesaEscritorio[] | null>(null);
   const [cats, setCats] = useState<Categorias | null>(null);
   const [cupom, setCupom] = useState<DespesaEscritorio | null>(null);

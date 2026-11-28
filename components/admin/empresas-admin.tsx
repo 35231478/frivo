@@ -13,10 +13,21 @@ import { REQUISITOS_SENHA } from "@/lib/acesso/senha";
 import { cnpjValido } from "@/lib/documento";
 import { rotuloEventoEmpresa, type DadosEmpresa } from "@/lib/empresa/eventos";
 import { cn, formatarData, formatarDataHora } from "@/lib/utils";
+import { PLANILHA } from "@/lib/planilha";
+import { TabelaPro, type ColunaPro } from "@/components/listagem/tabela-pro";
 
 export interface EmpresaDaLista {
   id: string; nome: string; nomeFantasia: string | null; cnpj: string; ativo: boolean; criadoEm: string; usuarios: number;
 }
+
+/** A lista (TabelaPro: largura, mostrar/esconder e ordem por usuário); no celular, cartões */
+const COLUNAS_EMPRESAS: ColunaPro[] = [
+  { id: "empresa", titulo: "Empresa", obrigatoria: true, minimo: 220, classe: "truncate" },
+  { id: "cnpj", titulo: "CNPJ", largura: 170 },
+  { id: "usuarios", titulo: "Usuários", largura: 100, alinhar: "direita" },
+  { id: "criada", titulo: "Criada em", largura: 120 },
+  { id: "acoes", titulo: "Ações", fixa: true, semTitulo: true, largura: 400, alinhar: "direita", classe: "py-0.5" },
+];
 
 const VAZIO = { razaoSocial: "", nomeFantasia: "", cnpj: "", email: "", telefone: "", adminNome: "", adminEmail: "", adminSenha: "" };
 
@@ -135,45 +146,45 @@ export function EmpresasAdmin({ inicial, empresaDoDono }: { inicial: EmpresaDaLi
         </div>
       )}
 
-      <div className="bg-white rounded-card border border-surface-border md:overflow-x-auto">
+      <div className="bg-white rounded-card border border-surface-border overflow-hidden">
         {empresas.length === 0 ? (
           <p className="p-6 text-sm text-ink-muted text-center">Nenhuma empresa cadastrada.</p>
         ) : (
-          <>
-          <table className="w-full text-sm hidden md:table" data-lista-empresas>
-            <thead className="text-left text-xs text-ink-muted border-b border-surface-linha">
-              <tr><th className="px-4 py-2.5 font-medium">Empresa</th><th className="px-4 py-2.5 font-medium">CNPJ</th><th className="px-4 py-2.5 font-medium">Usuários</th><th className="px-4 py-2.5 font-medium">Criada em</th><th className="px-4 py-2.5"><span className="sr-only">Ações</span></th></tr>
-            </thead>
-            <tbody>
-              {empresas.map((e) => (
-                <tr key={e.id} className="border-b border-surface-linha last:border-0" data-empresa={e.id}>
-                  <td className="px-4 py-2.5">
+          <TabelaPro
+            tela="admin-empresas" colunas={COLUNAS_EMPRESAS} atributos={{ "data-lista-empresas": true }}
+            barra={<span>{empresas.length === 1 ? "1 empresa" : `${empresas.length} empresas`}</span>}
+            cartoes={(
+              // Celular: um cartão por empresa, sem rolagem lateral
+              <ul className="md:hidden divide-y divide-surface-linha" data-cartoes-empresas>
+                {empresas.map((e) => (
+                  <li key={e.id} className="p-4 space-y-1" data-empresa={e.id}>
+                    <p className="flex items-center gap-2 font-medium text-ink"><Building2 className="w-4 h-4 text-ink-subtle shrink-0" aria-hidden /> {e.nomeFantasia || e.nome} {!e.ativo && <SeloInativa />}</p>
+                    {e.nomeFantasia && <p className="text-xs text-ink-muted">{e.nome}</p>}
+                    <p className="text-xs text-ink-muted tabular-nums">{e.cnpj} · {e.usuarios} {e.usuarios === 1 ? "usuário" : "usuários"} · criada em {formatarData(e.criadoEm)}</p>
+                    <div className="pt-1 flex flex-wrap gap-2">{acoes(e)}</div>
+                  </li>
+                ))}
+              </ul>
+            )}
+            linhas={empresas.map((e) => ({
+              id: e.id, atributos: { "data-empresa": e.id }, titulos: { empresa: e.nomeFantasia ? `${e.nomeFantasia} · ${e.nome}` : e.nome },
+              celulas: {
+                empresa: (
+                  <span className="block min-w-0">
                     <span className="flex items-center gap-2"><Building2 className="w-4 h-4 text-ink-subtle shrink-0" aria-hidden />
-                      <span className="font-medium text-ink">{e.nomeFantasia || e.nome}</span>
+                      <span className="font-medium text-ink truncate">{e.nomeFantasia || e.nome}</span>
                       {!e.ativo && <SeloInativa />}
                     </span>
-                    {e.nomeFantasia && <span className="block text-xs text-ink-muted ml-6">{e.nome}</span>}
-                  </td>
-                  <td className="px-4 py-2.5 tabular-nums text-ink-muted whitespace-nowrap">{e.cnpj}</td>
-                  <td className="px-4 py-2.5 tabular-nums">{e.usuarios}</td>
-                  <td className="px-4 py-2.5 text-ink-muted whitespace-nowrap">{formatarData(e.criadoEm)}</td>
-                  <td className="px-4 py-2.5"><span className="flex justify-end gap-2">{acoes(e)}</span></td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          {/* Celular: um cartão por empresa, sem rolagem lateral */}
-          <ul className="md:hidden divide-y divide-surface-linha" data-cartoes-empresas>
-            {empresas.map((e) => (
-              <li key={e.id} className="p-4 space-y-1" data-empresa={e.id}>
-                <p className="flex items-center gap-2 font-medium text-ink"><Building2 className="w-4 h-4 text-ink-subtle shrink-0" aria-hidden /> {e.nomeFantasia || e.nome} {!e.ativo && <SeloInativa />}</p>
-                {e.nomeFantasia && <p className="text-xs text-ink-muted">{e.nome}</p>}
-                <p className="text-xs text-ink-muted tabular-nums">{e.cnpj} · {e.usuarios} {e.usuarios === 1 ? "usuário" : "usuários"} · criada em {formatarData(e.criadoEm)}</p>
-                <div className="pt-1 flex flex-wrap gap-2">{acoes(e)}</div>
-              </li>
-            ))}
-          </ul>
-          </>
+                    {e.nomeFantasia && <span className="block text-xs text-ink-muted ml-6 truncate">{e.nome}</span>}
+                  </span>
+                ),
+                cnpj: <span className={cn(PLANILHA.codigo, "text-ink-muted")}>{e.cnpj}</span>,
+                usuarios: e.usuarios,
+                criada: <span className={cn(PLANILHA.data, PLANILHA.apagado)}>{formatarData(e.criadoEm)}</span>,
+                acoes: <span className="flex justify-end gap-2">{acoes(e)}</span>,
+              },
+            }))}
+          />
         )}
       </div>
 

@@ -336,3 +336,45 @@ describe("editar a legenda (Leva F)", () => {
     expect([chamadas, $("[data-modal-legenda]")]).toEqual([[], null]);
   });
 });
+
+/* ───────── Leva I.2 (11): Restaurar legenda do sistema ───────── */
+describe("restaurar a legenda do sistema (Leva I.2)", () => {
+  const lapis = (chave: string) => $(`[data-foto="${chave}"] [data-editar-legenda]`);
+  const galeria = (): Galeria => {
+    const g = GALERIA();
+    g.fotos = g.fotos.map((f) => (f.chave === "EXECUCAO:f1" ? { ...f, legenda: "Evaporadora suja", legendaSistema: "Antes do serviço" }
+      : f.chave === "EXECUCAO:f2" ? { ...f, legendaSistema: "Checklist: Limpeza dos filtros" } : f));
+    return g;
+  };
+  it("só na foto com legenda do sistema diferente da atual; volta pela mesma rota, com aviso, e a galeria mostra a automática", async () => {
+    respostas["PATCH /api/ordens/os1/fotos/f1?origem=EXECUCAO"] = { status: 200, corpo: { legenda: "Antes do serviço" } };
+    await montar(galeria());
+    // já na automática: sem o botão
+    await clicar(lapis("EXECUCAO:f2"));
+    expect($("[data-restaurar-legenda]")).toBeNull();
+    await clicar([...document.querySelectorAll("[data-modal-legenda] button")].find((b) => txt(b) === "Cancelar") ?? null);
+    // anexo: não tem legenda do sistema
+    await clicar(lapis("ANEXO:an1"));
+    expect($("[data-restaurar-legenda]")).toBeNull();
+    await clicar([...document.querySelectorAll("[data-modal-legenda] button")].find((b) => txt(b) === "Cancelar") ?? null);
+
+    await clicar(lapis("EXECUCAO:f1"));
+    const b = $("[data-restaurar-legenda]")!;
+    expect(txt(b)).toBe("Restaurar legenda do sistema");
+    expect(b.getAttribute("title")).toContain("“Antes do serviço”");
+    await clicar(b);
+    expect(chamadas.map((c) => [c.metodo, c.url, c.corpo && JSON.parse(c.corpo)])).toEqual([["PATCH", "/api/ordens/os1/fotos/f1?origem=EXECUCAO", { restaurar: true }]]);
+    expect($("[data-modal-legenda]")).toBeNull();
+    expect(txt($('[data-foto="EXECUCAO:f1"] [data-legenda]'))).toBe("Antes do serviço");
+    expect(avisos.toast).toHaveBeenCalledWith("Legenda do sistema restaurada.");
+    expect(roteador.refresh).toHaveBeenCalledTimes(1);
+  });
+  it("o servidor recusa: o motivo aparece no modal e a legenda fica", async () => {
+    respostas["PATCH /api/ordens/os1/fotos/f1?origem=EXECUCAO"] = { status: 403, corpo: { erro: "Sem permissão para editar a OS." } };
+    await montar(galeria());
+    await clicar(lapis("EXECUCAO:f1"));
+    await clicar($("[data-restaurar-legenda]"));
+    expect(txt($("[data-erro-legenda]"))).toBe("Sem permissão para editar a OS.");
+    expect(txt($('[data-foto="EXECUCAO:f1"] [data-legenda]'))).toBe("Evaporadora suja");
+  });
+});

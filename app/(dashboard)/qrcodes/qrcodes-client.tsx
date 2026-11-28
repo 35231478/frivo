@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
@@ -11,6 +11,7 @@ import { Dica } from "@/components/ui/dica";
 import { confirmar, toast } from "@/components/ui/avisos";
 import { CampoBusca, ListaVazia } from "@/components/listagem/listagem-ui";
 import { TabelaPro, type ColunaPro } from "@/components/listagem/tabela-pro";
+import { useFiltroUrl, useListagemUrl } from "@/components/listagem/use-listagem-url";
 import { QrCode, Printer, Link2, Unlink, Plus, Ban, RotateCcw } from "lucide-react";
 import { usePermissoes } from "@/components/providers/permissoes-provider";
 import { PLANILHA } from "@/lib/planilha";
@@ -61,9 +62,11 @@ async function erroDa(res: Response, reserva: string): Promise<string> {
 export function QrcodesClient({ lista, equipamentosLivres, proximoCodigo }: Props) {
   const router = useRouter();
   const podeGerenciar = usePermissoes().pode("qrcodes", "gerenciar");
-  const [busca, setBusca] = useState("");
-  const [filtroVinculo, setFiltroVinculo] = useState("");
-  const [filtroAtivo, setFiltroAtivo] = useState("");
+  // Busca e filtros na URL (q, vinculo, status) e lembrados ao voltar (o mesmo das outras listas)
+  const sp = useSearchParams();
+  const { busca, setBusca, navegar } = useListagemUrl({ chave: "qrcodes", qAtual: sp.get("q") ?? "" });
+  const [filtroVinculo, setFiltroVinculo] = useFiltroUrl("vinculo", navegar);
+  const [filtroAtivo, setFiltroAtivo] = useFiltroUrl("status", navegar);
   const [selecionados, setSelecionados] = useState<Set<string>>(new Set());
   const [modalGerar, setModalGerar] = useState(false);
   const [vinculando, setVinculando] = useState<QrItem | null>(null);

@@ -59,7 +59,8 @@ beforeEach(() => {
   avisos.lista = []; posts.length = 0; nav.refresh.mockClear(); nav.replace.mockClear(); nav.sp = new URLSearchParams();
   respostaTentar = { status: 200, corpo: { ok: true, execucao: { situacao: "CONCLUIDA" } } };
   globalThis.fetch = vi.fn(async (u: any, init?: RequestInit) => {
-    posts.push(`${init?.method ?? "GET"} ${String(u)}`);
+    // A preferência da planilha (TabelaPro, Leva I.2) não conta: só as chamadas da tela
+    if (!String(u).startsWith("/api/preferencias/")) posts.push(`${init?.method ?? "GET"} ${String(u)}`);
     return new Response(JSON.stringify(respostaTentar.corpo), { status: respostaTentar.status, headers: { "Content-Type": "application/json" } });
   }) as any;
   caixa = document.createElement("div");

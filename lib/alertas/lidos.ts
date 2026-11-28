@@ -23,8 +23,8 @@ export const CHAVE_SINO_LIDOS = "sino:lidos";
 export const AVISOS_DO_NUMERO = {
   prazosVencidos: null, etapasVencendoHoje: null, atendimentosAtraso: null, chamadosPortal: null, pedidosPendentes: null,
   atendimentoVencendo: null, atendimentoEstourado: null,
-  checklistPendente: null, checklistsComAlertas: null, checklistNaoVaiUsar: null, documentosVencendo: null, veiculosManutencao: null,
-  boletosPagos: null, orcamentosRespondidos: "orcamentoRespondidoId", leadsSite: null, nfPedidos: "nfPedidoId",
+  checklistPendente: null, checklistsComAlertas: "checklistAlertaId", checklistNaoVaiUsar: null, documentosVencendo: "documentoVencendoVeiculoId", veiculosManutencao: null,
+  boletosPagos: null, orcamentosRespondidos: "orcamentoRespondidoId", leadsSite: "leadSiteId", nfPedidos: "nfPedidoId",
   nfseAutorizadas: "nfseAutorizadaMedicaoId", nfseRejeitadas: "nfseRejeitadaMedicaoId", nfseAguardando: "nfseAguardandoMedicaoId",
   faturamentoContratos: null, reajustesContrato: null, separacoesPendentes: null, devolucoesPendentes: null,
   pmocsVencendo: null, pmocsExpirados: null,

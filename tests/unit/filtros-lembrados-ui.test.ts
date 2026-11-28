@@ -126,7 +126,7 @@ describe("filtros lembrados (hook único das listas)", () => {
 describe("um jeito só: todas as listas da barra de filtros ganham", () => {
   it("o hook é o do useListagemUrl (que serve o <ListaUrl>) e o da lista de OS; nenhuma lista desliga o lembrado", () => {
     const raiz = path.resolve(__dirname, "../..");
-    expect(readFileSync(path.join(raiz, "components/listagem/use-listagem-url.ts"), "utf8")).toContain("useFiltrosLembrados(chave, lembrarFiltros)");
+    expect(readFileSync(path.join(raiz, "components/listagem/use-listagem-url.ts"), "utf8")).toContain("useFiltrosLembrados(chave, lembrarFiltros, navegacao)"); // Leva I.2: + os parâmetros da tela (ex.: a aba)
     expect(readFileSync(path.join(raiz, "components/ordens/ordens-lista-client.tsx"), "utf8")).toContain('useFiltrosLembrados("ordens")');
     const desligadas = execFileSync("sh", ["-c", "grep -rln 'lembrarFiltros: false\\|lembrarFiltros={false}' components app || true"], { cwd: raiz, encoding: "utf8" }).trim();
     expect(desligadas).toBe("");

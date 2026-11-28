@@ -16,12 +16,16 @@ export async function contarAlertasVeiculos(empresaId: string) {
   const hojeCivil = hojeDiaCivil(agora); // vencimentos/revisão são dias civis
   const em30 = hojeDiaCivil(agora, 30);
 
-  const [templatesAtivos, veiculosAtivos, checklistsHoje, checklistsComAlertas, veiculosManutencao, docsVencendo, seguroVencendo, revisaoChegando] =
+  const [templatesAtivos, veiculosAtivos, checklistsHoje, [checklistsComAlertas, checklistAlerta], veiculosManutencao, docsVencendo, seguroVencendo, revisaoChegando] =
     await Promise.all([
       prisma.checklistTemplate.count({ where: { empresaId, ativo: true } }),
       prisma.veiculo.findMany({ where: { empresaId, status: { not: "INATIVO" } }, select: { id: true } }),
       prisma.checklistPreenchido.findMany({ where: { empresaId, criadoEm: { gte: inicioHoje }, inativadoEm: null }, select: { veiculoId: true }, distinct: ["veiculoId"] }),
-      prisma.checklistPreenchido.count({ where: { empresaId, status: "COM_ALERTAS", criadoEm: { gte: inicioHoje }, inativadoEm: null } }),
+      // A contagem e o mais recente (o sino leva direto à ficha do veículo quando é um só)
+      Promise.all([
+        prisma.checklistPreenchido.count({ where: { empresaId, status: "COM_ALERTAS", criadoEm: { gte: inicioHoje }, inativadoEm: null } }),
+        prisma.checklistPreenchido.findFirst({ where: { empresaId, status: "COM_ALERTAS", criadoEm: { gte: inicioHoje }, inativadoEm: null }, orderBy: { criadoEm: "desc" }, select: { id: true, veiculoId: true } }),
+      ]),
       prisma.veiculo.count({ where: { empresaId, status: "MANUTENCAO" } }),
       prisma.veiculo.findMany({ where: { empresaId, documentos: { some: { dataVencimento: { lte: em30 } } } }, select: { id: true } }),
       prisma.veiculo.findMany({ where: { empresaId, seguroVencimento: { lte: em30 } }, select: { id: true } }),
@@ -33,13 +37,19 @@ export async function contarAlertasVeiculos(empresaId: string) {
 
   const idsDocVencendo = new Set([...docsVencendo.map((v) => v.id), ...seguroVencendo.map((v) => v.id)]);
   const documentosVencendo = idsDocVencendo.size;
+  // O veículo quando é um só (o sino abre a ficha dele, na aba Documentos)
+  const documentoVencendoVeiculoId = documentosVencendo === 1 ? [...idsDocVencendo][0] : null;
 
   return {
     checklistPendente,
     checklistsComAlertas,
+    /** Leva I.2: o checklist com alertas mais recente de hoje e o veículo dele (o sino abre a ficha do veículo) */
+    checklistAlertaId: checklistAlerta?.id ?? null,
+    checklistAlertaVeiculoId: checklistAlerta?.veiculoId ?? null,
     // Checklist obrigatório no app: colaborador marcou "Hoje não vou usar o veículo" e ninguém do escritório viu
     checklistNaoVaiUsar: await contarNaoVaiUsar(empresaId, agora),
     documentosVencendo,
+    documentoVencendoVeiculoId,
     veiculosManutencao,
     revisaoChegando,
   };
