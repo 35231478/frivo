@@ -80,6 +80,15 @@ describe("cabeçalho da ficha: só o que importa", () => {
     expect($("[data-voltar-cliente]")!.getAttribute("href")).toBe("/clientes");
   });
 
+  it("sem nome fantasia (ou igual à razão social), a razão social não se repete no subtítulo", async () => {
+    await montar({ initialData: { ...CLIENTE, nomeFantasia: "Hospital Santa Luzia Ltda" }, consulta: true });
+    expect(txt($("[data-titulo-cliente]"))).toBe("Hospital Santa Luzia Ltda");
+    expect(txt($("[data-subtitulo-cliente]"))).toBe("11.222.333/0001-81 · São Paulo/SP");
+    await act(async () => root.unmount()); caixa.remove();
+    await montar({ initialData: { ...CLIENTE, nomeFantasia: null }, consulta: true });
+    expect(txt($("[data-subtitulo-cliente]"))).toBe("11.222.333/0001-81 · São Paulo/SP");
+  });
+
   it("inadimplente com o valor; contratos e a receber só com valor; link às vencidas só com o contas a receber", async () => {
     const dados = { ...CLIENTE, _count: { contratos: 2 } };
     await montar({ initialData: dados, consulta: true, valorEmAtraso: 2950, totalProximos30Dias: 1200 }, montarPermissoes({ clientes: ["visualizar"], financeiro: ["contasReceber"] }));
@@ -117,7 +126,8 @@ describe("cabeçalho da ficha: só o que importa", () => {
   });
 
   it("cliente novo: título \"Novo cliente\", sem Histórico/Atendimento/Comunicação (só existem depois de salvar)", async () => {
-    await montar({});
+    await montar({ abaInicial: "historico" }); // pedir uma aba que o novo não tem: abre em Dados
+    expect($('[data-aba="geral"]')!.getAttribute("aria-selected")).toBe("true");
     expect(txt($("[data-titulo-cliente]"))).toBe("Novo cliente");
     expect($$("[data-abas-cliente] button").map(txt)).toEqual(["Dados", "Endereços", "Portal", "Anexos"]);
     expect($("[data-voltar-cliente]")!.getAttribute("href")).toBe("/clientes");
@@ -219,12 +229,14 @@ describe("endereço principal: CNPJ e CEP", () => {
     expect(valor("cep")).toBe("01310-100");
     expect([valor("endereco"), valor("bairro"), valor("cidade"), valor("estado")]).toEqual(["Avenida Paulista", "Bela Vista", "São Paulo", "SP"]);
     expect(chamadas.filter((c) => c.url.includes("viacep")).length).toBe(1);
-    await digitar($('input[name="cep"]'), "01310-100"); // o mesmo CEP de novo: não busca outra vez
+    await digitar($('input[name="cep"]'), "01310-10"); // apaga um dígito e volta ao mesmo CEP: não busca outra vez
+    await digitar($('input[name="cep"]'), "01310-100");
     expect(chamadas.filter((c) => c.url.includes("viacep")).length).toBe(1);
   });
 
   it("cliente que já tem CEP: abrir a edição não dispara busca", async () => {
     await montar({ initialData: { ...CLIENTE, cep: "01310-100" } });
+    await digitar($('input[name="cep"]'), "01310-10");
     await digitar($('input[name="cep"]'), "01310-100");
     expect(chamadas.some((c) => c.url.includes("viacep"))).toBe(false);
   });

@@ -159,6 +159,8 @@ describe.skipIf(!URL_PG)("Leva H — ficha do cliente (PostgreSQL real)", () => 
     expect(evs.map((e) => e.titulo)).toEqual(["Fatura FAT-3 paga", "Cliente abriu a documentação da equipe", "Documentação da equipe enviada por e-mail"]);
     const um = await historicoServer.carregarHistoricoCliente("e1", "c1", { comFinanceiro: false, porFonte: 1 });
     expect(um.filter((e) => e.id.startsWith("os-criada-")).length).toBe(1);
+    // o aceite NÃO confirmado da OS-2 não ocupa a vaga: com 1 por fonte, vem o confirmado da OS-1
+    expect(um.filter((e) => e.titulo.startsWith("Cliente confirmou")).map((e) => e.titulo)).toEqual(["Cliente confirmou o serviço da OS OS-1"]);
   });
 
   it("API: quem vê clientes vê o histórico; o financeiro só com contas a receber ou faturas", async () => {
