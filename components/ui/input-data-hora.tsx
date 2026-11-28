@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { Clock } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { InputData } from "@/components/ui/input-data";
+import { useCampo } from "@/components/ui/campo-contexto";
 import { deLocalBR, paraLocalBR } from "@/lib/fuso";
 
 /** Máscara "hh:mm" enquanto digita (só números, dois-pontos automático). */
@@ -83,7 +84,10 @@ export function InputDataHora({ value, onChange, onProblema, id, className, disa
   const horaFaltando = !!dia && !horaValida(hora);
   const [saiu, setSaiu] = useState(false);
   // Em vermelho: hora completa que não existe, ou a pessoa já saiu do campo deixando-a vazia/incompleta
-  const horaInvalida = horaFaltando && (hora.length === 5 || saiu);
+  const horaInvalidaPropria = horaFaltando && (hora.length === 5 || saiu);
+  // Dentro de um FormField com erro (ERRO NO CAMPO): a hora também fica marcada e a mensagem é a do campo (sem repetir)
+  const campo = useCampo();
+  const horaInvalida = horaInvalidaPropria || !!campo?.invalido;
   const avisar = useRef(onProblema);
   avisar.current = onProblema;
   useEffect(() => {
@@ -107,7 +111,7 @@ export function InputDataHora({ value, onChange, onProblema, id, className, disa
       <div className="relative w-[5.5rem] shrink-0">
         <input
           type="text" inputMode="numeric" autoComplete="off" placeholder="hh:mm" disabled={disabled}
-          aria-label={ariaLabel ? `${ariaLabel} — hora` : "Hora"} aria-invalid={horaInvalida || undefined} data-input-hora
+          aria-label={ariaLabel ? `${ariaLabel} — hora` : "Hora"} aria-invalid={horaInvalida || undefined} aria-describedby={campo?.descricaoId} data-input-hora
           onFocus={selecionarAoFocar}
           value={hora}
           onChange={(e) => { const h = mascararHora(e.target.value); setHora(h); setSaiu(false); emitir(dia, h); }}
@@ -123,7 +127,8 @@ export function InputDataHora({ value, onChange, onProblema, id, className, disa
         />
         <Clock className="absolute right-2 top-1/2 -translate-y-1/2 w-4 h-4 text-ink-subtle pointer-events-none" />
       </div>
-      {horaInvalida && <p data-hora-erro className="basis-full text-xs text-atrasado">Informe um horário válido (hh:mm).</p>}
+      {horaInvalidaPropria && !campo?.invalido && <p data-hora-erro className="basis-full text-xs text-atrasado">Informe um horário válido (hh:mm).</p>}
     </div>
   );
 }
+(InputDataHora as unknown as { campoDeFormulario: boolean }).campoDeFormulario = true;

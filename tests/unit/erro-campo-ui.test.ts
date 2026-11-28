@@ -16,6 +16,7 @@ import { FormField } from "@/components/ui/form-field";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { InputData } from "@/components/ui/input-data";
+import { InputDataHora } from "@/components/ui/input-data-hora";
 import { BuscaSelect } from "@/components/ui/busca-select";
 import { Tabs } from "@/components/ui/tabs";
 import { ErrosDoFormulario, ResumoDeErros, useErrosDoFormulario, type ErrosFormulario } from "@/components/ui/formulario-erros";
@@ -254,6 +255,17 @@ describe("os outros controles seguem o mesmo padrão", () => {
     expect(document.getElementById(data.getAttribute("aria-describedby")!)!.textContent).toBe("Informe o vencimento.");
     const rotulo = data.closest("[class*='flex-col']")!.querySelector("label")!;
     expect(rotulo.htmlFor).toBe(data.id);
+  });
+
+  it("data e hora: as duas partes ficam marcadas e a mensagem é só a do campo (sem repetir a da hora)", () => {
+    act(() => root.render(h(FormField, { label: "Visita", error: "Informe a hora da visita." }, h(InputDataHora, { value: "", onChange: () => {} }))));
+    const hora = $<HTMLInputElement>("[data-input-hora]")!;
+    expect(hora.getAttribute("aria-invalid")).toBe("true");
+    expect(hora.className).toContain("border-atrasado");
+    expect($<HTMLInputElement>("[data-input-data]")!.getAttribute("aria-invalid")).toBe("true");
+    expect(document.getElementById(hora.getAttribute("aria-describedby")!)!.textContent).toBe("Informe a hora da visita.");
+    expect($("[data-hora-erro]")).toBeNull();
+    expect(caixa.querySelectorAll("[data-erro-campo]").length).toBe(1);
   });
 
   it("a dica vira a descrição do campo quando não há erro", () => {
