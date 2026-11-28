@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { randomUUID } from "node:crypto";
 import { comentarioSchema } from "@/lib/tecnico/comentarios";
 import { comentarParaPessoa } from "@/lib/execucao/comentarios";
-import { citavelNaConversa, conversaComPessoa, pessoasDaEmpresa, podeConversas } from "@/lib/chat/pessoas-servidor";
+import { citavelNaConversa, conversaComPessoa, lerAoResponderEscritorio, pessoasDaEmpresa, podeConversas } from "@/lib/chat/pessoas-servidor";
 import { MSG_SEM_CONVERSA, MSG_SEM_PERMISSAO_CONVERSAS } from "@/lib/chat/regras";
 import { guardaEscritorio, lerAte, SEM_CACHE } from "@/lib/chat/rotas-server";
 import { prisma } from "@/lib/prisma";
@@ -46,5 +46,7 @@ export async function POST(req: NextRequest, { params }: Params) {
   // Responder: só uma mensagem desta conversa que quem escreve pode ver
   const r = await comentarParaPessoa(g.quem.empresaId, g.quem.id, usuarioId, (osId as string) || null, parsed.data, citavelNaConversa(g.quem, pessoa));
   if (!r.ok) return NextResponse.json({ erro: r.erro }, { status: r.status });
+  // Responder é ler: o ✓✓ das mensagens do técnico (quem já estava com a conversa aberta não relia)
+  await lerAoResponderEscritorio(g.quem, usuarioId);
   return NextResponse.json({ mensagem: r.dados.comentario }, { status: r.status });
 }

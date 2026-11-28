@@ -74,6 +74,15 @@ export interface PendenciaEquipamento extends FaltasEquipamento { equipamentoId:
 const preenchido = (v: string | null | undefined) => !!(v ?? "").trim();
 
 /** O item tem resposta? Medição = tem o número; os demais = OK / Atenção / Não se aplica. */
+/**
+ * O progresso do checklist do equipamento ("X de Y"): os itens que o técnico RESPONDE. O calculado (ΔT) sai do
+ * total, como sai das pendências — senão a barra dizia "0 de 19" e o botão "Faltam 18".
+ */
+export function progressoDoChecklist(itens: readonly ItemExecucao[], respostas: Record<string, RespostaItem | undefined>): { feitos: number; total: number } {
+  const conta = itens.filter((it) => it.ativo && !ehCalculada(grandezaDoItem(it)));
+  return { feitos: conta.filter((it) => respondido(it, respostas[it.id])).length, total: conta.length };
+}
+
 export function respondido(it: Pick<ItemExecucao, "tipoResposta">, r: RespostaItem | undefined): boolean {
   if (!r) return false;
   if (r.status === "NAO_SE_APLICA") return true;

@@ -30,14 +30,18 @@ const ROTULO_OPERACAO: Record<string, string> = {
  * lugar do app) e as preferências do aparelho (app de rota). COM-1: "Minhas comissões" só quando a
  * empresa usa comissão (o mesmo extrato do Meu perfil do painel).
  */
-export function PerfilTecnico({ perfilInicial }: { perfilInicial: React.ComponentProps<typeof PerfilClient>["initial"] }) {
+export function PerfilTecnico({ perfilInicial, abrirComissoes = false }: {
+  perfilInicial: React.ComponentProps<typeof PerfilClient>["initial"];
+  /** Veio do card "Minhas comissões" do Meu dia: a seção aparece já aberta (também sem sinal — ele tem comissão) */
+  abrirComissoes?: boolean;
+}) {
   const { motor, estado, usuario, config, armazenamento, avatar, definirAvatar } = useTecnico();
   const [fila, setFila] = useState<OperacaoFila[]>([]);
   const [osDe, setOsDe] = useState<Record<string, string>>({});
   const [dados, setDados] = useState(false);
   const [sincronizando, setSincronizando] = useState(false);
-  const [usaComissao, setUsaComissao] = useState(false);
-  const [comissoesAbertas, setComissoesAbertas] = useState(false);
+  const [usaComissao, setUsaComissao] = useState(abrirComissoes);
+  const [comissoesAbertas, setComissoesAbertas] = useState(abrirComissoes);
   useEffect(() => {
     let vivo = true;
     fetch("/api/perfil/comissoes?so=ativo").then((r) => (r.ok ? r.json() : null)).then((d) => { if (vivo && d?.ativo) setUsaComissao(true); }).catch(() => {});
@@ -96,11 +100,24 @@ export function PerfilTecnico({ perfilInicial }: { perfilInicial: React.Componen
                 <li key={o.seq} className="rounded-card border border-atrasado/20 bg-atrasado-claro p-3 text-sm space-y-1">
                   <p className="font-semibold text-ink">{ROTULO_OPERACAO[o.tipo] ?? o.tipo}{osDe[o.atividadeId] ? ` — ${osDe[o.atividadeId]}` : ""}</p>
                   <p className="text-atrasado-texto">{o.erro}</p>
-                  <p className="text-xs text-ink-muted">As próximas gravações desta OS esperam esta. Reaberta pelo escritório? Toque em “Sincronizar agora”.</p>
+                  {o.tipo === "scan"
+                    ? <p className="text-xs text-ink-muted">O resto do serviço desta OS sobe normalmente.</p>
+                    : <p className="text-xs text-ink-muted">As próximas gravações desta OS esperam esta. Reaberta pelo escritório? Toque em “Sincronizar agora”.</p>}
                   <button type="button" className="inline-flex items-center gap-1 text-xs font-semibold text-atrasado-texto py-1"
                     onClick={async () => { if (await confirmar({ mensagem: "Descartar esta gravação? Ela não vai para o escritório.", perigo: true, confirmarTexto: "Descartar" })) await motor?.descartar(o.seq!); }}>
                     <Trash2 className="w-3.5 h-3.5" /> Descartar esta
                   </button>
+                  {(() => {
+                    // OS cancelada (ou que saiu dele) com trabalho feito sem sinal: as que esperam esta não têm mais para onde ir
+                    const esperam = o.tipo === "scan" ? 0 : aEnviar.filter((q) => q.atividadeId === o.atividadeId && q.seq! > o.seq!).length;
+                    if (!esperam) return null;
+                    return (
+                      <button type="button" className="ml-3 inline-flex items-center gap-1 text-xs font-semibold text-atrasado-texto py-1" data-descartar-da-os
+                        onClick={async () => { if (await confirmar({ mensagem: `Descartar esta e as ${esperam} que esperam por ela nesta OS? Nada disso vai para o escritório.`, perigo: true, confirmarTexto: "Descartar todas" })) await motor?.descartarDaAtividade(o.atividadeId); }}>
+                        <Trash2 className="w-3.5 h-3.5" /> Descartar todas desta OS ({esperam + 1})
+                      </button>
+                    );
+                  })()}
                 </li>
               ))}
             </ul>

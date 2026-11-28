@@ -8,6 +8,7 @@ import { Dica } from "@/components/ui/dica";
 import { ConversaChat, type EnvioMensagem } from "@/components/chat/conversa";
 import { SeletorOs } from "@/components/chat/seletor-os";
 import { useNovidades } from "@/components/chat/use-novidades";
+import { useAreaVisivel } from "@/components/tecnico/use-area-visivel";
 import { URL_NOVIDADES_APP } from "@/lib/chat/novidades-cliente";
 import { juntarComFila, osDaResposta, refDaCitada } from "@/lib/chat/regras";
 import { lerQrDaFoto } from "@/lib/qr/leitor";
@@ -214,9 +215,14 @@ export function VistaChat() {
     ? (osId: string) => { const a = atividadeDaOs(osId, osDoDia, atividades); if (a) irPara({ ver: "os", a }); }
     : undefined;
   const semSinal = motor?.atual.situacao === "offline";
+  // A conversa ocupa EXATAMENTE o que se vê entre o topo do app e a barra inferior (ou o teclado): medidos, não somados
+  // (no iPhone instalado o topo e a barra ganham a área do relógio e do gesto de início — a conta fixa deixava o campo de
+  // escrever atrás da barra)
+  const area = useAreaVisivel();
 
   return (
-    <div className="flex flex-col -mx-4 -mt-4 -mb-24 h-[calc(100dvh-8rem-env(safe-area-inset-bottom))]" data-vista="chat" data-chat-conversa>
+    <div className="fixed inset-x-0 z-20 mx-auto flex max-w-2xl flex-col bg-surface-page" data-vista="chat" data-chat-conversa data-teclado={area.teclado || undefined}
+      style={{ top: `calc(var(--tec-topo, 0px) + ${area.deslocamento}px)`, height: `calc(${area.altura}px - var(--tec-topo, 0px) - var(--tec-barra, 0px))` }}>
       <header className="flex items-center gap-2.5 border-b border-surface-border bg-white px-3 py-2">
         <span className="shrink-0 w-10 h-10 rounded-full bg-primary-50 text-primary-700 inline-flex items-center justify-center" aria-hidden>
           <Building2 className="w-5 h-5" />

@@ -10,7 +10,8 @@ import { EscolhaEquipamento } from "@/components/chat/escolha-equipamento";
 import { MOTIVO_EQUIPAMENTO, vinculoDaFoto, type EquipamentoFotoTela } from "@/lib/chat/equipamento-foto";
 import { Lightbox, type ItemLightbox } from "@/components/ui/lightbox";
 import {
-  acharCitada, citacaoDe, DESTAQUE_MS, mostraEtiquetaOs, MSG_CITADA_NAO_ENCONTRADA, preencherCitacoes, refDaCitada, rotuloDoDia, ROTULO_SEM_OS, TEXTO_MAX,
+  acharCitada, citacaoDe, DESTAQUE_MS, mostraAutor, mostraEtiquetaOs, MSG_CITADA_NAO_ENCONTRADA, preencherCitacoes, refDaCitada, rotuloDoDia, ROTULO_SEM_OS,
+  TEXTO_MAX,
 } from "@/lib/chat/regras";
 import { prepararFoto } from "@/lib/chat/foto-cliente";
 import type { ComentarioTela, RefCitacao } from "@/lib/tecnico/comentarios";
@@ -90,6 +91,16 @@ export function ConversaChat({
   // Indo até uma citada que não estava carregada: `buscou` = a tela já carregou desde ela
   const [indo, setIndo] = useState<{ c: NonNullable<ComentarioTela["respostaA"]>; buscou: boolean } | null>(null);
   const lista = useRef<HTMLDivElement>(null);
+  // Está no fim da conversa? Se a área encolher (o teclado abriu), continua no fim — a última mensagem à vista
+  const noFim = useRef(true);
+  const irProFim = () => { const el = lista.current; if (el) el.scrollTop = el.scrollHeight; };
+  useEffect(() => {
+    const el = lista.current;
+    if (!el || typeof ResizeObserver !== "function") return;
+    const ro = new ResizeObserver(() => { if (noFim.current) irProFim(); });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
   const arquivo = useRef<HTMLInputElement>(null);
   const campo = useRef<HTMLTextAreaElement>(null);
   // A fila do aparelho guarda só a referência da citada: a citação vem da própria conversa
@@ -192,7 +203,8 @@ export function ConversaChat({
 
   return (
     <div className={cn("flex flex-col min-h-0", className)} data-conversa>
-      <div ref={lista} className="flex-1 min-h-0 overflow-y-auto overscroll-contain px-3 py-3 bg-surface-page" data-mensagens>
+      <div ref={lista} className="flex-1 min-h-0 overflow-y-auto overscroll-contain px-3 pt-3 pb-4 bg-surface-page" data-mensagens
+        onScroll={(e) => { const el = e.currentTarget; noFim.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80; }}>
         {carregando && !mensagens.length ? (
           <p className="flex justify-center py-8 text-ink-muted"><Loader2 className="w-5 h-5 animate-spin" aria-label="Carregando" /></p>
         ) : erro ? (
@@ -205,7 +217,7 @@ export function ConversaChat({
               const ant = mensagens[i - 1];
               const dia = rotuloDoDia(m.criadoEm);
               const novoDia = !ant || rotuloDoDia(ant.criadoEm) !== dia;
-              const mostrarAutor = novoDia || !ant || ant.autor !== m.autor || ant.meu !== m.meu;
+              const mostrarAutor = mostraAutor(m, ant, { comEtiquetaOs: mostrarOs });
               return (
                 <Fragment key={m.clientId ?? m.id ?? i}>
                   {novoDia && (
@@ -279,7 +291,7 @@ export function ConversaChat({
               className="shrink-0 rounded-full w-11 h-11 inline-flex items-center justify-center text-ink-muted hover:text-primary-700 hover:bg-surface-alt disabled:opacity-40 touch-target" data-anexar-foto>
               {preparando ? <Loader2 className="w-5 h-5 animate-spin" /> : <Camera className="w-5 h-5" />}
             </button>
-            <textarea ref={campo} value={texto} onChange={(e) => setTexto(e.target.value)} maxLength={TEXTO_MAX} rows={1} placeholder={placeholder} aria-label="Mensagem"
+            <textarea ref={campo} value={texto} onFocus={() => { noFim.current = true; setTimeout(irProFim, 350); }} onChange={(e) => setTexto(e.target.value)} maxLength={TEXTO_MAX} rows={1} placeholder={placeholder} aria-label="Mensagem"
               onKeyDown={(e) => {
                 if (e.key === "Escape" && citando) { e.preventDefault(); cancelarCitacao(); return; }
                 if (e.key === "Enter" && !e.shiftKey && !("ontouchstart" in window)) { e.preventDefault(); void enviar(); }

@@ -41,7 +41,7 @@ export function TrocarSenhaObrigatoriaForm({ nome, email, destino }: { nome: str
     } catch { setErro("Erro de conexão. Tente de novo."); } finally { setSalvando(false); }
   }
 
-  const cls = "w-full bg-white border border-surface-border rounded-lg px-3 py-2.5 text-sm text-ink focus:outline-none focus:border-primary-500 focus:ring-4 focus:ring-primary-500/10";
+  const cls = "w-full bg-white border border-surface-border rounded-lg px-3 py-2.5 min-h-[44px] text-base text-ink focus:outline-none focus:border-primary-500 focus:ring-4 focus:ring-primary-500/10";
   return (
     <form onSubmit={salvar} className="space-y-5" data-trocar-senha-obrigatoria>
       <div>

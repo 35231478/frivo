@@ -14,6 +14,7 @@ import { chaveHojeBR } from "@/lib/fuso";
 import {
   CATEGORIAS_DESPESA, dataDespesaValida, DESCRICAO_MAX, lerValor, NOME_CATEGORIA, PAGAMENTOS, ROTULO_SITUACAO, SEM_OS, VALOR_MAX,
   type CategoriaDespesa, type DadosDespesa, type DespesaTela, type Pagamento, type SituacaoDespesa,
+  faltaNaDespesa, textoFaltaDespesa,
 } from "@/lib/tecnico/despesas";
 import type { OperacaoFila } from "@/lib/tecnico/offline/tipos";
 
@@ -124,7 +125,8 @@ export function ModalDespesa({ atividadeId, osNumero, onFechar }: { atividadeId?
   const valorOk = Number.isFinite(n) && n > 0 && n <= VALOR_MAX;
   const erroData = dataDespesaValida(data, hoje);
   const faltaDescricao = categoria === "OUTROS" && descricao.trim().length < 3;
-  const pronta = !!categoria && valorOk && !erroData && !!pagamento && !faltaDescricao && !!foto;
+  const falta = faltaNaDespesa({ categoria: !!categoria, valorOk, dataOk: !erroData, pagamento: !!pagamento, descricaoOk: !faltaDescricao, foto: !!foto });
+  const pronta = falta.length === 0;
 
   async function lancar() {
     if (!pronta || !motor) return;
@@ -180,6 +182,7 @@ export function ModalDespesa({ atividadeId, osNumero, onFechar }: { atividadeId?
         </div>
         <button type="button" disabled={!pronta || gravando} onClick={lancar} data-salvar-despesa
           className="w-full rounded-card bg-primary-600 text-white py-4 text-base font-bold disabled:opacity-40 touch-target">Lançar</button>
+        {!pronta && <p className="text-sm text-ink-muted text-center" data-falta-despesa>{textoFaltaDespesa(falta)}</p>}
       </div>
     </Modal>
   );

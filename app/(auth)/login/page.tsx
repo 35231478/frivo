@@ -21,7 +21,7 @@ export default function LoginPage() {
         <div className="bg-white rounded-card shadow-card p-8 border border-surface-border">
           <div className="mb-6">
             <h2 className="text-xl font-bold text-ink">Entrar na sua conta</h2>
-            <p className="text-sm text-ink-muted mt-1">Acesse o painel de gestão</p>
+            <p className="text-sm text-ink-muted mt-1">Painel de gestão e app do técnico</p>
           </div>
           <Suspense fallback={<div className="text-sm text-ink-muted">Carregando…</div>}>
             <LoginForm />

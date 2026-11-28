@@ -161,11 +161,11 @@ export function PorteiroChecklist({ resumo, porteiro, trocando = false }: { resu
 
       {trocando ? (
         <div className="text-center">
-          <button type="button" onClick={porteiro.fechar} className="text-sm text-ink-muted underline underline-offset-2 py-2" data-porteiro-voltar>Voltar sem fazer o checklist</button>
+          <button type="button" onClick={porteiro.fechar} className="text-sm text-ink-muted underline underline-offset-2 py-2 min-h-[44px] px-2" data-porteiro-voltar>Voltar sem fazer o checklist</button>
         </div>
       ) : !naoVou ? (
         <div className="text-center">
-          <button type="button" onClick={() => setNaoVou(true)} className="text-sm text-ink-muted underline underline-offset-2 py-2" data-porteiro-nao-vou>Hoje não vou usar o veículo</button>
+          <button type="button" onClick={() => setNaoVou(true)} className="text-sm text-ink-muted underline underline-offset-2 py-2 min-h-[44px] px-2" data-porteiro-nao-vou>Hoje não vou usar o veículo</button>
         </div>
       ) : (
         <div className="bg-white rounded-card border border-surface-border p-4 space-y-3" data-porteiro-nao-vou-caixa>

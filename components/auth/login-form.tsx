@@ -8,6 +8,7 @@ import { signIn } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { loginSchema, type LoginInput } from "@/lib/validations";
 import { AlertCircle, Eye, EyeOff, Loader2, LogIn } from "lucide-react";
+import { MSG_SESSAO_EXPIRADA } from "@/lib/acesso/sem-sessao";
 
 const CHAVE_LEMBRAR = "frivo:manter-conectado";
 
@@ -35,6 +36,8 @@ export function LoginForm() {
   const sessaoEncerrada = searchParams.get("sessao") === "encerrada";
   // App de campo com "apenas um dispositivo ativo": entrou em outro aparelho e este caiu (só dentro do aviso acima)
   const outroAparelho = searchParams.get("motivo") === "outro-aparelho";
+  // App do técnico que perdeu a sessão (lib/acesso/sem-sessao): o que estava no aparelho continua guardado
+  const expirou = searchParams.get("motivo") === "expirou";
   // Vindo de /definir-senha (convite): senha criada, é só entrar
   const senhaDefinida = searchParams.get("senha") === "definida";
   const [mostrarSenha, setMostrarSenha] = useState(false);
@@ -84,6 +87,13 @@ export function LoginForm() {
         </div>
       )}
 
+      {expirou && !sessaoEncerrada && !erro && (
+        <div className="bg-atencao-claro border border-atencao/20 text-atencao-texto text-sm rounded-lg px-3 py-2.5 flex items-center gap-2" role="status" data-sessao-expirou>
+          <AlertCircle className="w-4 h-4 shrink-0" />
+          {MSG_SESSAO_EXPIRADA}
+        </div>
+      )}
+
       {erro && (
         <div className="bg-atrasado-claro border border-atrasado/20 text-atrasado-texto text-sm rounded-lg px-3 py-2.5 flex items-center gap-2">
           <AlertCircle className="w-4 h-4 shrink-0" />
@@ -98,7 +108,7 @@ export function LoginForm() {
           type="email"
           autoComplete="email"
           placeholder="seu@email.com.br"
-          className="w-full bg-white border border-surface-border rounded-lg px-3 py-2.5 text-sm text-ink placeholder:text-ink-subtle focus:outline-none focus:border-primary-500 focus:ring-4 focus:ring-primary-500/10 disabled:opacity-50 transition-all"
+          className="w-full bg-white border border-surface-border rounded-lg px-3 py-2.5 min-h-[44px] text-base text-ink placeholder:text-ink-subtle focus:outline-none focus:border-primary-500 focus:ring-4 focus:ring-primary-500/10 disabled:opacity-50 transition-all"
           disabled={isSubmitting}
         />
         {errors.email && (
@@ -109,7 +119,7 @@ export function LoginForm() {
       <div className="space-y-1.5">
         <div className="flex items-center justify-between gap-2">
           <label className="text-sm font-semibold text-ink">Senha</label>
-          <Link href="/esqueci-senha" className="text-xs font-semibold text-primary-600 hover:text-primary-700 hover:underline">
+          <Link href="/esqueci-senha" className="inline-flex items-center min-h-[44px] -my-3 text-sm font-semibold text-primary-600 hover:text-primary-700 hover:underline" data-esqueci-senha>
             Esqueci minha senha
           </Link>
         </div>
@@ -119,13 +129,14 @@ export function LoginForm() {
             type={mostrarSenha ? "text" : "password"}
             autoComplete="current-password"
             placeholder="••••••••"
-            className="w-full bg-white border border-surface-border rounded-lg px-3 py-2.5 pr-10 text-sm text-ink placeholder:text-ink-subtle focus:outline-none focus:border-primary-500 focus:ring-4 focus:ring-primary-500/10 disabled:opacity-50 transition-all"
+            className="w-full bg-white border border-surface-border rounded-lg px-3 py-2.5 pr-12 min-h-[44px] text-base text-ink placeholder:text-ink-subtle focus:outline-none focus:border-primary-500 focus:ring-4 focus:ring-primary-500/10 disabled:opacity-50 transition-all"
             disabled={isSubmitting}
           />
           <button
             type="button"
             onClick={() => setMostrarSenha((v) => !v)}
-            className="absolute right-3 top-1/2 -translate-y-1/2 text-ink-subtle hover:text-primary-600 transition-colors"
+            className="absolute right-0 top-1/2 -translate-y-1/2 w-11 h-11 inline-flex items-center justify-center text-ink-subtle hover:text-primary-600 transition-colors"
+            aria-label={mostrarSenha ? "Esconder a senha" : "Mostrar a senha"}
             tabIndex={-1}
           >
             {mostrarSenha ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
@@ -136,14 +147,14 @@ export function LoginForm() {
         )}
       </div>
 
-      <label className="flex items-start gap-2.5 cursor-pointer select-none">
+      <label className="flex items-start gap-2.5 cursor-pointer select-none py-1" data-manter-conectado>
         <input
           type="checkbox"
           name="lembrar"
           checked={lembrar}
           onChange={(e) => setLembrar(e.target.checked)}
           disabled={isSubmitting}
-          className="mt-0.5 w-4 h-4 rounded border-surface-border text-primary-600 focus:ring-primary-500/20"
+          className="mt-0.5 w-5 h-5 rounded border-surface-border text-primary-600 focus:ring-primary-500/20"
         />
         <span className="text-sm text-ink">
           Manter conectado

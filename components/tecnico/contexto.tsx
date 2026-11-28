@@ -121,7 +121,8 @@ export function useTecnico() {
 export type Vista =
   | { ver: "dia" }
   | { ver: "agenda" }
-  | { ver: "perfil" }
+  /** sec=comissoes: veio do card "Minhas comissões" do Meu dia — a seção já abre */
+  | { ver: "perfil"; sec?: "comissoes" }
   | { ver: "desempenho" }
   /** Minhas despesas de campo (e o lançamento) */
   | { ver: "despesas" }
@@ -141,6 +142,7 @@ export function lerVista(search: string): Vista {
   if (ver === "os" && a) return { ver: "os", a, e: q.get("e"), ...(q.get("cam") === "1" && { cam: true }), ...(q.get("inc") && { inc: q.get("inc") }), ...(q.get("fim") === "1" && { fim: true }), ...(q.get("primeiro") === "1" && { primeiro: true }) };
   const qr = q.get("q");
   if (ver === "equipamento" && qr) return { ver: "equipamento", q: qr };
+  if (ver === "perfil" && q.get("sec") === "comissoes") return { ver: "perfil", sec: "comissoes" };
   // O endereço antigo (…&os=<osId>, de antes da conversa por pessoa) abre a mesma conversa
   if (ver === "agenda" || ver === "chat" || ver === "perfil" || ver === "desempenho" || ver === "despesas") return { ver };
   return { ver: "dia" };
@@ -150,6 +152,7 @@ export function urlDaVista(v: Vista): string {
   if (v.ver === "dia") return "/tecnico";
   if (v.ver === "os") return `/tecnico?ver=os&a=${encodeURIComponent(v.a)}${v.e ? `&e=${encodeURIComponent(v.e)}` : ""}${v.cam ? "&cam=1" : ""}${v.inc ? `&inc=${encodeURIComponent(v.inc)}` : ""}${v.fim ? "&fim=1" : ""}${v.primeiro ? "&primeiro=1" : ""}`;
   if (v.ver === "equipamento") return `/tecnico?ver=equipamento&q=${encodeURIComponent(v.q)}`;
+  if (v.ver === "perfil" && v.sec) return `/tecnico?ver=perfil&sec=${v.sec}`;
   if (v.ver === "chat") return urlConversaApp();
   return `/tecnico?ver=${v.ver}`;
 }

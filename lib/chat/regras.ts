@@ -172,6 +172,22 @@ export function preencherCitacoes(lista: ComentarioTela[]): ComentarioTela[] {
     return { ...m, respostaA: achada ? citacaoDe(achada) : { ...c, indisponivel: true } };
   });
 }
+
+/** Mensagens do mesmo autor mais próximas que isto formam uma SEQUÊNCIA (o nome só na 1ª) */
+export const SEQUENCIA_MS = 5 * 60_000;
+
+/**
+ * O balão RECEBIDO mostra quem escreveu (e de onde)? Sempre — só não repete numa sequência IMEDIATA do mesmo autor: a
+ * anterior é dele, do mesmo lado, do mesmo dia, sem a etiqueta de outra OS no meio e a menos de 5 minutos. (Antes, a
+ * etiqueta da OS e as horas de intervalo escondiam o nome de quem respondeu.)
+ */
+export function mostraAutor(m: Pick<ComentarioTela, "autor" | "meu" | "origem" | "criadoEm" | "os">, anterior: Pick<ComentarioTela, "autor" | "meu" | "origem" | "criadoEm" | "os"> | undefined, op: { comEtiquetaOs?: boolean; agora?: Date } = {}): boolean {
+  if (m.meu) return false;
+  if (!anterior || anterior.meu || anterior.autor !== m.autor || anterior.origem !== m.origem) return true;
+  if (rotuloDoDia(m.criadoEm, op.agora) !== rotuloDoDia(anterior.criadoEm, op.agora)) return true;
+  if (op.comEtiquetaOs && mostraEtiquetaOs(m, anterior, op.agora)) return true;
+  return Date.parse(m.criadoEm) - Date.parse(anterior.criadoEm) > SEQUENCIA_MS;
+}
 export const MSG_SEM_PERMISSAO_CONVERSAS = "Sem permissão para Conversas. Peça ao administrador (Configurações › Perfis de acesso).";
 
 // ── A mensagem (um balão) ───────────────────────────────────────────────────────────────────
