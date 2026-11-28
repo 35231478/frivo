@@ -44,7 +44,7 @@ const ESPECIALIDADES_SUGERIDAS = [
   "Refrigeração Comercial", "Ar Central", "Fan Coil", "Torres de Resfriamento",
 ];
 
-interface TipoOsOpt { id: string; nome: string; cor: string }
+interface TipoOsOpt { id: string; nome: string; cor: string; ativo?: boolean }
 
 interface ColaboradorFormProps {
   initialData?: any;
@@ -102,7 +102,8 @@ export function ColaboradorForm({ initialData, somenteLeitura = false, podeFolha
   const temFrota = useModulos().tem("veiculos");
 
   useEffect(() => {
-    fetch("/api/tipos-os").then((r) => r.json()).then((d) => setTiposOs(Array.isArray(d) ? d.filter((t: any) => t.ativo !== false) : [])).catch(() => {});
+    // Competências = os tipos de OS da empresa (Configurações › Tipos de OS); o inativo some da lista, menos o já marcado
+    fetch("/api/tipos-os").then((r) => r.json()).then((d) => setTiposOs(Array.isArray(d) ? d : [])).catch(() => {});
     fetch("/api/veiculos?resumo=1").then((r) => (r.ok ? r.json() : [])).then((d) => setVeiculos(Array.isArray(d) ? d : [])).catch(() => {});
   }, []);
 
@@ -159,6 +160,7 @@ export function ColaboradorForm({ initialData, somenteLeitura = false, podeFolha
     if (e.estado) setValue("estado", e.estado, { shouldDirty: true });
   }
   const jornadaOk = jornadaValida(faixas);
+  const tiposOsVisiveis = tiposOs.filter((t) => t.ativo !== false || competenciaIds.includes(t.id));
   function toggleCompetencia(id: string) {
     setCompetenciaIds((p) => (p.includes(id) ? p.filter((c) => c !== id) : [...p, id]));
   }
@@ -437,14 +439,14 @@ export function ColaboradorForm({ initialData, somenteLeitura = false, podeFolha
               <p className="text-sm text-ink-muted -mt-1">
                 Tipos de OS que este colaborador pode executar; só eles são sugeridos ao criar a OS.
               </p>
-              {tiposOs.length === 0 ? (
-                <p className="text-sm text-ink-subtle">Nenhum tipo de OS cadastrado. Cadastre em Configurações → Tipos de OS.</p>
+              {tiposOsVisiveis.length === 0 ? (
+                <p className="text-sm text-ink-subtle" data-competencias-vazio>Nenhum tipo de OS cadastrado. Cadastre em Configurações → Tipos de OS.</p>
               ) : (
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                  {tiposOs.map((t) => {
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2" data-competencias>
+                  {tiposOsVisiveis.map((t) => {
                     const sel = competenciaIds.includes(t.id);
                     return (
-                      <label key={t.id} className={cn(
+                      <label key={t.id} data-competencia={t.id} className={cn(
                         "flex items-center gap-3 px-3 py-2.5 rounded-lg border cursor-pointer transition-colors",
                         sel ? "border-primary-300 bg-primary-50" : "border-surface-border hover:bg-surface-alt",
                       )}>
@@ -452,6 +454,7 @@ export function ColaboradorForm({ initialData, somenteLeitura = false, podeFolha
                           className="w-4 h-4 rounded border-surface-border text-primary-600 focus:ring-primary-500" />
                         <span className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: t.cor }} />
                         <span className="text-sm text-ink">{t.nome}</span>
+                        {t.ativo === false && <span className="text-xs text-ink-subtle" data-competencia-inativa>(inativo)</span>}
                       </label>
                     );
                   })}
