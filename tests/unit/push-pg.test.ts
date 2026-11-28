@@ -184,7 +184,7 @@ describe.skipIf(!URL_PG)("push (PostgreSQL real)", () => {
     expect(recebidos()).toEqual([]);
     await rota("api/push/preferencias", "PUT", { OS_NOVA: true });
     como("uAdmin");
-    expect((await rota("api/push/preferencias", "GET")).json.map((t: any) => t.id)).toEqual(["ATIVIDADE_ESQUECIDA", "OS_COMENTARIO", "ACEITE", "DESPESA", "SOLICITACAO_PORTAL", "ORCAMENTO_RESPOSTA", "PEDIDO_CLIENTE", "ESTOQUE_NEGATIVO"]);
+    expect((await rota("api/push/preferencias", "GET")).json.map((t: any) => t.id)).toEqual(["IMPEDIMENTO", "ATIVIDADE_ESQUECIDA", "OS_COMENTARIO", "ACEITE", "DESPESA", "SOLICITACAO_PORTAL", "ORCAMENTO_RESPOSTA", "PEDIDO_CLIENTE", "ESTOQUE_NEGATIVO"]);
   });
 
   /* ───────── Atribuição ───────── */

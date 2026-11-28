@@ -52,7 +52,7 @@ export function FaixaPausa({ x, registrar }: { x: ExecucaoTela; registrar: Regis
     finally { setGravando(false); }
   }
   async function encerrar() {
-    if (!(await confirmar({ titulo: "Encerrar a visita como não concluída?", mensagem: `“${p!.motivo}”: a atividade volta para o escritório reagendar. Os equipamentos que faltam ficam como não atendidos, com o motivo.`, perigo: true, confirmarTexto: "Encerrar visita" }))) return;
+    if (!(await confirmar({ titulo: "Encerrar a visita como não concluída?", mensagem: `“${p!.motivo}”: o escritório vai reagendar a visita.`, perigo: true, confirmarTexto: "Encerrar visita" }))) return;
     setGravando(true);
     try {
       await registrar([{ tipo: "naoConcluida", atividadeId, dados: { pausaClientId: p!.clientId } }]);

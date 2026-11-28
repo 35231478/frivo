@@ -166,10 +166,11 @@ describe.skipIf(!URL_PG)("lista de OS e sessão: o mesmo resultado, menos idas a
       expect(resumoPedido).toBeNull();
       expect(typeof semAgendamento).toBe("number"); // Leva I: a contagem do filtro rápido "Sem agendamento" (à parte)
       expect(semOpcoes.linhas.every((l) => l.pedidoCliente === null), JSON.stringify(sp)).toBe(true);
+      expect(semOpcoes.linhas.every((l) => l.pausa === null), JSON.stringify(sp)).toBe(true); // D1: nenhuma pausa aberta nestes dados
       // COM-1 acrescentou a coluna "Vendedor" (campo novo de cada linha, fora do carregamento antigo): compara sem
       // ele e confere à parte que existe (neste cenário nenhuma OS tem vendedor)
       expect(semOpcoes.linhas.every((l) => "vendedor" in l && l.vendedor === null), JSON.stringify(sp)).toBe(true);
-      const semNovos = { ...semOpcoes, linhas: semOpcoes.linhas.map(({ pedidoCliente: _p, vendedor: _v, ...l }) => l) };
+      const semNovos = { ...semOpcoes, linhas: semOpcoes.linhas.map(({ pedidoCliente: _p, vendedor: _v, pausa: _pa, ...l }) => l) };
       expect(semNovos, JSON.stringify(sp)).toEqual(antigo);
     }
     // o cenário cobre o que importa: equipe com técnico repetido, técnicos em ordem pt-BR, faturada, sem atividade, outra empresa fora

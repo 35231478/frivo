@@ -25,15 +25,15 @@ describe("quem pode receber cada tipo", () => {
     expect(ids(TECNICO)).toEqual(["OS_NOVA", "OS_REAGENDADA", "OS_CANCELADA", "ATIVIDADE_ESQUECIDA", "OS_COMENTARIO", "ACEITE", "DESPESA"]);
   });
   it("administrador (sem técnico ligado): os do escritório, sem os 'para você'", () => {
-    expect(ids(ADMIN)).toEqual(["ATIVIDADE_ESQUECIDA", "OS_COMENTARIO", "ACEITE", "DESPESA", "SOLICITACAO_PORTAL", "ORCAMENTO_RESPOSTA", "PEDIDO_CLIENTE", "ESTOQUE_NEGATIVO"]);
+    expect(ids(ADMIN)).toEqual(["IMPEDIMENTO", "ATIVIDADE_ESQUECIDA", "OS_COMENTARIO", "ACEITE", "DESPESA", "SOLICITACAO_PORTAL", "ORCAMENTO_RESPOSTA", "PEDIDO_CLIENTE", "ESTOQUE_NEGATIVO"]);
   });
   it("financeiro: pela permissão de cada um (vê OS, orçamentos, estoque e fluxo de caixa)", () => {
-    expect(ids(FINANCEIRO)).toEqual(["ATIVIDADE_ESQUECIDA", "OS_COMENTARIO", "ACEITE", "DESPESA", "SOLICITACAO_PORTAL", "ORCAMENTO_RESPOSTA", "PEDIDO_CLIENTE", "ESTOQUE_NEGATIVO"]);
+    expect(ids(FINANCEIRO)).toEqual(["IMPEDIMENTO", "ATIVIDADE_ESQUECIDA", "OS_COMENTARIO", "ACEITE", "DESPESA", "SOLICITACAO_PORTAL", "ORCAMENTO_RESPOSTA", "PEDIDO_CLIENTE", "ESTOQUE_NEGATIVO"]);
     const soOrcamento: QuemRecebe = { permissoes: montarPermissoes({ orcamentos: ["visualizar"] }), role: "OPERADOR", restrito: false };
     expect(ids(soOrcamento)).toEqual(["ORCAMENTO_RESPOSTA"]);
     // só OS: nada de estoque nem de despesa (que pede Financeiro › Fluxo de caixa)
     const soOs: QuemRecebe = { permissoes: montarPermissoes({ ordens: ["visualizar"] }), role: "OPERADOR", restrito: false };
-    expect(ids(soOs)).toEqual(["ATIVIDADE_ESQUECIDA", "OS_COMENTARIO", "ACEITE", "SOLICITACAO_PORTAL", "PEDIDO_CLIENTE"]);
+    expect(ids(soOs)).toEqual(["IMPEDIMENTO", "ATIVIDADE_ESQUECIDA", "OS_COMENTARIO", "ACEITE", "SOLICITACAO_PORTAL", "PEDIDO_CLIENTE"]);
     const soEstoque: QuemRecebe = { permissoes: montarPermissoes({ estoque: ["visualizar"] }), role: "OPERADOR", restrito: false };
     expect(ids(soEstoque)).toEqual(["ESTOQUE_NEGATIVO"]);
   });

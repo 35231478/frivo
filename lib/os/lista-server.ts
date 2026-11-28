@@ -76,7 +76,7 @@ export async function carregarListaOs(empresaId: string, sp: SPOrdens, agora: Da
     const unicos = [...new Set(lista.filter((x): x is string => !!x))];
     return unicos.length ? buscar(unicos) : Promise.resolve([] as T[]);
   };
-  const [clientesOs, unidades, responsaveis, atividades, equipes, tecnicos, itensMedicao, medicoes, pedidos] = ids.length ? await Promise.all([
+  const [clientesOs, unidades, responsaveis, atividades, equipes, tecnicos, itensMedicao, medicoes, pedidos, pausas] = ids.length ? await Promise.all([
     doIds(ordens.map((o) => o.clienteId), (i) => prisma.cliente.findMany({ where: { id: { in: i } }, select: { id: true, nome: true, nomeFantasia: true, logo: true } })),
     doIds(ordens.map((o) => o.unidadeId), (i) => prisma.unidade.findMany({ where: { id: { in: i } }, select: { id: true, nome: true } })),
     doIds(ordens.map((o) => o.responsavelId), (i) => prisma.usuario.findMany({ where: { id: { in: i } }, select: { id: true, nome: true } })),
@@ -90,10 +90,12 @@ export async function carregarListaOs(empresaId: string, sp: SPOrdens, agora: Da
     prisma.medicaoItem.findMany({ where: { ordemServicoId: { in: ids } }, select: { ordemServicoId: true, medicaoId: true } }),
     prisma.medicao.findMany({ where: { itens: { some: { ordemServicoId: { in: ids } } } }, select: { id: true, status: true } }),
     pedidoDasOs(empresaId, ids),
-  ]) : [[], [], [], [], [], [], [], [], new Map()];
+    // D1: as pausas abertas (na mesma onda: nenhuma ida a mais ao banco em fila)
+    pausasAbertas(empresaId, { osIds: ids }),
+  ]) : [[], [], [], [], [], [], [], [], new Map(), []];
   // D1: a pausa aberta de cada OS ("Pausada — motivo — há X h" ao lado do status) — a mais antiga em aberto
   const pausaDa = new Map<string, { motivo: string; inicio: string; impedimento: boolean }>();
-  if (ids.length) for (const p of await pausasAbertas(empresaId, { osIds: ids })) {
+  for (const p of pausas) {
     if (!pausaDa.has(p.atividade.ordemServicoId)) pausaDa.set(p.atividade.ordemServicoId, { motivo: p.motivo, inicio: p.inicio.toISOString(), impedimento: p.impedimento });
   }
 
