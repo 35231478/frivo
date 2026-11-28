@@ -113,22 +113,6 @@ export const FOTO_QUALIDADE = 0.8;
 export const MINIATURA_LADO = 320;
 export const MINIATURA_QUALIDADE = 0.7;
 
-/** Tamanho (em bytes) do arquivo de uma data URL base64. */
-export function bytesDaDataUrl(dataUrl: string): number {
-  const i = dataUrl.indexOf(",");
-  const b64 = i >= 0 ? dataUrl.slice(i + 1) : dataUrl;
-  const pad = b64.endsWith("==") ? 2 : b64.endsWith("=") ? 1 : 0;
-  return Math.max(0, Math.floor(b64.length * 3 / 4) - pad);
-}
-
-/** As medidas reduzidas (proporção mantida; nunca aumenta). */
-export function medidasReduzidas(largura: number, altura: number, ladoMax: number): { largura: number; altura: number } {
-  const maior = Math.max(largura, altura);
-  if (maior <= ladoMax || maior <= 0) return { largura, altura };
-  const f = ladoMax / maior;
-  return { largura: Math.max(1, Math.round(largura * f)), altura: Math.max(1, Math.round(altura * f)) };
-}
-
 // ── Tempo real ──────────────────────────────────────────────────────────────────────────────
 
 /**
