@@ -4,12 +4,20 @@
  * recentes); a linha do tempo final é cortada em `limite`.
  *
  * O financeiro (faturas, pagamentos, cobranças) só entra para quem vê o financeiro (`comFinanceiro`).
+ * Com o "Ver só os próprios" da COM-1 (`escopo`), OS, orçamentos, aceites, e-mails das OS, pedidos do cliente e os
+ * lembretes deles ficam só os da pessoa: nada que revele o trabalho (ou o volume) dos outros vendedores.
  */
+import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
+import { comEscopo } from "@/lib/escopo/proprios";
 import { formatarMoeda } from "@/lib/utils";
 import { montarHistorico, ROTULO_NOTA, type EventoCliente } from "./historico";
 
-export interface OpcoesHistorico { comFinanceiro: boolean; porFonte?: number; limite?: number }
+export interface OpcoesHistorico {
+  comFinanceiro: boolean; porFonte?: number; limite?: number;
+  /** "Ver só os próprios" (lib/escopo/proprios: filtroOrdens / filtroOrcamentos); vazio = sem limite */
+  escopo?: { ordens?: Prisma.OrdemServicoWhereInput; orcamentos?: Prisma.OrcamentoWhereInput };
+}
 
 const ROTULO_ORCAMENTO: Record<string, string> = {
   ENVIADO: "enviado ao cliente", ENVIADO_EMAIL: "enviado por e-mail", ENVIADO_WHATSAPP: "enviado por WhatsApp",
@@ -21,17 +29,31 @@ export async function carregarHistoricoCliente(empresaId: string, clienteId: str
   const take = o.porFonte ?? 100;
   const doCliente = { empresaId, clienteId };
   const desc = { criadoEm: "desc" as const };
+  const eo = o.escopo?.ordens ?? {};
+  const eorc = o.escopo?.orcamentos ?? {};
+  const limitado = Object.keys(eo).length > 0 || Object.keys(eorc).length > 0;
+  // Com o escopo, o pedido do cliente só aparece se cobre alguma OS ou orçamento da pessoa; os lembretes, idem
+  const pedidoNoEscopo: Prisma.PedidoClienteWhereInput = limitado ? { OR: [{ ordens: { some: eo } }, { orcamentos: { some: eorc } }] } : {};
+  const [osDaPessoa, orcDaPessoa] = limitado
+    ? await Promise.all([
+        prisma.ordemServico.findMany({ where: comEscopo<Prisma.OrdemServicoWhereInput>(doCliente, eo), select: { id: true } }),
+        prisma.orcamento.findMany({ where: comEscopo<Prisma.OrcamentoWhereInput>(doCliente, eorc), select: { id: true } }),
+      ])
+    : [[], []];
+  const lembreteNoEscopo: Prisma.PedidoClienteLembreteWhereInput = limitado
+    ? { OR: [{ ordemServicoId: { in: osDaPessoa.map((x) => x.id) } }, { orcamentoId: { in: orcDaPessoa.map((x) => x.id) } }] }
+    : {};
 
   const [oss, aceites, orcs, eventosOrc, pedidos, lembretes, contratos, statusContrato, envios, notas, medicoes, recebimentos, cobrancas] = await Promise.all([
-    prisma.ordemServico.findMany({ where: doCliente, orderBy: desc, take, select: { id: true, numero: true, criadoEm: true, dataConclusao: true, origem: true, descricao: true, criadoPor: { select: { nome: true } } } }),
-    prisma.osAceite.findMany({ where: { empresaId, ordemServico: { clienteId }, confirmadoEm: { not: null } }, orderBy: { confirmadoEm: "desc" }, take, select: { id: true, confirmadoEm: true, avaliacao: true, ordemServico: { select: { id: true, numero: true } } } }),
-    prisma.orcamento.findMany({ where: doCliente, orderBy: desc, take, select: { id: true, codigo: true, nome: true, criadoEm: true, criadoPor: { select: { nome: true } } } }),
+    prisma.ordemServico.findMany({ where: comEscopo<Prisma.OrdemServicoWhereInput>(doCliente, eo), orderBy: desc, take, select: { id: true, numero: true, criadoEm: true, dataConclusao: true, origem: true, descricao: true, criadoPor: { select: { nome: true } } } }),
+    prisma.osAceite.findMany({ where: { empresaId, ordemServico: comEscopo<Prisma.OrdemServicoWhereInput>({ clienteId }, eo), confirmadoEm: { not: null } }, orderBy: { confirmadoEm: "desc" }, take, select: { id: true, confirmadoEm: true, avaliacao: true, ordemServico: { select: { id: true, numero: true } } } }),
+    prisma.orcamento.findMany({ where: comEscopo<Prisma.OrcamentoWhereInput>(doCliente, eorc), orderBy: desc, take, select: { id: true, codigo: true, nome: true, criadoEm: true, criadoPor: { select: { nome: true } } } }),
     prisma.orcamentoEvento.findMany({
-      where: { empresaId, orcamento: { clienteId }, tipo: { in: ["ENVIADO", "ENVIADO_EMAIL", "ENVIADO_WHATSAPP", "APROVADO", "RECUSADO", "VISUALIZADO"] } },
+      where: { empresaId, orcamento: comEscopo<Prisma.OrcamentoWhereInput>({ clienteId }, eorc), tipo: { in: ["ENVIADO", "ENVIADO_EMAIL", "ENVIADO_WHATSAPP", "APROVADO", "RECUSADO", "VISUALIZADO"] } },
       orderBy: desc, take: take * 2, select: { id: true, tipo: true, detalhe: true, criadoEm: true, usuario: { select: { nome: true } }, orcamento: { select: { id: true, codigo: true } } },
     }),
-    prisma.pedidoCliente.findMany({ where: doCliente, orderBy: desc, take, select: { id: true, numero: true, criadoEm: true, origem: true, situacao: true, conferidoEm: true, motivoRecusa: true } }),
-    prisma.pedidoClienteLembrete.findMany({ where: doCliente, orderBy: { enviadoEm: "desc" }, take, select: { id: true, para: true, enviadoEm: true, etapa: true } }),
+    prisma.pedidoCliente.findMany({ where: comEscopo<Prisma.PedidoClienteWhereInput>(doCliente, pedidoNoEscopo), orderBy: desc, take, select: { id: true, numero: true, criadoEm: true, origem: true, situacao: true, conferidoEm: true, motivoRecusa: true } }),
+    prisma.pedidoClienteLembrete.findMany({ where: comEscopo<Prisma.PedidoClienteLembreteWhereInput>(doCliente, lembreteNoEscopo), orderBy: { enviadoEm: "desc" }, take, select: { id: true, para: true, enviadoEm: true, etapa: true } }),
     prisma.contrato.findMany({ where: doCliente, orderBy: desc, take, select: { id: true, numero: true, criadoEm: true } }),
     prisma.contratoHistoricoStatus.findMany({ where: { empresaId, contrato: { clienteId } }, orderBy: { createdAt: "desc" }, take, select: { id: true, statusNovo: true, createdAt: true, usuario: { select: { nome: true } }, contrato: { select: { id: true, numero: true } } } }),
     prisma.documentacaoEnvioEvento.findMany({

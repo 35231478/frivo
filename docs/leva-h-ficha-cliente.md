@@ -113,6 +113,7 @@ abrem o **Histórico**. É uma linha do tempo montada com o que o sistema já re
 - Agrupado por mês (fuso de Brasília), do mais recente ao mais antigo, com quem fez e o link para o registro.
 - Filtro por tipo com a contagem; só aparecem os tipos que têm algo.
 - Carrega na primeira vez que a aba abre; no máximo 100 por fonte e 300 no total (os mais recentes).
+- Com o **"Ver só os próprios"** (COM-1), OS, orçamentos, aceites, e-mails das OS, pedidos e lembretes ficam só os da pessoa.
 - **Faturas, pagamentos e cobranças só para quem vê o financeiro** (contas a receber ou faturas). Cliente de outra
   empresa: 404.
 - **Limite honesto:** não existe log de acesso ao portal. As "ações do cliente" vêm do que já é gravado: OS aberta

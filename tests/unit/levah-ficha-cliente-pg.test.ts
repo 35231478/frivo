@@ -3,7 +3,8 @@
  *  - o HISTÓRICO AUTOMÁTICO (lib/clientes/historico-server + GET /api/clientes/[id]/historico): cada fonte vira o
  *    evento certo, só deste cliente e desta empresa; o financeiro só para quem vê o financeiro; 404 / 403;
  *  - o cliente NOVO com endereço principal ganha o local "Principal" (POST /api/clientes);
- *  - o "Inadimplente · R$ X em atraso" (calcularStatusFinanceiroDetalhado.valorEmAtraso).
+ *  - o "Inadimplente · R$ X em atraso" (calcularStatusFinanceiroDetalhado.valorEmAtraso);
+ *  - o "Ver só os próprios" (COM-1) no histórico: OS, orçamentos, pedidos e lembretes só os da pessoa.
  *   PG_TESTE_URL="postgresql://root@localhost/postgres?host=/var/run/postgresql" npx vitest run tests/unit/levah-ficha-cliente-pg
  */
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
@@ -18,8 +19,8 @@ const RAIZ = path.resolve(__dirname, "../..");
 
 const sessao = vi.hoisted(() => ({ atual: null as any }));
 vi.mock("@/lib/auth", () => ({ auth: vi.fn(async () => sessao.atual) }));
-const logar = (permissoes: Permissoes = permissoesTotais(), role = "ADMIN", empresaId = "e1") => {
-  sessao.atual = { user: { id: "u1", name: "Ana", email: "a@x.com", empresaId, role, permissoes, tecnicoId: null } };
+const logar = (permissoes: Permissoes = permissoesTotais(), role = "ADMIN", empresaId = "e1", id = "u1") => {
+  sessao.atual = { user: { id, name: "Ana", email: "a@x.com", empresaId, role, permissoes, tecnicoId: null } };
 };
 vi.setConfig({ testTimeout: 60_000 });
 
@@ -237,5 +238,35 @@ describe.skipIf(!URL_PG)("Leva H — ficha do cliente (PostgreSQL real)", () => 
     expect(await calcularStatusFinanceiroDetalhado("cf", "e1")).toEqual({ status: "INADIMPLENTE", totalProximos30Dias: 250, valorEmAtraso: 1100.55 });
     // a outra empresa não enxerga nada disso
     expect((await calcularStatusFinanceiroDetalhado("cf", "e2")).valorEmAtraso).toBe(0);
+  });
+
+  it("\"Ver só os próprios\" (COM-1): o vendedor vê no histórico só as OS, os orçamentos, os pedidos e os lembretes dele", async () => {
+    await prisma.usuario.create({ data: { id: "u3", empresaId: "e1", nome: "Vera", email: "v@x.com", senha: "x" } });
+    await prisma.ordemServico.create({ data: { id: "os3", empresaId: "e1", clienteId: "c1", numero: "OS-3", criadoPorId: "u1", vendedorId: "u3", descricao: "Da Vera", criadoEm: D("2026-11-21T12:00:00Z") } });
+    await prisma.orcamento.create({ data: { id: "orc3", empresaId: "e1", clienteId: "c1", codigo: "ORC-3", nome: "Da Vera", criadoPorId: "u1", vendedorId: "u3", tokenPublico: "tk-orc-3", criadoEm: D("2026-11-21T13:00:00Z") } });
+    await prisma.orcamentoEvento.create({ data: { empresaId: "e1", orcamentoId: "orc3", tipo: "APROVADO", criadoEm: D("2026-11-21T14:00:00Z") } });
+    await prisma.pedidoCliente.create({ data: { id: "pc3", empresaId: "e1", clienteId: "c1", numero: "PC-3", data: D("2026-11-21T00:00:00Z"), criadoEm: D("2026-11-21T15:00:00Z"), ordens: { connect: [{ id: "os3" }] } } });
+    await prisma.pedidoClienteLembrete.create({ data: { empresaId: "e1", clienteId: "c1", ordemServicoId: "os3", etapa: 1, chave: "lembrete-os3", envio: "EMAIL", para: "compras@c1.com", enviadoEm: D("2026-11-21T16:00:00Z") } });
+
+    logar(montarPermissoes({ clientes: ["visualizar"], ordens: ["visualizar", "verSoProprios"], orcamentos: ["visualizar", "verSoProprios"] }), "OPERADOR", "e1", "u3");
+    const r = await historicoApi("c1");
+    expect(r.status).toBe(200);
+    const titulos: string[] = r.json.eventos.map((e: any) => e.titulo);
+    expect(titulos.filter((t) => /OS-|ORC-|PC-|Pedido|pedido de compra/.test(t))).toEqual([
+      "Lembrete do pedido de compra enviado",
+      "Pedido do cliente PC-3 registrado",
+      "Orçamento ORC-3 aprovado",
+      "Orçamento ORC-3 criado",
+      "OS OS-3 criada",
+    ]);
+    // o que não é de OS nem de orçamento continua (notas, contratos, documentação)
+    expect(titulos).toContain("Ligação");
+    expect(titulos).toContain("Contrato CT-9 cadastrado");
+
+    // sem a marca (ou ADMIN): vê tudo, inclusive as da Vera
+    logar(montarPermissoes({ clientes: ["visualizar"], ordens: ["visualizar"], orcamentos: ["visualizar"] }), "OPERADOR", "e1", "u3");
+    const todos: string[] = (await historicoApi("c1")).json.eventos.map((e: any) => e.titulo);
+    expect(todos).toEqual(expect.arrayContaining(["OS OS-1 criada", "OS OS-3 criada", "Orçamento ORC-1 criado", "Pedido PC-77 recusado na conferência", "Pedido do cliente PC-3 registrado"]));
+    logar();
   });
 });
