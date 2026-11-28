@@ -19,8 +19,10 @@ export interface EnvioMensagem { texto: string; foto?: string; miniatura?: strin
  */
 export function ConversaChat({
   mensagens, carregando, erro, somenteLeitura, podeEscrever = true, semPermissao, onEnviar, urlFoto, onTentarDeNovo, className, placeholder = "Escreva uma mensagem",
-  mostrarOs = false, abrirOs, acimaDoTexto,
+  mostrarOs = false, abrirOs, podeAbrirOs, acimaDoTexto,
 }: {
+  /** Esta etiqueta abre a OS? (app: só a OS em que o técnico tem atividade); sem isso, todas abrem quando há abrirOs */
+  podeAbrirOs?: (osId: string) => boolean;
   /** Conversa da PESSOA: a etiqueta da OS (nº + cliente, abre a OS) quando a OS muda; seguidas da mesma OS agrupam */
   mostrarOs?: boolean;
   abrirOs?: (osId: string) => void;
@@ -113,7 +115,7 @@ export function ConversaChat({
                     <li className="flex items-center gap-2 pt-2 pb-0.5" data-etiqueta-os={m.os?.id ?? "sem-os"}>
                       <span className="h-px flex-1 bg-surface-border" aria-hidden />
                       {m.os ? (
-                        <button type="button" onClick={() => abrirOs?.(m.os!.id)} disabled={!abrirOs} title="Abrir a OS"
+                        <button type="button" onClick={() => abrirOs?.(m.os!.id)} disabled={!abrirOs || (podeAbrirOs ? !podeAbrirOs(m.os.id) : false)} title="Abrir a OS"
                           className="text-[11px] font-semibold text-primary-700 hover:underline disabled:no-underline disabled:cursor-default truncate max-w-[80%]">
                           {m.os.numero}{m.os.cliente ? ` · ${m.os.cliente}` : ""}
                         </button>

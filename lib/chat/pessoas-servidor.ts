@@ -96,12 +96,18 @@ async function mensagensDe(empresaId: string, onde: Prisma.OsComentarioWhereInpu
  * sino e a visão por OS) e marca o ✓✓ das mensagens dos outros que ainda não tinham sido lidas.
  */
 async function lerConversa(empresaId: string, quemLe: string, conversaUsuarioId: string, onde: Prisma.OsComentarioWhereInput, agora: Date) {
-  await marcarLeituraDaPessoa(quemLe, conversaUsuarioId, agora);
-  const naoLidas = await prisma.osComentario.findMany({
-    where: { AND: [{ empresaId }, onde, { usuarioId: { not: quemLe }, lidaEm: null, criadoEm: { lte: agora } }] }, select: { id: true, ordemServicoId: true },
-  });
-  if (naoLidas.length) await prisma.osComentario.updateMany({ where: { id: { in: naoLidas.map((m) => m.id) } }, data: { lidaEm: agora, lidaPorId: quemLe } });
-  for (const osId of new Set(naoLidas.map((m) => m.ordemServicoId).filter((x): x is string => !!x))) await marcarConversaLida(empresaId, osId, quemLe, agora);
+  // Só avança a leitura quando chegou mensagem desde a última (reler sem novidade não muda a marca do tempo real)
+  const antes = (await prisma.conversaLeitura.findUnique({ where: { usuarioId_conversaUsuarioId: { usuarioId: quemLe, conversaUsuarioId } }, select: { lidoEm: true } }))?.lidoEm;
+  const novidade = !antes || !!(await prisma.osComentario.findFirst({ where: { AND: [{ empresaId }, onde, { criadoEm: { gt: antes, lte: agora } }] }, select: { id: true } }));
+  if (novidade) await marcarLeituraDaPessoa(quemLe, conversaUsuarioId, agora);
+  // O ✓✓: só o que dos outros ainda não foi lido por ninguém (sem nada a marcar, não muda nada)
+  const semLeitura = await prisma.osComentario.findMany({ where: { AND: [{ empresaId }, onde, { usuarioId: { not: quemLe }, lidaEm: null, criadoEm: { lte: agora } }] }, select: { id: true } });
+  if (semLeitura.length) await prisma.osComentario.updateMany({ where: { id: { in: semLeitura.map((m) => m.id) } }, data: { lidaEm: agora, lidaPorId: quemLe } });
+  // A leitura das OS que chegaram nesta conversa desde a última vez (o sino e a visão por OS ficam coerentes)
+  if (novidade) {
+    const oss = await prisma.osComentario.findMany({ where: { AND: [{ empresaId }, onde, { ordemServicoId: { not: null }, criadoEm: { ...(antes && { gt: antes }), lte: agora } }] }, select: { ordemServicoId: true }, distinct: ["ordemServicoId"] });
+    for (const o of oss) if (o.ordemServicoId) await marcarConversaLida(empresaId, o.ordemServicoId, quemLe, agora);
+  }
 }
 
 // ── Escritório ──────────────────────────────────────────────────────────────────────────────

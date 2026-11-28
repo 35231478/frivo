@@ -371,6 +371,29 @@ describe.skipIf(!URL_PG)("CHAT-1 (PostgreSQL real)", () => {
     expect((await chamar("conversas/pessoas/[usuarioId]", "POST", { usuarioId: "uT" }, { clientId: "sem-os-x", texto: "x", osId: "os1" })).status).toBe(404);
   });
 
+  it("reler sem novidade não muda a marca do tempo real (a tela não relê em laço); mensagem nova muda e converge na leitura seguinte", async () => {
+    comoAdmin();
+    await chamar("conversas/pessoas/[usuarioId]", "GET", { usuarioId: "uT" });
+    const m1 = (await chamar("conversas/novidades", "GET")).json.marca;
+    await chamar("conversas/pessoas/[usuarioId]", "GET", { usuarioId: "uT" });
+    await chamar("conversas/[osId]", "GET", { osId: "os1" });
+    expect((await chamar("conversas/novidades", "GET")).json.marca).toBe(m1);
+    // o técnico escreve: a marca muda; o escritório lê (muda de novo) e, relendo, fica parada
+    await sync([mensagem("a1", { clientId: "conv-1", texto: "Terminei a sala 3." })]);
+    comoAdmin();
+    await chamar("conversas/pessoas/[usuarioId]", "GET", { usuarioId: "uT" });
+    const m2 = (await chamar("conversas/novidades", "GET")).json.marca;
+    expect(m2).not.toBe(m1);
+    await chamar("conversas/pessoas/[usuarioId]", "GET", { usuarioId: "uT" });
+    expect((await chamar("conversas/novidades", "GET")).json.marca).toBe(m2);
+    // no app também
+    comoTecnico();
+    await chamar("tecnico/conversas", "GET");
+    const t1 = (await chamar("tecnico/conversas/novidades", "GET")).json.marca;
+    await chamar("tecnico/conversas", "GET");
+    expect((await chamar("tecnico/conversas/novidades", "GET")).json.marca).toBe(t1);
+  });
+
   it("push por pessoa: o escritório para UMA pessoa avisa só ela (o app abre o Chat); o técnico sem OS avisa o escritório que conversa com ele", async () => {
     const { notificarMensagem } = await import("@/lib/push/eventos");
     push.envios = []; push.comAparelho = ["uA", "uT", "uT2", "uL"];

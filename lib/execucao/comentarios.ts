@@ -157,11 +157,18 @@ export async function comentariosDaOs(empresaId: string, osId: string, usuarioId
  * e marca o ✓✓ das mensagens dos OUTROS que ainda não tinham sido lidas por ninguém (a 1ª leitura fica: quem e quando).
  */
 export async function marcarConversaLida(empresaId: string, osId: string, usuarioId: string, agora: Date = new Date()) {
-  await prisma.osComentarioLeitura.upsert({
-    where: { usuarioId_ordemServicoId: { usuarioId, ordemServicoId: osId } },
-    create: { usuarioId, ordemServicoId: osId, lidoEm: agora },
-    update: { lidoEm: agora },
-  });
+  // Só avança a leitura quando chegou mensagem desde a última: reler sem novidade não muda nada (a marca do tempo real
+  // inclui a leitura de quem pergunta — avançar sempre faria a tela reler em laço)
+  const antes = await prisma.osComentarioLeitura.findUnique({ where: { usuarioId_ordemServicoId: { usuarioId, ordemServicoId: osId } }, select: { lidoEm: true } });
+  const novidade = !antes || !!(await prisma.osComentario.findFirst({ where: { empresaId, ordemServicoId: osId, criadoEm: { gt: antes.lidoEm, lte: agora } }, select: { id: true } }));
+  if (novidade) {
+    await prisma.osComentarioLeitura.upsert({
+      where: { usuarioId_ordemServicoId: { usuarioId, ordemServicoId: osId } },
+      create: { usuarioId, ordemServicoId: osId, lidoEm: agora },
+      update: { lidoEm: agora },
+    });
+  }
+  // O ✓✓ só toca o que ainda não foi lido por ninguém: sem nada a marcar, não muda nada
   await prisma.osComentario.updateMany({
     where: { empresaId, ordemServicoId: osId, usuarioId: { not: usuarioId }, lidaEm: null, criadoEm: { lte: agora } },
     data: { lidaEm: agora, lidaPorId: usuarioId },

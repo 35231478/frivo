@@ -177,7 +177,7 @@ export function VistaChat() {
             : semSinal ? MSG_CONVERSA_SEM_SINAL : "Não foi possível carregar a conversa. Toque em Atualizar para tentar de novo."} />
         </div>
       )}
-      <ConversaChat className="flex-1" mensagens={mensagens} carregando={!carga} mostrarOs abrirOs={abrirOs}
+      <ConversaChat className="flex-1" mensagens={mensagens} carregando={!carga} mostrarOs abrirOs={abrirOs} podeAbrirOs={(osId) => !!atividadeDaOs(osId, osDoDia, atividades)}
         onEnviar={enviar} urlFoto={urlFotoApp} onTentarDeNovo={() => { void motor?.tentarDeNovo(); }} placeholder="Escreva para o escritório"
         acimaDoTexto={<SeletorOs opcoes={osDoDia} valor={osEscolhida} onValor={(id) => setEscolha(id)} />} />
     </div>
