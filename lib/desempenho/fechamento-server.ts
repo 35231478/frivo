@@ -19,6 +19,7 @@ import type { z } from "zod";
 import { gerarCsv } from "@/lib/folha/planilha";
 import { proximoNumeroContaPagar } from "@/lib/financeiro-server";
 import { comissoesDoMes, empresaUsaComissao, movimentosAbertos, sincronizarComissoes } from "@/lib/comissoes/servidor";
+import { dataDoVencimento, lerVencimento, VENCIMENTO_PADRAO, type VencimentoFechamento } from "@/lib/comissoes/regras";
 import { competenciaAtual, competenciaCurta } from "./regras";
 import { ErroDesempenho, type Ator } from "./erros";
 import {
@@ -155,12 +156,14 @@ export async function previaDoFechamento(empresaId: string, competencia: string,
   };
 }
 
-/** O vencimento da conta a pagar do fechamento: dia 5 do mês seguinte à competência (ou hoje, se já passou) */
-export function vencimentoDoFechamento(competencia: string, agora: Date): Date {
-  const [a, m] = competencia.split("-").map(Number);
-  const dia5 = new Date(Date.UTC(m === 12 ? a + 1 : a, m === 12 ? 0 : m, 5));
+/**
+ * O vencimento da conta a pagar do fechamento (bônus + comissão): o da Configurações › Comissões (COM-1.1; padrão
+ * 5º dia útil do mês seguinte à competência) — ou hoje, se já passou.
+ */
+export function vencimentoDoFechamento(competencia: string, agora: Date, v: VencimentoFechamento = VENCIMENTO_PADRAO): Date {
+  const dia = dataDoVencimento(competencia, v);
   const hoje = new Date(Date.UTC(agora.getUTCFullYear(), agora.getUTCMonth(), agora.getUTCDate()));
-  return dia5 < hoje ? hoje : dia5;
+  return dia < hoje ? hoje : dia;
 }
 
 /** A descrição da conta a pagar da pessoa: o que entrou nela (bônus, comissão ou os dois) e o mês */
@@ -211,7 +214,8 @@ export async function fecharMes(autor: Autor, d: z.infer<typeof fecharSchema>, a
         if (count !== idsComissao.length) throw new ErroDesempenho(MSG_COMISSOES_MUDARAM, 409);
       }
       // Uma linha da folha e UMA conta a pagar por pessoa (bônus + comissão)
-      const vencimento = vencimentoDoFechamento(competencia, agora);
+      const cfgVenc = await tx.configuracao.findUnique({ where: { empresaId }, select: { comissaoVencimentoTipo: true, comissaoVencimentoDia: true } });
+      const vencimento = vencimentoDoFechamento(competencia, agora, lerVencimento(cfgVenc?.comissaoVencimentoTipo, cfgVenc?.comissaoVencimentoDia));
       for (const l of folha.linhas) {
         const linha = await tx.desempenhoFechamentoLinha.create({
           data: { fechamentoId: f.id, empresaId, tecnicoId: l.tecnicoId, nome: l.nome, perfil: l.perfil, posicao: l.posicao, escore: l.escore, faixa: l.faixa, valor: l.valor, usuarioId: l.usuarioId ?? null, comissao: l.comissao ?? 0 },
