@@ -58,7 +58,7 @@ export function ordenarComentarios(lista: ComentarioTela[]): ComentarioTela[] {
 }
 
 /** O comentário vale na tela na hora (sem sinal também); o mesmo clientId não entra duas vezes. */
-export function aplicarComentario(lista: ComentarioTela[], d: DadosComentario, quando: string, autor = "Você"): ComentarioTela[] {
+export function aplicarComentario(lista: ComentarioTela[], d: DadosComentario, quando: string, autor = "Minha mensagem"): ComentarioTela[] {
   if (lista.some((c) => c.clientId === d.clientId)) return lista;
   return [...lista, { id: null, clientId: d.clientId, texto: d.texto.trim(), autor, origem: "APP", criadoEm: quando, meu: true, pendente: true,
     ...(d.miniatura && { foto: { id: null, miniatura: d.miniatura } }) }];

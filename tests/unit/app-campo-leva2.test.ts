@@ -53,7 +53,7 @@ const c = (x: Partial<ComentarioTela>): ComentarioTela => ({ id: "i", clientId: 
 describe("comentários no aparelho", () => {
   it("entra na hora, como meu e pendente; o mesmo clientId não entra duas vezes", () => {
     const l = aplicarComentario([], { clientId: "k1", texto: "  Precisa de peça  " }, "2026-11-12T14:00:00.000Z");
-    expect(l).toEqual([{ id: null, clientId: "k1", texto: "Precisa de peça", autor: "Você", origem: "APP", criadoEm: "2026-11-12T14:00:00.000Z", meu: true, pendente: true }]);
+    expect(l).toEqual([{ id: null, clientId: "k1", texto: "Precisa de peça", autor: "Minha mensagem", origem: "APP", criadoEm: "2026-11-12T14:00:00.000Z", meu: true, pendente: true }]);
     expect(aplicarComentario(l, { clientId: "k1", texto: "de novo" }, "x")).toBe(l);
   });
   it("ordem: por data; o que ainda está no aparelho vai por último", () => {

@@ -73,7 +73,7 @@ export function ComentariosDaOs({ x, registrar }: { x: ExecucaoTela; registrar: 
             <li key={c.clientId ?? c.id} data-comentario={c.origem} data-pendente={c.pendente || undefined} data-novo={ehNovo(c) || undefined}
               className={cn("rounded-card border p-3 space-y-1", c.meu ? "bg-primary-50 border-primary-200 ml-6" : "bg-white border-surface-border mr-6", ehNovo(c) && "ring-2 ring-acento/40")}>
               <p className="text-xs text-ink-muted">
-                <span className="font-semibold text-ink">{c.meu ? "Você" : c.autor}</span>{c.origem === "ESCRITORIO" ? " · escritório" : ""} · {c.pendente ? "no aparelho" : formatarDataHora(c.criadoEm)}
+                <span className="font-semibold text-ink">{c.meu ? "Minha mensagem" : c.autor}</span>{c.origem === "ESCRITORIO" ? " · escritório" : ""} · {c.pendente ? "no aparelho" : formatarDataHora(c.criadoEm)}
               </p>
               <p className="text-base text-ink whitespace-pre-line break-words">{c.texto}</p>
             </li>

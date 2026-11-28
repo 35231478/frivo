@@ -152,7 +152,7 @@ describe("comentários no app", () => {
     expect(fila).toHaveLength(1);
     expect((fila[0] as any).dados).toMatchObject({ texto: "Ruído no ventilador.", clientId: expect.any(String) });
     await esperarAte(() => !!$("[data-comentario][data-pendente]"), "pendente na tela");
-    expect(texto($("[data-comentario][data-pendente]"))).toContain("Você · no aparelho");
+    expect(texto($("[data-comentario][data-pendente]"))).toContain("Minha mensagem · no aparelho");
     expect(($("[data-novo-comentario]") as HTMLTextAreaElement).value).toBe("");
     // O sinal volta: sobe sozinho e deixa de ser pendente
     online = true;
