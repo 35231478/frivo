@@ -1,4 +1,5 @@
 import { auth } from "@/lib/auth";
+import { SincronizarPush } from "@/components/push/sincronizar-push";
 import { prisma } from "@/lib/prisma";
 import { redirect } from "next/navigation";
 import { Sidebar } from "@/components/layout/sidebar";
@@ -33,6 +34,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
         <PermissoesProvider role={session.user.role} permissoes={session.user.permissoes} usuarioId={session.user.id} empresaId={session.user.empresaId}>
           <Avisos />
           <SincronizarAcesso mudou={session.user.acessoMudou === true} />
+          <SincronizarPush />
           <CascaTecnico>{children}</CascaTecnico>
         </PermissoesProvider>
       </AuthSessionProvider>
@@ -61,6 +63,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
           {/* Papel e permissões vêm do cadastro a cada requisição; este mantém o cookie (que o portão
               do middleware lê) igual a eles — conceder ou retirar acesso vale sem sair e entrar */}
           <SincronizarAcesso mudou={session.user.acessoMudou === true} />
+          <SincronizarPush />
           <SplashScreen />
           <RecarregarAoVoltar />
           <Sidebar session={sessao} avatarUrl={avatarUrl} />

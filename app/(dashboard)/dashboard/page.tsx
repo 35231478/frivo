@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { ConviteNotificacoes } from "@/components/push/convite-notificacoes";
 import { cookies } from "next/headers";
 import { auth } from "@/lib/auth";
 import { pode, type Permissoes } from "@/lib/permissoes";
@@ -76,6 +77,8 @@ export default async function DashboardPage() {
 
   return (
     <div className="space-y-5">
+      {/* Hotfix push: o convite para ativar os avisos neste computador (some depois de ativar) */}
+      <ConviteNotificacoes />
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="page-title">{primeiroNome ? `${saudacao}, ${primeiroNome}` : "Dashboard"}</h1>

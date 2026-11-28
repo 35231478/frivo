@@ -1045,6 +1045,13 @@ model PushSubscription {
   ultimoEnvioEm DateTime? @map("ultimo_envio_em")
   /// Falhas seguidas que não são definitivas (rede, 5xx); volta a 0 no próximo envio que der certo
   falhas        Int       @default(0)
+  /// Hotfix push: a IMPRESSÃO (sha-256, 12 hex) da chave pública VAPID com que o navegador se inscreveu — nunca a chave.
+  /// Diferente da do servidor = o serviço de push recusa (403): o app reinscreve sozinho.
+  chaveImpressao String?  @map("chave_impressao")
+  /// O último resultado do serviço de push para este aparelho (201 = aceito) e o motivo da última recusa
+  ultimoStatus   Int?      @map("ultimo_status")
+  ultimoErro     String?   @map("ultimo_erro")
+  ultimoErroEm   DateTime? @map("ultimo_erro_em")
 
   usuario Usuario @relation(fields: [userId], references: [id], onDelete: Cascade)
 
@@ -1064,6 +1071,9 @@ model PushEnvio {
   url       String?
   /// Quantos aparelhos aceitaram (0 = a pessoa não tem aparelho inscrito ou todos recusaram)
   aparelhos Int      @default(0)
+  /// Hotfix push: quantos recusaram e o resultado de cada aparelho [{ aparelho, servico, ok, status, motivo }]
+  falhas     Int     @default(0)
+  resultados Json?
   criadoEm  DateTime @default(now()) @map("criado_em")
 
   empresa Empresa @relation(fields: [empresaId], references: [id], onDelete: Cascade)

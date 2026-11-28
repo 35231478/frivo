@@ -12,10 +12,11 @@ import { DIAS_SINO_COMENTARIOS, MSG_COMENTARIO_DUPLICADO, osComNovidade, ordenar
 
 type Resultado<T> = { ok: true; status: number; dados: T } | { ok: false; status: number; erro: string };
 
-const SELECT = { id: true, clientId: true, texto: true, autorNome: true, origem: true, criadoEm: true, usuarioId: true } as const;
-type Linha = { id: string; clientId: string | null; texto: string; autorNome: string; origem: string; criadoEm: Date; usuarioId: string };
+const SELECT = { id: true, clientId: true, texto: true, autorNome: true, origem: true, criadoEm: true, usuarioId: true, atividade: { select: { titulo: true } } } as const;
+type Linha = { id: string; clientId: string | null; texto: string; autorNome: string; origem: string; criadoEm: Date; usuarioId: string; atividade?: { titulo: string } | null };
 const apresentar = (c: Linha, usuarioId: string): ComentarioTela => ({
   id: c.id, clientId: c.clientId, texto: c.texto, autor: c.autorNome, origem: c.origem as OrigemComentario, criadoEm: c.criadoEm.toISOString(), meu: c.usuarioId === usuarioId,
+  atividade: c.atividade?.titulo ?? null,
 });
 
 async function nomeDe(empresaId: string, usuarioId: string) {
@@ -61,7 +62,14 @@ export async function comentariosDaOs(empresaId: string, osId: string, usuarioId
 export async function comentariosParaEscritorio(empresaId: string, osId: string, usuarioId: string, agora: Date = new Date()): Promise<ComentarioTela[] | null> {
   const os = await prisma.ordemServico.findFirst({ where: { id: osId, empresaId }, select: { id: true } });
   if (!os) return null;
-  const lista = await comentariosDaOs(empresaId, osId, usuarioId);
+  // TODOS os comentários da OS, de todas as atividades (o do app vem com a atividade de onde foi escrito)
+  const [todos, leitura] = await Promise.all([
+    comentariosDaOs(empresaId, osId, usuarioId),
+    prisma.osComentarioLeitura.findUnique({ where: { usuarioId_ordemServicoId: { usuarioId, ordemServicoId: osId } }, select: { lidoEm: true } }),
+  ]);
+  // "novo": de outra pessoa, depois da última vez que esta pessoa leu (nunca leu: todos os dos outros)
+  const desde = leitura?.lidoEm?.toISOString() ?? null;
+  const lista = todos.map((c) => ({ ...c, novo: !c.meu && (!desde || c.criadoEm > desde) }));
   await prisma.osComentarioLeitura.upsert({
     where: { usuarioId_ordemServicoId: { usuarioId, ordemServicoId: osId } },
     create: { usuarioId, ordemServicoId: osId, lidoEm: agora }, update: { lidoEm: agora },
