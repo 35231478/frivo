@@ -7,6 +7,7 @@ import { prisma } from "@/lib/prisma";
 import { OsDetalhe } from "@/components/os/os-detalhe";
 import { sincronizarStatusOs } from "@/lib/os/sincronizar-status";
 import { carregarGaleria } from "@/lib/os/galeria-server";
+import { pedidoDasOs } from "@/lib/pedido-cliente/server";
 import { contasVinculadas } from "@/lib/financeiro/conta-receber-server";
 import { pode } from "@/lib/permissoes";
 import { osJaFaturada } from "@/lib/faturamento-os";
@@ -108,7 +109,7 @@ export default async function OsDetalhePage({ params, searchParams }: { params: 
     .filter((m) => (vistas.has(m.id) ? false : (vistas.add(m.id), true)));
 
   // Fotos & anexos do serviço (só metadados; as imagens são servidas à parte)
-  const galeria = await carregarGaleria(empresaId, os.id);
+  const [galeria, pedidos] = await Promise.all([carregarGaleria(empresaId, os.id), pedidoDasOs(empresaId, [os.id])]);
   // Contas a receber da OS (pela medição ou pelo orçamento ligado): só para quem vê o financeiro
   const u = session!.user!;
   const contasReceber = pode(u.permissoes, "financeiro", "visualizar", u.role) ? await contasVinculadas(empresaId, { ordemServicoId: os.id }) : [];
@@ -134,7 +135,7 @@ export default async function OsDetalhePage({ params, searchParams }: { params: 
   // Custo na OS: sem permissão de ver custo (lib/estoque/custo-acesso), o custo dos materiais NÃO vai ao navegador
   const verCusto = usuarioVeCustoDeCompra(u);
   const itensOrcamento = verCusto ? os.itensOrcamento : semCustoNosItensOs(os.itensOrcamento);
-  return <OsDetalhe verCusto={verCusto} os={{ ...os, itensOrcamento, medicoes: medicoesDaOs, galeria, contasReceber, fatura, faturamento, notaEmitida, pmoc, mesesFechadosDoAtraso, exigirPrestacaoMaterial: cfg?.osExigirPrestacaoMaterial ?? false,
+  return <OsDetalhe verCusto={verCusto} os={{ ...os, pedidoClienteSituacao: pedidos.get(os.id) ?? null, itensOrcamento, medicoes: medicoesDaOs, galeria, contasReceber, fatura, faturamento, notaEmitida, pmoc, mesesFechadosDoAtraso, exigirPrestacaoMaterial: cfg?.osExigirPrestacaoMaterial ?? false,
     // "Orçamento E2": a regra de cobrança dos materiais da OS (a dela; sem ainda, a da empresa — fixada no 1º item com materiais)
     regraMateriais: regraDeCobranca(os.cobrancaMateriais ?? cfg?.orcamentoCobrancaMateriais) }} abaInicial={aba} />;
 }

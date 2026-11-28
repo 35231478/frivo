@@ -31,6 +31,7 @@ import { usePermissoes } from "@/components/providers/permissoes-provider";
 import { AtalhoDocumentacao } from "@/components/documentacao/atalho-documentacao";
 import { InativarRegistro } from "@/components/ui/inativar-registro";
 import { cn } from "@/lib/utils";
+import { DICA_MODO_PEDIDO, MODOS_PEDIDO, ROTULO_MODO_PEDIDO, camposDoModo, modoDoCliente, type ModoPedido } from "@/lib/pedido-cliente/regra";
 import {
   LABELS_STATUS_FINANCEIRO_CALC, COR_STATUS_FINANCEIRO_CALC, type StatusFinanceiroCalc,
 } from "@/lib/status-financeiro";
@@ -160,8 +161,10 @@ export function ClienteForm({ initialData, statusFinanceiroCalc, perdas12m, cons
   // Cobrança e faturamento (reaproveita colunas já existentes; sem schema novo). Salvos no create e edit.
   const [emailsFaturamento, setEmailsFaturamento] = useState<string[]>(initialData?.emailsFaturamento ?? []);
   const [boletoUnicoMensal, setBoletoUnicoMensal] = useState<boolean>(initialData?.boletoUnicoMensal ?? false);
-  const [exigePcAntesNf, setExigePcAntesNf] = useState<boolean>(initialData?.exigePcAntesNf ?? false);
+  // Pedido do cliente (lib/pedido-cliente/regra): um só campo na tela, gravado nas duas colunas
+  const [modoPedido, setModoPedido] = useState<ModoPedido>(modoDoCliente(initialData));
   const [agrupaAdicionais, setAgrupaAdicionais] = useState<boolean>(initialData?.agrupaAdicionais ?? false);
+  const [lembretesPedido, setLembretesPedido] = useState<boolean>(initialData?.pedidoLembretesAtivo !== false);
 
   useEffect(() => {
     fetch("/api/configuracoes").then((r) => r.json()).then(setConfig).catch(() => {});
@@ -265,7 +268,8 @@ export function ClienteForm({ initialData, statusFinanceiroCalc, perdas12m, cons
       // Cobrança e faturamento: gravados no create e no edit (não ignora nem zera).
       emailsFaturamento,
       boletoUnicoMensal,
-      exigePcAntesNf,
+      ...camposDoModo(modoPedido),
+      pedidoLembretesAtivo: lembretesPedido,
       agrupaAdicionais,
     };
     if (!isEditing) {
@@ -639,14 +643,37 @@ export function ClienteForm({ initialData, statusFinanceiroCalc, perdas12m, cons
               <WhatsAppInput {...register("whatsappFaturamento")} placeholder="(00) 00000-0000" />
             </FormField>
           </FormGrid>
+          <FormGrid>
+            <FormField label="Exige pedido do cliente" dica={`${DICA_MODO_PEDIDO.FATURAR} ${DICA_MODO_PEDIDO.EXECUTAR} Uma unidade pode ter a sua regra (na unidade).`}>
+              <Select value={modoPedido} onChange={(e) => setModoPedido(e.target.value as ModoPedido)} aria-label="Exige pedido do cliente" data-modo-pedido>
+                {MODOS_PEDIDO.map((m) => <option key={m} value={m}>{ROTULO_MODO_PEDIDO[m]}</option>)}
+              </Select>
+            </FormField>
+          </FormGrid>
+          {/* Contato de compras: só quando o cliente exige o pedido (é quem emite o pedido) */}
+          {modoPedido !== "NAO" && (
+            <div data-contato-compras><FormGrid>
+              <FormField label="Contato de compras" dica="Quem emite o pedido do cliente: aparece na gaveta do pedido para cobrar quem precisa.">
+                <Input {...register("comprasNome")} placeholder="Nome" aria-label="Nome do contato de compras" />
+              </FormField>
+              <FormField label="E-mail de compras" error={errors.comprasEmail?.message as string | undefined}>
+                <Input {...register("comprasEmail")} type="email" placeholder="compras@cliente.com.br" error={!!errors.comprasEmail} />
+              </FormField>
+              <FormField label="Telefone de compras">
+                <PhoneInput {...register("comprasTelefone")} placeholder="(00) 0000-0000" />
+              </FormField>
+            </FormGrid>
+            <div className="mt-3" data-lembretes-cliente>
+              <ToggleSwitch
+                label="Lembrar o contato de compras por e-mail" checked={lembretesPedido} onChange={setLembretesPedido}
+                dica="Lembretes do pedido de compra pendente, nos dias definidos em Configurações › Orçamentos e propostas, com o link do portal. O contato de compras vê a seção “Pedido de compra” no portal com este mesmo e-mail."
+              />
+            </div></div>
+          )}
           <ToggleGroup title="Preferências de cobrança" description="Como este cliente é cobrado e faturado.">
             <ToggleSwitch
               label="Boleto único mensal" checked={boletoUnicoMensal} onChange={setBoletoUnicoMensal}
               dica="Agrupa as cobranças do mês num único boleto, em vez de um por lançamento."
-            />
-            <ToggleSwitch
-              label="Exige pedido de compra antes da NF" checked={exigePcAntesNf} onChange={setExigePcAntesNf}
-              dica="A nota fiscal só é emitida depois que o cliente informa o número do pedido de compra (PC)."
             />
             <ToggleSwitch
               label="Agrupa adicionais na fatura" checked={agrupaAdicionais} onChange={setAgrupaAdicionais}

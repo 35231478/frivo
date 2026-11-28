@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { portalLogout } from "@/app/(portal)/portal/actions";
-import { LayoutDashboard, Headset, Thermometer, FileText, Wallet, CalendarDays, LogOut } from "lucide-react";
+import { LayoutDashboard, Headset, Thermometer, FileText, Wallet, CalendarDays, LogOut, FileSignature } from "lucide-react";
 import { acento } from "@/lib/ui/tokens";
 
 interface Branding { empresaNome: string; logo: string | null; cor: string }
@@ -13,11 +13,13 @@ interface Props {
   clienteNome: string;
   branding: Branding;
   permissoes: Record<string, boolean>;
+  /** PC-2: o contato é o comprador (permissão ou "Contato de compras") e o cliente exige o pedido de compra */
+  pedidoCompra?: boolean;
   children: React.ReactNode;
 }
 
 type Perms = Record<string, boolean>;
-const ITENS: { href: string; label: string; icone: typeof LayoutDashboard; perm: (p: Perms) => boolean }[] = [
+const ITENS: { href: string; label: string; curto?: string; icone: typeof LayoutDashboard; perm: (p: Perms, extra: { pedidoCompra: boolean }) => boolean }[] = [
   { href: "/portal/dashboard", label: "Início", icone: LayoutDashboard, perm: () => true },
   { href: "/portal/chamados", label: "Chamados", icone: Headset, perm: (p) => !!(p?.verOS || p?.abrirChamados) },
   { href: "/portal/equipamentos", label: "Equipamentos", icone: Thermometer, perm: (p) => !!p?.verEquipamentos },
@@ -25,11 +27,13 @@ const ITENS: { href: string; label: string; icone: typeof LayoutDashboard; perm:
   // "Faturas" (rótulo leigo — C1): é aqui que o boleto e a fatura do mês se entregam sozinhos
   { href: "/portal/financeiro", label: "Faturas", icone: Wallet, perm: (p) => !!p?.verFinanceiro },
   { href: "/portal/agenda", label: "Agenda", icone: CalendarDays, perm: (p) => !!p?.verOS },
+  // PC-2: no portal o nome é o do cliente, "Pedido de compra"
+  { href: "/portal/pedidos-compra", label: "Pedido de compra", curto: "Pedido", icone: FileSignature, perm: (_, e) => e.pedidoCompra },
 ];
 
-export function PortalShell({ contatoNome, clienteNome, branding, permissoes, children }: Props) {
+export function PortalShell({ contatoNome, clienteNome, branding, permissoes, pedidoCompra = false, children }: Props) {
   const pathname = usePathname();
-  const itens = ITENS.filter((i) => i.perm(permissoes ?? {}));
+  const itens = ITENS.filter((i) => i.perm(permissoes ?? {}, { pedidoCompra }));
   // A cor da empresa (configurada no portal) marca o topo; texto e item ativo ficam no acento, que tem contraste garantido
   const cor = branding.cor || acento.DEFAULT;
 
@@ -85,7 +89,7 @@ export function PortalShell({ contatoNome, clienteNome, branding, permissoes, ch
           return (
             <Link key={i.href} href={i.href}
               className={cn("flex-1 flex flex-col items-center gap-0.5 py-2 text-[10px]", ativo ? "font-semibold text-acento" : "text-ink-muted")}>
-              <i.icone className="w-5 h-5" /> {i.label}
+              <i.icone className="w-5 h-5" /> {i.curto ?? i.label}
             </Link>
           );
         })}

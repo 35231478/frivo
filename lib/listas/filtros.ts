@@ -9,6 +9,7 @@ import { hojeDiaCivil, inicioMesDiaCivil, periodoDiaCivil, periodoInstanteBR } f
 import { DIAS_ORCAMENTO_VENCENDO_PADRAO, FILTRO_VENCENDO, whereEtapa, whereOrcamentoVencendo } from "@/lib/orcamentos/ciclo";
 import { faixaDiaCivil, lerPeriodo, type Periodo } from "@/lib/periodo";
 import { wherePrazo } from "@/lib/os/prazo-execucao";
+import { FILTRO_AGUARDANDO_PEDIDO, whereMedicaoAguardando, whereOrcamentoAguardando, whereOsAguardando } from "@/lib/pedido-cliente/where";
 import { FILTRO_SEM_TECNICO, whereOsSemTecnico } from "@/lib/os/sem-tecnico";
 
 type SP = Record<string, string | undefined>;
@@ -74,6 +75,8 @@ export function whereOrdens(empresaId: string, sp: SP, agora = new Date(), idsAt
   if (prazo) e.push(prazo);
   // Sem técnico (painel de pendências): a regra única de lib/os/sem-tecnico.ts
   if (sp.tecnico === FILTRO_SEM_TECNICO) e.push(whereOsSemTecnico());
+  // Aguardando o pedido do cliente (filtro rápido e painel de pendências): a regra única de lib/pedido-cliente
+  if (sp.pedido === FILTRO_AGUARDANDO_PEDIDO) e.push(whereOsAguardando());
   if (idsAtendimento) e.push({ id: { in: idsAtendimento } });
   if (e.length) where.AND = e;
   if (sp.busca) {
@@ -123,6 +126,7 @@ export function whereOrcamentos(empresaId: string, sp: SP, agora = new Date(), d
   if (sp.resposta === "nova") e.push({ status: { in: ["APROVADO", "REPROVADO"] }, respostaVistaEm: null });
   // Painel de pendências: enviados que vencem até o prazo do aviso da empresa (lib/orcamentos/ciclo.ts)
   if (sp.validade === FILTRO_VENCENDO) e.push(whereOrcamentoVencendo(hojeDiaCivil(agora), diasVencendo));
+  if (sp.pedido === FILTRO_AGUARDANDO_PEDIDO) e.push(whereOrcamentoAguardando());
   if (e.length) where.AND = e;
   if (sp.tipo) where.tipo = sp.tipo;
   if (sp.clienteId) where.clienteId = sp.clienteId;
@@ -508,6 +512,7 @@ export function whereMedicoes(empresaId: string, sp: SP, periodo: { gte?: Date |
   if (sp.clienteId) where.clienteId = sp.clienteId;
   if (sp.tipo) where.tipo = sp.tipo;
   if (periodo.gte || periodo.lt) where.criadoEm = { ...(periodo.gte && { gte: periodo.gte }), ...(periodo.lt && { lt: periodo.lt }) };
+  if (sp.pedido === FILTRO_AGUARDANDO_PEDIDO) where.AND = [whereMedicaoAguardando()];
   if (sp.busca) {
     where.OR = [
       { numero: { contains: sp.busca, mode: "insensitive" } },

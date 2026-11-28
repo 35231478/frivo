@@ -147,7 +147,15 @@ export const clienteSchema = z.object({
   emailsFaturamento: z.array(z.string().trim().email()).default([]),
   whatsappFaturamento: z.string().optional(),
   boletoUnicoMensal: z.boolean().default(false),
+  // Pedido do cliente (lib/pedido-cliente/regra): exigePcAntesNf = "Para faturar"; com exigePedidoExecutar, "Para
+  // executar e faturar" (sem o primeiro, o segundo não vale). Contato de compras: quem emite o pedido.
   exigePcAntesNf: z.boolean().default(false),
+  exigePedidoExecutar: z.boolean().default(false),
+  comprasNome: z.string().trim().max(120).nullish().transform((v) => v || null),
+  comprasEmail: z.union([z.literal(""), z.string().trim().email("E-mail de compras inválido")]).nullish().transform((v) => v || null),
+  comprasTelefone: z.string().trim().max(30).nullish().transform((v) => v || null),
+  // PC-2: os lembretes por e-mail ao contato de compras (desligável por cliente; sem o campo, fica como está)
+  pedidoLembretesAtivo: z.boolean().optional(),
   agrupaAdicionais: z.boolean().default(false),
   // Perfil de faturamento (tipo/dia/condição) saiu da UI do cliente: as colunas continuam no banco e são
   // preservadas na edição porque NÃO entram mais por este schema. A config de faturamento passou a viver
@@ -183,6 +191,8 @@ export const unidadeSchema = z.object({
   longitude: z.number().optional().nullable(),
   telefone: z.string().optional(),
   observacoes: z.string().optional().transform(caixaLivre),
+  // Pedido do cliente nesta unidade (lib/pedido-cliente/regra): vazio = como o cliente
+  exigePedido: z.preprocess((v) => (v === "" ? null : v), z.enum(["NAO", "FATURAR", "EXECUTAR"]).nullish()),
 });
 
 /** Tipo de equipamento (cadastro de configuração / cadastro rápido). */

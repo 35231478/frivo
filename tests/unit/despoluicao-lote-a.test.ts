@@ -55,7 +55,7 @@ describe("financeiro", () => {
   it("painéis de ação da medição e caixas de orientação neutros (cor só com função)", () => {
     const m = ler("components/medicao/medicao-acoes.tsx");
     const paineis = [...m.matchAll(/<div className="([^"]+)">\s*<h4 className="([^"]+)">Registrar [^<]+<\/h4>/g)];
-    expect(paineis).toHaveLength(4);
+    expect(paineis).toHaveLength(3); // o 4º (Registrar PC) virou o botão "Informar pedido do cliente" (PC-1)
     for (const [, caixa, titulo] of paineis) { expect(caixa).toContain("border-surface-border"); expect(`${caixa} ${titulo}`).not.toMatch(/primary|success/); }
     expect(ler("components/medicao/relatorio-mensal-contrato.tsx")).not.toMatch(/bg-primary-50 border border-primary-100/);
     expect(ler("components/forms/cliente-form.tsx")).not.toMatch(/bg-success-50/);

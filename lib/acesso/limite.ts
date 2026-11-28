@@ -13,7 +13,7 @@ import { prisma } from "@/lib/prisma";
 const MIN = 60_000;
 
 export type TipoTentativa = "LOGIN" | "ESQUECI_SENHA" | "TROCA_SENHA" | "PORTAL_LOGIN" | "PORTAL_TROCA_SENHA" | "CHAMADO_PUBLICO"
-  | "ADMISSAO_PUBLICA" | "ADMISSAO_CODIGO" | "DOCUMENTACAO_PUBLICA";
+  | "ADMISSAO_PUBLICA" | "ADMISSAO_CODIGO" | "DOCUMENTACAO_PUBLICA" | "PORTAL_PEDIDO_COMPRA";
 type Alvo = "email" | "ip" | "usuario";
 
 export const LIMITES: Record<TipoTentativa, { janelaMs: number; max: Partial<Record<Alvo, number>> }> = {
@@ -32,6 +32,8 @@ export const LIMITES: Record<TipoTentativa, { janelaMs: number; max: Partial<Rec
   // Link da documentação da equipe (o que o cliente abre): a mesma regra do link da admissão —
   // só TOKEN RECUSADO conta. Quem tem o link bom baixa à vontade; varrer tokens no escuro, não.
   DOCUMENTACAO_PUBLICA: { janelaMs: 60 * MIN, max: { ip: 20 } },
+  // Pedido de compra anexado pelo comprador no portal (PC-2): o uso normal sobra; o envio em rajada para
+  PORTAL_PEDIDO_COMPRA: { janelaMs: 60 * MIN, max: { usuario: 10, ip: 30 } },
 };
 const RETENCAO_MS = 24 * 60 * MIN;
 

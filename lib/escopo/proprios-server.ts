@@ -33,6 +33,29 @@ export async function escopoBarra(tipo: "orcamento" | "ordem", id: string): Prom
   return (await noEscopo(u, tipo, id)) ? null : NextResponse.json({ erro: MSG_FORA_DO_ESCOPO }, { status: 404 });
 }
 
+/**
+ * Algum dos ids (OS e orçamentos) está fora do escopo da pessoa? Sem a marca (ou ADMIN), nunca. Para as rotas que
+ * recebem uma LISTA de OS/orçamentos (o pedido do cliente: informar, liberar sem pedido, editar, conferir).
+ */
+export async function algumForaDoEscopo(u: QuemVe & { empresaId?: string | null }, osIds: string[], orcamentoIds: string[]): Promise<boolean> {
+  const [os, orc] = await Promise.all([idsNoEscopo(u, "ordens", osIds), idsNoEscopo(u, "orcamentos", orcamentoIds)]);
+  return os.length !== osIds.length || orc.length !== orcamentoIds.length;
+}
+
+/**
+ * O pedido do cliente cobre (ou propõe) alguma OS/orçamento fora do escopo? Com a marca, mexer no pedido (corrigir,
+ * conferir, baixar o anexo) exige que TUDO o que ele cobre seja da pessoa. Sem a marca, nunca consulta.
+ */
+export async function pedidoForaDoEscopo(u: QuemVe & { empresaId?: string | null }, pedidoId: string): Promise<boolean> {
+  if (!soProprios(u, "ordens") && !soProprios(u, "orcamentos")) return false;
+  const p = await prisma.pedidoCliente.findFirst({
+    where: { id: pedidoId, empresaId: u.empresaId ?? "" },
+    select: { osPropostas: true, orcamentosPropostos: true, ordens: { select: { id: true } }, orcamentos: { select: { id: true } } },
+  });
+  if (!p) return false; // a rota responde o 404 dela
+  return algumForaDoEscopo(u, [...p.ordens.map((o) => o.id), ...p.osPropostas], [...p.orcamentos.map((o) => o.id), ...p.orcamentosPropostos]);
+}
+
 /** Os ids (de uma seleção em massa) que estão no escopo da pessoa; entidade fora de orçamento/OS volta inteira. */
 export async function idsNoEscopo(u: QuemVe & { empresaId?: string | null }, entidade: string, ids: string[]): Promise<string[]> {
   if (!ids.length) return ids;

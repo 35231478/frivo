@@ -4,6 +4,7 @@ import { carregarListaOs, type SPOrdens } from "@/lib/os/lista-server";
 import { OrdensListaClient } from "@/components/ordens/ordens-lista-client";
 import { SelecaoMassaProvider } from "@/components/acoes-massa/selecao";
 import { BarraAcoesMassa } from "@/components/acoes-massa/barra";
+import { AcaoMassaPedido } from "@/components/pedido-cliente/acao-massa-pedido";
 
 export const metadata: Metadata = { title: "Ordens de serviço" };
 
@@ -11,12 +12,12 @@ export const metadata: Metadata = { title: "Ordens de serviço" };
 export default async function OrdensPage({ searchParams }: { searchParams: Promise<SPOrdens> }) {
   const sp = await searchParams;
   const session = await auth();
-  const { total, pagina, porPagina, periodo, linhas, opcoes } = await carregarListaOs(session!.user!.empresaId, sp, new Date(), session!.user); // COM-1: escopo
+  const { total, pagina, porPagina, periodo, linhas, opcoes, resumoPedido } = await carregarListaOs(session!.user!.empresaId, sp, new Date(), session!.user); // COM-1: escopo
 
   return (
     <SelecaoMassaProvider entidade="ordens" idsPagina={linhas.map((o) => o.id)} total={total}>
-    <OrdensListaClient ordens={linhas} total={total} pagina={pagina} porPagina={porPagina} periodo={periodo} opcoes={opcoes} />
-    <BarraAcoesMassa />
+    <OrdensListaClient ordens={linhas} total={total} pagina={pagina} porPagina={porPagina} periodo={periodo} opcoes={opcoes} resumoPedido={resumoPedido} />
+    <BarraAcoesMassa extra={resumoPedido ? <AcaoMassaPedido /> : null} />
     </SelecaoMassaProvider>
   );
 }

@@ -24,6 +24,7 @@ import {
 } from "@/lib/tecnico/aviso-cliente";
 import type { ContextoExecucao } from "@/lib/execucao/contexto";
 import type { ResultadoAcao } from "@/lib/execucao/acoes";
+import { travaIniciarAtividade } from "@/lib/pedido-cliente/server";
 
 const ok = <T>(dados: T, status = 200): ResultadoAcao<T> => ({ ok: true, status, dados });
 const limpo = (v: string | null | undefined) => (v ?? "").trim();
@@ -120,6 +121,12 @@ export async function avisoParaRetrato(
  */
 export async function avisarCliente(ctx: ContextoExecucao, d: AvisoCliente, relogio: RelogioAparelho = {}, agora: Date = new Date()) {
   const { empresaId, atividade } = ctx;
+  // "Cheguei" é começar: o cliente que exige o pedido dele ANTES da execução (lib/pedido-cliente) trava aqui, antes de
+  // registrar a chegada — o técnico vê o motivo e o escritório informa o pedido (ou libera)
+  if (d.evento === "CHEGOU") {
+    const semPedido = await travaIniciarAtividade(empresaId, atividade.id);
+    if (semPedido) return { ok: false, status: 409, erro: semPedido } as ResultadoAcao<never>;
+  }
   const { registradoEm, atrasoMs } = horarioDoToque(relogio.em, agora.getTime(), relogio.agoraAparelho);
   const dia = diaCivilDeChave(chaveDiaBR(registradoEm))!;
   const chave = { atividadeId_evento_dia: { atividadeId: atividade.id, evento: d.evento, dia } };

@@ -276,6 +276,16 @@ describe("Meu dia — lapidado (Etapa 2a)", () => {
     expect(c.querySelector("[data-ligar]")).toBeNull(); // o "Ligar" saiu do card
   });
 
+  it("pedido do cliente (PC-1): o cliente exige o pedido antes da execução — o cartão avisa antes do 'Cheguei'; os outros, não", async () => {
+    const card = meuDia.atividades.find((c) => c.atividadeId === "aA") as Record<string, unknown>;
+    card.aguardandoPedido = true;
+    try {
+      await abrirMeuDia();
+      expect($("[data-cartao=aA] [data-cartao-aguardando-pedido]")!.textContent).toBe("Aguardando pedido do cliente: o escritório precisa informar o pedido antes do início.");
+      expect($("[data-cartao=aB] [data-cartao-aguardando-pedido]")).toBeNull();
+    } finally { delete card.aguardandoPedido; }
+  });
+
   it("o card não tem mais 'Ligar' (com ou sem 'Exibir contatos'); com os dados do cliente desligados, some a rota e ficam 'Cheguei' e 'A caminho'", async () => {
     await abrirMeuDia();
     const c = $("[data-cartao=aA]")!;

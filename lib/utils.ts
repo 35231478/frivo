@@ -122,6 +122,8 @@ export const PERMISSOES_PORTAL = [
   { chave: "verBoletos", label: "Ver e baixar boletos" },
   { chave: "aprovarMedicoes", label: "Aprovar medições" },
   { chave: "verValores", label: "Ver valores financeiros" },
+  // PC-2: o comprador vê o que aguarda o pedido de compra e anexa o pedido (o "Contato de compras" da ficha já vê)
+  { chave: "enviarPedidoCompra", label: "Enviar pedido de compra" },
 ] as const;
 
 export type PermissaoPortal = (typeof PERMISSOES_PORTAL)[number]["chave"];
@@ -338,8 +340,9 @@ export const LABELS_STATUS_MEDICAO: Record<string, string> = {
   RASCUNHO: "Rascunho",
   AGUARDANDO_APROVACAO: "Aguardando aprovação",
   APROVADA: "Aprovada",
-  AGUARDANDO_PC: "Aguardando PC",
-  PC_RECEBIDO: "PC recebido",
+  // Pedido do cliente (lib/pedido-cliente): o "PC" da fatura é o pedido do cliente
+  AGUARDANDO_PC: "Aguardando pedido",
+  PC_RECEBIDO: "Pedido recebido",
   NF_EMITIDA: "NF emitida",
   BOLETO_GERADO: "Boleto gerado",
   PAGO: "Pago",

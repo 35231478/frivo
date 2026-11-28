@@ -8,7 +8,7 @@ import { corDado } from "@/lib/ui/tokens";
 export type Acao =
   | "visualizar" | "criar" | "editar" | "excluir" | "concluir" | "aprovar"
   | "gerenciar" | "medicoes" | "contasReceber" | "fluxoCaixa" | "folha" | "fiscal" | "perdas" | "checklist" | "exportar"
-  | "separar" | "revisar" | "disciplinar" | "enviar" | "verCusto" | "alterarPrecoTabela" | "trocarVendedor" | "verSoProprios";
+  | "separar" | "revisar" | "disciplinar" | "enviar" | "verCusto" | "alterarPrecoTabela" | "liberarSemPedido" | "trocarVendedor" | "verSoProprios";
 
 export type Permissoes = Record<string, Partial<Record<Acao, boolean>>>;
 
@@ -42,6 +42,7 @@ export const ACOES_LABEL: Record<Acao, string> = {
   enviar: "Enviar ao cliente",
   verCusto: "Ver custo e margem",
   alterarPrecoTabela: "Alterar preço de tabela",
+  liberarSemPedido: "Liberar sem pedido do cliente",
   trocarVendedor: "Trocar vendedor",
   verSoProprios: "Ver só os próprios",
 };
@@ -57,8 +58,11 @@ export const ehRestritiva = (a: Acao) => ACOES_RESTRITIVAS.includes(a);
 export const SECOES: SecaoDef[] = [
   {
     id: "operacao", label: "Operação", modulos: [
+      // liberarSemPedido: o cliente exige o pedido dele (lib/pedido-cliente) e a OS/orçamento ainda não tem; com esta
+      // permissão a pessoa libera a fatura, a NFS-e (e, no modo "para executar", o início) sem o pedido, com o motivo
+      // na trilha. Perfil gravado antes não a tem (nenhum UPDATE em perfis); o administrador tem sempre.
       // verSoProprios (COM-1, restritiva): vê e busca só as OS ligadas aos orçamentos em que é o vendedor (ou criadas por ele)
-      { id: "ordens", label: "Ordens de serviço", icone: "ClipboardList", acoes: ["visualizar", "criar", "editar", "concluir", "excluir", "verSoProprios"] },
+      { id: "ordens", label: "Ordens de serviço", icone: "ClipboardList", acoes: ["visualizar", "criar", "editar", "concluir", "excluir", "liberarSemPedido", "verSoProprios"] },
       { id: "clientes", label: "Clientes", icone: "Users", acoes: ["visualizar", "criar", "editar", "excluir"] },
       { id: "equipamentos", label: "Equipamentos", icone: "Thermometer", acoes: ["visualizar", "criar", "editar", "excluir"] },
       { id: "pmoc", label: "PMOC", icone: "FileBadge", acoes: ["visualizar", "criar", "editar", "excluir"] },

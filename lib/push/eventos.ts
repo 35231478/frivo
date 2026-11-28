@@ -17,7 +17,7 @@ import { whereAtividadesEsquecidas } from "@/lib/execucao/andamento-server";
 import { enviarPush, usuariosComAparelho, usuariosDosTecnicos } from "@/lib/push/servidor";
 import {
   aceiteMereceAviso, msgAceite, msgComentario, msgDespesa, msgEsquecida, msgEstoqueNegativo, msgOsCancelada, msgOsNova,
-  msgOsReagendada, msgRespostaOrcamento, msgSolicitacaoPortal, urlAppAtividade, urlOs,
+  msgOsReagendada, msgPedidoRecebido, msgRespostaOrcamento, msgSolicitacaoPortal, urlAppAtividade, urlOs,
   type MensagemPush, type QuemRecebe, type SituacaoDespesa,
 } from "@/lib/push/tipos";
 import { chaveDiaBR, ehDiaCivil } from "@/lib/fuso";
@@ -226,6 +226,16 @@ export async function notificarRespostaOrcamento(empresaId: string, orcamentoId:
   if (!o || (o.status !== "APROVADO" && o.status !== "REPROVADO")) return null;
   return enviarPush({ empresaId, tipo: "ORCAMENTO_RESPOSTA", alcance: "escritorio", usuarios: await usuariosComAparelho(empresaId), chave: `orcamento:${o.id}:${o.status}`,
     mensagem: msgRespostaOrcamento({ id: o.id, codigo: o.codigo, cliente: nomeCliente(o.cliente), aprovado: o.status === "APROVADO" }) });
+}
+
+/** PC-2: o comprador anexou o pedido de compra no portal — o escritório confere (um aviso por pedido) */
+export async function notificarPedidoRecebido(empresaId: string, pedidoId: string) {
+  const p = await prisma.pedidoCliente.findFirst({ where: { id: pedidoId, empresaId, situacao: "CONFERIR" }, select: { id: true, numero: true, osPropostas: true, orcamentosPropostos: true, cliente: { select: { nome: true, nomeFantasia: true } } } });
+  if (!p) return null;
+  const itens = p.osPropostas.length + p.orcamentosPropostos.length;
+  const url = p.osPropostas.length === 1 && !p.orcamentosPropostos.length ? urlOs(p.osPropostas[0]) : "/ordens?pedido=conferir&periodo=todos";
+  return enviarPush({ empresaId, tipo: "PEDIDO_CLIENTE", alcance: "escritorio", usuarios: await usuariosComAparelho(empresaId), chave: `pedido-cliente:${p.id}`,
+    mensagem: msgPedidoRecebido({ pedidoId: p.id, numero: p.numero, cliente: nomeCliente(p.cliente), itens, url }) });
 }
 
 /** O material lançado em campo deixou o produto negativo: um aviso por produto por dia. */

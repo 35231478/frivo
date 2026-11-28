@@ -193,7 +193,7 @@ export function OsDetalhe({ os: initialOs, abaInicial, verCusto = false }: {
                 )}
 
                 {ativa === "financeiro" && (
-                  <OsFinanceiro osId={os.id} temContrato={!!os.contrato} concluida={os.status === "CONCLUIDA"} fatura={os.fatura ?? null} faturamento={os.faturamento ?? null} medicoes={os.medicoes} itensOrcamento={os.itensOrcamento} contasReceber={os.contasReceber ?? []} abrirNfse={abrirNfse} onAbriuNfse={() => setAbrirNfse(false)} onAba={irPara} />
+                  <OsFinanceiro osId={os.id} temContrato={!!os.contrato} concluida={os.status === "CONCLUIDA"} fatura={os.fatura ?? null} faturamento={os.faturamento ?? null} medicoes={os.medicoes} itensOrcamento={os.itensOrcamento} contasReceber={os.contasReceber ?? []} abrirNfse={abrirNfse} onAbriuNfse={() => setAbrirNfse(false)} onAba={irPara} pedidoCliente={os.pedidoClienteSituacao ?? null} />
                 )}
                 {ativa === "financeiro" && pode("financeiro", "visualizar") && <div className="mt-6"><DespesasCampoOs osId={os.id} /></div>}
 

@@ -11,6 +11,7 @@ import { agendarPush, notificarReagendamento } from "@/lib/push/eventos";
 import { sincronizarStatusOs } from "@/lib/os/sincronizar-status";
 import { chaveDiaCivil } from "@/lib/fuso";
 import { escopoBarra } from "@/lib/escopo/proprios-server";
+import { travaIniciarAtividade } from "@/lib/pedido-cliente/server";
 
 type Params = { params: Promise<{ id: string; atividadeId: string }> };
 
@@ -75,6 +76,11 @@ export async function PUT(req: NextRequest, { params }: Params) {
   if (status === "CONCLUIDA" && existente.status !== "CONCLUIDA") {
     const trava = await travaConclusao(empresaId, id, atividadeId);
     if (trava) return respostaAcao(trava);
+  }
+  // Começar (Em andamento): o cliente que exige o pedido dele antes da execução trava aqui também (lib/pedido-cliente)
+  if (status === "EM_ANDAMENTO" && existente.status !== "EM_ANDAMENTO") {
+    const semPedido = await travaIniciarAtividade(empresaId, atividadeId);
+    if (semPedido) return NextResponse.json({ erro: semPedido }, { status: 409 });
   }
 
   const data: any = {};

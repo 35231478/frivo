@@ -23,6 +23,9 @@ import type { Prisma } from "@prisma/client";
 import { janela, lerOrdem, lerPaginacao, ordemPrisma, paginaValida } from "@/lib/listagem";
 import { ORDEM_ORCAMENTOS, ORDEM_PADRAO_ORCAMENTOS } from "@/lib/listas/ordenacao";
 import { ConteudoUrl, LimparBuscaUrl, ListaUrl, PaginacaoUrl, TabelaProUrl } from "@/components/listagem/lista-url";
+import { pedidoDosOrcamentos, resumoOrcamentosAguardando, usaPedidoCliente } from "@/lib/pedido-cliente/server";
+import { EtiquetaPedido } from "@/components/pedido-cliente/etiqueta-pedido";
+import { AcaoMassaPedido } from "@/components/pedido-cliente/acao-massa-pedido";
 import { Dica } from "@/components/ui/dica";
 
 export const metadata: Metadata = { title: "Orçamentos" };
@@ -62,7 +65,7 @@ export default async function OrcamentosPage({
     _sum: { totalGeral: true }, _count: true,
   });
 
-  const [total, clientes, aggCards] = await Promise.all([
+  const [total, clientes, aggCards, usaPedido, resumoPedido] = await Promise.all([
     prisma.orcamento.count({ where }),
     prisma.cliente.findMany({
       where: { empresaId, ativo: true },
@@ -70,6 +73,9 @@ export default async function OrcamentosPage({
       orderBy: { nome: "asc" },
     }),
     Promise.all(CARDS_PERIODO_ORCAMENTOS.map(soma)),
+    // Pedido do cliente (lib/pedido-cliente): a empresa usa? e o filtro rápido "Aguardando pedido"
+    usaPedidoCliente(empresaId),
+    usaPedidoCliente(empresaId).then((u) => (u ? resumoOrcamentosAguardando(where) : null)),
   ]);
   const resumo = Object.fromEntries(CARDS_PERIODO_ORCAMENTOS.map((k, i) => {
     const a = aggCards[i] as { _sum?: { totalGeral?: unknown }; _count: number };
@@ -86,6 +92,7 @@ export default async function OrcamentosPage({
     orderBy,
     ...janela(pagina, porPagina),
   }) : [];
+  const pedidos = await pedidoDosOrcamentos(empresaId, orcamentos.map((o) => o.id));
 
   return (
     <SelecaoMassaProvider entidade="orcamentos" idsPagina={orcamentos.map((o) => o.id)} total={total}>
@@ -113,6 +120,7 @@ export default async function OrcamentosPage({
       {/* Período (pela criação) + cards de funil do período, clicáveis como filtro — padrão da casa */}
       <PeriodoCardsOrcamentos
         periodo={periodoTela(periodo)} resumo={resumo} card={card} resposta={resposta} diasVencendo={diasVencendo}
+        resumoPedido={resumoPedido}
         opcoes={{
           tipos: Object.entries(LABELS_TIPO_ORCAMENTO).map(([value, label]) => ({ value, label })),
           status: Object.entries(LABELS_ETAPA).map(([value, label]) => ({ value, label })),
@@ -142,6 +150,7 @@ export default async function OrcamentosPage({
                 <p className="text-xs text-ink-muted truncate">{o.cliente.nomeFantasia ?? o.cliente.nome} · {formatarData(o.criadoEm)}{o.validadeEm && ` · válido até ${formatarData(o.validadeEm)}`}</p>
                 <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
                   <PilulaEtapa etapa={etapaCiclo(o, agora)} desde={dataDaEtapa(o, agora)} />
+                  <EtiquetaPedido situacao={pedidos.get(o.id)} alvo={{ orcamentoIds: [o.id] }} />
                   <span className="text-sm font-semibold text-ink ml-auto tabular-nums">{formatarMoeda(Number(o.totalGeral))}</span>
                 </div>
               </Link>
@@ -163,7 +172,7 @@ export default async function OrcamentosPage({
               { id: "tipo", titulo: "Tipo", largura: 128, oculta: true, classe: "truncate" },
               // COM-1: quem vendeu (escondida por padrão; liga em "Colunas")
               { id: "vendedor", titulo: "Vendedor", largura: 160, oculta: true, classe: "truncate" },
-              { id: "status", titulo: "Status", largura: 136, ordenar: "status" },
+              { id: "status", titulo: "Status", largura: 196, ordenar: "status" },
               { id: "valor", titulo: "Valor (R$)", alinhar: "direita", largura: 120, ordenar: "valor", obrigatoria: true },
               { id: "validade", titulo: "Validade", largura: 92 },
               { id: "os", titulo: "OS", alinhar: "centro", largura: 48, oculta: true },
@@ -184,7 +193,7 @@ export default async function OrcamentosPage({
                   cliente: <span className="text-ink" data-cliente-orcamento>{cliente}</span>,
                   tipo: <span className={CLASSE_TIPO_ORCAMENTO[o.tipo]}>{LABELS_TIPO_ORCAMENTO[o.tipo]}</span>,
                   vendedor: <span className="text-ink" data-vendedor-orcamento>{o.vendedor?.nome ?? "—"}</span>,
-                  status: <PilulaEtapa etapa={etapaCiclo(o, agora)} desde={dataDaEtapa(o, agora)} compacta />,
+                  status: <span className="inline-flex flex-wrap items-center gap-1"><PilulaEtapa etapa={etapaCiclo(o, agora)} desde={dataDaEtapa(o, agora)} compacta /><EtiquetaPedido situacao={pedidos.get(o.id)} alvo={{ orcamentoIds: [o.id] }} /></span>,
                   valor: <span className={cn(PLANILHA.numero, "font-semibold text-ink")} data-valor>{valorSemMoeda(Number(o.totalGeral))}</span>,
                   validade: <span className={cn(PLANILHA.data, PLANILHA.apagado)} data-validade>{o.validadeEm ? formatarData(o.validadeEm) : "—"}</span>,
                   os: <span className="tabular-nums text-ink-muted">{o._count.ordensServico}</span>,
@@ -219,7 +228,7 @@ export default async function OrcamentosPage({
       </div>
     </div>
     </ListaUrl>
-    <BarraAcoesMassa />
+    <BarraAcoesMassa extra={usaPedido ? <AcaoMassaPedido /> : null} />
     </SelecaoMassaProvider>
   );
 }

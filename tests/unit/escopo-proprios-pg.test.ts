@@ -205,6 +205,28 @@ describe.skipIf(!URL_PG)("COM-1 — Ver só os próprios: nada vaza entre vended
     expect(barrados).toEqual([{ tipo: "orcamento", id: "oBeto", barrou: false }]);
   });
 
+  it("pedido do cliente (PC-1/PC-2): informar, liberar, a gaveta e o pedido do outro vendedor não passam; sem a marca, segue igual", async () => {
+    const ped = await prisma.pedidoCliente.create({ data: { empresaId: "e1", clienteId: "c1", numero: "PC-BETO-1", data: new Date("2026-11-20"), anexo: Buffer.from("%PDF-1.4 pedido ficticio").toString("base64"), anexoNome: "pedido.pdf", ordens: { connect: [{ id: "osBeto" }] } } });
+    logar("uTudo");
+    expect((await chamar("pedidos-cliente", "POST", {}, { numero: "PC-1", osIds: ["osBeto"], orcamentoIds: [] })).status).toBe(404);
+    expect((await chamar("pedidos-cliente/liberar", "POST", {}, { osIds: [], orcamentoIds: ["oBeto"], motivo: "Cliente autorizou por telefone" })).status).toBe(404);
+    // A gaveta (leitura): a Ana pede as dela e as do Beto; voltam só as dela
+    logar("uAna");
+    const alvos = await chamar("pedidos-cliente/alvos", "GET", {}, undefined, "?os=osBeto,osVendaAna&orc=oBeto,oAna");
+    expect(alvos.status).toBe(200);
+    expect(alvos.json.itens.map((i: any) => i.id).sort()).toEqual(["oAna", "osVendaAna"]);
+    logar("uTudo");
+    for (const [rota, metodo, corpo] of [["pedidos-cliente/[id]", "GET", undefined], ["pedidos-cliente/[id]", "PATCH", { numero: "PC-X" }], ["pedidos-cliente/[id]/anexo", "GET", undefined], ["pedidos-cliente/[id]/conferir", "POST", { acao: "recusar", motivo: "Não confere" }]] as const) {
+      expect([rota, metodo, (await chamar(rota, metodo, { id: ped.id }, corpo)).status]).toEqual([rota, metodo, 404]);
+    }
+    expect((await prisma.pedidoCliente.findUnique({ where: { id: ped.id } })).numero).toBe("PC-BETO-1");
+    // Sem a marca: o pedido abre normalmente
+    logar("uGestor");
+    expect((await chamar("pedidos-cliente/[id]", "GET", { id: ped.id })).status).toBe(200);
+    // (o anexo existe: o 404 de cima é do escopo, não de "anexo não encontrado")
+    expect((await chamar("pedidos-cliente/[id]/anexo", "GET", { id: ped.id })).status).toBe(200);
+  });
+
   it("os prazos da OS (rota pelo id do prazo) também respeitam o escopo", async () => {
     const p = await prisma.osPrazo.create({ data: { ordemServicoId: "osBeto", nome: "Entrega", status: "ATIVO" } });
     logar("uAna");

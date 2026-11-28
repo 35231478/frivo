@@ -15,7 +15,7 @@ import { ehNotaBaixa } from "@/lib/alertas/sino";
 
 export type TipoPush =
   | "OS_NOVA" | "OS_REAGENDADA" | "OS_CANCELADA" | "ATIVIDADE_ESQUECIDA" | "OS_COMENTARIO" | "ACEITE"
-  | "DESPESA" | "SOLICITACAO_PORTAL" | "ORCAMENTO_RESPOSTA" | "ESTOQUE_NEGATIVO" | "TESTE";
+  | "DESPESA" | "SOLICITACAO_PORTAL" | "ORCAMENTO_RESPOSTA" | "ESTOQUE_NEGATIVO" | "PEDIDO_CLIENTE" | "TESTE";
 
 export interface QuemRecebe {
   permissoes: Permissoes | null | undefined;
@@ -52,6 +52,7 @@ export const TIPOS_PUSH: DefTipo[] = [
   { id: "DESPESA", rotulo: "Despesas de campo", dica: "Despesa enviada (escritório, para aprovar) e aprovada ou recusada (quem enviou).", podeReceber: (q) => tecnico(q) || p(q, "financeiro", "fluxoCaixa") },
   { id: "SOLICITACAO_PORTAL", rotulo: "Chamado novo do portal", dica: "O cliente abriu um chamado pelo Portal do Cliente.", podeReceber: (q) => escritorio(q) && veOrdens(q) },
   { id: "ORCAMENTO_RESPOSTA", rotulo: "Orçamento aprovado ou recusado", dica: "O cliente respondeu um orçamento pelo link.", podeReceber: (q) => escritorio(q) && p(q, "orcamentos", "visualizar") },
+  { id: "PEDIDO_CLIENTE", rotulo: "Pedido do cliente recebido pelo portal", dica: "O comprador do cliente anexou o pedido de compra no portal. Confira e confirme (ou recuse) para liberar o faturamento.", podeReceber: (q) => escritorio(q) && veOrdens(q) },
   { id: "ESTOQUE_NEGATIVO", rotulo: "Saldo negativo por uso em campo", dica: "O material lançado em campo deixou um produto com saldo negativo.", podeReceber: (q) => escritorio(q) && p(q, "estoque", "visualizar") },
 ];
 
@@ -218,6 +219,14 @@ export function msgRespostaOrcamento(a: { id: string; codigo: string; cliente?: 
 export function msgEstoqueNegativo(a: { produto: string; saldo: number; unidade?: string | null; osNumero?: string | null }): MensagemPush {
   const saldo = `${a.saldo.toLocaleString("pt-BR", { maximumFractionDigits: 3 })}${a.unidade ? ` ${a.unidade}` : ""}`;
   return { titulo: "Saldo negativo por uso em campo", corpo: juntar(a.produto, `saldo ${saldo}`, a.osNumero ? `OS ${a.osNumero}` : null), url: "/estoque?situacao=negativo", tag: "estoque-negativo", acao: "Ver estoque" };
+}
+
+export function msgPedidoRecebido(a: { pedidoId: string; numero: string; cliente?: string | null; itens: number; url: string }): MensagemPush {
+  return {
+    titulo: `Pedido do cliente recebido: nº ${curto(a.numero, 40)}`,
+    corpo: juntar(a.cliente, `${a.itens} ${a.itens === 1 ? "serviço" : "serviços"} para conferir`),
+    url: a.url, tag: `pedido-cliente-${a.pedidoId}`, acao: "Conferir",
+  };
 }
 
 export const MSG_TESTE: MensagemPush = { titulo: "Notificações ligadas", corpo: "Este aparelho vai receber os avisos do Frivo, mesmo com o app fechado.", url: "/", tag: "teste" };

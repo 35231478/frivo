@@ -25,6 +25,9 @@ import { formatarDiaCivil } from "@/lib/os/prazos";
 import { FILTROS_PRAZO, ROTULO_FILTRO_PRAZO } from "@/lib/os/prazo-execucao";
 import { ClipboardList, Plus, Download, Headset } from "lucide-react";
 import { TabelaPro } from "@/components/listagem/tabela-pro";
+import { EtiquetaPedido, type PedidoDaLinha } from "@/components/pedido-cliente/etiqueta-pedido";
+import { FILTRO_AGUARDANDO_PEDIDO } from "@/lib/pedido-cliente/where";
+import { DICA_FILTRO_AGUARDANDO } from "@/lib/pedido-cliente/regra";
 import { PLANILHA } from "@/lib/planilha";
 
 interface TecnicoView { id: string; nome: string; avatar: string | null }
@@ -37,6 +40,8 @@ interface OrdemView {
   estagio: EstagioOs;
   /** Prazo de execução que vale (o próprio ou, sem ele, o dia previsto), se é próprio, a situação dele e, se houver, o motivo do atraso justificado */
   prazo: string | null; prazoProprio: boolean; prazoSituacao: string; prazoTexto: string; atrasoJustificado: string | null;
+  /** O pedido do cliente (etiqueta "Aguardando pedido" / "Pedido nº X"); null = o cliente não exige */
+  pedidoCliente?: PedidoDaLinha | null;
 }
 interface Opcoes { clientes: OpcaoBusca[]; usuarios: OpcaoBusca[]; tiposOs: OpcaoBusca[]; contratos: OpcaoBusca[] }
 
@@ -68,6 +73,7 @@ function StatusDaOs({ os }: { os: OrdemView }) {
       <StatusPill tom={TOM_ESTAGIO_OS[os.estagio] ?? "previsto"} tamanho="sm" data-estagio={os.estagio}>{ROTULO_ESTAGIO[os.estagio] ?? os.estagio}</StatusPill>
       {selo && <span className={cn(selo, "text-[11px] px-2")}>{os.prazoTexto}</span>}
       {os.atrasoJustificado && <span className="pill-previsto text-[11px] px-2" data-atraso-justificado title={`Atraso justificado: ${os.atrasoJustificado}`}>Justificado</span>}
+      <EtiquetaPedido situacao={os.pedidoCliente} alvo={{ osIds: [os.id] }} />
     </span>
   );
 }
@@ -85,7 +91,11 @@ function PrazoDaOs({ os, compacto }: { os: OrdemView; compacto?: boolean }) {
     : <span className={cn(PLANILHA.data, PLANILHA.apagado, "whitespace-nowrap")} data-prazo-herdado title={TITULO_PRAZO_HERDADO}>{data}</span>;
 }
 
-export function OrdensListaClient({ ordens, total, pagina, porPagina, opcoes, periodo }: { ordens: OrdemView[]; total: number; pagina: number; porPagina: number; opcoes: Opcoes; periodo: PeriodoTela }) {
+export function OrdensListaClient({ ordens, total, pagina, porPagina, opcoes, periodo, resumoPedido = null }: {
+  ordens: OrdemView[]; total: number; pagina: number; porPagina: number; opcoes: Opcoes; periodo: PeriodoTela;
+  /** O filtro rápido "Aguardando pedido" (contagem e R$); null = a empresa não tem cliente que exige pedido */
+  resumoPedido?: { quantidade: number; total: number } | null;
+}) {
   const router = useRouter();
   const { pode } = usePermissoes();
   const pathname = usePathname();
@@ -183,6 +193,7 @@ export function OrdensListaClient({ ordens, total, pagina, porPagina, opcoes, pe
           />
         }
         paramBusca="busca" navegar={(m) => setParams(m)}
+        rapidos={resumoPedido ? [{ param: "pedido", valor: FILTRO_AGUARDANDO_PEDIDO, rotulo: "Aguardando pedido", quantidade: resumoPedido.quantidade, total: resumoPedido.total, dica: DICA_FILTRO_AGUARDANDO }] : []}
         extras={
           <>
             <a href={exportUrl} className="btn-secondary px-3 py-2 font-medium text-ink-muted">

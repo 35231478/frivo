@@ -127,7 +127,7 @@ describe("Fatura avulsa: documento e envio dizem \"Fatura\" (D1)", () => {
     expect(txt(caixa.querySelector(".text-right.shrink-0"))).toBe("Fatura2026-0012A emitir");
     expect(txt(caixa)).toContain("Faturamento avulso");
     act(() => root.render(createElement(MedicaoDocumento, { medicao: med, empresa, cliente })));
-    expect(txt(caixa.querySelector(".text-right.shrink-0"))).toBe("MediçãoMED-2026-0012PC recebido");
+    expect(txt(caixa.querySelector(".text-right.shrink-0"))).toBe("MediçãoMED-2026-0012Pedido recebido");
   });
 
   it("envio (e-mail/WhatsApp do link público): \"Fatura nº 2026-0012\" no assunto e no texto", async () => {

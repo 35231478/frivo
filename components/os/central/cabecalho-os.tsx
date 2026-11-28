@@ -22,6 +22,7 @@ import { Stepper } from "@/components/ui/stepper";
 import { Kpi } from "@/components/ui/kpi";
 import { atrasoJustificado, prazoEfetivo, rotuloMotivoAtraso, rotuloResponsabilidadeAtraso } from "@/lib/os/prazo-execucao";
 import { SeloDeAtendimento } from "@/components/os/central/prazo-atendimento";
+import { EtiquetaPedido } from "@/components/pedido-cliente/etiqueta-pedido";
 
 /** Situação do pagamento → cor do texto (status com função: previsto, atenção, atrasado, ok). */
 const COR_PAGAMENTO: Record<string, string> = {
@@ -82,6 +83,8 @@ export function CabecalhoOs({ os, central, acoes, onAba, onAtualizado }: {
               <StatusPill tom={TOM_PRIORIDADE[os.prioridade] ?? "previsto"}>
                 {LABELS_PRIORIDADE[os.prioridade]}
               </StatusPill>
+              {/* Pedido do cliente: "Aguardando pedido" abre a gaveta com 1 clique (lib/pedido-cliente) */}
+              <EtiquetaPedido situacao={os.pedidoClienteSituacao} alvo={{ osIds: [os.id] }} tamanho="md" />
               {os.origem === "PORTAL_CLIENTE" && (
                 <StatusPill tom="acento">
                   <FileBarChart className="w-3 h-3" /> Chamado do portal

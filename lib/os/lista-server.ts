@@ -24,6 +24,7 @@ import { comparaNatural } from "@/lib/utils";
 import { atrasoJustificado, prazoEfetivo, rotuloMotivoAtraso, situacaoPrazoExecucao, temPrazoProprio } from "@/lib/os/prazo-execucao";
 import { textoPrazo } from "@/lib/os/prazos";
 import { resumoStatus } from "@/lib/os/status";
+import { pedidoDasOs, resumoOsAguardando, usaPedidoCliente } from "@/lib/pedido-cliente/server";
 
 export type SPOrdens = Record<string, string | undefined>;
 
@@ -49,13 +50,15 @@ export async function carregarListaOs(empresaId: string, sp: SPOrdens, agora: Da
   const daPagina = (p: number) => prisma.ordemServico.findMany({ where, orderBy, ...janela(p, porPagina) });
 
   // 1ª onda: a contagem e a página pedida juntas (não esperam uma pela outra), e as opções dos filtros
-  const [total, paginaPedida, clientes, usuarios, tiposOs, contratos] = await Promise.all([
+  const [total, paginaPedida, clientes, usuarios, tiposOs, contratos, resumoPedido] = await Promise.all([
     prisma.ordemServico.count({ where }),
     daPagina(pedida),
     prisma.cliente.findMany({ where: { empresaId, ativo: true }, select: { id: true, nome: true, nomeFantasia: true }, orderBy: { nome: "asc" } }),
     prisma.usuario.findMany({ where: { empresaId, ativo: true }, select: { id: true, nome: true }, orderBy: { nome: "asc" } }),
     prisma.tipoOs.findMany({ where: { empresaId, ativo: true }, select: { id: true, nome: true }, orderBy: { nome: "asc" } }),
     prisma.contrato.findMany({ where: { empresaId }, select: { id: true, numero: true }, orderBy: { numero: "asc" } }),
+    // Pedido do cliente (lib/pedido-cliente): a empresa usa? e o filtro rápido "Aguardando pedido" (contagem e R$)
+    usaPedidoCliente(empresaId).then((u) => (u ? resumoOsAguardando(where) : null)),
   ]);
   const pagina = paginaValida(pedida, porPagina, total);
   // Página pedida além da última (filtro mudou o total): busca a página válida — o caso raro
@@ -67,7 +70,7 @@ export async function carregarListaOs(empresaId: string, sp: SPOrdens, agora: Da
     const unicos = [...new Set(lista.filter((x): x is string => !!x))];
     return unicos.length ? buscar(unicos) : Promise.resolve([] as T[]);
   };
-  const [clientesOs, unidades, responsaveis, atividades, equipes, tecnicos, itensMedicao, medicoes] = ids.length ? await Promise.all([
+  const [clientesOs, unidades, responsaveis, atividades, equipes, tecnicos, itensMedicao, medicoes, pedidos] = ids.length ? await Promise.all([
     doIds(ordens.map((o) => o.clienteId), (i) => prisma.cliente.findMany({ where: { id: { in: i } }, select: { id: true, nome: true, nomeFantasia: true, logo: true } })),
     doIds(ordens.map((o) => o.unidadeId), (i) => prisma.unidade.findMany({ where: { id: { in: i } }, select: { id: true, nome: true } })),
     doIds(ordens.map((o) => o.responsavelId), (i) => prisma.usuario.findMany({ where: { id: { in: i } }, select: { id: true, nome: true } })),
@@ -80,7 +83,8 @@ export async function carregarListaOs(empresaId: string, sp: SPOrdens, agora: Da
     }),
     prisma.medicaoItem.findMany({ where: { ordemServicoId: { in: ids } }, select: { ordemServicoId: true, medicaoId: true } }),
     prisma.medicao.findMany({ where: { itens: { some: { ordemServicoId: { in: ids } } } }, select: { id: true, status: true } }),
-  ]) : [[], [], [], [], [], [], [], []];
+    pedidoDasOs(empresaId, ids),
+  ]) : [[], [], [], [], [], [], [], [], new Map()];
 
   // COM-1: o vendedor da OS (gravado ao gerar do orçamento) ou, na OS antiga, o do orçamento de origem
   const origens = ordens.filter((o) => !o.vendedorId && o.orcamentoOrigemId).map((o) => o.orcamentoOrigemId!);
@@ -133,11 +137,15 @@ export async function carregarListaOs(empresaId: string, sp: SPOrdens, agora: Da
       prazoSituacao: situacao.situacao,
       prazoTexto: textoPrazo(situacao, true),
       atrasoJustificado: atrasoJustificado(o) ? rotuloMotivoAtraso(o.atrasoJustificadoMotivo) || "Justificado" : null,
+      // A etiqueta do pedido do cliente (null = o cliente não exige)
+      pedidoCliente: pedidos.get(o.id) ?? null,
     };
   });
 
   return {
     total, pagina, porPagina, periodo, linhas,
+    // O filtro rápido "Aguardando pedido": só para a empresa que tem cliente que exige o pedido
+    resumoPedido,
     opcoes: {
       clientes: clientes.map((c) => ({ value: c.id, label: c.nomeFantasia ?? c.nome })),
       usuarios: usuarios.map((u) => ({ value: u.id, label: u.nome })),

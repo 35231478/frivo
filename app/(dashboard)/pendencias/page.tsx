@@ -51,6 +51,7 @@ export default async function PendenciasPage() {
                         className="flex items-center gap-3 px-5 py-3.5 min-h-[52px] hover:bg-surface-alt transition-colors">
                         <Icone className={cn("w-5 h-5 shrink-0", COR_TOM[i.tom])} aria-hidden />
                         <span className="flex-1 min-w-0 text-sm font-medium text-ink">{i.rotulo}</span>
+                        {i.detalhe && <span className="text-sm text-ink-muted tabular-nums" data-pendencia-detalhe>{i.detalhe}</span>}
                         <span className="font-display text-lg font-semibold tabular-nums text-ink">{i.valor}</span>
                         <ChevronRight className="w-4 h-4 text-ink-subtle shrink-0" aria-hidden />
                       </Link>

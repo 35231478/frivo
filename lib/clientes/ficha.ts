@@ -7,6 +7,7 @@
  *
  * Função pura: a página carrega o cliente (lib/clientes/ficha-server) e a tela só desenha o que sai daqui.
  */
+import { ROTULO_MODO_PEDIDO, modoDoCliente } from "@/lib/pedido-cliente/regra";
 import { formatarCpfCnpj, formatarTelefone } from "@/lib/utils";
 
 export interface LinhaFicha { rotulo: string; valor: string }
@@ -27,6 +28,10 @@ export interface ClienteDaFicha {
   whatsappFaturamento?: string | null;
   boletoUnicoMensal?: boolean | null;
   exigePcAntesNf?: boolean | null;
+  exigePedidoExecutar?: boolean | null;
+  comprasNome?: string | null;
+  comprasEmail?: string | null;
+  comprasTelefone?: string | null;
   agrupaAdicionais?: boolean | null;
   observacoes?: string | null;
 }
@@ -54,7 +59,8 @@ export function secoesDaFicha(c: ClienteDaFicha): SecaoFicha[] {
   const pf = c.tipoPessoa === "FISICA";
   const prefs = [
     c.boletoUnicoMensal ? "Boleto único mensal" : "",
-    c.exigePcAntesNf ? "Exige pedido de compra antes da NF" : "",
+    // Pedido do cliente (lib/pedido-cliente/regra): o modo, quando exige
+    c.exigePcAntesNf ? `Exige pedido do cliente ${ROTULO_MODO_PEDIDO[modoDoCliente(c)].toLowerCase()}` : "",
     c.agrupaAdicionais ? "Agrupa adicionais na fatura" : "",
   ].filter(Boolean).join(" · ");
   const secoes: SecaoFicha[] = [
@@ -78,6 +84,8 @@ export function secoesDaFicha(c: ClienteDaFicha): SecaoFicha[] {
       ["E-mails de cobrança", (c.emailsFaturamento ?? []).map(texto).filter(Boolean).join(", ")],
       ["WhatsApp de cobrança", c.whatsappFaturamento ? formatarTelefone(c.whatsappFaturamento) : ""],
       ["Preferências", prefs],
+      // o contato de compras só vale quando o cliente exige o pedido
+      ["Contato de compras", c.exigePcAntesNf ? [texto(c.comprasNome), texto(c.comprasEmail), c.comprasTelefone ? formatarTelefone(c.comprasTelefone) : ""].filter(Boolean).join(" · ") : ""],
     ]) },
   ];
   return secoes.filter((s) => s.linhas.length > 0);

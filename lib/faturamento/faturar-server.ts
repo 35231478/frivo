@@ -22,6 +22,7 @@ import { registrarEvento } from "@/lib/orcamentos/ciclo-server";
 import { chaveDiaCivil, chaveHojeBR, partesBR } from "@/lib/fuso";
 import { retencoesHerdadas } from "@/lib/financeiro/retencoes-server";
 import { proximoNumero } from "@/lib/numeracao-server";
+import { travaFaturarOrcamento, travaFaturarOs } from "@/lib/pedido-cliente/server";
 import {
   faturaDaOs, faturaDoOrcamento, faturaParcial, motivoNaoFaturarOrcamento, motivoNaoFaturarOs, numeroFatura, percentualDoTotal,
   rotuloParcial, validarParcial, vencimentoAvulso, type Fatura, type PedidoParcial,
@@ -56,6 +57,8 @@ interface Origem {
   /** A fatura CHEIA de hoje (o total da origem é o líquido dela) */
   fatura: Fatura;
   origem: { orcamentoId?: string; osId?: string };
+  /** O número do pedido do cliente da origem (vai na fatura e na discriminação da NFS-e) */
+  pcNumero?: string | null;
   /** Registro na origem (histórico da OS / linha do tempo do orçamento), dentro da transação */
   registrar: (tx: Tx, numero: string, detalhe: string) => Promise<unknown>;
   parcelamento?: ParcelamentoFaturar | null;
@@ -96,7 +99,7 @@ async function criarFatura(o: Origem): Promise<ResultadoFaturar> {
         faturaParcial: ehParcial, percentualFaturado: ehParcial ? percentual : null,
         mes: agora.mes + 1, ano: agora.ano, descricao,
         // D3: o avulso vai direto para a nota (a aprovação do cliente é só da medição de contrato)
-        status: "PC_RECEBIDO", dataAprovacao: new Date(),
+        status: "PC_RECEBIDO", dataAprovacao: new Date(), pcNumero: o.pcNumero ?? null, pcRecebidoEm: o.pcNumero ? new Date() : null,
         dataVencimento: vencimentoAvulso(o.diaFaturamento, { ano: agora.ano, mes0: agora.mes, dia: agora.dia }),
         valorTotal: fatura.valorTotal, descontoValor: fatura.descontoValor, valorLiquido: fatura.valorLiquido,
         // Retenções herdadas dos serviços: a conta a receber/boleto sai pelo líquido
@@ -146,6 +149,7 @@ const SELECT_ORC = {
   id: true, codigo: true, nome: true, status: true, tipo: true, clienteId: true, vendedorId: true,
   descontoServicos: true, tipoDescontoServicos: true, descontoProdutos: true, tipoDescontoProdutos: true, issAliquota: true,
   cliente: { select: { diaFaturamento: true } },
+  pedidoCliente: { select: { numero: true } },
   servicos: { select: { descricao: true, quantidade: true, valorUnitario: true, valorTotal: true, ordem: true, servicoId: true } },
   produtos: { select: { descricao: true, quantidade: true, valorUnitario: true, valorTotal: true, ordem: true, produtoId: true } },
 } as const;
@@ -161,10 +165,13 @@ export async function faturarOrcamento(p: { empresaId: string; usuarioId: string
   if (fat.saldo <= 0 && fat.ultima) return { tipo: "existente", fatura: { id: fat.ultima.id, numero: fat.ultima.numero } };
   const motivo = motivoNaoFaturarOrcamento(orc);
   if (motivo) return { tipo: "bloqueado", erro: motivo };
+  // O cliente exige o pedido dele e o orçamento ainda não tem (nem foi liberado): não fatura (lib/pedido-cliente)
+  const semPedido = await travaFaturarOrcamento(p.empresaId, orc.id);
+  if (semPedido) return { tipo: "bloqueado", erro: semPedido };
   if (!fatura.linhas.length || fatura.valorLiquido <= 0) return { tipo: "vazio", erro: "Nada a faturar: o orçamento não tem itens com valor." };
   return criarFatura({
     empresaId: p.empresaId, usuarioId: p.usuarioId, clienteId: orc.clienteId, vendedorId: orc.vendedorId, diaFaturamento: orc.cliente.diaFaturamento,
-    descricao: `Orçamento ${orc.codigo} — ${orc.nome}`.slice(0, 300), fatura, origem: { orcamentoId: orc.id },
+    descricao: `Orçamento ${orc.codigo} — ${orc.nome}`.slice(0, 300), fatura, origem: { orcamentoId: orc.id }, pcNumero: orc.pedidoCliente?.numero ?? null,
     parcelamento: p.parcelamento, parcial: p.parcial,
     registrar: (tx, _numero, detalhe) => registrarEvento({ empresaId: p.empresaId, orcamentoId: orc.id, tipo: "FATURADO", detalhe, usuarioId: p.usuarioId }, tx),
   });
@@ -174,7 +181,7 @@ export async function faturarOrcamento(p: { empresaId: string; usuarioId: string
 export async function faturarOs(p: { empresaId: string; usuarioId: string; osId: string; parcelamento?: ParcelamentoFaturar | null; parcial?: PedidoParcial | null }): Promise<ResultadoFaturar> {
   const os = await prisma.ordemServico.findFirst({
     where: { id: p.osId, empresaId: p.empresaId },
-    select: { id: true, numero: true, status: true, contratoId: true, clienteId: true, descricao: true, vendedorId: true, orcamentoOrigem: { select: { vendedorId: true } }, cliente: { select: { diaFaturamento: true } } },
+    select: { id: true, numero: true, status: true, contratoId: true, clienteId: true, descricao: true, vendedorId: true, orcamentoOrigem: { select: { vendedorId: true } }, cliente: { select: { diaFaturamento: true } }, pedidoCliente: { select: { numero: true } } },
   });
   if (!os) return { tipo: "nao-encontrado" };
   const { itens, adicionais } = await itensFaturaveisDaOs(os.id);
@@ -186,13 +193,16 @@ export async function faturarOs(p: { empresaId: string; usuarioId: string; osId:
   if (fat.saldo <= 0 && fat.ultima) return { tipo: "existente", fatura: { id: fat.ultima.id, numero: fat.ultima.numero } };
   const motivo = motivoNaoFaturarOs(os);
   if (motivo) return { tipo: "bloqueado", erro: motivo };
+  // O cliente exige o pedido dele e a OS ainda não tem (nem foi liberada): não fatura (lib/pedido-cliente)
+  const semPedido = await travaFaturarOs(p.empresaId, os.id);
+  if (semPedido) return { tipo: "bloqueado", erro: semPedido };
   if (!fatura.linhas.length || fatura.valorLiquido <= 0) {
     return { tipo: "vazio", erro: "Nada a faturar: marque os itens executados (ou os adicionais \"Cobrar\" com preço)." };
   }
   const titulo = (os.descricao ?? "").split("\n")[0].trim();
   return criarFatura({
     empresaId: p.empresaId, usuarioId: p.usuarioId, clienteId: os.clienteId, vendedorId: os.vendedorId ?? os.orcamentoOrigem?.vendedorId ?? null, diaFaturamento: os.cliente.diaFaturamento,
-    descricao: `OS ${os.numero}${titulo ? ` — ${titulo}` : ""}`.slice(0, 300), fatura, origem: { osId: os.id },
+    descricao: `OS ${os.numero}${titulo ? ` — ${titulo}` : ""}`.slice(0, 300), fatura, origem: { osId: os.id }, pcNumero: os.pedidoCliente?.numero ?? null,
     parcelamento: p.parcelamento, parcial: p.parcial,
     registrar: (tx, _numero, detalhe) => tx.osHistorico.create({
       data: { ordemServicoId: os.id, usuarioId: p.usuarioId, acao: "OS faturada", detalhes: detalhe },

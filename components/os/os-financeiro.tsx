@@ -9,6 +9,7 @@ import { Receipt, ExternalLink } from "lucide-react";
 import { NotasFiscais } from "@/components/fiscal/nfse-notas";
 import { usePermissoes } from "@/components/providers/permissoes-provider";
 import { BotaoFaturar, type FaturaExistente, type FaturamentoOrigem } from "@/components/faturamento/botao-faturar";
+import { EtiquetaPedido, type PedidoDaLinha } from "@/components/pedido-cliente/etiqueta-pedido";
 import { rotuloMedicao } from "@/lib/faturamento/fatura";
 
 const COR_MEDICAO: Record<string, string> = {
@@ -28,7 +29,9 @@ interface MedicaoResumo { id: string; numero: string; status: string; valorTotal
  * liberada) e abre a emissão da NFS-e. OS de contrato: entra numa medição oficial ("Gerar medição").
  * A antiga "medição interna" (OsMedicao) saiu: nunca virava conta a receber.
  */
-export function OsFinanceiro({ osId, temContrato, concluida, fatura, faturamento, medicoes: iniciais, itensOrcamento, contasReceber = [], abrirNfse, onAbriuNfse, onAba }: {
+export function OsFinanceiro({ osId, temContrato, concluida, fatura, faturamento, medicoes: iniciais, itensOrcamento, contasReceber = [], abrirNfse, onAbriuNfse, onAba, pedidoCliente = null }: {
+  /** O pedido do cliente desta OS (a etiqueta ao lado do Faturar); null = o cliente não exige */
+  pedidoCliente?: PedidoDaLinha | null;
   osId: string; temContrato?: boolean; medicoes: MedicaoResumo[]; itensOrcamento: any[];
   /** Faturar só com a OS concluída */
   concluida?: boolean;
@@ -148,8 +151,16 @@ export function OsFinanceiro({ osId, temContrato, concluida, fatura, faturamento
               ) : "Marque os itens executados na aba Comercial."}
             </p>
           ) : (
-            <BotaoFaturar url={`/api/ordens/${osId}/faturar`} origem="OS" fatura={fatura ?? null} faturamento={faturamento ?? null}
-              podeFaturar={!!concluida && pode("financeiro", "medicoes")} podeVer={pode("financeiro", "visualizar")} />
+            <div className="space-y-2">
+              {/* Sem o pedido do cliente, o Faturar recusa com o motivo: a etiqueta mostra e resolve com 1 clique */}
+              {pedidoCliente?.aguardando && (
+                <p className="flex flex-wrap items-center gap-2 text-sm text-atencao-texto" data-faturar-aguardando-pedido>
+                  <EtiquetaPedido situacao={pedidoCliente} alvo={{ osIds: [osId] }} /> A fatura e a NFS-e esperam o pedido do cliente.
+                </p>
+              )}
+              <BotaoFaturar url={`/api/ordens/${osId}/faturar`} origem="OS" fatura={fatura ?? null} faturamento={faturamento ?? null}
+                podeFaturar={!!concluida && pode("financeiro", "medicoes")} podeVer={pode("financeiro", "visualizar")} />
+            </div>
           )}
         </div>
       ) : pode("financeiro", "medicoes") && (

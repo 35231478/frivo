@@ -161,12 +161,15 @@ describe.skipIf(!URL_PG)("lista de OS e sessão: o mesmo resultado, menos idas a
     for (const sp of CASOS) {
       const novo = await lista.carregarListaOs("e1", sp, AGORA);
       const antigo = await listaAntiga("e1", sp);
-      const { opcoes, ...semOpcoes } = novo;
+      // O pedido do cliente (PC-1) chegou depois: esta empresa não exige pedido, então nada disso aparece
+      const { opcoes, resumoPedido, ...semOpcoes } = novo;
+      expect(resumoPedido).toBeNull();
+      expect(semOpcoes.linhas.every((l) => l.pedidoCliente === null), JSON.stringify(sp)).toBe(true);
       // COM-1 acrescentou a coluna "Vendedor" (campo novo de cada linha, fora do carregamento antigo): compara sem
       // ele e confere à parte que existe (neste cenário nenhuma OS tem vendedor)
       expect(semOpcoes.linhas.every((l) => "vendedor" in l && l.vendedor === null), JSON.stringify(sp)).toBe(true);
-      const semVendedor = { ...semOpcoes, linhas: semOpcoes.linhas.map(({ vendedor: _v, ...l }) => l) };
-      expect(semVendedor, JSON.stringify(sp)).toEqual(antigo);
+      const semNovos = { ...semOpcoes, linhas: semOpcoes.linhas.map(({ pedidoCliente: _p, vendedor: _v, ...l }) => l) };
+      expect(semNovos, JSON.stringify(sp)).toEqual(antigo);
     }
     // o cenário cobre o que importa: equipe com técnico repetido, técnicos em ordem pt-BR, faturada, sem atividade, outra empresa fora
     const todas = await lista.carregarListaOs("e1", { periodo: "todos", sort: "numero", dir: "asc", por: "25" }, AGORA);

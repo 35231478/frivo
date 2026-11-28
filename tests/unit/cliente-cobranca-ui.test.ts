@@ -55,7 +55,7 @@ describe("Cobrança e faturamento no cadastro de cliente", () => {
     expect(c).toContain("E-mails de cobrança");
     expect(c).toContain("WhatsApp de cobrança");
     expect(c).toContain("Boleto único mensal");
-    expect(c).toContain("Exige pedido de compra antes da NF");
+    expect(c).toContain("Exige pedido do cliente"); // Leva PC-1: o seletor de 3 opções (Não | Para faturar | Para executar e faturar)
     expect(c).toContain("Agrupa adicionais na fatura");
     expect($("[data-emails-input] input[type='email']")).toBeTruthy();
     expect($('input[name="whatsappFaturamento"]')).toBeTruthy();
@@ -96,5 +96,26 @@ describe("Cobrança e faturamento no cadastro de cliente", () => {
     expect(boleto!.getAttribute("aria-checked")).toBe("false");
     await clicar(boleto);
     expect(boleto!.getAttribute("aria-checked")).toBe("true");
+  });
+});
+
+describe("Pedido do cliente na ficha (Leva PC-1)", () => {
+  async function escolher(el: Element | null, v: string) {
+    expect(el).toBeTruthy();
+    await act(async () => { Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, "value")!.set!.call(el, v); el!.dispatchEvent(new Event("change", { bubbles: true })); });
+    await flush();
+  }
+  it("um seletor com as 3 opções (no lugar do interruptor antigo); o contato de compras só quando exige", async () => {
+    await montar();
+    const sel = $<HTMLSelectElement>("[data-modo-pedido]")!;
+    expect([...sel.options].map((o) => [o.value, o.textContent])).toEqual([["NAO", "Não"], ["FATURAR", "Para faturar"], ["EXECUTAR", "Para executar e faturar"]]);
+    expect(sel.value).toBe("NAO");
+    expect(corpo()).not.toContain("Exige pedido de compra antes da NF");
+    expect($("[data-contato-compras]")).toBeNull();
+    await escolher(sel, "FATURAR");
+    expect($("[data-contato-compras]")).not.toBeNull();
+    expect($$("[data-contato-compras] input").map((i) => i.getAttribute("name"))).toEqual(["comprasNome", "comprasEmail", "comprasTelefone"]);
+    await escolher(sel, "NAO");
+    expect($("[data-contato-compras]")).toBeNull();
   });
 });
