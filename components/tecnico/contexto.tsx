@@ -10,6 +10,7 @@ import { MSG_SEM_ESPACO, protegerArmazenamento, type Armazenamento } from "@/lib
 import { Rastreio, motivoDaOperacao, type EstadoRastreio } from "@/lib/tecnico/offline/rastreio";
 import type { MotivoPosicao } from "@/lib/tecnico/posicao";
 import { toast } from "@/components/ui/avisos";
+import { urlConversaApp } from "@/lib/chat/regras";
 
 export interface UsuarioApp {
   id: string; nome: string; email: string; empresaNome: string; podeGravar: boolean;
@@ -125,6 +126,8 @@ export type Vista =
   | { ver: "desempenho" }
   /** Minhas despesas de campo (e o lançamento) */
   | { ver: "despesas" }
+  /** CHAT-1: a conversa com o Escritório (uma só; cada mensagem leva a OS dela) — o push abre /tecnico?ver=chat */
+  | { ver: "chat" }
   | { ver: "os"; a: string; e?: string | null; /** Abre já na câmera rápida (atalho do Meu dia) */ cam?: boolean;
       /** QR lido no Meu dia: equipamento da unidade que o técnico pode incluir nesta atividade (pergunta antes) */ inc?: string | null;
       /** Concluiu o último equipamento: a OS abre já na confirmação da conclusão */ fim?: boolean;
@@ -140,7 +143,8 @@ export function lerVista(search: string): Vista {
   const qr = q.get("q");
   if (ver === "equipamento" && qr) return { ver: "equipamento", q: qr };
   if (ver === "perfil" && q.get("sec") === "comissoes") return { ver: "perfil", sec: "comissoes" };
-  if (ver === "agenda" || ver === "perfil" || ver === "desempenho" || ver === "despesas") return { ver };
+  // O endereço antigo (…&os=<osId>, de antes da conversa por pessoa) abre a mesma conversa
+  if (ver === "agenda" || ver === "chat" || ver === "perfil" || ver === "desempenho" || ver === "despesas") return { ver };
   return { ver: "dia" };
 }
 
@@ -149,6 +153,7 @@ export function urlDaVista(v: Vista): string {
   if (v.ver === "os") return `/tecnico?ver=os&a=${encodeURIComponent(v.a)}${v.e ? `&e=${encodeURIComponent(v.e)}` : ""}${v.cam ? "&cam=1" : ""}${v.inc ? `&inc=${encodeURIComponent(v.inc)}` : ""}${v.fim ? "&fim=1" : ""}${v.primeiro ? "&primeiro=1" : ""}`;
   if (v.ver === "equipamento") return `/tecnico?ver=equipamento&q=${encodeURIComponent(v.q)}`;
   if (v.ver === "perfil" && v.sec) return `/tecnico?ver=perfil&sec=${v.sec}`;
+  if (v.ver === "chat") return urlConversaApp();
   return `/tecnico?ver=${v.ver}`;
 }
 

@@ -1,10 +1,10 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { MessageSquare, Send } from "lucide-react";
+import { MessageCircle, MessageSquare, Send } from "lucide-react";
 import { cn, formatarDataHora } from "@/lib/utils";
 import { Dica } from "@/components/ui/dica";
-import { useTecnico } from "@/components/tecnico/contexto";
+import { irPara, useTecnico } from "@/components/tecnico/contexto";
 import { novoClientId } from "@/lib/tecnico/offline/motor";
 import { chaveVisto, novosComentarios, ordenarComentarios, TEXTO_MAX, type ComentarioTela } from "@/lib/tecnico/comentarios";
 import type { ExecucaoTela, NovaOperacao } from "@/lib/tecnico/offline/tipos";
@@ -57,6 +57,11 @@ export function ComentariosDaOs({ x, registrar }: { x: ExecucaoTela; registrar: 
         {novos > 0 && <span className="text-xs font-semibold rounded-full bg-acento text-white px-2 py-0.5" data-comentarios-novos={novos}>{novos === 1 ? "1 novo" : `${novos} novos`}</span>}
         <Dica rotulo="Comentários" texto="Conversa interna com o escritório sobre esta OS. O cliente não vê. Sem sinal, o comentário fica no aparelho e sobe sozinho." />
       </h2>
+      {/* CHAT-1: a conversa com o Escritório (todas as OS; aqui ficam só as desta) */}
+      <button type="button" onClick={() => irPara({ ver: "chat" })} data-abrir-chat
+        className="inline-flex items-center gap-1.5 text-sm font-semibold text-primary-700 touch-target">
+        <MessageCircle className="w-4 h-4" aria-hidden /> Abrir no Chat
+      </button>
       {lista.length > VISIVEIS && !todos && (
         <button type="button" onClick={() => setTodos(true)} className="text-sm font-semibold text-primary-700 touch-target" data-ver-todos-comentarios>
           Ver os {lista.length} comentários
@@ -68,7 +73,7 @@ export function ComentariosDaOs({ x, registrar }: { x: ExecucaoTela; registrar: 
             <li key={c.clientId ?? c.id} data-comentario={c.origem} data-pendente={c.pendente || undefined} data-novo={ehNovo(c) || undefined}
               className={cn("rounded-card border p-3 space-y-1", c.meu ? "bg-primary-50 border-primary-200 ml-6" : "bg-white border-surface-border mr-6", ehNovo(c) && "ring-2 ring-acento/40")}>
               <p className="text-xs text-ink-muted">
-                <span className="font-semibold text-ink">{c.meu ? "Você" : c.autor}</span>{c.origem === "ESCRITORIO" ? " · escritório" : ""} · {c.pendente ? "no aparelho" : formatarDataHora(c.criadoEm)}
+                <span className="font-semibold text-ink">{c.meu ? "Minha mensagem" : c.autor}</span>{c.origem === "ESCRITORIO" ? " · escritório" : ""} · {c.pendente ? "no aparelho" : formatarDataHora(c.criadoEm)}
               </p>
               <p className="text-base text-ink whitespace-pre-line break-words">{c.texto}</p>
             </li>

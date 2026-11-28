@@ -170,6 +170,10 @@ export async function mudarStatusContrato(id: string, novo: StatusContrato, ctx:
   } else {
     await gerarPrevisaoContratoContasReceber(id, ctx.usuarioId).catch(() => 0);
   }
+  // COM-1.2: fechou (saiu de "Aguardando assinatura") gera a comissão do vendedor; renovou gera se a empresa quiser;
+  // parou/voltou recalcula (as mensalidades dali em diante param de gerar). Nunca derruba a troca de status.
+  const { comissoesDoContratoNoStatus } = await import("@/lib/comissoes/contrato-server");
+  await comissoesDoContratoNoStatus(ctx.empresaId, id, c.status, novo);
   return ok(undefined, { historico });
 }
 

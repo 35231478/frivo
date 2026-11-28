@@ -2,6 +2,7 @@
 
 import { useNomesDaTrilha } from "@/components/layout/nome-na-trilha";
 import { signOut } from "next-auth/react";
+import { IconeConversas } from "@/components/chat/icone-conversas";
 import { Bell, ShieldX, ChevronRight, LogOut, Search, AlertTriangle, Clock, ShoppingCart, Headset, ClipboardCheck, FileWarning, Wrench, Menu, Barcode, MessageSquareReply, PackageCheck, FileCheck2, FileX2, Hourglass, CalendarX2, TrendingUp, PackageOpen, PackageMinus, Globe, BadgeCheck, MessageSquareWarning, StarOff, UserPlus, FileSignature } from "lucide-react";
 import Link from "next/link";
 import { hrefChecklistsComAlertas, hrefDocumentosVencendo, hrefLeadsSite, umOuLista } from "@/lib/alertas/destinos-sino";
@@ -267,6 +268,9 @@ export function Header({ session, avatarUrl }: HeaderProps) {
             className="w-64 bg-surface-page border border-surface-border rounded-lg pl-9 pr-3 py-2 text-sm text-ink placeholder:text-ink-subtle focus:outline-none focus:bg-white focus:border-acento focus:ring-4 focus:ring-acento/15 transition-colors"
           />
         </div>
+
+        {/* CHAT-1: Conversas (quem vê OS), com as conversas por ler */}
+        {(pode(usuario.permissoes, "ordens", "visualizar", usuario.role) || pode(usuario.permissoes, "conversas", "visualizar", usuario.role)) && <IconeConversas />}
 
         {/* Notificações */}
         <div className="relative" ref={sinoRef}>

@@ -646,3 +646,36 @@ describe("troca de status: cancelar pede Contratos › Excluir; o que cai aparec
     expect(confirmarBtn().disabled).toBe(false);
   });
 });
+
+// ═════════════════════════ COM-1.2: o vendedor do contrato ═════════════════════════
+describe("COM-1.2: vendedor do contrato no cabeçalho e a troca no histórico", () => {
+  it("o vendedor (travado) aparece no cabeçalho; a troca fica no histórico como 'Vendedor trocado', sem setas de status", async () => {
+    const { ContratoForm } = await import("@/components/forms/contrato-form");
+    const { PermissoesProvider } = await import("@/components/providers/permissoes-provider");
+    const initialData = {
+      id: "ct1", clienteId: "c1", numero: "CT-1", tipo: "MANUTENCAO_PREVENTIVA", status: "ATIVO", periodicidade: "MENSAL",
+      dataInicio: new Date("2026-11-01"), valorMensal: 1000, unidades: [], anexos: [], reajustes: [], recorrenciasLocais: [],
+      historicoStatus: [
+        { id: "h2", statusAnterior: "ATIVO", statusNovo: "ATIVO", motivo: "Vendedor: Vitor → Paula. Motivo: Carteira nova", createdAt: "2026-12-01T12:00:00Z", usuario: { id: "u", nome: "Ana" } },
+        { id: "h1", statusAnterior: "AGUARDANDO_ASSINATURA", statusNovo: "ATIVO", motivo: null, createdAt: "2026-11-01T12:00:00Z", usuario: { id: "u", nome: "Ana" } },
+      ],
+    };
+    caixa = document.createElement("div");
+    document.body.appendChild(caixa);
+    root = createRoot(caixa);
+    await act(async () => {
+      root.render(createElement(PermissoesProvider, { role: "OPERADOR", permissoes: permissoesTotais(),
+        children: createElement(ContratoForm, { initialData, vendedor: createElement("span", { "data-vendedor-contrato": "" }, "Vendedor: Paula") } as any) }));
+    });
+    await flush();
+    expect($("[data-vendedor-contrato]")?.textContent).toBe("Vendedor: Paula");
+    await aba("gestao");
+    const troca = $$("[data-historico-vendedor]");
+    expect(troca.map((e) => e.textContent)).toEqual(["Vendedor trocado"]);
+    const cartao = troca[0].closest(".border")!;
+    expect(cartao.textContent).toContain("Vendedor: Vitor → Paula. Motivo: Carteira nova");
+    expect(cartao.textContent).not.toContain("→Ativo");
+    // A mudança de status de verdade continua com as duas etiquetas (de → para)
+    expect(painel("gestao").textContent).toContain("Aguardando");
+  });
+});

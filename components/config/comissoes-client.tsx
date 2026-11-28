@@ -12,7 +12,7 @@ import { Dica } from "@/components/ui/dica";
 import { toast } from "@/components/ui/avisos";
 import { cn } from "@/lib/utils";
 import {
-  BASES, DIVISOES, MAX_DIA_FIXO, MAX_DIA_UTIL, ORDEM_PRECEDENCIA, PAPEIS, PAPEIS_ATIVOS, QUANDO, QUANDO_EXECUTOR, QUEM, RETORNO_DIAS_MAX, ROTULO_BASE, ROTULO_DIVISAO,
+  BASES, BASES_CONTRATO, DIVISOES, MESES_MAX, MESES_PADRAO, ROTULO_TIPO_CONTRATO, TIPOS_CONTRATO, textoDosMeses, MAX_DIA_FIXO, MAX_DIA_UTIL, ORDEM_PRECEDENCIA, PAPEIS, PAPEIS_ATIVOS, QUANDO, QUANDO_EXECUTOR, QUEM, RETORNO_DIAS_MAX, ROTULO_BASE, ROTULO_DIVISAO,
   ROTULO_PAPEL, ROTULO_QUANDO, ROTULO_QUANDO_EXECUTOR, ROTULO_QUEM, ROTULO_SOBRE, ROTULO_VENCIMENTO_TIPO, SOBRE, VENCIMENTO_TIPOS, descricaoDaRegra, descricaoDoVencimento,
   type Base, type Divisao, type Papel, type Quando, type QuandoExecutor, type Quem, type RegraComissao, type Sobre, type VencimentoFechamento, type VencimentoTipo,
 } from "@/lib/comissoes/regras";
@@ -25,6 +25,8 @@ export interface ConfigComissoes {
   vencimento: VencimentoFechamento;
   /** COM-2: o técnico — quando fica devida, os dias do retorno e os tipos de OS que contam como retorno */
   executorQuando: QuandoExecutor; retornoDias: number; tiposRetorno: string[];
+  /** COM-1.2: a renovação do contrato abre um ciclo novo de comissão */
+  renovacaoGera: boolean;
 }
 export interface TelaComissoesDados {
   regras: RegraNaTela[];
@@ -42,16 +44,24 @@ const DICA_EXECUTOR = "A comissão do técnico nasce por equipamento atendido co
 const DICA_RETORNO = "Outra OS de um tipo de retorno, no mesmo equipamento, dentro destes dias depois do serviço: a comissão do técnico fica em revisão (não libera) até o encarregado decidir, em Desempenho › Fechamento. Quem registrou o problema no serviço não entra. 0 desliga.";
 const DICA_DIVISAO = "Igual: cada técnico da atividade recebe a mesma parte. Para quem executou: vai para quem marcou o equipamento como feito. % por cargo: pelo cargo de quem estava lá (60/40 entre Técnico e Ajudante, por exemplo).";
 const DICA_TETO = "O máximo de comissão por mês. O teto da pessoa vence o do cargo. O que passar fica para o mês seguinte (não se perde).";
+const DICA_CONTRATO = "Regras com \"Sobre: Contratos\". A comissão é do vendedor do contrato e nasce prevista quando o contrato vira Ativo. Cada mensalidade recebida dentro da janela libera a parte dela; o valor fixo sai com a 1ª mensalidade recebida. Contrato cancelado ou suspenso para de gerar dali em diante; mensalidade estornada estorna a comissão dela. Contratos de antes não geram nada.";
+const DICA_MESES = "Conta a partir do 1º mês do contrato. 0 = enquanto o contrato estiver ativo.";
 
 type Form = {
   id?: string; quemTipo: Quem; usuarioId: string; cargoId: string; papel: Papel; sobreTipo: Sobre; categoria: string; servicoId: string; base: Base; valor: string;
   divisao: Divisao; divisaoCargos: Record<string, string>;
+  /** COM-1.2: "Sobre: Contratos" — o tipo ("" = todos os contratos) e a janela de meses do "% das mensalidades" */
+  tipoContrato: string; meses: string;
 };
-const VAZIO: Form = { quemTipo: "TODOS", usuarioId: "", cargoId: "", papel: "VENDEDOR", sobreTipo: "TODOS_SERVICOS", categoria: "", servicoId: "", base: "PERC_VENDA", valor: "", divisao: "IGUAL", divisaoCargos: {} };
+const VAZIO: Form = {
+  quemTipo: "TODOS", usuarioId: "", cargoId: "", papel: "VENDEDOR", sobreTipo: "TODOS_SERVICOS", categoria: "", servicoId: "", base: "PERC_VENDA", valor: "", divisao: "IGUAL", divisaoCargos: {},
+  tipoContrato: "", meses: String(MESES_PADRAO),
+};
+const ehBaseDeContrato = (b: Base) => (BASES_CONTRATO as readonly string[]).includes(b);
 type FormTeto = { quemTipo: "PESSOA" | "CARGO"; usuarioId: string; cargoId: string; valor: string };
 const numero = (v: string) => Number(String(v).replace(",", "."));
 
-const valorDaRegra = (r: Pick<RegraComissao, "base" | "valor">) => r.base === "FIXO_ITEM"
+const valorDaRegra = (r: Pick<RegraComissao, "base" | "valor">) => r.base === "FIXO_ITEM" || r.base === "FIXO_CONTRATO"
   ? r.valor.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })
   : `${r.valor.toLocaleString("pt-BR", { maximumFractionDigits: 2 })}%`;
 
@@ -76,7 +86,9 @@ export function ComissoesClient({ inicial }: { inicial: TelaComissoesDados }) {
     || config.vencimento.tipo !== dados.config.vencimento.tipo || (diaOk && diaNum !== dados.config.vencimento.dia)
     // COM-2: o técnico
     || config.executorQuando !== dados.config.executorQuando || config.retornoDias !== dados.config.retornoDias
-    || [...config.tiposRetorno].sort().join() !== [...dados.config.tiposRetorno].sort().join();
+    || [...config.tiposRetorno].sort().join() !== [...dados.config.tiposRetorno].sort().join()
+    // COM-1.2: o contrato
+    || config.renovacaoGera !== dados.config.renovacaoGera;
   const temExecutor = dados.regras.some((r) => r.papel === "EXECUTOR" && r.ativo);
 
   async function recarregar() {
@@ -92,7 +104,7 @@ export function ComissoesClient({ inicial }: { inicial: TelaComissoesDados }) {
         method: "PUT", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           quando: config.quando, liquidaImpostos: config.liquidaImpostos, vencimentoTipo: vencimento.tipo, vencimentoDia: vencimento.dia,
-          executorQuando: config.executorQuando, retornoDias: config.retornoDias, tiposRetorno: config.tiposRetorno,
+          executorQuando: config.executorQuando, retornoDias: config.retornoDias, tiposRetorno: config.tiposRetorno, renovacaoGera: config.renovacaoGera,
         }),
       });
       const d = await r.json().catch(() => ({}));
@@ -112,6 +124,9 @@ export function ComissoesClient({ inicial }: { inicial: TelaComissoesDados }) {
         divisao: f.divisao,
         divisaoCargos: f.divisao === "POR_CARGO" ? Object.fromEntries(Object.entries(f.divisaoCargos).filter(([, v]) => v.trim()).map(([k, v]) => [k, numero(v)])) : null,
       } : {}),
+      // COM-1.2: o tipo de contrato só em "Sobre: Contratos"; a janela só no "% das mensalidades"
+      ...(f.sobreTipo === "CONTRATOS" ? { tipoContrato: f.tipoContrato || null } : {}),
+      ...(f.base === "PERC_MENSALIDADE" ? { meses: f.meses.trim() === "" ? MESES_PADRAO : Number(f.meses) } : {}),
     };
     const r = await fetch(f.id ? `/api/comissoes/regras/${f.id}` : "/api/comissoes/regras", {
       method: f.id ? "PATCH" : "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(corpo),
@@ -143,6 +158,7 @@ export function ComissoesClient({ inicial }: { inicial: TelaComissoesDados }) {
     id: r.id, quemTipo: r.quemTipo, usuarioId: r.usuarioId ?? "", cargoId: r.cargoId ?? "", papel: r.papel, sobreTipo: r.sobreTipo,
     categoria: r.categoria ?? "", servicoId: r.servicoId ?? "", base: r.base, valor: String(r.valor).replace(".", ","),
     divisao: r.divisao ?? "IGUAL", divisaoCargos: Object.fromEntries(Object.entries(r.divisaoCargos ?? {}).map(([k, v]) => [k, String(v).replace(".", ",")])),
+    tipoContrato: r.tipoContrato ?? "", meses: String(r.meses ?? MESES_PADRAO),
   });
 
   async function salvarTeto() {
@@ -167,6 +183,12 @@ export function ComissoesClient({ inicial }: { inicial: TelaComissoesDados }) {
   const alternarTipoRetorno = (id: string) => setConfig((c) => ({ ...c, tiposRetorno: c.tiposRetorno.includes(id) ? c.tiposRetorno.filter((x) => x !== id) : [...c.tiposRetorno, id] }));
   const nomeDoCargo = (id: string) => dados.opcoes.cargos.find((c) => c.id === id)?.nome ?? "Cargo";
   const set = <K extends keyof Form>(k: K, v: Form[K]) => setForm((f) => (f ? { ...f, [k]: v } : f));
+  /** COM-1.2: o contrato tem as bases dele (e é do vendedor); sair de "Contratos" volta à base da venda */
+  const mudarSobre = (sobre: Sobre) => setForm((f) => {
+    if (!f) return f;
+    if (sobre === "CONTRATOS") return { ...f, sobreTipo: sobre, papel: "VENDEDOR", base: ehBaseDeContrato(f.base) ? f.base : "PERC_MENSALIDADE" };
+    return { ...f, sobreTipo: sobre, base: ehBaseDeContrato(f.base) ? "PERC_VENDA" : f.base };
+  });
 
   return (
     <div className="space-y-6" data-tela-comissoes>
@@ -239,6 +261,18 @@ export function ComissoesClient({ inicial }: { inicial: TelaComissoesDados }) {
             )}
             <p className="text-xs text-ink-muted">A mesma lista do Desempenho: mudar aqui muda lá.</p>
           </fieldset>
+        </div>
+
+        {/* COM-1.2: o contrato */}
+        <div className="border-t border-surface-border pt-4 space-y-3" data-config-contrato>
+          <div className="flex items-center gap-1.5">
+            <h3 className="text-sm font-semibold text-ink">Comissão sobre contrato</h3>
+            <Dica rotulo="Comissão sobre contrato" texto={DICA_CONTRATO} />
+          </div>
+          <div data-renovacao-gera>
+            <ToggleSwitch checked={config.renovacaoGera} onChange={(v) => setConfig((c) => ({ ...c, renovacaoGera: v }))}
+              label="Renovação também gera" description="Quando o contrato é renovado, a comissão começa um ciclo novo. Desligado: só o fechamento gera." />
+          </div>
         </div>
         <div className="flex justify-end">
           <Button type="button" onClick={salvarConfig} disabled={!mudou || !diaOk} loading={salvandoConfig} data-salvar-config-comissao>Salvar</Button>
@@ -385,14 +419,14 @@ export function ComissoesClient({ inicial }: { inicial: TelaComissoesDados }) {
               <FormField label="Papel" required>
                 <Select value={form.papel} onChange={(e) => set("papel", e.target.value as Papel)} data-campo-papel>
                   {PAPEIS.map((p) => (
-                    <option key={p} value={p} disabled={!(PAPEIS_ATIVOS as readonly string[]).includes(p)}>
+                    <option key={p} value={p} disabled={!(PAPEIS_ATIVOS as readonly string[]).includes(p) || (form.sobreTipo === "CONTRATOS" && p !== "VENDEDOR")}>
                       {ROTULO_PAPEL[p]}{(PAPEIS_ATIVOS as readonly string[]).includes(p) ? "" : " (em breve)"}
                     </option>
                   ))}
                 </Select>
               </FormField>
               <FormField label="Sobre" required>
-                <Select value={form.sobreTipo} onChange={(e) => set("sobreTipo", e.target.value as Sobre)} data-campo-sobre>
+                <Select value={form.sobreTipo} onChange={(e) => mudarSobre(e.target.value as Sobre)} data-campo-sobre>
                   {SOBRE.map((s) => <option key={s} value={s}>{ROTULO_SOBRE[s]}</option>)}
                 </Select>
               </FormField>
@@ -400,6 +434,14 @@ export function ComissoesClient({ inicial }: { inicial: TelaComissoesDados }) {
                 <FormField label="Categoria de serviço" required hint="A categoria fica no cadastro do serviço.">
                   <Input value={form.categoria} onChange={(e) => set("categoria", e.target.value)} list="categorias-servico" maxLength={60} data-campo-categoria />
                   <datalist id="categorias-servico">{dados.opcoes.categorias.map((c) => <option key={c} value={c} />)}</datalist>
+                </FormField>
+              )}
+              {form.sobreTipo === "CONTRATOS" && (
+                <FormField label="Tipo de contrato" hint="Um tipo vence “Todos os contratos”.">
+                  <Select value={form.tipoContrato} onChange={(e) => set("tipoContrato", e.target.value)} data-campo-tipo-contrato>
+                    <option value="">Todos os contratos</option>
+                    {TIPOS_CONTRATO.map((t) => <option key={t} value={t}>{ROTULO_TIPO_CONTRATO[t]}</option>)}
+                  </Select>
                 </FormField>
               )}
               {form.sobreTipo === "SERVICO" && (
@@ -411,12 +453,20 @@ export function ComissoesClient({ inicial }: { inicial: TelaComissoesDados }) {
               )}
               <FormField label="Base" required hint={form.base === "PERC_LUCRO" ? "Calculado no servidor com o custo; o vendedor vê só o valor." : undefined}>
                 <Select value={form.base} onChange={(e) => set("base", e.target.value as Base)} data-campo-base>
-                  {BASES.map((b) => <option key={b} value={b}>{ROTULO_BASE[b]}</option>)}
+                  {BASES.filter((b) => ehBaseDeContrato(b) === (form.sobreTipo === "CONTRATOS")).map((b) => <option key={b} value={b}>{ROTULO_BASE[b]}</option>)}
                 </Select>
               </FormField>
-              <FormField label={form.base === "FIXO_ITEM" ? (form.papel === "EXECUTOR" ? "Valor por equipamento atendido (R$)" : "Valor por item (R$)") : "Percentual (%)"} required>
-                <Input value={form.valor} onChange={(e) => set("valor", e.target.value)} inputMode="decimal" placeholder={form.base === "FIXO_ITEM" ? "Ex.: 15,00" : "Ex.: 5"} data-campo-valor />
+              <FormField label={form.base === "FIXO_CONTRATO" ? "Valor no fechamento (R$)" : form.base === "PERC_MENSALIDADE" ? "Percentual da mensalidade (%)"
+                : form.base === "FIXO_ITEM" ? (form.papel === "EXECUTOR" ? "Valor por equipamento atendido (R$)" : "Valor por item (R$)") : "Percentual (%)"} required>
+                <Input value={form.valor} onChange={(e) => set("valor", e.target.value)} inputMode="decimal"
+                  placeholder={form.base === "FIXO_ITEM" ? "Ex.: 15,00" : form.base === "FIXO_CONTRATO" ? "Ex.: 200,00" : "Ex.: 5"} data-campo-valor />
               </FormField>
+              {form.base === "PERC_MENSALIDADE" && (
+                <FormField label="Durante os primeiros (meses)" required dica={DICA_MESES}
+                  hint={/^\d+$/.test(form.meses.trim()) && Number(form.meses) <= MESES_MAX ? `A comissão vale ${textoDosMeses(Number(form.meses))}.` : `De 0 a ${MESES_MAX}.`}>
+                  <Input value={form.meses} onChange={(e) => set("meses", e.target.value.replace(/\D/g, "").slice(0, 3))} inputMode="numeric" maxLength={3} data-campo-meses />
+                </FormField>
+              )}
               {form.papel === "EXECUTOR" && (
                 <FormField label="Dividir entre os técnicos" required dica={DICA_DIVISAO}>
                   <Select value={form.divisao} onChange={(e) => set("divisao", e.target.value as Divisao)} data-campo-divisao>

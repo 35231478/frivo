@@ -28,7 +28,7 @@ import { aceiteNoLocal } from "@/lib/os/aceite-server";
 import { materialRemoverSchema, materialSchema } from "@/lib/tecnico/materiais";
 import { gravarMaterial, removerMaterial } from "@/lib/execucao/materiais-campo";
 import { comentarioSchema } from "@/lib/tecnico/comentarios";
-import { comentarDoApp } from "@/lib/execucao/comentarios";
+import { comentarDoApp, comentarSemOsDoApp } from "@/lib/execucao/comentarios";
 import { despesaSchema, SEM_OS } from "@/lib/tecnico/despesas";
 import { editarLegendaFoto } from "@/lib/os/legenda-foto-server";
 import { LEGENDA_MAX } from "@/lib/os/galeria";
@@ -111,6 +111,8 @@ const MSG_ADIADA = "Aguardando a gravação anterior desta OS.";
 async function executar(ator: Ator, op: Operacao, lote: OpcoesLote): Promise<ResultadoAcao<unknown>> {
   // Despesa fora de OS: não há atividade a conferir (o servidor só aceita a do próprio colaborador)
   if (op.tipo === "despesa" && op.atividadeId === SEM_OS) return lancarDespesa(ator, op.dados, null);
+  // CHAT-1: mensagem SEM OS ("chego em 10 minutos"): só na conversa do técnico com o escritório
+  if (op.tipo === "comentario" && op.atividadeId === SEM_OS) return comentarSemOsDoApp(ator, op.dados);
   const equipamentoId = "equipamentoId" in op ? op.equipamentoId : undefined;
   const ctx = await carregarContexto(ator, op.atividadeId, { equipamentoId, permitirBloqueada: op.tipo === "concluir" || op.tipo === "aceite" || op.tipo === "comentario" || op.tipo === "despesa" || op.tipo === "fotoOsLegenda" });
   if (!ctx.ok) return { ok: false, status: ctx.status, erro: ctx.erro };
