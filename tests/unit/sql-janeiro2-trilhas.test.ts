@@ -14,6 +14,7 @@ const RAIZ = path.resolve(__dirname, "../..");
 const ARQUIVO = path.join(RAIZ, "prisma/sql/2027-02-22_janeiro2_trilhas.sql");
 const SCHEMA = `teste_trilhas_${process.pid}`;
 const PRISMA = `teste_trilhas_prisma_${process.pid}`;
+const VIZINHO = `teste_trilhas_vizinho_${process.pid}`;
 const TABELAS = ["despesas_campo_historico", "checklist_correcoes"];
 
 function psql(args: string[], schema = SCHEMA) {
@@ -33,11 +34,15 @@ describe.skipIf(!URL)("SQL de produção: as trilhas do janeiro 2 (PostgreSQL re
     execFileSync("psql", [URL!, "-v", "ON_ERROR_STOP=1", "-q", "-c", `DROP SCHEMA IF EXISTS ${SCHEMA} CASCADE; CREATE SCHEMA ${SCHEMA}; DROP SCHEMA IF EXISTS ${PRISMA} CASCADE;`]);
     // O que já existe em produção e a tabela nova referencia
     sql(`CREATE TABLE "checklist_preenchidos" ("id" TEXT PRIMARY KEY, "observacao_geral" TEXT); INSERT INTO "checklist_preenchidos" VALUES ('c1', 'antes'), ('c2', NULL);`);
+    // Um vizinho no MESMO banco já com uma chave de mesmo nome (outro schema): não pode impedir a nossa de nascer
+    execFileSync("psql", [URL!, "-v", "ON_ERROR_STOP=1", "-q", "-c", `DROP SCHEMA IF EXISTS ${VIZINHO} CASCADE; CREATE SCHEMA ${VIZINHO};
+      CREATE TABLE ${VIZINHO}.checklist_preenchidos (id TEXT PRIMARY KEY); CREATE TABLE ${VIZINHO}.checklist_correcoes (id TEXT PRIMARY KEY, checklist_id TEXT);
+      ALTER TABLE ${VIZINHO}.checklist_correcoes ADD CONSTRAINT checklist_correcoes_checklist_id_fkey FOREIGN KEY (checklist_id) REFERENCES ${VIZINHO}.checklist_preenchidos(id);`]);
     for (let i = 0; i < 3; i++) psql(["-f", ARQUIVO]); // 3×: idempotente
     const url = `${URL}${URL!.includes("?") ? "&" : "?"}schema=${PRISMA}`;
     execFileSync(path.join(RAIZ, "node_modules/.bin/prisma"), ["db", "push", "--skip-generate", "--schema", "prisma/schema.prisma"], { cwd: RAIZ, env: { ...process.env, DATABASE_URL: url }, stdio: "pipe" });
   }, 180_000);
-  afterAll(() => { execFileSync("psql", [URL!, "-q", "-c", `DROP SCHEMA IF EXISTS ${SCHEMA} CASCADE; DROP SCHEMA IF EXISTS ${PRISMA} CASCADE;`]); });
+  afterAll(() => { execFileSync("psql", [URL!, "-q", "-c", `DROP SCHEMA IF EXISTS ${SCHEMA} CASCADE; DROP SCHEMA IF EXISTS ${PRISMA} CASCADE; DROP SCHEMA IF EXISTS ${VIZINHO} CASCADE;`]); });
 
   it("as duas tabelas são IDÊNTICAS às do Prisma: colunas, tipos, padrões, índices e chaves", () => {
     for (const t of TABELAS) {

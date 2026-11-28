@@ -98,7 +98,7 @@ export function VistaDespesas() {
         <ArrowLeft className="w-4 h-4" /> Perfil
       </button>
       <h1 className="text-2xl font-bold text-ink flex items-center gap-2">Minhas despesas
-        <Dica rotulo="Minhas despesas" texto="Despesas de campo com a foto do cupom. O escritório aprova: a paga do seu bolso vira reembolso; a paga pela empresa fica só registrada. Até o escritório decidir, você corrige ou exclui (fica registrado o que mudou)." />
+        <Dica rotulo="Minhas despesas" texto="Despesas de campo com a foto do cupom. O escritório aprova: a paga do seu bolso vira reembolso; a paga pela empresa fica só registrada. Até a decisão do escritório, dá para corrigir ou excluir (o que mudou fica registrado)." />
       </h1>
       {aviso && <p className="rounded-card bg-atencao-claro p-3 text-sm text-atencao-texto" data-aviso-despesas>{aviso}</p>}
       {config.lancarDespesas && !aviso && (

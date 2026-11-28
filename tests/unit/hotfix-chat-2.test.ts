@@ -65,7 +65,9 @@ describe("a recusa: o porquê e o que fazer", () => {
   });
 
   it("a mensagem recusada não trava a atividade (nem o QR); as outras recusas travam", () => {
-    expect([...NAO_TRAVAM].sort()).toEqual(["comentario", "scan"]);
+    // + a correção/exclusão da despesa (D7, janeiro 2): recusada porque o escritório já decidiu, não segura o serviço
+    expect([...NAO_TRAVAM].sort()).toEqual(["comentario", "despesaEditar", "despesaExcluir", "scan"]);
+    expect(travaAtividade({ estado: "erro", tipo: "despesaEditar" })).toBe(false);
     expect(travaAtividade({ estado: "erro", tipo: "comentario" })).toBe(false);
     expect(travaAtividade({ estado: "erro", tipo: "scan" })).toBe(false);
     expect(travaAtividade({ estado: "erro", tipo: "foto" })).toBe(true);

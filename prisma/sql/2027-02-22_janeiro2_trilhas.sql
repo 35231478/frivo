@@ -50,7 +50,10 @@ CREATE INDEX IF NOT EXISTS "checklist_correcoes_checklist_id_idx" ON "checklist_
 
 DO $$
 BEGIN
-  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'checklist_correcoes_checklist_id_fkey') THEN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint
+    WHERE conname = 'checklist_correcoes_checklist_id_fkey' AND conrelid = to_regclass('"checklist_correcoes"')
+  ) THEN
     ALTER TABLE "checklist_correcoes" ADD CONSTRAINT "checklist_correcoes_checklist_id_fkey"
       FOREIGN KEY ("checklist_id") REFERENCES "checklist_preenchidos"("id") ON DELETE CASCADE ON UPDATE CASCADE;
   END IF;

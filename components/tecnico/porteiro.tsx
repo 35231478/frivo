@@ -154,7 +154,8 @@ export function PorteiroChecklist({ resumo, porteiro, trocando = false }: { resu
           <CarFront className="w-5 h-5 text-ink-muted shrink-0" aria-hidden /> <span className="font-mono">{veiculo.placa}</span> <span className="font-medium text-ink-muted truncate">· {veiculo.modelo}</span>
         </h1>
         <p className="text-sm text-ink-muted" data-porteiro-texto>
-          {corrigir ? "Corrigindo o checklist de hoje: vale até o fim do dia e o gestor vê o que mudou. As fotos já enviadas continuam; tire outra só para trocar."
+          {corrigir ? <><span className="block">Corrigindo o checklist de hoje: vale até o fim do dia e o gestor vê o que mudou.</span>
+            <span className="block">As fotos já enviadas continuam; tire outra só para trocar.</span></>
             : trocando ? "Vai usar o veículo, afinal? Faça o checklist: ele substitui o “não vou usar” de hoje." : "Antes de começar o dia, confira o veículo. Feito o checklist, o app libera até o próximo dia de checklist."}
         </p>
       </header>

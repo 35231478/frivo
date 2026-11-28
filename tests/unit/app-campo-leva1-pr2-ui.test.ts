@@ -260,7 +260,7 @@ describe("topo da OS: o que fazer", () => {
     const t = $("[data-topo-os]")!;
     expect(texto(t.querySelector("[data-problema] h2"))).toBe("Problema relatado");
     expect(texto(t.querySelector("[data-problema] p"))).toBe("Ar da recepção pingando no balcão.");
-    expect(texto(t.querySelector("[data-resumo-equipamentos]"))).toBe("1 equipamento · 1 atendido");
+    expect(texto(t.querySelector("[data-resumo-equipamentos]"))).toBe("1 equipamento · 1 começado · 1 completo"); // D14 (janeiro 2): começados × completos
     expect(texto(t.querySelector("[data-endereco-topo]"))).toBe("Av. Paulista, 1000 — São Paulo/SP");
     expect(t.querySelector("[data-ligar]")!.getAttribute("href")).toBe("tel:1133330000");
     expect(t.querySelector("[data-whatsapp-topo]")!.getAttribute("href")).toBe("https://wa.me/5511966665555");

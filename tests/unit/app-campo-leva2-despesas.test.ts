@@ -144,7 +144,7 @@ describe("no aparelho", () => {
     const l = despesasDoAparelho([opDespesa("k1"), opDespesa("k2"), outra], servidor);
     expect(l).toEqual([{
       id: null, clientId: "k1", categoria: "COMBUSTIVEL", valor: 187.4, data: "2026-11-20", pagamento: "PROPRIO", descricao: null,
-      osNumero: null, situacao: "PENDENTE", motivoRecusa: null, pendente: true, fotoLocal: FOTO,
+      osNumero: null, situacao: "PENDENTE", motivoRecusa: null, pendente: true, fotoLocal: FOTO, atividadeFila: "sem-os", // D7: a correção vai atrás, na mesma fila
     }]);
   });
   it("o servidor recusou o envio: a linha leva o motivo (a tela mostra 'Não enviada'); sem motivo, um texto padrão", () => {
