@@ -5,7 +5,7 @@
 import type { Prisma, PrismaClient } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { pode, type Permissoes } from "@/lib/permissoes";
-import { alteracoesDePrecoDeTabela, chaveCatalogo, conferirPrecoDeTabela, PERMISSAO_PRECO_TABELA, type AlteracaoPrecoTabela, type ItemComPreco, type Veredito } from "@/lib/precos/trava-tabela";
+import { alteracoesDePrecoDeTabela, chaveCatalogo, conferirPrecoDeTabela, PERMISSAO_PRECO_TABELA, textoDaTrilha, type AlteracaoPrecoTabela, type ItemComPreco, type Veredito } from "@/lib/precos/trava-tabela";
 
 type Db = PrismaClient | Prisma.TransactionClient;
 
@@ -109,4 +109,32 @@ export async function verificarItemDaOs(o: {
     itens: [{ tipo, catalogoId, descricao: o.item.descricao, valorUnitario: precoComparavelDoServico(o.item) }],
     anteriores: catalogoId && o.anterior != null ? new Map([[chaveCatalogo(tipo, catalogoId), [o.anterior]]]) : undefined,
   });
+}
+
+/* ───────── medição / fatura avulsa: a mesma conferência do orçamento e da OS ───────── */
+
+/** Os preços já gravados na medição (a edição não pede de novo o que já estava). */
+export async function precosAnterioresDaMedicao(medicaoId: string, db: Db = prisma): Promise<Map<string, number[]>> {
+  const linhas = await db.medicaoItem.findMany({ where: { medicaoId }, select: { tipo: true, servicoId: true, produtoId: true, valorUnitario: true } });
+  const m = new Map<string, number[]>();
+  for (const l of linhas) {
+    const chave = l.tipo === "PRODUTO" ? (l.produtoId ? chaveCatalogo("produto", l.produtoId) : null) : (l.servicoId ? chaveCatalogo("servico", l.servicoId) : null);
+    anotarAnterior(m, chave, l.valorUnitario);
+  }
+  return m;
+}
+
+/**
+ * A trilha da medição/fatura. A medição não tem histórico próprio (não há tabela de eventos dela): a alteração fica
+ * na trilha da empresa (empresa_eventos, tipo PRECO_TABELA_FATURA), com o número do documento, quem, o quê e o motivo.
+ */
+export const TIPO_EVENTO_PRECO_TABELA_FATURA = "PRECO_TABELA_FATURA";
+export async function registrarPrecoDeTabelaNaFatura(db: Db, o: {
+  empresaId: string; usuarioId: string | null | undefined; numero: string; avulsa?: boolean; alteracoes: readonly AlteracaoPrecoTabela[]; motivo: string;
+}) {
+  const doc = `${o.avulsa ? "Fatura" : "Medição"} ${o.numero}`;
+  await db.empresaEvento.create({ data: {
+    empresaId: o.empresaId, usuarioId: o.usuarioId ?? null, tipo: TIPO_EVENTO_PRECO_TABELA_FATURA,
+    detalhe: `${doc}: ${textoDaTrilha(o.alteracoes, o.motivo)}`,
+  } });
 }

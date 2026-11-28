@@ -12,7 +12,9 @@ import { FormField, FormGrid, FormSection } from "@/components/ui/form-field";
 import { PageHeader } from "@/components/ui/page-header";
 import { ItensTabela, type ItemTabela, type CatalogoItem, type TabelaPrecoCliente } from "@/components/orcamento/itens-tabela";
 import { LABELS_TIPO_MEDICAO, MESES_PT, formatarMoeda } from "@/lib/utils";
-import { AlertCircle, Tags } from "lucide-react";
+import { AlertCircle } from "lucide-react";
+import { itensComPrecoDeTabelaAlterado, marcarItensDaTabela, MOTIVO_MIN } from "@/lib/precos/trava-tabela";
+import { MotivoPrecoTabela, SeloTabelaCliente } from "@/components/orcamento/preco-tabela-tela";
 import { anoBR, mesBR } from "@/lib/fuso";
 
 interface ClienteOpt {
@@ -81,11 +83,12 @@ export function MedicaoForm({
   const [observacao, setObservacao] = useState(inicial?.observacao ?? "");
   const [descontoValor, setDescontoValor] = useState(Number(inicial?.descontoValor ?? 0));
   const [descontoPercent, setDescontoPercent] = useState(Number(inicial?.descontoPercent ?? 0));
+  // valorGravado: o preço já salvo (a tabela do cliente não o troca ao abrir; ver lib/precos/trava-tabela)
   const [servicos, setServicos] = useState<ItemTabela[]>(
-    inicial?.servicos.map((s) => ({ ...s, id: s.id || novoId() })) ?? [],
+    inicial?.servicos.map((s) => ({ ...s, id: s.id || novoId(), valorGravado: Number(s.valorUnitario) })) ?? [],
   );
   const [produtos, setProdutos] = useState<ItemTabela[]>(
-    inicial?.produtos.map((p) => ({ ...p, id: p.id || novoId() })) ?? [],
+    inicial?.produtos.map((p) => ({ ...p, id: p.id || novoId(), valorGravado: Number(p.valorUnitario) })) ?? [],
   );
 
   const [contratos, setContratos] = useState<ContratoOpt[]>([]);
@@ -96,6 +99,16 @@ export function MedicaoForm({
   const [tabelaInativa, setTabelaInativa] = useState<{ id: string; nome: string } | null>(null);
   const [erro, setErro] = useState("");
   const [salvando, setSalvando] = useState(false);
+  // Como no orçamento: ao abrir uma medição salva (ou trocar de cliente), os itens da tabela do cliente ficam
+  // marcados (o item novo recebe o preço da tabela; o já gravado mantém o seu); sem tabela, destravam
+  const [motivoPrecoTabela, setMotivoPrecoTabela] = useState("");
+  const [servidorPediuMotivo, setServidorPediuMotivo] = useState(false);
+  useEffect(() => {
+    setServicos((prev) => marcarItensDaTabela(prev, tabelaPreco?.itens, podeAlterarPrecoTabela));
+    setProdutos((prev) => marcarItensDaTabela(prev, tabelaPreco?.itens, podeAlterarPrecoTabela));
+  }, [tabelaPreco, podeAlterarPrecoTabela]);
+  const precosDeTabelaAlterados = itensComPrecoDeTabelaAlterado([...servicos, ...produtos]);
+  const pedirMotivo = precosDeTabelaAlterados.length > 0 || servidorPediuMotivo;
 
   useEffect(() => {
     if (!clienteId) {
@@ -133,6 +146,9 @@ export function MedicaoForm({
     if (servicos.length === 0 && produtos.length === 0) {
       return setErro("Adicione ao menos um serviço ou produto.");
     }
+    if (pedirMotivo && motivoPrecoTabela.trim().length < MOTIVO_MIN) {
+      return setErro("Informe o motivo da alteração do preço de tabela.");
+    }
 
     const mapItem = (it: ItemTabela, t: "SERVICO" | "PRODUTO") => ({
       tipo: t,
@@ -160,6 +176,7 @@ export function MedicaoForm({
       descontoValor: Number(descontoValor) || 0,
       descontoPercent: Number(descontoPercent) || 0,
       itens,
+      motivoPrecoTabela: pedirMotivo ? motivoPrecoTabela.trim() : null,
     };
 
     setSalvando(true);
@@ -174,6 +191,7 @@ export function MedicaoForm({
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
         setErro(err.erro ?? "Erro ao salvar.");
+        if (err.precoTabela && res.status === 400) setServidorPediuMotivo(true);
         return;
       }
       const saved = await res.json();
@@ -210,14 +228,7 @@ export function MedicaoForm({
         </div>
       )}
 
-      {tabelaPreco && (
-        <div className="flex items-center gap-2">
-          <span className="inline-flex items-center gap-1.5 bg-success-50 text-success-700 text-xs font-semibold rounded-full px-3 py-1">
-            <Tags className="w-3.5 h-3.5" /> Tabela: {tabelaPreco.nome}
-          </span>
-          <span className="text-xs text-ink-muted">Preços da tabela do cliente</span>
-        </div>
-      )}
+      {tabelaPreco && <SeloTabelaCliente nome={tabelaPreco.nome} podeAlterar={podeAlterarPrecoTabela} />}
       {tabelaInativa && (
         <p className="text-xs text-atencao-texto" data-aviso-tabela-inativa>A tabela do cliente (“{tabelaInativa.nome}”) está inativa: valem os preços padrão do catálogo.</p>
       )}
@@ -269,6 +280,8 @@ export function MedicaoForm({
       <div className="card-padded">
         <ItensTabela titulo="Produtos" labelAdicionar="Pesquisar produto por nome ou código..." catalogo={catalogoProdutos} itens={produtos} onChange={setProdutos} tabela={tabelaPreco} podeAlterarPrecoTabela={podeAlterarPrecoTabela} />
       </div>
+
+      {pedirMotivo && <MotivoPrecoTabela alterados={precosDeTabelaAlterados} valor={motivoPrecoTabela} onChange={setMotivoPrecoTabela} />}
 
       <div className="card-padded">
         <FormSection title="Totais">

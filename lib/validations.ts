@@ -687,6 +687,8 @@ export const medicaoSchema = z.object({
     z.number().nonnegative().max(100)
   ).default(0),
   itens: z.array(medicaoItemSchema).default([]),
+  /** Preço de tabela alterado (lib/precos/trava-tabela): o motivo, exigido de quem tem a permissão */
+  motivoPrecoTabela: z.string().trim().max(300).optional().nullable(),
 });
 
 export const aprovacaoMedicaoSchema = aprovacaoPublicaSchema;

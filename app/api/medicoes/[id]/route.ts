@@ -7,6 +7,8 @@ import { respostaRefEmpresa, validarRefsEmpresa } from "@/lib/ref-empresa";
 import { medicaoSchema } from "@/lib/validations";
 import { calcularTotaisMedicao } from "@/lib/medicao-helpers";
 import { motivoNaoExcluirMedicao } from "@/lib/cadastros/regras-arquivar";
+import { precosAnterioresDaMedicao, registrarPrecoDeTabelaNaFatura, verificarPrecoDeTabela } from "@/lib/precos/trava-tabela-server";
+import { itensDaMedicaoParaTrava } from "@/lib/precos/trava-tabela";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -59,6 +61,13 @@ export async function PUT(req: NextRequest, { params }: Params) {
       validarRefsEmpresa("orcamento", data.itens.map((i) => i.orcamentoId), empresaId, "Orçamento"),
     ]);
   } catch (e) { const r = respostaRefEmpresa(e); if (r) return r; throw e; }
+  // Preço de tabela travado (a mesma regra do orçamento e da OS): o preço já gravado na medição não pede de novo
+  const trava = await verificarPrecoDeTabela({
+    user: session.user!, empresaId, clienteId: data.clienteId, itens: itensDaMedicaoParaTrava(data.itens),
+    anteriores: await precosAnterioresDaMedicao(id), motivo: data.motivoPrecoTabela,
+  });
+  if (!trava.veredito.ok) return NextResponse.json({ erro: trava.veredito.erro, precoTabela: true }, { status: trava.veredito.status });
+  const motivoPrecoTabela = trava.veredito.motivo;
   const totais = calcularTotaisMedicao(data.itens, data.descontoValor, data.descontoPercent);
   // Retenções marcadas continuam as mesmas; o valor delas acompanha o novo valor da nota
   const retencoes = calcularRetencoes(totais.valorLiquido, retencoesDaMedicao(existente));
@@ -71,6 +80,9 @@ export async function PUT(req: NextRequest, { params }: Params) {
     });
     const ja = [...travadas.os, ...travadas.orcamentos][0];
     if (ja) return { conflito: `Um item já está faturado na medição ${ja.medicao.numero}. Cancele-a antes de faturar de novo.` };
+    if (motivoPrecoTabela) {
+      await registrarPrecoDeTabelaNaFatura(tx, { empresaId, usuarioId: session.user!.id, numero: existente.numero, avulsa: existente.avulsa, alteracoes: trava.alteracoes, motivo: motivoPrecoTabela });
+    }
     return { atualizada: await tx.medicao.update({
     where: { id },
     data: {

@@ -261,3 +261,66 @@ Em `docs/prints/leva-i/` (`antes-*` e `depois-*`, desktop e celular):
 | `leva-i` | posição do menu flutuante; a ordem das camadas e que cada componente usa a sua (e nenhum modal solto em z-50); a regra do menu lateral; quando um link sai da tela e a janela do envio; o CEP (ViaCEP, reserva, prazo, inexistente × fora do ar, o endereço aplicado); as ligações (telas com o aviso, formulários com o `CampoCep`, a chave, o veículo) |
 | `leva-i-ui` | o menu "Colunas" em portal fora da tabela; o modal por cima da gaveta; sair sem salvar (sem alteração, com alteração, busca não conta, depois do envio, salvo na tela, fechar a aba); o `CampoCep`; a chave copiando |
 | `leva-i-pg` (PostgreSQL real) | novembro mostra as agendadas, executadas ou previstas para novembro (não as só abertas nele); outubro vazio; "Sem agendamento" mostra e conta a OS sem data em qualquer período; o padrão é o mês atual |
+
+## Leva I.2 — grupo B
+
+### 5. Preço de tabela travado na medição/fatura
+
+A regra do orçamento e da OS (`lib/precos/trava-tabela`) agora vale também ao criar e ao editar a medição ou a fatura avulsa.
+
+**Na tela** (`medicao-form`):
+- o item do catálogo que está na tabela do cliente entra com o preço da tabela;
+- sem a permissão "Alterar preço de tabela", o preço aparece com cadeado;
+- com a permissão, mudar o preço faz aparecer o campo do motivo, exigido antes de salvar;
+- o item já gravado mantém o preço salvo (`valorGravado`);
+- trocar o cliente aplica a tabela do novo cliente, ou destrava os itens se ele não tiver tabela.
+
+O selo da tabela e o campo do motivo são os mesmos do orçamento (`components/orcamento/preco-tabela-tela`).
+
+**No servidor:** `POST /api/medicoes` e `PUT /api/medicoes/[id]` usam a mesma `verificarPrecoDeTabela`.
+- Sem a permissão: **403**.
+- Com a permissão e sem motivo: **400**.
+- Os dois casos respondem `{ precoTabela: true }`.
+- Na edição, o preço já gravado na medição não pede o motivo de novo.
+
+**Trilha:** a medição não tem histórico próprio. A alteração fica em `empresa_eventos` (tipo `PRECO_TABELA_FATURA`), no formato "Medição MED-… : Preço de tabela alterado: Limpeza (R$ 150,00 → R$ 120,00). Motivo: …", com quem alterou. Ainda não aparece na ficha da medição.
+
+### 6. Reajuste em massa da tabela de preço
+
+**No editor da tabela** (só numa tabela já criada, para quem edita tabela de preço: Configurações › gerenciar):
+- **"Reajustar preços"** vale para todos os itens, ou só para os marcados nas caixas de cada item.
+- O modal pede o tipo (% ou R$, positivo ou negativo), o valor e o motivo (5 a 300 caracteres).
+- **"Ver prévia"** mostra a lista calculada pelo servidor: item, preço atual → preço novo. Só depois vem **"Aplicar reajuste"**.
+- **"Desfazer reajuste"** só aparece quando há um lote. A confirmação mostra o lote (%, data, quem, motivo), os itens que voltam e o aviso dos que ficam.
+- Com alteração não salva na tabela, os dois botões ficam desligados. A dica explica: o reajuste vale sobre os preços gravados.
+
+**As regras** (`lib/precos/reajuste-tabela`):
+- a base do reajuste é o preço atual de cada item (o valor final gravado);
+- o resultado arredonda em centavos;
+- um preço que ficaria negativo recusa o reajuste inteiro;
+- item cujo preço não muda fica fora do lote.
+
+**Item com desconto %:** o reajuste vale sobre o preço final, e o item passa a **valor fixo** com o preço novo. É o jeito mais simples e exato: a prévia mostra o preço que fica, sem arredondar um percentual de volta. Desfazer devolve o desconto original, e o valor final é recalculado pelo preço padrão do catálogo de agora.
+
+**O lote:** cada aplicação grava um lote em `tabela_preco_reajustes`, com tipo, valor, motivo, quem e o antes/depois de cada item.
+
+**Desfazer** desfaz o **último lote ainda não desfeito**:
+- volta o "antes" só nos itens que continuam como o lote os deixou;
+- o item mudado depois (ou tirado da tabela) fica como está e aparece no aviso;
+- o lote é marcado como desfeito (`desfeito_em`, `desfeito_por_id`) mesmo quando nenhum item volta. Assim o lote anterior passa a ser o próximo a desfazer;
+- os itens são achados pelo serviço/produto, não pelo id da linha: salvar a tabela no editor recria as linhas.
+
+**Rotas:**
+- `GET /api/cadastros/tabelas-preco/[id]/reajustes`: o último lote;
+- `POST /api/cadastros/tabelas-preco/[id]/reajustes` com `{ tipo, valor, itemIds?, motivo, previa }`: `previa: false` grava;
+- `POST /api/cadastros/tabelas-preco/[id]/reajustes/desfazer` com `{ previa? }`.
+
+As rotas de gravar exigem a mesma permissão de editar a tabela (403 sem ela). A tabela de outra empresa dá 404.
+
+### Testes do grupo B
+
+| Arquivo | O que prova |
+|---|---|
+| `leva-i2-b` | as linhas da medição na conferência; 403/400/motivo e o já gravado; marcar, travar e destravar na tela; centavos; % e R$; todos e escolhidos; desconto % → valor fixo; negativo, nada muda e item ausente; a validação do pedido e do motivo; o plano do desfazer (volta, alterado, removido, desconto recalculado) e o aviso |
+| `leva-i2-b-ui` | medição: cadeado sem a permissão; o motivo pedido e enviado; o 400 do servidor abre o motivo. Editor: sem a permissão não há reajuste; marcados → prévia do servidor → motivo → aplicar → recarrega; todos em R$; alteração não salva desliga os botões; desfazer com a confirmação e o aviso |
+| `leva-i2-b-pg` (PostgreSQL real) | medição POST e PUT: 403, 400, trilha em `empresa_eventos` ("Medição"/"Fatura"), o já gravado não pede de novo, livres. Reajuste: prévia não grava; aplicar grava os preços e o lote; só os escolhidos depois de o editor recriar as linhas; 403, 404 e motivo; desfazer (o último, o item alterado fica, o anterior pelo serviço, desconto de volta), 409 sem lote |
