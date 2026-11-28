@@ -270,7 +270,7 @@ export function Header({ session, avatarUrl }: HeaderProps) {
         </div>
 
         {/* CHAT-1: Conversas (quem vê OS), com as conversas por ler */}
-        {pode(usuario.permissoes, "ordens", "visualizar", usuario.role) && <IconeConversas />}
+        {(pode(usuario.permissoes, "ordens", "visualizar", usuario.role) || pode(usuario.permissoes, "conversas", "visualizar", usuario.role)) && <IconeConversas />}
 
         {/* Notificações */}
         <div className="relative" ref={sinoRef}>

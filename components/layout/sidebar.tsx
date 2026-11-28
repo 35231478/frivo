@@ -32,6 +32,8 @@ interface Item {
   acao?: Acao;
   /** A ação basta sozinha (sem exigir "visualizar" do módulo). Ex.: "A separar" é de quem separa material. */
   somenteAcao?: boolean;
+  /** Aparece para quem tem QUALQUER uma destas permissões (ex.: Conversas = ver OS ou "Conversas") */
+  qualquer?: [string, Acao][];
 }
 interface Grupo {
   tipo: "grupo";
@@ -72,7 +74,7 @@ const OPERACIONAL: Secao[] = [
         tipo: "grupo", label: "Operações", icone: ClipboardList, itens: [
           { href: "/ordens", icone: ClipboardList, label: "Ordens de serviço" },
           // CHAT-1: o chat interno com o campo, uma conversa por OS (lib/chat)
-          { href: "/conversas", icone: MessageCircle, label: "Conversas" },
+          { href: "/conversas", icone: MessageCircle, label: "Conversas", qualquer: [["ordens", "visualizar"], ["conversas", "visualizar"]] },
           { href: "/calendario", icone: CalendarDays, label: "Calendário" },
           // O relatório do SLA (prazo de atendimento e de execução): Relatórios › Visualizar
           { href: "/ordens/cumprimento", icone: Timer, label: "Cumprimento de prazos", modulo: "relatorios", acao: "visualizar", somenteAcao: true },
@@ -275,6 +277,7 @@ export function Sidebar({ session, variant = "desktop", avatarUrl }: SidebarProp
   const podeVer = (i: Item) => {
     const href = i.href.split("#")[0];
     if (rotaDesligada(href)) return false;
+    if (i.qualquer) return i.qualquer.some(([mod, a]) => pode(permissoes, mod, a, role));
     const m = i.modulo ?? moduloDaRota(href);
     if (!m) return true;
     if (i.somenteAcao && i.acao) return pode(permissoes, m, i.acao, role);

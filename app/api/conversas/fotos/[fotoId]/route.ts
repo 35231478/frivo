@@ -9,7 +9,7 @@ type Params = { params: Promise<{ fotoId: string }> };
 
 /** GET /api/conversas/fotos/[fotoId] — CHAT-1: a foto inteira de uma mensagem (ampliar), para quem vê a conversa. */
 export async function GET(_: NextRequest, { params }: Params) {
-  const g = await guardaEscritorio("visualizar");
+  const g = await guardaEscritorio("visualizar", [["ordens", "visualizar"], ["conversas", "visualizar"]]);
   if (g.resposta) return g.resposta;
   const { fotoId } = await params;
   const f = await fotoDaMensagem(g.quem.empresaId, fotoId);

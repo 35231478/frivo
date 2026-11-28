@@ -13,7 +13,7 @@ type Params = { params: Promise<{ usuarioId: string }> };
 
 /** GET /api/conversas/pessoas/[usuarioId] — CHAT-1: a conversa com um técnico (lê e marca como lida), as OS dele no dia e a OS padrão. */
 export async function GET(_: NextRequest, { params }: Params) {
-  const g = await guardaEscritorio("visualizar");
+  const g = await guardaEscritorio("visualizar", [["conversas", "visualizar"]]);
   if (g.resposta) return g.resposta;
   if (!podeConversas(g.quem, "visualizar")) return NextResponse.json({ erro: MSG_SEM_PERMISSAO_CONVERSAS }, { status: 403 });
   const { usuarioId } = await params;
@@ -27,7 +27,7 @@ export async function GET(_: NextRequest, { params }: Params) {
  * pessoa, com a OS da mensagem ou sem OS. Pede "Conversas › Enviar"; com OS, também ver a OS (e o "Ver só os próprios").
  */
 export async function POST(req: NextRequest, { params }: Params) {
-  const g = await guardaEscritorio("visualizar");
+  const g = await guardaEscritorio("visualizar", [["conversas", "enviar"]]);
   if (g.resposta) return g.resposta;
   if (!podeConversas(g.quem, "enviar")) return NextResponse.json({ erro: MSG_SEM_PERMISSAO_CONVERSAS }, { status: 403 });
   const { usuarioId } = await params;

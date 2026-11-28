@@ -255,8 +255,6 @@ const ROTA_MODULO: Record<string, string> = {
   equipamentos: "equipamentos",
   pmoc: "pmoc",
   ordens: "ordens",
-  // CHAT-1: a conversa é da OS — quem vê OS vê as Conversas (escrever pede editar OS)
-  conversas: "ordens",
   prazos: "ordens",
   mapa: "equipes", // Operações › Mapa (posição dos técnicos): a página exige Equipes › Gerenciar
   tecnico: "ordens", // app do técnico (Meu dia)
@@ -315,6 +313,9 @@ export function moduloDaRota(pathname: string): string | null {
   // o endereço mora em /ordens, mas quem lê o relatório do SLA não precisa ver a lista de OS.
   // A página confere a permissão sozinha (e manda para /ordens quem não a tem).
   if (seg === "ordens" && segs[1] === "cumprimento") return null;
+  // CHAT-1: Conversas entra com "OS › Visualizar" (a visão por OS) OU "Conversas" (a por pessoa). A página confere
+  // sozinha (e manda para /sem-permissao quem não tem nenhuma das duas).
+  if (seg === "conversas") return null;
   return ROTA_MODULO[seg] ?? null;
 }
 

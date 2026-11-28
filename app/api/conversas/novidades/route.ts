@@ -12,7 +12,7 @@ export const maxDuration = 20;
  * por ler (o ícone do topo). Sem `desde`: a marca atual na hora.
  */
 export async function GET(req: NextRequest) {
-  const g = await guardaEscritorio("visualizar");
+  const g = await guardaEscritorio("visualizar", [["ordens", "visualizar"], ["conversas", "visualizar"]]);
   if (g.resposta) return g.resposta;
   const onde = ondeNovidadesEscritorio(g.quem.empresaId);
   const desde = lerDesde(req.url);

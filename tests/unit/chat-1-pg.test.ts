@@ -361,6 +361,16 @@ describe.skipIf(!URL_PG)("CHAT-1 (PostgreSQL real)", () => {
     expect((await chamar("conversas/pessoas", "GET")).json.pessoas).toEqual([]);
   });
 
+  it("\"Conversas\" sem ver OS: na conversa da pessoa só as mensagens SEM OS; escrever com OS é recusado", async () => {
+    como(user("uL", { role: "OPERADOR", permissoes: { ...TOTAIS, ordens: { visualizar: false, criar: false, editar: false, concluir: false, excluir: false, liberarSemPedido: false, verSoProprios: false } } }));
+    const c = await chamar("conversas/pessoas/[usuarioId]", "GET", { usuarioId: "uT" });
+    expect(c.status).toBe(200);
+    expect(c.json.mensagens.length).toBeGreaterThan(0);
+    expect(c.json.mensagens.every((m: any) => m.os === null)).toBe(true);
+    expect(c.json.osDoDia).toEqual([]);
+    expect((await chamar("conversas/pessoas/[usuarioId]", "POST", { usuarioId: "uT" }, { clientId: "sem-os-x", texto: "x", osId: "os1" })).status).toBe(404);
+  });
+
   it("push por pessoa: o escritório para UMA pessoa avisa só ela (o app abre o Chat); o técnico sem OS avisa o escritório que conversa com ele", async () => {
     const { notificarMensagem } = await import("@/lib/push/eventos");
     push.envios = []; push.comAparelho = ["uA", "uT", "uT2", "uL"];
@@ -369,7 +379,10 @@ describe.skipIf(!URL_PG)("CHAT-1 (PostgreSQL real)", () => {
     expect(push.envios[0].mensagem({ restrito: true })).toMatchObject({ url: "/tecnico?ver=chat", titulo: "Mensagem nova de Ana Escritório" });
     push.envios = [];
     await notificarMensagem({ empresaId: "e1", comentarioId: "x2", osId: null, autorId: "uT", paraUsuarioId: null, origem: "APP", texto: "Chego em 10" });
-    expect(push.envios[0].usuarios).toEqual(["uA"]); // a Ana escreveu para ele e leu a conversa dele
+    // quem conversa com ele (escreveu para ele ou leu a conversa dele); nunca o próprio autor nem o outro técnico
+    expect(push.envios[0].usuarios).toContain("uA");
+    expect(push.envios[0].usuarios).not.toContain("uT");
+    expect(push.envios[0].usuarios).not.toContain("uT2");
     expect(push.envios[0].mensagem.url).toBe("/conversas?pessoa=uT");
   });
 });

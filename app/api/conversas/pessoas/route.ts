@@ -8,7 +8,7 @@ import { guardaEscritorio, SEM_CACHE } from "@/lib/chat/rotas-server";
  * não lidas de quem vê; não lidas primeiro. Pede a permissão "Conversas" (o administrador sempre).
  */
 export async function GET(req: NextRequest) {
-  const g = await guardaEscritorio("visualizar");
+  const g = await guardaEscritorio("visualizar", [["conversas", "visualizar"]]);
   if (g.resposta) return g.resposta;
   if (!podeConversas(g.quem, "visualizar")) return NextResponse.json({ erro: MSG_SEM_PERMISSAO_CONVERSAS }, { status: 403 });
   const pessoas = await pessoasDoEscritorio(g.quem, { busca: req.nextUrl.searchParams.get("busca")?.slice(0, 80) ?? null });

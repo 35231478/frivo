@@ -149,7 +149,8 @@ export async function conversaComPessoa(u: QuemEscritorio, usuarioIdTecnico: str
   await lerConversa(u.empresaId, u.id, p.usuarioId, onde, agora);
   const [mensagens, osDoDia] = await Promise.all([mensagensDe(u.empresaId, onde, u.id), osDoDiaDoTecnico(u.empresaId, p.tecnicoId, agora)]);
   // O seletor mostra só as OS que esta pessoa do escritório pode ver ("Ver só os próprios")
-  const visiveis = osDoDia.length ? new Set((await prisma.ordemServico.findMany({ where: { id: { in: osDoDia.map((o) => o.osId) }, empresaId: u.empresaId, ...filtroOrdens(u) }, select: { id: true } })).map((o) => o.id)) : new Set<string>();
+  const veOs = pode(u.permissoes ?? null, "ordens", "visualizar", u.role ?? undefined);
+  const visiveis = veOs && osDoDia.length ? new Set((await prisma.ordemServico.findMany({ where: { id: { in: osDoDia.map((o) => o.osId) }, empresaId: u.empresaId, ...filtroOrdens(u) }, select: { id: true } })).map((o) => o.id)) : new Set<string>();
   const doDia = osDoDia.filter((o) => visiveis.has(o.osId)).map(({ atividadeId: _a, ...o }) => o);
   return { pessoa: { usuarioId: p.usuarioId, nome: p.nome, avatar: p.avatar }, mensagens, osDoDia: doDia, osPadrao: osPadraoDaMensagem({ osDoDia: doDia, mensagens, agora }) };
 }
