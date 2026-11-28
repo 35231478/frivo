@@ -150,6 +150,11 @@ describe.skipIf(!URL_PG)("COM-1 — comissões (PostgreSQL real)", () => {
     expect((await aprovar(o2.id)).status).toBe(200);
     expect((await comissoes(o2.id)).map((c: any) => [c.descricao, Number(c.valor)])).toEqual([["Instalação split", 50], ["Visita avulsa", 8]]);
     await prisma.comissaoRegra.update({ where: { id: fixo.json.id }, data: { ativo: false } });
+    // Proposta de contrato fica fora nesta leva (pergunta 1 do PR): aprovada e com vendedor, não gera comissão
+    const prop = await novoOrcamento({ servicos: [{ servicoId: "sInst", descricao: "Instalação split", v: 1000 }] });
+    await prisma.orcamento.update({ where: { id: prop.id }, data: { tipo: "PROPOSTA_CONTRATO", status: "APROVADO" } });
+    expect(await srv.gerarComissoesDoOrcamento("e1", prop.id)).toBe(0);
+    expect(await comissoes(prop.id)).toEqual([]);
   });
 
   it("recebimento PARCIAL libera proporcional; recebimento ESTORNADO estorna; quitado libera tudo; o extrato acompanha", async () => {
