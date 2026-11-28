@@ -125,3 +125,49 @@ export function useAssinaturaPreservada(ref: RefObject<SignatureCanvas | null>):
     };
   }, [ref]);
 }
+
+/* ───────── D6 — assinar em tela cheia (paisagem só nessa tela) ───────── */
+
+/** O que o navegador oferece para a tela cheia e a orientação (injetável para testar) */
+export interface AmbienteTela {
+  raiz?: { requestFullscreen?: () => Promise<void> } | null;
+  emTelaCheia?: () => boolean;
+  sairTelaCheia?: () => Promise<void>;
+  orientacao?: { lock?: (o: "landscape") => Promise<void>; unlock?: () => void } | null;
+}
+export interface EstadoPaisagem { telaCheia: boolean; travou: boolean }
+
+/** O ambiente real do navegador */
+export function ambienteDoNavegador(): AmbienteTela {
+  if (typeof document === "undefined") return {};
+  const d = document as Document & { exitFullscreen?: () => Promise<void> };
+  const o = (typeof screen !== "undefined" ? screen.orientation : null) as AmbienteTela["orientacao"];
+  return {
+    raiz: document.documentElement as AmbienteTela["raiz"],
+    emTelaCheia: () => !!document.fullscreenElement,
+    sairTelaCheia: d.exitFullscreen ? () => d.exitFullscreen!() : undefined,
+    orientacao: o ?? null,
+  };
+}
+
+/**
+ * Entra em tela cheia e trava em PAISAGEM — onde o aparelho deixa (Android/Chrome; o lock exige tela cheia).
+ * No iPhone não há trava: a tela de assinatura pede para girar (e funciona deitada ou em pé). Nunca falha:
+ * devolve o que conseguiu, para desfazer só isso ao sair.
+ */
+export async function entrarPaisagem(a: AmbienteTela): Promise<EstadoPaisagem> {
+  const estado: EstadoPaisagem = { telaCheia: false, travou: false };
+  if (a.raiz?.requestFullscreen && !a.emTelaCheia?.()) {
+    try { await a.raiz.requestFullscreen(); estado.telaCheia = true; } catch { /* o navegador recusou: segue sem */ }
+  }
+  if (a.orientacao?.lock) {
+    try { await a.orientacao.lock("landscape"); estado.travou = true; } catch { /* sem trava (iPhone, desktop) */ }
+  }
+  return estado;
+}
+
+/** Desfaz só o que entrarPaisagem fez: o resto do app volta a girar livre e sai da tela cheia */
+export async function sairPaisagem(a: AmbienteTela, estado: EstadoPaisagem): Promise<void> {
+  if (estado.travou) { try { a.orientacao?.unlock?.(); } catch { /* nada */ } }
+  if (estado.telaCheia && a.emTelaCheia?.()) { try { await a.sairTelaCheia?.(); } catch { /* nada */ } }
+}
