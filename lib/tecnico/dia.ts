@@ -28,6 +28,8 @@ const SELECT_CARTAO = {
   },
   _count: { select: { equipamentos: true, servicosAdicionais: true } },
   equipamentos: { where: { feito: true }, select: { id: true } },
+  // D1: a pausa aberta ("Pausada — motivo" no cartão)
+  pausas: { where: { fim: null }, orderBy: { inicio: "desc" }, take: 1, select: { clientId: true, motivo: true, inicio: true, impedimento: true } },
 } satisfies Prisma.AtividadeOsSelect;
 
 type AtividadeCartao = Prisma.AtividadeOsGetPayload<{ select: typeof SELECT_CARTAO }>;
@@ -78,6 +80,8 @@ export interface CartaoAtividade {
   /** Quem abriu a OS e como ela chegou (dado de escritório: fica em "Detalhes") */
   criadoPor: string | null;
   origem: string;
+  /** D1: a pausa aberta (null = em execução) */
+  pausa: { clientId: string; motivo: string; inicio: string; impedimento: boolean } | null;
 }
 
 /** Junta os textos do escritório (sem repetir o mesmo texto), um parágrafo cada. */
@@ -104,6 +108,7 @@ export function montarCartao(a: AtividadeCartao): CartaoAtividade {
     iniciadaEm: (a.iniciadaEm ?? (a.status === "EM_ANDAMENTO" ? a.dataAgendada : null))?.toISOString() ?? null,
     // Dado de escritório (vai para "Detalhes" no topo da OS)
     criadoPor: os.criadoPor?.nome ?? null, origem: os.origem,
+    pausa: a.pausas[0] ? { clientId: a.pausas[0].clientId, motivo: a.pausas[0].motivo, inicio: a.pausas[0].inicio.toISOString(), impedimento: a.pausas[0].impedimento } : null,
   };
 }
 
