@@ -11,11 +11,13 @@ export type EnderecoPrincipal = Partial<Record<CampoEndereco, string | null>>;
 const limpo = (v: unknown) => (typeof v === "string" ? v.trim() : "");
 
 /**
- * O que a consulta do CNPJ preenche no endereço principal: só os campos VAZIOS (o que a pessoa já digitou fica).
- * Devolve só os campos a mudar ({} = nada a preencher).
+ * O que a consulta do CNPJ preenche no endereço principal: tudo ou nada. Com rua ou CEP já preenchidos, nada (não
+ * mistura a rua digitada com o CEP, o bairro e a cidade da Receita); sem os dois, só os campos VAZIOS (o que a
+ * pessoa já digitou fica). Devolve só os campos a mudar ({} = nada a preencher).
  */
 export function enderecoDaConsulta(consulta: EnderecoPrincipal, atual: EnderecoPrincipal): Partial<Record<CampoEndereco, string>> {
   const patch: Partial<Record<CampoEndereco, string>> = {};
+  if (limpo(atual.endereco) || limpo(atual.cep)) return patch;
   for (const c of CAMPOS_ENDERECO) {
     const novo = limpo(consulta[c]);
     if (novo && !limpo(atual[c])) patch[c] = c === "estado" ? novo.toUpperCase().slice(0, 2) : novo;
@@ -66,6 +68,11 @@ export function localDoEnderecoPrincipal(e: EnderecoPrincipal, locaisInformados:
 /** Os locais a criar com o cliente novo: o "Principal" (do endereço principal) primeiro; os informados depois, secundários. */
 export function locaisDoClienteNovo<T extends LocalInformado>(e: EnderecoPrincipal, informados: readonly T[]) {
   const principal = localDoEnderecoPrincipal(e, informados);
-  if (!principal) return { principal: null, locais: [...informados] };
+  if (!principal) {
+    // Um local informado já é o endereço principal: ele vira o Principal (o cliente não fica sem principal)
+    const igual = temEndereco(e) ? informados.findIndex((l) => mesmoEndereco(l, e)) : -1;
+    if (igual < 0) return { principal: null, locais: [...informados] };
+    return { principal: null, locais: informados.map((l, i) => ({ ...l, principal: i === igual })) };
+  }
   return { principal, locais: informados.map((l) => ({ ...l, principal: false })) };
 }

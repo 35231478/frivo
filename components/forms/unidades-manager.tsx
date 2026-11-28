@@ -194,14 +194,15 @@ export function UnidadesManager({ clienteId, unidadesIniciais, inativosIniciais 
   }
 
   async function marcarPrincipal(id: string) {
+    setErro("");
     try {
       const res = await fetch(`/api/unidades/${id}`, {
         method: "PUT", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ _marcarPrincipal: true }),
       });
-      if (!res.ok) return;
+      if (!res.ok) { const e = await res.json().catch(() => ({})); setErro(e.erro ?? "Não foi possível tornar este endereço o principal."); return; }
       setUnidades((prev) => prev.map((u) => ({ ...u, principal: u.id === id })));
-    } catch {}
+    } catch { setErro("Erro de conexão."); }
   }
 
   // Inativar e reativar pelo botão padrão dos cadastros (InativarRegistro): o mesmo texto, o impacto
@@ -299,7 +300,7 @@ export function UnidadesManager({ clienteId, unidadesIniciais, inativosIniciais 
 
   return (
     <div className="space-y-3">
-      {erro && <div className="bg-atrasado-claro border border-atrasado/20 text-atrasado-texto text-sm rounded-lg px-3 py-2">{erro}</div>}
+      {erro && <div className="bg-atrasado-claro border border-atrasado/20 text-atrasado-texto text-sm rounded-lg px-3 py-2" data-erro-enderecos>{erro}</div>}
 
       {ordenadas.length === 0 && !editando && (
         <p className="text-sm text-ink-muted py-2" data-enderecos-vazio>Nenhum local de atendimento cadastrado.</p>
@@ -330,7 +331,7 @@ export function UnidadesManager({ clienteId, unidadesIniciais, inativosIniciais 
                     </Button>
                     {!u.principal && (
                       <>
-                        <Button type="button" variant="ghost" onClick={() => marcarPrincipal(u.id)} className="min-h-[44px] text-sm">
+                        <Button type="button" variant="ghost" onClick={() => marcarPrincipal(u.id)} className="min-h-[44px] text-sm" data-tornar-principal={u.id}>
                           Tornar principal
                         </Button>
                         <InativarRegistro url={`/api/unidades/${u.id}`} modulo="clientes" acaoInativar="editar" acaoReativar="editar"

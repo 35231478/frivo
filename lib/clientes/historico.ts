@@ -4,6 +4,7 @@
  * link/portal, e-mails e lembretes enviados, contratos). As notas manuais antigas ("interações") continuam
  * visíveis, como o tipo "Notas". Regra pura: sem banco (quem busca é ./historico-server).
  */
+import { chaveDiaCivil } from "@/lib/fuso";
 
 export const TIPOS_HISTORICO = ["os", "orcamento", "financeiro", "pedido", "portal", "comunicacao", "contrato", "nota"] as const;
 export type TipoHistorico = (typeof TIPOS_HISTORICO)[number];
@@ -62,9 +63,9 @@ const MESES = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julh
 export function agruparPorMes<T extends EventoCliente>(eventos: readonly T[]): { chave: string; rotulo: string; eventos: T[] }[] {
   const grupos: { chave: string; rotulo: string; eventos: T[] }[] = [];
   for (const e of eventos) {
-    const br = new Date(e.quando.getTime() - 3 * 3600_000); // Brasília (UTC−3), sem horário de verão
-    const ano = br.getUTCFullYear(), mes = br.getUTCMonth();
-    const chave = `${ano}-${String(mes + 1).padStart(2, "0")}`;
+    // Dia civil (pagamento gravado à meia-noite UTC do dia 1º) fica no próprio mês; instante, no mês de Brasília
+    const chave = chaveDiaCivil(e.quando).slice(0, 7);
+    const ano = Number(chave.slice(0, 4)), mes = Number(chave.slice(5, 7)) - 1;
     let g = grupos[grupos.length - 1];
     if (!g || g.chave !== chave) { g = { chave, rotulo: `${MESES[mes]} de ${ano}`, eventos: [] }; grupos.push(g); }
     g.eventos.push(e);

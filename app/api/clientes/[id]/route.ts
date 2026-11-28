@@ -6,6 +6,7 @@ import { respostaRefEmpresa, validarRefEmpresa } from "@/lib/ref-empresa";
 import { clienteContextoSchema, clienteSchema, dadosParciais } from "@/lib/validations";
 import { contatoSeguro } from "@/lib/contato-cliente";
 import { definirAtivoCliente } from "@/lib/acoes-massa/regras";
+import { clienteComMesmoDocumento, erroDocumentoCliente, mesmoDocumento } from "@/lib/clientes/documento-server";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -58,10 +59,11 @@ export async function PUT(req: NextRequest, { params }: Params) {
     && !pode(session.user!.permissoes, "clientes", "excluir", session.user!.role))
     return NextResponse.json({ erro: "Sem permissão" }, { status: 403 });
 
-  if (parsed.data.cpfCnpj !== existente.cpfCnpj) {
-    const dup = await prisma.cliente.findUnique({
-      where: { cpfCnpj_empresaId: { cpfCnpj: parsed.data.cpfCnpj, empresaId } },
-    });
+  // Documento trocado (os dígitos mudaram): válido de verdade e sem outro cliente com os mesmos dígitos
+  if (!mesmoDocumento(parsed.data.cpfCnpj, existente.cpfCnpj)) {
+    const erroDoc = erroDocumentoCliente(parsed.data.tipoPessoa, parsed.data.cpfCnpj);
+    if (erroDoc) return NextResponse.json({ erro: erroDoc }, { status: 400 });
+    const dup = await clienteComMesmoDocumento(empresaId, parsed.data.cpfCnpj, id);
     if (dup) return NextResponse.json({ erro: "CPF/CNPJ já cadastrado" }, { status: 409 });
   }
 
