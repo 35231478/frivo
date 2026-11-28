@@ -17,12 +17,19 @@ Prints fictícios (empresa demo "Polar Demo") em `docs/prints/erro-no-campo/`: a
    - Mais de um: "**N campos para corrigir**", com o nome de cada campo; tocar no nome leva ao campo.
    - Erro que não é de campo (conexão, permissão): fica só na faixa, e o foco vai para ela.
    - O "Dados inválidos" genérico do servidor não aparece quando os campos já dizem o que é.
+   - A faixa aparece quando a pessoa **tenta** algo (salvar, consultar) ou o servidor recusa. O formato acusado ao sair de um
+     campo fica só no campo: a faixa surgindo no topo empurrava a tela e o clique seguinte se perdia (achado no navegador).
 3. **Ao salvar, a tela rola e dá foco no primeiro campo com erro.** Se ele está em **outra aba**, a aba ganha o ponto vermelho
    com a contagem, abre sozinha e o campo recebe o foco. O mesmo para seção recolhida ("Mais opções" do contrato) e `<details>`.
 4. **O erro some assim que a pessoa corrige** — não só no próximo salvar. Obrigatório e erro do servidor somem ao digitar;
-   erro de formato some quando o formato fica certo.
+   erro de formato some quando o formato fica certo — enquanto segue errado, a mensagem acompanha ("14 dígitos" → "CNPJ
+   inválido").
 5. **Formato óbvio confere ao sair do campo** (CNPJ/CPF, e-mail, CEP, telefone/celular, data, hora, valor). Nunca acusa
    enquanto a pessoa digita pela primeira vez; vazio não é erro de formato (o obrigatório só acusa ao salvar).
+   - **Ao salvar** também confere o formato do que a pessoa digitou (CNPJ incompleto sem ter saído do campo); um dado antigo
+     fora do formato, que ninguém mexeu, não trava o salvar.
+   - Saiu do campo **apertando um botão** (Salvar, Consultar): não acusa na hora — a mensagem empurraria o botão sob o clique;
+     quem confere é a ação do botão.
 6. **O erro do servidor cai no campo certo** (CNPJ já cadastrado, e-mail em uso, RT sem CREA, número de contrato repetido…).
 7. Select, data, hora, data e hora, máscaras, seletor com busca, cadastro rápido, e-mails, células da tabela de itens e campos
    dentro de gavetas seguem o mesmo padrão.
