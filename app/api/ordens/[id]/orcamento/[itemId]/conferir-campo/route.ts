@@ -7,7 +7,8 @@ type Params = { params: Promise<{ id: string; itemId: string }> };
 
 /**
  * Leva I.2 — POST: o escritório confere o material lançado em campo que virou item cobrado ("Cobrado à parte").
- *  - { acao: "confirmar", quantidade?, valorUnitario? }: o item fica como está (ou ajustado) e libera o faturamento;
+ *  - { acao: "confirmar", quantidade?, valorUnitario?, motivoPrecoTabela? }: o item fica como está (ou ajustado) e
+ *    libera o faturamento; o preço fora da tabela do cliente segue a trava do preço de tabela (403 / 400 pede o motivo);
  *  - { acao: "remover" }: sai da cobrança (o uso em campo e o estoque ficam como estão).
  * Quem pode: quem edita a OS.
  */
@@ -19,7 +20,7 @@ export async function POST(req: NextRequest, { params }: Params) {
   const foraDoEscopo = await escopoBarra("ordem", id); // COM-1: "Ver só os próprios" → 404
   if (foraDoEscopo) return foraDoEscopo;
   const corpo = await req.json().catch(() => null);
-  const r = await conferirItemCampo({ empresaId: session.user!.empresaId, osId: id, itemId, usuarioId: session.user!.id }, corpo && typeof corpo === "object" ? corpo : {});
-  if (!r.ok) return NextResponse.json({ erro: r.erro }, { status: r.status });
+  const r = await conferirItemCampo({ empresaId: session.user!.empresaId, osId: id, itemId, usuarioId: session.user!.id, user: session.user! }, corpo && typeof corpo === "object" ? corpo : {});
+  if (!r.ok) return NextResponse.json(r.precoTabela ? { erro: r.erro, precoTabela: true } : { erro: r.erro }, { status: r.status });
   return NextResponse.json({ ok: true, item: r.item });
 }

@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { protegerFormula } from "@/lib/exportacao/formula";
 import { comEscopo, filtroOrcamentos, filtroOrdens, type QuemVe } from "@/lib/escopo/proprios";
 import { formatarData, LABELS_PRIORIDADE, LABELS_SEGMENTO, LABELS_STATUS_ORCAMENTO, LABELS_STATUS_OS } from "@/lib/utils";
 import { lerFiltros, montarWhere } from "@/lib/equipamento-listagem";
@@ -224,11 +225,10 @@ export async function linhasExportacao(entidade: Entidade, ids: string[], empres
   }
 }
 
-/** CSV para o Excel brasileiro (`;` + BOM). Células que começam com = + - @ ganham ' (anti-injeção de fórmula). */
+/** CSV para o Excel brasileiro (`;` + BOM). Células que começam com = + - @ ganham ' (anti-injeção de fórmula, lib/exportacao/formula; números não). */
 export function gerarCsvExportacao(linhas: string[][]) {
   const campo = (v: string) => {
-    let s = v ?? "";
-    if (/^[=+\-@\t\r]/.test(s)) s = `'${s}`;
+    const s = String(protegerFormula(v ?? ""));
     return /[;"\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
   };
   return "﻿" + linhas.map((l) => l.map(campo).join(";")).join("\r\n") + "\r\n";

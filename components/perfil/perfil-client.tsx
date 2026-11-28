@@ -192,6 +192,8 @@ export function PerfilClient({ initial, onAvatar, emailSomenteLeitura = false, n
   function descartarDados() {
     setNome(base.nome); setEmail(base.email); setTelefone(base.telefone);
     setConfirmacaoEmail(""); setSenhaAtualEmail(""); setPreview(null); setErro("");
+    // Descartou: nada a salvar, sair não pergunta mais
+    marcarFormularioSalvo();
   }
 
   // ── Senha ──

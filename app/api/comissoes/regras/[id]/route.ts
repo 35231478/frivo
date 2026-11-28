@@ -13,7 +13,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   const { id } = await params;
   const parsed = regraSchema.safeParse(await req.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ erro: parsed.error.errors[0]?.message ?? "Dados inválidos" }, { status: 400 });
-  const r = await salvarRegra(guard.session.user!.empresaId, normalizarRegra(parsed.data), { id });
+  const r = await salvarRegra(guard.session.user!.empresaId, normalizarRegra(parsed.data), { id, manterAtivo: parsed.data.ativo === undefined });
   if (!r.ok) return NextResponse.json({ erro: r.erro }, { status: r.status });
   return NextResponse.json({ id: r.id });
 }

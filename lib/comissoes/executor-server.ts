@@ -12,7 +12,7 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { relatoriosDasAtividades } from "@/lib/desempenho/medicao-server";
-import { descricaoDaRegra, fracaoRecebida, movimentoNecessario, round2, type QuandoExecutor } from "./regras";
+import { descricaoDaRegra, fracaoRecebida, liberacaoPorMes, movimentoNecessario, round2, type QuandoExecutor } from "./regras";
 import {
   MOTIVO_EXECUTOR, alvoDoExecutor, chaveDoExecutor, comissoesDaUnidade, ehOrigemDoRetorno, motivoDoEstornoExecutor, piorRevisao, unidadesDaOs,
   type Atendido, type LinhaOs, type Participante,
@@ -25,6 +25,9 @@ const DIA_MS = 86_400_000;
 /** OS sem comissão ainda só entra na conta se mexeu nos últimos dias (a de 6 meses atrás não muda mais) */
 export const JANELA_GERACAO_DIAS = 180;
 
+/** A unidade (atividade × equipamento × linha), sem a pessoa: o que a trava de qualidade olha */
+const chaveDaUnidade = (u: { atividadeId: string | null; equipamentoId: string | null; linhaId: string }) => `${u.atividadeId ?? "-"}:${u.equipamentoId ?? "-"}:${u.linhaId}`;
+
 const travarEmpresa = (tx: Prisma.TransactionClient, empresaId: string) => tx.$queryRaw`SELECT 1 AS ok FROM pg_advisory_xact_lock(hashtext(${`comissoes:${empresaId}`}))`;
 
 /** Prefixo do "usuário" de quem não tem login: entra na divisão (a parte dele não vai para os colegas), mas não recebe */
@@ -34,12 +37,12 @@ const SEM_LOGIN = "sem-login:";
  * Cada colaborador da atividade como participante da divisão: o usuário (login) pelo e-mail — o mesmo vínculo da
  * COM-1, ao contrário. Quem não tem login entra na conta da divisão com um id que não recebe nada.
  */
-async function participantesDosTecnicos(db: Prisma.TransactionClient, empresaId: string, tecnicoIds: string[]): Promise<Map<string, Participante>> {
+async function participantesDosTecnicos(db: Prisma.TransactionClient, empresaId: string, tecnicoIds: string[], incluirInativos = false): Promise<Map<string, Participante>> {
   const r = new Map<string, Participante>();
   if (!tecnicoIds.length) return r;
   const tecnicos = await db.tecnico.findMany({ where: { empresaId, id: { in: tecnicoIds } }, select: { id: true, nome: true, email: true, cargoId: true } });
   const emails = [...new Set(tecnicos.map((t) => (t.email ?? "").trim().toLowerCase()).filter(Boolean))];
-  const usuarios = emails.length ? await db.usuario.findMany({ where: { empresaId, ativo: true, email: { in: emails, mode: "insensitive" } }, select: { id: true, nome: true, email: true } }) : [];
+  const usuarios = emails.length ? await db.usuario.findMany({ where: { empresaId, ...(incluirInativos ? {} : { ativo: true }), email: { in: emails, mode: "insensitive" } }, select: { id: true, nome: true, email: true } }) : [];
   for (const t of tecnicos) {
     const u = usuarios.find((x) => !!t.email && x.email.trim().toLowerCase() === t.email.trim().toLowerCase());
     r.set(t.id, u ? { usuarioId: u.id, tecnicoId: t.id, cargoId: t.cargoId, nome: u.nome } : { usuarioId: `${SEM_LOGIN}${t.id}`, tecnicoId: t.id, cargoId: t.cargoId, nome: t.nome });
@@ -138,7 +141,10 @@ async function sincronizarOs(tx: Prisma.TransactionClient, c: CtxOs): Promise<Re
 
   /* 1. o que DEVERIA existir (só com a OS viva) */
   const desejadas = new Map<string, Prisma.ComissaoCreateManyInput>();
-  if (viva && c.regras.length) {
+  // PJ4: a trava de qualidade é da UNIDADE (serviço feito + relatório completo) e da pessoa ainda estar na atividade.
+  // Não depende de a regra continuar ativa, do login continuar ativo nem do cargo: a comissão já nascida é congelada.
+  const naAtividade = new Set<string>();
+  if (viva) {
     const linhas: LinhaOs[] = os.itensOrcamento.map((l) => {
       const inclusos = l.materiais.filter((m) => m.comportamento === "INCLUSO_NO_SERVICO");
       const custo = l.tipo === "PRODUTO"
@@ -174,7 +180,12 @@ async function sincronizarOs(tx: Prisma.TransactionClient, c: CtxOs): Promise<Re
       const vistos = new Set<string>();
       return ids.map((id) => pessoas.get(id)).filter((p): p is Participante => !!p && !vistos.has(p.usuarioId) && !!vistos.add(p.usuarioId));
     };
+    const todos = await participantesDosTecnicos(tx, c.empresaId, [...new Set(os.atividades.flatMap(tecnicosDe))], true);
     for (const u of unidades) {
+      const ids = u.atividadeId ? tecnicosDe(os.atividades.find((a) => a.id === u.atividadeId)!) : os.atividades.flatMap(tecnicosDe);
+      for (const id of ids) { const p = todos.get(id); if (p) naAtividade.add(`${chaveDaUnidade(u)}|${p.usuarioId}`); }
+    }
+    if (c.regras.length) for (const u of unidades) {
       for (const k of comissoesDaUnidade(u, participantesDe(u.atividadeId), c.regras, c.liquida)) {
         if (k.participante.usuarioId.startsWith(SEM_LOGIN)) continue; // sem login não recebe (e a parte dele não muda de dono)
         const chave = chaveDoExecutor(os.id, u, k.participante.usuarioId);
@@ -202,7 +213,7 @@ async function sincronizarOs(tx: Prisma.TransactionClient, c: CtxOs): Promise<Re
 
   const vivas = await tx.comissao.findMany({
     where: { empresaId: c.empresaId, ordemServicoId: os.id },
-    select: { id: true, chave: true, usuarioId: true, valor: true, quando: true, atividadeId: true, equipamentoId: true, lancamentos: { select: { valor: true } } },
+    select: { id: true, chave: true, usuarioId: true, valor: true, quando: true, atividadeId: true, equipamentoId: true, itemId: true, lancamentos: { select: { valor: true } } },
   });
   if (!vivas.length) return r;
 
@@ -218,13 +229,19 @@ async function sincronizarOs(tx: Prisma.TransactionClient, c: CtxOs): Promise<Re
   const novos: Prisma.ComissaoLancamentoCreateManyInput[] = [];
   for (const v of vivas) {
     const estado = {
-      osViva: viva, qualidade: !!v.chave && desejadas.has(v.chave), osConcluida: os.status === "CONCLUIDA", aceite,
+      osViva: viva, qualidade: !!v.chave && (desejadas.has(v.chave) || naAtividade.has(`${chaveDaUnidade({ atividadeId: v.atividadeId, equipamentoId: v.equipamentoId, linhaId: v.itemId ?? "" })}|${v.usuarioId}`)), osConcluida: os.status === "CONCLUIDA", aceite,
       fracao: fracaoRecebida(rec.faturas, totalOs), revisao: piorRevisao(revisoes.filter((x) => x.comissaoId === v.id).map((x) => x.situacao)),
     };
     const quando = v.quando as QuandoExecutor;
     const ja = round2(v.lancamentos.reduce((s, l) => s + num(l.valor), 0));
     const mov = movimentoNecessario(alvoDoExecutor({ valor: num(v.valor), quando }, estado, ja), ja);
     if (!mov) continue;
+    // PJ4: a liberação por recebimento vai para o mês em que cada parte do dinheiro entrou
+    if (mov.tipo === "LIBERACAO" && quando === "RECEBIMENTO") {
+      for (const p of liberacaoPorMes({ valorComissao: num(v.valor), totalVenda: totalOs, jaLiberado: ja, valor: mov.valor, entradas: rec.entradas, reserva: rec.ultimaData ?? c.agora }))
+        novos.push({ empresaId: c.empresaId, comissaoId: v.id, usuarioId: v.usuarioId, tipo: mov.tipo, valor: p.valor, data: p.data, motivo: MOTIVO_EXECUTOR[quando] });
+      continue;
+    }
     const data = mov.tipo === "ESTORNO" ? c.agora
       : quando === "CONCLUSAO_OS" ? os.dataConclusao ?? c.agora
       : quando === "ACEITE" ? os.aceite?.confirmadoEm ?? c.agora

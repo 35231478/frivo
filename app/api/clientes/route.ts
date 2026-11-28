@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { locaisDoClienteNovo } from "@/lib/clientes/endereco-principal";
+import { clienteComMesmoDocumento, erroDocumentoCliente } from "@/lib/clientes/documento-server";
 import { auth } from "@/lib/auth";
 import { pode } from "@/lib/permissoes";
 import { prisma } from "@/lib/prisma";
@@ -92,9 +93,10 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ erro: "Dados inválidos", detalhes: parsed.error.flatten() }, { status: 400 });
   }
 
-  const existente = await prisma.cliente.findUnique({
-    where: { cpfCnpj_empresaId: { cpfCnpj: parsed.data.cpfCnpj, empresaId } },
-  });
+  // Documento válido de verdade; repetido = os mesmos dígitos, com ou sem pontuação (lib/clientes/documento-server)
+  const erroDoc = erroDocumentoCliente(parsed.data.tipoPessoa, parsed.data.cpfCnpj);
+  if (erroDoc) return NextResponse.json({ erro: erroDoc }, { status: 400 });
+  const existente = await clienteComMesmoDocumento(empresaId, parsed.data.cpfCnpj);
   if (existente) return NextResponse.json({ erro: "CPF/CNPJ já cadastrado" }, { status: 409 });
 
   const { responsavelTecnicoId, unidades, anexos, contatos, ...resto } = parsed.data;
@@ -120,6 +122,10 @@ export async function POST(req: NextRequest) {
   const locais: z.infer<typeof unidadeInlineSchema>[] = novos.principal
     ? [{ ...novos.principal, telefone: resto.telefone ?? undefined }, ...novos.locais]
     : novos.locais;
+  // "Exigir endereço" da empresa vale também aqui, não só na tela: o endereço principal ou um local
+  const cfg = await prisma.configuracao.findUnique({ where: { empresaId }, select: { clienteExigirUnidade: true } });
+  if (cfg?.clienteExigirUnidade && locais.length === 0)
+    return NextResponse.json({ erro: "Preencha o endereço principal ou adicione um local de atendimento (configuração da empresa)." }, { status: 400 });
 
   const cliente = await prisma.cliente.create({
     data: {

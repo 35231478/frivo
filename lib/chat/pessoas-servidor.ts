@@ -198,3 +198,20 @@ export async function tecnicoVeMensagem(empresaId: string, usuarioId: string, te
     where: { AND: [{ id: comentarioId, empresaId }, { OR: [ondeConversaDoTecnico(usuarioId, tecnicoId), { ordemServico: { atividades: { some: atividadesDoTecnico(tecnicoId) } } }] }] }, select: { id: true },
   }));
 }
+
+// ── Responder é ler ──────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Quem responde leu a conversa até aqui: o ✓✓ das mensagens do outro lado (e a leitura da conversa). Sem isto, quem já
+ * estava com a conversa aberta e respondia deixava as mensagens do técnico só com ✓ (a conversa só marcava ao abrir).
+ * O escritório marca só o que ele pode ver da conversa da pessoa.
+ */
+export async function lerAoResponderEscritorio(u: QuemEscritorio, usuarioIdTecnico: string, agora: Date = new Date()) {
+  const p = (await pessoasDaEmpresa(u.empresaId)).find((x) => x.usuarioId === usuarioIdTecnico);
+  if (p) await lerConversa(u.empresaId, u.id, p.usuarioId, { AND: [ondeConversaDoTecnico(p.usuarioId, p.tecnicoId), visivelAoEscritorio(u)] }, agora);
+}
+
+/** O técnico respondeu (pelo app): leu a conversa dele com o escritório até aqui. */
+export async function lerAoResponderTecnico(empresaId: string, usuarioId: string, tecnicoId: string | null | undefined, agora: Date = new Date()) {
+  if (tecnicoId) await lerConversa(empresaId, usuarioId, usuarioId, ondeConversaDoTecnico(usuarioId, tecnicoId), agora);
+}

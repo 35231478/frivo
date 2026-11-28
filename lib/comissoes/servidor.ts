@@ -13,7 +13,7 @@ import { aplicarTetos, inicioDoMesSeguinte, type Excedente, type TetoComissao } 
 import { ultimosCustos } from "@/lib/estoque/custo";
 import { valorDesconto } from "@/lib/orcamentos/calculo";
 import {
-  VENDA_VIVA, alvoLiberado, chaveDaRegra, dataDeEmissao, lerVencimento, faturaFoiCancelada, fracaoEmitidaNoPeriodo, ultimaEmissaoNoPeriodo, vendaComFaturaCancelada, type FaturaDaVenda, comissoesDaVenda, entradasDaFatura, fracaoRecebidaNoPeriodo, inicioDaCompetencia, vistaPadrao, comissoesPorPessoa, descricaoDaRegra, fimDaCompetencia, fracaoRecebida, itensDaVenda,
+  VENDA_VIVA, alvoLiberado, liberacaoPorMes, chaveDaRegra, dataDeEmissao, lerVencimento, faturaFoiCancelada, fracaoEmitidaNoPeriodo, ultimaEmissaoNoPeriodo, vendaComFaturaCancelada, type FaturaDaVenda, comissoesDaVenda, entradasDaFatura, fracaoRecebidaNoPeriodo, inicioDaCompetencia, vistaPadrao, comissoesPorPessoa, descricaoDaRegra, fimDaCompetencia, fracaoRecebida, itensDaVenda,
   movimentoNecessario, round2, situacaoDaComissao, type QuandoExecutor, type EntradaDaVenda, type FaturaRecebida, type Quando, type Vista, type RegraComissao, type normalizarRegra,
 } from "./regras";
 
@@ -363,14 +363,18 @@ async function sincronizarNaTransacao(tx: Tx, empresaId: string, filtro: { orcam
         const ja = round2(c.lancamentos.reduce((s, l) => s + num(l.valor), 0));
         const mov = movimentoNecessario(alvo, ja);
         if (!mov) continue;
+        const motivo = substituida ? MOTIVO_TROCA : mov.tipo === "ESTORNO" ? motivoDoEstorno(quando, o.status, estado.faturaCancelada) : MOTIVO[quando];
+        // PJ4: a liberação por recebimento vai para o mês em que cada parte do dinheiro entrou
+        if (mov.tipo === "LIBERACAO" && quando === "RECEBIMENTO") {
+          for (const p of liberacaoPorMes({ valorComissao: num(c.valor), totalVenda: num(o.totalGeral), jaLiberado: ja, valor: mov.valor, entradas: rec.entradas, reserva: rec.ultimaData ?? agora }))
+            novos.push({ empresaId, comissaoId: c.id, usuarioId: c.usuarioId, tipo: mov.tipo, valor: p.valor, data: p.data, motivo });
+          continue;
+        }
         const data = mov.tipo === "ESTORNO" ? agora
           : quando === "APROVACAO" ? c.criadoEm
           : quando === "CONCLUSAO_OS" ? o.osGerada?.dataConclusao ?? agora
           : rec.ultimaData ?? agora;
-        novos.push({
-          empresaId, comissaoId: c.id, usuarioId: c.usuarioId, tipo: mov.tipo, valor: mov.valor, data,
-          motivo: substituida ? MOTIVO_TROCA : mov.tipo === "ESTORNO" ? motivoDoEstorno(quando, o.status, estado.faturaCancelada) : MOTIVO[quando],
-        });
+        novos.push({ empresaId, comissaoId: c.id, usuarioId: c.usuarioId, tipo: mov.tipo, valor: mov.valor, data, motivo });
       }
     }
     if (novos.length) await tx.comissaoLancamento.createMany({ data: novos });
@@ -477,13 +481,22 @@ export async function extratoDoUsuario(empresaId: string, usuarioId: string, ago
     orderBy: { criadoEm: "desc" },
     select: {
       orcamentoId: true, ordemServicoId: true, contratoId: true, equipamentoId: true, descricao: true, regraDescricao: true, valor: true, papel: true,
-      orcamento: { select: { codigo: true, nome: true, cliente: { select: { nome: true } }, osGerada: { select: { numero: true } } } },
-      contrato: { select: { numero: true, tipo: true, cliente: { select: { nome: true } } } },
-      ordemServico: { select: { numero: true, chamadoNumero: true, cliente: { select: { nome: true } } } },
+      orcamento: { select: { codigo: true, nome: true, status: true, cliente: { select: { nome: true } }, osGerada: { select: { numero: true } } } },
+      contrato: { select: { numero: true, tipo: true, status: true, cliente: { select: { nome: true } } } },
+      ordemServico: { select: { numero: true, chamadoNumero: true, status: true, cliente: { select: { nome: true } } } },
       lancamentos: { select: { valor: true, fechamento: { select: { situacao: true } } } },
       revisoes: { where: { situacao: "A_REVISAR" }, select: { id: true } },
     },
-    take: 600,
+    take: LIMITE_EXTRATO,
+  });
+  // PJ4: os TOTAIS contam todas as comissões (a lista mostra as mais recentes); com mais que o limite, uma conta só dos números
+  const todas = cs.length < LIMITE_EXTRATO ? cs : await prisma.comissao.findMany({
+    where: { empresaId, usuarioId },
+    select: {
+      valor: true, papel: true, orcamentoId: true, ordemServicoId: true,
+      orcamento: { select: { status: true } }, contrato: { select: { status: true } }, ordemServico: { select: { status: true } },
+      lancamentos: { select: { valor: true, fechamento: { select: { situacao: true } } } },
+    },
   });
   // O nome do equipamento de cada comissão do técnico ("Limpeza — Split da recepção")
   const equipIds = [...new Set(cs.map((c) => c.equipamentoId).filter(Boolean) as string[])];
@@ -496,7 +509,7 @@ export async function extratoDoUsuario(empresaId: string, usuarioId: string, ago
   for (const c of cs) {
     // COM-1.1: a do vendedor substituído não tem nada a receber; fica só o que já foi pago (o estorno da troca zera o resto)
     const substituida = c.papel === PAPEL_SUBSTITUIDO;
-    const s = situacaoDaComissao(substituida ? 0 : num(c.valor), c.lancamentos.map((l) => ({ valor: num(l.valor), pago: l.fechamento?.situacao === "FECHADO" })));
+    const s = situacaoNoExtrato(c);
     if (substituida && !s.prevista && !s.liberada && !s.paga) continue;
     // COM-2: a do vendedor agrupa pelo orçamento; a do técnico, pela OS; COM-1.2: a do contrato, pelo contrato
     const chave = c.contratoId ? `ct:${c.contratoId}` : c.orcamentoId ?? `os:${c.ordemServicoId}`;
@@ -523,12 +536,35 @@ export async function extratoDoUsuario(empresaId: string, usuarioId: string, ago
   // COM-1.2: no contrato, as partes nascem juntas — o fechamento (ou a renovação) primeiro, depois as mensalidades em ordem
   const ordemDaParte = (d: string) => { const m = /(\d{2})\/(\d{4})$/.exec(d); return m ? `1${m[2]}${m[1]}` : `0${d}`; };
   for (const v of lista) if (v.tipo === "CONTRATO") v.itens.sort((a, b) => ordemDaParte(a.descricao).localeCompare(ordemDaParte(b.descricao)));
+  const tot = todas.map(situacaoNoExtrato);
   return {
     vendas: lista,
     totais: {
-      prevista: round2(lista.reduce((s, v) => s + v.prevista, 0)), liberada: round2(lista.reduce((s, v) => s + v.liberada, 0)), paga: round2(lista.reduce((s, v) => s + v.paga, 0)),
+      prevista: round2(tot.reduce((s, v) => s + v.prevista, 0)), liberada: round2(tot.reduce((s, v) => s + v.liberada, 0)), paga: round2(tot.reduce((s, v) => s + v.paga, 0)),
     },
   };
+}
+
+/** Quantas comissões a lista do extrato mostra (as mais recentes); os totais contam todas */
+export const LIMITE_EXTRATO = 600;
+const CONTRATO_ENCERRADO = ["CANCELADO", "ENCERRADO"];
+
+/**
+ * Prevista / Liberada / Paga de uma comissão no extrato. PJ4: a de origem MORTA (venda cancelada ou recusada, OS
+ * cancelada, contrato cancelado ou encerrado) não tem mais nada previsto — só o que já foi liberado ou pago fica.
+ */
+function situacaoNoExtrato(c: {
+  valor: unknown; papel: string; orcamentoId: string | null; ordemServicoId: string | null;
+  orcamento: { status: string } | null; contrato: { status: string } | null; ordemServico: { status: string } | null;
+  lancamentos: { valor: unknown; fechamento: { situacao: string } | null }[];
+}) {
+  const morta = (!!c.orcamento && !(VENDA_VIVA as readonly string[]).includes(c.orcamento.status))
+    || (!c.orcamentoId && !!c.ordemServico && c.ordemServico.status === "CANCELADA")
+    || (!!c.contrato && CONTRATO_ENCERRADO.includes(c.contrato.status));
+  const semPrevisto = c.papel === PAPEL_SUBSTITUIDO || morta;
+  const movs = c.lancamentos.map((l) => ({ valor: num(l.valor), pago: l.fechamento?.situacao === "FECHADO" }));
+  const s = situacaoDaComissao(num(c.valor), movs);
+  return semPrevisto ? { ...s, prevista: 0 } : s;
 }
 
 /* ───────── o relatório do mês: por data de emissão ou por data de recebimento ───────── */
@@ -766,9 +802,12 @@ export async function telaDeComissoes(empresaId: string) {
 }
 
 /** Grava (cria ou edita) uma regra: as referências precisam ser da empresa e não pode haver outra ativa com a mesma chave. */
-export async function salvarRegra(empresaId: string, dados: ReturnType<typeof normalizarRegra>, o: { id?: string; criadoPorId?: string } = {}):
+export async function salvarRegra(empresaId: string, dados: ReturnType<typeof normalizarRegra>, o: { id?: string; criadoPorId?: string; manterAtivo?: boolean } = {}):
   Promise<{ ok: true; id: string } | { ok: false; status: number; erro: string }> {
-  if (o.id && !(await prisma.comissaoRegra.findFirst({ where: { id: o.id, empresaId }, select: { id: true } }))) return { ok: false, status: 404, erro: "Regra não encontrada" };
+  const atual = o.id ? await prisma.comissaoRegra.findFirst({ where: { id: o.id, empresaId }, select: { id: true, ativo: true } }) : null;
+  if (o.id && !atual) return { ok: false, status: 404, erro: "Regra não encontrada" };
+  // PJ4: editar uma regra desativada sem mandar "ativo" não a reativa sozinha
+  if (atual && o.manterAtivo) dados = { ...dados, ativo: atual.ativo };
   const [u, c, s] = await Promise.all([
     dados.usuarioId ? prisma.usuario.count({ where: { id: dados.usuarioId, empresaId } }) : 1,
     dados.cargoId ? prisma.cargo.count({ where: { id: dados.cargoId, empresaId } }) : 1,

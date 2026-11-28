@@ -280,6 +280,39 @@ describe.skipIf(!URL_PG)("COM-1.2 — comissão sobre contrato (PostgreSQL real)
     expect((await prisma.configuracao.findUnique({ where: { empresaId: "e1" } })).comissaoRenovacaoGera).toBe(false);
   });
 
+  it("PJ4: voltar de 'Aguardando assinatura' não é fechamento novo; a renovação com a janela aberta não comissiona a mesma mensalidade duas vezes", async () => {
+    // (B) ATIVO → AGUARDANDO_ASSINATURA → ATIVO meses depois: não gera de novo o fixo nem outro ciclo
+    logar("uV");
+    const b = await novoContrato();
+    expect(await prisma.comissao.count({ where: { contratoId: b } })).toBe(4);
+    await prisma.contrato.update({ where: { id: b }, data: { status: "ATIVO" } });
+    const daqui2 = new Date(Date.UTC(agora.getUTCFullYear(), agora.getUTCMonth() + 2, 15));
+    await ct.comissoesDoContratoNoStatus("e1", b, "AGUARDANDO_ASSINATURA", "ATIVO", daqui2);
+    expect(await prisma.comissao.count({ where: { contratoId: b } })).toBe(4);
+    expect(await prisma.comissao.count({ where: { contratoId: b, itemTipo: "FIXO" } })).toBe(1);
+
+    // (A) Locação (10% enquanto ativo) renovada com a chave ligada: cada mensalidade tem UMA comissão viva
+    const a = await novoContrato({ tipo: "LOCACAO" });
+    const { conta } = await faturarMensalidade(a, 0);
+    logar("uAdm");
+    expect((await receber(conta.id)).status).toBe(201);
+    await sincronizar();
+    expect((await chamar("comissoes", "PUT", {}, { quando: "RECEBIMENTO", liquidaImpostos: false, renovacaoGera: true })).status).toBe(200);
+    await prisma.contrato.update({ where: { id: a }, data: { status: "ATIVO" } });
+    await ct.comissoesDoContratoNoStatus("e1", a, "EM_RENOVACAO", "ATIVO", daqui2);
+    await sincronizar();
+    const vivas = await prisma.comissao.findMany({ where: { contratoId: a, itemTipo: "MENSALIDADE", papel: { not: "VENDEDOR_ANTERIOR" } } });
+    const porMes = new Map<string, number>();
+    vivas.forEach((c: any) => porMes.set(c.competencia, (porMes.get(c.competencia) ?? 0) + 1));
+    expect([...porMes.values()].every((x) => x === 1)).toBe(true);
+    // a do mês já recebido continua no ciclo antigo (com o liberado); as outras passaram ao ciclo da renovação
+    expect(porMes.size).toBeGreaterThan(3);
+    const ciclo = (comp: string) => vivas.find((c: any) => c.competencia === comp)?.cicloInicio;
+    expect([ciclo(COMP(0)), ciclo(COMP(1)), ciclo(COMP(2)), ciclo(COMP(3))]).toEqual([COMP(0), COMP(0), COMP(2), COMP(2)]);
+    expect(await liberado(a)).toBe(300); // 10% de 1.000 (o mês recebido, que ficou no ciclo antigo) + o fixo de 200 do Vitor
+    expect((await chamar("comissoes", "PUT", {}, { quando: "RECEBIMENTO", liquidaImpostos: false, renovacaoGera: false })).status).toBe(200);
+  });
+
   it("trocar o vendedor do contrato: precisa da permissão e do motivo (no histórico); o liberado estorna do antigo, o novo ganha; pago recusa", async () => {
     logar("uV");
     const id = await novoContrato();

@@ -53,8 +53,9 @@ export function AcessoAppColaborador({ tecnicoId, emailSalvo, inicial }: Props) 
     } catch { setErro("Erro de conexão. Tente novamente."); } finally { setSalvando(false); }
   }
 
+  // Grava sozinho (o acesso na hora): não arma o "Sair sem salvar?" da ficha em volta
   return (
-    <div className="space-y-5" data-acesso-app>
+    <div className="space-y-5" data-acesso-app data-sem-aviso>
       <p className="text-sm text-ink-muted -mt-1">
         Dá a este colaborador um login (e-mail e senha) para o <strong>app do técnico</strong>: ele
         entra direto em “Meu dia”, vê só as OS atribuídas a ele e não acessa o painel de gestão.

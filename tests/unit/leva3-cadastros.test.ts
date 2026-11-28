@@ -350,8 +350,10 @@ describe("tabelas de preço", () => {
     expect(linha("cliente", "c2").tabelaPrecoId).toBe("tp-contrato");
     expect((await chamar(cli, "PUT", { id: "c1" }, { ...base, nome: "Cliente Velho Ltda", cpfCnpj: "12345678000199", tabelaPrecoId: "tp-velha" })).status).toBe(200);
     expect(linha("cliente", "c1")).toMatchObject({ nome: "Cliente Velho Ltda", tabelaPrecoId: "tp-velha" });
-    const novo = await chamar(() => import("@/app/api/clientes/route"), "POST", {}, { ...base, nome: "Novo", cpfCnpj: "55666777000155", tabelaPrecoId: "tp-velha" });
+    // pj4 (H03): o CNPJ de teste passa a ser válido (o POST agora confere os dígitos) — o 400 continua sendo o da tabela
+    const novo = await chamar(() => import("@/app/api/clientes/route"), "POST", {}, { ...base, nome: "Novo", cpfCnpj: "55666777000181", tabelaPrecoId: "tp-velha" });
     expect(novo.status).toBe(400);
+    expect(novo.json.erro).toBe("Tabela de preço inativo(a): escolha um(a) ativo(a).");
   });
 
   it("seletor do cliente mostra a tabela real “(inativa)”, não “Padrão (automático)”; escolha nova não a oferece", async () => {

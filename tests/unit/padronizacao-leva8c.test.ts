@@ -248,7 +248,9 @@ describe("a leva não tocou no cálculo, na emissão nem nos vínculos", () => {
       .split("\n").filter(Boolean);
     // COM-1 mudou o fechamento do Desempenho DE PROPÓSITO: a folha ganha a comissão e o fechamento gera a conta a
     // pagar por pessoa (o CSV ganha "Comissão" e "Total" só quando há comissão). Folha, importação e NFS-e intocadas.
-    const mudouDeProposito = ["lib/desempenho/fechamento.ts", "lib/desempenho/fechamento-server.ts"];
+    // pj4 (F21): o CSV da planilha (lib/folha/planilha › gerarCsv) passou a proteger a célula contra fórmula — só a
+    // saída do CSV, o cálculo e a leitura da planilha ficam como estão.
+    const mudouDeProposito = ["lib/desempenho/fechamento.ts", "lib/desempenho/fechamento-server.ts", "lib/folha/planilha.ts"];
     expect(mudados.filter((arq) => !mudouDeProposito.includes(arq))).toEqual([]);
   });
 

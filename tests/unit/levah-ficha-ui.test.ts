@@ -117,12 +117,12 @@ describe("cabeçalho da ficha: só o que importa", () => {
   it("edição: Cancelar / Salvar e continuar / Salvar no topo; nada de barra repetida embaixo; voltar leva à ficha na mesma aba", async () => {
     await montar({ initialData: CLIENTE, abaInicial: "enderecos" });
     const acoes = $("[data-acoes-cliente]")!;
-    expect($$("button", acoes).map(txt)).toEqual(["Cancelar", "Salvar e continuarContinuar", "Salvar"]);
+    // pj4 (H11, mudança intencional): Cancelar virou link (o aviso de sair sem salvar pergunta antes)
+    expect([...acoes.querySelectorAll("a, button")].map(txt)).toEqual(["Cancelar", "Salvar e continuarContinuar", "Salvar"]);
     expect($$("button").filter((b) => txt(b) === "Salvar").length).toBe(1);
     expect($("[data-menu-novo]")).toBeNull();
     expect($("[data-voltar-cliente]")!.getAttribute("href")).toBe("/clientes/cl1?aba=enderecos");
-    await clicar($$("button", acoes)[0]);
-    expect(nav.push).toEqual(["/clientes/cl1?aba=enderecos"]);
+    expect($("a[data-cancelar-cliente]", acoes)!.getAttribute("href")).toBe("/clientes/cl1?aba=enderecos");
   });
 
   it("cliente novo: título \"Novo cliente\", sem Histórico/Atendimento/Comunicação (só existem depois de salvar)", async () => {
@@ -212,12 +212,13 @@ describe("abas e histórico automático", () => {
 describe("endereço principal: CNPJ e CEP", () => {
   const CNPJ = { nome: "Termofrio Engenharia Ltda", endereco: "Avenida Central", numero: "1000", complemento: "Sala 2", bairro: "Setor Central", cidade: "Goiânia", estado: "GO", cep: "74000-000" };
 
-  it("na edição, o Consultar preenche só os campos vazios do endereço (o que já tinha fica)", async () => {
+  it("na edição, o Consultar não mexe num endereço que já tem rua (tudo ou nada: não mistura com o da Receita)", async () => {
+    // pj4 (H05, mudança intencional): antes completava CEP/bairro/cidade da Receita em volta da rua digitada
     rotas["GET /api/cnpj/11222333000181"] = { corpo: CNPJ };
     await montar({ initialData: { ...CLIENTE, endereco: "Rua Velha", numero: "5", cidade: "", estado: "" } });
     await clicar($("[data-consultar-cnpj]"));
     expect([valor("endereco"), valor("numero"), valor("complemento"), valor("bairro"), valor("cidade"), valor("estado"), valor("cep")])
-      .toEqual(["Rua Velha", "5", "Sala 2", "Setor Central", "Goiânia", "GO", "74000-000"]);
+      .toEqual(["Rua Velha", "5", "", "", "", "", ""]);
   });
 
   it("CEP completo: formata, busca uma vez e preenche rua, bairro, cidade e UF", async () => {

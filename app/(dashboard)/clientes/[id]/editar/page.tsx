@@ -4,6 +4,8 @@ import { notFound } from "next/navigation";
 import { auth } from "@/lib/auth";
 import { ClienteForm } from "@/components/forms/cliente-form";
 import { carregarFichaCliente } from "@/lib/clientes/ficha-server";
+import { valoresDoCabecalho, veFinanceiroDoCliente } from "@/lib/clientes/cabecalho";
+import { pode } from "@/lib/permissoes";
 
 export const metadata: Metadata = { title: "Editar cliente" };
 
@@ -13,5 +15,8 @@ export default async function EditarClientePage({ params, searchParams }: { para
   const session = await auth();
   const ficha = await carregarFichaCliente(id, session!.user!.empresaId);
   if (!ficha) notFound();
-  return <ProtegerSaida><ClienteForm abaInicial={aba} initialData={ficha.dados} totalProximos30Dias={ficha.totalProximos30Dias} valorEmAtraso={ficha.valorEmAtraso} perdas12m={ficha.perdas12m} satisfacaoAceite={ficha.satisfacao} /></ProtegerSaida>;
+  // Os valores do financeiro só saem do servidor para quem vê o financeiro (contas a receber ou faturas)
+  const u = session!.user!;
+  const valores = valoresDoCabecalho(ficha, veFinanceiroDoCliente((m, a) => pode(u.permissoes, m, a, u.role)));
+  return <ProtegerSaida><ClienteForm abaInicial={aba} initialData={ficha.dados} {...valores} perdas12m={ficha.perdas12m} satisfacaoAceite={ficha.satisfacao} /></ProtegerSaida>;
 }

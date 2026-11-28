@@ -113,6 +113,8 @@ export function OrdensListaClient({ ordens, total, pagina, porPagina, opcoes, pe
   const sortAtual = get("sort") || "criadoEm";
   const dirAtual = (get("dir") || "desc") as "asc" | "desc";
   const filtrosAtivos = [...PARAMS_FILTROS_OS, "busca"].filter((k) => get(k) !== "").length;
+  // "Sem agendamento": a OS não tem data, então o período não vale — a barra (e os atalhos ← → T) saem de cena
+  const semAgenda = get("agenda") === FILTRO_SEM_AGENDAMENTO;
 
   const [buscaLocal, setBuscaLocal] = useState(get("busca"));
 
@@ -141,6 +143,7 @@ export function OrdensListaClient({ ordens, total, pagina, porPagina, opcoes, pe
       const alvo = document.activeElement as HTMLElement | null;
       const tag = alvo?.tagName;
       if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || alvo?.isContentEditable) return;
+      if (semAgenda) return;
       const p = periodo as Periodo;
       if (e.key === "ArrowLeft") { const m = urlVizinho(p, -1); if (m) { e.preventDefault(); setParams(m); } }
       else if (e.key === "ArrowRight") { const m = urlVizinho(p, 1); if (m) { e.preventDefault(); setParams(m); } }
@@ -149,7 +152,7 @@ export function OrdensListaClient({ ordens, total, pagina, porPagina, opcoes, pe
     window.addEventListener("keydown", aoTeclar);
     return () => window.removeEventListener("keydown", aoTeclar);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [periodo]);
+  }, [periodo, semAgenda]);
 
   function toggleLista(param: string, valor: string) {
     const atual = get(param).split(",").filter(Boolean);
@@ -192,7 +195,7 @@ export function OrdensListaClient({ ordens, total, pagina, porPagina, opcoes, pe
 
       {/* Barra enxuta: período + busca + "Mais filtros" (painel recolhido) — padrão da casa */}
       <BarraFiltros
-        periodo={<BarraPeriodo periodo={periodo} navegar={(m) => setParams(m)} permitirTodos dica="Pela data agendada ou de execução das atividades e pela data prevista da OS (não pela abertura). Atalhos: ← → mudam o período, T volta para hoje." />}
+        periodo={semAgenda ? undefined : <BarraPeriodo periodo={periodo} navegar={(m) => setParams(m)} permitirTodos dica="Pela data agendada ou de execução das atividades e pela data prevista da OS (não pela abertura). Atalhos: ← → mudam o período, T volta para hoje." />}
         busca={
           <CampoBusca
             valor={buscaLocal} onChange={setBuscaLocal} placeholder="Pesquisar" rotulo="Pesquisar ordens de serviço"
@@ -279,7 +282,7 @@ export function OrdensListaClient({ ordens, total, pagina, porPagina, opcoes, pe
 
       <div className="card overflow-hidden">
         <div className="px-4 sm:px-5 py-2.5 border-b border-surface-border flex items-center justify-between flex-wrap gap-2 text-sm text-ink-muted">
-          <span data-contador><strong className="text-ink">{total.toLocaleString("pt-BR")}</strong> {total === 1 ? "ordem de serviço" : "ordens de serviço"}{periodo.tipo !== "todos" ? ` · ${periodo.rotulo}` : ""}</span>
+          <span data-contador><strong className="text-ink">{total.toLocaleString("pt-BR")}</strong> {total === 1 ? "ordem de serviço" : "ordens de serviço"}{periodo.tipo !== "todos" && !semAgenda ? ` · ${periodo.rotulo}` : ""}</span>
         </div>
 
         {/* Resultados (celular: sempre cartões) */}
