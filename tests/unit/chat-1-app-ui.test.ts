@@ -442,7 +442,7 @@ describe("tempo real e contador", () => {
     await esperarAte(() => chat.querySelector("[data-nao-lidas]")?.textContent === "5", "contador em tempo real");
     expect($("[data-vista]")!.getAttribute("data-vista")).toBe("dia");
     expect(pedidos).not.toContain("GET /api/tecnico/conversas");
-    // Abrir o Chat lê (marca como lidas): o contador apaga
+    // Abrir o chat lê (marca como lidas): o contador apaga
     await clicar(chat);
     expect(window.location.search).toBe("?ver=chat");
     expect(chat.getAttribute("aria-current")).toBe("page");

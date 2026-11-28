@@ -89,7 +89,7 @@ Quando a mensagem já era sem OS, o complemento "Envie sem OS ou troque a OS" n�
 | "Recusadas pelo escritório (continuam guardadas)" | "Não enviadas", com "O sistema não aceitou estas gravações. Continuam guardadas no aparelho." Ninguém do escritório recusou: foi regra do sistema. |
 | "Comentário" | "Mensagem do chat · OS-4440 · “Opa”" (ou "Foto"; sem OS, "Sem OS"), para saber qual é. |
 | o motivo cru do servidor ("…atribuída a você…") | o mesmo motivo do balão, sem "você" |
-| "As próximas gravações desta OS esperam esta" | "O serviço desta OS sobe normalmente. No Chat: Enviar sem OS, Trocar a OS ou Descartar.", com "Abrir o Chat" |
+| "As próximas gravações desta OS esperam esta" | "O serviço desta OS sobe normalmente. No Chat: Enviar sem OS, Trocar a OS ou Descartar.", com "Abrir o chat" |
 
 **O número da OS** fica guardado com a mensagem, só no aparelho; não sobe.
 - Assim o balão e o Perfil dizem qual é a OS, mesmo quando ela sai das OS do dia.
@@ -178,7 +178,7 @@ A proposta de armazenamento externo segue no CHAT-1.1 (`docs/armazenamento-fotos
 - "Enviar sem OS" reenvia com o mesmo identificador;
 - "Trocar a OS" oferece só as outras;
 - "Descartar" tira da fila;
-- o caso do print: o motivo no balão; checklist e conclusão da mesma OS sobem; Perfil com "Não enviadas", "Mensagem do chat · OS-1 · …", sem "esperam esta" e com "Abrir o Chat".
+- o caso do print: o motivo no balão; checklist e conclusão da mesma OS sobem; Perfil com "Não enviadas", "Mensagem do chat · OS-1 · …", sem "esperam esta" e com "Abrir o chat".
 
 **Mutação:** 21/21 mutantes mortos. Cada mutante desfaz uma correção, e algum teste falha.
 

@@ -118,7 +118,7 @@ export function PerfilTecnico({ perfilInicial, abrirComissoes = false }: {
                   <p className="text-atrasado-texto" data-motivo-recusada>{g.motivo}</p>
                   {o.tipo === "comentario" ? (
                     <p className="text-xs text-ink-muted">O serviço desta OS sobe normalmente. No Chat: Enviar sem OS, Trocar a OS ou Descartar.{" "}
-                      <button type="button" className="font-semibold text-primary-700 underline" data-abrir-chat onClick={() => irPara({ ver: "chat" })}>Abrir o Chat</button>
+                      <button type="button" className="font-semibold text-primary-700 underline" data-abrir-chat onClick={() => irPara({ ver: "chat" })}>Abrir o chat</button>
                     </p>
                   ) : NAO_TRAVAM.has(o.tipo)
                     ? <p className="text-xs text-ink-muted">O resto do serviço desta OS sobe normalmente.</p>
