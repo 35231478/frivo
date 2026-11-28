@@ -176,8 +176,12 @@ describe("Configurações › Comissões", () => {
     expect(texto($("[data-vencimento-comissao]"))).toContain("De 1 a 20.");
     expect($("[data-vencimento-resumo]")).toBeNull();
     expect(salvar.disabled).toBe(true);
-    // Dia fixo aceita até 31; letras são descartadas
+    // Trocou o tipo (há mudança) mas o dia está fora do limite: o Salvar continua travado
     await escolher($("[data-vencimento-tipo]"), "DIA_FIXO");
+    await digitar($("[data-vencimento-dia]"), "32");
+    expect(texto($("[data-vencimento-comissao]"))).toContain("De 1 a 31.");
+    expect(salvar.disabled).toBe(true);
+    // Dia fixo aceita até 31; letras são descartadas
     await digitar($("[data-vencimento-dia]"), "1a0");
     expect($<HTMLInputElement>("[data-vencimento-dia]")!.value).toBe("10");
     expect(texto($("[data-vencimento-resumo]"))).toBe("Dia 10 do mês seguinte.");

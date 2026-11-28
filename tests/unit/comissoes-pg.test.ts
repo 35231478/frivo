@@ -229,6 +229,12 @@ describe.skipIf(!URL_PG)("COM-1 — comissões (PostgreSQL real)", () => {
     expect(await naVista(semFatura.id)).toBeUndefined();
     expect((await faturar(semFatura.id)).status).toBe(201);
     expect((await naVista(semFatura.id)).valor).toBe(20);
+    // A fatura que voltou para RASCUNHO (mesmo já enviada antes) não é emissão
+    const medSem = await prisma.medicao.findFirst({ where: { itens: { some: { orcamentoId: semFatura.id } } } });
+    await prisma.medicao.update({ where: { id: medSem.id }, data: { status: "RASCUNHO", dataEnvio: new Date() } });
+    expect(await naVista(semFatura.id)).toBeUndefined();
+    await prisma.medicao.update({ where: { id: medSem.id }, data: { status: medSem.status, dataEnvio: medSem.dataEnvio } });
+    expect((await naVista(semFatura.id)).valor).toBe(20);
     await prisma.orcamento.update({ where: { id: semFatura.id }, data: { status: "CANCELADO" } });
     expect(await naVista(semFatura.id)).toBeUndefined();
     // A data mostrada é a da emissão da fatura (NF registrada à mão vale mais que o título): NF no mês passado = emitida lá
@@ -316,6 +322,13 @@ describe.skipIf(!URL_PG)("COM-1 — comissões (PostgreSQL real)", () => {
     // A fatura viva com TODOS os títulos cancelados conta como cancelada
     const nova = await prisma.medicao.findFirst({ where: { itens: { some: { orcamentoId: a.id } }, status: { not: "CANCELADA" } } });
     expect(await prisma.contaReceber.count({ where: { medicaoId: nova.id } })).toBeGreaterThan(0);
+    // Título EXCLUÍDO conta como cancelado: com o título só excluído (não cancelado), também estorna
+    await prisma.contaReceber.updateMany({ where: { medicaoId: nova.id }, data: { excluidaEm: new Date() } });
+    await srv.sincronizarComissoes("e1", { orcamentoIds: [a.id] });
+    expect(await liberado(a.id)).toBe(0);
+    await prisma.contaReceber.updateMany({ where: { medicaoId: nova.id }, data: { excluidaEm: null } });
+    await srv.sincronizarComissoes("e1", { orcamentoIds: [a.id] });
+    expect(await liberado(a.id)).toBe(50); // o título voltou: a fatura vive de novo
     await prisma.contaReceber.updateMany({ where: { medicaoId: nova.id }, data: { status: "CANCELADO" } });
     await srv.sincronizarComissoes("e1", { orcamentoIds: [a.id] });
     expect(await liberado(a.id)).toBe(0);
@@ -470,6 +483,22 @@ describe.skipIf(!URL_PG)("COM-1 — comissões (PostgreSQL real)", () => {
     expect((await comissoes(b.id)).length).toBe(2);
     await prisma.comissaoLancamento.updateMany({ where: { comissaoId: nova.id }, data: { fechamentoId: null } });
     await prisma.desempenhoFechamento.delete({ where: { id: f.id } });
+    // O novo vendedor sem regra que case (nenhuma ativa): o antigo é estornado do mesmo jeito; nada nasce para o novo
+    await prisma.configuracao.update({ where: { empresaId: "e1" }, data: { comissaoQuando: "APROVACAO" } });
+    const c2 = await novoOrcamento({ servicos: [{ servicoId: "sLimp", descricao: "Limpeza", v: 100 }] });
+    logar("uAdm");
+    await aprovar(c2.id);
+    expect(await liberado(c2.id)).toBeGreaterThan(0);
+    const ativas = await prisma.comissaoRegra.findMany({ where: { empresaId: "e1", ativo: true }, select: { id: true } });
+    await prisma.comissaoRegra.updateMany({ where: { id: { in: ativas.map((r: any) => r.id) } }, data: { ativo: false } });
+    try {
+      expect((await chamar("orcamentos/[id]/vendedor", "PATCH", { id: c2.id }, { vendedorId: "uP", motivo: "Sem regra para a Paula" })).status).toBe(200);
+      expect(await liberado(c2.id)).toBe(0);
+      expect((await comissoes(c2.id)).map((c: any) => [c.usuarioId, c.papel])).toEqual([["uV", "VENDEDOR_ANTERIOR"]]);
+    } finally {
+      await prisma.comissaoRegra.updateMany({ where: { id: { in: ativas.map((r: any) => r.id) } }, data: { ativo: true } });
+      await prisma.configuracao.update({ where: { empresaId: "e1" }, data: { comissaoQuando: "RECEBIMENTO" } });
+    }
 
     // Regras e configuração: só com Desempenho › Gerenciar
     logar("uP", montarPermissoes({ orcamentos: ["visualizar", "criar", "editar", "trocarVendedor"], desempenho: ["visualizar"] }));
