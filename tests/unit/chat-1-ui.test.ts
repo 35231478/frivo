@@ -8,7 +8,8 @@
  *    de novo reenvia o MESMO clientId (não duplica), recusa (OS cancelada) volta à caixa; o tempo real recarrega;
  *  - a tela Conversas: lista com nº, cliente, técnicos, última, hora e não lidas; "Não lidas"; a busca vai ao servidor e
  *    oferece começar conversa; tocar abre a conversa e põe ?os= no endereço; no celular, a lista some e há "voltar";
- *  - o ícone do topo com as conversas por ler; a OS mostra a mesma conversa com "Abrir em Conversas".
+ *  - o ícone do topo com as conversas por ler; a OS mostra a mesma conversa com o link para a tela de conversas;
+ *  - a visão POR PESSOA: a chave Pessoas | OS, a lista de técnicos, a etiqueta da OS que agrupa, o seletor de OS e o envio com e sem OS.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act, createElement } from "react";
@@ -164,7 +165,7 @@ describe("a conversa do escritório", () => {
   async function abrir(mensagens = MENSAGENS.slice(0, 1), status = "AGENDADA") {
     respostas["GET /api/conversas/os1"] = { status: 200, corpo: { conversa: { ...CONVERSA, status }, mensagens } };
     const { ConversaEscritorio } = await import("@/components/chat/conversa-escritorio");
-    await montar(createElement(ConversaEscritorio, { osId: "os1", podeEscrever: true }));
+    await montar(createElement(ConversaEscritorio, { alvo: { tipo: "os", osId: "os1" }, podeEscrever: true }));
   }
 
   it("envia na hora: \"Enviando…\" e depois a do servidor; o corpo leva um clientId", async () => {
@@ -226,7 +227,8 @@ describe("a tela Conversas", () => {
     respostas["GET /api/conversas"] = { status: 200, corpo: { conversas: LISTA, semConversa: [], naoLidas: 1 } };
     respostas["GET /api/conversas/os1"] = { status: 200, corpo: { conversa: LISTA[0], mensagens: MENSAGENS.slice(0, 1) } };
     const { ConversasEscritorio } = await import("@/components/chat/conversas-escritorio");
-    await montar(createElement(ConversasEscritorio, { osInicial, podeEscrever: true }));
+    // sem "Conversas": só a visão por OS (como era)
+    await montar(createElement(ConversasEscritorio, { osInicial, pessoaInicial: null, podeEscrever: true, podeConversas: false, podeEnviarConversas: false }));
   }
 
   it("a lista: nº, cliente, técnicos, a última (com quem escreveu), a hora e o contador de não lidas", async () => {
@@ -258,9 +260,9 @@ describe("a tela Conversas", () => {
     await tela();
     await clicar($("[data-conversa-item='os1']"));
     expect(nav.replace).toHaveBeenCalledWith("/conversas?os=os1", { scroll: false });
-    expect($("[data-conversa-aberta='os1']")).not.toBeNull();
+    expect($("[data-conversa-aberta='os:os1']")).not.toBeNull();
     expect($("[data-lista-conversas]")!.className).toMatch(/hidden lg:flex/);
-    expect(txt($("[data-link-os]"))).toBe("OS-2026-0314");
+    expect(txt($("[data-link-os]"))).toBe("OS-2026-0314 · Bom Preço");
     await clicar($("[data-voltar-conversas]"));
     expect(nav.replace).toHaveBeenLastCalledWith("/conversas", { scroll: false });
     expect($("[data-conversa-aberta]")).toBeNull();
@@ -268,7 +270,7 @@ describe("a tela Conversas", () => {
 
   it("aberta pelo endereço (push e sino): já abre a conversa e zera o contador dela", async () => {
     await tela("os1");
-    expect($("[data-conversa-aberta='os1']")).not.toBeNull();
+    expect($("[data-conversa-aberta='os:os1']")).not.toBeNull();
     expect($("[data-conversa-item='os1'] [data-nao-lidas]")).toBeNull();
   });
 });
@@ -284,12 +286,94 @@ describe("o ícone do topo e a OS", () => {
     expect($("[data-icone-conversas]")!.getAttribute("aria-label")).toBe("Conversas: 3 conversas por ler");
   });
 
-  it("a OS mostra a mesma conversa, com \"Abrir em Conversas\"", async () => {
+  it("a OS mostra a mesma conversa, com o link para a tela de conversas", async () => {
     respostas["GET /api/conversas/os1"] = { status: 200, corpo: { conversa: CONVERSA, mensagens: MENSAGENS.slice(0, 2) } };
     const { ComentariosOs } = await import("@/components/os/comentarios-os");
     await montar(createElement(ComentariosOs, { osId: "os1", podeResponder: false }));
     expect($("[data-abrir-em-conversas]")!.getAttribute("href")).toBe("/conversas?os=os1");
     expect($$("[data-mensagem]")).toHaveLength(2);
     expect($("[data-escrever]")).toBeNull();
+  });
+});
+
+describe("a tela Conversas por PESSOA (o desenho aprovado)", () => {
+  const OS1 = { id: "os1", numero: "OS-2026-0314", cliente: "Bom Preço" };
+  const OS2 = { id: "os2", numero: "OS-2026-0315", cliente: "Padaria Sol" };
+  const PESSOAS = [
+    { usuarioId: "uM", tecnicoId: "tM", nome: "Maria Souza", avatar: null, naoLidas: 0, ultima: { texto: "Ok", autor: "Maria Souza", criadoEm: "2026-11-02T12:00:00.000Z", minha: false, foto: false, osNumero: null } },
+    { usuarioId: "uC", tecnicoId: "tC", nome: "Carlos Oliveira", avatar: null, naoLidas: 2, ultima: { texto: "Dreno entupido", autor: "Carlos Oliveira", criadoEm: HOJE, minha: false, foto: false, osNumero: "OS-2026-0314" } },
+  ];
+  const DA_PESSOA = [
+    msg({ id: "a", clientId: "a", texto: "Cheguei.", os: OS1 }),
+    msg({ id: "b", clientId: "b", texto: "Dreno entupido.", os: OS1 }),
+    msg({ id: "c", clientId: "c", texto: "Chego em 10 minutos.", os: null }),
+    msg({ id: "d", clientId: "d", texto: "Pode desobstruir.", autor: "Ana", origem: "ESCRITORIO", meu: true, os: OS2, para: "Carlos Oliveira" }),
+  ];
+  const DO_DIA = [{ osId: "os1", numero: OS1.numero, cliente: OS1.cliente, emAndamento: true }, { osId: "os2", numero: OS2.numero, cliente: OS2.cliente, emAndamento: false }];
+  async function tela(pessoaInicial: string | null = null) {
+    respostas["GET /api/conversas/pessoas"] = { status: 200, corpo: { pessoas: PESSOAS, naoLidas: 1 } };
+    respostas["GET /api/conversas/pessoas/uC"] = { status: 200, corpo: { pessoa: { usuarioId: "uC", nome: "Carlos Oliveira", avatar: null }, mensagens: DA_PESSOA, osDoDia: DO_DIA, osPadrao: "os1" } };
+    respostas["GET /api/conversas"] = { status: 200, corpo: { conversas: [], semConversa: [], naoLidas: 0 } };
+    const { ConversasEscritorio } = await import("@/components/chat/conversas-escritorio");
+    await montar(createElement(ConversasEscritorio, { osInicial: null, pessoaInicial, podeEscrever: true, podeConversas: true, podeEnviarConversas: true }));
+  }
+
+  it("com \"Conversas\", abre em Pessoas: a lista de técnicos (iniciais, nome, a OS da última, não lidas); a chave troca para OS", async () => {
+    await tela();
+    expect($("[data-visao-chave='pessoas']")!.getAttribute("aria-selected")).toBe("true");
+    expect(chamadas[0].url).toBe("/api/conversas/pessoas");
+    const itens = $$("[data-pessoa-item]");
+    expect(itens.map((e) => e.getAttribute("data-pessoa-item"))).toEqual(["uM", "uC"]); // a ordem vem do servidor
+    expect(txt(itens[1])).toContain("CO");
+    expect(txt(itens[1])).toContain("OS-2026-0314");
+    expect(txt(itens[1].querySelector("[data-nao-lidas]"))).toBe("2");
+    await clicar($("[data-visao-chave='os']"));
+    expect(chamadas.some((c) => c.url === "/api/conversas")).toBe(true);
+    expect($("[data-pessoa-item]")).toBeNull();
+  });
+
+  it("a conversa com a pessoa: a etiqueta da OS só quando a OS muda (seguidas agrupam), \"Sem OS\", o destinatário no balão", async () => {
+    await tela("uC");
+    expect(nav.replace).not.toHaveBeenCalled();
+    expect($$("[data-etiqueta-os]").map((e) => [e.getAttribute("data-etiqueta-os"), txt(e)])).toEqual([
+      ["os1", "OS-2026-0314 · Bom Preço"], ["sem-os", "Sem OS"], ["os2", "OS-2026-0315 · Padaria Sol"],
+    ]);
+    expect(txt($("[data-mensagem='d'] [data-para]"))).toBe("para Carlos ·");
+    expect(txt($("[data-titulo-conversa]"))).toBe("Carlos Oliveira");
+    // a etiqueta abre a OS
+    await clicar($("[data-etiqueta-os='os2'] button"));
+  });
+
+  it("o seletor começa na OS padrão (a em andamento); um toque troca; enviar leva a OS escolhida ou nenhuma (Sem OS)", async () => {
+    await tela("uC");
+    expect($("[data-os-opcao='os1']")!.getAttribute("aria-checked")).toBe("true");
+    respostas["POST /api/conversas/pessoas/uC"] = () => new Response(JSON.stringify({ mensagem: msg({ id: "s1", clientId: chamadas.at(-1)!.corpo.clientId, texto: chamadas.at(-1)!.corpo.texto, meu: true }) }), { status: 201 });
+    await digitar($("[data-texto-mensagem]"), "Ok, siga.");
+    await clicar($("[data-enviar-mensagem]"));
+    expect(chamadas.filter((c) => c.metodo === "POST").at(-1)!.corpo).toMatchObject({ texto: "Ok, siga.", osId: "os1" });
+    await clicar($("[data-os-opcao='sem-os']"));
+    expect($("[data-os-opcao='sem-os']")!.getAttribute("aria-checked")).toBe("true");
+    await digitar($("[data-texto-mensagem]"), "Passa no escritório.");
+    await clicar($("[data-enviar-mensagem]"));
+    expect(chamadas.filter((c) => c.metodo === "POST").at(-1)!.corpo).toMatchObject({ texto: "Passa no escritório.", osId: null });
+  });
+
+  it("\"Outra OS\": a busca vai ao servidor e a OS achada entra no seletor, já escolhida", async () => {
+    await tela("uC");
+    respostas["GET /api/conversas?busca=0999"] = { status: 200, corpo: { conversas: [], semConversa: [{ osId: "os9", osNumero: "OS-2026-0999", cliente: "Mercado Azul" }] } };
+    await clicar($("[data-outra-os]"));
+    await digitar($("[data-busca-os-texto]"), "0999");
+    await act(async () => { await new Promise((r) => setTimeout(r, 350)); });
+    await esperar();
+    await clicar($("[data-os-achada='os9']"));
+    expect($("[data-os-opcao='os9']")!.getAttribute("aria-checked")).toBe("true");
+  });
+
+  it("tocar na pessoa abre a conversa e põe ?pessoa= no endereço", async () => {
+    await tela();
+    await clicar($("[data-pessoa-item='uC']"));
+    expect(nav.replace).toHaveBeenCalledWith("/conversas?pessoa=uC", { scroll: false });
+    expect($("[data-conversa-aberta='p:uC']")).not.toBeNull();
+    expect($("[data-pessoa-item='uC'] [data-nao-lidas]")).toBeNull(); // abrir zera o contador dela
   });
 });

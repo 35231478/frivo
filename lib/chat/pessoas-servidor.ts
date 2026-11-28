@@ -61,7 +61,8 @@ export const ondeConversaDoTecnico = (usuarioId: string, tecnicoId: string): Pri
 /** O que esta pessoa do escritório pode ver de uma conversa: a sem OS; com OS, só pela permissão de OS e o escopo. */
 export function visivelAoEscritorio(u: QuemEscritorio): Prisma.OsComentarioWhereInput {
   if (!pode(u.permissoes ?? null, "ordens", "visualizar", u.role ?? undefined)) return { ordemServicoId: null };
-  return { OR: [{ ordemServicoId: null }, { ordemServico: filtroOrdens(u) }] };
+  // A relação da OS é opcional: "com OS e dentro do escopo" explícito (o filtro vazio do admin não pode virar "sem OS")
+  return { OR: [{ ordemServicoId: null }, { AND: [{ ordemServicoId: { not: null } }, { ordemServico: { is: filtroOrdens(u) } }] }] };
 }
 
 /** As OS do técnico no dia: as atividades de hoje (Brasília) e as em andamento; a em andamento primeiro. */

@@ -1,7 +1,6 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
 import { ConversaChat, type EnvioMensagem } from "@/components/chat/conversa";
 import { SeletorOs } from "@/components/chat/seletor-os";
 import { useNovidades } from "@/components/chat/use-novidades";
@@ -35,15 +34,16 @@ async function buscarOs(q: string): Promise<OsDoDia[]> {
  * como "Enviando…"; se falhar, fica "Não enviada" com "Tentar de novo" (o mesmo clientId: não duplica).
  * Na conversa da pessoa: a etiqueta da OS em cada grupo de mensagens e o seletor de OS (1 toque; "Sem OS"; "Outra OS").
  */
-export function ConversaEscritorio({ alvo, podeEscrever, className, aoCarregar, semPermissao }: {
+export function ConversaEscritorio({ alvo, podeEscrever, className, aoCarregar, semPermissao, abrirOs }: {
   alvo: AlvoConversa;
+  /** A etiqueta da OS (conversa da pessoa) abre a OS — quem monta decide como navegar */
+  abrirOs?: (osId: string) => void;
   podeEscrever: boolean;
   className?: string;
   /** Avisa o cabeçalho e a lista (zera o contador da aberta) a cada leitura */
   aoCarregar?: (r: ResumoConversa) => void;
   semPermissao?: string;
 }) {
-  const router = useRouter();
   const chave = alvo.tipo === "os" ? alvo.osId : alvo.usuarioId;
   const url = alvo.tipo === "os" ? `/api/conversas/${encodeURIComponent(alvo.osId)}` : `/api/conversas/pessoas/${encodeURIComponent(alvo.usuarioId)}`;
   const [servidor, setServidor] = useState<ComentarioTela[]>([]);
@@ -126,7 +126,7 @@ export function ConversaEscritorio({ alvo, podeEscrever, className, aoCarregar, 
       somenteLeitura={!daPessoa && somenteLeitura(status) ? MSG_OS_CANCELADA : null} podeEscrever={podeEscrever}
       semPermissao={semPermissao ?? "Para escrever nesta conversa é preciso poder editar a OS."}
       onEnviar={enviar} onTentarDeNovo={tentarDeNovo} urlFoto={urlFotoEscritorio}
-      mostrarOs={daPessoa} abrirOs={(id) => router.push(`/ordens/${id}`)}
+      mostrarOs={daPessoa} abrirOs={abrirOs}
       acimaDoTexto={daPessoa && osEscolhida !== undefined
         ? <SeletorOs opcoes={osDoDia} valor={osEscolhida.id} onValor={(id, os) => setOsEscolhida({ id, os: os ?? null })} buscar={buscarOs} />
         : undefined} />

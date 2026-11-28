@@ -42,7 +42,8 @@ const como = (u: Record<string, unknown>) => { sessao.atual = { user: u }; };
 const comoAdmin = () => como(user("uA"));
 const comoTecnico = (id = "uT", tecnicoId = "t1", email = "joao@clima.test") => como({ id, name: id, email, empresaId: "e1", role: "TECNICO", permissoes: PRESETS.TECNICO, tecnicoId });
 const comoVendedor = () => como(user("uV", { role: "OPERADOR", permissoes: { ...TOTAIS, ordens: { ...TOTAIS.ordens, verSoProprios: true } } }));
-const comoLeitor = () => como(user("uL", { role: "OPERADOR", permissoes: { ...TOTAIS, ordens: { ...TOTAIS.ordens, editar: false } } }));
+// O leitor vê OS mas não edita, e não tem "Conversas" (a lista por pessoa)
+const comoLeitor = () => como(user("uL", { role: "OPERADOR", permissoes: { ...TOTAIS, ordens: { ...TOTAIS.ordens, editar: false }, conversas: { visualizar: false, enviar: false } } }));
 
 async function chamar(rota: string, metodo: string, params: Record<string, string> = {}, corpo?: unknown, qs = "") {
   const mod = await import(/* @vite-ignore */ `@/app/api/${rota}/route`);
@@ -63,7 +64,7 @@ describe.skipIf(!URL_PG)("CHAT-1 (PostgreSQL real)", () => {
     process.env.DATABASE_URL = url;
     (globalThis as any).prisma = undefined;
     ({ prisma } = await import("@/lib/prisma"));
-    await Promise.all(["tecnico/sync", "conversas", "conversas/[osId]", "conversas/novidades", "conversas/fotos/[fotoId]", "tecnico/conversas", "tecnico/conversas/[osId]",
+    await Promise.all(["tecnico/sync", "conversas", "conversas/[osId]", "conversas/novidades", "conversas/fotos/[fotoId]", "tecnico/conversas", "conversas/pessoas", "conversas/pessoas/[usuarioId]",
       "tecnico/conversas/novidades", "tecnico/conversas/fotos/[fotoId]", "ordens/[id]/comentarios"].map((r) => import(/* @vite-ignore */ `@/app/api/${r}/route`)));
 
     await prisma.empresa.createMany({ data: [
@@ -169,13 +170,13 @@ describe.skipIf(!URL_PG)("CHAT-1 (PostgreSQL real)", () => {
     expect(b.json.mensagem.id).toBe(a.json.mensagem.id);
     expect(await prisma.osComentario.count({ where: { ordemServicoId: "os1", origem: "ESCRITORIO" } })).toBe(1);
     comoTecnico();
-    const l = await chamar("tecnico/conversas", "GET");
-    const c1 = l.json.conversas.find((c: any) => c.osId === "os1");
-    expect(c1).toMatchObject({ naoLidas: 1, atividadeId: "a1", atividadeIds: ["a1"] });
-    expect(l.json.naoLidas).toBe(1);
-    const conv = await chamar("tecnico/conversas/[osId]", "GET", { osId: "os1" });
-    expect(conv.json.conversa.atividadeId).toBe("a1");
-    expect(conv.json.mensagens.at(-1)).toMatchObject({ texto: corpo.texto, meu: false, origem: "ESCRITORIO" });
+    // o contador do Chat (novidades) e a conversa Escritório do app (a do escritório na OS dele, sem destinatário = para todos da OS)
+    expect((await chamar("tecnico/conversas/novidades", "GET")).json.naoLidas).toBe(1);
+    const conv = await chamar("tecnico/conversas", "GET");
+    expect(conv.json.mensagens.at(-1)).toMatchObject({ texto: corpo.texto, meu: false, origem: "ESCRITORIO", os: { id: "os1", numero: "OS-0001" }, para: null });
+    expect(conv.json.osPadrao).toBe("os1"); // a atividade dele em andamento
+    expect(conv.json.osDoDia.map((o: any) => [o.osId, o.emAndamento, o.atividadeId])).toContainEqual(["os1", true, "a1"]);
+    expect((await chamar("tecnico/conversas/novidades", "GET")).json.naoLidas).toBe(0);
     comoAdmin();
     const visto = await chamar("conversas/[osId]", "GET", { osId: "os1" });
     expect(visto.json.mensagens.at(-1)).toMatchObject({ meu: true, lida: { por: "João Técnico" } });
@@ -184,12 +185,14 @@ describe.skipIf(!URL_PG)("CHAT-1 (PostgreSQL real)", () => {
     expect(antigo.status).toBe(201);
   });
 
-  it("isolamento entre técnicos: o João só vê as OS dele; a da Maria não aparece e não abre", async () => {
+  it("isolamento entre técnicos: a conversa do João não traz a OS da Maria; escrever pela atividade dela é recusado", async () => {
+    await prisma.osComentario.create({ data: { id: "m-maria", empresaId: "e1", ordemServicoId: "os2", usuarioId: "uA", autorNome: "Ana Escritório", origem: "ESCRITORIO", texto: "Para a OS da Maria" } });
     comoTecnico();
     const l = await chamar("tecnico/conversas", "GET");
-    // as OS dele em aberto (a em andamento e a da Vera); a cancelada sem mensagem e a concluída sem mensagem recente ficam fora
-    expect(l.json.conversas.map((c: any) => c.osId).sort()).toEqual(["os1", "osV"]);
-    expect((await chamar("tecnico/conversas/[osId]", "GET", { osId: "os2" })).status).toBe(404);
+    expect(l.json.mensagens.map((m: any) => m.texto)).not.toContain("Para a OS da Maria");
+    comoTecnico("uT2", "t2", "maria@clima.test");
+    expect((await chamar("tecnico/conversas", "GET")).json.mensagens.map((m: any) => m.texto)).toContain("Para a OS da Maria");
+    comoTecnico();
     // escrever pela fila numa atividade que não é dele é recusado pelo escopo da execução
     const r = await sync([mensagem("a2", { clientId: "intruso", texto: "oi" })]);
     expect(r[0].ok).toBe(false);
@@ -200,15 +203,14 @@ describe.skipIf(!URL_PG)("CHAT-1 (PostgreSQL real)", () => {
     await prisma.configuracao.upsert({ where: { empresaId: "e1" }, create: { empresaId: "e1", appExibirDadosCliente: false }, update: { appExibirDadosCliente: false } });
     comoTecnico();
     const l = await chamar("tecnico/conversas", "GET");
-    expect(l.json.conversas.map((c: any) => c.cliente)).toEqual(l.json.conversas.map(() => ""));
+    expect(l.json.mensagens.filter((m: any) => m.os).every((m: any) => m.os.cliente === "")).toBe(true);
+    expect(l.json.osDoDia.every((o: any) => o.cliente === "")).toBe(true);
     expect(JSON.stringify(l.json)).not.toContain("Hospital Fictício");
-    const c = await chamar("tecnico/conversas/[osId]", "GET", { osId: "os1" });
-    expect(c.json.conversa.cliente).toBe("");
     await prisma.configuracao.update({ where: { empresaId: "e1" }, data: { appExibirDadosCliente: true } });
-    expect((await chamar("tecnico/conversas/[osId]", "GET", { osId: "os1" })).json.conversa.cliente).toBe("Hospital Fictício");
+    expect(JSON.stringify((await chamar("tecnico/conversas", "GET")).json)).toContain("Hospital Fictício");
   });
 
-  it("OS cancelada: só leitura (escritório 409, app recusado); concluída segue aberta e volta à lista do técnico", async () => {
+  it("OS cancelada: só leitura (escritório 409, app recusado); concluída segue aberta e a mensagem chega à conversa do técnico", async () => {
     comoAdmin();
     expect((await chamar("conversas/[osId]", "POST", { osId: "osC" }, { clientId: "c-x", texto: "oi" })).json).toEqual({ erro: MSG_OS_CANCELADA });
     const app = await sync([mensagem("aC", { clientId: "c-y", texto: "oi" })]);
@@ -216,7 +218,7 @@ describe.skipIf(!URL_PG)("CHAT-1 (PostgreSQL real)", () => {
     comoAdmin();
     expect((await chamar("conversas/[osId]", "POST", { osId: "osF" }, { clientId: "f-1", texto: "Garantia: o cliente ligou de novo." })).status).toBe(201);
     comoTecnico();
-    expect((await chamar("tecnico/conversas", "GET")).json.conversas.map((c: any) => c.osId)).toContain("osF");
+    expect((await chamar("tecnico/conversas", "GET")).json.mensagens.map((m: any) => m.os?.id)).toContain("osF");
   });
 
   it("permissões: sem editar OS não escreve (403); técnico na rota do escritório (403); \"Ver só os próprios\" e outra empresa não veem", async () => {
@@ -239,11 +241,11 @@ describe.skipIf(!URL_PG)("CHAT-1 (PostgreSQL real)", () => {
 
   it("busca: acha pelo cliente e oferece começar a conversa nas OS que ainda não têm", async () => {
     comoAdmin();
-    const r = await chamar("conversas", "GET", {}, undefined, "?busca=OS-0002");
+    const r = await chamar("conversas", "GET", {}, undefined, "?busca=OS-0003");
     expect(r.json.conversas).toEqual([]);
-    expect(r.json.semConversa).toEqual([{ osId: "os2", osNumero: "OS-0002", cliente: "Hospital Fictício" }]);
+    expect(r.json.semConversa).toEqual([{ osId: "osC", osNumero: "OS-0003", cliente: "Hospital Fictício" }]);
     // a conversa de uma OS sem mensagem abre vazia (para começar)
-    const v = await chamar("conversas/[osId]", "GET", { osId: "os2" });
+    const v = await chamar("conversas/[osId]", "GET", { osId: "osC" });
     expect([v.status, v.json.mensagens]).toEqual([200, []]);
   });
 
@@ -274,10 +276,100 @@ describe.skipIf(!URL_PG)("CHAT-1 (PostgreSQL real)", () => {
     await notificarComentarioOS("os1", "uL", { comentarioId: "x", texto: "Teste" });
     const [app, escritorio] = push.envios;
     expect(app.usuarios).toEqual(["uT"]);
-    expect(app.mensagem({ restrito: true }).url).toBe("/tecnico?ver=chat&os=os1");
+    expect(app.mensagem({ restrito: true }).url).toBe("/tecnico?ver=chat");
     expect(app.mensagem({ restrito: false }).url).toBe("/conversas?os=os1");
     expect(app.mensagem({ restrito: true })).toMatchObject({ titulo: "Mensagem nova na OS OS-0001", acao: "Abrir conversa" });
     expect(escritorio.usuarios).toEqual(["uA"]); // ligado à OS (abriu e conversou); o autor (uL) não
     expect(escritorio.mensagem.url).toBe("/conversas?os=os1");
+  });
+  /* ═════════════ a conversa POR PESSOA (o desenho aprovado) ═════════════ */
+
+  it("a lista por pessoa: os técnicos com login, a última mensagem e as não lidas; pede \"Conversas\" (o admin sempre)", async () => {
+    comoAdmin();
+    const l = await chamar("conversas/pessoas", "GET");
+    expect(l.status).toBe(200);
+    expect(l.json.pessoas.map((p: any) => p.nome).sort()).toEqual(["João Silva", "Maria Souza"]);
+    expect(l.json.pessoas.find((p: any) => p.usuarioId === "uT").ultima).toMatchObject({ osNumero: expect.any(String) });
+    // sem a permissão "Conversas": a lista por pessoa responde 403 (a visão por OS continua pela permissão de OS)
+    comoLeitor();
+    expect((await chamar("conversas/pessoas", "GET")).status).toBe(403);
+    expect((await chamar("conversas/pessoas/[usuarioId]", "GET", { usuarioId: "uT" })).status).toBe(403);
+    expect((await chamar("conversas", "GET")).status).toBe(200);
+  });
+
+  it("escrever para UMA pessoa sem OS: só na conversa dela (nem na do outro técnico, nem em OS nenhuma); o técnico lê", async () => {
+    comoAdmin();
+    const r = await chamar("conversas/pessoas/[usuarioId]", "POST", { usuarioId: "uT" }, { clientId: "p-1", texto: "Passa no escritório antes de ir embora." });
+    expect(r.status).toBe(201);
+    expect(r.json.mensagem).toMatchObject({ os: null, para: "João Técnico", meu: true });
+    const g = await prisma.osComentario.findFirst({ where: { clientId: "p-1" } });
+    expect([g.ordemServicoId, g.paraUsuarioId]).toEqual([null, "uT"]);
+    comoTecnico();
+    expect((await chamar("tecnico/conversas", "GET")).json.mensagens.at(-1)).toMatchObject({ texto: "Passa no escritório antes de ir embora.", os: null });
+    comoTecnico("uT2", "t2", "maria@clima.test");
+    expect((await chamar("tecnico/conversas", "GET")).json.mensagens.map((m: any) => m.texto)).not.toContain("Passa no escritório antes de ir embora.");
+    comoAdmin();
+    expect((await chamar("conversas/[osId]", "GET", { osId: "os1" })).json.mensagens.map((m: any) => m.texto)).not.toContain("Passa no escritório antes de ir embora.");
+    // e o escritório vê o ✓✓ (quem leu)
+    const conv = await chamar("conversas/pessoas/[usuarioId]", "GET", { usuarioId: "uT" });
+    expect(conv.json.mensagens.find((m: any) => m.clientId === "p-1")).toMatchObject({ lida: { por: "João Técnico" } });
+  });
+
+  it("OS com dois técnicos: pela OS vai para os dois (na conversa de cada um); pela conversa de UMA pessoa vai só para ela e a OS mostra o destinatário", async () => {
+    await prisma.ordemServico.create({ data: { id: "osD", empresaId: "e1", numero: "OS-0006", clienteId: "c1", criadoPorId: "uA", descricao: "Dupla" } });
+    await prisma.atividadeOs.createMany({ data: [
+      { id: "aD1", empresaId: "e1", ordemServicoId: "osD", titulo: "Dupla 1", tecnicoId: "t1", status: "AGENDADA" },
+      { id: "aD2", empresaId: "e1", ordemServicoId: "osD", titulo: "Dupla 2", tecnicoId: "t2", status: "AGENDADA" },
+    ] });
+    comoAdmin();
+    await chamar("conversas/[osId]", "POST", { osId: "osD" }, { clientId: "d-todos", texto: "Os dois: levem a escada grande." });
+    await chamar("conversas/pessoas/[usuarioId]", "POST", { usuarioId: "uT2" }, { clientId: "d-maria", texto: "Maria, a chave fica na portaria.", osId: "osD" });
+    const daOs = (await chamar("conversas/[osId]", "GET", { osId: "osD" })).json.mensagens;
+    expect(daOs.map((m: any) => [m.clientId, m.para])).toEqual([["d-todos", null], ["d-maria", "Maria Técnica"]]);
+    comoTecnico();
+    const joao = (await chamar("tecnico/conversas", "GET")).json.mensagens.map((m: any) => m.clientId);
+    expect([joao.includes("d-todos"), joao.includes("d-maria")]).toEqual([true, false]);
+    comoTecnico("uT2", "t2", "maria@clima.test");
+    const maria = (await chamar("tecnico/conversas", "GET")).json.mensagens.map((m: any) => m.clientId);
+    expect([maria.includes("d-todos"), maria.includes("d-maria")]).toEqual([true, true]);
+  });
+
+  it("o técnico escreve SEM OS pela fila (\"sem-os\"): só na conversa dele; o escritório vê não lida na lista por pessoa", async () => {
+    const r = await sync([{ id: randomUUID(), tipo: "comentario", atividadeId: "sem-os", em: new Date().toISOString(), dados: { clientId: "t-sem", texto: "Chego em 10 minutos." } }]);
+    expect(r[0]).toMatchObject({ ok: true, status: 201 });
+    // reenviar a mesma gravação não duplica
+    await sync([{ id: randomUUID(), tipo: "comentario", atividadeId: "sem-os", em: new Date().toISOString(), dados: { clientId: "t-sem", texto: "Chego em 10 minutos." } }]);
+    expect(await prisma.osComentario.count({ where: { clientId: "t-sem", ordemServicoId: null } })).toBe(1);
+    comoAdmin();
+    const joao = (await chamar("conversas/pessoas", "GET")).json.pessoas.find((p: any) => p.usuarioId === "uT");
+    expect(joao).toMatchObject({ naoLidas: 1, ultima: { texto: "Chego em 10 minutos.", osNumero: null } });
+    await chamar("conversas/pessoas/[usuarioId]", "GET", { usuarioId: "uT" });
+    expect((await chamar("conversas/pessoas", "GET")).json.pessoas.find((p: any) => p.usuarioId === "uT").naoLidas).toBe(0);
+  });
+
+  it("\"Ver só os próprios\": na conversa da pessoa, as mensagens de OS fora do escopo não aparecem (a sem OS, sim); escrever com OS de fora: 404", async () => {
+    comoVendedor(); // tem "Conversas" e "Ver só os próprios" em OS
+    const c = await chamar("conversas/pessoas/[usuarioId]", "GET", { usuarioId: "uT" });
+    const oss = new Set(c.json.mensagens.map((m: any) => m.os?.id ?? "sem"));
+    expect(oss.has("os1")).toBe(false);
+    expect(oss.has("sem")).toBe(true);
+    expect(c.json.osDoDia.map((o: any) => o.osId)).not.toContain("os1");
+    expect((await chamar("conversas/pessoas/[usuarioId]", "POST", { usuarioId: "uT" }, { clientId: "v-x", texto: "x", osId: "os1" })).status).toBe(404);
+    // outra empresa: a pessoa não existe
+    como({ ...user("uX"), empresaId: "e2" });
+    expect((await chamar("conversas/pessoas/[usuarioId]", "GET", { usuarioId: "uT" })).status).toBe(404);
+    expect((await chamar("conversas/pessoas", "GET")).json.pessoas).toEqual([]);
+  });
+
+  it("push por pessoa: o escritório para UMA pessoa avisa só ela (o app abre o Chat); o técnico sem OS avisa o escritório que conversa com ele", async () => {
+    const { notificarMensagem } = await import("@/lib/push/eventos");
+    push.envios = []; push.comAparelho = ["uA", "uT", "uT2", "uL"];
+    await notificarMensagem({ empresaId: "e1", comentarioId: "x1", osId: null, autorId: "uA", paraUsuarioId: "uT", origem: "ESCRITORIO", texto: "Passa aqui" });
+    expect(push.envios[0].usuarios).toEqual(["uT"]);
+    expect(push.envios[0].mensagem({ restrito: true })).toMatchObject({ url: "/tecnico?ver=chat", titulo: "Mensagem nova de Ana Escritório" });
+    push.envios = [];
+    await notificarMensagem({ empresaId: "e1", comentarioId: "x2", osId: null, autorId: "uT", paraUsuarioId: null, origem: "APP", texto: "Chego em 10" });
+    expect(push.envios[0].usuarios).toEqual(["uA"]); // a Ana escreveu para ele e leu a conversa dele
+    expect(push.envios[0].mensagem.url).toBe("/conversas?pessoa=uT");
   });
 });

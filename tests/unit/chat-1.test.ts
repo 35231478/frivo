@@ -5,6 +5,7 @@
  */
 import { describe, expect, it, vi } from "vitest";
 import {
+  iniciais, mostraEtiquetaOs, ordenarPessoas, osPadraoDaMensagem, urlConversaPessoa, type PessoaResumo,
   estadoDaMensagem, esperaDepoisDeErro, marcaValida, filtrarConversas, horaDaLista, juntarComFila, marcaNovidades, MSG_OS_CANCELADA, ordenarConversas,
   rotuloDoDia, somenteLeitura, textoDaUltima, totalNaoLidas, urlConversaApp, urlConversaEscritorio, ESPERA_NOVIDADES_MS, PASSO_NOVIDADES_MS,
   type ConversaResumo,
@@ -72,6 +73,52 @@ describe("a lista de conversas", () => {
     expect(urlConversaEscritorio(null)).toBe("/conversas");
     expect(urlConversaApp("os1")).toBe("/tecnico?ver=chat&os=os1");
     expect(urlConversaApp()).toBe("/tecnico?ver=chat");
+  });
+});
+
+describe("a conversa POR PESSOA (o desenho aprovado)", () => {
+  const pessoa = (over: Partial<PessoaResumo>): PessoaResumo => ({ usuarioId: "u", tecnicoId: "t", nome: "Carlos Oliveira", avatar: null, ultima: null, naoLidas: 0, ...over });
+  const ultima = (criadoEm: string) => ({ texto: "x", autor: "x", criadoEm, minha: false, foto: false, osNumero: null });
+
+  it("a lista: não lidas primeiro; depois a mais recente; quem nunca conversou, pelo nome", () => {
+    const l = [
+      pessoa({ usuarioId: "velha", ultima: ultima("2026-11-27T10:00:00.000Z") }),
+      pessoa({ usuarioId: "zeca", nome: "Zeca" }),
+      pessoa({ usuarioId: "nova", ultima: ultima("2026-11-28T10:00:00.000Z") }),
+      pessoa({ usuarioId: "naoLida", ultima: ultima("2026-11-20T10:00:00.000Z"), naoLidas: 3 }),
+      pessoa({ usuarioId: "ana", nome: "Ana" }),
+    ];
+    expect(ordenarPessoas(l).map((p) => p.usuarioId)).toEqual(["naoLida", "nova", "velha", "ana", "zeca"]);
+  });
+
+  it("as iniciais (sem foto) e o endereço da conversa com a pessoa", () => {
+    expect([iniciais("Carlos Oliveira"), iniciais("Eng. Roberto Mendes"), iniciais("ana"), iniciais("  ")]).toEqual(["CO", "EM", "A", "?"]);
+    expect(urlConversaPessoa("u 1")).toBe("/conversas?pessoa=u%201");
+    expect(urlConversaPessoa(null)).toBe("/conversas");
+  });
+
+  it("a OS da mensagem vem SOZINHA: a da atividade em andamento; senão a última usada HOJE na conversa; senão Sem OS", () => {
+    const agora = new Date("2026-11-28T15:00:00.000Z");
+    const doDia = [{ osId: "os1", numero: "OS-1", cliente: "A", emAndamento: false }, { osId: "os2", numero: "OS-2", cliente: "B", emAndamento: true }];
+    expect(osPadraoDaMensagem({ osDoDia: doDia, mensagens: [], agora })).toBe("os2");
+    const msgs = [
+      { os: { id: "os1", numero: "OS-1", cliente: "A" }, criadoEm: "2026-11-28T12:00:00.000Z" },
+      { os: null, criadoEm: "2026-11-28T13:00:00.000Z" },
+    ];
+    expect(osPadraoDaMensagem({ osDoDia: [doDia[0]], mensagens: msgs, agora })).toBe("os1");
+    // a de ONTEM não vale
+    expect(osPadraoDaMensagem({ osDoDia: [], mensagens: [{ os: { id: "os9", numero: "OS-9", cliente: "" }, criadoEm: "2026-11-27T12:00:00.000Z" }], agora })).toBeNull();
+    expect(osPadraoDaMensagem({ osDoDia: [], mensagens: [], agora })).toBeNull();
+  });
+
+  it("a etiqueta da OS só aparece quando a OS muda (ou o dia): mensagens seguidas da mesma OS agrupam", () => {
+    const os1 = { id: "os1", numero: "OS-1", cliente: "A" };
+    const m = (os: typeof os1 | null, criadoEm = "2026-11-28T12:00:00.000Z") => ({ os, criadoEm });
+    expect(mostraEtiquetaOs(m(os1), undefined)).toBe(true);
+    expect(mostraEtiquetaOs(m(os1), m(os1))).toBe(false);
+    expect(mostraEtiquetaOs(m(null), m(os1))).toBe(true);
+    expect(mostraEtiquetaOs(m(null), m(null))).toBe(false);
+    expect(mostraEtiquetaOs(m(os1, "2026-11-28T12:00:00.000Z"), m(os1, "2026-11-27T12:00:00.000Z"))).toBe(true);
   });
 });
 
