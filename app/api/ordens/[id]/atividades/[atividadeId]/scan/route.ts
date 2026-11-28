@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { contextoExecucao } from "@/lib/execucao/contexto";
 import { respostaAcao, vincularPorQr } from "@/lib/execucao/acoes";
+import { escopoBarra } from "@/lib/escopo/proprios-server";
 
 type Params = { params: Promise<{ id: string; atividadeId: string }> };
 
@@ -14,6 +15,8 @@ const schema = z.object({ valor: z.string().min(1) });
  */
 export async function POST(req: NextRequest, { params }: Params) {
   const { id, atividadeId } = await params;
+  const foraDoEscopo = await escopoBarra("ordem", id); // COM-1: "Ver só os próprios" → 404
+  if (foraDoEscopo) return foraDoEscopo;
   const ctx = await contextoExecucao(id, atividadeId);
   if (!ctx.ok) return ctx.resposta;
   const parsed = schema.safeParse(await req.json().catch(() => null));

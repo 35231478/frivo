@@ -57,6 +57,8 @@ export const TOLERANCIA_ALTERADO_MS = 2000;
 
 /** Nome de cada vínculo, no motivo do "fica". O que não está aqui vira o nome do campo em palavras. */
 export const NOMES_VINCULO: Record<string, string> = {
+  // COM-1: regra de comissão por serviço ou por cargo
+  comissaoRegras: "regras de comissão",
   unidades: "unidades", contratos: "contratos", documentacaoEnvios: "envios de documentação", ordensServico: "ordens de serviço",
   anexos: "anexos", contatosCliente: "contatos", comunicacaoPreferencias: "preferências de comunicação", interacoes: "interações",
   orcamentos: "orçamentos", pedidosCliente: "pedidos do cliente", medicoes: "medições", contasReceber: "contas a receber", notasFiscais: "notas fiscais", pmocs: "PMOC",

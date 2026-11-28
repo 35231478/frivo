@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { comEscopo, filtroOrcamentos, filtroOrdens, type QuemVe } from "@/lib/escopo/proprios";
 import { formatarData, LABELS_PRIORIDADE, LABELS_SEGMENTO, LABELS_STATUS_ORCAMENTO, LABELS_STATUS_OS } from "@/lib/utils";
 import { lerFiltros, montarWhere } from "@/lib/equipamento-listagem";
 import { lerFiltrosVeiculos, montarWhereVeiculos } from "@/lib/veiculo-listagem";
@@ -93,7 +94,8 @@ export async function rotulos(entidade: Entidade, ids: string[], empresaId: stri
 }
 
 /** Ids que batem no filtro da lista (mesmo where da página), até MAX_SELECAO. */
-export async function idsDoFiltro(entidade: Entidade, filtro: string, empresaId: string): Promise<{ ids: string[]; total: number }> {
+/** `quem`: COM-1 — com "Ver só os próprios", só os registros do escopo da pessoa (ids e total). */
+export async function idsDoFiltro(entidade: Entidade, filtro: string, empresaId: string, quem?: QuemVe): Promise<{ ids: string[]; total: number }> {
   const params = new URLSearchParams(filtro);
   const sp: Record<string, string> = Object.fromEntries(params.entries());
   const take = MAX_SELECAO + 1;
@@ -103,7 +105,7 @@ export async function idsDoFiltro(entidade: Entidade, filtro: string, empresaId:
   };
   switch (entidade) {
     case "ordens": {
-      const where = await whereOrdensDaLista(empresaId, sp);
+      const where = comEscopo(await whereOrdensDaLista(empresaId, sp), filtroOrdens(quem));
       return pegar(prisma.ordemServico.findMany({ where, select: { id: true }, orderBy: { criadoEm: "desc" }, take }), prisma.ordemServico.count({ where }));
     }
     case "equipamentos": {
@@ -122,7 +124,7 @@ export async function idsDoFiltro(entidade: Entidade, filtro: string, empresaId:
     case "orcamentos": {
       // "Vencendo" usa o prazo do aviso da empresa, como a lista e o painel de pendências
       const dias = sp.validade === FILTRO_VENCENDO ? await diasOrcamentoVencendo(empresaId) : undefined;
-      const where = whereOrcamentos(empresaId, sp, new Date(), dias);
+      const where = comEscopo(whereOrcamentos(empresaId, sp, new Date(), dias), filtroOrcamentos(quem));
       return pegar(prisma.orcamento.findMany({ where, select: { id: true }, orderBy: { criadoEm: "desc" }, take }), prisma.orcamento.count({ where }));
     }
     case "contratos": {

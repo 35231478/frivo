@@ -186,7 +186,7 @@ export async function criarLeadDoSite(entrada: unknown, fonte = "Calculadora de 
   const orcamento = await comNumero(empresaId, "orcamento", (codigo, tx) =>
     tx.orcamento.create({
       data: {
-        empresaId, codigo, nome: `Lead do site — ${data.nome}`, clienteId: cliente!.id, criadoPorId,
+        empresaId, codigo, nome: `Lead do site — ${data.nome}`, clienteId: cliente!.id, criadoPorId, vendedorId: criadoPorId,
         descricao: data.recomendacao ?? `Calculadora de BTU (${data.tipoUso})`, observacao, status: "RASCUNHO",
         totalServicos, totalProdutos, totalGeral: totalProdutos + totalServicos,
         tokenPublico: crypto.randomUUID(),

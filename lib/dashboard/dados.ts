@@ -17,35 +17,41 @@ import { chaveDiaBR, hojeDiaCivil, inicioHojeBR, inicioMesBR, inicioMesDiaCivil 
 import type { BlocoId } from "@/lib/dashboard/blocos";
 import { comparaNatural } from "@/lib/utils";
 import { DIAS_FORA_DA_FAIXA } from "@/lib/checklist/faixas";
+import { comEscopo, filtroOrcamentos, filtroOrdens, type QuemVe } from "@/lib/escopo/proprios";
+import type { Prisma } from "@prisma/client";
+
+/** COM-1: "Ver só os próprios" — o escopo das OS / orçamentos de quem vê o painel (vazio = sem limite) */
+type EscopoOs = Prisma.OrdemServicoWhereInput;
+type EscopoOrc = Prisma.OrcamentoWhereInput;
 
 const OS_FINAIS = ["CONCLUIDA", "CANCELADA"] as const;
 const DIA = 864e5;
 const nomeCliente = (c: { nome: string; nomeFantasia: string | null } | null) => (c ? c.nomeFantasia || c.nome : "—");
 const num = (v: unknown) => Number(v ?? 0);
 
-export async function dadosOperacional(empresaId: string, agora = new Date()) {
+export async function dadosOperacional(empresaId: string, agora = new Date(), eo: EscopoOs = {}) {
   const hoje = inicioHojeBR(agora);
   const amanha = inicioHojeBR(agora, 1);
   const [abertas, agendadasHoje, atrasadas, concluidasMes, emAndamento] = await Promise.all([
-    prisma.ordemServico.count({ where: { empresaId, status: { notIn: [...OS_FINAIS] } } }),
+    prisma.ordemServico.count({ where: comEscopo({ empresaId, status: { notIn: [...OS_FINAIS] } }, eo) }),
     prisma.ordemServico.count({
-      where: {
+      where: comEscopo({
         empresaId, status: { notIn: [...OS_FINAIS] },
         atividades: { some: { dataAgendada: { gte: hoje, lt: amanha }, status: { not: "CANCELADA" } } },
-      },
+      }, eo),
     }),
     // a regra única de "atrasada" (lib/os/prazo-execucao.ts): por DIA de Brasília, igual ao calendário e ao sino
-    prisma.ordemServico.count({ where: { empresaId, ...whereOsAtrasada(agora) } }),
-    prisma.ordemServico.count({ where: { empresaId, status: "CONCLUIDA", dataConclusao: { gte: inicioMesBR(agora) } } }),
-    prisma.ordemServico.count({ where: { empresaId, status: "EM_ANDAMENTO" } }),
+    prisma.ordemServico.count({ where: comEscopo({ empresaId, ...whereOsAtrasada(agora) }, eo) }),
+    prisma.ordemServico.count({ where: comEscopo({ empresaId, status: "CONCLUIDA", dataConclusao: { gte: inicioMesBR(agora) } }, eo) }),
+    prisma.ordemServico.count({ where: comEscopo({ empresaId, status: "EM_ANDAMENTO" }, eo) }),
   ]);
   return { abertas, agendadasHoje, atrasadas, concluidasMes, emAndamento };
 }
 
-export async function dadosOsDoDia(empresaId: string, agora = new Date()) {
+export async function dadosOsDoDia(empresaId: string, agora = new Date(), eo: EscopoOs = {}) {
   const hoje = inicioHojeBR(agora);
   const amanha = inicioHojeBR(agora, 1);
-  const where = { empresaId, dataAgendada: { gte: hoje, lt: amanha }, status: { not: "CANCELADA" as const } };
+  const where = { empresaId, dataAgendada: { gte: hoje, lt: amanha }, status: { not: "CANCELADA" as const }, ...(Object.keys(eo).length ? { ordemServico: eo } : {}) };
   const grupos = await prisma.atividadeOs.groupBy({
     by: ["tecnicoId", "equipeId", "status"],
     where,
@@ -78,8 +84,8 @@ export async function dadosOsDoDia(empresaId: string, agora = new Date()) {
   return { linhas: lista.slice(0, 8), outros: Math.max(0, lista.length - 8), total: lista.reduce((s, l) => s + l.total, 0) };
 }
 
-export async function dadosSolicitacoes(empresaId: string) {
-  const where = { empresaId, ...SOLICITACAO_PENDENTE };
+export async function dadosSolicitacoes(empresaId: string, eo: EscopoOs = {}) {
+  const where = comEscopo({ empresaId, ...SOLICITACAO_PENDENTE } as EscopoOs, eo);
   const [total, recentes] = await Promise.all([
     prisma.ordemServico.count({ where }),
     prisma.ordemServico.findMany({
@@ -96,10 +102,10 @@ export async function dadosSolicitacoes(empresaId: string) {
   };
 }
 
-export async function dadosAgenda(empresaId: string, agora = new Date()) {
+export async function dadosAgenda(empresaId: string, agora = new Date(), eo: EscopoOs = {}) {
   const hoje = inicioHojeBR(agora);
   const fim = inicioHojeBR(agora, 14);
-  const where = { empresaId, dataAgendada: { gte: hoje, lt: fim }, status: { not: "CANCELADA" as const }, ordemServico: { status: { not: "CANCELADA" as const } } };
+  const where = { empresaId, dataAgendada: { gte: hoje, lt: fim }, status: { not: "CANCELADA" as const }, ordemServico: comEscopo({ status: { not: "CANCELADA" as const } } as EscopoOs, eo) };
   const [datas, proximas] = await Promise.all([
     // Só a data de cada atividade (lista curta e limitada) para montar a faixa de 14 dias
     prisma.atividadeOs.findMany({ where, select: { dataAgendada: true }, take: 2000 }),
@@ -129,13 +135,13 @@ export async function dadosAgenda(empresaId: string, agora = new Date()) {
   };
 }
 
-export async function dadosComercial(empresaId: string, ver: { contratos: boolean; orcamentos: boolean }, agora = new Date()) {
+export async function dadosComercial(empresaId: string, ver: { contratos: boolean; orcamentos: boolean }, agora = new Date(), ec: EscopoOrc = {}) {
   const em60 = hojeDiaCivil(agora, 60); // dataFim é dia civil
   const [ativos, vencendo, orcAbertos, orcEnviadosValor] = await Promise.all([
     ver.contratos ? prisma.contrato.count({ where: { empresaId, status: "ATIVO" } }) : null,
     ver.contratos ? prisma.contrato.count({ where: { empresaId, status: "ATIVO", dataFim: { gte: hojeDiaCivil(agora), lte: em60 } } }) : null,
-    ver.orcamentos ? prisma.orcamento.count({ where: { empresaId, status: { in: ["RASCUNHO", "ENVIADO"] } } }) : null,
-    ver.orcamentos ? prisma.orcamento.aggregate({ where: { empresaId, status: "ENVIADO" }, _sum: { totalGeral: true }, _count: { _all: true } }) : null,
+    ver.orcamentos ? prisma.orcamento.count({ where: comEscopo({ empresaId, status: { in: ["RASCUNHO", "ENVIADO"] } } as EscopoOrc, ec) }) : null,
+    ver.orcamentos ? prisma.orcamento.aggregate({ where: comEscopo({ empresaId, status: "ENVIADO" } as EscopoOrc, ec), _sum: { totalGeral: true }, _count: { _all: true } }) : null,
   ]);
   return {
     contratosAtivos: ativos,
@@ -242,8 +248,8 @@ export async function dadosPmoc(empresaId: string, agora = new Date()) {
 
 export const dadosFrota = (empresaId: string) => contarAlertasVeiculos(empresaId);
 
-export async function dadosPrazos(empresaId: string, comCompras: boolean) {
-  const a = await contarAlertasPrazos(empresaId);
+export async function dadosPrazos(empresaId: string, comCompras: boolean, eo: EscopoOs = {}) {
+  const a = await contarAlertasPrazos(empresaId, eo);
   return {
     prazosVencidos: a.prazosVencidos,
     etapasVencendoHoje: a.etapasVencendoHoje,
@@ -264,22 +270,23 @@ export type DadosBloco = {
   prazos: Awaited<ReturnType<typeof dadosPrazos>>;
 };
 
-export interface ContextoUsuario { empresaId: string; podeVer: (modulo: string, acao?: string) => boolean }
+export interface ContextoUsuario { empresaId: string; podeVer: (modulo: string, acao?: string) => boolean; /** COM-1: quem vê ("Ver só os próprios") */ quem?: QuemVe }
 
 /** Carrega só os blocos pedidos; um bloco que falha não derruba o dashboard. */
 export async function carregarBlocos(ids: BlocoId[], ctx: ContextoUsuario, agora = new Date()) {
   const { empresaId, podeVer } = ctx;
+  const eo = filtroOrdens(ctx.quem), ec = filtroOrcamentos(ctx.quem);
   const carregadores: { [K in BlocoId]: () => Promise<DadosBloco[K]> } = {
-    operacional: () => dadosOperacional(empresaId, agora),
-    "os-do-dia": () => dadosOsDoDia(empresaId, agora),
-    solicitacoes: () => dadosSolicitacoes(empresaId),
-    agenda: () => dadosAgenda(empresaId, agora),
-    comercial: () => dadosComercial(empresaId, { contratos: podeVer("contratos"), orcamentos: podeVer("orcamentos") }, agora),
+    operacional: () => dadosOperacional(empresaId, agora, eo),
+    "os-do-dia": () => dadosOsDoDia(empresaId, agora, eo),
+    solicitacoes: () => dadosSolicitacoes(empresaId, eo),
+    agenda: () => dadosAgenda(empresaId, agora, eo),
+    comercial: () => dadosComercial(empresaId, { contratos: podeVer("contratos"), orcamentos: podeVer("orcamentos") }, agora, ec),
     financeiro: () => dadosFinanceiro(empresaId, agora),
     equipamentos: () => dadosEquipamentos(empresaId, agora),
     pmoc: () => dadosPmoc(empresaId, agora),
     frota: () => dadosFrota(empresaId),
-    prazos: () => dadosPrazos(empresaId, podeVer("compras")),
+    prazos: () => dadosPrazos(empresaId, podeVer("compras"), eo),
   };
   const resultados = await Promise.allSettled(ids.map((id) => carregadores[id]()));
   const dados: Partial<{ [K in BlocoId]: DadosBloco[K] | { erro: true } }> = {};

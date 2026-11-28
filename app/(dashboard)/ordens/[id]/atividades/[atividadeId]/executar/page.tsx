@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { noEscopo } from "@/lib/escopo/proprios-server";
 import { notFound } from "next/navigation";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
@@ -9,6 +10,8 @@ export const metadata: Metadata = { title: "Executar atividade" };
 export default async function ExecutarAtividadePage({ params }: { params: Promise<{ id: string; atividadeId: string }> }) {
   const { id, atividadeId } = await params;
   const session = await auth();
+  // COM-1: "Ver só os próprios" — o registro de outro vendedor não existe para esta pessoa
+  if (session?.user && !(await noEscopo(session.user, "ordem", id))) notFound();
   const empresaId = session!.user!.empresaId;
 
   const atividade = await prisma.atividadeOs.findFirst({

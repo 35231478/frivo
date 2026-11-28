@@ -5,6 +5,7 @@ import { TelaTermos } from "./termos";
 import { TelaPrazos } from "./prazos";
 import { TelaImpressaoOs } from "./impressao-os";
 import { TelaHorarioComercial } from "./horario-comercial";
+import { TelaComissoes } from "./comissoes";
 import { TelaOrcamento } from "./orcamento";
 import { TelaTiposEquipamento } from "./tipos-equipamento";
 import { TelaServicos } from "./servicos";
@@ -43,6 +44,7 @@ const TELAS: Record<string, () => ReactNode> = {
   prazos: () => <TelaPrazos />,
   "impressao-os": () => <TelaImpressaoOs />,
   "horario-comercial": () => <TelaHorarioComercial />,
+  comissoes: () => <TelaComissoes />,
   orcamento: () => <TelaOrcamento />,
   "tipos-equipamento": () => <TelaTiposEquipamento />,
   servicos: () => <TelaServicos />,

@@ -7,6 +7,7 @@ import {
   MAX_ANEXOS_ORCAMENTO, MSG_LIMITE_ANEXOS, MSG_SO_RASCUNHO, SELECT_ANEXO_ORCAMENTO,
   orcamentoParaAnexos, ordenarAnexos, proximaOrdem, tipoAnexoPorMime,
 } from "@/lib/orcamentos/anexos-server";
+import { escopoBarra } from "@/lib/escopo/proprios-server";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -16,6 +17,8 @@ export async function GET(_: NextRequest, { params }: Params) {
   if (guard.erro) return guard.resposta;
   const empresaId = guard.session.user!.empresaId;
   const { id } = await params;
+  const foraDoEscopo = await escopoBarra("orcamento", id); // COM-1: "Ver só os próprios" → 404
+  if (foraDoEscopo) return foraDoEscopo;
   const orc = await orcamentoParaAnexos(empresaId, id);
   if (!orc) return NextResponse.json({ erro: "Orçamento não encontrado" }, { status: 404 });
   const anexos = await prisma.orcamentoAnexo.findMany({ where: { orcamentoId: id, empresaId }, select: SELECT_ANEXO_ORCAMENTO });
@@ -32,6 +35,8 @@ export async function POST(req: NextRequest, { params }: Params) {
   const { session } = guard;
   const empresaId = session.user!.empresaId;
   const { id } = await params;
+  const foraDoEscopo = await escopoBarra("orcamento", id); // COM-1: "Ver só os próprios" → 404
+  if (foraDoEscopo) return foraDoEscopo;
   const orc = await orcamentoParaAnexos(empresaId, id);
   if (!orc) return NextResponse.json({ erro: "Orçamento não encontrado" }, { status: 404 });
   if (orc.status !== "RASCUNHO") return NextResponse.json({ erro: MSG_SO_RASCUNHO }, { status: 409 });

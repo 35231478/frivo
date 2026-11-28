@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { comEscopo, filtroOrcamentos } from "@/lib/escopo/proprios";
 import { registrarEvento } from "@/lib/orcamentos/ciclo-server";
 import { itensDoOrcamentoParaTrava, verificarPrecoDeTabela } from "@/lib/precos/trava-tabela-server";
 import { textoDaTrilha } from "@/lib/precos/trava-tabela";
@@ -45,7 +46,7 @@ export async function GET(req: NextRequest) {
   }
 
   const orcamentos = await prisma.orcamento.findMany({
-    where,
+    where: comEscopo(where, filtroOrcamentos(session.user)), // COM-1: "Ver só os próprios"
     include: {
       cliente: { select: { id: true, nome: true, nomeFantasia: true } },
       _count: { select: { ordensServico: true } },
@@ -137,6 +138,8 @@ export async function POST(req: NextRequest) {
           unidadeId: data.unidadeId === undefined ? sugerido!.unidadeId : data.unidadeId || null,
           contatoClienteId: data.contatoClienteId === undefined ? sugerido!.contatoClienteId : data.contatoClienteId || null,
           criadoPorId: usuarioId,
+          // COM-1: o vendedor nasce = quem criou (travado; só "Trocar vendedor" muda, com motivo na trilha)
+          vendedorId: usuarioId,
           descricao: data.descricao ?? null,
           observacao: data.observacao ?? null,
           validadeEm: data.validadeEm === undefined ? validadeDoPadrao(padroes.validadeDias) : data.validadeEm ? new Date(data.validadeEm) : null,

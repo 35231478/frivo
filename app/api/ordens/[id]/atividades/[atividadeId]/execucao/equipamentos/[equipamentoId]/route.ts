@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { contextoExecucao } from "@/lib/execucao/contexto";
 import { equipamentoSchema, marcarEquipamento, respostaAcao } from "@/lib/execucao/acoes";
+import { escopoBarra } from "@/lib/escopo/proprios-server";
 
 type Params = { params: Promise<{ id: string; atividadeId: string; equipamentoId: string }> };
 
@@ -10,6 +11,8 @@ type Params = { params: Promise<{ id: string; atividadeId: string; equipamentoId
  */
 export async function PATCH(req: NextRequest, { params }: Params) {
   const { id, atividadeId, equipamentoId } = await params;
+  const foraDoEscopo = await escopoBarra("ordem", id); // COM-1: "Ver só os próprios" → 404
+  if (foraDoEscopo) return foraDoEscopo;
   const ctx = await contextoExecucao(id, atividadeId, equipamentoId);
   if (!ctx.ok) return ctx.resposta;
   const parsed = equipamentoSchema.safeParse(await req.json().catch(() => null));

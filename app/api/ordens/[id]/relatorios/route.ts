@@ -6,6 +6,7 @@ import { relatorioSchema } from "@/lib/validations";
 import { linkRelatorioAtividade } from "@/lib/relatorio-atividade-link";
 import { comNumero } from "@/lib/numeracao-server";
 import { contarEquipamentosAtendidos } from "@/lib/relatorio-os/dados";
+import { escopoBarra } from "@/lib/escopo/proprios-server";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -19,6 +20,8 @@ export async function GET(_: NextRequest, { params }: Params) {
   if (guard.erro) return guard.resposta;
   const { session } = guard;
   const { id } = await params;
+  const foraDoEscopo = await escopoBarra("ordem", id); // COM-1: "Ver só os próprios" → 404
+  if (foraDoEscopo) return foraDoEscopo;
   const empresaId = session.user!.empresaId;
 
   const os = await prisma.ordemServico.findFirst({
@@ -103,6 +106,8 @@ export async function POST(req: NextRequest, { params }: Params) {
   if (guard.erro) return guard.resposta;
   const { session } = guard;
   const { id } = await params;
+  const foraDoEscopo = await escopoBarra("ordem", id); // COM-1: "Ver só os próprios" → 404
+  if (foraDoEscopo) return foraDoEscopo;
   const empresaId = session.user!.empresaId;
 
   const os = await prisma.ordemServico.findFirst({

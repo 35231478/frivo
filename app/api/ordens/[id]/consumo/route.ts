@@ -5,6 +5,7 @@ import { ErroEstoque } from "@/lib/estoque/servidor";
 import { consumoSchema, mensagemSeparacao } from "@/lib/estoque/separacao";
 import { ErroSeparacao } from "@/lib/estoque/separacao-server";
 import { consumirMateriais, desfazerConsumo } from "@/lib/estoque/consumo-server";
+import { escopoBarra } from "@/lib/escopo/proprios-server";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -23,6 +24,8 @@ export async function POST(req: NextRequest, { params }: Params) {
   if (guard.erro) return guard.resposta;
   const { session } = guard;
   const { id } = await params;
+  const foraDoEscopo = await escopoBarra("ordem", id); // COM-1: "Ver só os próprios" → 404
+  if (foraDoEscopo) return foraDoEscopo;
   const parsed = consumoSchema.safeParse(await req.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ erro: mensagemSeparacao(parsed.error) }, { status: 400 });
   try {
@@ -38,6 +41,8 @@ export async function DELETE(req: NextRequest, { params }: Params) {
   if (guard.erro) return guard.resposta;
   const { session } = guard;
   const { id } = await params;
+  const foraDoEscopo = await escopoBarra("ordem", id); // COM-1: "Ver só os próprios" → 404
+  if (foraDoEscopo) return foraDoEscopo;
   const body = await req.json().catch(() => null);
   const materialId = typeof body?.id === "string" ? body.id.trim() : "";
   if (!materialId || materialId.length > 40) return NextResponse.json({ erro: "Material inválido." }, { status: 400 });

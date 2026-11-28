@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { exigirPermissao } from "@/lib/permissoes-server";
 import { prisma } from "@/lib/prisma";
 import { motivoBloqueioInativacao } from "@/lib/os-server";
+import { escopoBarra } from "@/lib/escopo/proprios-server";
 
 /**
  * Pré-checagem do modal de inativar OS (o botão padrão dos cadastros): a OS já em medição não é
@@ -11,6 +12,8 @@ export async function GET(_: NextRequest, { params }: { params: Promise<{ id: st
   const guard = await exigirPermissao("ordens", "excluir");
   if (guard.erro) return guard.resposta;
   const { id } = await params;
+  const foraDoEscopo = await escopoBarra("ordem", id); // COM-1: "Ver só os próprios" → 404
+  if (foraDoEscopo) return foraDoEscopo;
   const os = await prisma.ordemServico.findFirst({ where: { id, empresaId: guard.session.user!.empresaId }, select: { id: true } });
   if (!os) return NextResponse.json({ erro: "OS não encontrada" }, { status: 404 });
   return NextResponse.json({ bloqueio: await motivoBloqueioInativacao(id), avisos: [] });

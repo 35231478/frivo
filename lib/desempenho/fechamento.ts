@@ -33,8 +33,21 @@ export function avisosDoFechamento(competencia: string, atual: string, pendentes
 
 /* ───────── a folha de bônus ───────── */
 
-export interface LinhaFolha { tecnicoId: string | null; nome: string; perfil: string; posicao: number | null; escore: number | null; faixa: string | null; valor: number }
-export interface Folha { linhas: LinhaFolha[]; total: number }
+export interface LinhaFolha {
+  tecnicoId: string | null; nome: string; perfil: string; posicao: number | null; escore: number | null; faixa: string | null; valor: number;
+  /** COM-1: o usuário das comissões e a soma delas no mês (empresa sem comissão: ausente/zero) */
+  usuarioId?: string | null;
+  comissao?: number;
+  /** COM-1: a conta a pagar gerada ao fechar (bônus + comissão) */
+  contaPagarId?: string | null;
+}
+export interface Folha {
+  linhas: LinhaFolha[];
+  /** Soma dos bônus */
+  total: number;
+  /** COM-1: soma das comissões (ausente/zero sem comissão) */
+  totalComissao?: number;
+}
 
 const centavos = (n: number) => Math.round(n * 100) / 100;
 
@@ -45,6 +58,29 @@ export function folhaDoPainel(painel: Pick<Painel, "grupos">): Folha {
   })));
   return { linhas, total: centavos(linhas.reduce((s, l) => s + l.valor, 0)) };
 }
+
+/** Perfil mostrado na linha de quem só tem comissão (não participa do Desempenho) */
+export const PERFIL_SO_COMISSAO = "Comissão";
+
+/**
+ * COM-1 — a folha do mês com as comissões: quem já está na folha de bônus (mesmo colaborador) ganha a comissão
+ * na mesma linha (UMA conta a pagar por pessoa); quem só tem comissão entra numa linha própria, no fim.
+ */
+export function folhaComComissoes(folha: Folha, pessoas: readonly { usuarioId: string; nome: string; tecnicoId: string | null; valor: number }[]): Folha {
+  const linhas: LinhaFolha[] = folha.linhas.map((l) => ({ ...l, usuarioId: l.usuarioId ?? null, comissao: l.comissao ?? 0 }));
+  const extras: LinhaFolha[] = [];
+  for (const p of pessoas) {
+    const daFolha = p.tecnicoId ? linhas.find((l) => l.tecnicoId === p.tecnicoId && !l.usuarioId) : undefined;
+    if (daFolha) { daFolha.usuarioId = p.usuarioId; daFolha.comissao = centavos(p.valor); continue; }
+    extras.push({ tecnicoId: p.tecnicoId, usuarioId: p.usuarioId, nome: p.nome, perfil: PERFIL_SO_COMISSAO, posicao: null, escore: null, faixa: null, valor: 0, comissao: centavos(p.valor) });
+  }
+  extras.sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR"));
+  const todas = [...linhas, ...extras];
+  return { linhas: todas, total: centavos(todas.reduce((s, l) => s + l.valor, 0)), totalComissao: centavos(todas.reduce((s, l) => s + (l.comissao ?? 0), 0)) };
+}
+
+/** O que cada pessoa recebe no mês: bônus + comissão */
+export const totalDaLinha = (l: Pick<LinhaFolha, "valor" | "comissao">) => centavos(l.valor + (l.comissao ?? 0));
 
 /* ───────── quem ganhou a premiação ───────── */
 
@@ -137,6 +173,18 @@ const br = (n: number, casas: number) => n.toFixed(casas).replace(".", ",");
 /** A folha em linhas de planilha (CSV para o financeiro): uma por colaborador, com o total no fim. */
 export function linhasDoCsv(competencia: string, folha: Folha, premios: PremioFechado[]): string[][] {
   const premiosDe = (tecnicoId: string | null) => premios.filter((p) => !!tecnicoId && p.ganhadores.some((g) => g.tecnicoId === tecnicoId)).map((p) => p.titulo).join(" / ");
+  // COM-1: com comissão no mês, a planilha ganha "Comissão" e "Total" (sem comissão, fica como sempre foi)
+  if ((folha.totalComissao ?? 0) !== 0 || folha.linhas.some((l) => (l.comissao ?? 0) !== 0)) {
+    const totalComissao = folha.totalComissao ?? centavos(folha.linhas.reduce((s, l) => s + (l.comissao ?? 0), 0));
+    return [
+      ["Competência", "Colaborador", "Perfil", "Posição", "Escore (%)", "Faixa", "Bônus (R$)", "Comissão (R$)", "Total (R$)", "Premiação"],
+      ...folha.linhas.map((l) => [
+        competenciaCurta(competencia), l.nome, l.perfil, l.posicao === null ? "" : String(l.posicao), l.escore === null ? "" : br(l.escore, 1), l.faixa ?? "",
+        br(l.valor, 2), br(l.comissao ?? 0, 2), br(totalDaLinha(l), 2), premiosDe(l.tecnicoId),
+      ]),
+      ["", "Total", "", "", "", "", br(folha.total, 2), br(totalComissao, 2), br(centavos(folha.total + totalComissao), 2), ""],
+    ];
+  }
   return [
     ["Competência", "Colaborador", "Perfil", "Posição", "Escore (%)", "Faixa", "Bônus (R$)", "Premiação"],
     ...folha.linhas.map((l) => [

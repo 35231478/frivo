@@ -1,5 +1,6 @@
 import { contextoExecucao } from "@/lib/execucao/contexto";
 import { respostaAcao, tudoOk } from "@/lib/execucao/acoes";
+import { escopoBarra } from "@/lib/escopo/proprios-server";
 
 type Params = { params: Promise<{ id: string; atividadeId: string; equipamentoId: string }> };
 
@@ -10,6 +11,8 @@ type Params = { params: Promise<{ id: string; atividadeId: string; equipamentoId
  */
 export async function POST(_req: Request, { params }: Params) {
   const { id, atividadeId, equipamentoId } = await params;
+  const foraDoEscopo = await escopoBarra("ordem", id); // COM-1: "Ver só os próprios" → 404
+  if (foraDoEscopo) return foraDoEscopo;
   const ctx = await contextoExecucao(id, atividadeId, equipamentoId);
   if (!ctx.ok) return ctx.resposta;
   return respostaAcao(await tudoOk(ctx));

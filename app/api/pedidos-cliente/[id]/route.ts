@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { MSG_FORA_DO_ESCOPO, pedidoForaDoEscopo } from "@/lib/escopo/proprios-server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { editarPedido, totalLigado } from "@/lib/pedido-cliente/server";
@@ -12,6 +13,8 @@ export async function GET(_: NextRequest, { params }: Params) {
   const session = await auth();
   if (!session) return NextResponse.json({ erro: "Não autorizado" }, { status: 401 });
   const { id } = await params;
+  // COM-1: "Ver só os próprios" — pedido que cobre OS/orçamento de outro vendedor não existe para a pessoa
+  if (await pedidoForaDoEscopo(session.user, id)) return NextResponse.json({ erro: MSG_FORA_DO_ESCOPO }, { status: 404 });
   const p = await prisma.pedidoCliente.findFirst({
     where: { id, empresaId: session.user.empresaId },
     select: {
@@ -51,6 +54,8 @@ export async function PATCH(req: NextRequest, { params }: Params) {
     return NextResponse.json({ erro: MSG_SEM_PERMISSAO_PEDIDO }, { status: 403 });
   }
   const { id } = await params;
+  // COM-1: "Ver só os próprios" — pedido que cobre OS/orçamento de outro vendedor não existe para a pessoa
+  if (await pedidoForaDoEscopo(session.user, id)) return NextResponse.json({ erro: MSG_FORA_DO_ESCOPO }, { status: 404 });
   const corpo = await req.json().catch(() => null);
   if (!corpo || typeof corpo !== "object") return NextResponse.json({ erro: "Dados inválidos" }, { status: 400 });
   const r = await editarPedido({ empresaId: session.user.empresaId, usuarioId: session.user.id }, id, corpo);

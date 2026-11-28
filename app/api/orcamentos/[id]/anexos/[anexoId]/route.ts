@@ -3,6 +3,7 @@ import { exigirPermissao } from "@/lib/permissoes-server";
 import { prisma } from "@/lib/prisma";
 import { respostaAnexo } from "@/lib/anexos-server";
 import { MSG_SO_RASCUNHO, orcamentoParaAnexos } from "@/lib/orcamentos/anexos-server";
+import { escopoBarra } from "@/lib/escopo/proprios-server";
 
 type Params = { params: Promise<{ id: string; anexoId: string }> };
 
@@ -11,6 +12,8 @@ export async function GET(req: NextRequest, { params }: Params) {
   const guard = await exigirPermissao("orcamentos", "visualizar");
   if (guard.erro) return guard.resposta;
   const { id, anexoId } = await params;
+  const foraDoEscopo = await escopoBarra("orcamento", id); // COM-1: "Ver só os próprios" → 404
+  if (foraDoEscopo) return foraDoEscopo;
   const anexo = await prisma.orcamentoAnexo.findFirst({
     where: { id: anexoId, orcamentoId: id, empresaId: guard.session.user!.empresaId },
     select: { nome: true, conteudo: true },
@@ -25,6 +28,8 @@ export async function DELETE(_: NextRequest, { params }: Params) {
   if (guard.erro) return guard.resposta;
   const empresaId = guard.session.user!.empresaId;
   const { id, anexoId } = await params;
+  const foraDoEscopo = await escopoBarra("orcamento", id); // COM-1: "Ver só os próprios" → 404
+  if (foraDoEscopo) return foraDoEscopo;
   const orc = await orcamentoParaAnexos(empresaId, id);
   if (!orc) return NextResponse.json({ erro: "Orçamento não encontrado" }, { status: 404 });
   if (orc.status !== "RASCUNHO") return NextResponse.json({ erro: MSG_SO_RASCUNHO }, { status: 409 });
