@@ -11,7 +11,7 @@ import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { filtroOrdens, type QuemVe } from "@/lib/escopo/proprios";
 import { atividadesDoTecnico } from "@/lib/tecnico/escopo";
-import { ondeConversaDoTecnico } from "@/lib/chat/pessoas-servidor";
+import { equipamentosDasOsDaConversa, ondeConversaDoTecnico, ondeEscritorioVe, type EquipamentosDasOs } from "@/lib/chat/pessoas-servidor";
 import { comentariosDaOs, comentariosParaEscritorio, marcarConversaLida } from "@/lib/execucao/comentarios";
 import { ESPERA_NOVIDADES_MS, PASSO_NOVIDADES_MS, marcaNovidades, ordenarConversas, type ConversaResumo } from "@/lib/chat/regras";
 import type { ComentarioTela } from "@/lib/tecnico/comentarios";
@@ -106,12 +106,13 @@ export async function conversasDoEscritorio(u: QuemEscritorio, op: { busca?: str
 }
 
 /** A conversa aberta no escritório: o resumo e as mensagens (ler marca como lidas). Fora do escopo: null. */
-export async function conversaDoEscritorio(u: QuemEscritorio, osId: string): Promise<{ conversa: ConversaResumo; mensagens: ComentarioTela[] } | null> {
+export async function conversaDoEscritorio(u: QuemEscritorio, osId: string, op: { ate?: string | null } = {}): Promise<{ conversa: ConversaResumo; mensagens: ComentarioTela[]; equipamentosDasOs: EquipamentosDasOs } | null> {
   const os = await prisma.ordemServico.findFirst({ where: { id: osId, ...osDoEscritorio(u) }, select: { id: true } });
   if (!os) return null;
-  const mensagens = (await comentariosParaEscritorio(u.empresaId, osId, u.id)) ?? [];
-  const [conversa] = await resumosDasConversas(u.empresaId, u.id, [osId]);
-  return { conversa, mensagens };
+  // A citação de outra conversa aparece se esta pessoa pode ver a original (senão, "Mensagem indisponível")
+  const mensagens = (await comentariosParaEscritorio(u.empresaId, osId, u.id, new Date(), { ate: op.ate, visivel: ondeEscritorioVe(u) })) ?? [];
+  const [[conversa], equipamentosDasOs] = await Promise.all([resumosDasConversas(u.empresaId, u.id, [osId]), equipamentosDasOsDaConversa(u.empresaId, [osId])]);
+  return { conversa, mensagens, equipamentosDasOs };
 }
 
 /** Quantas conversas têm mensagem não lida por esta pessoa (o ícone do topo). */

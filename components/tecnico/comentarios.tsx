@@ -7,6 +7,8 @@ import { Dica } from "@/components/ui/dica";
 import { irPara, useTecnico } from "@/components/tecnico/contexto";
 import { novoClientId } from "@/lib/tecnico/offline/motor";
 import { chaveVisto, novosComentarios, ordenarComentarios, TEXTO_MAX, type ComentarioTela } from "@/lib/tecnico/comentarios";
+import { preencherCitacoes } from "@/lib/chat/regras";
+import { Citacao } from "@/components/chat/citacao";
 import type { ExecucaoTela, NovaOperacao } from "@/lib/tecnico/offline/tipos";
 
 const VISIVEIS = 4;
@@ -18,7 +20,7 @@ const VISIVEIS = 4;
 export function ComentariosDaOs({ x, registrar }: { x: ExecucaoTela; registrar: (ops: NovaOperacao[]) => Promise<void> }) {
   const { motor } = useTecnico();
   const osId = x.os.id;
-  const lista = useMemo(() => ordenarComentarios(x.comentarios ?? []), [x.comentarios]);
+  const lista = useMemo(() => preencherCitacoes(ordenarComentarios(x.comentarios ?? [])), [x.comentarios]);
   const [vistoAntes, setVistoAntes] = useState<string | null | undefined>(undefined);
   const [todos, setTodos] = useState(false);
   const [texto, setTexto] = useState("");
@@ -75,6 +77,8 @@ export function ComentariosDaOs({ x, registrar }: { x: ExecucaoTela; registrar: 
               <p className="text-xs text-ink-muted">
                 <span className="font-semibold text-ink">{c.meu ? "Minha mensagem" : c.autor}</span>{c.origem === "ESCRITORIO" ? " · escritório" : ""} · {c.pendente ? "no aparelho" : formatarDataHora(c.criadoEm)}
               </p>
+              {/* CHAT-1: a resposta mostra a citação, igual à do Chat (responder é pelo Chat) */}
+              {c.respostaA && <Citacao c={c.respostaA} />}
               <p className="text-base text-ink whitespace-pre-line break-words">{c.texto}</p>
             </li>
           ))}

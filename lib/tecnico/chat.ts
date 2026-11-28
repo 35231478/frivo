@@ -11,15 +11,26 @@
  */
 import { marcaValida, type OsDoDia } from "@/lib/chat/regras";
 import { SEM_OS } from "@/lib/tecnico/despesas";
-import type { ComentarioTela } from "@/lib/tecnico/comentarios";
+import { refParaCitacao, type ComentarioTela } from "@/lib/tecnico/comentarios";
+import { acharCitada } from "@/lib/chat/regras";
+import type { EquipamentoFotoTela } from "@/lib/chat/equipamento-foto";
 import type { OperacaoFila } from "@/lib/tecnico/offline/tipos";
 
 /** GET /api/tecnico/conversas */
-export interface RespostaConversa { mensagens: ComentarioTela[]; osDoDia: OsDoDia[]; osPadrao: string | null }
+export interface RespostaConversa {
+  mensagens: ComentarioTela[]; osDoDia: OsDoDia[]; osPadrao: string | null;
+  /** A atividade do técnico nas OS da conversa que não são do dia (responder herda a OS da citada) */
+  atividadesDasOs?: OsDoDia[];
+  /** CHAT-1.1: por OS, os equipamentos (a foto se vincula a um deles) e o da atividade em andamento dele */
+  equipamentosDasOs?: EquipamentosDasOsTela;
+}
+export type EquipamentosDasOsTela = Record<string, { equipamentos: EquipamentoFotoTela[]; emAndamento: string | null }>;
 /** A OS como a etiqueta mostra */
 export type OsEtiqueta = NonNullable<ComentarioTela["os"]>;
 
 export const URL_CONVERSA_APP = "/api/tecnico/conversas";
+/** A conversa desde uma mensagem antiga (a citada que o técnico quer ver) */
+export const urlConversaAte = (id: string | null) => (id ? `${URL_CONVERSA_APP}?ate=${encodeURIComponent(id)}` : URL_CONVERSA_APP);
 /** A foto inteira (ao ampliar) */
 export const urlFotoApp = (fotoId: string) => `${URL_CONVERSA_APP}/fotos/${encodeURIComponent(fotoId)}`;
 
@@ -41,6 +52,7 @@ export function semCliente(r: RespostaConversa, exibir: boolean): RespostaConver
     ...r,
     mensagens: r.mensagens.map((m) => (m.os?.cliente ? { ...m, os: { ...m.os, cliente: "" } } : m)),
     osDoDia: r.osDoDia.map((o) => (o.cliente ? { ...o, cliente: "" } : o)),
+    ...(r.atividadesDasOs && { atividadesDasOs: r.atividadesDasOs.map((o) => (o.cliente ? { ...o, cliente: "" } : o)) }),
   };
 }
 
@@ -69,19 +81,39 @@ export function atividadeDaOs(osId: string, osDoDia: readonly OsDoDia[], ativida
  * atividade (SEM_OS = sem OS). A já confirmada (estado "enviada") continua como pendente até a conversa do servidor
  * trazê-la — `juntarComFila` tira a repetida.
  */
-export function mensagensDaFila(fila: OperacaoFila[], atividades: ReadonlyMap<string, OsEtiqueta>, autor: string): ComentarioTela[] {
+export function mensagensDaFila(fila: OperacaoFila[], atividades: ReadonlyMap<string, OsEtiqueta>, autor: string, equipamentos: EquipamentosDasOsTela = {}): ComentarioTela[] {
   return fila.flatMap((o): ComentarioTela[] => {
     if (o.tipo !== "comentario") return [];
     const d = o.dados;
     const recusada = o.estado === "erro";
     const falhou = recusada ? motivoDaRecusa(o.status ?? null, o.erro ?? null, o.atividadeId !== SEM_OS) : null;
+    const os = o.atividadeId === SEM_OS ? null : atividades.get(o.atividadeId) ?? (o.osNumero ? { id: "", numero: o.osNumero, cliente: "" } : null);
+    // O equipamento que o técnico escolheu para a foto aparece já (o automático, quando o servidor confirmar)
+    const escolhido = d.equipamentoId && os ? equipamentos[os.id]?.equipamentos.find((e) => e.id === d.equipamentoId) ?? null : null;
     return [{
       id: null, clientId: d.clientId, texto: (d.texto ?? "").trim(), autor, origem: "APP", criadoEm: o.criadoEm, meu: true,
-      pendente: !falhou, falhou, os: o.atividadeId === SEM_OS ? null : atividades.get(o.atividadeId) ?? (o.osNumero ? { id: "", numero: o.osNumero, cliente: "" } : null),
+      pendente: !falhou, falhou, os,
       // `comOs`: ela foi para uma OS (mesmo que a OS já não esteja nas do dia — ex.: cancelada — e a etiqueta não a ache)
       ...(recusada && o.seq != null && { recusa: { seq: o.seq, status: o.status ?? null, comOs: o.atividadeId !== SEM_OS } }),
-      ...(d.miniatura && { foto: { id: null, miniatura: d.miniatura } }),
+      ...(d.miniatura && { foto: { id: null, miniatura: d.miniatura, equipamento: escolhido, origemEquipamento: escolhido ? "ESCOLHA" as const : null } }),
+      ...(d.respostaA && { respostaA: refParaCitacao(d.respostaA) }),
     }];
+  });
+}
+
+/**
+ * CHAT-1.1: as correções do equipamento da foto que ainda estão na fila valem na tela já (a última de cada foto). A
+ * recusada não vale: a foto fica como o servidor tem.
+ */
+export function aplicarCorrecoesDaFila(mensagens: ComentarioTela[], fila: OperacaoFila[], equipamentos: EquipamentosDasOsTela = {}): ComentarioTela[] {
+  const correcoes = fila.filter((o) => o.tipo === "fotoChatEquipamento" && o.estado !== "erro");
+  if (!correcoes.length) return mensagens;
+  return mensagens.map((m) => {
+    if (!m.foto || !m.os) return m;
+    const c = [...correcoes].reverse().find((o) => o.tipo === "fotoChatEquipamento" && !!acharCitada([m], { id: o.dados.comentario.id ?? null, clientId: o.dados.comentario.clientId ?? null }));
+    if (!c || c.tipo !== "fotoChatEquipamento") return m;
+    const equipamento = c.dados.equipamentoId ? equipamentos[m.os.id]?.equipamentos.find((e) => e.id === c.dados.equipamentoId) ?? null : null;
+    return { ...m, foto: { ...m.foto, equipamento, origemEquipamento: "CORRIGIDO" } };
   });
 }
 
@@ -134,6 +166,17 @@ export function mensagensSumidas(antes: ComentarioTela[], agora: ComentarioTela[
 export function osDoSeletor(escolha: string | null | undefined, osPadrao: string | null | undefined, osDoDia: readonly OsDoDia[]): string | null {
   const v = escolha === undefined ? osPadrao ?? null : escolha;
   return v && osDoDia.some((o) => o.osId === v && o.atividadeId) ? v : null;
+}
+
+/**
+ * As opções do seletor: as OS do dia e, respondendo uma mensagem de OUTRA OS, a dela (a resposta herda a OS da citada)
+ * — quando o técnico tem atividade nela (a do dia, a guardada no aparelho ou a que veio com a conversa). Sem atividade
+ * dele naquela OS, a resposta vai sem OS (a fila sobe pela atividade).
+ */
+export function opcoesDoSeletor(osDoDia: readonly OsDoDia[], herdada: OsEtiqueta | null | undefined, atividades: ReadonlyMap<string, OsEtiqueta>): OsDoDia[] {
+  if (!herdada || osDoDia.some((o) => o.osId === herdada.id)) return [...osDoDia];
+  const atividadeId = atividadeDaOs(herdada.id, osDoDia, atividades);
+  return atividadeId ? [...osDoDia, { osId: herdada.id, numero: herdada.numero, cliente: herdada.cliente, emAndamento: false, atividadeId }] : [...osDoDia];
 }
 
 /** Por qual atividade a mensagem sobe na fila: a da OS escolhida; "Sem OS" = SEM_OS. */

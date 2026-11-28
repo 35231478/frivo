@@ -65,7 +65,7 @@ export const NOMES_VINCULO: Record<string, string> = {
   orcamentos: "orçamentos", pedidosCliente: "pedidos do cliente", medicoes: "medições", contasReceber: "contas a receber", notasFiscais: "notas fiscais", pmocs: "PMOC",
   equipamentos: "equipamentos", ordensAbertas: "OS abertas pelo contato", orcamentosAc: "orçamentos", aceitesConfirmados: "aceites de OS",
   qrcode: "QR Code", atividades: "atividades de OS", respostasFormulario: "formulários respondidos", checklistRespostas: "checklists",
-  fotosAtendimento: "fotos de atendimento", servicosAdicionais: "serviços adicionais", anexosOs: "anexos de OS",
+  fotosAtendimento: "fotos de atendimento", fotosChat: "fotos do chat", fotosChatSugeridas: "fotos do chat (sugestão)", servicosAdicionais: "serviços adicionais", anexosOs: "anexos de OS",
   pmocCronogramas: "cronograma de PMOC", pmocExecucoes: "execuções de PMOC", pmocOcorrencias: "ocorrências de PMOC",
   desempenhoPenalidades: "penalidades de desempenho", contasPagar: "contas a pagar", recorrenciasPagar: "despesas recorrentes",
   notasCompra: "notas de compra", deParas: "vínculos com fornecedor", pedidosCompra: "pedidos de compra",

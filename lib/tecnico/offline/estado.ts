@@ -255,6 +255,10 @@ export function aplicar(r: RetratoAtividade, x: ExecucaoTela, op: OperacaoFila):
       // A despesa não muda a execução: aparece em "Minhas despesas" (lida da fila e do servidor)
       return x;
 
+    case "fotoChatEquipamento":
+      // O equipamento de uma foto do chat: a tela Chat mostra a correção pela fila; a execução da OS não muda
+      return x;
+
     case "fotoOsRemover":
       return { ...x, fotosServico: (x.fotosServico ?? []).filter((f) => !((op.dados.clientId && f.clientId === op.dados.clientId) || (op.dados.id && f.id === op.dados.id))) };
 

@@ -250,7 +250,7 @@ export function ConversasEscritorio({ pessoaInicial, osInicial, podeEscrever, po
                 </div>
               </header>
               <ConversaEscritorio key={chaveAberta(aberta)} alvo={aberta} className="flex-1" aoCarregar={aoCarregar} abrirOs={(id) => router.push(`/ordens/${id}`)}
-                podeEscrever={aberta.tipo === "os" ? podeEscrever : podeEnviarConversas}
+                podeEscrever={aberta.tipo === "os" ? podeEscrever : podeEnviarConversas} podeCorrigirFoto={podeEscrever}
                 semPermissao={aberta.tipo === "os" ? undefined : "Para escrever é preciso a permissão Conversas › Enviar."} />
             </>
           ) : (

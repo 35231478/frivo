@@ -1526,6 +1526,8 @@ model Equipamento {
   respostasFormulario RespostaFormularioEquipamento[]
   checklistRespostas  ChecklistResposta[]
   fotosAtendimento    FotoAtendimento[]
+  fotosChat           OsComentarioFoto[] @relation("FotoChatEquipamento")
+  fotosChatSugeridas  OsComentarioFoto[] @relation("FotoChatSugerido")
   servicosAdicionais  ServicoAdicional[]
   anexosOs            OsAnexo[]
 
@@ -2828,10 +2830,14 @@ model OsComentario {
   /// CHAT-1: a conversa (o técnico, pelo usuário dele) para quem o escritório escreveu. Vazio numa mensagem do
   /// escritório com OS = para todos os técnicos da OS (como era antes); a do técnico é sempre da conversa dele.
   paraUsuarioId  String?   @map("para_usuario_id")
+  /// CHAT-1.1: a mensagem que esta RESPONDE (a citação no topo do balão). Só da mesma conversa/OS, conferido na gravação
+  respostaAId    String?   @map("resposta_a_id")
 
   ordemServico OrdemServico?     @relation(fields: [ordemServicoId], references: [id], onDelete: Cascade)
   atividade    AtividadeOs?      @relation(fields: [atividadeId], references: [id], onDelete: SetNull)
   foto         OsComentarioFoto?
+  respostaA    OsComentario?  @relation("RespostaA", fields: [respostaAId], references: [id], onDelete: SetNull)
+  respostas    OsComentario[] @relation("RespostaA")
 
   @@unique([empresaId, clientId])
   @@index([ordemServicoId, criadoEm])
@@ -2867,9 +2873,22 @@ model OsComentarioFoto {
   conteudo     String   @db.Text
   miniatura    String   @db.Text
   criadoEm     DateTime @default(now()) @map("criado_em")
+  /// CHAT-1.1: o equipamento da foto (só foto com OS). Vazio = sem equipamento
+  equipamentoId         String?  @map("equipamento_id")
+  /// Como o vínculo nasceu: UNICO (a OS tem um só), ANDAMENTO (a atividade em andamento), QR (o QR code na foto),
+  /// ESCOLHA (quem enviou escolheu) ou CORRIGIDO (alguém corrigiu depois; a trilha fica no histórico da OS)
+  equipamentoOrigem     String?  @map("equipamento_origem")
+  /// QR code de OUTRO cliente lido na foto: o equipamento sugerido — NÃO vinculado
+  equipamentoSugeridoId String?  @map("equipamento_sugerido_id")
+  /// O escritório pôs esta foto no relatório da atividade (por referência: o arquivo não é copiado). O chat é interno:
+  /// por padrão, fora
+  noRelatorio           Boolean  @default(false) @map("no_relatorio")
 
-  comentario OsComentario @relation(fields: [comentarioId], references: [id], onDelete: Cascade)
+  comentario          OsComentario @relation(fields: [comentarioId], references: [id], onDelete: Cascade)
+  equipamento         Equipamento? @relation("FotoChatEquipamento", fields: [equipamentoId], references: [id], onDelete: SetNull)
+  equipamentoSugerido Equipamento? @relation("FotoChatSugerido", fields: [equipamentoSugeridoId], references: [id], onDelete: SetNull)
 
+  @@index([empresaId, equipamentoId])
   @@map("os_comentarios_fotos")
 }
 

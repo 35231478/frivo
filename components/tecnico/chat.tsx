@@ -10,20 +10,24 @@ import { SeletorOs } from "@/components/chat/seletor-os";
 import { useNovidades } from "@/components/chat/use-novidades";
 import { useAreaVisivel } from "@/components/tecnico/use-area-visivel";
 import { URL_NOVIDADES_APP } from "@/lib/chat/novidades-cliente";
-import { juntarComFila } from "@/lib/chat/regras";
+import { juntarComFila, osDaResposta, refDaCitada } from "@/lib/chat/regras";
+import { lerQrDaFoto } from "@/lib/qr/leitor";
+import { equipamentoDoQr } from "@/lib/tecnico/offline/estado";
 import { irPara, useTecnico } from "@/components/tecnico/contexto";
 import { novoClientId } from "@/lib/tecnico/offline/motor";
 import { MSG_SEM_ESPACO } from "@/lib/tecnico/offline/armazenamento";
 import { comentarioSchema, type ComentarioTela } from "@/lib/tecnico/comentarios";
 import type { OperacaoFila } from "@/lib/tecnico/offline/tipos";
 import {
-  atividadeDaOs, atividadeDoEnvio, numeroDaOs, CHAVE_CONVERSA, confirmadasForaDaConversa, conversaValida, dicaNaoLidas, mapaDeAtividades, mensagensDaFila,
-  mensagensSumidas, MSG_CONVERSA_SEM_SINAL, osDoSeletor, precisaRecarregar, rotuloNaoLidas, semCliente, URL_CONVERSA_APP, urlFotoApp,
-  type RespostaConversa,
+  aplicarCorrecoesDaFila, atividadeDaOs, atividadeDoEnvio, numeroDaOs, CHAVE_CONVERSA, confirmadasForaDaConversa, conversaValida, dicaNaoLidas, mapaDeAtividades, mensagensDaFila,
+  mensagensSumidas, MSG_CONVERSA_SEM_SINAL, opcoesDoSeletor, osDoSeletor, precisaRecarregar, rotuloNaoLidas, semCliente, urlConversaAte, urlFotoApp,
+  type OsEtiqueta, type RespostaConversa,
 } from "@/lib/tecnico/chat";
 
 type Carga = { dados: RespostaConversa | null; baixadoEm: number | null; doAparelho: boolean };
 type AtividadeGuardada = { atividadeId: string; osId: string; osNumero: string; cliente: string };
+type QrGuardado = { equipamentoId: string; valor: (lido: string) => boolean };
+export const MSG_SEM_ATIVIDADE_NA_OS = "Sem atividade sua nesta OS neste aparelho: o escritório corrige o equipamento.";
 
 /**
  * O contador do item "Chat" da barra inferior: o que o escritório mandou e o técnico não leu. Vem do tempo real (o
@@ -66,8 +70,15 @@ export function VistaChat() {
   const [atualizando, setAtualizando] = useState(false);
   const [fila, setFila] = useState<OperacaoFila[]>([]);
   const [guardadas, setGuardadas] = useState<AtividadeGuardada[]>([]);
+  // CHAT-1.1: os QR codes dos equipamentos das unidades guardadas no aparelho (a prévia do QR lido na foto, sem sinal)
+  const [qrsGuardados, setQrsGuardados] = useState<QrGuardado[]>([]);
   // A OS que o técnico escolheu no seletor (undefined = ainda não escolheu: vale a OS padrão do servidor)
   const [escolha, setEscolha] = useState<string | null | undefined>(undefined);
+  // Responder herda a OS da citada (entra no seletor); cancelar volta à escolha de antes, se o técnico não trocou
+  const [herdada, setHerdada] = useState<OsEtiqueta | null>(null);
+  const antesDaCitacao = useRef<{ herdada: string | null; antes: string | null | undefined } | null>(null);
+  // Foi até uma citada antiga: as próximas leituras continuam desde ela
+  const ate = useRef<string | null>(null);
   // A que saiu da fila (o servidor confirmou) segue "Enviando…" até a conversa trazê-la com o ✓;
   // `pedido` = o 1º pedido da conversa feito depois de ela sair da fila (o que a traz)
   const [sumidas, setSumidas] = useState<{ m: ComentarioTela; pedido: number }[]>([]);
@@ -78,7 +89,7 @@ export function VistaChat() {
     const n = ++pedido.current;
     setAtualizando(true);
     let x: Carga;
-    try { x = await motor.baixarLista<RespostaConversa>(CHAVE_CONVERSA, URL_CONVERSA_APP); } catch { x = { dados: null, baixadoEm: null, doAparelho: true }; }
+    try { x = await motor.baixarLista<RespostaConversa>(CHAVE_CONVERSA, urlConversaAte(ate.current)); } catch { x = { dados: null, baixadoEm: null, doAparelho: true }; }
     if (n !== pedido.current) return; // outro pedido saiu depois (ou a tela fechou): vale o mais novo
     setAtualizando(false);
     const ok = conversaValida(x.dados);
@@ -106,17 +117,22 @@ export function VistaChat() {
     let vivo = true;
     motor.banco.fila().then((f) => { if (vivo) setFila(f); }, () => { /* banco fechado: fica a última lida */ });
     motor.banco.retratos().then((rs) => {
-      if (vivo) setGuardadas(rs.map(({ retrato: { cartao: c } }) => ({ atividadeId: c.atividadeId, osId: c.osId, osNumero: c.osNumero, cliente: c.cliente })));
+      if (!vivo) return;
+      setGuardadas(rs.map(({ retrato: { cartao: c } }) => ({ atividadeId: c.atividadeId, osId: c.osId, osNumero: c.osNumero, cliente: c.cliente })));
+      setQrsGuardados(rs.flatMap(({ retrato: r }) => r.equipamentosUnidade.filter((e) => e.qr).map((e) => ({ equipamentoId: e.id, valor: (lido: string) => equipamentoDoQr(r, lido)?.id === e.id }))));
     }, () => { /* idem */ });
     return () => { vivo = false; };
   }, [motor, estado.versao]);
 
   const dados = useMemo(() => (carga?.dados ? semCliente(carga.dados, config.exibirDadosCliente) : null), [carga, config.exibirDadosCliente]);
   const osDoDia = useMemo(() => dados?.osDoDia ?? [], [dados]);
-  const atividades = useMemo(() => mapaDeAtividades(osDoDia, config.exibirDadosCliente ? guardadas : guardadas.map((g) => ({ ...g, cliente: "" }))),
-    [osDoDia, guardadas, config.exibirDadosCliente]);
+  const atividades = useMemo(() => {
+    const daConversa = (dados?.atividadesDasOs ?? []).flatMap((o) => (o.atividadeId ? [{ atividadeId: o.atividadeId, osId: o.osId, osNumero: o.numero, cliente: o.cliente }] : []));
+    return mapaDeAtividades(osDoDia, [...daConversa, ...(config.exibirDadosCliente ? guardadas : guardadas.map((g) => ({ ...g, cliente: "" })))]);
+  }, [dados, osDoDia, guardadas, config.exibirDadosCliente]);
   const servidor = useMemo(() => dados?.mensagens ?? [], [dados]);
-  const daFila = useMemo(() => mensagensDaFila(fila, atividades, usuario.nome), [fila, atividades, usuario.nome]);
+  const equipamentos = useMemo(() => dados?.equipamentosDasOs ?? {}, [dados]);
+  const daFila = useMemo(() => mensagensDaFila(fila, atividades, usuario.nome, equipamentos), [fila, atividades, usuario.nome, equipamentos]);
 
   const antes = useRef<ComentarioTela[]>([]);
   const pedidas = useRef(new Set<string>());
@@ -131,21 +147,65 @@ export function VistaChat() {
 
   const mensagens = useMemo(() => {
     const ids = new Set(daFila.map((m) => m.clientId));
-    return juntarComFila(servidor, [...daFila, ...sumidas.map((s) => s.m).filter((m) => !ids.has(m.clientId))]);
-  }, [servidor, daFila, sumidas]);
+    // CHAT-1.1: a correção do equipamento da foto que ainda está na fila já vale na tela
+    return aplicarCorrecoesDaFila(juntarComFila(servidor, [...daFila, ...sumidas.map((s) => s.m).filter((m) => !ids.has(m.clientId))]), fila, equipamentos);
+  }, [servidor, daFila, sumidas, fila, equipamentos]);
 
-  const osEscolhida = osDoSeletor(escolha, dados?.osPadrao, osDoDia);
+  const opcoes = useMemo(() => opcoesDoSeletor(osDoDia, herdada, atividades), [osDoDia, herdada, atividades]);
+  const osEscolhida = osDoSeletor(escolha, dados?.osPadrao, opcoes);
+
+  /** Responder: a OS vem da citada (sem atividade dele nela, sem OS); cancelar volta à escolha de antes */
+  function aoCitar(m: ComentarioTela | null) {
+    if (m) {
+      const os = osDaResposta(m);
+      antesDaCitacao.current = { herdada: os, antes: antesDaCitacao.current ? antesDaCitacao.current.antes : escolha };
+      setHerdada(m.os ?? null);
+      setEscolha(os);
+      return;
+    }
+    const a = antesDaCitacao.current;
+    antesDaCitacao.current = null;
+    if (a && (escolha ?? null) === a.herdada) setEscolha(a.antes);
+  }
+
+  async function carregarAte(id: string) { ate.current = id; await carregar(); }
 
   async function enviar(d: EnvioMensagem): Promise<string | null> {
     if (!motor) return MSG_SEM_ESPACO;
-    const v = comentarioSchema.safeParse({ clientId: novoClientId(), texto: d.texto, ...(d.foto && d.miniatura && { foto: d.foto, miniatura: d.miniatura }) });
+    const v = comentarioSchema.safeParse({
+      clientId: novoClientId(), texto: d.texto, ...(d.foto && d.miniatura && { foto: d.foto, miniatura: d.miniatura }), ...(d.respostaA && { respostaA: d.respostaA }),
+      ...(d.foto && d.equipamentoId !== undefined && { equipamentoId: d.equipamentoId }), ...(d.foto && d.qr && { qr: d.qr }),
+    });
     if (!v.success) return v.error.issues[0]?.message ?? MSG_SEM_ESPACO;
     try {
-      await motor.registrar([{ tipo: "comentario", atividadeId: atividadeDoEnvio(osEscolhida, osDoDia), dados: v.data, osNumero: numeroDaOs(osEscolhida, osDoDia) }]);
+      await motor.registrar([{ tipo: "comentario", atividadeId: atividadeDoEnvio(osEscolhida, opcoes), dados: v.data, osNumero: numeroDaOs(osEscolhida, opcoes) }]);
     } catch {
       return MSG_SEM_ESPACO; // o aparelho não guardou: nunca finge que enviou
     }
+    antesDaCitacao.current = null;
     setEscolha(osEscolhida); // a próxima vai na mesma OS (ou sem OS)
+    setFila(await motor.banco.fila());
+    return null;
+  }
+
+  /** O QR lido na foto, no aparelho: só se for de um equipamento desta OS (o resto o servidor confere) */
+  function resolverQr(valor: string) {
+    const lista = osEscolhida ? equipamentos[osEscolhida]?.equipamentos ?? [] : [];
+    const g = qrsGuardados.find((q) => q.valor(valor) && lista.some((e) => e.id === q.equipamentoId));
+    const e = g && lista.find((x) => x.id === g.equipamentoId);
+    return e ? { equipamentoId: e.id, mesmoCliente: true, titulo: e.titulo } : null;
+  }
+
+  /** Corrigir o equipamento de uma foto: pela fila (sem sinal também), pela atividade dele naquela OS */
+  async function corrigirEquipamento(m: ComentarioTela, equipamentoId: string | null): Promise<string | null> {
+    const atividadeId = m.os ? atividadeDaOs(m.os.id, opcoes, atividades) : null;
+    const ref = refDaCitada(m);
+    if (!motor || !atividadeId || !ref) return MSG_SEM_ATIVIDADE_NA_OS;
+    try {
+      await motor.registrar([{ tipo: "fotoChatEquipamento", atividadeId, dados: { comentario: ref, equipamentoId } }]);
+    } catch {
+      return MSG_SEM_ESPACO;
+    }
     setFila(await motor.banco.fila());
     return null;
   }
@@ -207,8 +267,11 @@ export function VistaChat() {
       )}
       <ConversaChat className="flex-1" mensagens={mensagens} carregando={!carga} mostrarOs abrirOs={abrirOs} podeAbrirOs={(osId) => !!atividadeDaOs(osId, osDoDia, atividades)}
         onEnviar={enviar} urlFoto={urlFotoApp} onTentarDeNovo={() => { void motor?.tentarDeNovo(); }} placeholder="Escreva para o escritório"
+        onCitar={aoCitar} carregarAte={carregarAte}
+        origem="APP" osDaMensagem={osEscolhida} equipamentosDaOs={(id) => equipamentos[id]} lerQr={(f) => lerQrDaFoto(f)} resolverQr={resolverQr}
+        onCorrigirEquipamento={corrigirEquipamento}
         recusa={{ opcoesOs: osDoDia, reenviar: (m, osId) => { void reenviar(m, osId); }, descartar: (m) => { void descartar(m); } }}
-        acimaDoTexto={<SeletorOs opcoes={osDoDia} valor={osEscolhida} onValor={(id) => setEscolha(id)} />} />
+        acimaDoTexto={<SeletorOs opcoes={opcoes} valor={osEscolhida} onValor={(id) => setEscolha(id)} />} />
     </div>
   );
 }
