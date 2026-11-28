@@ -17,7 +17,7 @@ import {
   Wrench, Calculator, Wallet, Receipt, TrendingUp, FileBarChart, ShoppingCart, CalendarDays, QrCode, MapPinned,
   Truck, UsersRound, BadgeDollarSign, ClipboardCheck, Smartphone, Building2, FolderOutput, UserCog, Upload, Landmark, Globe, Coins,
   PanelLeftClose, PanelLeftOpen, MoreVertical, LogOut, Package, FileBadge,
-  CalendarClock, PackageOpen, PackageMinus, Trophy, UserPlus, Timer, ReceiptText, ListChecks,
+  CalendarClock, PackageOpen, PackageMinus, Trophy, UserPlus, Timer, ReceiptText, ListChecks, MessageCircle,
 } from "lucide-react";
 
 type Icone = React.ComponentType<{ className?: string }>;
@@ -71,6 +71,8 @@ const OPERACIONAL: Secao[] = [
       {
         tipo: "grupo", label: "Operações", icone: ClipboardList, itens: [
           { href: "/ordens", icone: ClipboardList, label: "Ordens de serviço" },
+          // CHAT-1: o chat interno com o campo, uma conversa por OS (lib/chat)
+          { href: "/conversas", icone: MessageCircle, label: "Conversas" },
           { href: "/calendario", icone: CalendarDays, label: "Calendário" },
           // O relatório do SLA (prazo de atendimento e de execução): Relatórios › Visualizar
           { href: "/ordens/cumprimento", icone: Timer, label: "Cumprimento de prazos", modulo: "relatorios", acao: "visualizar", somenteAcao: true },

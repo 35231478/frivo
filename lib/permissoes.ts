@@ -251,6 +251,8 @@ const ROTA_MODULO: Record<string, string> = {
   equipamentos: "equipamentos",
   pmoc: "pmoc",
   ordens: "ordens",
+  // CHAT-1: a conversa é da OS — quem vê OS vê as Conversas (escrever pede editar OS)
+  conversas: "ordens",
   prazos: "ordens",
   mapa: "equipes", // Operações › Mapa (posição dos técnicos): a página exige Equipes › Gerenciar
   tecnico: "ordens", // app do técnico (Meu dia)
