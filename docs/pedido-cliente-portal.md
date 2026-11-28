@@ -161,6 +161,8 @@ Testado em PostgreSQL real (`sql-pedido-cliente-portal`):
   não aparece duas vezes; sem `CRON_SECRET` a rota responde 401 (o teste antigo mandava `Bearer `, que a requisição
   apara e não exercitava o caso).
 
+- Suíte completa (612 arquivos, 8883 testes), typecheck e build de produção: ok.
+
 **Testes antigos atualizados de propósito** (cada um só passa a listar o item novo da PC-2):
 
 - `push-regras` (2 testes, 3 listas) e `push-pg` (1): o tipo novo de push `PEDIDO_CLIENTE` na lista de quem vê OS.
