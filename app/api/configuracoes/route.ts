@@ -146,6 +146,8 @@ export async function PUT(req: NextRequest) {
     comissaoQuando: _comQuando, comissaoLiquidaImpostos: _comLiq,
     // COM-2 — o técnico (quando fica devida, dias do retorno): rota própria (/api/comissoes); a tela geral não sobrescreve
     comissaoExecutorQuando: _comExecQuando, comissaoRetornoDias: _comRetDias,
+    // COM-1.1 — o vencimento da conta a pagar do fechamento: também da rota própria (/api/comissoes)
+    comissaoVencimentoTipo: _comVencTipo, comissaoVencimentoDia: _comVencDia,
     // Leva J — "Mostrar especialidades do técnico": rota própria (/api/configuracoes/impressao-os); a tela geral não sobrescreve
     mostrarEspecialidadesTecnico: _espTec,
     ...entrada

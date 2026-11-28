@@ -65,10 +65,12 @@ describe("a marca nos perfis", () => {
     }
   });
 
-  it("o preset Vendas das empresas novas nasce com a marca — sem ganhar acesso novo (OS continua sem 'visualizar')", () => {
+  // COM-1.1 (decisão do item 7): o preset passa a VER as OS, com "Ver só os próprios" ligado (antes: OS sem 'visualizar')
+  it("o preset Vendas das empresas novas nasce com a marca e vê as OS — só as próprias (sem criar, editar nem aprovar)", () => {
     expect(PRESET_VENDAS.orcamentos.verSoProprios).toBe(true);
     expect(PRESET_VENDAS.ordens.verSoProprios).toBe(true);
-    expect(PRESET_VENDAS.ordens.visualizar).toBe(false);
+    expect(PRESET_VENDAS.ordens.visualizar).toBe(true);
+    expect([PRESET_VENDAS.ordens.criar, PRESET_VENDAS.ordens.editar, PRESET_VENDAS.ordens.excluir]).toEqual([false, false, false]);
     expect(PRESET_VENDAS.orcamentos.aprovar).toBe(false);
     const vendas = perfisPadrao().find((p) => p.nome === "Vendas")!;
     expect(vendas.permissoes.orcamentos.verSoProprios).toBe(true);

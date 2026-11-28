@@ -60,7 +60,7 @@ const DADOS = {
     regra({ id: "rE", divisao: "POR_CARGO", divisaoCargos: { cgTec: 60, cgAj: 40 } }),
     regra({ id: "rX", base: "FIXO_ITEM", valor: 25, divisao: "POR_EXECUTOR" }),
   ],
-  config: { quando: "RECEBIMENTO", liquidaImpostos: false, executorQuando: "CONCLUSAO_OS", retornoDias: 30, tiposRetorno: ["toCorr"] },
+  config: { quando: "RECEBIMENTO", liquidaImpostos: false, vencimento: { tipo: "DIA_UTIL", dia: 5 }, executorQuando: "CONCLUSAO_OS", retornoDias: 30, tiposRetorno: ["toCorr"] },
   opcoes: {
     pessoas: [{ id: "uC", nome: "Carlos Técnico" }], cargos: [{ id: "cgTec", nome: "Técnico" }, { id: "cgAj", nome: "Ajudante" }], servicos: [], categorias: [],
     tiposOs: [{ id: "toCorr", nome: "Corretiva" }, { id: "toPrev", nome: "Preventiva" }],
@@ -128,7 +128,7 @@ describe("Configurações › Comissões (COM-2)", () => {
     expect(($("[data-salvar-config-comissao]") as HTMLButtonElement).disabled).toBe(false);
     await clicar($("[data-salvar-config-comissao]"));
     expect(chamadas.find((c) => c.metodo === "PUT")).toEqual({ url: "/api/comissoes", metodo: "PUT", corpo: {
-      quando: "RECEBIMENTO", liquidaImpostos: false, executorQuando: "ACEITE", retornoDias: 45, tiposRetorno: ["toPrev"],
+      quando: "RECEBIMENTO", liquidaImpostos: false, vencimentoTipo: "DIA_UTIL", vencimentoDia: 5, executorQuando: "ACEITE", retornoDias: 45, tiposRetorno: ["toPrev"],
     } });
     // desmarcar todos: o aviso
     await clicar($("[data-tipo-retorno='toPrev']"));

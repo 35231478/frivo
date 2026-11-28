@@ -13,11 +13,19 @@ import { aplicarTetos, inicioDoMesSeguinte, type Excedente, type TetoComissao } 
 import { ultimosCustos } from "@/lib/estoque/custo";
 import { valorDesconto } from "@/lib/orcamentos/calculo";
 import {
-  VENDA_VIVA, alvoLiberado, chaveDaRegra, comissoesDaVenda, entradasDaFatura, fracaoRecebidaNoPeriodo, inicioDaCompetencia, vistaPadrao, comissoesPorPessoa, descricaoDaRegra, fimDaCompetencia, fracaoRecebida, itensDaVenda,
+  VENDA_VIVA, alvoLiberado, chaveDaRegra, dataDeEmissao, lerVencimento, faturaFoiCancelada, fracaoEmitidaNoPeriodo, ultimaEmissaoNoPeriodo, vendaComFaturaCancelada, type FaturaDaVenda, comissoesDaVenda, entradasDaFatura, fracaoRecebidaNoPeriodo, inicioDaCompetencia, vistaPadrao, comissoesPorPessoa, descricaoDaRegra, fimDaCompetencia, fracaoRecebida, itensDaVenda,
   movimentoNecessario, round2, situacaoDaComissao, type QuandoExecutor, type EntradaDaVenda, type FaturaRecebida, type Quando, type Vista, type RegraComissao, type normalizarRegra,
 } from "./regras";
 
 type Db = Prisma.TransactionClient | typeof prisma;
+type Tx = Prisma.TransactionClient;
+
+/**
+ * COM-1.1 — a comissão do vendedor que SAIU numa troca de vendedor depois da liberação: fica no histórico (o que
+ * foi liberado e o estorno da troca), mas não vale mais nada (alvo 0), não conta como "já gerada" e sai do relatório.
+ */
+export const PAPEL_SUBSTITUIDO = "VENDEDOR_ANTERIOR";
+const valendo = { papel: { not: PAPEL_SUBSTITUIDO } } as const;
 const num = (v: unknown) => { const n = Number(v); return Number.isFinite(n) ? n : 0; };
 
 /** A empresa usa comissão? (alguma regra ativa ou alguma comissão já gerada) — sem isso, nada de comissão aparece. */
@@ -63,10 +71,15 @@ const travarEmpresa = (tx: Prisma.TransactionClient, empresaId: string) => tx.$q
  * (regra, base, taxa, valor e o "quando" da empresa hoje). Idempotente: orçamento que já tem comissão não gera
  * de novo. Só orçamento comum (proposta de contrato fica fora nesta leva), aprovado e com vendedor.
  */
-export async function gerarComissoesDoOrcamento(empresaId: string, orcamentoId: string, agora: Date = new Date()): Promise<number> {
-  const regras = await regrasAtivas(empresaId);
+export async function gerarComissoesDoOrcamento(
+  empresaId: string, orcamentoId: string, agora: Date = new Date(),
+  /** COM-1.1 (troca de vendedor): grava na transação da troca, com o "quando"/impostos congelados da comissão antiga */
+  na?: { tx: Tx; quando?: Quando; liquidaImpostos?: boolean },
+): Promise<number> {
+  const db: Db = na?.tx ?? prisma;
+  const regras = await regrasAtivas(empresaId, db);
   if (!regras.length) return 0;
-  const o = await prisma.orcamento.findFirst({
+  const o = await db.orcamento.findFirst({
     where: { id: orcamentoId, empresaId },
     select: {
       status: true, tipo: true, vendedorId: true, issAliquota: true,
@@ -76,11 +89,11 @@ export async function gerarComissoesDoOrcamento(empresaId: string, orcamentoId: 
     },
   });
   if (!o || o.tipo !== "COMUM" || !o.vendedorId || !(VENDA_VIVA as readonly string[]).includes(o.status)) return 0;
-  const pessoa = await colaboradorDoUsuario(empresaId, o.vendedorId);
+  const pessoa = await colaboradorDoUsuario(empresaId, o.vendedorId, db);
   if (!pessoa) return 0;
-  const cfg = await prisma.configuracao.findUnique({ where: { empresaId }, select: { comissaoQuando: true, comissaoLiquidaImpostos: true } });
-  const quando = (cfg?.comissaoQuando ?? "RECEBIMENTO") as Quando;
-  const liquida = cfg?.comissaoLiquidaImpostos ?? false;
+  const cfg = await db.configuracao.findUnique({ where: { empresaId }, select: { comissaoQuando: true, comissaoLiquidaImpostos: true } });
+  const quando = na?.quando ?? ((cfg?.comissaoQuando ?? "RECEBIMENTO") as Quando);
+  const liquida = na?.liquidaImpostos ?? cfg?.comissaoLiquidaImpostos ?? false;
 
   // O custo de cada item (só servidor): serviço = materiais inclusos; peça = custo do material de origem ou último custo de compra
   const avulsos = o.produtos.filter((p) => !p.material && p.produtoId).map((p) => p.produtoId!);
@@ -106,15 +119,16 @@ export async function gerarComissoesDoOrcamento(empresaId: string, orcamentoId: 
 
   // Os nomes da regra como eram (a descrição fica congelada na comissão)
   const [usuarios, cargos, servicos] = await Promise.all([
-    prisma.usuario.findMany({ where: { empresaId, id: { in: calculadas.map((c) => c.regra.usuarioId).filter(Boolean) as string[] } }, select: { id: true, nome: true } }),
-    prisma.cargo.findMany({ where: { empresaId, id: { in: calculadas.map((c) => c.regra.cargoId).filter(Boolean) as string[] } }, select: { id: true, nome: true } }),
-    prisma.servico.findMany({ where: { empresaId, id: { in: calculadas.map((c) => c.regra.servicoId).filter(Boolean) as string[] } }, select: { id: true, nome: true } }),
+    db.usuario.findMany({ where: { empresaId, id: { in: calculadas.map((c) => c.regra.usuarioId).filter(Boolean) as string[] } }, select: { id: true, nome: true } }),
+    db.cargo.findMany({ where: { empresaId, id: { in: calculadas.map((c) => c.regra.cargoId).filter(Boolean) as string[] } }, select: { id: true, nome: true } }),
+    db.servico.findMany({ where: { empresaId, id: { in: calculadas.map((c) => c.regra.servicoId).filter(Boolean) as string[] } }, select: { id: true, nome: true } }),
   ]);
   const nome = (lista: { id: string; nome: string }[], id?: string | null) => lista.find((x) => x.id === id)?.nome ?? null;
 
-  const criadas = await prisma.$transaction(async (tx) => {
+  const gravar = async (tx: Tx) => {
     await tx.$queryRaw`SELECT 1 AS ok FROM pg_advisory_xact_lock(hashtext(${`comissao-orc:${orcamentoId}`}))`;
-    if (await tx.comissao.count({ where: { orcamentoId } })) return 0;
+    // Idempotente: já há comissão valendo (a do vendedor substituído numa troca não conta)
+    if (await tx.comissao.count({ where: { orcamentoId, ...valendo } })) return 0;
     await tx.comissao.createMany({
       data: calculadas.map((c) => ({
         empresaId, orcamentoId, usuarioId: pessoa.usuarioId, beneficiarioNome: pessoa.nome, papel: c.regra.papel,
@@ -124,7 +138,13 @@ export async function gerarComissoesDoOrcamento(empresaId: string, orcamentoId: 
       })),
     });
     return calculadas.length;
-  });
+  };
+  if (na) {
+    const n = await gravar(na.tx);
+    if (n) await sincronizarNaTransacao(na.tx, empresaId, { orcamentoIds: [orcamentoId] }, agora);
+    return n;
+  }
+  const criadas = await prisma.$transaction(gravar);
   if (criadas) await sincronizarComissoes(empresaId, { orcamentoIds: [orcamentoId] }, agora);
   return criadas;
 }
@@ -227,6 +247,53 @@ export async function recebimentoDaOrigem(db: Db, empresaId: string, origem: { o
   return { faturas, ultimaData, entradas };
 }
 
+/* ───────── as faturas da venda, vivas e canceladas (COM-1.1) ───────── */
+
+/**
+ * TODAS as faturas (medições) ligadas à venda — vivas e canceladas, pelos mesmos caminhos de `medicoesDaOrigem`
+ * (item do orçamento, item da OS gerada, relatório MEDICAO_COMPLETA) — com: cancelada (a medição ou todos os
+ * títulos), a data de emissão (NFS-e autorizada > NF registrada > enviada > 1º título) e o quanto é desta venda.
+ */
+export async function faturasDaVenda(db: Db, empresaId: string, orcamentoId: string): Promise<FaturaDaVenda[]> {
+  const os = await db.ordemServico.findFirst({ where: { orcamentoOrigemId: orcamentoId, empresaId }, select: { id: true } });
+  const [porItem, porRel] = await Promise.all([
+    db.medicaoItem.findMany({ where: { medicao: { empresaId }, OR: [{ orcamentoId }, ...(os ? [{ ordemServicoId: os.id }] : [])] }, select: { medicaoId: true } }),
+    os ? db.relatorioOs.findMany({ where: { ordemServicoId: os.id, escopo: "MEDICAO_COMPLETA", medicaoId: { not: null } }, select: { medicaoId: true } }) : [],
+  ]);
+  const ids = [...new Set([...porItem, ...porRel].map((x) => x.medicaoId).filter(Boolean) as string[])];
+  if (!ids.length) return [];
+  const [meds, titulos] = await Promise.all([
+    db.medicao.findMany({
+      where: { id: { in: ids }, empresaId },
+      select: {
+        id: true, status: true, avulsa: true, valorLiquido: true, dataEnvio: true,
+        itens: { select: { valorTotal: true, orcamentoId: true, ordemServicoId: true } },
+        nfs: { select: { emitidaEm: true } },
+        notasFiscais: { where: { status: "CONCLUIDO" }, select: { autorizadaEm: true } },
+      },
+    }),
+    db.contaReceber.findMany({
+      where: { empresaId, status: { not: "PARCELADO" }, OR: [{ medicaoId: { in: ids } }, { lancamento: { medicaoId: { in: ids } } }] },
+      select: { medicaoId: true, status: true, excluidaEm: true, criadoEm: true, lancamento: { select: { medicaoId: true } } },
+    }),
+  ]);
+  return meds.map((m) => {
+    const dela = titulos.filter((t) => (t.medicaoId ?? t.lancamento?.medicaoId) === m.id);
+    const total = m.itens.reduce((s, i) => s + num(i.valorTotal), 0);
+    const daVenda = m.itens.filter((i) => i.orcamentoId === orcamentoId || (!!os && i.ordemServicoId === os.id)).reduce((s, i) => s + num(i.valorTotal), 0);
+    const parte = m.avulsa || total <= 0 || daVenda <= 0 ? 1 : Math.min(1, daVenda / total);
+    const vivos = dela.filter((t) => t.status !== "CANCELADO" && !t.excluidaEm);
+    return {
+      cancelada: faturaFoiCancelada(m.status, dela.map((t) => ({ cancelado: t.status === "CANCELADO" || !!t.excluidaEm }))),
+      emitidaEm: m.status === "RASCUNHO" ? null : dataDeEmissao({
+        nfseAutorizadas: m.notasFiscais.map((n) => n.autorizadaEm), nfsRegistradas: m.nfs.map((n) => n.emitidaEm),
+        enviadaEm: m.dataEnvio, titulosEm: vivos.map((t) => t.criadoEm),
+      }),
+      daVenda: round2(num(m.valorLiquido) * parte),
+    };
+  });
+}
+
 /* ───────── sincronizar: liberar e estornar ───────── */
 
 const MOTIVO: Record<Quando, string> = {
@@ -239,20 +306,21 @@ const MOTIVO: Record<Quando, string> = {
  * `orcamentoIds`/`usuarioId` limitam a conta (o extrato de uma pessoa, um orçamento recém-aprovado).
  */
 export async function sincronizarComissoes(empresaId: string, filtro: { orcamentoIds?: string[]; usuarioId?: string } = {}, agora: Date = new Date()): Promise<number> {
-  const doVendedor = await sincronizarVendedor(empresaId, filtro, agora);
+  const doVendedor = await prisma.$transaction((tx) => sincronizarNaTransacao(tx, empresaId, filtro, agora), { timeout: 60_000 });
   // COM-2: o técnico (pela OS) — fica de fora quando a conta é só de alguns orçamentos (aprovação de uma venda)
   if (filtro.orcamentoIds) return doVendedor;
   const { sincronizarExecutor } = await import("./executor-server");
   return doVendedor + (await sincronizarExecutor(empresaId, { usuarioId: filtro.usuarioId }, agora)).lancamentos;
 }
 
-async function sincronizarVendedor(empresaId: string, filtro: { orcamentoIds?: string[]; usuarioId?: string }, agora: Date): Promise<number> {
-  return prisma.$transaction(async (tx) => {
+/** O recálculo das comissões do VENDEDOR, dentro de uma transação que já existe (a troca de vendedor) */
+async function sincronizarNaTransacao(tx: Tx, empresaId: string, filtro: { orcamentoIds?: string[]; usuarioId?: string }, agora: Date): Promise<number> {
+  {
     await travarEmpresa(tx, empresaId);
     const comissoes = await tx.comissao.findMany({
       // Só as do VENDEDOR (vêm de um orçamento); as do técnico (vêm da OS) têm a conta própria (lib/comissoes/executor-server)
       where: { empresaId, orcamentoId: filtro.orcamentoIds ? { in: filtro.orcamentoIds } : { not: null }, ...(filtro.usuarioId ? { usuarioId: filtro.usuarioId } : {}) },
-      select: { id: true, orcamentoId: true, usuarioId: true, valor: true, quando: true, criadoEm: true, lancamentos: { select: { valor: true } } },
+      select: { id: true, orcamentoId: true, usuarioId: true, valor: true, quando: true, papel: true, criadoEm: true, lancamentos: { select: { valor: true } } },
     });
     if (!comissoes.length) return 0;
     const orcIds = [...new Set(comissoes.map((c) => c.orcamentoId!))];
@@ -265,14 +333,18 @@ async function sincronizarVendedor(empresaId: string, filtro: { orcamentoIds?: s
       const desta = comissoes.filter((c) => c.orcamentoId === o.id);
       const precisaRecebido = desta.some((c) => c.quando === "RECEBIMENTO");
       const rec = precisaRecebido ? await recebimentoDaVenda(tx, empresaId, o.id) : { faturas: [], ultimaData: null, entradas: [] };
+      // COM-1.1: na aprovação e na conclusão, a fatura cancelada (sem outra viva) estorna
+      const precisaFaturas = desta.some((c) => c.quando !== "RECEBIMENTO");
       const estado = {
         statusOrcamento: o.status,
         osConcluida: o.osGerada?.status === "CONCLUIDA",
         fracao: fracaoRecebida(rec.faturas, num(o.totalGeral)),
+        faturaCancelada: precisaFaturas && vendaComFaturaCancelada(await faturasDaVenda(tx, empresaId, o.id)),
       };
       for (const c of desta) {
         const quando = c.quando as Quando;
-        const alvo = alvoLiberado({ valor: num(c.valor), quando }, estado);
+        const substituida = c.papel === PAPEL_SUBSTITUIDO;
+        const alvo = substituida ? 0 : alvoLiberado({ valor: num(c.valor), quando }, estado);
         const ja = round2(c.lancamentos.reduce((s, l) => s + num(l.valor), 0));
         const mov = movimentoNecessario(alvo, ja);
         if (!mov) continue;
@@ -282,17 +354,20 @@ async function sincronizarVendedor(empresaId: string, filtro: { orcamentoIds?: s
           : rec.ultimaData ?? agora;
         novos.push({
           empresaId, comissaoId: c.id, usuarioId: c.usuarioId, tipo: mov.tipo, valor: mov.valor, data,
-          motivo: mov.tipo === "ESTORNO" ? motivoDoEstorno(quando, o.status) : MOTIVO[quando],
+          motivo: substituida ? MOTIVO_TROCA : mov.tipo === "ESTORNO" ? motivoDoEstorno(quando, o.status, estado.faturaCancelada) : MOTIVO[quando],
         });
       }
     }
     if (novos.length) await tx.comissaoLancamento.createMany({ data: novos });
     return novos.length;
-  }, { timeout: 60_000 });
+  }
 }
 
-function motivoDoEstorno(quando: Quando, status: string): string {
+const MOTIVO_TROCA = "Troca de vendedor";
+
+export function motivoDoEstorno(quando: Quando, status: string, faturaCancelada = false): string {
   if (!(VENDA_VIVA as readonly string[]).includes(status)) return "Orçamento cancelado ou recusado depois da aprovação";
+  if (faturaCancelada && quando !== "RECEBIMENTO") return "Fatura cancelada";
   if (quando === "CONCLUSAO_OS") return "A OS deixou de estar concluída";
   return "Recebimento estornado ou fatura cancelada";
 }
@@ -386,7 +461,7 @@ export async function extratoDoUsuario(empresaId: string, usuarioId: string, ago
     where: { empresaId, usuarioId },
     orderBy: { criadoEm: "desc" },
     select: {
-      orcamentoId: true, ordemServicoId: true, equipamentoId: true, descricao: true, regraDescricao: true, valor: true,
+      orcamentoId: true, ordemServicoId: true, equipamentoId: true, descricao: true, regraDescricao: true, valor: true, papel: true,
       orcamento: { select: { codigo: true, nome: true, cliente: { select: { nome: true } }, osGerada: { select: { numero: true } } } },
       ordemServico: { select: { numero: true, chamadoNumero: true, cliente: { select: { nome: true } } } },
       lancamentos: { select: { valor: true, fechamento: { select: { situacao: true } } } },
@@ -403,7 +478,11 @@ export async function extratoDoUsuario(empresaId: string, usuarioId: string, ago
   };
   const vendas = new Map<string, VendaNoExtrato>();
   for (const c of cs) {
-    const s = situacaoDaComissao(num(c.valor), c.lancamentos.map((l) => ({ valor: num(l.valor), pago: l.fechamento?.situacao === "FECHADO" })));
+    // COM-1.1: a do vendedor substituído não tem nada a receber; fica só o que já foi pago (o estorno da troca zera o resto)
+    const substituida = c.papel === PAPEL_SUBSTITUIDO;
+    const s = situacaoDaComissao(substituida ? 0 : num(c.valor), c.lancamentos.map((l) => ({ valor: num(l.valor), pago: l.fechamento?.situacao === "FECHADO" })));
+    if (substituida && !s.prevista && !s.liberada && !s.paga) continue;
+    // COM-2: a do vendedor agrupa pelo orçamento; a do técnico, pela OS
     const chave = c.orcamentoId ?? `os:${c.ordemServicoId}`;
     let v = vendas.get(chave);
     if (!v) {
@@ -416,8 +495,10 @@ export async function extratoDoUsuario(empresaId: string, usuarioId: string, ago
       }
     }
     v.prevista = round2(v.prevista + s.prevista); v.liberada = round2(v.liberada + s.liberada); v.paga = round2(v.paga + s.paga);
-    const equip = nomeEquip(c.equipamentoId);
-    v.itens.push({ descricao: equip ? `${c.descricao} — ${equip}` : c.descricao, regra: c.regraDescricao, valor: num(c.valor), ...(c.revisoes.length ? { emRevisao: true } : {}) });
+    if (!substituida) {
+      const equip = nomeEquip(c.equipamentoId);
+      v.itens.push({ descricao: equip ? `${c.descricao} — ${equip}` : c.descricao, regra: c.regraDescricao, valor: num(c.valor), ...(c.revisoes.length ? { emRevisao: true } : {}) });
+    }
     vendas.set(chave, v);
   }
   const lista = [...vendas.values()];
@@ -441,8 +522,10 @@ export interface RelatorioComissoes { competencia: string; vista: Vista; quando:
 
 /**
  * As comissões do mês vistas por uma das datas — só LEITURA (o que o fechamento paga segue o "quando é devida"):
- *  - EMISSÃO: as vendas emitidas (orçamento aprovado = a comissão nasceu) no mês e ainda vivas, com a comissão inteira;
- *    e as comissões do técnico nascidas no mês (equipamento atendido com o relatório completo), de OS não cancelada;
+ *  - EMISSÃO (COM-1.1): a parte de cada comissão do VENDEDOR coberta pelas faturas vivas da venda EMITIDAS no mês (a
+ *    data da fatura/NF, como no OMIE — não a aprovação). Venda viva sem fatura emitida não aparece. A do TÉCNICO
+ *    (COM-2), que não tem fatura própria, entra inteira no mês em que nasceu (equipamento atendido com o relatório
+ *    completo), de OS não cancelada;
  *  - RECEBIMENTO: a parte de cada comissão coberta pelo dinheiro que entrou no mês (recebimento a recebimento) — da
  *    venda, ou da OS no caso do técnico.
  * Sem `vista`, abre na do "quando é devida" da empresa.
@@ -454,10 +537,12 @@ export async function relatorioDeComissoes(empresaId: string, competencia: strin
   const ini = inicioDaCompetencia(competencia), fim = fimDaCompetencia(competencia);
   const cs = await prisma.comissao.findMany({
     where: {
-      empresaId,
+      empresaId, ...valendo,
       ...(v === "EMISSAO" ? {
-        criadoEm: { gte: ini, lt: fim },
-        OR: [{ orcamento: { status: { in: [...VENDA_VIVA] } } }, { ordemServicoId: { not: null }, ordemServico: { status: { not: "CANCELADA" } } }],
+        OR: [
+          { orcamento: { status: { in: [...VENDA_VIVA] } } },
+          { ordemServicoId: { not: null }, ordemServico: { status: { not: "CANCELADA" } }, criadoEm: { gte: ini, lt: fim } },
+        ],
       } : {}),
     },
     select: {
@@ -494,7 +579,14 @@ export async function relatorioDeComissoes(empresaId: string, competencia: strin
       if (fator <= 0) continue;
       const noMes = rec.entradas.filter((e) => e.data >= ini && e.data < fim);
       data = noMes[noMes.length - 1]?.data ?? data;
+    } else if (ven.o.orcamentoId) {
+      // EMISSÃO do vendedor (COM-1.1): a parte coberta pelas faturas emitidas no mês
+      const fs = await faturasDaVenda(prisma, empresaId, ven.o.orcamentoId);
+      fator = fracaoEmitidaNoPeriodo(fs, ven.o.total, ini, fim);
+      if (fator <= 0) continue;
+      data = ultimaEmissaoNoPeriodo(fs, ini, fim) ?? data;
     }
+    // EMISSÃO do técnico (COM-2): a consulta já trouxe só as nascidas no mês, inteiras
     for (const [k, p] of ven.porPessoa) {
       const valor = round2(p.valor * fator);
       if (valor <= 0) continue;
@@ -524,12 +616,16 @@ export async function comissoesNaAprovacao(empresaId: string, orcamentoId: strin
 
 export const MSG_VENDEDOR_INVALIDO = "Escolha um usuário ativo desta empresa.";
 export const MSG_MESMO_VENDEDOR = "Este já é o vendedor do orçamento.";
-export const MSG_COMISSAO_LIBERADA = "Este orçamento já tem comissão liberada para o vendedor atual: a troca mudaria o que já é devido. Fale com o financeiro.";
+export const msgComissaoPaga = (competencia: string) =>
+  `A comissão desta venda já foi paga no fechamento de ${competencia.slice(5, 7)}/${competencia.slice(0, 4)}: a troca de vendedor não pode mudar o que já foi pago. Fale com o financeiro.`;
 
 /**
  * TROCA o vendedor do orçamento (só quem tem "Trocar vendedor": a rota confere): o novo segue para a OS gerada e
- * para as faturas da venda; a trilha registra quem, de quem para quem e o motivo. Se a comissão já nasceu e
- * nada foi liberado, ela é refeita para o novo vendedor; com algo liberado, a troca é recusada (não mexe no devido).
+ * para as faturas da venda; a trilha registra quem, de quem para quem e o motivo.
+ * COM-1.1 — com a comissão já liberada, a troca vale (com o motivo), tudo NA MESMA TRANSAÇÃO: o que foi liberado
+ * para o antigo é ESTORNADO ("Troca de vendedor"), a comissão dele fica como "substituída" (histórico) e o novo
+ * ganha a dele (regras de hoje, o mesmo "quando" congelado), já liberada no que for devido. Se algo da comissão
+ * já entrou num fechamento FECHADO (pago), a troca é recusada. Comissão sem nada liberado é simplesmente refeita.
  */
 export async function trocarVendedor(o: { empresaId: string; orcamentoId: string; vendedorId: string; motivo: string; quem: { id: string; nome: string } }):
   Promise<{ ok: true; vendedor: { id: string; nome: string } } | { ok: false; status: number; erro: string }> {
@@ -538,9 +634,14 @@ export async function trocarVendedor(o: { empresaId: string; orcamentoId: string
   const novo = await prisma.usuario.findFirst({ where: { id: o.vendedorId, empresaId: o.empresaId, ativo: true }, select: { id: true, nome: true } });
   if (!novo) return { ok: false, status: 400, erro: MSG_VENDEDOR_INVALIDO };
   if (orc.vendedorId === novo.id) return { ok: false, status: 400, erro: MSG_MESMO_VENDEDOR };
-  const liberadas = await prisma.comissaoLancamento.count({ where: { empresaId: o.empresaId, comissao: { orcamentoId: orc.id } } });
-  if (liberadas) return { ok: false, status: 409, erro: MSG_COMISSAO_LIBERADA };
-  const tinhaComissao = await prisma.$transaction(async (tx) => {
+  const recusa = await prisma.$transaction(async (tx) => {
+    // A mesma trava do recálculo e do fechamento: ninguém libera nem fecha no meio da troca
+    await travarEmpresa(tx, o.empresaId);
+    const pago = await tx.comissaoLancamento.findFirst({
+      where: { empresaId: o.empresaId, comissao: { orcamentoId: orc.id, ...valendo }, fechamento: { situacao: "FECHADO" } },
+      select: { fechamento: { select: { competencia: true } } },
+    });
+    if (pago?.fechamento) return msgComissaoPaga(pago.fechamento.competencia);
     await tx.orcamento.update({ where: { id: orc.id }, data: { vendedorId: novo.id } });
     await tx.ordemServico.updateMany({ where: { empresaId: o.empresaId, orcamentoOrigemId: orc.id }, data: { vendedorId: novo.id } });
     await tx.medicao.updateMany({ where: { empresaId: o.empresaId, itens: { some: { orcamentoId: orc.id } } }, data: { vendedorId: novo.id } });
@@ -550,11 +651,26 @@ export async function trocarVendedor(o: { empresaId: string; orcamentoId: string
         detalhe: `Vendedor: ${orc.vendedor?.nome ?? "sem vendedor"} → ${novo.nome}. Motivo: ${o.motivo.trim()}`.slice(0, 500),
       },
     });
-    const { count } = await tx.comissao.deleteMany({ where: { empresaId: o.empresaId, orcamentoId: orc.id, lancamentos: { none: {} } } });
-    return count > 0;
-  });
-  // A comissão (sem nada liberado) nasce de novo, para o novo vendedor
-  if (tinhaComissao) await comissoesNaAprovacao(o.empresaId, orc.id);
+    const antigas = await tx.comissao.findMany({
+      where: { empresaId: o.empresaId, orcamentoId: orc.id, ...valendo },
+      select: { id: true, usuarioId: true, quando: true, liquidaImpostos: true, lancamentos: { select: { valor: true } } },
+    });
+    if (!antigas.length) return null;
+    // O que nunca foi liberado some (nasce de novo para o novo); o que já foi liberado é estornado e fica no histórico
+    const agora = new Date();
+    const comMovimento = antigas.filter((c) => c.lancamentos.length);
+    await tx.comissao.deleteMany({ where: { id: { in: antigas.filter((c) => !c.lancamentos.length).map((c) => c.id) } } });
+    const estornos = comMovimento
+      .map((c) => ({ c, saldo: round2(c.lancamentos.reduce((s, l) => s + num(l.valor), 0)) }))
+      .filter((x) => Math.abs(x.saldo) >= 0.01)
+      .map((x) => ({ empresaId: o.empresaId, comissaoId: x.c.id, usuarioId: x.c.usuarioId, tipo: x.saldo > 0 ? "ESTORNO" : "LIBERACAO", valor: -x.saldo, data: agora, motivo: MOTIVO_TROCA }));
+    if (estornos.length) await tx.comissaoLancamento.createMany({ data: estornos });
+    if (comMovimento.length) await tx.comissao.updateMany({ where: { id: { in: comMovimento.map((c) => c.id) } }, data: { papel: PAPEL_SUBSTITUIDO } });
+    // A do novo vendedor nasce aqui mesmo, com o "quando" que a venda já tinha, e libera o que for devido
+    await gerarComissoesDoOrcamento(o.empresaId, orc.id, agora, { tx, quando: antigas[0].quando as Quando, liquidaImpostos: antigas[0].liquidaImpostos });
+    return null;
+  }, { timeout: 60_000 });
+  if (recusa) return { ok: false, status: 409, erro: recusa };
   return { ok: true, vendedor: novo };
 }
 
@@ -574,7 +690,7 @@ export async function telaDeComissoes(empresaId: string) {
         divisao: true, divisaoCargos: true, usuario: { select: { nome: true } }, cargo: { select: { nome: true } }, servico: { select: { nome: true } },
       },
     }),
-    prisma.configuracao.findUnique({ where: { empresaId }, select: { comissaoQuando: true, comissaoLiquidaImpostos: true, comissaoExecutorQuando: true, comissaoRetornoDias: true } }),
+    prisma.configuracao.findUnique({ where: { empresaId }, select: { comissaoQuando: true, comissaoLiquidaImpostos: true, comissaoVencimentoTipo: true, comissaoVencimentoDia: true, comissaoExecutorQuando: true, comissaoRetornoDias: true } }),
     prisma.usuario.findMany({ where: { empresaId, ativo: true }, orderBy: { nome: "asc" }, select: { id: true, nome: true } }),
     prisma.cargo.findMany({ where: { empresaId, ativo: true }, orderBy: { nome: "asc" }, select: { id: true, nome: true } }),
     prisma.servico.findMany({ where: { empresaId, ativo: true }, orderBy: { nome: "asc" }, select: { id: true, nome: true, categoria: true } }),
@@ -591,6 +707,7 @@ export async function telaDeComissoes(empresaId: string) {
     })),
     config: {
       quando: (cfg?.comissaoQuando ?? "RECEBIMENTO") as Quando, liquidaImpostos: cfg?.comissaoLiquidaImpostos ?? false,
+      vencimento: lerVencimento(cfg?.comissaoVencimentoTipo, cfg?.comissaoVencimentoDia),
       // COM-2: o técnico e os tipos de OS que contam como retorno (a mesma lista do Desempenho)
       executorQuando: (cfg?.comissaoExecutorQuando ?? "CONCLUSAO_OS") as QuandoExecutor, retornoDias: cfg?.comissaoRetornoDias ?? 30,
       tiposRetorno: tiposRetorno.map((t) => t.tipoOsId),

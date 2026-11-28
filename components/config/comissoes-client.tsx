@@ -12,15 +12,17 @@ import { Dica } from "@/components/ui/dica";
 import { toast } from "@/components/ui/avisos";
 import { cn } from "@/lib/utils";
 import {
-  BASES, DIVISOES, ORDEM_PRECEDENCIA, PAPEIS, PAPEIS_ATIVOS, QUANDO, QUANDO_EXECUTOR, QUEM, RETORNO_DIAS_MAX, ROTULO_BASE, ROTULO_DIVISAO, ROTULO_PAPEL, ROTULO_QUANDO,
-  ROTULO_QUANDO_EXECUTOR, ROTULO_QUEM, ROTULO_SOBRE, SOBRE, descricaoDaRegra,
-  type Base, type Divisao, type Papel, type Quando, type QuandoExecutor, type Quem, type RegraComissao, type Sobre,
+  BASES, DIVISOES, MAX_DIA_FIXO, MAX_DIA_UTIL, ORDEM_PRECEDENCIA, PAPEIS, PAPEIS_ATIVOS, QUANDO, QUANDO_EXECUTOR, QUEM, RETORNO_DIAS_MAX, ROTULO_BASE, ROTULO_DIVISAO,
+  ROTULO_PAPEL, ROTULO_QUANDO, ROTULO_QUANDO_EXECUTOR, ROTULO_QUEM, ROTULO_SOBRE, ROTULO_VENCIMENTO_TIPO, SOBRE, VENCIMENTO_TIPOS, descricaoDaRegra, descricaoDoVencimento,
+  type Base, type Divisao, type Papel, type Quando, type QuandoExecutor, type Quem, type RegraComissao, type Sobre, type VencimentoFechamento, type VencimentoTipo,
 } from "@/lib/comissoes/regras";
 
 export interface RegraNaTela extends RegraComissao { ativo: boolean; nomes: { pessoa: string | null; cargo: string | null; servico: string | null } }
 export interface TetoNaTela { id: string; quemTipo: "PESSOA" | "CARGO"; usuarioId: string | null; cargoId: string | null; valor: number; ativo: boolean; nome: string }
 export interface ConfigComissoes {
   quando: Quando; liquidaImpostos: boolean;
+  /** COM-1.1: o vencimento da conta a pagar do fechamento */
+  vencimento: VencimentoFechamento;
   /** COM-2: o técnico — quando fica devida, os dias do retorno e os tipos de OS que contam como retorno */
   executorQuando: QuandoExecutor; retornoDias: number; tiposRetorno: string[];
 }
@@ -33,7 +35,8 @@ export interface TelaComissoesDados {
 
 const DICA_PRECEDENCIA = "O item manda, a pessoa desempata: a regra de um serviço vence a da categoria, que vence a de todos os serviços. No mesmo item, pessoa vence cargo, que vence todos. Peças só valem para as linhas de peça.";
 const EXEMPLO_PRECEDENCIA = "Ana tem 7% fixo (pessoa + todos os serviços). No item Instalação VRF vale a regra do serviço (3%).";
-const DICA_QUANDO = "Por data de recebimento: cada parcela paga libera a parte proporcional da comissão. Por data de emissão (aprovação do orçamento) ou na conclusão da OS: libera tudo de uma vez. No fechamento do mês dá para ver pelas duas datas. A comissão nasce na aprovação e guarda a regra daquele dia: mudar aqui não mexe no passado.";
+const DICA_QUANDO = "Por data de recebimento: cada parcela paga libera a parte proporcional da comissão. Na aprovação do orçamento ou na conclusão da OS: libera tudo de uma vez (e estorna se a fatura for cancelada). No fechamento do mês dá para ver por data de emissão da fatura ou de recebimento. A comissão nasce na aprovação e guarda a regra daquele dia: mudar aqui não mexe no passado.";
+const DICA_VENCIMENTO = "A data de vencimento da conta a pagar que o fechamento do mês gera para cada pessoa (bônus e comissão juntos). Dia útil = segunda a sexta; feriados não entram. Se a data já passou quando o mês é fechado, vence no dia.";
 
 const DICA_EXECUTOR = "A comissão do técnico nasce por equipamento atendido com o relatório completo (checklist, fotos, medições e formulário que a OS pede) e fica Prevista. Ela é liberada no gatilho escolhido. Na % da venda, cada equipamento ganha a parte da linha (valor ÷ equipamentos da OS).";
 const DICA_RETORNO = "Outra OS de um tipo de retorno, no mesmo equipamento, dentro destes dias depois do serviço: a comissão do técnico fica em revisão (não libera) até o encarregado decidir, em Desempenho › Fechamento. Quem registrou o problema no serviço não entra. 0 desliga.";
@@ -65,7 +68,15 @@ export function ComissoesClient({ inicial }: { inicial: TelaComissoesDados }) {
   const [salvando, setSalvando] = useState(false);
   const [teto, setTeto] = useState<FormTeto | null>(null);
   const [erroTeto, setErroTeto] = useState<string | null>(null);
-  const mudou = JSON.stringify({ ...config, tiposRetorno: [...config.tiposRetorno].sort() }) !== JSON.stringify({ ...dados.config, tiposRetorno: [...dados.config.tiposRetorno].sort() });
+  const [diaTexto, setDiaTexto] = useState(String(inicial.config.vencimento.dia));
+  const maxDia = config.vencimento.tipo === "DIA_UTIL" ? MAX_DIA_UTIL : MAX_DIA_FIXO;
+  const diaNum = Number(diaTexto);
+  const diaOk = Number.isInteger(diaNum) && diaNum >= 1 && diaNum <= maxDia;
+  const mudou = config.quando !== dados.config.quando || config.liquidaImpostos !== dados.config.liquidaImpostos
+    || config.vencimento.tipo !== dados.config.vencimento.tipo || (diaOk && diaNum !== dados.config.vencimento.dia)
+    // COM-2: o técnico
+    || config.executorQuando !== dados.config.executorQuando || config.retornoDias !== dados.config.retornoDias
+    || [...config.tiposRetorno].sort().join() !== [...dados.config.tiposRetorno].sort().join();
   const temExecutor = dados.regras.some((r) => r.papel === "EXECUTOR" && r.ativo);
 
   async function recarregar() {
@@ -76,10 +87,18 @@ export function ComissoesClient({ inicial }: { inicial: TelaComissoesDados }) {
   async function salvarConfig() {
     setSalvandoConfig(true);
     try {
-      const r = await fetch("/api/comissoes", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(config) });
+      const vencimento = { tipo: config.vencimento.tipo, dia: diaNum };
+      const r = await fetch("/api/comissoes", {
+        method: "PUT", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          quando: config.quando, liquidaImpostos: config.liquidaImpostos, vencimentoTipo: vencimento.tipo, vencimentoDia: vencimento.dia,
+          executorQuando: config.executorQuando, retornoDias: config.retornoDias, tiposRetorno: config.tiposRetorno,
+        }),
+      });
       const d = await r.json().catch(() => ({}));
       if (!r.ok) { toast(d.erro ?? "Não foi possível salvar.", "erro"); return; }
-      setDados((x) => ({ ...x, config }));
+      setConfig((c) => ({ ...c, vencimento }));
+      setDados((x) => ({ ...x, config: { ...config, vencimento } }));
       toast("Configuração das comissões salva.");
     } finally { setSalvandoConfig(false); }
   }
@@ -163,6 +182,24 @@ export function ComissoesClient({ inicial }: { inicial: TelaComissoesDados }) {
         </FormField>
         <ToggleSwitch checked={config.liquidaImpostos} onChange={(v) => setConfig((c) => ({ ...c, liquidaImpostos: v }))}
           label="Base líquida de impostos" description="Calcula a % sobre a venda sem o ISS (o padrão é o valor com desconto)." />
+        <div className="space-y-2 pt-1" data-vencimento-comissao>
+          <div className="flex items-center gap-1.5">
+            <h3 className="text-sm font-semibold text-ink">Vencimento do pagamento</h3>
+            <Dica rotulo="Vencimento do pagamento" texto={DICA_VENCIMENTO} />
+          </div>
+          <div className="grid grid-cols-[1fr_6rem] gap-3 max-w-md">
+            <FormField label="Vence no mês seguinte">
+              <Select value={config.vencimento.tipo} data-vencimento-tipo
+                onChange={(e) => setConfig((c) => ({ ...c, vencimento: { ...c.vencimento, tipo: e.target.value as VencimentoTipo } }))}>
+                {VENCIMENTO_TIPOS.map((t) => <option key={t} value={t}>{ROTULO_VENCIMENTO_TIPO[t]}</option>)}
+              </Select>
+            </FormField>
+            <FormField label={config.vencimento.tipo === "DIA_UTIL" ? "Dia útil" : "Dia"} error={diaOk ? undefined : `De 1 a ${maxDia}.`}>
+              <Input value={diaTexto} onChange={(e) => setDiaTexto(e.target.value.replace(/\D/g, "").slice(0, 2))} inputMode="numeric" data-vencimento-dia error={!diaOk} />
+            </FormField>
+          </div>
+          {diaOk && <p className="text-xs text-ink-muted" data-vencimento-resumo>{descricaoDoVencimento({ tipo: config.vencimento.tipo, dia: diaNum })}{config.vencimento.tipo === "DIA_UTIL" && diaNum === 5 ? " (padrão)" : ""}.</p>}
+        </div>
 
         {/* COM-2: o técnico (Executor) */}
         <div className="border-t border-surface-border pt-4 space-y-4" data-config-executor>
@@ -204,7 +241,7 @@ export function ComissoesClient({ inicial }: { inicial: TelaComissoesDados }) {
           </fieldset>
         </div>
         <div className="flex justify-end">
-          <Button type="button" onClick={salvarConfig} disabled={!mudou} loading={salvandoConfig} data-salvar-config-comissao>Salvar</Button>
+          <Button type="button" onClick={salvarConfig} disabled={!mudou || !diaOk} loading={salvandoConfig} data-salvar-config-comissao>Salvar</Button>
         </div>
       </section>
 

@@ -757,6 +757,10 @@ model Configuracao {
   comissaoExecutorQuando  String  @default("CONCLUSAO_OS") @map("comissao_executor_quando")
   /// COM-2: retorno no mesmo equipamento até N dias depois do serviço põe a comissão do técnico em revisão (0 = desligado)
   comissaoRetornoDias     Int     @default(30) @map("comissao_retorno_dias")
+  /// COM-1.1 — o vencimento da conta a pagar do fechamento (bônus + comissão): DIA_UTIL (o N-º dia útil, seg–sex,
+  /// do mês seguinte; padrão 5) | DIA_FIXO (o dia N do mês seguinte; além do fim do mês = o último dia)
+  comissaoVencimentoTipo  String  @default("DIA_UTIL") @map("comissao_vencimento_tipo")
+  comissaoVencimentoDia   Int     @default(5) @map("comissao_vencimento_dia")
 
   /// Impressão do relatório da OS: seções ligadas/desligadas e quem vê (cliente × só interno).
   /// JSON { [secao]: { ativo, cliente } }; ausente = padrões de lib/relatorio-os/config.ts

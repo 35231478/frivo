@@ -105,8 +105,8 @@ describe("Configurações › Comissões", () => {
       regra({ id: "r2", quemTipo: "CARGO", cargoId: "cg", sobreTipo: "CATEGORIA", categoria: "Instalação", valor: 5, nomes: { pessoa: null, cargo: "Vendedores", servico: null } }),
       regra({ id: "r3", sobreTipo: "PECAS", base: "FIXO_ITEM", valor: 10, ativo: false }),
     ],
-    // COM-2: o técnico, os tipos de OS (retorno) e os tetos vêm junto
-    config: { quando: "RECEBIMENTO", liquidaImpostos: false, executorQuando: "CONCLUSAO_OS", retornoDias: 30, tiposRetorno: [] },
+    // COM-1.1: o vencimento; COM-2: o técnico, os tipos de OS (retorno) e os tetos vêm junto
+    config: { quando: "RECEBIMENTO", liquidaImpostos: false, vencimento: { tipo: "DIA_UTIL", dia: 5 }, executorQuando: "CONCLUSAO_OS", retornoDias: 30, tiposRetorno: [] },
     opcoes: { pessoas: [{ id: "uA", nome: "Ana" }], cargos: [{ id: "cg", nome: "Vendedores" }], servicos: [{ id: "s1", nome: "Limpeza" }], categorias: ["Instalação", "Manutenção"], tiposOs: [] },
     tetos: [],
   };
@@ -162,7 +162,36 @@ describe("Configurações › Comissões", () => {
     await escolher($("[data-comissao-quando]"), "CONCLUSAO_OS");
     expect(salvar.disabled).toBe(false);
     await clicar(salvar);
-    expect(chamadas.find((c) => c.metodo === "PUT")).toEqual({ url: "/api/comissoes", metodo: "PUT", corpo: { quando: "CONCLUSAO_OS", liquidaImpostos: false, executorQuando: "CONCLUSAO_OS", retornoDias: 30, tiposRetorno: [] } }); // COM-2: a configuração inteira, com o técnico
+    // COM-1.1 + COM-2: a configuração inteira (o vencimento do fechamento e o técnico, o que estava na tela)
+    expect(chamadas.find((c) => c.metodo === "PUT")).toEqual({ url: "/api/comissoes", metodo: "PUT", corpo: { quando: "CONCLUSAO_OS", liquidaImpostos: false, vencimentoTipo: "DIA_UTIL", vencimentoDia: 5, executorQuando: "CONCLUSAO_OS", retornoDias: 30, tiposRetorno: [] } });
+  });
+
+  it("COM-1.1 — vencimento do pagamento: padrão 5º dia útil; trocar para dia fixo; dia fora do limite trava o Salvar", async () => {
+    await abrir();
+    expect(texto($("[data-vencimento-resumo]"))).toBe("5º dia útil do mês seguinte (padrão).");
+    expect($<HTMLSelectElement>("[data-vencimento-tipo]")!.value).toBe("DIA_UTIL");
+    expect($<HTMLInputElement>("[data-vencimento-dia]")!.value).toBe("5");
+    const salvar = $<HTMLButtonElement>("[data-salvar-config-comissao]")!;
+    expect(salvar.disabled).toBe(true);
+    // Dia útil acima de 20: erro e Salvar travado
+    await digitar($("[data-vencimento-dia]"), "21");
+    expect(texto($("[data-vencimento-comissao]"))).toContain("De 1 a 20.");
+    expect($("[data-vencimento-resumo]")).toBeNull();
+    expect(salvar.disabled).toBe(true);
+    // Trocou o tipo (há mudança) mas o dia está fora do limite: o Salvar continua travado
+    await escolher($("[data-vencimento-tipo]"), "DIA_FIXO");
+    await digitar($("[data-vencimento-dia]"), "32");
+    expect(texto($("[data-vencimento-comissao]"))).toContain("De 1 a 31.");
+    expect(salvar.disabled).toBe(true);
+    // Dia fixo aceita até 31; letras são descartadas
+    await digitar($("[data-vencimento-dia]"), "1a0");
+    expect($<HTMLInputElement>("[data-vencimento-dia]")!.value).toBe("10");
+    expect(texto($("[data-vencimento-resumo]"))).toBe("Dia 10 do mês seguinte.");
+    expect(salvar.disabled).toBe(false);
+    await clicar(salvar);
+    expect(chamadas.find((c) => c.metodo === "PUT")!.corpo).toEqual({ quando: "RECEBIMENTO", liquidaImpostos: false, vencimentoTipo: "DIA_FIXO", vencimentoDia: 10, executorQuando: "CONCLUSAO_OS", retornoDias: 30, tiposRetorno: [] });
+    // Salvo: sem mudança de novo, o botão volta a travar
+    expect(salvar.disabled).toBe(true);
   });
 });
 
