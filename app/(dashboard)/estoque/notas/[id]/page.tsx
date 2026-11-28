@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { ChaveCopiavel } from "@/components/compras/chave-copiavel";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { AlertTriangle, ArrowLeft, Barcode, CheckCircle2, FileText, Package, Tag, Wallet } from "lucide-react";
@@ -71,7 +72,7 @@ export default async function NotaCompraPage({ params, searchParams }: { params:
             {!lancada && gerencia && <div><DescartarNota id={nota.id} numero={nota.numero} serie={nota.serie} voltarPara={doFinanceiro ? "/estoque/notas?de=contas-pagar" : "/estoque/notas"} /></div>}
           </div>
         </div>
-        <p className="mt-3 text-[11px] text-ink-muted">Chave de acesso <span className="font-mono text-ink break-all">{chaveEmBlocos(nota.chaveAcesso)}</span></p>
+        <p className="mt-3 text-[11px] text-ink-muted">Chave de acesso <ChaveCopiavel chave={nota.chaveAcesso} /></p>
         <p className="text-[11px] text-ink-subtle">Importada em {dataHoraBr(nota.criadoEm)}{nota.usuario && ` por ${nota.usuario.nome}`}{nota.lancadaEm && ` · lançada em ${dataHoraBr(nota.lancadaEm)}`}</p>
       </div>
 

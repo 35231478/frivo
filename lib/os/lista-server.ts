@@ -13,6 +13,7 @@
  *     medições.
  * O resultado é o mesmo de antes (o teste no PostgreSQL compara linha a linha).
  */
+import { FILTRO_SEM_AGENDAMENTO } from "@/lib/listas/filtros";
 import { osEmConferencia } from "@/lib/pedido-cliente/portal-server";
 import { prisma } from "@/lib/prisma";
 import type { QuemVe } from "@/lib/escopo/proprios";
@@ -51,7 +52,7 @@ export async function carregarListaOs(empresaId: string, sp: SPOrdens, agora: Da
   const daPagina = (p: number) => prisma.ordemServico.findMany({ where, orderBy, ...janela(p, porPagina) });
 
   // 1ª onda: a contagem e a página pedida juntas (não esperam uma pela outra), e as opções dos filtros
-  const [total, paginaPedida, clientes, usuarios, tiposOs, contratos, resumoPedido] = await Promise.all([
+  const [total, paginaPedida, clientes, usuarios, tiposOs, contratos, resumoPedido, semAgendamento] = await Promise.all([
     prisma.ordemServico.count({ where }),
     daPagina(pedida),
     prisma.cliente.findMany({ where: { empresaId, ativo: true }, select: { id: true, nome: true, nomeFantasia: true }, orderBy: { nome: "asc" } }),
@@ -61,6 +62,8 @@ export async function carregarListaOs(empresaId: string, sp: SPOrdens, agora: Da
     // Pedido do cliente (lib/pedido-cliente): a empresa usa? e o filtro rápido "Aguardando pedido" (contagem e R$)
     // + quantas OS têm pedido do portal para conferir (o filtro rápido "Pedido recebido — conferir")
     usaPedidoCliente(empresaId).then(async (u) => (u ? { ...(await resumoOsAguardando(where)), conferir: (await osEmConferencia(empresaId)).length } : null)),
+    // Leva I: quantas OS não têm agendamento (o filtro rápido "Sem agendamento"; o período não as alcança)
+    whereOrdensDaLista(empresaId, { ...sp, agenda: FILTRO_SEM_AGENDAMENTO }, agora, quem).then((w) => prisma.ordemServico.count({ where: w })),
   ]);
   const pagina = paginaValida(pedida, porPagina, total);
   // Página pedida além da última (filtro mudou o total): busca a página válida — o caso raro
@@ -148,6 +151,7 @@ export async function carregarListaOs(empresaId: string, sp: SPOrdens, agora: Da
     total, pagina, porPagina, periodo, linhas,
     // O filtro rápido "Aguardando pedido": só para a empresa que tem cliente que exige o pedido
     resumoPedido,
+    semAgendamento,
     opcoes: {
       clientes: clientes.map((c) => ({ value: c.id, label: c.nomeFantasia ?? c.nome })),
       usuarios: usuarios.map((u) => ({ value: u.id, label: u.nome })),

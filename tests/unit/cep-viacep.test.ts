@@ -19,7 +19,7 @@ describe("buscarCep (ViaCEP simulado)", () => {
     vi.stubGlobal("fetch", fetchFalso);
     expect(await buscarCep("01001-000")).toEqual({ logradouro: "Praça da Sé", bairro: "Sé", cidade: "São Paulo", estado: "SP", complemento: "lado ímpar" });
     // Consulta só os dígitos, no endereço do ViaCEP
-    expect(fetchFalso).toHaveBeenCalledWith("https://viacep.com.br/ws/01001000/json/");
+    expect(fetchFalso).toHaveBeenCalledWith("https://viacep.com.br/ws/01001000/json/", expect.objectContaining({ signal: expect.anything() })); // Leva I: com prazo (não trava)
   });
 
   it("campos ausentes viram texto vazio (não 'undefined' no formulário)", async () => {

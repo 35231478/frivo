@@ -26,6 +26,18 @@ export const mostrarCancelados = (sp: SP) => sp.cancelados === "1" || sp.inativo
  * valendo: `?data=AAAA-MM-DD` (navegação por dia) vira "Hoje" navegado; `dataInicio`/`dataFim`
  * viram o período personalizado.
  */
+/** Filtro rápido da lista de OS: as que não têm data agendada nenhuma (`?agenda=sem`) */
+export const FILTRO_SEM_AGENDAMENTO = "sem";
+export const DICA_SEM_AGENDAMENTO = "OS sem nenhuma atividade agendada nem previsão: ficam fora do filtro de período (que olha a data agendada), e aparecem aqui para não se perderem.";
+/**
+ * Sem agendamento: a OS sem DATA nenhuma das que o período olha — nenhuma atividade agendada, iniciada ou concluída, e
+ * sem previsão. (A executada sem ter sido agendada tem data: entra no mês da execução, não aqui.)
+ */
+export const whereSemAgendamento = () => ({
+  previsaoConclusao: null,
+  atividades: { none: { OR: [{ dataAgendada: { not: null } }, { iniciadaEm: { not: null } }, { concluidaEm: { not: null } }] } },
+});
+
 export function periodoOrdens(sp: SP, agora = new Date()) {
   const semPeriodo = !sp.periodo && !sp.de && !sp.ate && !sp.mes;
   return lerPeriodo(
@@ -54,18 +66,21 @@ export function whereOrdens(empresaId: string, sp: SP, agora = new Date(), idsAt
   if (sp.tipoOsId) where.atividades = { some: { tipoOsId: sp.tipoOsId } };
   if (sp.numero) where.numero = { contains: sp.numero, mode: "insensitive" };
   const e: any[] = [];
-  // Período: OS com atividade agendada, data prevista, prazo ou abertura dentro dele
-  // (instantes no fuso de Brasília; a data prevista e o prazo gravados como DIA CIVIL pela faixa de dia)
+  const semAgenda = sp.agenda === FILTRO_SEM_AGENDAMENTO;
+  // "Sem agendamento" (filtro rápido): as OS sem data nenhuma — não cabem em período, então ele não se aplica
+  if (semAgenda) e.push(whereSemAgendamento());
+  // Período (Leva I): a DATA AGENDADA / DE EXECUÇÃO — atividade agendada, iniciada ou concluída no período, ou a
+  // previsão da OS. A data de abertura não conta (a OS aberta em outubro e agendada para novembro é de novembro).
+  // Instantes no fuso de Brasília; a previsão gravada como DIA CIVIL pela faixa de dia.
   const periodo = periodoOrdens(sp, agora);
-  if (periodo.gte || periodo.lt) {
+  if (!semAgenda && (periodo.gte || periodo.lt)) {
     const instante = { ...(periodo.gte && { gte: periodo.gte }), ...(periodo.lt && { lt: periodo.lt }) };
     const dia = faixaDiaCivil(periodo);
     e.push({
       OR: [
-        { atividades: { some: { dataAgendada: instante } } },
-        ...(dia ? [{ previsaoConclusao: dia }, { prazoExecucao: dia }] : []),
+        { atividades: { some: { OR: [{ dataAgendada: instante }, { iniciadaEm: instante }, { concluidaEm: instante }] } } },
+        ...(dia ? [{ previsaoConclusao: dia }] : []),
         { previsaoConclusao: instante }, // previsão gravada com hora (OS do calendário)
-        { criadoEm: instante },
       ],
     });
   }

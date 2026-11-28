@@ -1,5 +1,9 @@
 "use client";
 
+import { CampoCep } from "@/components/ui/campo-cep";
+import { enderecoDoCep } from "@/lib/cep";
+import { useAvisoSairSemSalvar } from "@/components/ui/proteger-saida";
+import { marcarFormularioSalvo } from "@/lib/ui/sair-sem-salvar";
 import { useState, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { useAutoGeocode } from "@/hooks/use-auto-geocode";
@@ -58,6 +62,9 @@ export function ConfiguracoesClient({ empresa: initialEmpresa, config: initialCo
   const [logo, setLogo] = useState<string | null>(initialEmpresa.logo);
   const [uploadingLogo, setUploadingLogo] = useState(false);
   const logoInputRef = useRef<HTMLInputElement>(null);
+  // Sair sem salvar (lib/ui/sair-sem-salvar): o aviso de toda tela de edição
+  const raizRef = useRef<HTMLDivElement>(null);
+  useAvisoSairSemSalvar(raizRef);
 
   const [emp, setEmp] = useState({
     nome: initialEmpresa.nome,
@@ -158,6 +165,7 @@ export function ConfiguracoesClient({ empresa: initialEmpresa, config: initialCo
       });
       if (!res.ok) { setErroEmpresa(await erroDaResposta(res, "Não foi possível salvar.")); return; }
       toast("Dados da empresa salvos.");
+      marcarFormularioSalvo();
       router.refresh();
     } catch { setErroEmpresa("Sem conexão. Tente de novo."); } finally { setSalvandoEmpresa(false); }
   }
@@ -172,12 +180,13 @@ export function ConfiguracoesClient({ empresa: initialEmpresa, config: initialCo
       });
       if (!res.ok) { setErroConfig(await erroDaResposta(res, "Não foi possível salvar.")); return; }
       toast("Preferências salvas.");
+      marcarFormularioSalvo();
       router.refresh();
     } catch { setErroConfig("Sem conexão. Tente de novo."); } finally { setSalvandoConfig(false); }
   }
 
   return (
-    <div className="space-y-8">
+    <div ref={raizRef} className="space-y-8">
       {/* ========== DADOS DA EMPRESA ========== */}
       {parte !== "preferencias" && <div className="bg-white rounded-card border border-surface-border p-6 space-y-6">
         <div className="flex items-center gap-2">
@@ -266,6 +275,8 @@ export function ConfiguracoesClient({ empresa: initialEmpresa, config: initialCo
         </FormSection>
 
         <FormSection title="Endereço" dica="Usado no cálculo da distância até os clientes e na busca do município da NFS-e.">
+          <CampoCep valor={emp.cep} onValor={(v) => updateEmp("cep", v)}
+            onEndereco={(d) => setEmp((e) => ({ ...e, ...enderecoDoCep(e, d, { logradouro: "endereco", bairro: "bairro", cidade: "cidade", estado: "estado" }) }))} />
           <FormField label="Logradouro">
             <EnderecoAutocomplete value={emp.endereco} onChange={(v) => updateEmp("endereco", v)} onSelect={handleEnderecoSelect} placeholder="Digite para buscar o endereço" />
           </FormField>
@@ -282,7 +293,6 @@ export function ConfiguracoesClient({ empresa: initialEmpresa, config: initialCo
               </Select>
             </FormField>
           </FormGrid>
-          <FormField label="CEP"><Input value={emp.cep} onChange={(e) => updateEmp("cep", e.target.value)} className="max-w-[200px]" /></FormField>
 
           {emp.endereco && emp.cidade && emp.estado && (
             <MapaEndereco logradouro={emp.endereco} numero={emp.numero} cidade={emp.cidade} estado={emp.estado} cep={emp.cep} />

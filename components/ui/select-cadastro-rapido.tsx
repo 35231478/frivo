@@ -4,7 +4,7 @@ import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { corDado } from "@/lib/ui/tokens";
 import { Check, ChevronDown, ExternalLink, Layers, Loader2, Lock, MapPin, Pencil, Plus, Search, X } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { buscarCep, cepCompleto } from "@/lib/cep";
+import { cepCompleto, consultarCep, enderecoDoCep, formatarCep } from "@/lib/cep";
 import { Modal } from "@/components/ui/modal";
 import { Dica } from "@/components/ui/dica";
 import { toast } from "@/components/ui/avisos";
@@ -538,12 +538,14 @@ function MiniCadastro({
     if (!cepCompleto(cepBruto)) return;
     setBuscandoCep(true);
     try {
-      const d = await buscarCep(cepBruto);
-      if (!d) return; // sem rede ou CEP que não existe: a pessoa digita
-      const mapa: Record<string, string | undefined> = { logradouro: d.logradouro, bairro: d.bairro, cidade: d.cidade, estado: d.estado };
+      const r = await consultarCep(cepBruto);
+      if (!r.ok) return; // sem rede ou CEP que não existe: a pessoa digita
+      // O mesmo jeito de toda tela (lib/cep › enderecoDoCep), só nos campos que este cadastro tem
+      const nomes = new Set(campos.map((c) => c.nome));
       setValores((s) => {
-        const novo = { ...s };
-        for (const c of campos) if (mapa[c.nome] && !s[c.nome]) novo[c.nome] = mapa[c.nome]!;
+        const vindo = enderecoDoCep(s, r.endereco, { logradouro: "logradouro", bairro: "bairro", cidade: "cidade", estado: "estado" });
+        const novo: Record<string, string> = { ...s };
+        for (const [k, v] of Object.entries(vindo)) if (nomes.has(k) && v) novo[k] = v;
         return novo;
       });
     } finally { setBuscandoCep(false); }
@@ -642,7 +644,7 @@ function MiniCadastro({
                     id={comConsulta ? id : undefined}
                     autoFocus={i === 0}
                     value={valores[c.nome] ?? ""}
-                    onChange={(e) => { set(c.nome, e.target.value); if (c.tipo === "cep") preencherPeloCep(e.target.value); }}
+                    onChange={(e) => { const v = c.tipo === "cep" ? formatarCep(e.target.value) : e.target.value; set(c.nome, v); if (c.tipo === "cep") preencherPeloCep(v); }}
                     placeholder={c.placeholder} maxLength={c.maxLength ?? (c.tipo === "cep" ? 9 : undefined)}
                     inputMode={c.tipo === "cep" ? "numeric" : c.inputMode}
                     className={cn(inputCls, faltando.has(c.nome) && "border-atrasado/40 focus:border-atrasado focus:ring-atrasado/10")}

@@ -1,5 +1,7 @@
 "use client";
 
+import { CampoCep } from "@/components/ui/campo-cep";
+import { enderecoDoCep } from "@/lib/cep";
 import { useState, useRef, useEffect, KeyboardEvent } from "react";
 import { useForm, Controller } from "react-hook-form";
 import { chaveDiaCivil } from "@/lib/fuso";
@@ -37,7 +39,6 @@ import { ToggleSwitch } from "@/components/ui/toggle-switch";
 import { JornadaFaixas } from "@/components/colaborador/jornada-faixas";
 import { faixasDoColaborador, jornadaValida, problemasDaJornada, type FaixaJornada } from "@/lib/colaborador/jornada";
 import { DICA_CAMPO, DICA_RT, ROTULO_CAMPO, ROTULO_RT, funcaoDaFicha, gravarFuncao } from "@/lib/colaborador/funcao";
-import { buscarCep, cepCompleto, formatarCep } from "@/lib/cep";
 
 const ESPECIALIDADES_SUGERIDAS = [
   "Split", "VRF", "Chiller", "Câmara Fria",
@@ -144,21 +145,6 @@ export function ColaboradorForm({ initialData, somenteLeitura = false, podeFolha
   const [motivoInativacao, setMotivoInativacao] = useState("");
   const inativandoPeloStatus = isEditing && watch("statusColaborador") === "INATIVO" && initialData?.ativo !== false && initialData?.statusColaborador !== "INATIVO";
 
-  // O CEP preenche o endereço (a mesma consulta da admissão e do cadastro rápido: lib/cep)
-  const [cepBuscando, setCepBuscando] = useState(false);
-  const [cepAchou, setCepAchou] = useState<boolean | null>(null);
-  async function completarCep(cep: string) {
-    if (!cepCompleto(cep)) return;
-    setCepBuscando(true);
-    const e = await buscarCep(cep);
-    setCepBuscando(false);
-    setCepAchou(!!e);
-    if (!e) return;
-    if (e.logradouro) setValue("endereco", e.logradouro, { shouldDirty: true });
-    if (e.bairro) setValue("bairro", e.bairro, { shouldDirty: true });
-    if (e.cidade) setValue("cidade", e.cidade, { shouldDirty: true });
-    if (e.estado) setValue("estado", e.estado, { shouldDirty: true });
-  }
   const jornadaOk = jornadaValida(faixas);
   const tiposOsVisiveis = tiposOs.filter((t) => t.ativo !== false || competenciaIds.includes(t.id));
   function toggleCompetencia(id: string) {
@@ -353,12 +339,12 @@ export function ColaboradorForm({ initialData, somenteLeitura = false, podeFolha
 
             <FormSection title="Endereço">
               <FormGrid cols={3}>
-                <FormField label="CEP" hint={cepBuscando ? "Buscando o endereço…" : cepAchou === false ? "CEP não encontrado: preencha à mão." : "O endereço é preenchido pelo CEP."}>
-                  <Controller name="cep" control={control} render={({ field }) => (
-                    <Input value={formatarCep((field.value as string) ?? "")} inputMode="numeric" placeholder="00000-000" data-campo-cep
-                      onChange={(e) => { const v = formatarCep(e.target.value); field.onChange(v); setCepAchou(null); if (cepCompleto(v)) completarCep(v); }} />
-                  )} />
-                </FormField>
+                <CampoCep valor={watch("cep") ?? ""} onValor={(v) => setValue("cep", v, { shouldDirty: true })}
+                  onEndereco={(d) => {
+                    // O mesmo jeito de toda tela (lib/cep › enderecoDoCep): o logradouro do colaborador é "endereco"
+                    const novo = enderecoDoCep({ endereco: watch("endereco"), bairro: watch("bairro"), cidade: watch("cidade"), estado: watch("estado") }, d, { logradouro: "endereco", bairro: "bairro", cidade: "cidade", estado: "estado" });
+                    for (const [k, v] of Object.entries(novo)) setValue(k as "endereco", (v as string) ?? "", { shouldDirty: true });
+                  }} />
                 <FormField label="Logradouro" className="sm:col-span-2"><Input {...register("endereco")} caixa="endereco" placeholder="Rua, avenida…" /></FormField>
               </FormGrid>
               <FormGrid cols={3}>

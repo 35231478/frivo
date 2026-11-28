@@ -9,10 +9,14 @@ import { Textarea } from "@/components/ui/textarea";
 import { FormField, FormGrid } from "@/components/ui/form-field";
 import { MapaEndereco } from "@/components/ui/mapa-endereco";
 import { EnderecoAutocomplete, type EnderecoSelecionado } from "@/components/ui/endereco-autocomplete";
-import { Plus, Pencil, Trash2, X, Check, Search, MapPin } from "lucide-react";
+import { Plus, Pencil, Trash2, X, Check, MapPin } from "lucide-react";
 import { enderecoEmUmaLinha } from "@/lib/clientes/ficha";
-import { buscarCep, cepCompleto, formatarCep } from "@/lib/cep";
+import { enderecoDoCep } from "@/lib/cep";
+import { CampoCep } from "@/components/ui/campo-cep";
+
 import { cn, comparaNatural } from "@/lib/utils";
+
+const CAMPOS_ENDERECO_UNIDADE = { logradouro: "logradouro", bairro: "bairro", cidade: "cidade", estado: "estado" } as const;
 
 const ESTADOS_BR = [
   "AC","AL","AP","AM","BA","CE","DF","ES","GO","MA","MT","MS","MG",
@@ -53,7 +57,6 @@ interface UnidadesLocalProps {
 export function UnidadesLocal({ unidades, onChange, principalNoCadastro = false }: UnidadesLocalProps) {
   const [editando, setEditando] = useState<string | "novo" | null>(null);
   const [form, setForm] = useState<UnidadeLocal>(emptyForm());
-  const [buscandoCep, setBuscandoCep] = useState(false);
 
   const handleAutoGeocode = useCallback((coords: { lat: number; lng: number }) => {
     if (editando) {
@@ -65,23 +68,6 @@ export function UnidadesLocal({ unidades, onChange, principalNoCadastro = false 
     { logradouro: editando ? form.logradouro : "", numero: form.numero, cidade: form.cidade, estado: form.estado },
     handleAutoGeocode,
   );
-
-  async function buscarCepDaUnidade(cep = form.cep) {
-    if (!cepCompleto(cep)) return;
-    setBuscandoCep(true);
-    try {
-      const d = await buscarCep(cep);
-      if (!d) return; // sem rede ou CEP que não existe: a pessoa digita
-      setForm((f) => ({
-        ...f,
-        logradouro: d.logradouro || f.logradouro,
-        bairro: d.bairro || f.bairro,
-        cidade: d.cidade || f.cidade,
-        estado: d.estado || f.estado,
-        complemento: d.complemento || f.complemento,
-      }));
-    } finally { setBuscandoCep(false); }
-  }
 
   function abrirNova() {
     const temPrincipal = unidades.some((u) => u.principal);
@@ -143,7 +129,6 @@ export function UnidadesLocal({ unidades, onChange, principalNoCadastro = false 
     return comparaNatural(a.nome, b.nome);
   });
 
-
   function renderFormInline() {
     return (
       <div className="border border-frivo-200 bg-frivo-50/30 rounded-lg p-4 space-y-4">
@@ -164,15 +149,8 @@ export function UnidadesLocal({ unidades, onChange, principalNoCadastro = false 
         </FormGrid>
 
         <FormGrid cols={3}>
-          <FormField label="CEP">
-            <div className="flex gap-2">
-              <Input value={form.cep} onChange={(e) => { const v = formatarCep(e.target.value); updateField("cep", v); if (cepCompleto(v) && !cepCompleto(form.cep)) void buscarCepDaUnidade(v); }}
-                placeholder="00000-000" maxLength={9} inputMode="numeric" aria-label="CEP do endereço" />
-              <Button type="button" variant="secondary" loading={buscandoCep} onClick={() => buscarCepDaUnidade()} className="shrink-0 px-3" aria-label="Consultar o CEP">
-                {!buscandoCep && <Search className="w-4 h-4" />}
-              </Button>
-            </div>
-          </FormField>
+          <CampoCep valor={form.cep} onValor={(v) => updateField("cep", v)}
+            onEndereco={(d) => setForm((f) => ({ ...f, ...enderecoDoCep(f, d, CAMPOS_ENDERECO_UNIDADE) }))} />
           <FormField label="Logradouro" className="sm:col-span-2">
             <EnderecoAutocomplete
               value={form.logradouro}

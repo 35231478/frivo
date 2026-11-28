@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { ProtegerSaida } from "@/components/ui/proteger-saida";
 import { notFound, redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
 import { pode } from "@/lib/permissoes";
@@ -47,7 +48,7 @@ export default async function EditarMedicaoPage({ params }: { params: Promise<{ 
     .map((it) => ({ id: it.id, catalogoId: it.produtoId, descricao: it.descricao, quantidade: Number(it.quantidade), valorUnitario: Number(it.valorUnitario), observacao: it.observacao }));
 
   return (
-    <MedicaoForm
+    <ProtegerSaida><MedicaoForm
       mode="editar"
       clientes={clientes}
       catalogoServicos={servicos.map((s) => ({ ...s, valorPadrao: s.valorPadrao ? Number(s.valorPadrao) : null }))}
@@ -67,6 +68,6 @@ export default async function EditarMedicaoPage({ params }: { params: Promise<{ 
         servicos: servicosItens,
         produtos: produtosItens,
       }}
-    />
+    /></ProtegerSaida>
   );
 }

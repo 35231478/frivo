@@ -1,6 +1,7 @@
 /**
- * Lista de OS × período do seletor (lib/listas/filtros.ts, puro): por padrão todo o período; o atalho vale
- * sobre o dia agendado, a previsão de conclusão (dia civil e com hora) e a abertura; os links antigos
+ * Lista de OS × período do seletor (lib/listas/filtros.ts, puro): por padrão o mês atual; o atalho vale sobre a data
+ * AGENDADA / DE EXECUÇÃO das atividades (agendada, iniciada, concluída) e a previsão da OS (dia civil e com hora) —
+ * Leva I: a abertura e o prazo não contam mais; os links antigos
  * (`?data=` da navegação por dia e `dataInicio`/`dataFim`) continuam funcionando.
  */
 import { describe, expect, it } from "vitest";
@@ -10,32 +11,36 @@ const AGORA = new Date("2026-11-04T01:30:00.000Z"); // terça 03/11/2026 22:30 e
 const iso = (d?: Date) => d?.toISOString();
 const faixaDe = (where: any) => {
   const ou = where.AND?.[0]?.OR;
-  // ordem: agenda, data prevista (dia), PRAZO (dia), data prevista (com hora), abertura
-  return ou ? { agenda: ou[0].atividades.some.dataAgendada, previsaoDia: ou[1].previsaoConclusao, prazoDia: ou[2].prazoExecucao, previsaoHora: ou[3].previsaoConclusao, abertura: ou[4].criadoEm } : null;
+  // ordem (Leva I): atividade (agendada | iniciada | concluída), data prevista (dia), data prevista (com hora)
+  if (!ou) return null;
+  const [agendada, iniciada, concluida] = ou[0].atividades.some.OR;
+  return { agenda: agendada.dataAgendada, iniciada: iniciada.iniciadaEm, concluida: concluida.concluidaEm, previsaoDia: ou[1].previsaoConclusao, previsaoHora: ou[2].previsaoConclusao, qtd: ou.length };
 };
 
 describe("período da lista de OS", () => {
   it("sem nada na URL: o MÊS ATUAL (o padrão pedido pelo Zé); 'todos' explícito: nenhuma condição de data", () => {
     const p = periodoOrdens({}, AGORA);
     expect([p.tipo, p.mes]).toEqual(["mes", "2026-11"]);
-    expect(faixaDe(whereOrdens("e1", {}, AGORA))!.abertura).toEqual({ gte: new Date("2026-11-01T03:00:00.000Z"), lt: new Date("2026-12-01T03:00:00.000Z") });
+    expect(faixaDe(whereOrdens("e1", {}, AGORA))!.agenda).toEqual({ gte: new Date("2026-11-01T03:00:00.000Z"), lt: new Date("2026-12-01T03:00:00.000Z") });
     expect(periodoOrdens({ periodo: "todos" }, AGORA).tipo).toBe("todos");
     expect(whereOrdens("e1", { periodo: "todos" }, AGORA).AND).toBeUndefined();
   });
-  it("hoje: dia de Brasília nos instantes (agenda, previsão com hora, abertura) e dia civil na previsão", () => {
+  it("hoje: dia de Brasília nos instantes (agendada, iniciada, concluída, previsão com hora) e dia civil na previsão; sem abertura nem prazo", () => {
     const f = faixaDe(whereOrdens("e1", { periodo: "hoje" }, AGORA))!;
     expect([iso(f.agenda.gte), iso(f.agenda.lt)]).toEqual(["2026-11-03T03:00:00.000Z", "2026-11-04T03:00:00.000Z"]);
-    expect(f.abertura).toEqual(f.agenda);
-    expect(f.previsaoHora).toEqual(f.agenda);
+    expect([f.iniciada, f.concluida, f.previsaoHora]).toEqual([f.agenda, f.agenda, f.agenda]);
     expect([iso(f.previsaoDia.gte), iso(f.previsaoDia.lt)]).toEqual(["2026-11-03T00:00:00.000Z", "2026-11-04T00:00:00.000Z"]);
-    expect(f.prazoDia).toEqual(f.previsaoDia); // o prazo de execução é dia civil, como a data prevista gravada como dia
+    expect(f.qtd).toBe(3);
+    const w = JSON.stringify(whereOrdens("e1", { periodo: "hoje" }, AGORA));
+    expect(w).not.toContain("criadoEm");
+    expect(w).not.toContain("prazoExecucao");
   });
   it("esta semana e este mês: a faixa inteira; a empresa sempre da sessão", () => {
     const w = whereOrdens("e1", { periodo: "semana" }, AGORA);
     expect(w.empresaId).toBe("e1");
     const f = faixaDe(w)!;
     expect([iso(f.agenda.gte), iso(f.agenda.lt)]).toEqual(["2026-11-02T03:00:00.000Z", "2026-11-09T03:00:00.000Z"]);
-    expect(faixaDe(whereOrdens("e1", { mes: "2026-10" }, AGORA))!.abertura).toEqual({ gte: new Date("2026-10-01T03:00:00.000Z"), lt: new Date("2026-11-01T03:00:00.000Z") });
+    expect(faixaDe(whereOrdens("e1", { mes: "2026-10" }, AGORA))!.agenda).toEqual({ gte: new Date("2026-10-01T03:00:00.000Z"), lt: new Date("2026-11-01T03:00:00.000Z") });
   });
   it("links antigos: ?data= vira 'Hoje' navegado naquele dia; dataInicio/dataFim viram o período personalizado", () => {
     const p = periodoOrdens({ data: "2026-10-20" }, AGORA);

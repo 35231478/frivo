@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { ProtegerSaida } from "@/components/ui/proteger-saida";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
@@ -54,7 +55,7 @@ export default async function NovoEnvioPage({ searchParams }: { searchParams?: P
           <Dica rotulo="Novo envio" lado="direita" texto={AJUDA} />
         </h1>
       </div>
-      <NovoEnvio equipes={equipes} colaboradores={colaboradores} inicial={inicial} />
+      <ProtegerSaida><NovoEnvio equipes={equipes} colaboradores={colaboradores} inicial={inicial} /></ProtegerSaida>
     </div>
   );
 }

@@ -13,6 +13,8 @@ import { ancorarElemento, pontoDoPin, reencontrar } from "@/lib/anotacoes/ancora
 import { ROTULO_PRECISAO, TEXTO_MAX, telaDaRota, type Ancora, type Precisao } from "@/lib/anotacoes/regras";
 import { chavePosicaoBotao, ehArraste, lerPosicao, limitarPosicao, posicaoArrastada, posicaoDoVoltar, type Ponto } from "@/lib/anotacoes/posicao-botao";
 
+/* Camadas (lib/ui/camadas): a ferramenta fica em 84…89 — acima da gaveta (60), do modal (70) e dos menus (80),
+   abaixo da confirmação (95) e do toast (100). Os números ficam literais aqui por causa do Tailwind. */
 /**
  * ANOTAÇÕES INTERNAS — a ferramenta na tela. Só o dono do Frivo chega aqui (o layout do painel só
  * monta a casca para ele, e o chunk desta ferramenta só baixa depois disso).
@@ -276,7 +278,7 @@ export function AnotacoesFerramenta({ usuarioId = "" }: { usuarioId?: string }) 
         title={modo ? "Sair do modo anotação (Alt+A)" : "Anotar nesta tela (Alt+A). Arraste para mudar de lugar."}
         style={posicao ? { left: posicao.x, top: posicao.y } : undefined}
         className={cn(
-          "fixed z-[47] hidden lg:inline-flex items-center gap-2 rounded-full border px-3 py-2 shadow-sm transition-colors touch-none select-none",
+          "fixed z-[87] hidden lg:inline-flex items-center gap-2 rounded-full border px-3 py-2 shadow-sm transition-colors touch-none select-none",
           !posicao && "right-4 bottom-[5rem]",
           modo
             ? "bg-acento text-white border-acento"
@@ -291,7 +293,7 @@ export function AnotacoesFerramenta({ usuarioId = "" }: { usuarioId?: string }) 
           type="button" onClick={voltarAoPadrao} {...CLASSE_FORA_DO_PRINT} data-anotacoes-voltar
           title="Voltar o botão à posição padrão" aria-label="Voltar o botão de anotações à posição padrão"
           style={posicaoDoVoltar(posicao, botaoRef.current?.offsetWidth ?? 96)}
-          className="fixed z-[47] hidden lg:inline-flex items-center justify-center w-8 h-8 rounded-full border border-surface-border bg-white text-ink-muted shadow-sm hover:text-ink hover:border-acento/40"
+          className="fixed z-[87] hidden lg:inline-flex items-center justify-center w-8 h-8 rounded-full border border-surface-border bg-white text-ink-muted shadow-sm hover:text-ink hover:border-acento/40"
         >
           <RotateCcw className="w-3.5 h-3.5" aria-hidden />
         </button>
@@ -304,12 +306,12 @@ export function AnotacoesFerramenta({ usuarioId = "" }: { usuarioId?: string }) 
             {...CLASSE_FORA_DO_PRINT}
             data-anotacoes-veu
             onClick={aoClicarNaTela}
-            className="fixed inset-0 z-[45] cursor-crosshair bg-acento/5"
+            className="fixed inset-0 z-[84] cursor-crosshair bg-acento/5"
           />
 
           {/* A barra do modo */}
           <div {...CLASSE_FORA_DO_PRINT} data-anotacoes-barra
-            className="fixed z-[48] left-1/2 -translate-x-1/2 top-4 flex items-center gap-3 rounded-full bg-ink text-white px-4 py-2 shadow-elevated">
+            className="fixed z-[88] left-1/2 -translate-x-1/2 top-4 flex items-center gap-3 rounded-full bg-ink text-white px-4 py-2 shadow-elevated">
             <Pin className="w-3.5 h-3.5" aria-hidden />
             <span className="text-xs">Clique no ponto que quer anotar</span>
             <Link href="/anotacoes" className="text-xs font-semibold underline underline-offset-2" data-anotacoes-ver-lista>
@@ -322,7 +324,7 @@ export function AnotacoesFerramenta({ usuarioId = "" }: { usuarioId?: string }) 
 
           {/* Os pins já ancorados nesta tela */}
           {pins.map((p) => (
-            <div key={p.anotacao.id} {...CLASSE_FORA_DO_PRINT} className="fixed z-[46]"
+            <div key={p.anotacao.id} {...CLASSE_FORA_DO_PRINT} className="fixed z-[86]"
               style={{ left: p.left, top: p.top, transform: "translate(-50%, -100%)" }}>
               <button
                 type="button"
@@ -368,7 +370,7 @@ export function AnotacoesFerramenta({ usuarioId = "" }: { usuarioId?: string }) 
           {/* O balão de escrever, ancorado no ponto clicado */}
           {rascunho && (
             <div {...CLASSE_FORA_DO_PRINT} data-anotacoes-balao
-              className="fixed z-[49] w-80 rounded-card border border-surface-border bg-white p-3 shadow-elevated"
+              className="fixed z-[89] w-80 rounded-card border border-surface-border bg-white p-3 shadow-elevated"
               style={{
                 left: Math.min(Math.max(12, rascunho.left - 160), Math.max(12, window.innerWidth - 332)),
                 top: Math.min(Math.max(12, rascunho.top + 12), Math.max(12, window.innerHeight - 220)),
@@ -404,7 +406,7 @@ export function AnotacoesFerramenta({ usuarioId = "" }: { usuarioId?: string }) 
           )}
 
           {capturando && (
-            <div {...CLASSE_FORA_DO_PRINT} className="fixed z-[49] right-4 top-4 inline-flex items-center gap-2 rounded-full bg-white border border-surface-border px-3 py-1.5 shadow-sm">
+            <div {...CLASSE_FORA_DO_PRINT} className="fixed z-[89] right-4 top-4 inline-flex items-center gap-2 rounded-full bg-white border border-surface-border px-3 py-1.5 shadow-sm">
               <Loader2 className="w-3.5 h-3.5 animate-spin text-ink-muted" />
               <span className="text-xs text-ink-muted">Guardando o print</span>
             </div>

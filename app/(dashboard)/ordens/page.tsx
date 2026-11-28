@@ -12,11 +12,11 @@ export const metadata: Metadata = { title: "Ordens de serviço" };
 export default async function OrdensPage({ searchParams }: { searchParams: Promise<SPOrdens> }) {
   const sp = await searchParams;
   const session = await auth();
-  const { total, pagina, porPagina, periodo, linhas, opcoes, resumoPedido } = await carregarListaOs(session!.user!.empresaId, sp, new Date(), session!.user); // COM-1: escopo
+  const { total, pagina, porPagina, periodo, linhas, opcoes, resumoPedido, semAgendamento } = await carregarListaOs(session!.user!.empresaId, sp, new Date(), session!.user); // COM-1: escopo
 
   return (
     <SelecaoMassaProvider entidade="ordens" idsPagina={linhas.map((o) => o.id)} total={total}>
-    <OrdensListaClient ordens={linhas} total={total} pagina={pagina} porPagina={porPagina} periodo={periodo} opcoes={opcoes} resumoPedido={resumoPedido} />
+    <OrdensListaClient ordens={linhas} total={total} pagina={pagina} porPagina={porPagina} periodo={periodo} opcoes={opcoes} resumoPedido={resumoPedido} semAgendamento={semAgendamento} />
     <BarraAcoesMassa extra={resumoPedido ? <AcaoMassaPedido /> : null} />
     </SelecaoMassaProvider>
   );

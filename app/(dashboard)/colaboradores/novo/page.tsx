@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { ProtegerSaida } from "@/components/ui/proteger-saida";
 import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
 import { pode } from "@/lib/permissoes";
@@ -13,7 +14,7 @@ export default async function NovoColaboradorPage() {
   return (
     <div className="max-w-4xl mx-auto">
       <PageHeader title="Novo colaborador" description="Cadastre um colaborador da equipe" backHref="/colaboradores" />
-      <ColaboradorForm podeFolha={pode(session?.user?.permissoes, "financeiro", "folha", session?.user?.role)} />
+      <ProtegerSaida><ColaboradorForm podeFolha={pode(session?.user?.permissoes, "financeiro", "folha", session?.user?.role)} /></ProtegerSaida>
     </div>
   );
 }

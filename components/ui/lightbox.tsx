@@ -1,5 +1,7 @@
 "use client";
 
+import { CAMADA } from "@/lib/ui/camadas";
+import { cn } from "@/lib/utils";
 import { useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 import { ChevronLeft, ChevronRight, Download, X } from "lucide-react";
@@ -47,7 +49,7 @@ export function Lightbox({ itens, indice, onIndice, onFechar }: {
   if (!item || typeof document === "undefined") return null;
 
   return createPortal(
-    <div className="fixed inset-0 z-[70] flex flex-col bg-ink/95" role="dialog" aria-modal="true" aria-label={`Foto: ${item.titulo}`} data-lightbox>
+    <div className={cn("fixed inset-0 flex flex-col bg-ink/95", CAMADA.lightbox)} role="dialog" aria-modal="true" aria-label={`Foto: ${item.titulo}`} data-lightbox>
       <div className="flex items-center justify-between gap-2 px-3 py-2 sm:px-5 sm:py-3 text-white shrink-0">
         <span className="text-sm tabular-nums text-white/80" aria-live="polite">{varios ? `${indice + 1} de ${itens.length}` : ""}</span>
         <div className="flex items-center gap-1">

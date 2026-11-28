@@ -1,5 +1,6 @@
 "use client";
 
+import { CHAVE_MENU_ANTIGA, chaveMenuLateral, estadoMenu, LARGURA_MENU_AUTOMATICO, lerPreferenciaMenu, preferenciaDoClique, type PreferenciaMenu } from "@/lib/layout/menu-lateral";
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
@@ -45,7 +46,6 @@ interface Secao {
 
 const ehGrupo = (e: Item | Grupo): e is Grupo => (e as Grupo).tipo === "grupo";
 
-const STORAGE_KEY = "frivo:sidebar-recolhido";
 const MODULO_KEY = "frivo:sidebar-modulo";
 
 // ─────────────────────────────────────────────
@@ -216,8 +216,11 @@ export function Sidebar({ session, variant = "desktop", avatarUrl }: SidebarProp
   const router = useRouter();
   const usuario = session.user;
 
-  // Recolher/expandir (apenas desktop) — persistido em localStorage
-  const [recolhido, setRecolhido] = useState(false);
+  // Recolher/expandir (apenas desktop): a escolha FIXA e fica lembrada por usuário; sem escolha, o mouse expande
+  // temporariamente o menu recolhido (lib/layout/menu-lateral)
+  const [preferencia, setPreferencia] = useState<PreferenciaMenu>(null);
+  const [largura, setLargura] = useState(LARGURA_MENU_AUTOMATICO);
+  const [hover, setHover] = useState(false);
   const [montado, setMontado] = useState(false);
   const [menuAberto, setMenuAberto] = useState(false);
 
@@ -226,7 +229,8 @@ export function Sidebar({ session, variant = "desktop", avatarUrl }: SidebarProp
 
   useEffect(() => {
     if (typeof window !== "undefined") {
-      if (localStorage.getItem(STORAGE_KEY) === "1") setRecolhido(true);
+      try { setPreferencia(lerPreferenciaMenu(localStorage.getItem(chaveMenuLateral(usuario.id)), localStorage.getItem(CHAVE_MENU_ANTIGA))); } catch { /* sem armazenamento */ }
+      setLargura(window.innerWidth);
       const m = localStorage.getItem(MODULO_KEY);
       if (m === "financeiro" || m === "operacional") setModulo(m);
     }
@@ -244,14 +248,21 @@ export function Sidebar({ session, variant = "desktop", avatarUrl }: SidebarProp
     if (montado) { try { localStorage.setItem(MODULO_KEY, modulo); } catch {} }
   }, [modulo, montado]);
 
-  const toggleRecolher = () =>
-    setRecolhido((v) => {
-      const novo = !v;
-      try { localStorage.setItem(STORAGE_KEY, novo ? "1" : "0"); } catch {}
-      return novo;
-    });
+  useEffect(() => {
+    const onResize = () => setLargura(window.innerWidth);
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, []);
+  const estado = estadoMenu({ preferencia, largura, hover });
+  const toggleRecolher = () => {
+    const nova = preferenciaDoClique(estado);
+    setPreferencia(nova); setHover(false);
+    try { localStorage.setItem(chaveMenuLateral(usuario.id), nova); } catch { /* sem armazenamento */ }
+  };
 
-  const colapsada = variant === "desktop" && recolhido;
+  // Recolhido = só ícones; aberto pelo mouse = largo por cima da página (o espaço reservado continua estreito)
+  const colapsada = variant === "desktop" && estado.recolhido && !estado.expandidoPorHover;
+  const flutuando = variant === "desktop" && estado.expandidoPorHover;
 
   // Permissão de visualização por item (item.modulo sobrescreve o 1º segmento da rota)
   const permissoes = (usuario as any).permissoes;
@@ -340,12 +351,19 @@ export function Sidebar({ session, variant = "desktop", avatarUrl }: SidebarProp
   };
 
   return (
+    <div
+      className={cn(variant === "mobile" ? "contents" : cn("hidden lg:block relative shrink-0", montado && "transition-[width] duration-200 ease-in-out", estado.recolhido ? "lg:w-16" : "lg:w-[280px]"))}
+      onMouseEnter={variant === "desktop" ? () => setHover(true) : undefined}
+      onMouseLeave={variant === "desktop" ? () => setHover(false) : undefined}
+      data-menu-lateral={variant === "desktop" ? (flutuando ? "hover" : colapsada ? "recolhido" : "aberto") : undefined}
+      data-menu-preferencia={variant === "desktop" ? preferencia ?? "automatico" : undefined}
+    >
     <aside
       aria-label="Menu principal"
       className={cn(
         "flex flex-col bg-white text-ink border-r border-surface-border shrink-0",
         montado && "transition-[width] duration-200 ease-in-out",
-        variant === "mobile" ? "w-72 h-full" : cn("hidden lg:flex", colapsada ? "lg:w-16" : "lg:w-[280px]"),
+        variant === "mobile" ? "w-72 h-full" : cn("h-full", colapsada ? "w-16" : "w-[280px]", flutuando && "absolute inset-y-0 left-0 z-40 shadow-elevated"),
       )}
     >
       {/* Toggle recolher/expandir (desktop) */}
@@ -353,11 +371,12 @@ export function Sidebar({ session, variant = "desktop", avatarUrl }: SidebarProp
         <div className={cn("flex items-center px-3 pt-3", colapsada ? "justify-center" : "justify-end")}>
           <button
             onClick={toggleRecolher}
-            title={colapsada ? "Expandir menu" : "Recolher menu"}
-            aria-label={colapsada ? "Expandir menu" : "Recolher menu"}
+            title={estado.recolhido ? "Fixar o menu aberto" : "Recolher menu"}
+            aria-label={estado.recolhido ? "Fixar o menu aberto" : "Recolher menu"}
+            data-alternar-menu
             className="p-1.5 rounded-lg text-ink-muted hover:bg-surface-page hover:text-ink transition-colors"
           >
-            {colapsada ? <PanelLeftOpen className="w-5 h-5" /> : <PanelLeftClose className="w-5 h-5" />}
+            {estado.recolhido ? <PanelLeftOpen className="w-5 h-5" /> : <PanelLeftClose className="w-5 h-5" />}
           </button>
         </div>
       )}
@@ -565,6 +584,7 @@ export function Sidebar({ session, variant = "desktop", avatarUrl }: SidebarProp
         </div>
       </div>
     </aside>
+    </div>
   );
 }
 

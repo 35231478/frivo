@@ -1,5 +1,6 @@
 "use client";
 
+import { CAMADA } from "@/lib/ui/camadas";
 import { useEffect, useRef } from "react";
 import { cn } from "@/lib/utils";
 import { X } from "lucide-react";
@@ -40,7 +41,7 @@ export function Modal({ aberto, onFechar, titulo, children, tamanho = "md" }: Mo
   return (
     // text-left/whitespace-normal: o modal é renderizado no lugar do botão (ex.: célula "Ações" alinhada à
     // direita e sem quebra de linha) e não pode herdar esse alinhamento
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 text-left whitespace-normal" role="dialog" aria-modal="true">
+    <div className={cn("fixed inset-0 flex items-center justify-center p-4 text-left whitespace-normal", CAMADA.modal)} role="dialog" aria-modal="true" data-modal>
       <div className="absolute inset-0 bg-ink/40" onClick={onFechar} />
       <div ref={painelRef} className={cn(
         "relative bg-white rounded-card border border-surface-border shadow-elevated w-full max-h-[90vh] overflow-y-auto",

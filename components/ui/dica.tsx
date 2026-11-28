@@ -1,5 +1,6 @@
 "use client";
 
+import { CAMADA } from "@/lib/ui/camadas";
 import { useEffect, useId, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { Info } from "lucide-react";
@@ -128,7 +129,7 @@ export function Dica({ texto, rotulo, className, lado = "centro" }: {
           style={pos}
           data-dica-texto
           onPointerLeave={(e) => { if (e.pointerType === "mouse" && !botao.current?.contains(e.relatedTarget as Node | null)) fechar(); }}
-          className="fixed z-[80] rounded-lg bg-ink px-3 py-2 text-xs font-normal leading-relaxed text-white shadow-elevated normal-case tracking-normal text-left whitespace-normal"
+          className={`fixed ${CAMADA.flutuante} rounded-lg bg-ink px-3 py-2 text-xs font-normal leading-relaxed text-white shadow-elevated normal-case tracking-normal text-left whitespace-normal`}
         >
           {texto}
         </span>,

@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
+import { useAvisoSairSemSalvar } from "@/components/ui/proteger-saida";
 import { useRouter } from "next/navigation";
 import { PageHeader } from "@/components/ui/page-header";
 import { Button } from "@/components/ui/button";
@@ -42,6 +43,9 @@ const opcaoEquip = (e: EquipItem): OpcaoCadastro => ({ value: e.id, label: rotul
 const DICA_EQUIPAMENTOS = "Opcional na abertura: os equipamentos podem ser vinculados durante a execução, pelo QR Code ou pela lista. Para concluir a OS, ao menos um equipamento precisa ser atendido, com o checklist respondido.";
 
 export default function NovaOrdemPage() {
+  // Sair sem salvar (lib/ui/sair-sem-salvar): o aviso de toda tela de edição
+  const raizRef = useRef<HTMLDivElement>(null);
+  useAvisoSairSemSalvar(raizRef);
   const router = useRouter();
   // Campo-ponte: a empresa sem o módulo Equipamentos não vê vínculo nem seletor de equipamento
   const temEquipamentos = useModulos().tem("equipamentos");
@@ -208,7 +212,7 @@ export default function NovaOrdemPage() {
   }
 
   return (
-    <div className="max-w-3xl mx-auto">
+    <div ref={raizRef} className="max-w-3xl mx-auto">
       <PageHeader
         title={solicitacao ? `Aceitar solicitação ${solicitacao.numero}` : "Nova ordem de serviço"}
         backHref={solicitacao ? "/calendario" : "/ordens"}

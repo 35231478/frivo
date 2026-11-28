@@ -201,7 +201,7 @@ describe.skipIf(!URL_PG)("pontas soltas de cadastro (PostgreSQL real)", () => {
   it("busca pelo fantasia: OS, orçamentos e contratos (o where da lista) e o seletor de clientes — só da empresa", async () => {
     const { whereOrdens, whereOrcamentos, whereContratos } = await import("@/lib/listas/filtros");
     const busca = "mercado do zé";
-    expect((await prisma.ordemServico.findMany({ where: whereOrdens("e1", { busca }), select: { id: true }, orderBy: { id: "asc" } })).map((o: any) => o.id)).toEqual(["os-l4-1", "os-l4-2"]);
+    expect((await prisma.ordemServico.findMany({ where: whereOrdens("e1", { busca, periodo: "todos" }) /* Leva I: o mês olha a data agendada */, select: { id: true }, orderBy: { id: "asc" } })).map((o: any) => o.id)).toEqual(["os-l4-1", "os-l4-2"]);
     expect((await prisma.orcamento.findMany({ where: whereOrcamentos("e1", { busca }), select: { id: true } })).map((o: any) => o.id)).toEqual(["orc1"]);
     expect((await prisma.contrato.findMany({ where: whereContratos("e1", { busca }), select: { id: true } })).map((o: any) => o.id)).toEqual(["ct1"]);
     como();

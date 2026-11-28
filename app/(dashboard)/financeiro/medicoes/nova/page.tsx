@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { ProtegerSaida } from "@/components/ui/proteger-saida";
 import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
 import { pode } from "@/lib/permissoes";
@@ -37,12 +38,12 @@ export default async function NovaMedicaoPage({
   ]);
 
   return (
-    <MedicaoForm
+    <ProtegerSaida><MedicaoForm
       mode="novo"
       clientes={clientes}
       catalogoServicos={servicos.map((s) => ({ ...s, valorPadrao: s.valorPadrao ? Number(s.valorPadrao) : null }))}
       catalogoProdutos={produtos.map((p) => ({ ...p, valorPadrao: p.valorPadrao ? Number(p.valorPadrao) : null }))}
       clienteIdInicial={clienteId}
-    />
+    /></ProtegerSaida>
   );
 }

@@ -1,5 +1,6 @@
 "use client";
 
+import { CAMADA } from "@/lib/ui/camadas";
 import { createContext, useCallback, useContext, useEffect, useId, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { cn } from "@/lib/utils";
@@ -97,7 +98,7 @@ export function Drawer({ aberto, onFechar, titulo, children, largura, rodape, ab
   if (!montado || typeof document === "undefined") return null;
 
   return createPortal(
-    <div className="fixed inset-0 z-[60]">
+    <div className={cn("fixed inset-0", CAMADA.gaveta)}>
       <div
         onClick={onFechar}
         className={cn("absolute inset-0 bg-ink/40 transition-opacity duration-300", entrando ? "opacity-100" : "opacity-0")}

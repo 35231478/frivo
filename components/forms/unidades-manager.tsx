@@ -3,7 +3,10 @@
 import { InativarRegistro } from "@/components/ui/inativar-registro";
 import { SecaoInativos } from "@/components/forms/secao-inativos";
 import { useState, useEffect, useCallback } from "react";
-import { buscarCep, cepCompleto, formatarCep } from "@/lib/cep";
+
+import { enderecoDoCep } from "@/lib/cep";
+import { CampoCep } from "@/components/ui/campo-cep";
+
 import { useAutoGeocode } from "@/hooks/use-auto-geocode";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -14,10 +17,12 @@ import { MapaEndereco } from "@/components/ui/mapa-endereco";
 import { EnderecoAutocomplete, type EnderecoSelecionado } from "@/components/ui/endereco-autocomplete";
 import { haversine, formatarDistancia } from "@/lib/geo";
 import type { Unidade } from "@prisma/client";
-import { Plus, Pencil, X, Check, Navigation, Search, MapPin } from "lucide-react";
+import { Plus, Pencil, X, Check, Navigation, MapPin } from "lucide-react";
 import { enderecoEmUmaLinha } from "@/lib/clientes/ficha";
 import { MODOS_PEDIDO, ROTULO_HERDA, ROTULO_MODO_PEDIDO } from "@/lib/pedido-cliente/regra";
 import { cn, comparaNatural } from "@/lib/utils";
+
+const CAMPOS_ENDERECO_UNIDADE = { logradouro: "logradouro", bairro: "bairro", cidade: "cidade", estado: "estado" } as const;
 
 const ESTADOS_BR = [
   "AC","AL","AP","AM","BA","CE","DF","ES","GO","MA","MT","MS","MG",
@@ -82,7 +87,6 @@ export function UnidadesManager({ clienteId, unidadesIniciais, inativosIniciais 
   const [form, setForm] = useState<UnidadeFormData>(emptyForm);
   const [erro, setErro] = useState("");
   const [salvando, setSalvando] = useState(false);
-  const [buscandoCep, setBuscandoCep] = useState(false);
   const [empresaCoords, setEmpresaCoords] = useState<EmpresaCoords>({ latitude: null, longitude: null });
 
   useEffect(() => {
@@ -147,23 +151,6 @@ export function UnidadesManager({ clienteId, unidadesIniciais, inativosIniciais 
 
   function updateField(field: keyof UnidadeFormData, value: any) {
     setForm((f) => ({ ...f, [field]: value }));
-  }
-
-  async function buscarCepDaUnidade(cep = form.cep) {
-    if (!cepCompleto(cep)) return;
-    setBuscandoCep(true);
-    try {
-      const d = await buscarCep(cep);
-      if (!d) return; // sem rede ou CEP que não existe: a pessoa digita
-      setForm((f) => ({
-        ...f,
-        logradouro: d.logradouro || f.logradouro,
-        bairro: d.bairro || f.bairro,
-        cidade: d.cidade || f.cidade,
-        estado: d.estado || f.estado,
-        complemento: d.complemento || f.complemento,
-      }));
-    } finally { setBuscandoCep(false); }
   }
 
   function handleEnderecoSelect(e: EnderecoSelecionado) {
@@ -234,7 +221,6 @@ export function UnidadesManager({ clienteId, unidadesIniciais, inativosIniciais 
     return comparaNatural(a.nome, b.nome);
   });
 
-
   function renderFormInline() {
     return (
       <div className="border border-frivo-200 bg-frivo-50/30 rounded-lg p-4 space-y-4">
@@ -255,15 +241,8 @@ export function UnidadesManager({ clienteId, unidadesIniciais, inativosIniciais 
         </FormGrid>
 
         <FormGrid cols={3}>
-          <FormField label="CEP">
-            <div className="flex gap-2">
-              <Input value={form.cep} onChange={(e) => { const v = formatarCep(e.target.value); updateField("cep", v); if (cepCompleto(v) && !cepCompleto(form.cep)) void buscarCepDaUnidade(v); }}
-                placeholder="00000-000" maxLength={9} inputMode="numeric" aria-label="CEP do endereço" />
-              <Button type="button" variant="secondary" loading={buscandoCep} onClick={() => buscarCepDaUnidade()} className="shrink-0 px-3" aria-label="Consultar o CEP">
-                {!buscandoCep && <Search className="w-4 h-4" />}
-              </Button>
-            </div>
-          </FormField>
+          <CampoCep valor={form.cep} onValor={(v) => updateField("cep", v)}
+            onEndereco={(d) => setForm((f) => ({ ...f, ...enderecoDoCep(f, d, CAMPOS_ENDERECO_UNIDADE) }))} />
           <FormField label="Logradouro" className="sm:col-span-2">
             <EnderecoAutocomplete
               value={form.logradouro}

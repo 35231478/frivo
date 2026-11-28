@@ -104,7 +104,7 @@ describe.skipIf(!URL_PG)("COM-1 — Ver só os próprios: nada vaza entre vended
     logar("uAna");
     expect(ids((await chamar("ordens", "GET")).json)).toEqual(["osCriadaAna", "osDaVendaAna", "osVendaAna"]);
     expect((await chamar("ordens", "GET", {}, undefined, "?busca=OS-osBeto")).json).toEqual([]);
-    const csv = (await chamar("ordens/export", "GET", {}, undefined, "?status=")).texto;
+    const csv = (await chamar("ordens/export", "GET", {}, undefined, "?status=&periodo=todos") /* Leva I: OS sem agendamento */).texto;
     expect(csv).toContain("OS-osVendaAna");
     expect(csv).not.toMatch(/OS-osBeto|OS-osSemDono/);
     logar("uBeto"); expect(ids((await chamar("ordens", "GET")).json)).toEqual(["osBeto"]);
@@ -114,7 +114,7 @@ describe.skipIf(!URL_PG)("COM-1 — Ver só os próprios: nada vaza entre vended
 
   it("seleção em massa: 'ids do filtro' só conta os próprios; exportar/alterar ids do outro não passa", async () => {
     logar("uAna");
-    const filtro = await chamar("acoes-massa", "POST", {}, { entidade: "ordens", acao: "ids-do-filtro", filtro: "" });
+    const filtro = await chamar("acoes-massa", "POST", {}, { entidade: "ordens", acao: "ids-do-filtro", filtro: "periodo=todos" } /* Leva I: OS sem agendamento */);
     expect(filtro.json.total).toBe(3);
     expect(filtro.json.ids).not.toContain("osBeto");
     const exp = await chamar("acoes-massa", "POST", {}, { entidade: "orcamentos", acao: "exportar", ids: ["oAna", "oBeto"] });

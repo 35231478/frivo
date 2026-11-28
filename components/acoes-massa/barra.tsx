@@ -209,7 +209,7 @@ function ExecucaoMassa({ acao, ids, podeImprimirQr, onFechar }: { acao: AcaoItem
   const [um, varios] = def.resultado ?? ["feita", "feitas"];
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-4" role="dialog" aria-modal="true" aria-label={`${def.rotulo} em massa`} data-modal-massa={etapa}>
+    <div className="fixed inset-0 z-[70] flex items-end sm:items-center justify-center sm:p-4" role="dialog" aria-modal="true" aria-label={`${def.rotulo} em massa`} data-modal-massa={etapa}>
       <div className="absolute inset-0 bg-ink/40" onClick={() => etapa === "confirmar" && onFechar(false)} />
       <div className={cn("relative bg-white w-full rounded-t-card sm:rounded-card border border-surface-border shadow-elevated max-h-[92vh] overflow-y-auto",
         def.formulario ? "sm:max-w-2xl" : "sm:max-w-lg")}>

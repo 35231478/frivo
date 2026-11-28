@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { ProtegerSaida } from "@/components/ui/proteger-saida";
 import { notFound, redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
 import { pode } from "@/lib/permissoes";
@@ -95,7 +96,7 @@ export default async function EditarColaboradorPage({ params }: { params: Promis
           Este colaborador está <strong>inativo</strong>: não aparece nas listas nem nos seletores de técnico. Use “Reativar” para voltar a usá-lo.
         </div>
       )}
-      <ColaboradorForm
+      <ProtegerSaida><ColaboradorForm
         key={`${colaborador.ativo}-${colaborador.statusColaborador}`} initialData={initialData}
         somenteLeitura={!pode(user.permissoes, "equipes", "gerenciar", user.role)}
         podeFolha={podeFolha}
@@ -112,7 +113,7 @@ export default async function EditarColaboradorPage({ params }: { params: Promis
         emitidosIniciais={emitidos}
         podeExcluirDocumento={podeExcluirDocumento}
         contratoAssinado={contratoAssinado}
-      />
+      /></ProtegerSaida>
     </div>
   );
 }

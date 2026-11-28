@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { ProtegerSaida } from "@/components/ui/proteger-saida";
 import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
 import { pode } from "@/lib/permissoes";
@@ -13,7 +14,7 @@ export default async function NovaEquipePage() {
   return (
     <div className="max-w-3xl mx-auto">
       <PageHeader title="Nova equipe" description="Monte uma equipe de campo" backHref="/equipes" />
-      <EquipeForm />
+      <ProtegerSaida><EquipeForm /></ProtegerSaida>
     </div>
   );
 }
