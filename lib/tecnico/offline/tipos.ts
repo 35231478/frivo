@@ -121,10 +121,19 @@ export interface ExecucaoTela {
   materiais?: MaterialTela[];
   /** Comentários da OS (conversa interna com o escritório); ausente em retratos antigos */
   comentarios?: ComentarioTela[];
+  /** D1: a pausa aberta (null = em execução); ausente em retratos antigos */
+  pausa?: PausaTela | null;
+  /** D1: a visita foi encerrada como "Não concluída — precisa voltar" neste aparelho (ainda na fila ou já enviada) */
+  naoConcluida?: { motivo: string; em: string } | null;
 }
+
+/** A pausa aberta da atividade (D1) */
+export interface PausaTela { clientId: string; motivo: string; impedimento: boolean; inicio: string; observacao?: string | null; pendente?: boolean }
 
 /** O que o servidor manda (e o aparelho guarda) de uma atividade */
 export interface RetratoAtividade {
+  /** D1: os motivos de pausa da empresa (ativos, na ordem); ausente em retratos antigos */
+  motivosPausa?: { id: string; nome: string; tipo: "IMPEDIMENTO" | "INTERVALO"; pedeTexto: boolean }[];
   cartao: CartaoTela;
   execucao: ExecucaoTela;
   equipamentosUnidade: EquipamentoUnidade[];

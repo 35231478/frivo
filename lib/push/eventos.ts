@@ -17,7 +17,7 @@ import { prisma } from "@/lib/prisma";
 import { whereAtividadesEsquecidas } from "@/lib/execucao/andamento-server";
 import { enviarPush, usuariosComAparelho, usuariosDosTecnicos } from "@/lib/push/servidor";
 import {
-  aceiteMereceAviso, msgAceite, msgComentario, msgDespesa, msgEsquecida, msgEstoqueNegativo, msgOsCancelada, msgOsNova,
+  aceiteMereceAviso, msgAceite, msgComentario, msgDespesa, msgEsquecida, msgEstoqueNegativo, msgImpedimento, msgOsCancelada, msgOsNova,
   msgOsReagendada, msgPedidoRecebido, msgRespostaOrcamento, msgSolicitacaoPortal, urlAppAtividade, urlOs,
   type MensagemPush, type QuemRecebe, type SituacaoDespesa,
 } from "@/lib/push/tipos";
@@ -295,6 +295,19 @@ export async function notificarPedidoRecebido(empresaId: string, pedidoId: strin
     : "/ordens?pedido=conferir&periodo=todos";
   return enviarPush({ empresaId, tipo: "PEDIDO_CLIENTE", alcance: "escritorio", usuarios: await usuariosComAparelho(empresaId), chave: `pedido-cliente:${p.id}`,
     mensagem: msgPedidoRecebido({ pedidoId: p.id, numero: p.numero, cliente: nomeCliente(p.cliente), itens, url }) });
+}
+
+/** Pausa por IMPEDIMENTO no app do técnico: avisa o escritório (um aviso por pausa; almoço não avisa). */
+export function notificarImpedimento(pausaId: string) {
+  agendarPush(async () => {
+    const p = await prisma.atividadePausa.findUnique({ where: { id: pausaId }, select: {
+      empresaId: true, motivo: true, observacao: true, impedimento: true,
+      atividade: { select: { ordemServicoId: true, ordemServico: { select: { numero: true } }, tecnico: { select: { nome: true } } } },
+    } });
+    if (!p || !p.impedimento) return;
+    await enviarPush({ empresaId: p.empresaId, tipo: "IMPEDIMENTO", alcance: "escritorio", usuarios: await usuariosComAparelho(p.empresaId), chave: `impedimento:${pausaId}`,
+      mensagem: msgImpedimento({ osNumero: p.atividade.ordemServico.numero, tecnico: p.atividade.tecnico?.nome, motivo: p.motivo, observacao: p.observacao, osId: p.atividade.ordemServicoId }) });
+  });
 }
 
 /** O material lançado em campo deixou o produto negativo: um aviso por produto por dia. */

@@ -9,6 +9,8 @@
  *    próxima rodada (não se conclui com uma resposta anterior pendente); as de outras atividades seguem;
  *  - a execução é do técnico: a gravação dele vale (a última), item a item.
  */
+import { naoConcluidaSchema, pausarSchema, retomarSchema } from "@/lib/pausas/regras";
+import { naoConcluirAtividade, pausarAtividade, retomarAtividade } from "@/lib/pausas/servidor";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { carregarContexto, type Ator } from "@/lib/execucao/contexto";
@@ -73,6 +75,11 @@ export const operacaoSchema = z.discriminatedUnion("tipo", [
   z.object({ ...base, tipo: z.literal("comentario"), dados: comentarioSchema }).strict(),
   // Despesa de campo com a foto do cupom: numa atividade (vai para a OS dela) ou fora de OS (atividadeId = "sem-os")
   z.object({ ...base, tipo: z.literal("despesa"), dados: despesaSchema }).strict(),
+  // D1: pausar (motivo da lista da empresa), retomar e encerrar a visita como "Não concluída — precisa voltar".
+  // `clientId` da pausa gerado no aparelho: reenviar não cria outra pausa; retomar/encerrar apontam para ele
+  z.object({ ...base, tipo: z.literal("pausar"), dados: pausarSchema.strict() }).strict(),
+  z.object({ ...base, tipo: z.literal("retomar"), dados: retomarSchema.strict() }).strict(),
+  z.object({ ...base, tipo: z.literal("naoConcluida"), dados: naoConcluidaSchema.strict() }).strict(),
   z.object({ ...base, tipo: z.literal("concluir"), dados: concluirSchema }).strict(),
   // Aceite do cliente no local: nome + assinatura desenhada no aparelho, depois de concluir
   z.object({ ...base, tipo: z.literal("aceite"), dados: aceiteLocalSchema }).strict(),
@@ -118,6 +125,9 @@ async function executar(ator: Ator, op: Operacao, lote: OpcoesLote): Promise<Res
   if (!ctx.ok) return { ok: false, status: ctx.status, erro: ctx.erro };
   switch (op.tipo) {
     case "iniciar": return iniciarAtividade(ctx, { em: op.em, agoraAparelho: lote.agoraAparelho });
+    case "pausar": return pausarAtividade(ctx, op.dados, { em: op.em, agoraAparelho: lote.agoraAparelho });
+    case "retomar": return retomarAtividade(ctx, op.dados, { em: op.em, agoraAparelho: lote.agoraAparelho });
+    case "naoConcluida": return naoConcluirAtividade(ctx, op.dados, { em: op.em, agoraAparelho: lote.agoraAparelho });
     case "avisoCliente": return avisarCliente(ctx, op.dados, { em: op.em, agoraAparelho: lote.agoraAparelho });
     case "resposta": return responderItem(ctx, op.itemId, op.dados);
     case "audio": return gravarAudio(ctx, op.itemId, op.dataUrl);

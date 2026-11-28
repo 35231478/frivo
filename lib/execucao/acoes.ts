@@ -25,6 +25,7 @@ import { temModulo } from "@/lib/modulos/servidor";
 import { MSG_MODULO_DESLIGADO } from "@/lib/modulos/catalogo";
 import { marcarItensAoConcluirUltima } from "@/lib/execucao/itens-ao-concluir";
 import { sincronizarStatusOs } from "@/lib/os/sincronizar-status";
+import { fecharPausaAoConcluir } from "@/lib/pausas/servidor";
 import { equipamentosDaOs } from "@/lib/os/galeria-server";
 import { limparLegenda, MSG_EQUIPAMENTO_FORA, MSG_LEGENDA, nomeArquivoFoto } from "@/lib/os/galeria";
 
@@ -633,6 +634,8 @@ export async function concluirAtividade(ctx: ContextoExecucao, d: z.infer<typeof
     concluidaEm = new Date(Math.min(new Date(d.terminoEm).getTime(), toque.getTime()));
   }
   await prisma.atividadeOs.update({ where: { id: atividade.id }, data: { status: "CONCLUIDA", concluidaEm, ...(resumo !== undefined && { resumo }) } });
+  // D1: concluiu pausada (esqueceu de retomar): a pausa fecha na hora da conclusão
+  await fecharPausaAoConcluir(atividade.id, concluidaEm, ctx.usuarioId);
   await prisma.osHistorico.create({
     data: { ordemServicoId: atividade.ordemServico.id, usuarioId: ctx.usuarioId, acao: "Status da atividade alterado", detalhes: `"${atividade.titulo}": ${atividade.status} → CONCLUIDA` },
   });
