@@ -17,6 +17,8 @@ import { lerDanfe } from "@/lib/compras/danfe";
 
 (globalThis as any).IS_REACT_ACT_ENVIRONMENT = true;
 const nav = vi.hoisted(() => ({ replace: vi.fn(), push: vi.fn(), qs: "" }));
+const avisos = vi.hoisted(() => ({ toasts: [] as [string, string | undefined][] }));
+vi.mock("@/components/ui/avisos", async (original) => ({ ...(await original<object>()), toast: vi.fn((m: string, t?: string) => { avisos.toasts.push([m, t]); }) }));
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: nav.push, refresh: () => {}, replace: nav.replace, back: () => {} }),
   usePathname: () => "/estoque/notas", useSearchParams: () => new URLSearchParams(nav.qs),
@@ -207,11 +209,31 @@ describe("lista de notas: a visualização rápida", () => {
     expect(txt($("[data-danfe-totais]"))).toContain("Total da notaR$ 1.749,30");
     expect(txt($("[data-danfe-totais]"))).toContain("ICMSR$ 314,87");
     expect($("[data-copiar='Copiar chave']")).not.toBeNull();
-    expect($("[data-baixar-pdf]")!.getAttribute("href")).toBe("/api/compras/notas/n1/danfe");
-    expect($("[data-baixar-xml]")!.getAttribute("href")).toBe("/api/compras/notas/n1/xml");
-    expect($("[data-baixar-pdf]")!.hasAttribute("download")).toBe(true);
+    // Baixar PDF/XML vão por fetch (pronto-janeiro-3): a recusa da rota aparece na tela, não como "download falhou"
+    expect($("[data-baixar-pdf]")!.tagName).toBe("BUTTON");
+    expect($("[data-baixar-xml]")!.tagName).toBe("BUTTON");
     expect($("[data-abrir-nota]")!.getAttribute("href")).toBe("/estoque/notas/n1");
     expect($("[data-pedido-nota]")!.getAttribute("href")).toBe("/compras/pedidos/pc1");
+  });
+
+  it("pronto-janeiro-3: Baixar PDF/XML — a rota responde o arquivo; recusou, o motivo dela aparece (toast de erro)", async () => {
+    avisos.toasts.length = 0;
+    respostas["/api/compras/notas/n1/visualizar"] = { status: 200, corpo: visualizacao(true) };
+    respostas["/api/compras/notas/n1/danfe"] = { status: 500, corpo: { erro: "Não foi possível gerar a DANFE desta nota." } };
+    respostas["/api/compras/notas/n1/xml"] = { status: 200, corpo: { xml: true } };
+    const criados: string[] = [];
+    vi.stubGlobal("URL", Object.assign(globalThis.URL, { createObjectURL: () => { criados.push("blob"); return "blob:x"; }, revokeObjectURL: () => {} }));
+    await lista();
+    await clicar($('table [data-ver-nota="4521"]'));
+    await esperar();
+    await clicar($("[data-baixar-pdf]"));
+    await esperar();
+    expect(chamadas.some((c) => c.url === "/api/compras/notas/n1/danfe")).toBe(true);
+    expect(avisos.toasts).toEqual([["Não foi possível gerar a DANFE desta nota.", "erro"]]);
+    await clicar($("[data-baixar-xml]"));
+    await esperar();
+    expect(criados).toEqual(["blob"]);
+    expect(avisos.toasts).toHaveLength(1);
   });
 
   it("clicar na linha também abre a gaveta (sem sair da tela); o link da NF continua indo para a nota", async () => {

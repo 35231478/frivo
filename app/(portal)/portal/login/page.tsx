@@ -3,15 +3,17 @@ import { redirect } from "next/navigation";
 import { FrivoLogo } from "@/components/layout/frivo-logo";
 import { PortalLoginForm } from "@/components/portal/portal-login-form";
 import { getPortalSession } from "@/lib/auth-portal";
-import { destinoDoPortal } from "@/lib/portal/senha-provisoria";
+import { destinoDoPortal, destinoSeguroDoPortal } from "@/lib/portal/senha-provisoria";
 
 export const metadata: Metadata = { title: "Portal do cliente — Entrar" };
 export const dynamic = "force-dynamic";
 
-export default async function PortalLoginPage() {
-  // Já logado: o painel do portal, ou a tela de troca se a senha ainda é a provisória (uma decisão só)
+export default async function PortalLoginPage({ searchParams }: { searchParams: Promise<{ destino?: string }> }) {
+  const { destino } = await searchParams;
+  const voltarPara = destinoSeguroDoPortal(destino);
+  // Já logado: para onde ia (link do e-mail), o painel do portal, ou a tela de troca se a senha ainda é a provisória
   const sessao = await getPortalSession({ comTroca: true });
-  if (sessao?.user) redirect(destinoDoPortal(sessao.user));
+  if (sessao?.user) redirect(destinoDoPortal(sessao.user, voltarPara));
 
   return (
     <div className="min-h-screen flex items-center justify-center p-4 bg-surface-page">
@@ -23,7 +25,7 @@ export default async function PortalLoginPage() {
         <div className="bg-white rounded-card shadow-card p-6 md:p-8 border border-surface-border">
           <h1 className="text-lg font-bold text-ink mb-1">Acesse sua conta</h1>
           <p className="text-sm text-ink-muted mb-5">Use o e-mail e a senha fornecidos pela empresa.</p>
-          <PortalLoginForm />
+          <PortalLoginForm destino={voltarPara} />
         </div>
         <p className="text-center text-xs text-ink-muted mt-6">Acompanhe suas ordens de serviço, documentos e financeiro.</p>
       </div>

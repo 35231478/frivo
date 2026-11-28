@@ -70,6 +70,7 @@ export default async function NotasCompraPage({ searchParams }: { searchParams: 
         {descartes.length > 0 && (
           <details className="card px-4 py-3 text-sm" data-descartes>
             <summary className="cursor-pointer text-ink-muted font-medium">Notas descartadas ({descartes.length}{descartes.length === 20 ? " mais recentes" : ""})</summary>
+            <p className="mt-1 text-xs text-ink-muted" data-descartes-recuperar>Para recuperar uma nota descartada, importe o XML dela de novo.</p>
             <ul className="mt-2 divide-y divide-surface-border">
               {descartes.map((d) => (
                 <li key={d.id} className="py-2 flex flex-wrap items-baseline gap-x-3 gap-y-0.5" data-descarte={d.id}>

@@ -1,13 +1,13 @@
 "use client";
 
 import { useState } from "react";
-import { Building2, CheckCircle2, Plus, AlertCircle } from "lucide-react";
+import { Building2, CheckCircle2, Plus, AlertCircle, X } from "lucide-react";
 import { PageHeader } from "@/components/ui/page-header";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { FormField } from "@/components/ui/form-field";
 import { Modal } from "@/components/ui/modal";
-import { toast } from "@/components/ui/avisos";
+import { confirmar, toast } from "@/components/ui/avisos";
 import { REQUISITOS_SENHA } from "@/lib/acesso/senha";
 import { cn, formatarData } from "@/lib/utils";
 
@@ -28,8 +28,9 @@ export function mascararCnpj(v: string): string {
  * usar (perfis, tipos de OS, configuração) e com o 1º administrador. A senha inicial é do super
  * admin: no 1º login o sistema só abre a tela de troca (lib/acesso/troca-obrigatoria).
  */
-export function EmpresasAdmin({ inicial }: { inicial: EmpresaDaLista[] }) {
+export function EmpresasAdmin({ inicial, empresaDoDono }: { inicial: EmpresaDaLista[]; empresaDoDono?: string }) {
   const [empresas, setEmpresas] = useState(inicial);
+  const [mudando, setMudando] = useState<string | null>(null);
   const [aberto, setAberto] = useState(false);
   const [f, setF] = useState(VAZIO);
   const [erro, setErro] = useState("");
@@ -60,6 +61,23 @@ export function EmpresasAdmin({ inicial }: { inicial: EmpresaDaLista[] }) {
     } catch { setErro("Erro de conexão. Tente novamente."); } finally { setSalvando(false); }
   }
 
+  /** Inativar (ninguém da empresa entra; nada é apagado) ou reativar */
+  async function alterarSituacao(e: EmpresaDaLista) {
+    const nome = e.nomeFantasia || e.nome;
+    const ok = await confirmar(e.ativo
+      ? { mensagem: `Inativar ${nome}? Ninguém da empresa consegue entrar até ser reativada. Nenhum dado é apagado.`, perigo: true, confirmarTexto: "Inativar empresa" }
+      : { mensagem: `Reativar ${nome}? Os usuários ativos dela voltam a entrar.`, confirmarTexto: "Reativar empresa" });
+    if (!ok) return;
+    setMudando(e.id);
+    try {
+      const res = await fetch(`/api/admin/empresas/${e.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ativo: !e.ativo }) });
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok) { toast(d.erro ?? "Não foi possível alterar a empresa.", "erro"); return; }
+      setEmpresas((lista) => lista.map((x) => (x.id === e.id ? { ...x, ativo: d.ativo } : x)));
+      toast(d.ativo ? "Empresa reativada." : "Empresa inativada.");
+    } catch { toast("Erro de conexão. Tente novamente.", "erro"); } finally { setMudando(null); }
+  }
+
   return (
     <div className="max-w-5xl mx-auto" data-admin-empresas>
       <PageHeader title="Empresas" description="Área do administrador do Frivo: empresas cadastradas e criação de uma empresa nova" backHref="/dashboard"
@@ -68,38 +86,55 @@ export function EmpresasAdmin({ inicial }: { inicial: EmpresaDaLista[] }) {
       {criada && (
         <div className="mb-4 rounded-card border border-ok/30 bg-ok-claro px-4 py-3 text-sm text-ok-texto flex gap-2" role="status" data-empresa-criada>
           <CheckCircle2 className="w-4 h-4 mt-0.5 shrink-0" aria-hidden />
-          <div>
+          <div className="flex-1">
             <p><strong>{criada.nome}</strong> criada com {criada.perfis} perfis de acesso e {criada.tiposOs} tipos de OS.</p>
             <p className="mt-1">Entregue ao administrador o login <strong>{criada.adminEmail}</strong> e a senha inicial. No primeiro acesso, o sistema pede que ele crie a própria senha.</p>
           </div>
+          <button type="button" onClick={() => setCriada(null)} className="shrink-0 -my-2 -mr-2 min-h-[44px] min-w-[44px] inline-flex items-center justify-center text-ok-texto hover:opacity-80" aria-label="Fechar aviso" data-fechar-aviso>
+            <X className="w-4 h-4" aria-hidden />
+          </button>
         </div>
       )}
 
-      <div className="bg-white rounded-card border border-surface-border overflow-x-auto">
+      <div className="bg-white rounded-card border border-surface-border md:overflow-x-auto">
         {empresas.length === 0 ? (
           <p className="p-6 text-sm text-ink-muted text-center">Nenhuma empresa cadastrada.</p>
         ) : (
-          <table className="w-full text-sm" data-lista-empresas>
+          <>
+          <table className="w-full text-sm hidden md:table" data-lista-empresas>
             <thead className="text-left text-xs text-ink-muted border-b border-surface-linha">
-              <tr><th className="px-4 py-2.5 font-medium">Empresa</th><th className="px-4 py-2.5 font-medium">CNPJ</th><th className="px-4 py-2.5 font-medium">Usuários</th><th className="px-4 py-2.5 font-medium">Criada em</th></tr>
+              <tr><th className="px-4 py-2.5 font-medium">Empresa</th><th className="px-4 py-2.5 font-medium">CNPJ</th><th className="px-4 py-2.5 font-medium">Usuários</th><th className="px-4 py-2.5 font-medium">Criada em</th><th className="px-4 py-2.5"><span className="sr-only">Ações</span></th></tr>
             </thead>
             <tbody>
               {empresas.map((e) => (
-                <tr key={e.id} className="border-b border-surface-linha last:border-0">
+                <tr key={e.id} className="border-b border-surface-linha last:border-0" data-empresa={e.id}>
                   <td className="px-4 py-2.5">
                     <span className="flex items-center gap-2"><Building2 className="w-4 h-4 text-ink-subtle shrink-0" aria-hidden />
                       <span className="font-medium text-ink">{e.nomeFantasia || e.nome}</span>
-                      {!e.ativo && <span className="text-[10px] font-semibold bg-surface-alt text-ink-muted px-2 py-0.5 rounded-full">Inativa</span>}
+                      {!e.ativo && <SeloInativa />}
                     </span>
                     {e.nomeFantasia && <span className="block text-xs text-ink-muted ml-6">{e.nome}</span>}
                   </td>
                   <td className="px-4 py-2.5 tabular-nums text-ink-muted whitespace-nowrap">{e.cnpj}</td>
                   <td className="px-4 py-2.5 tabular-nums">{e.usuarios}</td>
                   <td className="px-4 py-2.5 text-ink-muted whitespace-nowrap">{formatarData(e.criadoEm)}</td>
+                  <td className="px-4 py-2.5 text-right"><BotaoSituacao e={e} propria={e.id === empresaDoDono} alterar={alterarSituacao} ocupado={mudando === e.id} /></td>
                 </tr>
               ))}
             </tbody>
           </table>
+          {/* Celular: um cartão por empresa, sem rolagem lateral */}
+          <ul className="md:hidden divide-y divide-surface-linha" data-cartoes-empresas>
+            {empresas.map((e) => (
+              <li key={e.id} className="p-4 space-y-1" data-empresa={e.id}>
+                <p className="flex items-center gap-2 font-medium text-ink"><Building2 className="w-4 h-4 text-ink-subtle shrink-0" aria-hidden /> {e.nomeFantasia || e.nome} {!e.ativo && <SeloInativa />}</p>
+                {e.nomeFantasia && <p className="text-xs text-ink-muted">{e.nome}</p>}
+                <p className="text-xs text-ink-muted tabular-nums">{e.cnpj} · {e.usuarios} {e.usuarios === 1 ? "usuário" : "usuários"} · criada em {formatarData(e.criadoEm)}</p>
+                <div className="pt-1"><BotaoSituacao e={e} propria={e.id === empresaDoDono} alterar={alterarSituacao} ocupado={mudando === e.id} /></div>
+              </li>
+            ))}
+          </ul>
+          </>
         )}
       </div>
 
@@ -148,5 +183,17 @@ export function EmpresasAdmin({ inicial }: { inicial: EmpresaDaLista[] }) {
         </form>
       </Modal>
     </div>
+  );
+}
+
+const SeloInativa = () => <span className="text-[10px] font-semibold bg-surface-alt text-ink-muted px-2 py-0.5 rounded-full" data-empresa-inativa>Inativa</span>;
+
+/** Inativar / Reativar: a empresa do próprio dono do Frivo não oferece inativar */
+function BotaoSituacao({ e, propria, alterar, ocupado }: { e: EmpresaDaLista; propria: boolean; alterar: (e: EmpresaDaLista) => void; ocupado: boolean }) {
+  if (propria && e.ativo) return null;
+  return (
+    <Button type="button" variant="secondary" className="text-xs h-8" loading={ocupado} onClick={() => alterar(e)} data-situacao-empresa={e.ativo ? "inativar" : "reativar"}>
+      {e.ativo ? "Inativar" : "Reativar"}
+    </Button>
   );
 }

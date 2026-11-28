@@ -66,7 +66,8 @@ describe("preço de tabela travado — o que é alteração", () => {
   });
 
   it("na tela: marca só os itens da tabela, trava sem a permissão e guarda o valor gravado", () => {
-    const itens: ItemDaTela[] = [{ catalogoId: "s1", valorUnitario: 120 }, { catalogoId: "s9", valorUnitario: 5 }, { catalogoId: null, valorUnitario: 1 }];
+    // Itens de um orçamento salvo chegam com o valor gravado (o formulário anota ao abrir); o item novo, sem (pronto-janeiro-3)
+    const itens: ItemDaTela[] = [{ catalogoId: "s1", valorUnitario: 120, valorGravado: 120 }, { catalogoId: "s9", valorUnitario: 5 }, { catalogoId: null, valorUnitario: 1 }];
     const tab = { s1: { valorFinal: 150 } };
     const sem = marcarItensDaTabela(itens, tab, false);
     expect(sem[0]).toEqual({ catalogoId: "s1", valorUnitario: 120, origemPreco: "contrato", valorTabela: 150, bloqueado: true, valorGravado: 120 });

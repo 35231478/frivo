@@ -54,7 +54,7 @@ export default async function ExtratoEstoquePage({ params, searchParams }: {
   const filtrado = periodo.tipo !== "todos" || !!busca || !!extrato.tipo || !!extrato.origem;
 
   return (
-    <ListaUrl chave="estoque-extrato" paramBusca="busca" qAtual={busca}>
+    <ListaUrl chave={`estoque-extrato-${produtoId}`} paramBusca="busca" qAtual={busca}>
       <div className="space-y-6">
         <Link href="/estoque" className="inline-flex items-center gap-1 text-sm text-ink-muted hover:text-ink"><ArrowLeft className="w-4 h-4" /> Estoque</Link>
         <div className="flex flex-wrap items-start justify-between gap-3">

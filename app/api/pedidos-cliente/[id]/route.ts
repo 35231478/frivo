@@ -40,6 +40,8 @@ export async function GET(_: NextRequest, { params }: Params) {
     ...resto, ordens, orcamentos, valor, data: p.data.toISOString().slice(0, 10), temAnexo: !!p.anexoNome, total,
     cliente: p.cliente.nomeFantasia ?? p.cliente.nome, alerta: alertaValorPedido(valor, total),
     enviadoPor: contato ? [contato.nome, contato.email].filter(Boolean).join(" · ") : null,
+    // A mesma regra do POST …/conferir: quem não pode conferir não vê Confirmar/Recusar
+    podeConferir: podeInformarPedido(session, { os: p.osPropostas.length > 0, orcamentos: p.orcamentosPropostos.length > 0 }),
   });
 }
 

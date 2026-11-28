@@ -56,7 +56,7 @@ Depois de informado, vira **"Pedido nº X"** (1 clique abre para ver ou corrigir
 - número (obrigatório);
 - data (hoje em Brasília);
 - valor;
-- anexo (PDF ou foto, até 5 MB, com o tipo conferido pelo conteúdo);
+- anexo (PDF ou foto, até 3 MB, com o tipo conferido pelo conteúdo);
 - observação.
 
 **Um pedido cobre várias OS e orçamentos** do mesmo cliente. A gaveta mostra o que ele cobre e o total.

@@ -29,7 +29,8 @@ export async function PUT(req: NextRequest, { params }: Params) {
 
   const parsed = acessoPortalSchema.safeParse(await req.json());
   if (!parsed.success) {
-    return NextResponse.json({ erro: "Dados inválidos", detalhes: parsed.error.flatten() }, { status: 400 });
+    // A mensagem do campo (ex.: "E-mail inválido"), não um "Dados inválidos" genérico
+    return NextResponse.json({ erro: parsed.error.issues[0]?.message ?? "Dados inválidos", detalhes: parsed.error.flatten() }, { status: 400 });
   }
   const d = parsed.data;
 

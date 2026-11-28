@@ -88,8 +88,10 @@ export function PortalShell({ contatoNome, clienteNome, branding, permissoes, pe
           const ativo = pathname === i.href || pathname.startsWith(i.href + "/");
           return (
             <Link key={i.href} href={i.href}
-              className={cn("flex-1 flex flex-col items-center gap-0.5 py-2 text-[10px]", ativo ? "font-semibold text-acento" : "text-ink-muted")}>
-              <i.icone className="w-5 h-5" /> {i.curto ?? i.label}
+              // min-w-0 + truncate: com todas as permissões (7 itens) o rótulo não estoura a largura do celular
+              className={cn("flex-1 min-w-0 flex flex-col items-center gap-0.5 py-2 px-0.5 text-[10px]", ativo ? "font-semibold text-acento" : "text-ink-muted")}
+              title={i.label} data-nav-portal>
+              <i.icone className="w-5 h-5 shrink-0" aria-hidden /> <span className="max-w-full truncate">{i.curto ?? i.label}</span>
             </Link>
           );
         })}

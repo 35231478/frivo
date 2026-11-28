@@ -76,7 +76,7 @@ export async function contarSino({ empresaId, usuarioId, escopo: e, filtroTecnic
   // Empresa sem cliente que exige o pedido: nem consulta
   const contarPedidos = async () => (e.pedidosCliente && await usaPedidoCliente(empresaId)
     ? Promise.all([resumoAguardandoEmpresa(empresaId), contarPedidosAtrasados(empresaId, agora), contarPedidosConferir(empresaId)])
-    : [{ quantidade: 0, total: 0 }, { pedidosAtrasados: 0, pedidoAtrasadoOsId: null, diasAlertaPedido: 0 }, { pedidosConferir: 0, pedidoConferirId: null, pedidoConferirOsId: null }] as const);
+    : [{ quantidade: 0, total: 0 }, { pedidosAtrasados: 0, pedidoAtrasadoOsId: null, diasAlertaPedido: 0 }, { pedidosConferir: 0, pedidoConferirId: null, pedidoConferirOsId: null, pedidoConferirOrcamentoId: null }] as const);
   const whereRespondidos = { empresaId, status: { in: ["APROVADO" as const, "REPROVADO" as const] }, respostaVistaEm: null };
 
   const [prazosBrutos, veiculosBrutos, boletosPagos, respondidos, leadsSite, nfsDoPedido, nfse, faturamentoContratos, reajustesContrato, separacoesPendentes, devolucoesPendentes, pmoc, aceites, admissoes, estoqueNegativoCampo, esquecidas, comentarios, despesasCampo, semTecnico, vencendo, contasPagarHoje, contasReceberHoje, pedidos] = await Promise.all([
@@ -192,6 +192,7 @@ export async function contarSino({ empresaId, usuarioId, escopo: e, filtroTecnic
     pedidosConferir: pedidosConferir.pedidosConferir,
     pedidoConferirId: pedidosConferir.pedidoConferirId,
     pedidoConferirOsId: pedidosConferir.pedidoConferirOsId,
+    pedidoConferirOrcamentoId: pedidosConferir.pedidoConferirOrcamentoId,
   };
   // O total do sino (lidos ou não): os avisos de lib/alertas/lidos › AVISOS_DO_NUMERO; as contas do dia
   // ficam fora (são rotina de todo dia; o painel as mostra)

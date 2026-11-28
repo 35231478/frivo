@@ -233,7 +233,10 @@ export async function notificarPedidoRecebido(empresaId: string, pedidoId: strin
   const p = await prisma.pedidoCliente.findFirst({ where: { id: pedidoId, empresaId, situacao: "CONFERIR" }, select: { id: true, numero: true, osPropostas: true, orcamentosPropostos: true, cliente: { select: { nome: true, nomeFantasia: true } } } });
   if (!p) return null;
   const itens = p.osPropostas.length + p.orcamentosPropostos.length;
-  const url = p.osPropostas.length === 1 && !p.orcamentosPropostos.length ? urlOs(p.osPropostas[0]) : "/ordens?pedido=conferir&periodo=todos";
+  // Uma OS: ela; um orçamento só: ele (a lista de OS não mostra orçamento); o resto: a lista de OS em conferência
+  const url = p.osPropostas.length === 1 && !p.orcamentosPropostos.length ? urlOs(p.osPropostas[0])
+    : !p.osPropostas.length && p.orcamentosPropostos.length === 1 ? `/orcamentos/${p.orcamentosPropostos[0]}`
+    : "/ordens?pedido=conferir&periodo=todos";
   return enviarPush({ empresaId, tipo: "PEDIDO_CLIENTE", alcance: "escritorio", usuarios: await usuariosComAparelho(empresaId), chave: `pedido-cliente:${p.id}`,
     mensagem: msgPedidoRecebido({ pedidoId: p.id, numero: p.numero, cliente: nomeCliente(p.cliente), itens, url }) });
 }

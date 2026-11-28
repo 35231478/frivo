@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { FormField, FormGrid } from "@/components/ui/form-field";
@@ -70,6 +70,18 @@ export function OsOrcamento({ osId, itens: iniciais, clienteId = null, situacao 
   const [salvando, setSalvando] = useState(false);
   const [erro, setErro] = useState("");
   const produtos = useCadastro<ItemCadastro>("produtos");
+  // A tabela de preço do cliente (a mesma rota do orçamento): o item que está nela tem o preço travado ao editar
+  const [tabela, setTabela] = useState<Record<string, { valorFinal: number }> | null>(null);
+  useEffect(() => {
+    if (!clienteId) return;
+    let vivo = true;
+    fetch(`/api/clientes/${clienteId}/tabela-preco`).then((r) => (r.ok ? r.json() : null)).then((d) => { if (vivo) setTabela(d?.itens ?? null); }).catch(() => {});
+    return () => { vivo = false; };
+  }, [clienteId]);
+  const naTabela = (i: { servicoId?: string | null; produtoId?: string | null }) => {
+    const id = i.servicoId ?? i.produtoId;
+    return !!(id && tabela?.[id]);
+  };
 
   const total = itens.reduce((acc, i) => acc + num(i.valorTotal), 0);
   const totalExecutado = itens.filter((i) => i.executado).reduce((acc, i) => acc + num(i.valorTotal), 0);
@@ -143,6 +155,8 @@ export function OsOrcamento({ osId, itens: iniciais, clienteId = null, situacao 
     setEdicao({
       id: i.id, tipo: i.tipo ?? "SERVICO", servicoId: i.servicoId ?? null, produtoId: i.produtoId ?? null, descricao: i.descricao, quantidade: num(i.quantidade),
       valorUnitario: unitarioParaEdicao(i), valorTotal: num(i.valorTotal), valorManual: !!i.valorManual,
+      // Item da tabela do cliente: o editor trava o preço sem a permissão (e mostra "Preço da tabela do cliente")
+      origemPreco: naTabela(i) ? "contrato" : undefined,
       materiais: i.materiais?.length ? i.materiais.map((m) => ({ ...m, quantidade: num(m.quantidade), quantidadePadrao: num(m.quantidadePadrao), valorVendaUnit: num(m.valorVendaUnit), custoUnit: m.custoUnit == null ? null : num(m.custoUnit) })) : (i.tipo ?? "SERVICO") === "SERVICO" && i.servicoId ? [] : undefined,
     });
   };
@@ -155,16 +169,18 @@ export function OsOrcamento({ osId, itens: iniciais, clienteId = null, situacao 
   /** A edição da linha como USO, no painel da leva 1: só o que mudou vai para o servidor */
   const edicaoDaLinha = (i: ItemOs, motivo: string | null): EdicaoDoSelecionado => {
     const comMateriais = !!i.materiais?.length;
+    // Sem o campo de preço: total digitado à mão (muda em "Materiais e peças") ou item da tabela sem "Alterar preço de tabela"
+    const semPreco = (i.valorManual && comMateriais) || (naTabela(i) && !podeAlterarPrecoTabela);
     return {
       escopo: "uso", alvo: ALVO_LINHA, travado: motivo, permissao: { modulo: "ordens", acao: "editar" }, mensagemSucesso: "Item da OS atualizado.",
       campos: [
         { nome: "descricao", label: "Descrição", obrigatorio: true, tipo: "textarea", maxLength: 500 },
         { nome: "quantidade", label: "Quantidade", obrigatorio: true, colunas: 3, inputMode: "decimal" },
         // Linha com total digitado à mão: o preço é esse total (muda em "Materiais e peças")
-        ...(i.valorManual && comMateriais ? [] : [{ nome: "valorUnitario", label: comMateriais ? "Unit. base (R$)" : "Valor unitário (R$)", obrigatorio: true, colunas: 3 as const, inputMode: "decimal" as const }]),
+        ...(semPreco ? [] : [{ nome: "valorUnitario", label: comMateriais ? "Unit. base (R$)" : "Valor unitário (R$)", obrigatorio: true, colunas: 3 as const, inputMode: "decimal" as const }]),
         // Preço que veio da tabela do cliente: mudar pede o motivo (vai para o histórico); sem a permissão, o servidor recusa.
         // Sem o campo de preço (total digitado à mão), não há preço a mudar aqui: sem motivo (como no orçamento)
-        ...(podeAlterarPrecoTabela && !(i.valorManual && comMateriais) ? [{ nome: "motivoPrecoTabela", label: "Motivo (se alterar preço de tabela)", maxLength: 300 }] : []),
+        ...(podeAlterarPrecoTabela && !semPreco ? [{ nome: "motivoPrecoTabela", label: "Motivo (se alterar preço de tabela)", maxLength: 300 }] : []),
       ],
       valores: () => ({ descricao: i.descricao, quantidade: numeroParaCampo(num(i.quantidade)), valorUnitario: numeroParaCampo(unitarioParaEdicao(i), 2), motivoPrecoTabela: "" }),
       async salvar(id, valores, alterados) {

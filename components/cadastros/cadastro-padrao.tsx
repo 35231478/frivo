@@ -1,5 +1,6 @@
 "use client";
 
+import { useFiltrosLembrados } from "@/components/listagem/use-filtros-lembrados";
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState, type ComponentType, type ReactNode } from "react";
 import { corDado } from "@/lib/ui/tokens";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
@@ -19,8 +20,8 @@ import { CheckboxLinha, CheckboxPagina, SelecaoMassaProvider } from "@/component
 import { ENTIDADE, podeAcao, podeExportar, type AcaoItem, type Entidade } from "@/lib/acoes-massa/acoes";
 import { rotuloPermissao } from "@/lib/permissoes";
 import { cn, formatarMoeda } from "@/lib/utils";
-import { lerTamanho, proximaOrdem, TAMANHO_PADRAO, type Ordem } from "@/lib/listagem";
-import { CampoBusca, ListaVazia, lerTamanhoPreferido, Paginacao, SkeletonLista, sugerirPorUrl } from "@/components/listagem/listagem-ui";
+import { lerTamanho, proximaOrdem, type Ordem } from "@/lib/listagem";
+import { CampoBusca, ListaVazia, Paginacao, SkeletonLista, sugerirPorUrl } from "@/components/listagem/listagem-ui";
 import { TabelaPro } from "@/components/listagem/tabela-pro";
 import { PLANILHA } from "@/lib/planilha";
 import { DEBOUNCE_BUSCA_MS } from "@/components/listagem/use-listagem-url";
@@ -147,11 +148,9 @@ function Conteudo({ entidade, Editor, celula, acoesLinha, ajuda, aviso, grupos }
   }
 
   // Itens por página: a preferência lembrada vale ao abrir (se a URL não disser outro)
-  useEffect(() => {
-    const pref = lerTamanhoPreferido();
-    if (!sp.get("por") && pref && pref !== TAMANHO_PADRAO) mudarUrl({ por: String(pref) }, true);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  // Filtros lembrados (aba, busca, ordem, itens por página): o mesmo hook de todas as listas — sair e voltar no mesmo
+  // dia mantém o que foi escolhido; a preferência de itens por página vem junto
+  useFiltrosLembrados(`cadastro-${entidade}`);
 
   // Busca ao vivo: filtra conforme digita (debounce), sem Enter; volta para a página 1
   useEffect(() => {

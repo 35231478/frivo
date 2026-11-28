@@ -319,3 +319,39 @@ describe("Implantação — itens que levam a uma tela têm cara de clicável", 
     expect($("[data-item-etapa='Usuários'] span")).toBeTruthy();
   });
 });
+
+/* ───────── Pronto pra janeiro 3: Empresas — inativar/reativar, celular e o aviso que fecha ───────── */
+describe("pronto-janeiro-3: Empresas", () => {
+  const EMPRESAS = [
+    { id: "e1", nome: "Frivo (fictícia)", nomeFantasia: null, cnpj: "12.345.678/0001-90", ativo: true, criadoEm: "2026-01-02T12:00:00.000Z", usuarios: 3 },
+    { id: "e2", nome: "Refrigeração Aurora Ltda (fictícia)", nomeFantasia: "Aurora Clima", cnpj: "45.678.912/0001-55", ativo: true, criadoEm: "2026-11-27T12:00:00.000Z", usuarios: 1 },
+  ];
+  it("a linha tem Inativar/Reativar (a empresa do próprio dono não); o servidor responde e a lista mostra a situação", async () => {
+    const { EmpresasAdmin } = await import("@/components/admin/empresas-admin");
+    respostas["PATCH /api/admin/empresas/e2"] = (corpo) => [200, { ok: true, ativo: corpo.ativo }];
+    await montar(createElement(EmpresasAdmin, { inicial: EMPRESAS, empresaDoDono: "e1" }), permissoesTotais(), "SUPER_ADMIN");
+    // tabela (desktop) e cartões (celular): a e1 não oferece inativar; a e2, sim
+    expect(document.querySelectorAll('[data-empresa="e1"] [data-situacao-empresa]')).toHaveLength(0);
+    expect(document.querySelectorAll('[data-empresa="e2"] [data-situacao-empresa="inativar"]')).toHaveLength(2);
+    expect($("[data-cartoes-empresas]")!.className).toContain("md:hidden");
+    expect($("[data-lista-empresas]")!.className).toContain("hidden md:table");
+    await clicar(document.querySelector('[data-lista-empresas] [data-empresa="e2"] [data-situacao-empresa]'));
+    expect(chamadas.at(-1)).toEqual({ url: "/api/admin/empresas/e2", metodo: "PATCH", corpo: { ativo: false } });
+    expect(document.querySelectorAll('[data-empresa="e2"] [data-empresa-inativa]')).toHaveLength(2);
+    await clicar(document.querySelector('[data-lista-empresas] [data-empresa="e2"] [data-situacao-empresa="reativar"]'));
+    expect(chamadas.at(-1)!.corpo).toEqual({ ativo: true });
+    expect(document.querySelectorAll('[data-empresa="e2"] [data-empresa-inativa]')).toHaveLength(0);
+  });
+  it("o aviso de empresa criada tem Fechar", async () => {
+    const { EmpresasAdmin } = await import("@/components/admin/empresas-admin");
+    respostas["POST /api/admin/empresas"] = () => [201, { ok: true, adminEmail: "marina@aurora.teste", perfis: 5, tiposOs: 6 }];
+    respostas["GET /api/admin/empresas"] = () => [200, { empresas: EMPRESAS }];
+    await montar(createElement(EmpresasAdmin, { inicial: [] }), permissoesTotais(), "SUPER_ADMIN");
+    await clicar($("[data-nova-empresa]"));
+    for (const [k, v] of [["razaoSocial", "Aurora Ltda"], ["cnpj", "45678912000155"], ["email", "a@aurora.teste"], ["adminNome", "Marina Teste"], ["adminEmail", "marina@aurora.teste"], ["adminSenha", "Inicial2026x"]]) await digitar(`[data-campo='${k}']`, v);
+    await clicar($("[data-confirmar-nova-empresa]"));
+    expect($("[data-empresa-criada]")).toBeTruthy();
+    await clicar($("[data-fechar-aviso]"));
+    expect($("[data-empresa-criada]")).toBeNull();
+  });
+});

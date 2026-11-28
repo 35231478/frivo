@@ -26,8 +26,8 @@ import { FILTROS_PRAZO, ROTULO_FILTRO_PRAZO } from "@/lib/os/prazo-execucao";
 import { ClipboardList, Plus, Download, Headset } from "lucide-react";
 import { TabelaPro } from "@/components/listagem/tabela-pro";
 import { EtiquetaPedido, type PedidoDaLinha } from "@/components/pedido-cliente/etiqueta-pedido";
-import { FILTRO_AGUARDANDO_PEDIDO } from "@/lib/pedido-cliente/where";
-import { DICA_FILTRO_AGUARDANDO } from "@/lib/pedido-cliente/regra";
+import { FILTRO_AGUARDANDO_PEDIDO, FILTRO_CONFERIR_PEDIDO } from "@/lib/pedido-cliente/where";
+import { DICA_FILTRO_AGUARDANDO, DICA_FILTRO_CONFERIR } from "@/lib/pedido-cliente/regra";
 import { PLANILHA } from "@/lib/planilha";
 
 interface TecnicoView { id: string; nome: string; avatar: string | null }
@@ -94,7 +94,7 @@ function PrazoDaOs({ os, compacto }: { os: OrdemView; compacto?: boolean }) {
 export function OrdensListaClient({ ordens, total, pagina, porPagina, opcoes, periodo, resumoPedido = null }: {
   ordens: OrdemView[]; total: number; pagina: number; porPagina: number; opcoes: Opcoes; periodo: PeriodoTela;
   /** O filtro rápido "Aguardando pedido" (contagem e R$); null = a empresa não tem cliente que exige pedido */
-  resumoPedido?: { quantidade: number; total: number } | null;
+  resumoPedido?: { quantidade: number; total: number; conferir?: number } | null;
 }) {
   const router = useRouter();
   const { pode } = usePermissoes();
@@ -193,7 +193,11 @@ export function OrdensListaClient({ ordens, total, pagina, porPagina, opcoes, pe
           />
         }
         paramBusca="busca" navegar={(m) => setParams(m)}
-        rapidos={resumoPedido ? [{ param: "pedido", valor: FILTRO_AGUARDANDO_PEDIDO, rotulo: "Aguardando pedido", quantidade: resumoPedido.quantidade, total: resumoPedido.total, dica: DICA_FILTRO_AGUARDANDO }] : []}
+        rapidos={resumoPedido ? [
+          { param: "pedido", valor: FILTRO_AGUARDANDO_PEDIDO, rotulo: "Aguardando pedido", quantidade: resumoPedido.quantidade, total: resumoPedido.total, dica: DICA_FILTRO_AGUARDANDO },
+          // PC-2: o sino leva para cá; o filtro aparece, conta e sai pelo "Limpar filtros" como qualquer outro
+          { param: "pedido", valor: FILTRO_CONFERIR_PEDIDO, rotulo: "Pedido recebido — conferir", quantidade: resumoPedido.conferir ?? 0, dica: DICA_FILTRO_CONFERIR },
+        ] : []}
         extras={
           <>
             <a href={exportUrl} className="btn-secondary px-3 py-2 font-medium text-ink-muted">
