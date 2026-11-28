@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { comEscopo, filtroOrdens } from "@/lib/escopo/proprios";
 import { exigirAlgumaPermissao } from "@/lib/permissoes-server";
 import { prisma } from "@/lib/prisma";
 import { SOLICITACAO_PENDENTE } from "@/lib/solicitacoes";
@@ -14,7 +15,7 @@ export async function GET() {
   if (guard.erro) return guard.resposta;
   const empresaId = guard.session.user!.empresaId;
 
-  const where = { empresaId, ...SOLICITACAO_PENDENTE };
+  const where = comEscopo({ empresaId, ...SOLICITACAO_PENDENTE }, filtroOrdens(guard.session.user)); // COM-1: escopo
   const [total, ultima] = await Promise.all([
     prisma.ordemServico.count({ where }),
     prisma.ordemServico.findFirst({ where, orderBy: { criadoEm: "desc" }, select: { criadoEm: true } }),

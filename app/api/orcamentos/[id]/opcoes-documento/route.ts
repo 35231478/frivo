@@ -5,6 +5,7 @@ import { exigirPermissao } from "@/lib/permissoes-server";
 import {
   motivoOpcoesTravadas, opcoesDoDocumento, opcoesDocumentoEditaveis, STATUS_OPCOES_TRAVADAS,
 } from "@/lib/orcamentos/documento-opcoes";
+import { escopoBarra } from "@/lib/escopo/proprios-server";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -22,6 +23,8 @@ export async function PUT(req: NextRequest, { params }: Params) {
   if (guard.erro) return guard.resposta;
   const empresaId = guard.session.user!.empresaId;
   const { id } = await params;
+  const foraDoEscopo = await escopoBarra("orcamento", id); // COM-1: "Ver só os próprios" → 404
+  if (foraDoEscopo) return foraDoEscopo;
   const parsed = corpo.safeParse(await req.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ erro: "Opções inválidas" }, { status: 400 });
 

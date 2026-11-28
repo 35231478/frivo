@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { catalogoParaItemOs } from "@/lib/os/materiais-server";
 import { usuarioVeCustoDeCompra } from "@/lib/estoque/custo-acesso";
 import { semCustoNosMateriais } from "@/lib/orcamentos/estoque-margem";
+import { escopoBarra } from "@/lib/escopo/proprios-server";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -17,6 +18,8 @@ export async function GET(req: NextRequest, { params }: Params) {
   if (guard.erro) return guard.resposta;
   const empresaId = guard.session.user!.empresaId;
   const { id } = await params;
+  const foraDoEscopo = await escopoBarra("ordem", id); // COM-1: "Ver só os próprios" → 404
+  if (foraDoEscopo) return foraDoEscopo;
   const os = await prisma.ordemServico.findFirst({ where: { id, empresaId }, select: { clienteId: true } });
   if (!os) return NextResponse.json({ erro: "OS não encontrada" }, { status: 404 });
   const sp = req.nextUrl.searchParams;

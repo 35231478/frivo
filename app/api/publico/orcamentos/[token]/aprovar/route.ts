@@ -5,6 +5,7 @@ import { aprovacaoPublicaSchema } from "@/lib/validations";
 import { diaCivilPassou } from "@/lib/fuso";
 import { ipDaRequisicao } from "@/lib/orcamentos/ciclo";
 import { avisarResponsavel, registrarEvento } from "@/lib/orcamentos/ciclo-server";
+import { comissoesNaAprovacao } from "@/lib/comissoes/servidor";
 
 /**
  * Aceite digital no link público: nome, CPF e assinatura de quem aprova, com data/hora, IP e
@@ -54,6 +55,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tok
   });
   if (r.count !== 1) return NextResponse.json({ erro: "Este orçamento não está disponível para aprovação" }, { status: 400 });
   await registrarEvento({ empresaId: orcamento.empresaId, orcamentoId: orcamento.id, tipo: "APROVADO", detalhe: nome, ip });
+  // COM-1: a comissão do vendedor nasce na aprovação, congelada (regra e valor de hoje)
+  await comissoesNaAprovacao(orcamento.empresaId, orcamento.id);
   // O escritório recebe o push "Orçamento aprovado" (depois da resposta)
   agendarPush(() => notificarRespostaOrcamento(orcamento.empresaId, orcamento.id));
 

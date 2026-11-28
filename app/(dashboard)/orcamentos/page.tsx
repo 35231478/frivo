@@ -1,4 +1,5 @@
 import { SelecaoMassaProvider, CheckboxLinha, CheckboxPagina } from "@/components/acoes-massa/selecao";
+import { comEscopo, filtroOrcamentos } from "@/lib/escopo/proprios";
 import { BarraAcoesMassa } from "@/components/acoes-massa/barra";
 import { temAcaoMassa } from "@/lib/acoes-massa/acoes";
 import type { Metadata } from "next";
@@ -54,11 +55,13 @@ export default async function OrcamentosPage({
   const periodo = lerPeriodo(sp, agora, { permitirTodos: true });
   // "Vencendo" (painel de pendências): o prazo do aviso "vence em X dias" da empresa
   const diasVencendo = sp.validade === FILTRO_VENCENDO ? await diasOrcamentoVencendo(empresaId) : null;
-  const where = whereListaOrcamentos(empresaId, sp, periodo, agora, diasVencendo ?? undefined);
+  // COM-1: "Ver só os próprios" — a lista, a contagem e os cards do funil só com os orçamentos em que a pessoa é o vendedor
+  const escopo = filtroOrcamentos(session!.user);
+  const where = comEscopo(whereListaOrcamentos(empresaId, sp, periodo, agora, diasVencendo ?? undefined), escopo);
   // Cards de funil: só o período (busca e demais filtros mexem só na lista)
   const noPeriodo = condPeriodoCriacao(periodo);
   const soma = (c: string) => prisma.orcamento.aggregate({
-    where: { empresaId, AND: [noPeriodo ?? {}, condCardPeriodoOrcamentos(c, agora) ?? {}] as object[] },
+    where: { empresaId, AND: [noPeriodo ?? {}, condCardPeriodoOrcamentos(c, agora) ?? {}, escopo] as object[] },
     _sum: { totalGeral: true }, _count: true,
   });
 
@@ -83,6 +86,7 @@ export default async function OrcamentosPage({
     where,
     include: {
       cliente: { select: { id: true, nome: true, nomeFantasia: true, logo: true } },
+      vendedor: { select: { nome: true } },
       _count: { select: { ordensServico: true } },
     },
     orderBy,
@@ -166,6 +170,8 @@ export default async function OrcamentosPage({
               { id: "nome", titulo: "Nome", ordenar: "nome", obrigatoria: true, classe: "truncate" },
               { id: "cliente", titulo: "Cliente", largura: 220, ordenar: "cliente", classe: "truncate" },
               { id: "tipo", titulo: "Tipo", largura: 128, oculta: true, classe: "truncate" },
+              // COM-1: quem vendeu (escondida por padrão; liga em "Colunas")
+              { id: "vendedor", titulo: "Vendedor", largura: 160, oculta: true, classe: "truncate" },
               { id: "status", titulo: "Status", largura: 196, ordenar: "status" },
               { id: "valor", titulo: "Valor (R$)", alinhar: "direita", largura: 120, ordenar: "valor", obrigatoria: true },
               { id: "validade", titulo: "Validade", largura: 92 },
@@ -186,6 +192,7 @@ export default async function OrcamentosPage({
                   nome: <span className={PLANILHA.nome} data-nome-orcamento>{o.nome}</span>,
                   cliente: <span className="text-ink" data-cliente-orcamento>{cliente}</span>,
                   tipo: <span className={CLASSE_TIPO_ORCAMENTO[o.tipo]}>{LABELS_TIPO_ORCAMENTO[o.tipo]}</span>,
+                  vendedor: <span className="text-ink" data-vendedor-orcamento>{o.vendedor?.nome ?? "—"}</span>,
                   status: <span className="inline-flex flex-wrap items-center gap-1"><PilulaEtapa etapa={etapaCiclo(o, agora)} desde={dataDaEtapa(o, agora)} compacta /><EtiquetaPedido situacao={pedidos.get(o.id)} alvo={{ orcamentoIds: [o.id] }} /></span>,
                   valor: <span className={cn(PLANILHA.numero, "font-semibold text-ink")} data-valor>{valorSemMoeda(Number(o.totalGeral))}</span>,
                   validade: <span className={cn(PLANILHA.data, PLANILHA.apagado)} data-validade>{o.validadeEm ? formatarData(o.validadeEm) : "—"}</span>,

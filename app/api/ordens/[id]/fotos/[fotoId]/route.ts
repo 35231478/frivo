@@ -7,6 +7,7 @@ import { removerFoto, removerFotoAdicional } from "@/lib/execucao/acoes";
 import { nomeEquipamento } from "@/lib/execucao/vinculos";
 import { legendaAdicional, legendaExecucao } from "@/lib/os/galeria";
 import { editarLegendaFoto } from "@/lib/os/legenda-foto-server";
+import { escopoBarra } from "@/lib/escopo/proprios-server";
 
 type Params = { params: Promise<{ id: string; fotoId: string }> };
 
@@ -22,6 +23,8 @@ export async function DELETE(req: NextRequest, { params }: Params) {
   const { session } = guard;
   const empresaId = session.user!.empresaId;
   const { id, fotoId } = await params;
+  const foraDoEscopo = await escopoBarra("ordem", id); // COM-1: "Ver só os próprios" → 404
+  if (foraDoEscopo) return foraDoEscopo;
   if (!(await osDaEmpresa(id, empresaId))) return NextResponse.json({ erro: "OS não encontrada" }, { status: 404 });
   const origem = req.nextUrl.searchParams.get("origem");
 
@@ -67,6 +70,8 @@ export async function PATCH(req: NextRequest, { params }: Params) {
   if (guard.erro) return guard.resposta;
   const { session } = guard;
   const { id, fotoId } = await params;
+  const foraDoEscopo = await escopoBarra("ordem", id); // COM-1: "Ver só os próprios" → 404
+  if (foraDoEscopo) return foraDoEscopo;
   const origem = req.nextUrl.searchParams.get("origem") as (typeof ORIGENS)[number] | null;
   if (!origem || !ORIGENS.includes(origem)) return NextResponse.json({ erro: "Diga de onde é a foto (execução, serviço adicional ou anexo)." }, { status: 400 });
   const corpo = await req.json().catch(() => null);

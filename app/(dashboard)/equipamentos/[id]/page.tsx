@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { filtroOrdens } from "@/lib/escopo/proprios";
 import { notFound } from "next/navigation";
 import { exigirModuloNaPagina } from "@/lib/modulos/pagina";
 import { prisma } from "@/lib/prisma";
@@ -81,7 +82,7 @@ export default async function EquipamentoPerfilPage({
     ?? equipamento.tipo;
 
   // Linha do tempo de atendimentos (OS diretas + atividades com vários equipamentos)
-  const linhaDoTempo = await carregarHistoricoEquipamento(empresaId, id);
+  const linhaDoTempo = await carregarHistoricoEquipamento(empresaId, id, filtroOrdens(session!.user)); // COM-1: escopo
 
   // Visão rápida — derivada dos atendimentos; a "próxima" usa a atividade agendada mais
   // próxima e, na falta dela, a recorrência de contrato do local (sem campos novos no banco).

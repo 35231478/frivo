@@ -1,7 +1,7 @@
 import {
   Boxes, Building2, CalendarClock, Clock, Cog, FileBadge, FileSignature, FileSpreadsheet, Headset, IdCard, Landmark, ListChecks, Mail, Package, Printer, QrCode, ScrollText, ShieldCheck, Tags,
   Target, Thermometer, UserCog, Wallet, Wrench, type LucideIcon,
-  Hash, CaseSensitive, UserPlus, Blocks, Rocket, DatabaseBackup,
+  Hash, CaseSensitive, UserPlus, Blocks, Rocket, DatabaseBackup, Percent,
 } from "lucide-react";
 import { moduloDaRota, pode, podeEntrarNoModulo, type Acao, type Permissoes } from "@/lib/permissoes";
 
@@ -66,6 +66,8 @@ export const SECOES_CONFIGURACOES: SecaoConfig[] = [
         titulo: "Comercial",
         itens: [
           { id: "orcamento", href: "/configuracoes/orcamento", icone: FileSignature, label: "Orçamentos e propostas", dica: "Validade, garantias, materiais, não incluso e normas do orçamento novo" },
+          // COM-1: valores de pagamento — "Desempenho › Gerenciar", como o bônus e o fechamento do mês
+          { id: "comissoes", href: "/configuracoes", modulo: "desempenho", acao: "gerenciar", icone: Percent, label: "Comissões", dica: "Regras de comissão do vendedor, quando fica devida e a base de cálculo" },
         ],
       },
       {

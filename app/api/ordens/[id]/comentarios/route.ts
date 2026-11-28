@@ -4,6 +4,7 @@ import { exigirPermissao } from "@/lib/permissoes-server";
 import { escopoDaSessao } from "@/lib/tecnico/escopo";
 import { TEXTO_MAX } from "@/lib/tecnico/comentarios";
 import { comentarDoEscritorio, comentariosParaEscritorio } from "@/lib/execucao/comentarios";
+import { escopoBarra } from "@/lib/escopo/proprios-server";
 
 type Params = { params: Promise<{ id: string }> };
 const MSG_APP = "O técnico comenta pelo app.";
@@ -17,6 +18,8 @@ export async function GET(_: NextRequest, { params }: Params) {
   if (guard.erro) return guard.resposta;
   if (escopoDaSessao(guard.session).restrito) return NextResponse.json({ erro: MSG_APP }, { status: 403 });
   const { id } = await params;
+  const foraDoEscopo = await escopoBarra("ordem", id); // COM-1: "Ver só os próprios" → 404
+  if (foraDoEscopo) return foraDoEscopo;
   const lista = await comentariosParaEscritorio(guard.session.user.empresaId, id, guard.session.user.id);
   if (!lista) return NextResponse.json({ erro: "OS não encontrada" }, { status: 404 });
   return NextResponse.json({ comentarios: lista }, { headers: { "Cache-Control": "private, no-store" } });
@@ -29,9 +32,11 @@ export async function POST(req: NextRequest, { params }: Params) {
   const guard = await exigirPermissao("ordens", "editar");
   if (guard.erro) return guard.resposta;
   if (escopoDaSessao(guard.session).restrito) return NextResponse.json({ erro: MSG_APP }, { status: 403 });
+  const { id } = await params;
+  const foraDoEscopo = await escopoBarra("ordem", id); // COM-1: "Ver só os próprios" → 404 (antes de ler o corpo)
+  if (foraDoEscopo) return foraDoEscopo;
   const parsed = corpo.safeParse(await req.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ erro: parsed.error.issues[0]?.message ?? "Dados inválidos" }, { status: 400 });
-  const { id } = await params;
   const c = await comentarDoEscritorio(guard.session.user.empresaId, id, guard.session.user.id, parsed.data.texto);
   if (!c) return NextResponse.json({ erro: "OS não encontrada" }, { status: 404 });
   return NextResponse.json({ comentario: c }, { status: 201 });

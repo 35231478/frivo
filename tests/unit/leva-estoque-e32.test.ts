@@ -277,7 +277,8 @@ describe("composição do serviço (materiais padrão)", () => {
     const res = await mod.POST(new NextRequest("http://localhost/api/acoes-massa", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ entidade: "servicos", acao: "exportar", ids: [r.json.id] }) }));
     const csv = await res.text();
     expect(csv).not.toContain("Materiais padrão");
-    expect(csv).toContain("Valor padrão (R$);Código do serviço (LC 116)");
+    // COM-1: o serviço ganhou a coluna "Categoria" (o "Sobre: categoria" das regras de comissão)
+    expect(csv).toContain("Valor padrão (R$);Categoria;Código do serviço (LC 116)");
   });
 
   it("cria com produto solto, kit e override; grava só a referência (comportamento efetivo não é gravado); o registro vem com o kit aberto", async () => {

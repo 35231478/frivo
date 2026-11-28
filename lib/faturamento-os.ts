@@ -115,7 +115,7 @@ export async function travarOrigens(tx: Prisma.TransactionClient, o: { osIds?: (
  * Todas as medições VIVAS ligadas à origem (os mesmos três caminhos da trava: item do orçamento, item da OS,
  * relatório MEDICAO_COMPLETA, e o orçamento de origem ↔ OS gerada), sem repetição, da mais antiga à mais nova.
  */
-async function medicoesDaOrigem(db: Db, origem: { orcamentoId?: string | null; osId?: string | null }, ignorar?: string): Promise<MedicaoFat[]> {
+export async function medicoesDaOrigem(db: Db, origem: { orcamentoId?: string | null; osId?: string | null }, ignorar?: string): Promise<MedicaoFat[]> {
   const orcIds = new Set<string>(); const osIds = new Set<string>();
   if (origem.orcamentoId) {
     orcIds.add(origem.orcamentoId);

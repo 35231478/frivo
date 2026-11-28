@@ -36,7 +36,7 @@ export default async function CumprimentoPage({ searchParams }: { searchParams: 
   const contratoId = sp.contratoId || null;
 
   const [relatorio, clientes, contratos] = await Promise.all([
-    relatorioCumprimento(empresaId, { gte: periodo.gte ?? undefined, lt: periodo.lt ?? undefined, clienteId, contratoId }, agora),
+    relatorioCumprimento(empresaId, { gte: periodo.gte ?? undefined, lt: periodo.lt ?? undefined, clienteId, contratoId }, agora, u),
     prisma.cliente.findMany({ where: { empresaId, ativo: true }, select: { id: true, nome: true, nomeFantasia: true } }),
     prisma.contrato.findMany({ where: { empresaId }, select: { id: true, numero: true }, orderBy: { numero: "desc" }, take: 300 }),
   ]);

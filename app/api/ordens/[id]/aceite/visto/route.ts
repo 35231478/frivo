@@ -1,6 +1,7 @@
 import { NextRequest } from "next/server";
 import { marcarAceiteVisto } from "@/lib/os/aceite-server";
 import { guardaDoAceite, responderAceite } from "@/lib/os/aceite-rotas";
+import { escopoBarra } from "@/lib/escopo/proprios-server";
 
 /**
  * "Visto": alguém do escritório abriu a OS depois de o cliente confirmar (com ou sem ressalva) — o
@@ -9,6 +10,8 @@ import { guardaDoAceite, responderAceite } from "@/lib/os/aceite-rotas";
  */
 export async function POST(_: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
+  const foraDoEscopo = await escopoBarra("ordem", id); // COM-1: "Ver só os próprios" → 404
+  if (foraDoEscopo) return foraDoEscopo;
   const { ator, resposta } = await guardaDoAceite(id, "editar");
   if (!ator) return resposta;
   return responderAceite(async () => ({ ok: true, marcou: await marcarAceiteVisto(id, ator.empresaId) }));

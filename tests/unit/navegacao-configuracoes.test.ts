@@ -57,7 +57,7 @@ describe("estrutura: 3 abas com cartões; cada item tem id, tela e a rota antiga
     const sub = (id: string) => SECOES_CONFIGURACOES.find((s) => s.id === id)!.subgrupos.map((g) => [g.titulo, g.itens.map((i) => i.label)]);
     expect(sub("operacionais")).toEqual([
       ["Ordens de serviço", ["Tipos de OS", "Formulários", "Termos de referência", "Etapas com prazo", "Impressão da OS", "Horário comercial"]],
-      ["Comercial", ["Orçamentos e propostas"]],
+      ["Comercial", ["Orçamentos e propostas", "Comissões"]], // COM-1: o card das regras de comissão
       ["Catálogo", ["Tipos de equipamento", "Serviços", "Produtos", "Categorias de produto", "Kits de material", "Tabelas de preços"]],
     ]);
     expect(sub("financeiras")).toEqual([["Classificação", ["Categorias financeiras", "Centros de custo"]], ["Integrações", ["Banco Inter"]], ["Fiscal", ["Dados fiscais (NFS-e)"]]]);

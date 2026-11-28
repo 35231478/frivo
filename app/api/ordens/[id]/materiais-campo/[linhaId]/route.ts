@@ -5,6 +5,7 @@ import { ErroEstoque } from "@/lib/estoque/servidor";
 import { quantidadeSchema } from "@/lib/tecnico/materiais";
 import { corrigirMaterialEscritorio, estornarMaterialEscritorio } from "@/lib/execucao/materiais-campo";
 import type { Session } from "next-auth";
+import { escopoBarra } from "@/lib/escopo/proprios-server";
 
 type Params = { params: Promise<{ id: string; linhaId: string }> };
 
@@ -24,6 +25,8 @@ export async function PATCH(req: NextRequest, { params }: Params) {
   const g = await doEscritorio();
   if ("erro" in g) return g.erro;
   const { id, linhaId } = await params;
+  const foraDoEscopo = await escopoBarra("ordem", id); // COM-1: "Ver só os próprios" → 404
+  if (foraDoEscopo) return foraDoEscopo;
   const body = await req.json().catch(() => null);
   const q = quantidadeSchema.safeParse(body?.quantidade);
   if (!q.success) return NextResponse.json({ erro: q.error.issues[0]?.message ?? "Quantidade inválida." }, { status: 400 });
@@ -40,6 +43,8 @@ export async function DELETE(_: NextRequest, { params }: Params) {
   const g = await doEscritorio();
   if ("erro" in g) return g.erro;
   const { id, linhaId } = await params;
+  const foraDoEscopo = await escopoBarra("ordem", id); // COM-1: "Ver só os próprios" → 404
+  if (foraDoEscopo) return foraDoEscopo;
   try {
     return responder(await estornarMaterialEscritorio(g.session.user.empresaId, id, linhaId, g.session.user.id));
   } catch (e) {
