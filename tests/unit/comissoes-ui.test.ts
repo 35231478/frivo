@@ -105,8 +105,10 @@ describe("Configurações › Comissões", () => {
       regra({ id: "r2", quemTipo: "CARGO", cargoId: "cg", sobreTipo: "CATEGORIA", categoria: "Instalação", valor: 5, nomes: { pessoa: null, cargo: "Vendedores", servico: null } }),
       regra({ id: "r3", sobreTipo: "PECAS", base: "FIXO_ITEM", valor: 10, ativo: false }),
     ],
-    config: { quando: "RECEBIMENTO", liquidaImpostos: false },
-    opcoes: { pessoas: [{ id: "uA", nome: "Ana" }], cargos: [{ id: "cg", nome: "Vendedores" }], servicos: [{ id: "s1", nome: "Limpeza" }], categorias: ["Instalação", "Manutenção"] },
+    // COM-2: o técnico, os tipos de OS (retorno) e os tetos vêm junto
+    config: { quando: "RECEBIMENTO", liquidaImpostos: false, executorQuando: "CONCLUSAO_OS", retornoDias: 30, tiposRetorno: [] },
+    opcoes: { pessoas: [{ id: "uA", nome: "Ana" }], cargos: [{ id: "cg", nome: "Vendedores" }], servicos: [{ id: "s1", nome: "Limpeza" }], categorias: ["Instalação", "Manutenção"], tiposOs: [] },
+    tetos: [],
   };
   const abrir = async (dados: any = DADOS) => {
     const { ComissoesClient } = await import("@/components/config/comissoes-client");
@@ -160,7 +162,7 @@ describe("Configurações › Comissões", () => {
     await escolher($("[data-comissao-quando]"), "CONCLUSAO_OS");
     expect(salvar.disabled).toBe(false);
     await clicar(salvar);
-    expect(chamadas.find((c) => c.metodo === "PUT")).toEqual({ url: "/api/comissoes", metodo: "PUT", corpo: { quando: "CONCLUSAO_OS", liquidaImpostos: false } });
+    expect(chamadas.find((c) => c.metodo === "PUT")).toEqual({ url: "/api/comissoes", metodo: "PUT", corpo: { quando: "CONCLUSAO_OS", liquidaImpostos: false, executorQuando: "CONCLUSAO_OS", retornoDias: 30, tiposRetorno: [] } }); // COM-2: a configuração inteira, com o técnico
   });
 });
 
