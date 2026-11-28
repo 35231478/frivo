@@ -7,6 +7,8 @@ import { BuscaUrl, FiltroCheckUrl, FiltroSelectUrl, useListaUrl } from "@/compon
 import { BarraFiltros } from "@/components/listagem/barra-filtros";
 import Link from "next/link";
 import { X } from "lucide-react";
+import { FILTRO_AGUARDANDO_PEDIDO } from "@/lib/pedido-cliente/where";
+import { DICA_FILTRO_AGUARDANDO } from "@/lib/pedido-cliente/regra";
 import type { Opcao } from "@/components/listagem/listagem-ui";
 
 type CardKey = "EM_ABERTO" | "APROVADO" | "RECUSADO" | "VENCIDO" | "TOTAL";
@@ -34,7 +36,7 @@ function PilulaFiltro({ rotulo, dado }: { rotulo: string; dado: string }) {
   );
 }
 
-export function PeriodoCardsOrcamentos({ periodo, resumo, card, opcoes = { tipos: [], status: [], clientes: [] }, resposta, diasVencendo = null }: {
+export function PeriodoCardsOrcamentos({ periodo, resumo, card, opcoes = { tipos: [], status: [], clientes: [] }, resposta, diasVencendo = null, resumoPedido = null }: {
   periodo: PeriodoTela; resumo: ResumoOrcamentos; card: string;
   /** As opções dos filtros do painel "Mais filtros" */
   opcoes?: { tipos: Opcao[]; status: Opcao[]; clientes: Opcao[] };
@@ -42,6 +44,8 @@ export function PeriodoCardsOrcamentos({ periodo, resumo, card, opcoes = { tipos
   resposta?: string;
   /** ?validade=vencendo (painel de pendências): o prazo do aviso da empresa, para a pílula; null = sem o filtro */
   diasVencendo?: number | null;
+  /** O filtro rápido "Aguardando pedido" (contagem e R$); null = a empresa não tem cliente que exige pedido */
+  resumoPedido?: { quantidade: number; total: number } | null;
 }) {
   const { navegar } = useListaUrl();
   return (
@@ -51,6 +55,7 @@ export function PeriodoCardsOrcamentos({ periodo, resumo, card, opcoes = { tipos
         periodo={<BarraPeriodo rotulo="Criação" periodo={periodo} navegar={navegar} permitirTodos dica="Pela data de criação do orçamento." />}
         busca={<BuscaUrl lista="orcamentos" placeholder="Pesquisar" rotulo="Pesquisar orçamentos" />}
         paramBusca="busca" navegar={navegar}
+        rapidos={resumoPedido ? [{ param: "pedido", valor: FILTRO_AGUARDANDO_PEDIDO, rotulo: "Aguardando pedido", quantidade: resumoPedido.quantidade, total: resumoPedido.total, dica: DICA_FILTRO_AGUARDANDO }] : []}
         extras={resposta === "nova" ? <PilulaFiltro rotulo="Respostas novas do cliente" dado="resposta" />
           : diasVencendo !== null ? <PilulaFiltro rotulo={`Vencem em até ${diasVencendo} dias`} dado="vencendo" />
           : undefined}

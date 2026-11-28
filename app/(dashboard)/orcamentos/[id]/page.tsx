@@ -26,6 +26,8 @@ import { pode } from "@/lib/permissoes";
 import { PageHeader } from "@/components/ui/page-header";
 import { InativarRegistro } from "@/components/ui/inativar-registro";
 import { LABELS_STATUS_OS, formatarData, cn } from "@/lib/utils";
+import { pedidoDosOrcamentos } from "@/lib/pedido-cliente/server";
+import { EtiquetaPedido } from "@/components/pedido-cliente/etiqueta-pedido";
 import { ClipboardList, ExternalLink, CheckCircle2, FileSignature } from "lucide-react";
 
 export const metadata: Metadata = { title: "Orçamento" };
@@ -69,6 +71,7 @@ export default async function OrcamentoDetalhePage({
   });
 
   const podeEditar = orcamento.status === "RASCUNHO";
+  const pedidos = await pedidoDosOrcamentos(empresaId, [orcamento.id]);
   const u = session!.user!;
   // Conta a receber do orçamento aprovado (o outro lado do vínculo): só para quem vê o financeiro
   const contasReceber = pode(u.permissoes, "financeiro", "visualizar", u.role) ? await contasVinculadas(empresaId, { orcamentoId: orcamento.id }) : [];
@@ -100,6 +103,9 @@ export default async function OrcamentoDetalhePage({
         description={orcamento.nome}
         backHref="/orcamentos"
         actions={
+          <>
+          {/* Pedido do cliente: "Aguardando pedido" abre a gaveta com 1 clique (lib/pedido-cliente) */}
+          <EtiquetaPedido situacao={pedidos.get(orcamento.id)} alvo={{ orcamentoIds: [orcamento.id] }} tamanho="md" />
           <InativarRegistro
             url={`/api/orcamentos/${orcamento.id}`} modulo="orcamentos" acaoReativar="editar" variante="botao"
             ativo={orcamento.status !== "CANCELADO"} nome={orcamento.codigo} entidade="orçamento"
@@ -107,6 +113,7 @@ export default async function OrcamentoDetalhePage({
             textoInativar="Tem certeza? O orçamento passa para Cancelado e sai da lista padrão. Nada é apagado: itens, vínculos e o link público ficam preservados, e ele pode ser reaberto (volta para Rascunho)."
             textoReativar="O orçamento volta para Rascunho (editável) e reaparece na lista."
           />
+          </>
         }
       />
       {orcamento.status === "CANCELADO" && (

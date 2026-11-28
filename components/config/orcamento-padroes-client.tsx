@@ -9,6 +9,7 @@ import { ToggleSwitch } from "@/components/ui/toggle-switch";
 import { EscolhaCobrancaMateriais } from "@/components/orcamento/escolha-cobranca-materiais";
 import { regraDeCobranca, type CobrancaMateriais } from "@/lib/orcamentos/materiais";
 import { FormField, FormGrid, FormSection } from "@/components/ui/form-field";
+import { DIAS_ALERTA_PEDIDO_PADRAO } from "@/lib/pedido-cliente/regra";
 import {
   GARANTIAS_PECAS_SUGERIDAS, GARANTIAS_SERVICO_SUGERIDAS, NaoInclusoCampo, NormasCampo,
 } from "@/components/orcamento/campos-corporativos";
@@ -23,6 +24,8 @@ export interface PadroesOrcamentoTela {
   orcamentoMostrarMateriais?: boolean;
   /** "Orçamento E2": como a empresa cobra os materiais */
   orcamentoCobrancaMateriais?: string | null;
+  /** Pedido do cliente: o sino avisa depois de tantos dias esperando */
+  pedidoClienteDiasAlerta?: number;
 }
 
 /**
@@ -38,6 +41,7 @@ export function OrcamentoPadroesClient({ inicial, podeEditar }: { inicial: Padro
   const [normas, setNormas] = useState<string[]>(inicial.orcamentoNormas ?? []);
   const [mostrarMateriais, setMostrarMateriais] = useState(inicial.orcamentoMostrarMateriais !== false);
   const [cobranca, setCobranca] = useState<CobrancaMateriais>(regraDeCobranca(inicial.orcamentoCobrancaMateriais));
+  const [diasPedido, setDiasPedido] = useState(String(inicial.pedidoClienteDiasAlerta ?? DIAS_ALERTA_PEDIDO_PADRAO));
   const [salvando, setSalvando] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
   const mudou = <T,>(f: (v: T) => void) => (v: T) => { f(v); setMsg(null); };
@@ -56,6 +60,7 @@ export function OrcamentoPadroesClient({ inicial, podeEditar }: { inicial: Padro
           orcamentoNormas: normas,
           orcamentoMostrarMateriais: mostrarMateriais,
           orcamentoCobrancaMateriais: cobranca,
+          pedidoClienteDiasAlerta: diasPedido,
         }),
       });
       const j = await r.json().catch(() => ({}));
@@ -106,6 +111,14 @@ export function OrcamentoPadroesClient({ inicial, podeEditar }: { inicial: Padro
               </div>
             )}
           </div>
+        </FormSection>
+
+        <FormSection title="Pedido do cliente" dica="Para os clientes que só pagam com o pedido deles (marcado na ficha do cliente). A OS que espera o pedido aparece no painel de pendências desde o primeiro dia; o sino avisa depois deste prazo, contado da conclusão da OS (no modo “para executar e faturar”, da aprovação).">
+          <FormGrid cols={3}>
+            <FormField label="Avisar no sino depois de (dias)">
+              <Input type="number" inputMode="numeric" min={1} max={90} value={diasPedido} onChange={(e) => mudou(setDiasPedido)(e.target.value)} data-dias-pedido-cliente />
+            </FormField>
+          </FormGrid>
         </FormSection>
 
         <FormSection title="Normas atendidas" dica="As normas marcadas vêm selecionadas em cada novo orçamento. Para orçamentos simples, deixe-as desmarcadas e selecione no orçamento quando necessário.">

@@ -12,12 +12,14 @@
 import type { EscopoDoSino } from "@/lib/alertas/sino";
 import { ehAvisoDoNumero, type AvisoDoNumero } from "@/lib/alertas/lidos";
 import { FILTRO_SEM_TECNICO } from "@/lib/os/sem-tecnico";
+import { FILTRO_AGUARDANDO_PEDIDO } from "@/lib/pedido-cliente/where";
+import { reais } from "@/lib/pedido-cliente/regra";
 import { FILTRO_VENCENDO } from "@/lib/orcamentos/ciclo";
 
 export type TomPendencia = "atrasado" | "atencao" | "acento";
 export type AreaPendencia = "operacao" | "comercial" | "financeiro" | "estoque";
 /** A chave do ícone (a tela traduz para o componente: components/alertas/icones-pendencia) */
-export type IconePendencia = "semTecnico" | "atrasada" | "esquecida" | "comentario" | "pmoc" | "orcamento" | "despesa" | "pagar" | "receber" | "estoque";
+export type IconePendencia = "semTecnico" | "atrasada" | "esquecida" | "comentario" | "pmoc" | "orcamento" | "despesa" | "pagar" | "receber" | "estoque" | "pedidoCliente";
 
 /** Os números que o catálogo usa (o retorno de contarSino tem todos) */
 export interface DadosPendencias {
@@ -29,7 +31,7 @@ export interface DadosPendencias {
   orcamentosVencendo: number; orcamentoVencendoId: string | null;
   despesasCampo: number;
   estoqueNegativoCampo: number;
-  foraDoNumero?: { contasPagarHoje: number; contasReceberHoje: number };
+  foraDoNumero?: { contasPagarHoje: number; contasReceberHoje: number; pedidosAguardando?: number; pedidosAguardandoTotal?: number };
 }
 
 export interface ItemPendencia {
@@ -39,6 +41,8 @@ export interface ItemPendencia {
   href: string;
   tom: TomPendencia;
   icone: IconePendencia;
+  /** Ao lado do número (ex.: o total em R$ parado) */
+  detalhe?: string | null;
 }
 
 export const ROTULO_AREA: Record<AreaPendencia, string> = {
@@ -62,6 +66,7 @@ interface DefPendencia {
   escopo: keyof EscopoDoSino;
   valor: (d: DadosPendencias) => number;
   href: (d: DadosPendencias) => string;
+  detalhe?: (d: DadosPendencias) => string | null;
 }
 
 /** Os itens, na ordem do painel. */
@@ -92,6 +97,13 @@ export const PENDENCIAS = {
     valor: (d) => d.orcamentosVencendo,
     href: (d) => umOuLista(d.orcamentosVencendo, d.orcamentoVencendoId, (id) => `/orcamentos/${id}`, `/orcamentos?validade=${FILTRO_VENCENDO}&periodo=todos`),
   },
+  pedidosCliente: {
+    area: "financeiro", rotulo: "Aguardando pedido do cliente", tom: "atencao", icone: "pedidoCliente", escopo: "pedidosCliente",
+    valor: (d) => d.foraDoNumero?.pedidosAguardando ?? 0,
+    // a lista de OS só com as que esperam, as mais antigas primeiro
+    href: () => `/ordens?pedido=${FILTRO_AGUARDANDO_PEDIDO}&periodo=todos&sort=criadoEm&dir=asc`,
+    detalhe: (d) => (d.foraDoNumero?.pedidosAguardandoTotal ? reais(d.foraDoNumero.pedidosAguardandoTotal) : null),
+  },
   despesasCampo: {
     area: "financeiro", rotulo: "Despesas de campo a aprovar", tom: "atencao", icone: "despesa", escopo: "despesasCampo",
     valor: (d) => d.despesasCampo, href: () => "/financeiro/despesas-campo",
@@ -119,7 +131,7 @@ export const escopoDoItem = (id: IdPendencia): keyof EscopoDoSino => (PENDENCIAS
 export function itemPendencia(id: IdPendencia, d: DadosPendencias): ItemPendencia {
   const def: DefPendencia = PENDENCIAS[id];
   // Campo que não veio (resposta de uma versão anterior, no meio de um deploy) conta como zero
-  return { id, rotulo: def.rotulo, valor: Number(def.valor(d)) || 0, href: def.href(d), tom: def.tom, icone: def.icone };
+  return { id, rotulo: def.rotulo, valor: Number(def.valor(d)) || 0, href: def.href(d), tom: def.tom, icone: def.icone, detalhe: def.detalhe?.(d) ?? null };
 }
 
 /** O aviso do número do sino que o item é (a marca de lido, lib/alertas/lidos); as contas do dia não estão no número */

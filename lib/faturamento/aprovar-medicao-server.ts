@@ -4,7 +4,7 @@
  * D2: o vencimento sai da regra do contrato (medição de um contrato) ou do dia do cliente.
  */
 import { prisma } from "@/lib/prisma";
-import { statusAposAprovacao } from "@/lib/medicao-helpers";
+import { situacaoDaFaturaAprovada } from "@/lib/pedido-cliente/server";
 import { gerarContaReceberDaMedicao } from "@/lib/financeiro-server";
 import { vencimentoDaMedicao } from "@/lib/faturamento/medicao-contrato-server";
 
@@ -28,12 +28,14 @@ export async function aprovarMedicao(medicaoId: string, assinatura?: Assinatura)
     select: { status: true, contratoId: true, mes: true, ano: true, cliente: { select: { exigePcAntesNf: true, diaFaturamento: true } } },
   });
   if (!m || m.status !== "AGUARDANDO_APROVACAO") return null;
-  const proximo = statusAposAprovacao(m.cliente.exigePcAntesNf);
+  // Pedido do cliente: "Aguardando PC" só se alguma OS/orçamento da fatura ainda espera o pedido (lib/pedido-cliente)
+  const { status: proximo, pcNumero } = await situacaoDaFaturaAprovada(medicaoId);
   const vencimento = await vencimentoDaMedicao(prisma, m);
   const r = await prisma.medicao.updateMany({
     where: { id: medicaoId, status: "AGUARDANDO_APROVACAO" },
     data: {
       status: proximo, dataAprovacao: new Date(), dataVencimento: vencimento,
+      ...(pcNumero ? { pcNumero, pcRecebidoEm: new Date() } : {}),
       ...(assinatura ? { assinadoPor: assinatura.assinadoPor, assinadoCpf: assinatura.assinadoCpf, assinaturaUrl: assinatura.assinaturaUrl ?? null } : {}),
     },
   });

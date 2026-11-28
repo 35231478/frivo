@@ -3,6 +3,7 @@
  * receber, NFS-e, retenções); só nasce liberada para a nota e aparece como "Fatura" (D1/D3 do #102).
  * O número interno MED-AAAA-NNNN não muda: na tela vira "Fatura AAAA-NNNN".
  */
+import { textoPedidoNaNota } from "@/lib/pedido-cliente/regra";
 import { round2, versaoCliente, type EntradaCalculo } from "@/lib/orcamentos/calculo";
 
 /** "MED-21" → "21" (formato novo); "MED-2026-0012" → "2026-0012" (antigo) */
@@ -13,12 +14,17 @@ export function rotuloMedicao(m: { numero: string; avulsa?: boolean | null }) {
   return m.avulsa ? `Fatura ${numeroFatura(m.numero)}` : `Medição ${m.numero}`;
 }
 
-/** Referência na discriminação da NFS-e: "Fatura nº 21" ou "Medição MED-21" */
-export function referenciaNota(m: { numero: string; avulsa?: boolean | null; faturaParcial?: boolean | null; percentualFaturado?: unknown }) {
-  if (!m.avulsa) return `Medição ${m.numero}`;
+/**
+ * Referência na discriminação da NFS-e: "Fatura nº 21" ou "Medição MED-21" — e, quando a fatura tem o pedido do
+ * cliente (lib/pedido-cliente: o "PC" dela), "· Pedido do cliente nº 4500012345": o número entra sozinho na nota.
+ */
+export function referenciaNota(m: { numero: string; avulsa?: boolean | null; faturaParcial?: boolean | null; percentualFaturado?: unknown; pcNumero?: string | null }) {
+  const pedido = textoPedidoNaNota((m.pcNumero ?? "").split(","));
+  const comPedido = (ref: string) => (pedido ? `${ref} · ${pedido}` : ref);
+  if (!m.avulsa) return comPedido(`Medição ${m.numero}`);
   // P5: a nota de uma parte diz que é parte ("Fatura nº 2026-0012 (parcial 40%)")
   const parte = m.faturaParcial && m.percentualFaturado != null ? ` (${rotuloParcial(Number(m.percentualFaturado))})` : "";
-  return `Fatura nº ${numeroFatura(m.numero)}${parte}`;
+  return comPedido(`Fatura nº ${numeroFatura(m.numero)}${parte}`);
 }
 
 /** Por que o orçamento não pode ser faturado (null = pode) */

@@ -2,7 +2,7 @@
 
 import { useNomesDaTrilha } from "@/components/layout/nome-na-trilha";
 import { signOut } from "next-auth/react";
-import { Bell, ShieldX, ChevronRight, LogOut, Search, AlertTriangle, Clock, ShoppingCart, Headset, ClipboardCheck, FileWarning, Wrench, Menu, Barcode, MessageSquareReply, PackageCheck, FileCheck2, FileX2, Hourglass, CalendarX2, TrendingUp, PackageOpen, PackageMinus, Globe, BadgeCheck, MessageSquareWarning, StarOff, UserPlus } from "lucide-react";
+import { Bell, ShieldX, ChevronRight, LogOut, Search, AlertTriangle, Clock, ShoppingCart, Headset, ClipboardCheck, FileWarning, Wrench, Menu, Barcode, MessageSquareReply, PackageCheck, FileCheck2, FileX2, Hourglass, CalendarX2, TrendingUp, PackageOpen, PackageMinus, Globe, BadgeCheck, MessageSquareWarning, StarOff, UserPlus, FileSignature } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -13,6 +13,7 @@ import type { ContagemSino } from "@/lib/alertas/sino-server";
 import { avisoDoItem, escopoDoItem, itemPendencia, type IdPendencia } from "@/lib/alertas/pendencias";
 import { assinaturaDoAviso, type AvisoDoNumero } from "@/lib/alertas/lidos";
 import { URL_SOLICITACOES } from "@/lib/solicitacoes";
+import { FILTRO_AGUARDANDO_PEDIDO } from "@/lib/pedido-cliente/where";
 import { escopoDoSino } from "@/lib/alertas/sino";
 import { COR_TOM, ICONE_PENDENCIA } from "@/components/alertas/icones-pendencia";
 
@@ -313,6 +314,10 @@ export function Header({ session, avatarUrl }: HeaderProps) {
                   {podeVer("estoque", "separar") && (alertas?.separacoesPendentes ?? 0) > 0 && <AlertaItem href="/estoque/separacao" icone={PackageOpen} cor="text-acento" label="OS com material a separar" valor={alertas?.separacoesPendentes ?? 0} {...toque("separacoesPendentes")} />}
                   {podeVer("estoque", "separar") && (alertas?.devolucoesPendentes ?? 0) > 0 && <AlertaItem href="/estoque/devolucao" icone={PackageMinus} cor="text-atencao" label="OS com material a devolver" valor={alertas?.devolucoesPendentes ?? 0} {...toque("devolucoesPendentes")} />}
                   {doPainel("despesasCampo")}
+                  {/* Pedido do cliente: OS esperando o pedido há mais que o prazo da empresa (Configurações › Orçamentos e propostas) */}
+                  {podeVer("ordens") && (alertas?.pedidosAtrasados ?? 0) > 0 && <AlertaItem
+                    href={umOuLista(alertas?.pedidosAtrasados, alertas?.pedidoAtrasadoOsId, (id) => `/ordens/${id}`, `/ordens?pedido=${FILTRO_AGUARDANDO_PEDIDO}&periodo=todos&sort=criadoEm&dir=asc`)}
+                    icone={FileSignature} cor="text-atencao" label={`Pedido do cliente há mais de ${alertas?.diasAlertaPedido ?? 7} dias`} valor={alertas?.pedidosAtrasados ?? 0} {...toque("pedidosAtrasados")} />}
                   {doPainel("comentariosCampo")}
                   {doPainel("atividadesEsquecidas")}
                   {doPainel("estoqueNegativoCampo")}

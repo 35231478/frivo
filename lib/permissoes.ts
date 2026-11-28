@@ -8,7 +8,7 @@ import { corDado } from "@/lib/ui/tokens";
 export type Acao =
   | "visualizar" | "criar" | "editar" | "excluir" | "concluir" | "aprovar"
   | "gerenciar" | "medicoes" | "contasReceber" | "fluxoCaixa" | "folha" | "fiscal" | "perdas" | "checklist" | "exportar"
-  | "separar" | "revisar" | "disciplinar" | "enviar" | "verCusto" | "alterarPrecoTabela";
+  | "separar" | "revisar" | "disciplinar" | "enviar" | "verCusto" | "alterarPrecoTabela" | "liberarSemPedido";
 
 export type Permissoes = Record<string, Partial<Record<Acao, boolean>>>;
 
@@ -42,13 +42,17 @@ export const ACOES_LABEL: Record<Acao, string> = {
   enviar: "Enviar ao cliente",
   verCusto: "Ver custo e margem",
   alterarPrecoTabela: "Alterar preço de tabela",
+  liberarSemPedido: "Liberar sem pedido do cliente",
 };
 
 /** Matriz de permissões agrupada por seção (fonte da verdade da UI e dos defaults). */
 export const SECOES: SecaoDef[] = [
   {
     id: "operacao", label: "Operação", modulos: [
-      { id: "ordens", label: "Ordens de serviço", icone: "ClipboardList", acoes: ["visualizar", "criar", "editar", "concluir", "excluir"] },
+      // liberarSemPedido: o cliente exige o pedido dele (lib/pedido-cliente) e a OS/orçamento ainda não tem; com esta
+      // permissão a pessoa libera a fatura, a NFS-e (e, no modo "para executar", o início) sem o pedido, com o motivo
+      // na trilha. Perfil gravado antes não a tem (nenhum UPDATE em perfis); o administrador tem sempre.
+      { id: "ordens", label: "Ordens de serviço", icone: "ClipboardList", acoes: ["visualizar", "criar", "editar", "concluir", "excluir", "liberarSemPedido"] },
       { id: "clientes", label: "Clientes", icone: "Users", acoes: ["visualizar", "criar", "editar", "excluir"] },
       { id: "equipamentos", label: "Equipamentos", icone: "Thermometer", acoes: ["visualizar", "criar", "editar", "excluir"] },
       { id: "pmoc", label: "PMOC", icone: "FileBadge", acoes: ["visualizar", "criar", "editar", "excluir"] },

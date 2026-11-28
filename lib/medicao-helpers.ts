@@ -36,13 +36,6 @@ export function calcularTotaisMedicao(
   };
 }
 
-/**
- * Define o próximo status quando uma medição é aprovada,
- * considerando se o cliente exige Pedido de Compra (PC) antes da NF.
- */
-export function statusAposAprovacao(exigePc: boolean): "AGUARDANDO_PC" | "PC_RECEBIDO" {
-  return exigePc ? "AGUARDANDO_PC" : "PC_RECEBIDO";
-}
 
 /**
  * Calcula a data de vencimento a partir do dia de faturamento do cliente

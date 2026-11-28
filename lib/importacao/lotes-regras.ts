@@ -59,7 +59,7 @@ export const TOLERANCIA_ALTERADO_MS = 2000;
 export const NOMES_VINCULO: Record<string, string> = {
   unidades: "unidades", contratos: "contratos", documentacaoEnvios: "envios de documentação", ordensServico: "ordens de serviço",
   anexos: "anexos", contatosCliente: "contatos", comunicacaoPreferencias: "preferências de comunicação", interacoes: "interações",
-  orcamentos: "orçamentos", medicoes: "medições", contasReceber: "contas a receber", notasFiscais: "notas fiscais", pmocs: "PMOC",
+  orcamentos: "orçamentos", pedidosCliente: "pedidos do cliente", medicoes: "medições", contasReceber: "contas a receber", notasFiscais: "notas fiscais", pmocs: "PMOC",
   equipamentos: "equipamentos", ordensAbertas: "OS abertas pelo contato", orcamentosAc: "orçamentos", aceitesConfirmados: "aceites de OS",
   qrcode: "QR Code", atividades: "atividades de OS", respostasFormulario: "formulários respondidos", checklistRespostas: "checklists",
   fotosAtendimento: "fotos de atendimento", servicosAdicionais: "serviços adicionais", anexosOs: "anexos de OS",

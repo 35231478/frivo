@@ -236,6 +236,8 @@ describe("Configurações › Orçamentos e propostas", () => {
       orcamentoMostrarMateriais: true,
       // "Orçamento E2": a tela também manda como a empresa cobra os materiais (intocado = Incluso, o padrão)
       orcamentoCobrancaMateriais: "INCLUSO",
+      // PC-1: o prazo do aviso do pedido do cliente (intocado = 7 dias, o padrão)
+      pedidoClienteDiasAlerta: "7",
     });
     // Leva 3 da padronização: a confirmação do salvar é o toast (não mais a caixa verde na tela)
     expect([...document.querySelectorAll("[data-toast='sucesso']")].map((t) => t.textContent?.trim())).toEqual(["Padrões salvos. Valem para os próximos orçamentos."]);

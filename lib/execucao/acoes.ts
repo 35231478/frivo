@@ -10,6 +10,7 @@ import { z } from "zod";
 import { momentoDaConclusao, type RelogioDaConclusao } from "@/lib/os/conclusao-atividade";
 import { historicoTermino, inicioDaAtividade, MSG_TERMINO_FORA, terminoValido } from "@/lib/tecnico/andamento";
 import { prisma } from "@/lib/prisma";
+import { travaIniciarAtividade } from "@/lib/pedido-cliente/server";
 import { marcarComparecimento } from "@/lib/atendimento/prazo-server";
 import { horarioDoToque } from "@/lib/tecnico/aviso-cliente";
 import { TIPOS_IMAGEM } from "@/lib/anexos";
@@ -578,6 +579,9 @@ export async function removerFotoAdicional(ctx: ContextoExecucao, ref: { fotoId?
  */
 export async function iniciarAtividade(ctx: ContextoExecucao, relogio: { em?: string | null; agoraAparelho?: string | null } = {}) {
   if (ctx.atividade.status !== "AGENDADA") return ok({ status: ctx.atividade.status });
+  // O cliente exige o pedido dele antes da execução e ele ainda não veio (nem foi liberado): não começa (lib/pedido-cliente)
+  const semPedido = await travaIniciarAtividade(ctx.empresaId, ctx.atividade.id);
+  if (semPedido) return erro(409, semPedido);
   // A hora do início (atividade esquecida em andamento): a do toque no aparelho, mesmo que a fila chegue depois
   const iniciadaEm = momentoDaConclusao(relogio);
   const { count } = await prisma.atividadeOs.updateMany({ where: { id: ctx.atividade.id, status: "AGENDADA" }, data: { status: "EM_ANDAMENTO", iniciadaEm } });

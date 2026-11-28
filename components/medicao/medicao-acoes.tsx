@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import { chaveHojeBR } from "@/lib/fuso";
 import { InputData } from "@/components/ui/input-data";
+import { GavetaPedido } from "@/components/pedido-cliente/gaveta-pedido";
 import { usePermissoes } from "@/components/providers/permissoes-provider";
 
 interface MedicaoAcoesProps {
@@ -32,7 +33,7 @@ type Painel = "PC" | "NF" | "BOLETO" | "PAGAMENTO" | null;
 const FEITO = (acao: string, doc: string): string => ({
   ENVIAR: `${doc} enviada para aprovação.`,
   APROVAR_MANUAL: `Aprovação registrada: a ${doc.toLowerCase()} seguiu no ciclo.`,
-  REGISTRAR_PC: "Pedido de compra registrado.",
+  REGISTRAR_PC: "Pedido do cliente informado.",
   REGISTRAR_NF: "Nota fiscal registrada.",
   REGISTRAR_BOLETO: "Boleto registrado.",
   REGISTRAR_PAGAMENTO: `Pagamento registrado: ${doc.toLowerCase()} quitada.`,
@@ -51,8 +52,6 @@ export function MedicaoAcoes({ medicaoId, numero, tokenPublico, status, avulsa }
   const [painel, setPainel] = useState<Painel>(null);
 
   // Campos dos painéis
-  const [pcNumero, setPcNumero] = useState("");
-  const [pcAnexoUrl, setPcAnexoUrl] = useState("");
   const [nfNumero, setNfNumero] = useState("");
   const [nfUrl, setNfUrl] = useState("");
   const [boletoUrl, setBoletoUrl] = useState("");
@@ -153,8 +152,8 @@ export function MedicaoAcoes({ medicaoId, numero, tokenPublico, status, avulsa }
 
         {/* AGUARDANDO_PC */}
         {podeMexer && status === "AGUARDANDO_PC" && (
-          <Button variant="primary" data-registrar-pc onClick={() => setPainel(painel === "PC" ? null : "PC")}>
-            <ScrollText className="w-4 h-4" /> Registrar PC recebido
+          <Button variant="primary" data-registrar-pc onClick={() => setPainel("PC")}>
+            <ScrollText className="w-4 h-4" /> Informar pedido do cliente
           </Button>
         )}
 
@@ -205,26 +204,9 @@ export function MedicaoAcoes({ medicaoId, numero, tokenPublico, status, avulsa }
         )}
       </div>
 
-      {/* Painel: PC */}
-      {painel === "PC" && (
-        <div className="border border-surface-border bg-surface-alt/60 rounded-lg p-4 space-y-3">
-          <h4 className="text-sm font-semibold text-ink">Registrar pedido de compra (PC)</h4>
-          <FormGrid cols={2}>
-            <FormField label="Número do PC" required>
-              <Input value={pcNumero} onChange={(e) => setPcNumero(e.target.value)} placeholder="Ex.: PC-2026-001" />
-            </FormField>
-            <FormField label="Link do anexo (URL)" hint="Opcional">
-              <Input value={pcAnexoUrl} onChange={(e) => setPcAnexoUrl(e.target.value)} placeholder="https://..." />
-            </FormField>
-          </FormGrid>
-          <div className="flex justify-end gap-2">
-            <Button variant="secondary" onClick={() => setPainel(null)}>Cancelar</Button>
-            <Button onClick={() => executar("REGISTRAR_PC", { pcNumero, pcAnexoUrl })} loading={carregando === "REGISTRAR_PC"}>
-              <Check className="w-4 h-4" /> Confirmar PC
-            </Button>
-          </div>
-        </div>
-      )}
+      {/* Pedido do cliente (o antigo "PC"): a MESMA gaveta da OS e do orçamento — o pedido fica nas OS/orçamentos da
+          fatura, entra na NFS-e e a fatura segue para a nota (lib/pedido-cliente) */}
+      {painel === "PC" && <GavetaPedido aberto onFechar={() => setPainel(null)} alvo={{ medicaoId }} />}
 
       {/* Painel: NF */}
       {painel === "NF" && (

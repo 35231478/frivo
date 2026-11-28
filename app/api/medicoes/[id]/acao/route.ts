@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { exigirPermissao } from "@/lib/permissoes-server";
 import { prisma } from "@/lib/prisma";
+import { registrarPedido } from "@/lib/pedido-cliente/server";
 import { acaoMedicaoSchema } from "@/lib/validations";
 import { buildMedicaoPublicUrl } from "@/lib/medicao-helpers";
 import { desfazerContasDaMedicao } from "@/lib/financeiro-server";
@@ -71,16 +72,13 @@ export async function POST(req: NextRequest, { params }: Params) {
         return NextResponse.json({ erro: "Medição não está aguardando PC" }, { status: 400 });
       }
       if (!a.pcNumero) return NextResponse.json({ erro: "Informe o número do PC" }, { status: 400 });
-      await prisma.medicao.update({
-        where: { id },
-        data: {
-          status: "PC_RECEBIDO",
-          pcNumero: a.pcNumero,
-          pcAnexoUrl: a.pcAnexoUrl || null,
-          pcRecebidoEm: new Date(),
-        },
-      });
-      return NextResponse.json({ ok: true, status: "PC_RECEBIDO" });
+      // Um jeito só: o PC da fatura é o PEDIDO DO CLIENTE das OS/orçamentos dela (lib/pedido-cliente) — fica nelas
+      // também, entra na discriminação da NFS-e, e a fatura segue para a nota
+      const r = await registrarPedido({ empresaId, usuarioId: session.user!.id }, { numero: a.pcNumero }, { medicaoId: id });
+      if (!r.ok) return NextResponse.json({ erro: r.erro }, { status: r.status });
+      if (a.pcAnexoUrl) await prisma.medicao.update({ where: { id }, data: { pcAnexoUrl: a.pcAnexoUrl } });
+      const depois = await prisma.medicao.findUnique({ where: { id }, select: { status: true } });
+      return NextResponse.json({ ok: true, status: depois?.status ?? "PC_RECEBIDO", alerta: r.alerta });
     }
 
     case "REGISTRAR_NF": {

@@ -12,6 +12,7 @@ import { avisosDeHojePorAtividade } from "@/lib/execucao/aviso-cliente";
 import type { AvisosTela } from "@/lib/tecnico/aviso-cliente";
 import { numerosDasVisitas } from "@/lib/os/visitas-server";
 import type { MaterialPrevisto } from "@/lib/tecnico/o-que-levar";
+import { whereOsAguardando } from "@/lib/pedido-cliente/where";
 import { prazoDefinido } from "@/lib/os/prazo-execucao";
 
 const SELECT_CARTAO = {
@@ -51,6 +52,8 @@ export interface CartaoAtividade {
   descricao: string;
   /** A OS veio de um chamado do cliente (portal ou QR Code): a descrição é o que ele pediu */
   chamado: boolean;
+  /** O cliente exige o pedido dele ANTES da execução e ele ainda não veio: o início trava (lib/pedido-cliente) */
+  aguardandoPedido?: boolean;
   /** O que o escritório escreveu para a visita: a observação da atividade e as observações da OS */
   orientacao: string;
   /**
@@ -115,8 +118,18 @@ async function comAvisosDeHoje(cartoes: CartaoAtividade[], agora: Date): Promise
 
 /** Os cartões das atividades, com "Visita N de M" nas que são visita de uma OS em campanha */
 async function cartoesDe(atividades: AtividadeCartao[]): Promise<CartaoAtividade[]> {
-  const visitas = await numerosDasVisitas(atividades);
-  return atividades.map((a) => { const v = visitas.get(a.id); return v ? { ...montarCartao(a), visita: v } : montarCartao(a); });
+  const osIds = [...new Set(atividades.map((a) => a.ordemServico.id))];
+  // As OS de cliente que exige o pedido ANTES da execução e ainda não o mandou (o cartão avisa antes do "Cheguei")
+  const [visitas, travadas] = await Promise.all([
+    numerosDasVisitas(atividades),
+    osIds.length ? prisma.ordemServico.findMany({ where: { id: { in: osIds }, ...whereOsAguardando(["EXECUTAR"]) }, select: { id: true } }) : [],
+  ]);
+  const semPedido = new Set(travadas.map((o) => o.id));
+  return atividades.map((a) => {
+    const v = visitas.get(a.id);
+    const c = v ? { ...montarCartao(a), visita: v } : montarCartao(a);
+    return semPedido.has(a.ordemServico.id) ? { ...c, aguardandoPedido: true } : c;
+  });
 }
 
 /**
