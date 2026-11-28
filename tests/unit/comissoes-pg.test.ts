@@ -245,6 +245,18 @@ describe.skipIf(!URL_PG)("COM-1 — comissões (PostgreSQL real)", () => {
     expect((await chamar("medicoes/[id]/acao", "POST", { id: med.id }, { acao: "CANCELAR" })).status).toBe(200);
     await srv.sincronizarComissoes("e1");
     expect(await liberado(o.id)).toBe(0);
+    // Conta a receber com dinheiro que depois é CANCELADA: o que entrou nela deixa de contar (estorna o liberado)
+    const c = await novoOrcamento({ servicos: [{ servicoId: "sLimp", descricao: "Limpeza", v: 300 }] });
+    await aprovar(c.id);
+    await faturar(c.id);
+    const medC = await prisma.medicao.findFirst({ where: { itens: { some: { orcamentoId: c.id } } } });
+    const contaC = await contaDaFatura(medC.id);
+    expect((await chamar("contas-receber/[id]/recebimentos", "POST", { id: contaC.id }, { valor: 300, data: hoje() })).status).toBe(201);
+    await srv.sincronizarComissoes("e1");
+    expect(await liberado(c.id)).toBe(30);
+    await prisma.contaReceber.update({ where: { id: contaC.id }, data: { status: "CANCELADO" } });
+    await srv.sincronizarComissoes("e1");
+    expect(await liberado(c.id)).toBe(0);
 
     // Gatilho "na aprovação": libera tudo ao aprovar; cancelou depois → estorno automático
     await prisma.configuracao.update({ where: { empresaId: "e1" }, data: { comissaoQuando: "APROVACAO" } });
