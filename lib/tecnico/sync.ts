@@ -28,7 +28,7 @@ import { aceiteNoLocal } from "@/lib/os/aceite-server";
 import { materialRemoverSchema, materialSchema } from "@/lib/tecnico/materiais";
 import { gravarMaterial, removerMaterial } from "@/lib/execucao/materiais-campo";
 import { comentarioSchema } from "@/lib/tecnico/comentarios";
-import { comentarDoApp, comentarSemOsDoApp } from "@/lib/execucao/comentarios";
+import { comentarDoApp, comentarSemOsDoApp, corrigirEquipamentoDaFoto, ondeTecnicoVe } from "@/lib/execucao/comentarios";
 import { despesaSchema, SEM_OS } from "@/lib/tecnico/despesas";
 import { editarLegendaFoto } from "@/lib/os/legenda-foto-server";
 import { LEGENDA_MAX } from "@/lib/os/galeria";
@@ -71,6 +71,10 @@ export const operacaoSchema = z.discriminatedUnion("tipo", [
   z.object({ ...base, tipo: z.literal("materialRemover"), dados: materialRemoverSchema }).strict(),
   // Comentário na OS (conversa interna com o escritório): vale também com a atividade concluída
   z.object({ ...base, tipo: z.literal("comentario"), dados: comentarioSchema }).strict(),
+  // CHAT-1.1: corrigir (ou tirar) o equipamento de uma foto do chat desta OS — a mensagem pelo id, ou pelo clientId se
+  // ainda estava na fila; o mesmo valor de novo não muda nada; a trilha fica no histórico da OS
+  z.object({ ...base, tipo: z.literal("fotoChatEquipamento"), dados: z.object({ comentario: ref, equipamentoId: id.nullable() }).strict()
+    .refine((d) => !!d.comentario.id !== !!d.comentario.clientId, { message: "Mensagem inválida." }) }).strict(),
   // Despesa de campo com a foto do cupom: numa atividade (vai para a OS dela) ou fora de OS (atividadeId = "sem-os")
   z.object({ ...base, tipo: z.literal("despesa"), dados: despesaSchema }).strict(),
   z.object({ ...base, tipo: z.literal("concluir"), dados: concluirSchema }).strict(),
@@ -114,7 +118,7 @@ async function executar(ator: Ator, op: Operacao, lote: OpcoesLote): Promise<Res
   // CHAT-1: mensagem SEM OS ("chego em 10 minutos"): só na conversa do técnico com o escritório
   if (op.tipo === "comentario" && op.atividadeId === SEM_OS) return comentarSemOsDoApp(ator, op.dados);
   const equipamentoId = "equipamentoId" in op ? op.equipamentoId : undefined;
-  const ctx = await carregarContexto(ator, op.atividadeId, { equipamentoId, permitirBloqueada: op.tipo === "concluir" || op.tipo === "aceite" || op.tipo === "comentario" || op.tipo === "despesa" || op.tipo === "fotoOsLegenda" });
+  const ctx = await carregarContexto(ator, op.atividadeId, { equipamentoId, permitirBloqueada: op.tipo === "concluir" || op.tipo === "aceite" || op.tipo === "comentario" || op.tipo === "fotoChatEquipamento" || op.tipo === "despesa" || op.tipo === "fotoOsLegenda" });
   if (!ctx.ok) return { ok: false, status: ctx.status, erro: ctx.erro };
   switch (op.tipo) {
     case "iniciar": return iniciarAtividade(ctx, { em: op.em, agoraAparelho: lote.agoraAparelho });
@@ -141,6 +145,10 @@ async function executar(ator: Ator, op: Operacao, lote: OpcoesLote): Promise<Res
     case "material": return gravarMaterial(ctx, op.dados);
     case "materialRemover": return removerMaterial(ctx, op.dados);
     case "comentario": return comentarDoApp(ctx, op.dados);
+    case "fotoChatEquipamento": return corrigirEquipamentoDaFoto({
+      empresaId: ctx.empresaId, usuarioId: ctx.usuarioId, ref: op.dados.comentario, equipamentoId: op.dados.equipamentoId,
+      podeVer: ondeTecnicoVe(ctx.usuarioId, ctx.escopo.tecnicoId), osId: ctx.atividade.ordemServico.id, doApp: true,
+    });
     case "despesa": return lancarDespesa(ator, op.dados, ctx);
     case "concluir": {
       // "Campo de conclusão obrigatório" (Configuracao.appConclusaoObrigatoria): sem resumo, não conclui.

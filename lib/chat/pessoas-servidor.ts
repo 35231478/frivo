@@ -18,10 +18,12 @@ import { pode } from "@/lib/permissoes";
 import { filtroOrdens } from "@/lib/escopo/proprios";
 import { atividadesDoTecnico } from "@/lib/tecnico/escopo";
 import { inicioHojeBR } from "@/lib/fuso";
-import { apresentar, marcarConversaLida, marcarLeituraDaPessoa, nomesDeQuemLeu, SELECT_MENSAGEM } from "@/lib/execucao/comentarios";
+import { marcarConversaLida, marcarLeituraDaPessoa, mensagensDaConversa, ondeConversaDoTecnico, ondeTecnicoVe } from "@/lib/execucao/comentarios";
 import { ordenarPessoas, osPadraoDaMensagem, type OsDoDia, type PessoaResumo } from "@/lib/chat/regras";
 import type { QuemEscritorio } from "@/lib/chat/servidor";
 import type { ComentarioTela } from "@/lib/tecnico/comentarios";
+import { equipamentosDaOs } from "@/lib/os/galeria-server";
+import { equipamentoEmAndamento, type EquipamentoFotoTela } from "@/lib/chat/equipamento-foto";
 
 /** Quantas mensagens a conversa da pessoa traz (as mais recentes) */
 export const LIMITE_MENSAGENS_PESSOA = 300;
@@ -49,14 +51,8 @@ export async function pessoasDaEmpresa(empresaId: string): Promise<{ usuarioId: 
   });
 }
 
-/** O filtro da conversa do técnico (o usuário U dele, o técnico T). */
-export const ondeConversaDoTecnico = (usuarioId: string, tecnicoId: string): Prisma.OsComentarioWhereInput => ({
-  OR: [
-    { usuarioId },
-    { paraUsuarioId: usuarioId },
-    { paraUsuarioId: null, origem: "ESCRITORIO", ordemServico: { atividades: { some: atividadesDoTecnico(tecnicoId) } } },
-  ],
-});
+/** O filtro da conversa do técnico (o usuário U dele, o técnico T) — mora com a gravação, que confere a citada */
+export { ondeConversaDoTecnico };
 
 /** O que esta pessoa do escritório pode ver de uma conversa: a sem OS; com OS, só pela permissão de OS e o escopo. */
 export function visivelAoEscritorio(u: QuemEscritorio): Prisma.OsComentarioWhereInput {
@@ -64,6 +60,15 @@ export function visivelAoEscritorio(u: QuemEscritorio): Prisma.OsComentarioWhere
   // A relação da OS é opcional: "com OS e dentro do escopo" explícito (o filtro vazio do admin não pode virar "sem OS")
   return { OR: [{ ordemServicoId: null }, { AND: [{ ordemServicoId: { not: null } }, { ordemServico: { is: filtroOrdens(u) } }] }] };
 }
+
+/** Tudo o que esta pessoa do escritório vê: com OS pela permissão e o escopo de OS; a sem OS, só com "Conversas". */
+export function ondeEscritorioVe(u: QuemEscritorio): Prisma.OsComentarioWhereInput {
+  return podeConversas(u, "visualizar") ? visivelAoEscritorio(u) : { AND: [visivelAoEscritorio(u), { ordemServicoId: { not: null } }] };
+}
+
+/** O que o escritório pode CITAR ao escrever para uma pessoa: a conversa dela, no que ele vê. */
+export const citavelNaConversa = (u: QuemEscritorio, p: { usuarioId: string; tecnicoId: string }): Prisma.OsComentarioWhereInput =>
+  ({ AND: [ondeConversaDoTecnico(p.usuarioId, p.tecnicoId), visivelAoEscritorio(u)] });
 
 /** As OS do técnico no dia: as atividades de hoje (Brasília) e as em andamento; a em andamento primeiro. */
 export async function osDoDiaDoTecnico(empresaId: string, tecnicoId: string, agora: Date = new Date()): Promise<OsDoDia[]> {
@@ -84,12 +89,6 @@ export async function osDoDiaDoTecnico(empresaId: string, tecnicoId: string, ago
   return [...porOs.values()].sort((x, y) => Number(y.emAndamento) - Number(x.emAndamento));
 }
 
-async function mensagensDe(empresaId: string, onde: Prisma.OsComentarioWhereInput, usuarioId: string): Promise<ComentarioTela[]> {
-  const linhas = await prisma.osComentario.findMany({ where: { AND: [{ empresaId }, onde] }, orderBy: { criadoEm: "desc" }, take: LIMITE_MENSAGENS_PESSOA, select: SELECT_MENSAGEM });
-  linhas.reverse();
-  const nomes = await nomesDeQuemLeu(empresaId, linhas);
-  return linhas.map((c) => apresentar(c, usuarioId, nomes));
-}
 
 /**
  * Ler a conversa: avança a leitura da pessoa naquela conversa (o contador por pessoa), a das OS que aparecem nela (o
@@ -147,18 +146,22 @@ export async function pessoasDoEscritorio(u: QuemEscritorio, op: { busca?: strin
 }
 
 /** A conversa do escritório com um técnico: as mensagens (que esta pessoa pode ver), as OS dele no dia e a OS padrão. */
-export async function conversaComPessoa(u: QuemEscritorio, usuarioIdTecnico: string, agora: Date = new Date()):
-  Promise<{ pessoa: { usuarioId: string; nome: string; avatar: string | null }; mensagens: ComentarioTela[]; osDoDia: OsDoDia[]; osPadrao: string | null } | null> {
+export async function conversaComPessoa(u: QuemEscritorio, usuarioIdTecnico: string, agora: Date = new Date(), op: { ate?: string | null } = {}):
+  Promise<{ pessoa: { usuarioId: string; nome: string; avatar: string | null }; mensagens: ComentarioTela[]; osDoDia: OsDoDia[]; osPadrao: string | null; equipamentosDasOs: EquipamentosDasOs } | null> {
   const p = (await pessoasDaEmpresa(u.empresaId)).find((x) => x.usuarioId === usuarioIdTecnico);
   if (!p) return null;
-  const onde: Prisma.OsComentarioWhereInput = { AND: [ondeConversaDoTecnico(p.usuarioId, p.tecnicoId), visivelAoEscritorio(u)] };
+  const onde = citavelNaConversa(u, p);
   await lerConversa(u.empresaId, u.id, p.usuarioId, onde, agora);
-  const [mensagens, osDoDia] = await Promise.all([mensagensDe(u.empresaId, onde, u.id), osDoDiaDoTecnico(u.empresaId, p.tecnicoId, agora)]);
+  const [mensagens, osDoDia] = await Promise.all([
+    mensagensDaConversa(u.empresaId, onde, u.id, { limite: LIMITE_MENSAGENS_PESSOA, ate: op.ate, visivel: ondeEscritorioVe(u) }),
+    osDoDiaDoTecnico(u.empresaId, p.tecnicoId, agora),
+  ]);
   // O seletor mostra só as OS que esta pessoa do escritório pode ver ("Ver só os próprios")
   const veOs = pode(u.permissoes ?? null, "ordens", "visualizar", u.role ?? undefined);
   const visiveis = veOs && osDoDia.length ? new Set((await prisma.ordemServico.findMany({ where: { id: { in: osDoDia.map((o) => o.osId) }, empresaId: u.empresaId, ...filtroOrdens(u) }, select: { id: true } })).map((o) => o.id)) : new Set<string>();
   const doDia = osDoDia.filter((o) => visiveis.has(o.osId)).map(({ atividadeId: _a, ...o }) => o);
-  return { pessoa: { usuarioId: p.usuarioId, nome: p.nome, avatar: p.avatar }, mensagens, osDoDia: doDia, osPadrao: osPadraoDaMensagem({ osDoDia: doDia, mensagens, agora }) };
+  const equipamentos = await equipamentosDasOsDaConversa(u.empresaId, [...mensagens.map((m) => m.os?.id), ...doDia.map((o) => o.osId)]);
+  return { pessoa: { usuarioId: p.usuarioId, nome: p.nome, avatar: p.avatar }, mensagens, osDoDia: doDia, osPadrao: osPadraoDaMensagem({ osDoDia: doDia, mensagens, agora }), equipamentosDasOs: equipamentos };
 }
 
 /** Quantas pessoas têm mensagem por ler para quem vê (o ícone do topo, na visão por pessoa). */
@@ -169,12 +172,37 @@ export async function pessoasNaoLidas(u: QuemEscritorio): Promise<number> {
 // ── Técnico (a conversa "Escritório") ───────────────────────────────────────────────────────
 
 /** A conversa do técnico com o escritório (lê e marca como lida), as OS dele no dia e a OS padrão. */
-export async function conversaDoTecnicoComEscritorio(empresaId: string, usuarioId: string, tecnicoId: string, agora: Date = new Date()):
-  Promise<{ mensagens: ComentarioTela[]; osDoDia: OsDoDia[]; osPadrao: string | null }> {
+export async function conversaDoTecnicoComEscritorio(empresaId: string, usuarioId: string, tecnicoId: string, agora: Date = new Date(), op: { ate?: string | null } = {}):
+  Promise<{ mensagens: ComentarioTela[]; osDoDia: OsDoDia[]; osPadrao: string | null; atividadesDasOs: OsDoDia[]; equipamentosDasOs: EquipamentosDasOs }> {
   const onde = ondeConversaDoTecnico(usuarioId, tecnicoId);
   await lerConversa(empresaId, usuarioId, usuarioId, onde, agora);
-  const [mensagens, osDoDia] = await Promise.all([mensagensDe(empresaId, onde, usuarioId), osDoDiaDoTecnico(empresaId, tecnicoId, agora)]);
-  return { mensagens, osDoDia, osPadrao: osPadraoDaMensagem({ osDoDia, mensagens, agora }) };
+  const [mensagens, osDoDia] = await Promise.all([
+    mensagensDaConversa(empresaId, onde, usuarioId, { limite: LIMITE_MENSAGENS_PESSOA, ate: op.ate, visivel: ondeTecnicoVe(usuarioId, tecnicoId) }),
+    osDoDiaDoTecnico(empresaId, tecnicoId, agora),
+  ]);
+  const [deOutrosDias, equipamentos] = await Promise.all([
+    atividadesDasOs(empresaId, tecnicoId, mensagens, osDoDia),
+    equipamentosDasOsDaConversa(empresaId, [...mensagens.map((m) => m.os?.id), ...osDoDia.map((o) => o.osId)], tecnicoId),
+  ]);
+  return { mensagens, osDoDia, osPadrao: osPadraoDaMensagem({ osDoDia, mensagens, agora }), atividadesDasOs: deOutrosDias, equipamentosDasOs: equipamentos };
+}
+
+/**
+ * Responder herda a OS da citada — também de uma OS de outro dia. A fila do app sobe pela atividade do técnico; aqui
+ * vai a atividade dele em cada OS que aparece na conversa (e que não está nas do dia), a mais recente.
+ */
+async function atividadesDasOs(empresaId: string, tecnicoId: string, mensagens: ComentarioTela[], osDoDia: OsDoDia[]): Promise<OsDoDia[]> {
+  const doDia = new Set(osDoDia.map((o) => o.osId));
+  const ids = [...new Set(mensagens.map((m) => m.os?.id).filter((x): x is string => !!x && !doDia.has(x)))];
+  if (!ids.length) return [];
+  const as = await prisma.atividadeOs.findMany({
+    where: { ...atividadesDoTecnico(tecnicoId), ordemServicoId: { in: ids }, ordemServico: { empresaId, status: { not: "CANCELADA" } } },
+    orderBy: [{ dataAgendada: "desc" }, { criadoEm: "desc" }],
+    select: { id: true, ordemServico: { select: { id: true, numero: true, cliente: { select: { nome: true, nomeFantasia: true } } } } },
+  });
+  const porOs = new Map<string, OsDoDia>();
+  for (const a of as) if (!porOs.has(a.ordemServico.id)) porOs.set(a.ordemServico.id, { osId: a.ordemServico.id, numero: a.ordemServico.numero, cliente: nomeCliente(a.ordemServico.cliente), emAndamento: false, atividadeId: a.id });
+  return [...porOs.values()];
 }
 
 /** Quantas mensagens do escritório o técnico ainda não leu (o contador do Chat na barra do app). */
@@ -194,7 +222,25 @@ export async function escritorioVeMensagem(u: QuemEscritorio, comentarioId: stri
 
 /** O técnico vê esta mensagem? (a conversa dele, ou uma OS em que tem atividade) */
 export async function tecnicoVeMensagem(empresaId: string, usuarioId: string, tecnicoId: string, comentarioId: string): Promise<boolean> {
-  return !!(await prisma.osComentario.findFirst({
-    where: { AND: [{ id: comentarioId, empresaId }, { OR: [ondeConversaDoTecnico(usuarioId, tecnicoId), { ordemServico: { atividades: { some: atividadesDoTecnico(tecnicoId) } } }] }] }, select: { id: true },
+  return !!(await prisma.osComentario.findFirst({ where: { AND: [{ id: comentarioId, empresaId }, ondeTecnicoVe(usuarioId, tecnicoId)] }, select: { id: true } }));
+}
+
+// ── CHAT-1.1: os equipamentos das OS da conversa (a foto se vincula a um deles) ───────────────────
+
+/** Por OS: os equipamentos dela (o mesmo critério e os mesmos nomes da galeria da OS) e, para o técnico, o da atividade em andamento. */
+export type EquipamentosDasOs = Record<string, { equipamentos: EquipamentoFotoTela[]; emAndamento: string | null }>;
+
+/** As OS das mensagens e do dia (até 40): uma consulta por OS, em paralelo. `tecnicoId`: o equipamento em andamento dele. */
+export async function equipamentosDasOsDaConversa(empresaId: string, osIds: (string | null | undefined)[], tecnicoId?: string | null): Promise<EquipamentosDasOs> {
+  const ids = [...new Set(osIds.filter((x): x is string => !!x))].slice(0, 40);
+  const pares = await Promise.all(ids.map(async (osId) => {
+    const [eqs, andamento] = await Promise.all([
+      equipamentosDaOs(empresaId, osId),
+      tecnicoId ? prisma.atividadeEquipamento.findMany({
+        where: { atividade: { ordemServicoId: osId, empresaId, status: "EM_ANDAMENTO", ...atividadesDoTecnico(tecnicoId) } }, select: { equipamentoId: true, feito: true },
+      }) : Promise.resolve([]),
+    ]);
+    return [osId, { equipamentos: eqs.map((e) => ({ id: e.id, titulo: e.titulo, detalhe: e.detalhe })), emAndamento: equipamentoEmAndamento(andamento) }] as const;
   }));
+  return Object.fromEntries(pares);
 }

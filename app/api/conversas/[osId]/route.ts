@@ -4,18 +4,21 @@ import { comentarioSchema } from "@/lib/tecnico/comentarios";
 import { comentarDoEscritorio } from "@/lib/execucao/comentarios";
 import { conversaDoEscritorio } from "@/lib/chat/servidor";
 import { MSG_SEM_CONVERSA } from "@/lib/chat/regras";
-import { guardaEscritorio, SEM_CACHE } from "@/lib/chat/rotas-server";
+import { guardaEscritorio, lerAte, SEM_CACHE } from "@/lib/chat/rotas-server";
 import { prisma } from "@/lib/prisma";
 import { filtroOrdens } from "@/lib/escopo/proprios";
 
 type Params = { params: Promise<{ osId: string }> };
 
-/** GET /api/conversas/[osId] — CHAT-1: a conversa da OS (o resumo e as mensagens). Ler marca como lidas (o ✓✓ de quem escreveu). */
-export async function GET(_: NextRequest, { params }: Params) {
+/**
+ * GET /api/conversas/[osId]?ate= — CHAT-1: a conversa da OS (o resumo e as mensagens). Ler marca como lidas (o ✓✓ de
+ * quem escreveu). `ate`: o id de uma mensagem antiga (a citada) — traz desde ela.
+ */
+export async function GET(req: NextRequest, { params }: Params) {
   const g = await guardaEscritorio("visualizar");
   if (g.resposta) return g.resposta;
   const { osId } = await params;
-  const r = await conversaDoEscritorio(g.quem, osId);
+  const r = await conversaDoEscritorio(g.quem, osId, { ate: lerAte(req.url) });
   if (!r) return NextResponse.json({ erro: MSG_SEM_CONVERSA }, { status: 404 });
   return NextResponse.json(r, { headers: SEM_CACHE });
 }

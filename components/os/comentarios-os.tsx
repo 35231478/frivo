@@ -20,7 +20,7 @@ export function ComentariosOs({ osId, podeResponder }: { osId: string; podeRespo
         </h3>
         <Link href={urlConversaEscritorio(osId)} className="text-sm font-semibold text-primary-700 hover:underline" data-abrir-em-conversas>Abrir na tela de conversas</Link>
       </div>
-      <ConversaEscritorio alvo={{ tipo: "os", osId }} podeEscrever={podeResponder} className="h-[28rem] rounded-card border border-surface-border overflow-hidden" />
+      <ConversaEscritorio alvo={{ tipo: "os", osId }} podeEscrever={podeResponder} podeCorrigirFoto={podeResponder} className="h-[28rem] rounded-card border border-surface-border overflow-hidden" />
     </section>
   );
 }
