@@ -59,7 +59,12 @@ export interface MaterialTela {
 }
 
 /** Produto do catálogo como vai para o aparelho: SEM preço e SEM custo. */
-export interface ProdutoCatalogo { id: string; codigo: number | null; nome: string; unidade: string }
+export interface ProdutoCatalogo {
+  id: string; codigo: number | null; nome: string; unidade: string;
+  /** D5 — o saldo do estoque (sem custo nem preço). null = o produto não controla estoque ou o módulo está desligado;
+   *  ausente = catálogo antigo no aparelho. */
+  saldo?: number | null;
+}
 
 /* ───────── baixa ───────── */
 
@@ -102,6 +107,39 @@ export function escolherSeparacao(lista: SeparacaoCandidata[], produtoId: string
     .filter((m) => (m.estadoSeparacao === "SEPARADO" && m.quantidadeConsumida <= 0) || (m.estadoSeparacao === "CONSUMIDO" && m.doCampo))
     .sort((a, b) => a.ordem - b.ordem || a.id.localeCompare(b.id));
   return ok[0]?.id ?? null;
+}
+
+/**
+ * D5 — quanto da SEPARAÇÃO desta OS o próximo uso do produto ainda consome antes de sair do estoque: a mesma escolha do
+ * servidor (escolherSeparacao). Separada e ainda não consumida = tudo; já consumida pelo campo = o que sobra dela.
+ */
+export function separadoParaUso(lista: SeparacaoCandidata[], produtoId: string | null): number {
+  const id = escolherSeparacao(lista, produtoId);
+  const m = id ? lista.find((x) => x.id === id) : null;
+  if (!m) return 0;
+  return arred(Math.max(0, m.estadoSeparacao === "SEPARADO" ? m.quantidadeSeparada : m.quantidadeSeparada - m.quantidadeConsumida));
+}
+
+/**
+ * D5 — o SALDO DISPONÍVEL para este uso, sem o estoque ficar negativo: o saldo do catálogo + o separado para esta OS −
+ * o que o aparelho já lançou deste produto e ainda não enviou (o servidor ainda não abateu). null = não controla estoque.
+ */
+export function disponivelParaUso(saldo: number | null | undefined, separado: number, pendentes: number): number | null {
+  if (saldo == null || !Number.isFinite(saldo)) return null;
+  return arred(saldo + Math.max(0, separado) - Math.max(0, pendentes));
+}
+
+/** D5 — o aviso ao passar do saldo: lança mesmo assim (o escritório recebe o push "Estoque negativo"). */
+export function avisoSemSaldo(quantidade: number, disponivel: number | null, unidade: string): string | null {
+  if (disponivel == null || !(quantidade > 0) || !(arred(quantidade) > disponivel)) return null;
+  return `Saldo disponível: ${textoQuantidade(Math.max(0, disponivel), unidade)}. Vai ficar negativo; o escritório será avisado.`;
+}
+
+/** D5 — a linha de saldo embaixo do material escolhido. */
+export function textoSaldo(disponivel: number | null, separado: number, unidade: string): string | null {
+  if (disponivel == null) return null;
+  const base = `Saldo disponível: ${textoQuantidade(disponivel, unidade)}`;
+  return separado > 0 ? `${base} (${textoQuantidade(separado, unidade)} separado para esta OS)` : base;
 }
 
 /* ───────── catálogo no aparelho ───────── */

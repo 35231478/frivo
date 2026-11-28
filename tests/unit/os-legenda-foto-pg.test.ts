@@ -237,4 +237,29 @@ describe.skipIf(!URL_PG)("legenda editável das fotos da OS (PostgreSQL real)", 
     expect((await restaurar("fAntes", "EXECUCAO")).status).toBe(404);
     expect((await prisma.fotoAtendimento.findUnique({ where: { id: "fAntes" } })).legenda).toBe("Escrita de novo");
   });
+
+  it("D4: a legenda opcional da foto antes/depois pelo app (operação fotoLegenda): pelo id ou pelo id do aparelho; vazia volta à do sistema; trilha", async () => {
+    comoTecnico();
+    const opD4 = (dados: Record<string, unknown>, atividadeId = "a1") => ({ ...opLegenda(atividadeId, dados), tipo: "fotoLegenda" });
+    await prisma.fotoAtendimento.create({ data: { id: "fDepois", empresaId: "e1", atividadeId: "a1", equipamentoId: "eqA", momento: "DEPOIS", url: "data:image/png;base64,AA", clientId: "cli-dep", criadoPorId: "uT" } });
+    await prisma.fotoAtendimento.update({ where: { id: "fAntes" }, data: { legenda: null } });
+    const n = await prisma.osHistorico.count();
+    let r = await sync([opD4({ id: "fAntes", legenda: "Serpentina antes da limpeza" }), opD4({ clientId: "cli-dep", legenda: "Serpentina limpa" })]);
+    expect(r.json.resultados.map((x: any) => x.ok)).toEqual([true, true]);
+    expect((await prisma.fotoAtendimento.findMany({ where: { id: { in: ["fAntes", "fDepois"] } }, orderBy: { id: "asc" } })).map((f: any) => f.legenda))
+      .toEqual(["Serpentina antes da limpeza", "Serpentina limpa"]);
+    const trilha = (await prisma.osHistorico.findMany({ orderBy: { criadoEm: "asc" }, skip: n })).map((h: any) => h.detalhes);
+    expect(trilha).toEqual(["“Antes do serviço” → “Serpentina antes da limpeza” (app do técnico)", "“Depois do serviço” → “Serpentina limpa” (app do técnico)"]);
+    // a mesma operação reenviada não grava de novo
+    const op = opD4({ id: "fAntes", legenda: "Antes: serpentina com limo" });
+    await sync([op]); await sync([op]);
+    expect(await prisma.osHistorico.count()).toBe(n + 3);
+    // vazia: volta à legenda do sistema (e fica na trilha)
+    r = await sync([opD4({ clientId: "cli-dep", legenda: "" })]);
+    expect(r.json.resultados[0]).toMatchObject({ ok: true, dados: { legenda: "Depois do serviço", mudou: true } });
+    expect((await prisma.fotoAtendimento.findUnique({ where: { id: "fDepois" } })).legenda).toBeNull();
+    // a foto de outra atividade (do outro técnico) não; OS encerrada não
+    expect((await sync([opD4({ id: "fAntes", legenda: "Outra" }, "a3")])).json.resultados[0]).toMatchObject({ ok: false });
+    expect((await prisma.fotoAtendimento.findUnique({ where: { id: "fAntes" } })).legenda).toBe("Antes: serpentina com limo");
+  });
 });

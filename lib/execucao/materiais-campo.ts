@@ -27,8 +27,9 @@ import { prepararCobrancaCampo, sincronizarItemCampo, type CobrancaCampo } from 
 import type { ContextoExecucao } from "@/lib/execucao/contexto";
 import {
   deltaBaixaDireta, escolherSeparacao, identificado, MSG_EQUIP_FORA, MSG_SEM_MATERIAL, MSG_MATERIAL_REMOVIDO, MSG_PRODUTO_INVALIDO, MSG_SO_O_SEU, MSG_SOBRA_DEVOLVIDA,
-  planoAjusteConsumo, textoQuantidade, type DadosMaterial, type MaterialTela,
+  planoAjusteConsumo, separadoParaUso, textoQuantidade, type DadosMaterial, type MaterialTela, type SeparacaoCandidata,
 } from "@/lib/tecnico/materiais";
+import { temModulo } from "@/lib/modulos/servidor";
 
 type Resultado<T> = { ok: true; status: number; dados: T } | { ok: false; status: number; erro: string };
 const ok = <T>(dados: T, status = 200): Resultado<T> => ({ ok: true, status, dados });
@@ -247,6 +248,29 @@ export async function materiaisDaAtividade(empresaId: string, atividadeId: strin
   const linhas = await prisma.atividadeMaterial.findMany({ where: { empresaId, atividadeId, removidoEm: null }, orderBy: { criadoEm: "asc" }, select: SELECT_LINHA });
   const nomes = await nomesDeUsuarios(empresaId, linhas.map((l) => l.criadoPorId));
   return linhas.map((l) => apresentar(l, usuarioId, l.criadoPorId ? nomes.get(l.criadoPorId) ?? null : null));
+}
+
+/**
+ * D5 — o separado para esta OS que o próximo uso de cada produto ainda consome (a mesma escolha do lançamento): o app
+ * soma ao saldo do catálogo para avisar "vai ficar negativo" no mesmo ponto em que o escritório recebe o push.
+ * Estoque desligado: nada (não há saldo para avisar).
+ */
+export async function separadoDaOsParaUso(empresaId: string, osId: string): Promise<Record<string, number>> {
+  if (!(await temModulo(empresaId, "estoque"))) return {};
+  const sep = await prisma.osMaterial.findMany({
+    where: { ordemServicoId: osId, produtoId: { not: null }, quantidadeSeparada: { gt: 0 }, ordemServico: { empresaId } },
+    select: { id: true, produtoId: true, estadoSeparacao: true, quantidadeSeparada: true, quantidadeConsumida: true, ordem: true, _count: { select: { usosCampo: { where: { removidoEm: null } } } } },
+  });
+  const lista: SeparacaoCandidata[] = sep.map((m) => ({
+    id: m.id, produtoId: m.produtoId, estadoSeparacao: m.estadoSeparacao, quantidadeSeparada: Number(m.quantidadeSeparada),
+    quantidadeConsumida: Number(m.quantidadeConsumida), ordem: m.ordem, doCampo: m._count.usosCampo > 0,
+  }));
+  const r: Record<string, number> = {};
+  for (const pid of new Set(lista.map((m) => m.produtoId!))) {
+    const q = separadoParaUso(lista, pid);
+    if (q > 0) r[pid] = q;
+  }
+  return r;
 }
 
 async function nomesDeUsuarios(empresaId: string, ids: (string | null)[]) {

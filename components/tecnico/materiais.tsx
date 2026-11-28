@@ -10,7 +10,7 @@ import { useTecnico } from "@/components/tecnico/contexto";
 import { lerNumero } from "@/components/tecnico/equipamento";
 import { novoClientId } from "@/lib/tecnico/offline/motor";
 import { arred } from "@/lib/estoque/regras";
-import { buscarNoCatalogo, QTD_MAX, textoQuantidade, type MaterialTela, type ProdutoCatalogo } from "@/lib/tecnico/materiais";
+import { avisoSemSaldo, buscarNoCatalogo, disponivelParaUso, QTD_MAX, textoQuantidade, textoSaldo, type MaterialTela, type ProdutoCatalogo } from "@/lib/tecnico/materiais";
 import type { ExecucaoTela, NovaOperacao } from "@/lib/tecnico/offline/tipos";
 
 type Registrar = (ops: NovaOperacao[]) => Promise<void>;
@@ -46,7 +46,7 @@ export function MateriaisUsados({ x, registrar, equipamentoId, nomeEquipamento }
       <h2 className="text-base font-bold text-ink inline-flex items-center gap-1.5">
         <Package className="w-4 h-4 text-ink-muted" /> Materiais usados
         {lista.length > 0 && <span className="text-xs font-semibold rounded-full bg-surface-linha text-ink px-2 py-0.5" data-contagem-materiais>{lista.length}</span>}
-        <Dica rotulo="Materiais usados" texto="Busque no catálogo e informe a quantidade. A baixa sai do estoque com o veículo registrado; o que foi separado para esta OS é abatido da separação. Funciona sem sinal." />
+        <Dica rotulo="Materiais usados" texto="Busque no catálogo e informe a quantidade. Aparece o saldo disponível; passou dele, lança assim mesmo e o escritório é avisado. O separado para esta OS é abatido da separação. Funciona sem sinal." />
       </h2>
       {lista.length > 0 && (
         <ul className="rounded-card border border-surface-border bg-white divide-y divide-surface-border">
@@ -82,12 +82,30 @@ export function MateriaisUsados({ x, registrar, equipamentoId, nomeEquipamento }
 
 const rotuloEquip = (e: ExecucaoTela["equipamentos"][number]["equipamento"]) => [e.titulo, e.tag && `TAG ${e.tag}`, e.local].filter(Boolean).join(" — ");
 
+/**
+ * D5 — o saldo para este uso: o do catálogo guardado + o separado para esta OS − o que o aparelho lançou deste produto e
+ * ainda não enviou. `jaNoEstoque` = o que a linha corrigida já tirou do estoque (o aviso olha só a diferença).
+ * null = material avulso, produto que não controla estoque, Estoque desligado ou catálogo antigo.
+ */
+export function saldoDoUso(x: ExecucaoTela, catalogo: ProdutoCatalogo[] | null, linha: MaterialTela | null, produto: ProdutoCatalogo | null) {
+  const produtoId = linha?.produtoId ?? produto?.id ?? null;
+  if (!produtoId) return null;
+  const doCatalogo = produto?.id === produtoId ? produto : catalogo?.find((p) => p.id === produtoId);
+  const separado = x.separado?.[produtoId] ?? 0;
+  const pendentes = (x.materiais ?? []).filter((m) => m.produtoId === produtoId && m.pendente && !m.id && m.clientId !== linha?.clientId)
+    .reduce((t, m) => t + m.quantidade, 0);
+  const disponivel = disponivelParaUso(doCatalogo?.saldo, separado, pendentes);
+  if (disponivel == null) return null;
+  return { disponivel, separado, jaNoEstoque: linha?.id ? linha.quantidade : 0 };
+}
+
 /** Escolher no catálogo (ou descrever) → quantidade → equipamento. Grava no aparelho. */
 function ModalMaterial({ x, registrar, linha, equipamentoId, onFechar }: {
   x: ExecucaoTela; registrar: Registrar; linha: MaterialTela | null; equipamentoId?: string; onFechar: () => void;
 }) {
   const atividadeId = x.atividade.id;
-  const catalogo = useCatalogo(!linha);
+  // O catálogo também na correção de um material do catálogo: é dele que vem o saldo (D5)
+  const catalogo = useCatalogo(!linha || !!linha.produtoId);
   const [busca, setBusca] = useState("");
   const [produto, setProduto] = useState<ProdutoCatalogo | null>(null);
   const [avulso, setAvulso] = useState(false);
@@ -100,6 +118,9 @@ function ModalMaterial({ x, registrar, linha, equipamentoId, onFechar }: {
   const escolhido = !!linha || !!produto || (avulso && descricao.trim().length >= 2);
   const n = lerNumero(qtd);
   const qtdOk = n !== null && Number.isFinite(n) && n > 0 && n <= QTD_MAX;
+  const saldo = saldoDoUso(x, catalogo, linha, produto);
+  const unid = linha?.unidade ?? produto?.unidade ?? (unidade || "un");
+  const aviso = qtdOk && saldo ? avisoSemSaldo(arred(n! - saldo.jaNoEstoque), saldo.disponivel, unid) : null;
   const passo = (d: number) => setQtd(String(arred(Math.max(0, (Number.isFinite(n ?? NaN) ? n ?? 0 : 0) + d))).replace(".", ","));
 
   async function salvar() {
@@ -116,7 +137,7 @@ function ModalMaterial({ x, registrar, linha, equipamentoId, onFechar }: {
             : { produtoId: null, descricao: descricao.trim(), unidade: unidade.trim() || "un" }),
         },
       }]);
-      toast(linha ? "Quantidade corrigida." : "Material lançado.");
+      toast(`${linha ? "Quantidade corrigida." : "Material lançado."}${aviso ? " O escritório será avisado do estoque negativo." : ""}`);
       onFechar();
     } finally { setGravando(false); }
   }
@@ -188,6 +209,8 @@ function ModalMaterial({ x, registrar, linha, equipamentoId, onFechar }: {
                 <button type="button" onClick={() => passo(1)} aria-label="Mais 1" className="w-16 rounded-card border border-surface-border bg-white inline-flex items-center justify-center touch-target"><Plus className="w-6 h-6" /></button>
               </div>
               {!qtdOk && <p className="text-xs text-atrasado-texto" data-qtd-invalida>Informe uma quantidade maior que zero.</p>}
+              {saldo && !aviso && <p className="text-sm text-ink-muted" data-saldo-material>{textoSaldo(saldo.disponivel, saldo.separado, unid)}</p>}
+              {aviso && <p className="rounded-card bg-atencao-claro border border-atencao text-atencao-texto px-3 py-2 text-sm font-semibold" role="status" data-aviso-sem-saldo>{aviso}</p>}
             </div>
             {x.equipamentos.length > 0 && (
               <label className="block space-y-1">

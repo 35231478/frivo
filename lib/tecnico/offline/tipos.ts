@@ -121,6 +121,8 @@ export interface ExecucaoTela {
   aceiteLocal?: { nome: string; em: string };
   /** Materiais usados em campo (sem valores); ausente em retratos antigos */
   materiais?: MaterialTela[];
+  /** D5 — separado para esta OS que o próximo uso de cada produto consome (produtoId → quantidade); ausente em retratos antigos */
+  separado?: Record<string, number>;
   /** Comentários da OS (conversa interna com o escritório); ausente em retratos antigos */
   comentarios?: ComentarioTela[];
 }

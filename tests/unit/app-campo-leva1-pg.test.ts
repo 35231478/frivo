@@ -28,6 +28,13 @@ const sessao = vi.hoisted(() => ({ atual: null as any }));
 vi.mock("@/lib/auth", () => ({ auth: vi.fn(async () => sessao.atual) }));
 // O sino agenda tarefas com after(), que só existe numa requisição do Next: aqui não roda
 vi.mock("next/server", async (orig) => ({ ...(await orig<typeof import("next/server")>()), after: () => {} }));
+// D5: o push "Estoque negativo" ao escritório — quem foi chamado, com o quê (o envio em si é coberto em push-pg)
+const pushes = vi.hoisted(() => ({ negativos: [] as unknown[][] }));
+vi.mock("@/lib/push/eventos", async (orig) => ({
+  ...(await orig<typeof import("@/lib/push/eventos")>()),
+  agendarPush: (fn: () => Promise<unknown>) => { void fn(); },
+  notificarEstoqueNegativo: vi.fn(async (...a: unknown[]) => { pushes.negativos.push(a); return null; }),
+}));
 const comoTecnico = (tecnicoId = "t1", id = "uT", email = "joao@clima.com", permissoes: Permissoes = PRESETS.TECNICO) => {
   sessao.atual = { user: { id, name: "João", email, empresaId: "e1", role: "TECNICO", permissoes, tecnicoId } };
 };
@@ -220,12 +227,20 @@ describe.skipIf(!URL_PG)("app de campo, leva 1: QR e materiais usados (PostgreSQ
 
   /* ═════════════ materiais ═════════════ */
   describe("catálogo para o aparelho", () => {
-    it("só código, nome e unidade dos ATIVOS da empresa — nunca preço, custo ou saldo", async () => {
+    it("código, nome, unidade e (D5) o saldo dos ATIVOS da empresa — nunca preço ou custo", async () => {
       comoTecnico();
       const r = await chamar("tecnico/catalogo", "GET");
       expect(r.status).toBe(200);
       expect(r.json.produtos.map((p: any) => p.id).sort()).toEqual(["pCabo", "pCap", "pGas", "pServ"]);
-      for (const p of r.json.produtos) expect(Object.keys(p).sort()).toEqual(["codigo", "id", "nome", "unidade"]);
+      for (const p of r.json.produtos) expect(Object.keys(p).sort()).toEqual(["codigo", "id", "nome", "saldo", "unidade"]);
+      expect(JSON.stringify(r.json)).not.toMatch(/valor|custo|preco|45|90/);
+      // D5: o saldo do estoque; quem não controla estoque não tem saldo
+      const saldos = Object.fromEntries(r.json.produtos.map((p: any) => [p.id, p.saldo]));
+      expect(saldos).toEqual({ pCap: await saldo("pCap"), pCabo: 1, pGas: await saldo("pGas"), pServ: null });
+      // Estoque desligado: nenhum saldo (não há o que avisar)
+      await definirModulo("e1", "estoque", false, "uA");
+      expect((await chamar("tecnico/catalogo", "GET")).json.produtos.every((p: any) => p.saldo === null)).toBe(true);
+      await definirModulo("e1", "estoque", true, "uA");
       // Quem não grava execução não baixa o catálogo
       comoTecnico("t1", "uT", "joao@clima.com", montarPermissoes({ ordens: ["visualizar"] } as never));
       expect((await chamar("tecnico/catalogo", "GET")).status).toBe(403);
@@ -277,7 +292,11 @@ describe.skipIf(!URL_PG)("app de campo, leva 1: QR e materiais usados (PostgreSQ
     it("SEPARADO para a OS: consome a separação — a reserva vira saída e só o excedente baixa a mais (nunca duas vezes)", async () => {
       comoTecnico();
       expect(await saldo("pGas")).toBe(16); // 20 − 4 reservados
+      // D5: o retrato leva o separado desta OS que o próximo uso consome (o app soma ao saldo do catálogo)
+      const separado = async () => (await chamar("tecnico/atividades/[atividadeId]", "GET", { atividadeId: "aA" })).json.execucao.separado;
+      expect(await separado()).toEqual({ pGas: 4 });
       await sync([material({ clientId: "gas1", produtoId: "pGas", quantidade: 3, equipamentoId: "eqA" })]);
+      expect(await separado()).toEqual({ pGas: 1 }); // sobra 1 kg da separação para o próximo uso
       expect(await saldo("pGas")).toBe(16); // líquido zero: já tinha saído na separação
       let m = await prisma.osMaterial.findUnique({ where: { id: "mGas" } });
       expect(m).toMatchObject({ estadoSeparacao: "CONSUMIDO", consumidoPorId: "uT" });
@@ -288,6 +307,7 @@ describe.skipIf(!URL_PG)("app de campo, leva 1: QR e materiais usados (PostgreSQ
       expect(await saldo("pGas")).toBe(15);
       m = await prisma.osMaterial.findUnique({ where: { id: "mGas" } });
       expect(Number(m.quantidadeConsumida)).toBe(5);
+      expect(await separado()).toEqual({}); // a separação acabou: o próximo uso sai do estoque
       // Saldo = inicial − consumido de verdade (5): nada contado duas vezes
       expect(await saldo("pGas")).toBe(20 - 5);
       expect(await somaRazao("pGas")).toBe(-5);
@@ -323,6 +343,8 @@ describe.skipIf(!URL_PG)("app de campo, leva 1: QR e materiais usados (PostgreSQ
       expect(r.ok).toBe(true);
       expect(r.dados.avisos[0]).toContain("saldo ficou negativo");
       expect(await saldo("pCabo")).toBe(-2.5);
+      // D5: o escritório é avisado (o push "Estoque negativo", com a OS) — confere o que o aviso do app promete
+      expect(pushes.negativos.at(-1)).toEqual(["e1", "pCabo", expect.any(String)]);
       comoEscritorio();
       expect((await chamar("alertas", "GET")).json.estoqueNegativoCampo).toBe(1);
       // Sem permissão de ver o Estoque, o aviso não vem; o técnico nunca recebe

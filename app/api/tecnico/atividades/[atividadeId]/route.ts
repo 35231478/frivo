@@ -16,7 +16,7 @@ import { comentariosDaOs } from "@/lib/execucao/comentarios";
 import { aceiteParaRetrato } from "@/lib/os/aceite-server";
 import { pode, type Permissoes } from "@/lib/permissoes";
 import { comMateriaisPrevistos } from "@/lib/tecnico/o-que-levar-server";
-import { materiaisDaAtividade } from "@/lib/execucao/materiais-campo";
+import { materiaisDaAtividade, separadoDaOsParaUso } from "@/lib/execucao/materiais-campo";
 
 type Params = { params: Promise<{ atividadeId: string }> };
 
@@ -74,10 +74,12 @@ export async function GET(_: NextRequest, { params }: Params) {
   const [comMateriais] = await comMateriaisPrevistos(empresaId, [cartao], config.oQueLevar);
   // Materiais usados em campo nesta atividade (sem valores; "meu" = lançado por quem está com o aparelho)
   // Atividade esquecida em andamento (limite, jornada, última gravação) e o WhatsApp do topo da OS (1 toque)
-  const [materiais, andamento, whatsapp, comentarios] = await Promise.all([
+  // D5: o separado desta OS por produto (o app soma ao saldo do catálogo para avisar "vai ficar negativo")
+  const [materiais, andamento, whatsapp, comentarios, separado] = await Promise.all([
     materiaisDaAtividade(empresaId, atividadeId, guard.session.user.id), andamentoParaRetrato(empresaId, atividadeId), whatsappDoCliente(empresaId, config, cartao.osId),
     // Comentários da OS (conversa interna com o escritório; o cliente nunca vê)
     comentariosDaOs(empresaId, cartao.osId, guard.session.user.id),
+    separadoDaOsParaUso(empresaId, cartao.osId),
   ]);
   return NextResponse.json({
     cartao: aplicarPrivacidade(comMateriais, config),
@@ -89,6 +91,7 @@ export async function GET(_: NextRequest, { params }: Params) {
       adicionais: execucao.adicionais.map(({ statusCobranca, ...a }) => ({ ...a, cobrancaDecidida: statusCobranca !== "A_AVALIAR" })),
       avisos,
       materiais,
+      separado,
       comentarios,
     },
     equipamentosUnidade: daUnidade.map(({ qrcode, ...e }) => ({ ...semUnidade(apresentarEquipamento(e)), tipoEquipamentoId: e.tipoEquipamentoId, qr: qrcode })),
