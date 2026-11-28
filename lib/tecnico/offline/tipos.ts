@@ -12,6 +12,7 @@ import type { MaterialPrevisto } from "@/lib/tecnico/o-que-levar";
 import type { MaterialTela } from "@/lib/tecnico/materiais";
 import type { ComentarioTela } from "@/lib/tecnico/comentarios";
 import type { Jornada } from "@/lib/atendimento/prazo";
+import type { ComissaoRetrato } from "@/lib/tecnico/comissao";
 
 export type { Operacao };
 export type TipoOperacao = Operacao["tipo"];
@@ -142,6 +143,8 @@ export interface RetratoAtividade {
   relatorio?: RelatorioRetrato | null;
   /** Módulos da empresa que o app usa (campo-ponte); ausente em retratos antigos = tudo ligado */
   modulos?: { equipamentos: boolean; qrcodes: boolean };
+  /** COM-2B: quanto ESTE técnico ganha por equipamento (feito e completo) e o que o servidor já confirmou; null/ausente = não se aplica */
+  comissao?: ComissaoRetrato | null;
   geradoEm: string;
 }
 
