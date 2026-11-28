@@ -1,10 +1,10 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { MessageSquare, Send } from "lucide-react";
+import { MessageCircle, MessageSquare, Send } from "lucide-react";
 import { cn, formatarDataHora } from "@/lib/utils";
 import { Dica } from "@/components/ui/dica";
-import { useTecnico } from "@/components/tecnico/contexto";
+import { irPara, useTecnico } from "@/components/tecnico/contexto";
 import { novoClientId } from "@/lib/tecnico/offline/motor";
 import { chaveVisto, novosComentarios, ordenarComentarios, TEXTO_MAX, type ComentarioTela } from "@/lib/tecnico/comentarios";
 import type { ExecucaoTela, NovaOperacao } from "@/lib/tecnico/offline/tipos";
@@ -57,6 +57,11 @@ export function ComentariosDaOs({ x, registrar }: { x: ExecucaoTela; registrar: 
         {novos > 0 && <span className="text-xs font-semibold rounded-full bg-acento text-white px-2 py-0.5" data-comentarios-novos={novos}>{novos === 1 ? "1 novo" : `${novos} novos`}</span>}
         <Dica rotulo="Comentários" texto="Conversa interna com o escritório sobre esta OS. O cliente não vê. Sem sinal, o comentário fica no aparelho e sobe sozinho." />
       </h2>
+      {/* CHAT-1: a mesma conversa, na tela Chat (balões, foto, ✓✓) */}
+      <button type="button" onClick={() => irPara({ ver: "chat", os: osId })} data-abrir-chat
+        className="inline-flex items-center gap-1.5 text-sm font-semibold text-primary-700 touch-target">
+        <MessageCircle className="w-4 h-4" aria-hidden /> Abrir no Chat
+      </button>
       {lista.length > VISIVEIS && !todos && (
         <button type="button" onClick={() => setTodos(true)} className="text-sm font-semibold text-primary-700 touch-target" data-ver-todos-comentarios>
           Ver os {lista.length} comentários

@@ -199,8 +199,8 @@ export class MotorSync {
     }
   }
 
-  /** Baixa uma lista (Meu dia / Agenda), guarda no aparelho e devolve; sem sinal, devolve a guardada. */
-  async baixarLista<T>(chave: "meuDia" | "agenda" | "catalogo" | "despesas", url: string): Promise<{ dados: T | null; baixadoEm: number | null; doAparelho: boolean }> {
+  /** Baixa uma lista (Meu dia / Agenda / Chat), guarda no aparelho e devolve; sem sinal, devolve a guardada. */
+  async baixarLista<T>(chave: "meuDia" | "agenda" | "catalogo" | "despesas" | "conversas" | `conversa:${string}`, url: string): Promise<{ dados: T | null; baixadoEm: number | null; doAparelho: boolean }> {
     const guardada = await this.banco.ler<{ dados: T; baixadoEm: number }>(chave);
     if (!this.online()) this.publicar(); // o indicador já mostra "Offline"
     else {

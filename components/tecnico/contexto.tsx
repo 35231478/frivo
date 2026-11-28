@@ -10,6 +10,7 @@ import { MSG_SEM_ESPACO, protegerArmazenamento, type Armazenamento } from "@/lib
 import { Rastreio, motivoDaOperacao, type EstadoRastreio } from "@/lib/tecnico/offline/rastreio";
 import type { MotivoPosicao } from "@/lib/tecnico/posicao";
 import { toast } from "@/components/ui/avisos";
+import { urlConversaApp } from "@/lib/chat/regras";
 
 export interface UsuarioApp {
   id: string; nome: string; email: string; empresaNome: string; podeGravar: boolean;
@@ -124,6 +125,8 @@ export type Vista =
   | { ver: "desempenho" }
   /** Minhas despesas de campo (e o lançamento) */
   | { ver: "despesas" }
+  /** CHAT-1: a lista de conversas (sem `os`) ou a conversa de uma OS — o push abre /tecnico?ver=chat&os=<osId> */
+  | { ver: "chat"; os?: string | null }
   | { ver: "os"; a: string; e?: string | null; /** Abre já na câmera rápida (atalho do Meu dia) */ cam?: boolean;
       /** QR lido no Meu dia: equipamento da unidade que o técnico pode incluir nesta atividade (pergunta antes) */ inc?: string | null;
       /** Concluiu o último equipamento: a OS abre já na confirmação da conclusão */ fim?: boolean;
@@ -138,6 +141,7 @@ export function lerVista(search: string): Vista {
   if (ver === "os" && a) return { ver: "os", a, e: q.get("e"), ...(q.get("cam") === "1" && { cam: true }), ...(q.get("inc") && { inc: q.get("inc") }), ...(q.get("fim") === "1" && { fim: true }), ...(q.get("primeiro") === "1" && { primeiro: true }) };
   const qr = q.get("q");
   if (ver === "equipamento" && qr) return { ver: "equipamento", q: qr };
+  if (ver === "chat") { const os = q.get("os"); return os ? { ver: "chat", os } : { ver: "chat" }; }
   if (ver === "agenda" || ver === "perfil" || ver === "desempenho" || ver === "despesas") return { ver };
   return { ver: "dia" };
 }
@@ -146,6 +150,7 @@ export function urlDaVista(v: Vista): string {
   if (v.ver === "dia") return "/tecnico";
   if (v.ver === "os") return `/tecnico?ver=os&a=${encodeURIComponent(v.a)}${v.e ? `&e=${encodeURIComponent(v.e)}` : ""}${v.cam ? "&cam=1" : ""}${v.inc ? `&inc=${encodeURIComponent(v.inc)}` : ""}${v.fim ? "&fim=1" : ""}${v.primeiro ? "&primeiro=1" : ""}`;
   if (v.ver === "equipamento") return `/tecnico?ver=equipamento&q=${encodeURIComponent(v.q)}`;
+  if (v.ver === "chat") return urlConversaApp(v.os);
   return `/tecnico?ver=${v.ver}`;
 }
 
