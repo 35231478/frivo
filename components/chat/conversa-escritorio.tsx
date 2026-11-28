@@ -8,6 +8,7 @@ import { URL_NOVIDADES_ESCRITORIO } from "@/lib/chat/novidades-cliente";
 import { citacaoDe, MSG_OS_CANCELADA, osDaResposta, somenteLeitura, juntarComFila, type ConversaResumo, type OsDoDia } from "@/lib/chat/regras";
 import { atualizarSino } from "@/lib/ui/sino";
 import type { ComentarioTela } from "@/lib/tecnico/comentarios";
+import type { EstadoTecnico } from "@/lib/chat/presenca";
 
 const novoClientId = () => (globalThis.crypto?.randomUUID?.() ?? `${Date.now()}${Math.random()}`).replace(/[^a-z0-9]/gi, "").slice(0, 32);
 export const urlFotoEscritorio = (id: string) => `/api/conversas/fotos/${encodeURIComponent(id)}`;
@@ -16,7 +17,7 @@ export const urlFotoEscritorio = (id: string) => `/api/conversas/fotos/${encodeU
 export type AlvoConversa = { tipo: "os"; osId: string } | { tipo: "pessoa"; usuarioId: string };
 
 /** O que a leitura devolve (para o cabeçalho e a lista) */
-export type ResumoConversa = { tipo: "os"; conversa: ConversaResumo } | { tipo: "pessoa"; pessoa: { usuarioId: string; nome: string; avatar: string | null } };
+export type ResumoConversa = { tipo: "os"; conversa: ConversaResumo } | { tipo: "pessoa"; pessoa: { usuarioId: string; nome: string; avatar: string | null; estado?: EstadoTecnico | null } };
 
 /** Outra OS para a mensagem (o "Outra OS" do seletor): a mesma busca da visão por OS */
 async function buscarOs(q: string): Promise<OsDoDia[]> {

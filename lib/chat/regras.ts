@@ -8,6 +8,7 @@
  */
 import { partesBR } from "@/lib/fuso";
 import type { CitacaoTela, ComentarioTela, RefCitacao } from "@/lib/tecnico/comentarios";
+import type { EstadoTecnico } from "@/lib/chat/presenca";
 export { FOTO_TAMANHO_MAX, MINIATURA_TAMANHO_MAX, MSG_FOTO_GRANDE, MSG_MENSAGEM_VAZIA, TEXTO_MAX } from "@/lib/tecnico/comentarios";
 
 // ── A conversa (um item da lista) ───────────────────────────────────────────────────────────
@@ -73,9 +74,11 @@ export interface PessoaResumo {
   tecnicoId: string;
   nome: string;
   avatar: string | null;
-  ultima: { texto: string; autor: string; criadoEm: string; minha: boolean; foto: boolean; osNumero: string | null } | null;
+  ultima: { texto: string; autor: string; criadoEm: string; minha: boolean; foto: boolean; osNumero: string | null; origem?: string; lida?: boolean } | null;
   /** O que o técnico mandou depois da última leitura de quem vê */
   naoLidas: number;
+  /** CHAT-1.2: o que ele está fazendo e o último contato do app (só o escritório recebe) */
+  estado?: EstadoTecnico | null;
 }
 
 /** Não lidas primeiro; depois a mais recente; quem nunca conversou, pelo nome. */

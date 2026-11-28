@@ -18,6 +18,8 @@ import { pode } from "@/lib/permissoes";
 import { filtroOrdens } from "@/lib/escopo/proprios";
 import { atividadesDoTecnico } from "@/lib/tecnico/escopo";
 import { ondeMeuDia } from "@/lib/tecnico/dia";
+import { estadosDosTecnicos, type TecnicoDaConversa } from "@/lib/chat/presenca-servidor";
+import type { EstadoTecnico } from "@/lib/chat/presenca";
 import { marcarConversaLida, marcarLeituraDaPessoa, marcarRespondidas, mensagensDaConversa, ondeConversaDoTecnico, ondeTecnicoVe } from "@/lib/execucao/comentarios";
 import { ordenarPessoas, osPadraoDaMensagem, type OsDoDia, type PessoaResumo } from "@/lib/chat/regras";
 import type { QuemEscritorio } from "@/lib/chat/servidor";
@@ -33,13 +35,19 @@ const nomeCliente = (c: { nome: string; nomeFantasia: string | null } | null | u
 /** O escritório pode usar as Conversas por pessoa? ("visualizar" para ler, "enviar" para escrever; o admin sempre) */
 export const podeConversas = (u: QuemEscritorio, acao: "visualizar" | "enviar") => pode(u.permissoes ?? null, "conversas", acao, u.role ?? undefined);
 
+/** Uma pessoa com quem o escritório conversa (o técnico e o login dele), com o que a situação e a presença precisam */
+export type PessoaDaConversa = TecnicoDaConversa & { nome: string; avatar: string | null };
+
 /** As pessoas com quem o escritório conversa: os técnicos ATIVOS que têm login no app (o mesmo e-mail). */
-export async function pessoasDaEmpresa(empresaId: string): Promise<{ usuarioId: string; tecnicoId: string; nome: string; avatar: string | null }[]> {
-  const tecnicos = await prisma.tecnico.findMany({ where: { empresaId, ativo: true, email: { not: null } }, select: { id: true, nome: true, email: true }, orderBy: { criadoEm: "asc" } });
+export async function pessoasDaEmpresa(empresaId: string): Promise<PessoaDaConversa[]> {
+  const tecnicos = await prisma.tecnico.findMany({
+    where: { empresaId, ativo: true, email: { not: null } },
+    select: { id: true, nome: true, email: true, jornadaFaixas: true, jornadaEntrada: true, jornadaSaida: true, jornadaDias: true }, orderBy: { criadoEm: "asc" },
+  });
   if (!tecnicos.length) return [];
   const usuarios = await prisma.usuario.findMany({
     where: { empresaId, ativo: true, OR: tecnicos.map((t) => ({ email: { equals: t.email!, mode: "insensitive" as const } })) },
-    select: { id: true, email: true, avatar: true },
+    select: { id: true, email: true, avatar: true, ultimoContatoEm: true },
   });
   const porEmail = new Map(usuarios.map((u) => [u.email.trim().toLowerCase(), u]));
   const vistos = new Set<string>();
@@ -47,7 +55,10 @@ export async function pessoasDaEmpresa(empresaId: string): Promise<{ usuarioId: 
     const u = porEmail.get((t.email ?? "").trim().toLowerCase());
     if (!u || vistos.has(u.id)) return [];
     vistos.add(u.id);
-    return [{ usuarioId: u.id, tecnicoId: t.id, nome: t.nome, avatar: u.avatar ?? null }];
+    return [{
+      usuarioId: u.id, tecnicoId: t.id, nome: t.nome, avatar: u.avatar ?? null, contatoEm: u.ultimoContatoEm ?? null,
+      jornada: { jornadaFaixas: t.jornadaFaixas, jornadaEntrada: t.jornadaEntrada, jornadaSaida: t.jornadaSaida, jornadaDias: t.jornadaDias },
+    }];
   });
 }
 
@@ -133,7 +144,7 @@ async function lerConversa(empresaId: string, quemLe: string, conversaUsuarioId:
  * hora e as não lidas (o que o técnico mandou depois da última leitura de quem vê). Não lidas primeiro; depois a mais
  * recente. Busca por nome, nº de OS e cliente (das mensagens da conversa).
  */
-export async function pessoasDoEscritorio(u: QuemEscritorio, op: { busca?: string | null } = {}): Promise<PessoaResumo[]> {
+export async function pessoasDoEscritorio(u: QuemEscritorio, op: { busca?: string | null; semEstados?: boolean } = {}, agora: Date = new Date()): Promise<PessoaResumo[]> {
   const pessoas = await pessoasDaEmpresa(u.empresaId);
   if (!pessoas.length) return [];
   const visivel = visivelAoEscritorio(u);
@@ -141,6 +152,8 @@ export async function pessoasDoEscritorio(u: QuemEscritorio, op: { busca?: strin
     .map((l) => [l.conversaUsuarioId, l.lidoEm]));
   const q = (op.busca ?? "").trim();
   const contem = { contains: q, mode: "insensitive" as const };
+  // CHAT-1.2: a situação e a presença de todos (uma consulta); a contagem do topo não precisa
+  const estados = new Map(op.semEstados ? [] : (await estadosDosTecnicos(u, pessoas, agora)).map((e) => [e.usuarioId, e]));
   const lista = await Promise.all(pessoas.map(async (p): Promise<PessoaResumo | null> => {
     const onde: Prisma.OsComentarioWhereInput = { AND: [{ empresaId: u.empresaId }, ondeConversaDoTecnico(p.usuarioId, p.tecnicoId), visivel] };
     if (q && !p.nome.toLowerCase().includes(q.toLowerCase())) {
@@ -151,12 +164,15 @@ export async function pessoasDoEscritorio(u: QuemEscritorio, op: { busca?: strin
     }
     const lido = leituras.get(p.usuarioId);
     const [ultima, naoLidas] = await Promise.all([
-      prisma.osComentario.findFirst({ where: onde, orderBy: { criadoEm: "desc" }, select: { texto: true, autorNome: true, usuarioId: true, criadoEm: true, foto: { select: { id: true } }, ordemServico: { select: { numero: true } } } }),
+      prisma.osComentario.findFirst({ where: onde, orderBy: { criadoEm: "desc" }, select: { texto: true, autorNome: true, usuarioId: true, criadoEm: true, origem: true, lidaEm: true, foto: { select: { id: true } }, ordemServico: { select: { numero: true } } } }),
       prisma.osComentario.count({ where: { AND: [onde, { usuarioId: p.usuarioId }, ...(lido ? [{ criadoEm: { gt: lido } }] : [])] } }),
     ]);
     return {
-      usuarioId: p.usuarioId, tecnicoId: p.tecnicoId, nome: p.nome, avatar: p.avatar, naoLidas,
-      ultima: ultima ? { texto: ultima.texto, autor: ultima.autorNome, criadoEm: ultima.criadoEm.toISOString(), minha: ultima.usuarioId === u.id, foto: !!ultima.foto, osNumero: ultima.ordemServico?.numero ?? null } : null,
+      usuarioId: p.usuarioId, tecnicoId: p.tecnicoId, nome: p.nome, avatar: p.avatar, naoLidas, estado: estados.get(p.usuarioId) ?? null,
+      ultima: ultima ? {
+        texto: ultima.texto, autor: ultima.autorNome, criadoEm: ultima.criadoEm.toISOString(), minha: ultima.usuarioId === u.id, foto: !!ultima.foto, osNumero: ultima.ordemServico?.numero ?? null,
+        origem: ultima.origem, lida: !!ultima.lidaEm,
+      } : null,
     };
   }));
   return ordenarPessoas(lista.filter((x): x is PessoaResumo => !!x));
@@ -164,26 +180,46 @@ export async function pessoasDoEscritorio(u: QuemEscritorio, op: { busca?: strin
 
 /** A conversa do escritório com um técnico: as mensagens (que esta pessoa pode ver), as OS dele no dia e a OS padrão. */
 export async function conversaComPessoa(u: QuemEscritorio, usuarioIdTecnico: string, agora: Date = new Date(), op: { ate?: string | null } = {}):
-  Promise<{ pessoa: { usuarioId: string; nome: string; avatar: string | null }; mensagens: ComentarioTela[]; osDoDia: OsDoDia[]; osPadrao: string | null; equipamentosDasOs: EquipamentosDasOs } | null> {
+  Promise<{ pessoa: { usuarioId: string; nome: string; avatar: string | null; estado: EstadoTecnico | null }; mensagens: ComentarioTela[]; osDoDia: OsDoDia[]; osPadrao: string | null; equipamentosDasOs: EquipamentosDasOs } | null> {
   const p = (await pessoasDaEmpresa(u.empresaId)).find((x) => x.usuarioId === usuarioIdTecnico);
   if (!p) return null;
   const onde = citavelNaConversa(u, p);
   await lerConversa(u.empresaId, u.id, p.usuarioId, onde, agora);
-  const [mensagens, osDoDia] = await Promise.all([
+  const [mensagens, osDoDia, [estado]] = await Promise.all([
     mensagensDaConversa(u.empresaId, onde, u.id, { limite: LIMITE_MENSAGENS_PESSOA, ate: op.ate, visivel: ondeEscritorioVe(u) }),
     osDoDiaDoTecnico(u.empresaId, p.tecnicoId, agora),
+    estadosDosTecnicos(u, [p], agora),
   ]);
   // O seletor mostra só as OS que esta pessoa do escritório pode ver ("Ver só os próprios")
   const veOs = pode(u.permissoes ?? null, "ordens", "visualizar", u.role ?? undefined);
   const visiveis = veOs && osDoDia.length ? new Set((await prisma.ordemServico.findMany({ where: { id: { in: osDoDia.map((o) => o.osId) }, empresaId: u.empresaId, ...filtroOrdens(u) }, select: { id: true } })).map((o) => o.id)) : new Set<string>();
   const doDia = osDoDia.filter((o) => visiveis.has(o.osId)).map(({ atividadeId: _a, ...o }) => o);
   const equipamentos = await equipamentosDasOsDaConversa(u.empresaId, [...mensagens.map((m) => m.os?.id), ...doDia.map((o) => o.osId)]);
-  return { pessoa: { usuarioId: p.usuarioId, nome: p.nome, avatar: p.avatar }, mensagens, osDoDia: doDia, osPadrao: osPadraoDaMensagem({ osDoDia: doDia, mensagens, agora }), equipamentosDasOs: equipamentos };
+  return { pessoa: { usuarioId: p.usuarioId, nome: p.nome, avatar: p.avatar, estado: estado ?? null }, mensagens, osDoDia: doDia, osPadrao: osPadraoDaMensagem({ osDoDia: doDia, mensagens, agora }), equipamentosDasOs: equipamentos };
+}
+
+/** O tempo real relê a situação e a presença no máximo a cada este intervalo, por pessoa do escritório */
+export const CACHE_ESTADOS_MS = 15_000;
+const cacheEstados = new Map<string, { em: number; estados: EstadoTecnico[] }>();
+/** Só para os testes: esquece as situações lidas */
+export const esquecerEstados = () => cacheEstados.clear();
+
+/**
+ * CHAT-1.2: a situação e a presença de todos os técnicos, para o tempo real do escritório. Três consultas leves para
+ * todos juntos (técnicos, logins, a situação), no máximo a cada 15 s por pessoa.
+ */
+export async function estadosDoEscritorio(u: QuemEscritorio, agora: Date = new Date()): Promise<EstadoTecnico[]> {
+  const chave = `${u.empresaId}:${u.id}`;
+  const c = cacheEstados.get(chave);
+  if (c && agora.getTime() - c.em < CACHE_ESTADOS_MS && agora.getTime() >= c.em) return c.estados;
+  const estados = await estadosDosTecnicos(u, await pessoasDaEmpresa(u.empresaId), agora);
+  cacheEstados.set(chave, { em: agora.getTime(), estados });
+  return estados;
 }
 
 /** Quantas pessoas têm mensagem por ler para quem vê (o ícone do topo, na visão por pessoa). */
 export async function pessoasNaoLidas(u: QuemEscritorio): Promise<number> {
-  return (await pessoasDoEscritorio(u)).filter((p) => p.naoLidas > 0).length;
+  return (await pessoasDoEscritorio(u, { semEstados: true })).filter((p) => p.naoLidas > 0).length;
 }
 
 // ── Técnico (a conversa "Escritório") ───────────────────────────────────────────────────────

@@ -8,6 +8,8 @@ import { cn } from "@/lib/utils";
 import { Dica } from "@/components/ui/dica";
 import { ConversaEscritorio, type AlvoConversa, type ResumoConversa } from "@/components/chat/conversa-escritorio";
 import { useNovidades } from "@/components/chat/use-novidades";
+import { LinhaSituacao, PontoPresenca, useAgora } from "@/components/chat/situacao-tecnico";
+import { aguardandoTecnico, LEGENDA_SITUACAO, type EstadoTecnico } from "@/lib/chat/presenca";
 import { URL_NOVIDADES_ESCRITORIO } from "@/lib/chat/novidades-cliente";
 import {
   filtrarConversas, horaDaLista, iniciais, textoDaUltima, urlConversaEscritorio, urlConversaPessoa, type ConversaResumo, type PessoaResumo,
@@ -41,6 +43,9 @@ export function ConversasEscritorio({ pessoaInicial, osInicial, podeEscrever, po
   const [soNaoLidas, setSoNaoLidas] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
   const [resumo, setResumo] = useState<ResumoConversa | null>(null);
+  // CHAT-1.2: a situação e a presença que o tempo real traz (mais nova que a da lista)
+  const [estados, setEstados] = useState<Map<string, EstadoTecnico>>(() => new Map());
+  const agora = useAgora();
   // A conversa aberta está sendo lida: o contador dela fica zerado mesmo quando a lista chega depois dela
   const abertaRef = useRef(aberta);
   abertaRef.current = aberta;
@@ -71,7 +76,11 @@ export function ConversasEscritorio({ pessoaInicial, osInicial, podeEscrever, po
     const t = setTimeout(() => void carregar(visao, busca), busca ? 300 : 0);
     return () => clearTimeout(t);
   }, [busca, visao, carregar]);
-  useNovidades(URL_NOVIDADES_ESCRITORIO, (r) => { if (r.mudou) void carregar(visao, busca); });
+  useNovidades(URL_NOVIDADES_ESCRITORIO, (r) => {
+    if (r.tecnicos) setEstados(new Map(r.tecnicos.map((e) => [e.usuarioId, e])));
+    if (r.mudou) void carregar(visao, busca);
+  });
+  const estadoDe = (usuarioId: string, daLista?: EstadoTecnico | null) => estados.get(usuarioId) ?? daLista ?? null;
 
   function abrir(a: AlvoConversa | null) {
     setAberta(a);
@@ -99,10 +108,14 @@ export function ConversasEscritorio({ pessoaInicial, osInicial, podeEscrever, po
     if (aberta.tipo === "pessoa") {
       const p = pessoas?.find((x) => x.usuarioId === aberta.usuarioId);
       const nome = p?.nome ?? (resumo?.tipo === "pessoa" ? resumo.pessoa.nome : "");
-      return { titulo: nome || "Conversa", sub: "A OS de cada mensagem aparece na conversa", avatar: p?.avatar ?? (resumo?.tipo === "pessoa" ? resumo.pessoa.avatar : null), linkOs: null as string | null };
+      const estado = estadoDe(aberta.usuarioId, p?.estado ?? (resumo?.tipo === "pessoa" ? resumo.pessoa.estado : null));
+      return {
+        titulo: nome || "Conversa", sub: "A OS de cada mensagem aparece na conversa", avatar: p?.avatar ?? (resumo?.tipo === "pessoa" ? resumo.pessoa.avatar : null), linkOs: null as string | null,
+        estado, aguardando: aguardandoTecnico(p?.ultima),
+      };
     }
     const c = conversas?.find((x) => x.osId === aberta.osId) ?? (resumo?.tipo === "os" ? resumo.conversa : null);
-    return { titulo: `${c?.osNumero ?? "OS"}${c?.cliente ? ` · ${c.cliente}` : ""}`, sub: c?.tecnicos.length ? c.tecnicos.join(", ") : "Sem técnico na OS", avatar: null, linkOs: aberta.osId };
+    return { titulo: `${c?.osNumero ?? "OS"}${c?.cliente ? ` · ${c.cliente}` : ""}`, sub: c?.tecnicos.length ? c.tecnicos.join(", ") : "Sem técnico na OS", avatar: null, linkOs: aberta.osId, estado: null, aguardando: false };
   })();
 
   return (
@@ -129,13 +142,14 @@ export function ConversasEscritorio({ pessoaInicial, osInicial, podeEscrever, po
                 className="w-full rounded-full border border-surface-border bg-surface-page pl-9 pr-8 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/40" />
               {busca && <button type="button" onClick={() => setBusca("")} aria-label="Limpar a pesquisa" className="absolute right-2 top-1/2 -translate-y-1/2 text-ink-subtle"><X className="w-4 h-4" /></button>}
             </label>
-            <div className="flex gap-2">
+            <div className="flex items-center gap-2">
               {([[false, "Todas"], [true, "Não lidas"]] as const).map(([v, r]) => (
                 <button key={r} type="button" onClick={() => setSoNaoLidas(v)} aria-pressed={soNaoLidas === v} data-filtro-conversas={v ? "nao-lidas" : "todas"}
                   className={cn("rounded-full px-3 py-1 text-xs font-semibold border", soNaoLidas === v ? "bg-primary-600 text-white border-primary-600" : "bg-white text-ink-muted border-surface-border")}>
                   {r}
                 </button>
               ))}
+              {visao === "pessoas" && <span className="ml-auto" data-legenda-situacao><Dica texto={LEGENDA_SITUACAO} rotulo="Situação e presença" lado="esquerda" /></span>}
             </div>
           </div>
           <div className="flex-1 min-h-0 overflow-y-auto">
@@ -152,15 +166,19 @@ export function ConversasEscritorio({ pessoaInicial, osInicial, podeEscrever, po
                         <li key={p.usuarioId}>
                           <button type="button" onClick={() => abrir({ tipo: "pessoa", usuarioId: p.usuarioId })} data-pessoa-item={p.usuarioId} aria-current={ativa || undefined}
                             className={cn("w-full text-left px-3 py-2.5 flex gap-3 border-b border-surface-linha hover:bg-surface-alt", ativa && "bg-primary-50")}>
-                            {p.avatar
-                              // eslint-disable-next-line @next/next/no-img-element
-                              ? <img src={p.avatar} alt="" className="shrink-0 w-10 h-10 rounded-full object-cover" />
-                              : <span className="shrink-0 w-10 h-10 rounded-full bg-primary-100 text-primary-700 inline-flex items-center justify-center text-sm font-bold" aria-hidden>{iniciais(p.nome)}</span>}
+                            <span className="relative shrink-0 self-start">
+                              {p.avatar
+                                // eslint-disable-next-line @next/next/no-img-element
+                                ? <img src={p.avatar} alt="" className="w-10 h-10 rounded-full object-cover" />
+                                : <span className="w-10 h-10 rounded-full bg-primary-100 text-primary-700 inline-flex items-center justify-center text-sm font-bold" aria-hidden>{iniciais(p.nome)}</span>}
+                              <PontoPresenca estado={estadoDe(p.usuarioId, p.estado)} agora={agora} />
+                            </span>
                             <span className="flex-1 min-w-0">
                               <span className="flex items-baseline justify-between gap-2">
                                 <span className="font-semibold text-ink truncate">{p.nome}</span>
                                 {p.ultima && <span className={cn("shrink-0 text-[11px]", p.naoLidas ? "text-primary-700 font-semibold" : "text-ink-subtle")}>{horaDaLista(p.ultima.criadoEm)}</span>}
                               </span>
+                              <LinhaSituacao estado={estadoDe(p.usuarioId, p.estado)} agora={agora} aguardando={aguardandoTecnico(p.ultima)} />
                               <span className="flex items-center justify-between gap-2">
                                 <span className="text-sm text-ink-muted truncate inline-flex items-center gap-1" data-ultima>
                                   {p.ultima?.minha && <CheckCheck className="w-3.5 h-3.5 shrink-0 text-ink-subtle" aria-label="Mensagem minha" />}
@@ -238,15 +256,25 @@ export function ConversasEscritorio({ pessoaInicial, osInicial, podeEscrever, po
                 <button type="button" onClick={() => abrir(null)} className="lg:hidden p-2 -ml-1 text-ink-muted touch-target" aria-label="Voltar às conversas" data-voltar-conversas>
                   <ArrowLeft className="w-5 h-5" />
                 </button>
-                {aberta.tipo === "pessoa" && (cabecalho.avatar
-                  // eslint-disable-next-line @next/next/no-img-element
-                  ? <img src={cabecalho.avatar} alt="" className="shrink-0 w-9 h-9 rounded-full object-cover" />
-                  : <span className="shrink-0 w-9 h-9 rounded-full bg-primary-100 text-primary-700 inline-flex items-center justify-center text-sm font-bold" aria-hidden>{iniciais(cabecalho.titulo)}</span>)}
+                {aberta.tipo === "pessoa" && (
+                  <span className="relative shrink-0">
+                    {cabecalho.avatar
+                      // eslint-disable-next-line @next/next/no-img-element
+                      ? <img src={cabecalho.avatar} alt="" className="w-9 h-9 rounded-full object-cover" />
+                      : <span className="w-9 h-9 rounded-full bg-primary-100 text-primary-700 inline-flex items-center justify-center text-sm font-bold" aria-hidden>{iniciais(cabecalho.titulo)}</span>}
+                    <PontoPresenca estado={cabecalho.estado} agora={agora} />
+                  </span>
+                )}
                 <div className="min-w-0 flex-1">
                   <p className="font-semibold text-ink truncate" data-titulo-conversa>
                     {cabecalho.linkOs ? <Link href={`/ordens/${cabecalho.linkOs}`} className="hover:underline" data-link-os>{cabecalho.titulo}</Link> : cabecalho.titulo}
                   </p>
-                  <p className="text-xs text-ink-muted truncate">{cabecalho.sub}</p>
+                  {cabecalho.estado ? (
+                    <div className="flex items-center gap-1 min-w-0" data-situacao-cabecalho>
+                      <LinhaSituacao estado={cabecalho.estado} agora={agora} aguardando={cabecalho.aguardando} linkOs />
+                      <Dica texto={LEGENDA_SITUACAO} rotulo="Situação e presença" />
+                    </div>
+                  ) : <p className="text-xs text-ink-muted truncate">{cabecalho.sub}</p>}
                 </div>
               </header>
               <ConversaEscritorio key={chaveAberta(aberta)} alvo={aberta} className="flex-1" aoCarregar={aoCarregar} abrirOs={(id) => router.push(`/ordens/${id}`)}
