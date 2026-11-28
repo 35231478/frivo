@@ -159,7 +159,7 @@ export function LoginForm() {
         <span className="text-sm text-ink">
           Manter conectado
           <span className="block text-xs text-ink-muted">
-            {lembrar ? "Fica conectado por 30 dias neste aparelho." : "Sem marcar, a sessão vale por 1 dia. Não marque em computador compartilhado."}
+            {lembrar ? "Fica conectado por 30 dias neste aparelho." : "Sem marcar, a sessão vale por 1 dia (no app do técnico, 30 dias). Não marque em computador compartilhado."}
           </span>
         </span>
       </label>

@@ -12,3 +12,12 @@ export function sessaoCurtaVencida(token: { lembrar?: unknown; loginEm?: unknown
   const loginEm = Number(token.loginEm);
   return !Number.isFinite(loginEm) || agora - loginEm > SESSAO_CURTA_MS;
 }
+
+/**
+ * D2 — o "Manter conectado" do login. No APP DO TÉCNICO (modo técnico) a sessão vale sempre 30 dias: o técnico abre
+ * o celular no dia seguinte e a fila sobe sem pedir senha. O escritório segue com a escolha da caixa. "Um aparelho só",
+ * inativar e redefinir o acesso continuam derrubando na hora (lib/sessao-ativa: o servidor confere a cada leitura).
+ */
+export function lembrarNoLogin(marcouManterConectado: boolean, appDoTecnico: boolean): boolean {
+  return marcouManterConectado || appDoTecnico;
+}

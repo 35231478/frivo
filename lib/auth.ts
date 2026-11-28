@@ -1,4 +1,6 @@
 import NextAuth, { CredentialsSignin } from "next-auth";
+import { lembrarNoLogin } from "@/lib/acesso/sessao";
+import { emModoTecnico } from "@/lib/tecnico/modo";
 import Credentials from "next-auth/providers/credentials";
 import { randomUUID } from "crypto";
 import bcrypt from "bcryptjs";
@@ -84,7 +86,8 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
           role: usuario.role,
           permissoes,
           perfilNome: usuario.perfilAcesso?.ativo === false ? null : usuario.perfilAcesso?.nome ?? null,
-          lembrar,
+          // D2: no app do técnico, a sessão vale 30 dias mesmo sem "Manter conectado"
+          lembrar: lembrarNoLogin(lembrar, emModoTecnico({ role: usuario.role, permissoes, tecnicoId: tecnico?.id ?? null })),
           fs: impressaoDaSenha(usuario.senha),
           tecnicoId: tecnico?.id ?? null,
           sessaoAtiva,
