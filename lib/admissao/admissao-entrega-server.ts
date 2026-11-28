@@ -13,6 +13,7 @@
  */
 
 import { prisma } from "@/lib/prisma";
+import { faixasDoColaborador, textoDaJornada } from "@/lib/colaborador/jornada";
 import { formatarData, formatarDataHora, formatarMoeda } from "@/lib/utils";
 import { formatarDocumento } from "@/lib/documento";
 import { decodificarDataUrl } from "@/lib/anexos-server";
@@ -21,7 +22,7 @@ import { montarZip, type ArquivoZip } from "@/lib/zip";
 import type { ArquivoGerado } from "@/lib/pdf/resposta";
 import {
   ESCOLARIDADES, ESTADOS_CIVIS, PARENTESCOS, TIPOS_CONTA, documentosDaEmpresa, formatarPis,
-  normalizarForm, textoJornada, type FormAdmissao,
+  normalizarForm, type FormAdmissao,
 } from "@/lib/admissao/admissao";
 import {
   VAZIO, gerarContratoPdf, gerarFichaPdf, ou, type DadosFicha, type DependenteFicha, type LinhaFicha,
@@ -59,7 +60,7 @@ const SELECT_ENTREGA = {
     select: {
       id: true, nome: true, cpf: true, rg: true, email: true, telefone: true,
       dataNascimento: true, dataAdmissao: true, salario: true,
-      jornadaEntrada: true, jornadaSaida: true, jornadaDias: true,
+      jornadaEntrada: true, jornadaSaida: true, jornadaDias: true, jornadaFaixas: true,
       pis: true, ctpsNumero: true, ctpsSerie: true, ctpsUf: true,
       nomeMae: true, nomePai: true, estadoCivil: true, escolaridade: true,
       nacionalidade: true, naturalidade: true, sexo: true, tituloEleitor: true, reservista: true,
@@ -144,7 +145,7 @@ export function blocosDaFicha(a: LinhaEntrega, agora: Date): DadosFicha {
     { rotulo: "CBO", valor: ou(col.cargo?.cbo) },
     { rotulo: "Salário", valor: col.salario === null || col.salario === undefined ? VAZIO : formatarMoeda(Number(col.salario)) },
     { rotulo: "Data de admissão", valor: col.dataAdmissao ? formatarData(col.dataAdmissao) : VAZIO },
-    { rotulo: "Jornada", valor: ou(textoJornada({ entrada: col.jornadaEntrada, saida: col.jornadaSaida, dias: col.jornadaDias })) },
+    { rotulo: "Jornada", valor: ou(textoDaJornada(faixasDoColaborador(col))) },
     { rotulo: "Empregador", valor: `${a.empresa.nomeFantasia?.trim() || a.empresa.nome}${a.empresa.cnpj ? ` · CNPJ ${a.empresa.cnpj}` : ""}` },
   ];
 

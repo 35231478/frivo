@@ -33,17 +33,15 @@ import {
   X, Plus, Upload, Trash2, AlertCircle, CalendarClock, User, Briefcase, ListChecks, FileText, Wallet, KeyRound, UserPlus,
 } from "lucide-react";
 import { InputData } from "@/components/ui/input-data";
-import { InputHora } from "@/components/ui/input-hora";
+import { ToggleSwitch } from "@/components/ui/toggle-switch";
+import { JornadaFaixas } from "@/components/colaborador/jornada-faixas";
+import { faixasDoColaborador, jornadaValida, problemasDaJornada, type FaixaJornada } from "@/lib/colaborador/jornada";
+import { DICA_CAMPO, DICA_RT, ROTULO_CAMPO, ROTULO_RT, funcaoDaFicha, gravarFuncao } from "@/lib/colaborador/funcao";
+import { buscarCep, cepCompleto, formatarCep } from "@/lib/cep";
 
 const ESPECIALIDADES_SUGERIDAS = [
   "Split", "VRF", "Chiller", "Câmara Fria",
   "Refrigeração Comercial", "Ar Central", "Fan Coil", "Torres de Resfriamento",
-];
-
-const DIAS_SEMANA = [
-  { code: "SEG", label: "Seg" }, { code: "TER", label: "Ter" }, { code: "QUA", label: "Qua" },
-  { code: "QUI", label: "Qui" }, { code: "SEX", label: "Sex" }, { code: "SAB", label: "Sáb" },
-  { code: "DOM", label: "Dom" },
 ];
 
 interface TipoOsOpt { id: string; nome: string; cor: string }
@@ -76,7 +74,9 @@ export function ColaboradorForm({ initialData, somenteLeitura = false, podeFolha
 
   const [especialidades, setEspecialidades] = useState<string[]>(initialData?.especialidades ?? []);
   const [novaEsp, setNovaEsp] = useState("");
-  const [jornadaDias, setJornadaDias] = useState<string[]>(initialData?.jornadaDias ?? ["SEG", "TER", "QUA", "QUI", "SEX"]);
+  // Leva J: a jornada em faixas (a antiga, de um horário só, abre como uma faixa); colaborador novo nasce com Seg–Sex
+  const [faixas, setFaixas] = useState<FaixaJornada[]>(() => (initialData ? faixasDoColaborador(initialData)
+    : [{ dias: ["SEG", "TER", "QUA", "QUI", "SEX"], entrada: "08:00", saida: "17:00", intervaloInicio: "12:00", intervaloFim: "13:00" }]));
   const [competenciaIds, setCompetenciaIds] = useState<string[]>(
     initialData?.competencias?.map((c: any) => c.id) ?? [],
   );
@@ -91,7 +91,9 @@ export function ColaboradorForm({ initialData, somenteLeitura = false, podeFolha
   // Perfis (ativos e inativos): o SeletorCadastro só oferece os ativos e mantém o atual se inativo
   const { itens: perfis } = useCadastro("perfis-acesso");
   const [perfilAcessoId, setPerfilAcessoId] = useState<string>(initialData?.perfilAcessoId ?? "");
-  const [tipoEquipe, setTipoEquipe] = useState<string>(initialData?.tipoEquipe ?? "CAMPO");
+  // Leva J: "Usa o app de campo" + "Responsável técnico (ART/PMOC)" no lugar de "Tipo" + "Tipo de equipe" (lib/colaborador/funcao)
+  const [campo, setCampo] = useState<boolean>(() => funcaoDaFicha(initialData ?? {}).campo);
+  const [rt, setRt] = useState<boolean>(() => funcaoDaFicha(initialData ?? {}).rt);
   // Veículo "padrão" (opcional): puxado automaticamente na OS quando ele executa sozinho
   const [veiculoId, setVeiculoId] = useState<string>(initialData?.veiculoId ?? "");
   const [veiculos, setVeiculos] = useState<VeiculoResumo[]>([]);
@@ -104,11 +106,11 @@ export function ColaboradorForm({ initialData, somenteLeitura = false, podeFolha
     fetch("/api/veiculos?resumo=1").then((r) => (r.ok ? r.json() : [])).then((d) => setVeiculos(Array.isArray(d) ? d : [])).catch(() => {});
   }, []);
 
-  // Ao escolher o tipo de equipe, sugere um perfil compatível (se nenhum estiver escolhido)
-  function escolherTipoEquipe(novo: string) {
-    setTipoEquipe(novo);
+  // Ao marcar/desmarcar "Usa o app de campo", sugere um perfil compatível (se nenhum estiver escolhido)
+  function escolherCampo(novo: boolean) {
+    setCampo(novo);
     if (perfilAcessoId) return;
-    const alvo = novo === "CAMPO" ? ["TECNICO"] : ["SUPERVISOR", "FINANCEIRO"];
+    const alvo = novo ? ["TECNICO"] : ["SUPERVISOR", "FINANCEIRO"];
     const sugestao = perfis.find((p) => p.ativo !== false && alvo.includes(String(p.tipo)));
     if (sugestao) setPerfilAcessoId(sugestao.id);
   }
@@ -131,21 +133,32 @@ export function ColaboradorForm({ initialData, somenteLeitura = false, podeFolha
           cidade: initialData.cidade ?? "", estado: initialData.estado ?? "", cep: initialData.cep ?? "",
           cargoId: initialData.cargoId ?? "", tipo: initialData.tipo, crea: initialData.crea ?? "",
           dataAdmissao: dataIso(initialData.dataAdmissao),
-          jornadaEntrada: initialData.jornadaEntrada ?? "", jornadaSaida: initialData.jornadaSaida ?? "",
           statusColaborador: initialData.statusColaborador ?? "ATIVO",
           observacoes: initialData.observacoes ?? "",
         }
       : { tipo: "TECNICO_CAMPO", statusColaborador: "ATIVO" },
   });
 
-  const tipo = watch("tipo");
   // Status → Inativo (editando): mostra o impacto e pede motivo, como o botão Inativar
   const [motivoInativacao, setMotivoInativacao] = useState("");
   const inativandoPeloStatus = isEditing && watch("statusColaborador") === "INATIVO" && initialData?.ativo !== false && initialData?.statusColaborador !== "INATIVO";
 
-  function toggleDia(code: string) {
-    setJornadaDias((p) => (p.includes(code) ? p.filter((d) => d !== code) : [...p, code]));
+  // O CEP preenche o endereço (a mesma consulta da admissão e do cadastro rápido: lib/cep)
+  const [cepBuscando, setCepBuscando] = useState(false);
+  const [cepAchou, setCepAchou] = useState<boolean | null>(null);
+  async function completarCep(cep: string) {
+    if (!cepCompleto(cep)) return;
+    setCepBuscando(true);
+    const e = await buscarCep(cep);
+    setCepBuscando(false);
+    setCepAchou(!!e);
+    if (!e) return;
+    if (e.logradouro) setValue("endereco", e.logradouro, { shouldDirty: true });
+    if (e.bairro) setValue("bairro", e.bairro, { shouldDirty: true });
+    if (e.cidade) setValue("cidade", e.cidade, { shouldDirty: true });
+    if (e.estado) setValue("estado", e.estado, { shouldDirty: true });
   }
+  const jornadaOk = jornadaValida(faixas);
   function toggleCompetencia(id: string) {
     setCompetenciaIds((p) => (p.includes(id) ? p.filter((c) => c !== id) : [...p, id]));
   }
@@ -174,6 +187,12 @@ export function ColaboradorForm({ initialData, somenteLeitura = false, podeFolha
 
   async function onSubmit(data: TecnicoInput) {
     setErroGlobal("");
+    if (!jornadaOk) {
+      const p = problemasDaJornada(faixas);
+      setErroGlobal(`Jornada: ${[...p.geral, ...p.faixas.flatMap((x, i) => x.map((m) => `faixa ${i + 1}: ${m}`))][0] ?? "confira as faixas."}`);
+      setAba("profissionais");
+      return;
+    }
     try {
       const url = isEditing ? `/api/tecnicos/${initialData.id}` : "/api/tecnicos";
       const res = await fetch(url, {
@@ -184,8 +203,8 @@ export function ColaboradorForm({ initialData, somenteLeitura = false, podeFolha
           avatar: avatar ?? "",
           perfilAcessoId: perfilAcessoId || null,
           veiculoId: veiculoId || null,
-          tipoEquipe,
-          especialidades, competenciaIds, jornadaDias,
+          ...gravarFuncao({ campo, rt }, initialData?.tipo),
+          especialidades, competenciaIds, jornadaFaixas: faixas,
           ...(inativandoPeloStatus && { motivoInativacao }),
         }),
       });
@@ -201,6 +220,17 @@ export function ColaboradorForm({ initialData, somenteLeitura = false, podeFolha
     }
   }
 
+  // As abas com erro (a mesma marca da ficha do cliente): o salvar recusado leva à primeira
+  const CAMPOS_PESSOAIS = ["nome", "cpf", "email", "telefone", "rg", "dataNascimento", "cep", "endereco", "numero", "bairro", "cidade", "estado"] as const;
+  const abasErro = new Set<Aba>([
+    ...(CAMPOS_PESSOAIS.some((c) => (errors as Record<string, unknown>)[c]) ? ["pessoais" as const] : []),
+    ...(!jornadaOk ? ["profissionais" as const] : []),
+  ]);
+  function invalido(e: Record<string, unknown>) {
+    if (CAMPOS_PESSOAIS.some((c) => e[c])) setAba("pessoais");
+    else setAba("profissionais");
+  }
+
   const ABAS: { id: Aba; label: string; icone: any; badge?: number }[] = [
     { id: "pessoais", label: "Dados pessoais", icone: User },
     { id: "profissionais", label: "Dados profissionais", icone: Briefcase },
@@ -214,7 +244,7 @@ export function ColaboradorForm({ initialData, somenteLeitura = false, podeFolha
   const inputCls = "w-full bg-white border border-surface-border rounded-lg px-3 py-2.5 text-sm text-ink focus:outline-none focus:border-primary-500 focus:ring-4 focus:ring-primary-500/10 transition-all";
 
   return (
-    <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
+    <form onSubmit={handleSubmit(onSubmit, invalido)} className="space-y-5">
       {erroGlobal && (
         <div className="flex items-center gap-2 bg-atrasado-claro border border-atrasado/20 text-atrasado-texto text-sm rounded-lg px-4 py-3">
           <AlertCircle className="w-4 h-4 shrink-0" /> {erroGlobal}
@@ -238,18 +268,18 @@ export function ColaboradorForm({ initialData, somenteLeitura = false, podeFolha
       )}
 
       <div className="bg-white rounded-card shadow-card border border-surface-border overflow-hidden">
-        <nav className="flex gap-1.5 overflow-x-auto px-4 pt-4 pb-4 border-b border-surface-border">
+        {/* Leva J: as abas quebram linha como na ficha do cliente (sem rolagem lateral; no celular, todas à vista) */}
+        <nav className="flex flex-wrap gap-1.5 px-4 pt-4 pb-4 border-b border-surface-border" data-abas-colaborador>
           {ABAS.map((t) => {
             const ativa = aba === t.id;
+            const comErro = abasErro.has(t.id);
             return (
               <button
-                key={t.id} type="button" onClick={() => setAba(t.id)}
-                // No celular a tira de abas rola: a ativa tem de vir para a vista, senão trocar de
-                // aba pelo atalho do aviso deixa a tira mostrando outra aba
-                ref={ativa ? ((el) => el?.scrollIntoView({ block: "nearest", inline: "nearest" })) : undefined}
+                key={t.id} type="button" onClick={() => setAba(t.id)} data-aba={t.id} aria-current={ativa ? "page" : undefined}
                 className={cn(
                   "flex items-center gap-2 px-4 py-2.5 text-sm font-medium rounded-card whitespace-nowrap transition-all",
                   ativa ? "bg-primary-500 text-white shadow-sm" : "text-ink-muted hover:text-ink hover:bg-surface-alt",
+                  comErro && !ativa && "text-atrasado bg-atrasado-claro",
                 )}
               >
                 <t.icone className="w-4 h-4" />
@@ -257,6 +287,7 @@ export function ColaboradorForm({ initialData, somenteLeitura = false, podeFolha
                 {t.badge != null && t.badge > 0 && (
                   <span className={cn("text-[10px] font-semibold px-1.5 py-0.5 rounded-full", ativa ? "bg-white/25 text-white" : "bg-surface-alt text-ink-muted")}>{t.badge}</span>
                 )}
+                {comErro && <AlertCircle className={cn("w-3.5 h-3.5", ativa ? "text-white" : "text-atrasado")} aria-label="Tem erro" />}
               </button>
             );
           })}
@@ -318,7 +349,12 @@ export function ColaboradorForm({ initialData, somenteLeitura = false, podeFolha
 
             <FormSection title="Endereço">
               <FormGrid cols={3}>
-                <FormField label="CEP"><Input {...register("cep")} placeholder="00000-000" /></FormField>
+                <FormField label="CEP" hint={cepBuscando ? "Buscando o endereço…" : cepAchou === false ? "CEP não encontrado: preencha à mão." : "O endereço é preenchido pelo CEP."}>
+                  <Controller name="cep" control={control} render={({ field }) => (
+                    <Input value={formatarCep((field.value as string) ?? "")} inputMode="numeric" placeholder="00000-000" data-campo-cep
+                      onChange={(e) => { const v = formatarCep(e.target.value); field.onChange(v); setCepAchou(null); if (cepCompleto(v)) completarCep(v); }} />
+                  )} />
+                </FormField>
                 <FormField label="Logradouro" className="sm:col-span-2"><Input {...register("endereco")} caixa="endereco" placeholder="Rua, avenida…" /></FormField>
               </FormGrid>
               <FormGrid cols={3}>
@@ -344,23 +380,6 @@ export function ColaboradorForm({ initialData, somenteLeitura = false, podeFolha
                     onChange={(v) => setValue("cargoId", v, { shouldDirty: true })}
                   />
                 </FormField>
-                <FormField label="Tipo" required>
-                  <Select {...register("tipo")}>
-                    <option value="TECNICO_CAMPO">Técnico de campo</option>
-                    <option value="RESPONSAVEL_TECNICO">Responsável técnico</option>
-                    <option value="ADMINISTRATIVO">Administrativo</option>
-                    <option value="MOTORISTA">Motorista</option>
-                    <option value="OUTRO">Outro</option>
-                  </Select>
-                </FormField>
-              </FormGrid>
-              <FormGrid>
-                <FormField label="Tipo de equipe" hint="Define em qual equipe o colaborador aparece">
-                  <Select value={tipoEquipe} onChange={(e) => escolherTipoEquipe(e.target.value)}>
-                    <option value="CAMPO">Campo</option>
-                    <option value="ADMINISTRATIVO">Administrativo</option>
-                  </Select>
-                </FormField>
                 <FormField label="Perfil de acesso" hint="Permissões no sistema (Configurações › Perfis)">
                   <SeletorCadastro entidade="perfis-acesso" itens={perfis} valor={perfilAcessoId} vazio="Sem perfil" onChange={setPerfilAcessoId} />
                 </FormField>
@@ -375,7 +394,12 @@ export function ColaboradorForm({ initialData, somenteLeitura = false, podeFolha
                   </Select>
                 </FormField>
               )}
-              {tipo === "RESPONSAVEL_TECNICO" && (
+              {/* Leva J: dois conceitos claros no lugar de "Tipo" e "Tipo de equipe" (decisão no doc da leva) */}
+              <div className="grid gap-3 sm:grid-cols-2" data-funcao-colaborador>
+                <div data-usa-app-campo={campo ? "sim" : "nao"}><ToggleSwitch label={ROTULO_CAMPO} dica={DICA_CAMPO} checked={campo} onChange={escolherCampo} disabled={somenteLeitura} /></div>
+                <div data-responsavel-tecnico={rt ? "sim" : "nao"}><ToggleSwitch label={ROTULO_RT} dica={DICA_RT} checked={rt} onChange={setRt} disabled={somenteLeitura} /></div>
+              </div>
+              {rt && (
                 <FormField label="CREA / Registro profissional" hint="Obrigatório para responsáveis técnicos">
                   <Input {...register("crea")} placeholder="Ex: 5012345-D/SP" />
                 </FormField>
@@ -396,31 +420,8 @@ export function ColaboradorForm({ initialData, somenteLeitura = false, podeFolha
               {isEditing && <AvisoInativacaoStatus url={`/api/tecnicos/${initialData.id}`} mostrar={inativandoPeloStatus} motivo={motivoInativacao} onMotivo={setMotivoInativacao} />}
             </FormSection>
 
-            <FormSection title="Jornada de trabalho">
-              <FormGrid>
-                <FormField label="Horário de entrada">
-                  <Controller name="jornadaEntrada" control={control} render={({ field }) => <InputHora value={(field.value as string) ?? ""} onChange={field.onChange} aria-label="Horário de entrada" />} />
-                </FormField>
-                <FormField label="Horário de saída">
-                  <Controller name="jornadaSaida" control={control} render={({ field }) => <InputHora value={(field.value as string) ?? ""} onChange={field.onChange} aria-label="Horário de saída" />} />
-                </FormField>
-              </FormGrid>
-              <FormField label="Dias da semana">
-                <div className="flex flex-wrap gap-2">
-                  {DIAS_SEMANA.map((d) => {
-                    const sel = jornadaDias.includes(d.code);
-                    return (
-                      <button key={d.code} type="button" onClick={() => toggleDia(d.code)}
-                        className={cn(
-                          "px-3 py-1.5 rounded-lg text-sm font-medium border transition-colors",
-                          sel ? "bg-primary-500 border-primary-500 text-white" : "bg-white border-surface-border text-ink-muted hover:border-primary-300",
-                        )}>
-                        {d.label}
-                      </button>
-                    );
-                  })}
-                </div>
-              </FormField>
+            <FormSection title="Jornada de trabalho" dica="Uma faixa por grupo de dias com o mesmo horário (ex.: Seg–Qui 07:30–17:30 e Sex 07:30–16:30). O intervalo é descontado das horas. Vai para o contrato e os documentos.">
+              <JornadaFaixas faixas={faixas} onChange={setFaixas} disabled={somenteLeitura} />
             </FormSection>
 
             <FormSection title="Observações">

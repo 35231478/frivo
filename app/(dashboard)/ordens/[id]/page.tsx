@@ -3,6 +3,7 @@ import { regraDeCobranca } from "@/lib/orcamentos/materiais";
 import { notFound } from "next/navigation";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { mostrarEspecialidades } from "@/lib/relatorio-os/dados";
 import { OsDetalhe } from "@/components/os/os-detalhe";
 import { sincronizarStatusOs } from "@/lib/os/sincronizar-status";
 import { carregarGaleria } from "@/lib/os/galeria-server";
@@ -46,9 +47,9 @@ export default async function OsDetalhePage({ params, searchParams }: { params: 
       atividades: {
         include: {
           tipoOs: { select: { id: true, nome: true, cor: true } },
-          tecnico: { select: { id: true, nome: true } },
+          tecnico: { select: { id: true, nome: true, especialidades: true } },
           equipe: { select: { id: true, nome: true, cor: true } },
-          tecnicosEquipe: { select: { tecnico: { select: { id: true, nome: true } } }, orderBy: { criadoEm: "asc" } },
+          tecnicosEquipe: { select: { tecnico: { select: { id: true, nome: true, especialidades: true } } }, orderBy: { criadoEm: "asc" } },
           veiculo: { select: { id: true, placa: true, modelo: true, marca: true } },
           respostas: { include: { campo: true } },
           // equipamentoId: o cabeçalho conta equipamento DISTINTO (igual ao card e ao relatório)
@@ -98,6 +99,13 @@ export default async function OsDetalhePage({ params, searchParams }: { params: 
     },
   });
   if (!os) notFound();
+  // Leva J: as especialidades do técnico junto ao nome (Configurações › Impressão da OS); desligado, a OS nem as recebe
+  if (!(await mostrarEspecialidades(empresaId))) {
+    for (const a of os.atividades) {
+      if (a.tecnico) a.tecnico.especialidades = [];
+      for (const t of a.tecnicosEquipe) t.tecnico.especialidades = [];
+    }
+  }
 
   // A aba Financeiro recebe as medições OFICIAIS da OS (deduplicadas), não mais a OsMedicao interna
   const vistas = new Set<string>();

@@ -1,4 +1,6 @@
 import type { Metadata } from "next";
+import { mostrarEspecialidades } from "@/lib/relatorio-os/dados";
+import { nomeComEspecialidades } from "@/lib/atividade-equipe";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
@@ -22,6 +24,11 @@ export default async function PortalChamadoDetalhe({ params }: { params: Promise
     where: { id, empresaId: user.empresaId, clienteId: user.clienteId },
     include: {
       responsavel: { select: { nome: true } },
+      // Leva J: quem executou (as atividades), com as especialidades quando a empresa mostra
+      atividades: {
+        where: { status: { not: "CANCELADA" } }, orderBy: { criadoEm: "asc" },
+        select: { tecnico: { select: { nome: true, especialidades: true } }, tecnicosEquipe: { select: { tecnico: { select: { nome: true, especialidades: true } } }, orderBy: { criadoEm: "asc" } } },
+      },
       unidade: { select: { nome: true } },
       equipamento: { select: { marca: true, modelo: true } },
       anexos: { select: { id: true, nome: true, tipo: true, conteudo: true, criadoEm: true }, orderBy: { criadoEm: "asc" } },
@@ -29,6 +36,9 @@ export default async function PortalChamadoDetalhe({ params }: { params: Promise
     },
   });
   if (!os) notFound();
+  const comEspecialidades = await mostrarEspecialidades(user.empresaId);
+  const tecnicos = [...new Map(os.atividades.flatMap((a) => [a.tecnico, ...a.tecnicosEquipe.map((t) => t.tecnico)]).filter((t): t is NonNullable<typeof t> => !!t).map((t) => [t.nome, t])).values()];
+  const textoTecnicos = tecnicos.length ? tecnicos.map((t) => nomeComEspecialidades(t, comEspecialidades)).join("; ") : null;
   const aceite = estadoDoAceite(os.status, os.aceite);
 
   // Só as fotos enviadas pelo cliente ao abrir o chamado (criadas junto com a OS).
@@ -64,7 +74,7 @@ export default async function PortalChamadoDetalhe({ params }: { params: Promise
           <span className="text-sm font-medium px-3 py-1 rounded-full bg-primary-50 text-primary-700">{LABELS_STATUS_OS[os.status] ?? os.status}</span>
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-4 text-sm">
-          <div className="flex items-center gap-2"><User className="w-4 h-4 text-ink-muted" /> <span className="text-ink-muted">Técnico:</span> {os.responsavel?.nome ?? "A designar"}</div>
+          <div className="flex items-center gap-2"><User className="w-4 h-4 text-ink-muted" /> <span className="text-ink-muted">{tecnicos.length > 1 ? "Técnicos:" : "Técnico:"}</span> <span data-portal-tecnicos>{textoTecnicos ?? os.responsavel?.nome ?? "A designar"}</span></div>
           <div><span className="text-ink-muted">Prioridade:</span> {LABELS_PRIORIDADE[os.prioridade] ?? os.prioridade}</div>
           {os.unidade && <div><span className="text-ink-muted">Local:</span> {os.unidade.nome}</div>}
           {os.equipamento && <div><span className="text-ink-muted">Equipamento:</span> {os.equipamento.marca} {os.equipamento.modelo}</div>}

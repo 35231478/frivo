@@ -21,7 +21,8 @@ export async function GET(req: NextRequest) {
     where: {
       empresaId,
       ativo: true,
-      tipo: "TECNICO_CAMPO",
+      // Leva J: "Usa o app de campo" (tipoEquipe) é a fonte única de quem é de campo — inclui o RT que vai a campo
+      tipoEquipe: "CAMPO",
       latitude: { not: null },
       longitude: { not: null },
     },

@@ -7,11 +7,11 @@ import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { FormField, FormGrid } from "@/components/ui/form-field";
 import { InputData } from "@/components/ui/input-data";
-import { cn } from "@/lib/utils";
+import { cn, formatarTelefone } from "@/lib/utils";
 import { digitos, formatarDocumento } from "@/lib/documento";
 import { buscarCep, cepCompleto, formatarCep } from "@/lib/cep";
 import {
-  CODIGO_TAMANHO, ESCOLARIDADES, ESTADOS_CIVIS, PARENTESCOS, TIPOS_CONTA, formatarPis,
+  CODIGO_TAMANHO, ESCOLARIDADES, ESTADOS_CIVIS, PARENTESCOS, TIPOS_CONTA, UFS, formatarPis,
   type DocumentoPedido, type FormAdmissao,
 } from "@/lib/admissao/admissao";
 
@@ -21,10 +21,6 @@ export interface CamposProps {
   set: <K extends keyof FormAdmissao>(campo: K, valor: FormAdmissao[K]) => void;
 }
 
-const UFS = [
-  "AC", "AL", "AP", "AM", "BA", "CE", "DF", "ES", "GO", "MA", "MT", "MS", "MG", "PA", "PB", "PR",
-  "PE", "PI", "RJ", "RN", "RS", "RO", "RR", "SC", "SP", "SE", "TO",
-];
 
 /* ───────── etapa 1: os dados da pessoa ───────── */
 
@@ -113,8 +109,8 @@ export function CamposDados({ form, set }: CamposProps) {
           <Input value={form.reservista} onChange={(e) => set("reservista", e.target.value)} data-campo="reservista" />
         </FormField>
       </FormGrid>
-      <FormField label="Telefone / WhatsApp" required>
-        <Input value={form.telefone} onChange={(e) => set("telefone", e.target.value)} inputMode="tel" data-campo="telefone" autoComplete="tel" />
+      <FormField label="Celular (WhatsApp)" required hint="Com DDD." dica="É por onde a empresa fala com você: WhatsApp, avisos e o app de campo.">
+        <Input value={formatarTelefone(form.telefone)} onChange={(e) => set("telefone", digitos(e.target.value).slice(0, 11))} inputMode="tel" data-campo="telefone" autoComplete="tel" placeholder="(00) 90000-0000" />
       </FormField>
     </div>
   );
@@ -168,7 +164,7 @@ export function VerificarEmail({ form, set, token, verificado, onVerificado }: C
 
   return (
     <div className="space-y-3" data-verificar-email={confere ? "ok" : "pendente"}>
-      <FormField label="E-mail" hint="Para receber o contrato e os avisos da empresa.">
+      <FormField label="E-mail" required hint="Para receber o contrato e os avisos da empresa.">
         <Input type="email" value={form.email} onChange={(e) => { set("email", e.target.value); setPedido(false); }}
           caixa="email" data-campo="email" autoComplete="email" inputMode="email" />
       </FormField>
