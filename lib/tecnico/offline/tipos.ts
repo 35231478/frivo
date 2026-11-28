@@ -67,6 +67,8 @@ export interface CampoFormularioTela { id: string; label: string; tipo: string; 
 export type RespostaTela = RespostaItem & { audioId: string | null; /** áudio gravado no aparelho, ainda não enviado */ audioLocal?: string | null };
 export interface FotoTela {
   id: string | null; clientId: string | null; itemId: string | null; momento: "ANTES" | "DEPOIS" | null;
+  /** D4: a legenda escrita pelo técnico ou pelo escritório (null/ausente = a do sistema) */
+  legenda?: string | null;
   /** Imagem guardada no aparelho (ainda não enviada) */
   local?: string;
   pendente?: boolean;

@@ -6,6 +6,9 @@ import { AlertTriangle, ArrowLeft, ArrowRight, Camera, Check, CheckCheck, Chevro
 import { faixaSomenteLeitura } from "@/lib/tecnico/somente-leitura";
 import { cn, formatarMoeda } from "@/lib/utils";
 import { Modal } from "@/components/ui/modal";
+import { toast } from "@/components/ui/avisos";
+import { osEncerrada } from "@/lib/os/prazo-execucao";
+import { LEGENDA_MAX } from "@/lib/os/galeria";
 import { Dica } from "@/components/ui/dica";
 import { CampoFormulario } from "@/components/os/execucao-equipamento";
 import { BotaoFoto, Miniatura, ObservacaoVoz, type MarcaFoto } from "@/components/tecnico/captura";
@@ -68,6 +71,10 @@ export function TelaEquipamento({ x, e, registrar, endereco, qr, comissao }: Pro
   const ativos = e.itens.filter((i) => i.ativo);
   const { feitos, total: totalItens } = progressoDoChecklist(e.itens, e.respostas);
   const semResposta = ativos.filter((i) => i.tipoResposta === "OK_ATENCAO_NA" && !e.respostas[i.id]?.status).length;
+  // D4: legenda opcional das fotos antes/depois — enquanto a OS não estiver encerrada (a mesma regra das fotos do serviço)
+  const podeLegenda = !osEncerrada(x.os.status);
+  const legendar = (f: FotoTela, legenda: string) =>
+    void registrar([{ tipo: "fotoLegenda", atividadeId: x.atividade.id, dados: { ...(f.clientId ? { clientId: f.clientId } : { id: f.id! }), legenda } }]).then(() => toast(legenda ? "Legenda salva." : "Legenda do sistema de volta."));
   const fotosDe = (itemId: string | null, momento: "ANTES" | "DEPOIS" | null) => e.fotos.filter((f) => f.itemId === itemId && (itemId ? true : f.momento === momento));
   const faltando = useMemo(() => new Set([...e.faltas.semResposta, ...e.faltas.semFoto, ...e.faltas.semObservacao]), [e.faltas]);
   const posicao = x.equipamentos.findIndex((q) => q.equipamento.id === equipamentoId);
@@ -236,7 +243,7 @@ export function TelaEquipamento({ x, e, registrar, endereco, qr, comissao }: Pro
 
       <Secao titulo="Fotos ANTES" Icone={Camera} contagem={fotosDe(null, "ANTES").length} chave="antes"
         acao={!so && <BotaoCamera rotulo="Foto antes" titulo={e.equipamento.titulo} marca={marca} passos={() => [{ chave: "antes", rotulo: "Foto antes do serviço", onFoto: (d) => foto(d, { momento: "ANTES" }) }]} />}>
-        <Fotos fotos={fotosDe(null, "ANTES")} onRemover={so ? undefined : tirarFoto} />
+        <Fotos fotos={fotosDe(null, "ANTES")} onRemover={so ? undefined : tirarFoto} onLegenda={podeLegenda ? legendar : undefined} />
       </Secao>
 
       {ativos.length > 0 && !so && (
@@ -291,7 +298,7 @@ export function TelaEquipamento({ x, e, registrar, endereco, qr, comissao }: Pro
 
       <Secao titulo="Fotos DEPOIS" Icone={Camera} contagem={fotosDe(null, "DEPOIS").length} chave="depois"
         acao={!so && <BotaoCamera rotulo="Foto depois" titulo={e.equipamento.titulo} marca={marca} passos={() => [{ chave: "depois", rotulo: "Foto depois do serviço", onFoto: (d) => foto(d, { momento: "DEPOIS" }) }]} />}>
-        <Fotos fotos={fotosDe(null, "DEPOIS")} onRemover={so ? undefined : tirarFoto} />
+        <Fotos fotos={fotosDe(null, "DEPOIS")} onRemover={so ? undefined : tirarFoto} onLegenda={podeLegenda ? legendar : undefined} />
       </Secao>
 
       <MateriaisUsados x={x} registrar={registrar} equipamentoId={equipamentoId} />
@@ -368,11 +375,39 @@ function Secao({ titulo, Icone, children, contagem, chave, acao }: {
   );
 }
 
-function Fotos({ fotos, onRemover }: { fotos: FotoTela[]; onRemover?: (f: FotoTela) => void }) {
+function Fotos({ fotos, onRemover, onLegenda }: { fotos: FotoTela[]; onRemover?: (f: FotoTela) => void;
+  /** D4: legenda opcional (fotos antes/depois); ausente = sem legenda (fotos de item) */
+  onLegenda?: (f: FotoTela, legenda: string) => void }) {
+  const [editando, setEditando] = useState<FotoTela | null>(null);
+  const [texto, setTexto] = useState("");
   if (!fotos.length) return null;
   return (
-    <div className="flex flex-wrap gap-2 py-1">
-      {fotos.map((f, i) => <Miniatura key={f.clientId ?? f.id ?? i} src={srcFoto(f)} alt={`foto ${i + 1}`} pendente={f.pendente} onRemover={onRemover ? () => onRemover(f) : undefined} />)}
+    <div className="flex flex-wrap gap-3 py-1">
+      {fotos.map((f, i) => (
+        <div key={f.clientId ?? f.id ?? i} className="w-20 space-y-1" data-foto-equip>
+          <Miniatura src={srcFoto(f)} alt={`foto ${i + 1}`} pendente={f.pendente} onRemover={onRemover ? () => onRemover(f) : undefined} />
+          {onLegenda && (
+            <button type="button" onClick={() => { setTexto(f.legenda ?? ""); setEditando(f); }} data-legenda-foto-equip
+              className={cn("w-full min-h-[44px] text-left text-xs leading-tight line-clamp-3 break-words", f.legenda ? "text-ink" : "text-primary-700 font-semibold")}>
+              {f.legenda || "+ Legenda"}
+            </button>
+          )}
+        </div>
+      ))}
+      {editando && onLegenda && (
+        <Modal aberto titulo="Legenda da foto" onFechar={() => setEditando(null)}>
+          <div className="space-y-3" data-modal-legenda-foto>
+            <input value={texto} onChange={(e) => setTexto(e.target.value)} maxLength={LEGENDA_MAX} aria-label="Legenda da foto" autoFocus data-legenda-foto-input
+              placeholder="Ex.: serpentina antes da limpeza" className="w-full rounded-lg border border-surface-border px-3 py-3 text-base" />
+            <p className="text-xs text-ink-muted">Opcional. Vazia, vale a do sistema (“Antes do serviço” / “Depois do serviço”).</p>
+            <div className="flex gap-2">
+              <button type="button" className="btn-primary flex-1 touch-target" data-legenda-foto-salvar
+                onClick={() => { const f = editando; setEditando(null); if ((texto.trim() || null) !== (f.legenda ?? null)) onLegenda(f, texto.trim()); }}>Salvar</button>
+              <button type="button" className="btn-secondary flex-1 touch-target" onClick={() => setEditando(null)}>Cancelar</button>
+            </div>
+          </div>
+        </Modal>
+      )}
     </div>
   );
 }

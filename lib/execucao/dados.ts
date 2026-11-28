@@ -52,7 +52,7 @@ export function apresentarEquipamento(e: EquipBanco) {
 
 /** Resposta como a tela recebe: + o id da resposta quando tem áudio (servido à parte) */
 export type RespostaTela = RespostaItem & { audioId: string | null };
-export interface FotoExecucao { id: string; itemId: string | null; momento: "ANTES" | "DEPOIS" | null; clientId: string | null; criadoEm: Date }
+export interface FotoExecucao { id: string; itemId: string | null; momento: "ANTES" | "DEPOIS" | null; clientId: string | null; criadoEm: Date; /** D4: a legenda escrita (null = a do sistema) */ legenda?: string | null }
 export interface ServicoAdicionalTela {
   id: string; clientId: string | null; descricao: string; equipamentoId: string | null;
   statusCobranca: "A_AVALIAR" | "COBRAR" | "NAO_COBRAR";
@@ -156,7 +156,7 @@ export async function carregarExecucao(empresaId: string, osId: string, atividad
     }),
     // Só QUAIS têm áudio (o áudio em si é servido à parte)
     prisma.checklistResposta.findMany({ where: { atividadeId, audioUrl: { not: null } }, select: { id: true } }),
-    prisma.fotoAtendimento.findMany({ where: { atividadeId }, orderBy: { criadoEm: "asc" }, select: { id: true, equipamentoId: true, itemId: true, momento: true, clientId: true, criadoEm: true } }),
+    prisma.fotoAtendimento.findMany({ where: { atividadeId }, orderBy: { criadoEm: "asc" }, select: { id: true, equipamentoId: true, itemId: true, momento: true, clientId: true, criadoEm: true, legenda: true } }),
     atividade.tipoOsId && tipoIds.length ? prisma.formTypeMapping.findMany({
       where: { empresaId, tipoOsId: atividade.tipoOsId, tipoEquipamentoId: { in: tipoIds } },
       select: {

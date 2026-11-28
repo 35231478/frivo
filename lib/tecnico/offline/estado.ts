@@ -146,6 +146,16 @@ export function aplicar(r: RetratoAtividade, x: ExecucaoTela, op: OperacaoFila):
         return { ...e, feito: true, fotos: [...e.fotos, foto] };
       });
 
+    // D4: a legenda da foto antes/depois vale já na tela (vazia = a do sistema)
+    case "fotoLegenda":
+      return {
+        ...x,
+        equipamentos: x.equipamentos.map((e) => ({
+          ...e,
+          fotos: e.fotos.map((f) => ((op.dados.clientId && f.clientId === op.dados.clientId) || (op.dados.id && f.id === op.dados.id) ? { ...f, legenda: op.dados.legenda.trim() || null } : f)),
+        })),
+      };
+
     case "fotoRemover":
       return {
         ...x,
