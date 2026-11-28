@@ -227,6 +227,12 @@ describe.skipIf(!URL_PG)("COM-1 — comissões (PostgreSQL real)", () => {
     // A vista não muda o que o fechamento paga (segue a configuração): o liberado continua sendo os 40% que entraram
     await srv.sincronizarComissoes("e1");
     expect(await liberado(o.id)).toBe(20);
+    // O fechamento do mês passado não pega movimento deste mês (só até o fim da competência)
+    const movsDeste = await prisma.comissaoLancamento.findMany({ where: { comissao: { orcamentoId: o.id }, data: { gte: new Date(`${mes}-01T00:00:00Z`) } }, select: { id: true } });
+    expect(movsDeste.length).toBeGreaterThan(0);
+    const abertosPassado = new Set((await srv.movimentosAbertos("e1", mesPassado)).map((m: any) => m.id));
+    const abertosDeste = new Set((await srv.movimentosAbertos("e1", mes)).map((m: any) => m.id));
+    expect(movsDeste.map((m: any) => [abertosPassado.has(m.id), abertosDeste.has(m.id)])).toEqual(movsDeste.map(() => [false, true]));
     // Só quem fecha o mês vê; o vendedor não
     logar("uV", montarPermissoes({ orcamentos: ["visualizar"] }));
     expect((await chamar("comissoes/relatorio", "GET", {}, undefined, `?mes=${mes}`)).status).toBe(403);
