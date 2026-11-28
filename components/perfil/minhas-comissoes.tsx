@@ -3,12 +3,10 @@
 import { useEffect, useState } from "react";
 import { ChevronDown, Loader2 } from "lucide-react";
 import { cn, formatarMoeda } from "@/lib/utils";
+import type { VendaNoExtrato } from "@/lib/comissoes/servidor";
 
-interface Venda {
-  orcamentoId: string; codigo: string; nome: string; cliente: string; osNumero: string | null;
-  prevista: number; liberada: number; paga: number;
-  itens: { descricao: string; regra: string; valor: number }[];
-}
+// A venda (vendedor) ou a OS (técnico, COM-2): o mesmo formato do extrato do servidor
+type Venda = VendaNoExtrato;
 interface Extrato { vendas: Venda[]; totais: { prevista: number; liberada: number; paga: number } }
 
 const SITUACOES = [
@@ -51,10 +49,10 @@ export function MinhasComissoes() {
       ) : (
         <ul className="rounded-xl border border-surface-border bg-white divide-y divide-surface-border" data-lista-comissoes>
           {dados.vendas.map((v) => {
-            const aberto = aberta === v.orcamentoId;
+            const aberto = aberta === v.chave;
             return (
-              <li key={v.orcamentoId} data-venda-comissao={v.orcamentoId}>
-                <button type="button" onClick={() => setAberta(aberto ? null : v.orcamentoId)} aria-expanded={aberto}
+              <li key={v.chave} data-venda-comissao={v.chave}>
+                <button type="button" onClick={() => setAberta(aberto ? null : v.chave)} aria-expanded={aberto}
                   className="w-full min-h-[44px] px-3 py-3 flex items-start justify-between gap-3 text-left hover:bg-surface-alt/60">
                   <span className="min-w-0">
                     <span className="block text-sm font-medium text-ink truncate">{v.codigo} · {v.nome}</span>
@@ -73,7 +71,11 @@ export function MinhasComissoes() {
                   <ul className="px-3 pb-3 space-y-1" data-itens-comissao>
                     {v.itens.map((i, n) => (
                       <li key={n} className="flex items-start justify-between gap-3 text-xs">
-                        <span className="min-w-0"><span className="text-ink">{i.descricao}</span><span className="block text-ink-muted">{i.regra}</span></span>
+                        <span className="min-w-0">
+                          <span className="text-ink">{i.descricao}</span>
+                          <span className="block text-ink-muted">{i.regra}</span>
+                          {i.emRevisao && <span className="mt-0.5 inline-block rounded-full bg-atencao-claro px-1.5 py-0.5 text-[10px] font-semibold text-atencao-texto" data-item-em-revisao>Em revisão: retorno no equipamento</span>}
+                        </span>
                         <span className="tabular-nums text-ink shrink-0">{formatarMoeda(i.valor)}</span>
                       </li>
                     ))}

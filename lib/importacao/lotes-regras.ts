@@ -59,6 +59,7 @@ export const TOLERANCIA_ALTERADO_MS = 2000;
 export const NOMES_VINCULO: Record<string, string> = {
   // COM-1: regra de comissão por serviço ou por cargo
   comissaoRegras: "regras de comissão",
+  comissaoTetos: "tetos de comissão",
   unidades: "unidades", contratos: "contratos", documentacaoEnvios: "envios de documentação", ordensServico: "ordens de serviço",
   anexos: "anexos", contatosCliente: "contatos", comunicacaoPreferencias: "preferências de comunicação", interacoes: "interações",
   orcamentos: "orçamentos", pedidosCliente: "pedidos do cliente", medicoes: "medições", contasReceber: "contas a receber", notasFiscais: "notas fiscais", pmocs: "PMOC",

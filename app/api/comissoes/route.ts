@@ -16,7 +16,9 @@ export async function GET() {
 
 /**
  * Grava a configuração da empresa (quando fica devida, base líquida de impostos — vale para as comissões que
- * nascerem daqui em diante — e o vencimento da conta a pagar do fechamento, que vale para o próximo fechamento).
+ * nascerem daqui em diante — e o vencimento da conta a pagar do fechamento, que vale para o próximo fechamento) e, da
+ * COM-2, opcionais: quando a comissão do técnico fica devida, os dias do retorno e os tipos de OS que contam como
+ * retorno (a mesma lista do Desempenho).
  */
 export async function PUT(req: NextRequest) {
   const guard = await exigirPermissao("desempenho", "gerenciar");
@@ -24,10 +26,26 @@ export async function PUT(req: NextRequest) {
   const parsed = configComissaoSchema.safeParse(await req.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ erro: parsed.error.errors[0]?.message ?? "Dados inválidos" }, { status: 400 });
   const empresaId = guard.session.user!.empresaId;
+  const d = parsed.data;
+  if (d.tiposRetorno?.length && (await prisma.tipoOs.count({ where: { empresaId, id: { in: d.tiposRetorno } } })) !== new Set(d.tiposRetorno).size) {
+    return NextResponse.json({ erro: "Tipo de OS não encontrado nesta empresa." }, { status: 400 });
+  }
   const data = {
-    comissaoQuando: parsed.data.quando, comissaoLiquidaImpostos: parsed.data.liquidaImpostos,
-    ...(parsed.data.vencimentoTipo ? { comissaoVencimentoTipo: parsed.data.vencimentoTipo, comissaoVencimentoDia: parsed.data.vencimentoDia } : {}),
+    comissaoQuando: d.quando, comissaoLiquidaImpostos: d.liquidaImpostos,
+    // COM-1.1: o vencimento da conta a pagar do fechamento
+    ...(d.vencimentoTipo ? { comissaoVencimentoTipo: d.vencimentoTipo, comissaoVencimentoDia: d.vencimentoDia } : {}),
+    // COM-2: o técnico
+    ...(d.executorQuando ? { comissaoExecutorQuando: d.executorQuando } : {}),
+    ...(d.retornoDias !== undefined ? { comissaoRetornoDias: d.retornoDias } : {}),
   };
-  await prisma.configuracao.upsert({ where: { empresaId }, update: data, create: { empresaId, ...data } });
+  await prisma.$transaction(async (tx) => {
+    await tx.configuracao.upsert({ where: { empresaId }, update: data, create: { empresaId, ...data } });
+    if (d.tiposRetorno) {
+      await tx.desempenhoTipoRetorno.deleteMany({ where: { empresaId, tipoOsId: { notIn: d.tiposRetorno } } });
+      const ja = (await tx.desempenhoTipoRetorno.findMany({ where: { empresaId }, select: { tipoOsId: true } })).map((t) => t.tipoOsId);
+      const novos = [...new Set(d.tiposRetorno)].filter((t) => !ja.includes(t));
+      if (novos.length) await tx.desempenhoTipoRetorno.createMany({ data: novos.map((tipoOsId) => ({ empresaId, tipoOsId })) });
+    }
+  });
   return NextResponse.json({ ok: true });
 }

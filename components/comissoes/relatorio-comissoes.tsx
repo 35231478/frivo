@@ -69,7 +69,7 @@ export function RelatorioDeComissoes({ mes }: { mes: string }) {
                       {aberto && (
                         <ul className="pb-2 space-y-1" data-relatorio-vendas>
                           {p.vendas.map((v) => (
-                            <li key={v.orcamentoId} className="flex items-start justify-between gap-3 text-xs">
+                            <li key={v.chave} className="flex items-start justify-between gap-3 text-xs">
                               <span className="min-w-0">
                                 <span className="text-ink">{v.codigo} · {v.nome}</span>
                                 <span className="block text-ink-muted">{v.cliente} · {formatarData(v.data)}</span>
