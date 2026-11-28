@@ -57,8 +57,8 @@ export function ComentariosDaOs({ x, registrar }: { x: ExecucaoTela; registrar: 
         {novos > 0 && <span className="text-xs font-semibold rounded-full bg-acento text-white px-2 py-0.5" data-comentarios-novos={novos}>{novos === 1 ? "1 novo" : `${novos} novos`}</span>}
         <Dica rotulo="Comentários" texto="Conversa interna com o escritório sobre esta OS. O cliente não vê. Sem sinal, o comentário fica no aparelho e sobe sozinho." />
       </h2>
-      {/* CHAT-1: a mesma conversa, na tela Chat (balões, foto, ✓✓) */}
-      <button type="button" onClick={() => irPara({ ver: "chat", os: osId })} data-abrir-chat
+      {/* CHAT-1: a conversa com o Escritório (todas as OS; aqui ficam só as desta) */}
+      <button type="button" onClick={() => irPara({ ver: "chat" })} data-abrir-chat
         className="inline-flex items-center gap-1.5 text-sm font-semibold text-primary-700 touch-target">
         <MessageCircle className="w-4 h-4" aria-hidden /> Abrir no Chat
       </button>
