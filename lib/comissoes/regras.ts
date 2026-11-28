@@ -417,6 +417,8 @@ export const configComissaoSchema = z.object({
   // COM-2 (opcionais: a tela antiga manda só os dois de cima)
   executorQuando: z.enum(QUANDO_EXECUTOR).optional(),
   retornoDias: z.coerce.number().int("Dias do retorno: número inteiro.").min(0, "Dias do retorno: de 0 a 365.").max(RETORNO_DIAS_MAX, "Dias do retorno: de 0 a 365.").optional(),
+  /** Os tipos de OS que contam como retorno (a mesma lista do Desempenho: mudar aqui muda lá) */
+  tiposRetorno: z.array(z.string().trim().min(1).max(64)).max(200).optional(),
 }).strict();
 
 export const MOTIVO_TROCA_MIN = 5;

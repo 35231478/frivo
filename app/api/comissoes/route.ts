@@ -14,14 +14,34 @@ export async function GET() {
   return NextResponse.json(await telaDeComissoes(guard.session.user!.empresaId));
 }
 
-/** Grava a configuração da empresa (quando fica devida, base líquida de impostos). Vale para as comissões que nascerem daqui em diante. */
+/**
+ * Grava a configuração da empresa (quando fica devida, base líquida de impostos) e, da COM-2, opcionais: quando a
+ * comissão do técnico fica devida, os dias do retorno e os tipos de OS que contam como retorno (a mesma lista do
+ * Desempenho). Vale para as comissões que nascerem daqui em diante.
+ */
 export async function PUT(req: NextRequest) {
   const guard = await exigirPermissao("desempenho", "gerenciar");
   if (guard.erro) return guard.resposta;
   const parsed = configComissaoSchema.safeParse(await req.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ erro: parsed.error.errors[0]?.message ?? "Dados inválidos" }, { status: 400 });
   const empresaId = guard.session.user!.empresaId;
-  const data = { comissaoQuando: parsed.data.quando, comissaoLiquidaImpostos: parsed.data.liquidaImpostos };
-  await prisma.configuracao.upsert({ where: { empresaId }, update: data, create: { empresaId, ...data } });
+  const d = parsed.data;
+  if (d.tiposRetorno?.length && (await prisma.tipoOs.count({ where: { empresaId, id: { in: d.tiposRetorno } } })) !== new Set(d.tiposRetorno).size) {
+    return NextResponse.json({ erro: "Tipo de OS não encontrado nesta empresa." }, { status: 400 });
+  }
+  const data = {
+    comissaoQuando: d.quando, comissaoLiquidaImpostos: d.liquidaImpostos,
+    ...(d.executorQuando ? { comissaoExecutorQuando: d.executorQuando } : {}),
+    ...(d.retornoDias !== undefined ? { comissaoRetornoDias: d.retornoDias } : {}),
+  };
+  await prisma.$transaction(async (tx) => {
+    await tx.configuracao.upsert({ where: { empresaId }, update: data, create: { empresaId, ...data } });
+    if (d.tiposRetorno) {
+      await tx.desempenhoTipoRetorno.deleteMany({ where: { empresaId, tipoOsId: { notIn: d.tiposRetorno } } });
+      const ja = (await tx.desempenhoTipoRetorno.findMany({ where: { empresaId }, select: { tipoOsId: true } })).map((t) => t.tipoOsId);
+      const novos = [...new Set(d.tiposRetorno)].filter((t) => !ja.includes(t));
+      if (novos.length) await tx.desempenhoTipoRetorno.createMany({ data: novos.map((tipoOsId) => ({ empresaId, tipoOsId })) });
+    }
+  });
   return NextResponse.json({ ok: true });
 }

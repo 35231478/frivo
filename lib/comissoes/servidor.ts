@@ -14,7 +14,7 @@ import { ultimosCustos } from "@/lib/estoque/custo";
 import { valorDesconto } from "@/lib/orcamentos/calculo";
 import {
   VENDA_VIVA, alvoLiberado, chaveDaRegra, comissoesDaVenda, entradasDaFatura, fracaoRecebidaNoPeriodo, inicioDaCompetencia, vistaPadrao, comissoesPorPessoa, descricaoDaRegra, fimDaCompetencia, fracaoRecebida, itensDaVenda,
-  movimentoNecessario, round2, situacaoDaComissao, type EntradaDaVenda, type FaturaRecebida, type Quando, type Vista, type RegraComissao, type normalizarRegra,
+  movimentoNecessario, round2, situacaoDaComissao, type QuandoExecutor, type EntradaDaVenda, type FaturaRecebida, type Quando, type Vista, type RegraComissao, type normalizarRegra,
 } from "./regras";
 
 type Db = Prisma.TransactionClient | typeof prisma;
@@ -565,24 +565,38 @@ export const MSG_REFERENCIA = "Pessoa, cargo ou serviço não encontrado nesta e
 
 /** A tela de Comissões: as regras (com os nomes), a configuração da empresa e as opções dos seletores */
 export async function telaDeComissoes(empresaId: string) {
-  const [regras, cfg, pessoas, cargos, servicos] = await Promise.all([
+  const { tetosDaEmpresa } = await import("./executor-server");
+  const [regras, cfg, pessoas, cargos, servicos, tiposOs, tiposRetorno, tetos] = await Promise.all([
     prisma.comissaoRegra.findMany({
       where: { empresaId }, orderBy: [{ ativo: "desc" }, { criadoEm: "asc" }],
-      select: { id: true, quemTipo: true, usuarioId: true, cargoId: true, papel: true, sobreTipo: true, categoria: true, servicoId: true, base: true, valor: true, ativo: true, usuario: { select: { nome: true } }, cargo: { select: { nome: true } }, servico: { select: { nome: true } } },
+      select: {
+        id: true, quemTipo: true, usuarioId: true, cargoId: true, papel: true, sobreTipo: true, categoria: true, servicoId: true, base: true, valor: true, ativo: true,
+        divisao: true, divisaoCargos: true, usuario: { select: { nome: true } }, cargo: { select: { nome: true } }, servico: { select: { nome: true } },
+      },
     }),
-    prisma.configuracao.findUnique({ where: { empresaId }, select: { comissaoQuando: true, comissaoLiquidaImpostos: true } }),
+    prisma.configuracao.findUnique({ where: { empresaId }, select: { comissaoQuando: true, comissaoLiquidaImpostos: true, comissaoExecutorQuando: true, comissaoRetornoDias: true } }),
     prisma.usuario.findMany({ where: { empresaId, ativo: true }, orderBy: { nome: "asc" }, select: { id: true, nome: true } }),
     prisma.cargo.findMany({ where: { empresaId, ativo: true }, orderBy: { nome: "asc" }, select: { id: true, nome: true } }),
     prisma.servico.findMany({ where: { empresaId, ativo: true }, orderBy: { nome: "asc" }, select: { id: true, nome: true, categoria: true } }),
+    prisma.tipoOs.findMany({ where: { empresaId, ativo: true }, orderBy: { nome: "asc" }, select: { id: true, nome: true } }),
+    prisma.desempenhoTipoRetorno.findMany({ where: { empresaId }, select: { tipoOsId: true } }),
+    tetosDaEmpresa(empresaId),
   ]);
   const categorias = [...new Set(servicos.map((s) => s.categoria?.trim()).filter(Boolean) as string[])].sort((a, b) => a.localeCompare(b, "pt-BR"));
   return {
     regras: regras.map((r) => ({
       id: r.id, quemTipo: r.quemTipo, usuarioId: r.usuarioId, cargoId: r.cargoId, papel: r.papel, sobreTipo: r.sobreTipo, categoria: r.categoria, servicoId: r.servicoId,
       base: r.base, valor: num(r.valor), ativo: r.ativo, nomes: { pessoa: r.usuario?.nome ?? null, cargo: r.cargo?.nome ?? null, servico: r.servico?.nome ?? null },
+      divisao: (r.divisao ?? "IGUAL") as RegraComissao["divisao"], divisaoCargos: lerDivisaoCargos(r.divisaoCargos),
     })),
-    config: { quando: (cfg?.comissaoQuando ?? "RECEBIMENTO") as Quando, liquidaImpostos: cfg?.comissaoLiquidaImpostos ?? false },
-    opcoes: { pessoas, cargos, servicos: servicos.map((s) => ({ id: s.id, nome: s.nome })), categorias },
+    config: {
+      quando: (cfg?.comissaoQuando ?? "RECEBIMENTO") as Quando, liquidaImpostos: cfg?.comissaoLiquidaImpostos ?? false,
+      // COM-2: o técnico e os tipos de OS que contam como retorno (a mesma lista do Desempenho)
+      executorQuando: (cfg?.comissaoExecutorQuando ?? "CONCLUSAO_OS") as QuandoExecutor, retornoDias: cfg?.comissaoRetornoDias ?? 30,
+      tiposRetorno: tiposRetorno.map((t) => t.tipoOsId),
+    },
+    opcoes: { pessoas, cargos, servicos: servicos.map((s) => ({ id: s.id, nome: s.nome })), categorias, tiposOs },
+    tetos,
   };
 }
 

@@ -302,3 +302,81 @@ async function abrirRevisoes(
   if (!novas.length) return 0;
   return (await tx.comissaoRevisao.createMany({ data: novas, skipDuplicates: true })).count;
 }
+
+/* ───────── o teto (Configurações › Comissões) ───────── */
+
+export const MSG_TETO_REPETIDO = "Já existe um teto para esta pessoa/cargo. Edite o que existe.";
+export const MSG_TETO_REFERENCIA = "Pessoa ou cargo não encontrado nesta empresa.";
+
+export async function tetosDaEmpresa(empresaId: string) {
+  const ts = await prisma.comissaoTeto.findMany({
+    where: { empresaId }, orderBy: [{ quemTipo: "desc" }, { criadoEm: "asc" }],
+    select: { id: true, quemTipo: true, usuarioId: true, cargoId: true, valor: true, ativo: true, usuario: { select: { nome: true } }, cargo: { select: { nome: true } } },
+  });
+  return ts.map((t) => ({ id: t.id, quemTipo: t.quemTipo as "PESSOA" | "CARGO", usuarioId: t.usuarioId, cargoId: t.cargoId, valor: num(t.valor), ativo: t.ativo, nome: t.usuario?.nome ?? t.cargo?.nome ?? "—" }));
+}
+
+/** Cria ou edita um teto: a pessoa/o cargo precisa ser da empresa e não pode haver dois tetos para o mesmo alvo. */
+export async function salvarTeto(empresaId: string, d: { quemTipo: "PESSOA" | "CARGO"; usuarioId?: string | null; cargoId?: string | null; valor: number; ativo?: boolean }, id?: string):
+  Promise<{ ok: true; id: string } | { ok: false; status: number; erro: string }> {
+  if (id && !(await prisma.comissaoTeto.findFirst({ where: { id, empresaId }, select: { id: true } }))) return { ok: false, status: 404, erro: "Teto não encontrado" };
+  const dados = { quemTipo: d.quemTipo, usuarioId: d.quemTipo === "PESSOA" ? d.usuarioId ?? null : null, cargoId: d.quemTipo === "CARGO" ? d.cargoId ?? null : null, valor: round2(d.valor), ativo: d.ativo ?? true };
+  const existe = dados.usuarioId ? await prisma.usuario.count({ where: { id: dados.usuarioId, empresaId } }) : await prisma.cargo.count({ where: { id: dados.cargoId ?? "", empresaId } });
+  if (!existe) return { ok: false, status: 400, erro: MSG_TETO_REFERENCIA };
+  const repetido = await prisma.comissaoTeto.count({ where: { empresaId, quemTipo: dados.quemTipo, usuarioId: dados.usuarioId, cargoId: dados.cargoId, ...(id ? { id: { not: id } } : {}) } });
+  if (repetido) return { ok: false, status: 409, erro: MSG_TETO_REPETIDO };
+  if (id) { await prisma.comissaoTeto.update({ where: { id }, data: dados }); return { ok: true, id }; }
+  const t = await prisma.comissaoTeto.create({ data: { ...dados, empresaId }, select: { id: true } });
+  return { ok: true, id: t.id };
+}
+
+export async function excluirTeto(empresaId: string, id: string): Promise<boolean> {
+  return (await prisma.comissaoTeto.deleteMany({ where: { id, empresaId } })).count > 0;
+}
+
+/* ───────── a revisão do retorno (Desempenho › Fechamento) ───────── */
+
+export interface RevisaoNaTela {
+  id: string; situacao: "A_REVISAR" | "ESTORNAR" | "MANTER"; descricao: string; beneficiario: string; usuarioId: string | null;
+  osNumero: string; valor: number; motivo: string | null; decididoPorNome: string | null; decididoEm: string | null; criadoEm: string;
+}
+
+/** As revisões da empresa: as abertas primeiro, depois as últimas decididas (as 30 mais recentes) */
+export async function revisoesDaEmpresa(empresaId: string): Promise<RevisaoNaTela[]> {
+  const sel = {
+    id: true, situacao: true, descricao: true, motivo: true, decididoPorNome: true, decididoEm: true, criadoEm: true,
+    comissao: { select: { beneficiarioNome: true, usuarioId: true, valor: true, ordemServico: { select: { numero: true, chamadoNumero: true } } } },
+  } as const;
+  const [abertas, decididas] = await Promise.all([
+    prisma.comissaoRevisao.findMany({ where: { empresaId, situacao: "A_REVISAR" }, orderBy: { criadoEm: "asc" }, select: sel }),
+    prisma.comissaoRevisao.findMany({ where: { empresaId, situacao: { not: "A_REVISAR" } }, orderBy: { decididoEm: "desc" }, take: 30, select: sel }),
+  ]);
+  return [...abertas, ...decididas].map((r) => ({
+    id: r.id, situacao: r.situacao as RevisaoNaTela["situacao"], descricao: r.descricao, beneficiario: r.comissao.beneficiarioNome, usuarioId: r.comissao.usuarioId,
+    osNumero: r.comissao.ordemServico?.chamadoNumero ?? r.comissao.ordemServico?.numero ?? "", valor: num(r.comissao.valor), motivo: r.motivo,
+    decididoPorNome: r.decididoPorNome, decididoEm: r.decididoEm?.toISOString() ?? null, criadoEm: r.criadoEm.toISOString(),
+  }));
+}
+
+/**
+ * O encarregado decide: ESTORNAR (o retorno conta: a comissão vai a zero, o que já foi pago desconta no mês seguinte)
+ * ou MANTER (libera normalmente). Com motivo; ninguém decide a própria; decidida não muda de novo. A conta da OS é
+ * refeita na hora.
+ */
+export async function decidirRevisao(empresaId: string, id: string, d: { decisao: "ESTORNAR" | "MANTER"; motivo: string }, autor: { usuarioId: string; nome: string }, agora: Date = new Date()):
+  Promise<{ ok: true } | { ok: false; status: number; erro: string }> {
+  const { MSG_REVISAR_PROPRIA, MSG_REVISAO_DECIDIDA } = await import("./executor");
+  const r = await prisma.comissaoRevisao.findFirst({ where: { id, empresaId }, select: { id: true, situacao: true, comissao: { select: { usuarioId: true, ordemServicoId: true } } } });
+  if (!r) return { ok: false, status: 404, erro: "Revisão não encontrada" };
+  if (r.comissao.usuarioId === autor.usuarioId) return { ok: false, status: 403, erro: MSG_REVISAR_PROPRIA };
+  const { count } = await prisma.comissaoRevisao.updateMany({
+    where: { id, empresaId, situacao: "A_REVISAR" },
+    data: { situacao: d.decisao, motivo: d.motivo.trim(), decididoPorId: autor.usuarioId, decididoPorNome: autor.nome, decididoEm: agora },
+  });
+  if (!count) return { ok: false, status: 409, erro: MSG_REVISAO_DECIDIDA };
+  if (r.comissao.ordemServicoId) await sincronizarExecutor(empresaId, { osIds: [r.comissao.ordemServicoId] }, agora);
+  return { ok: true };
+}
+
+/** Quantas revisões estão abertas (o aviso do fechamento e o sino) */
+export const revisoesAbertas = (empresaId: string) => prisma.comissaoRevisao.count({ where: { empresaId, situacao: "A_REVISAR" } });
