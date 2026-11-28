@@ -5,7 +5,7 @@
  */
 import { describe, expect, it, vi } from "vitest";
 import {
-  estadoDaMensagem, esperaDepoisDeErro, filtrarConversas, horaDaLista, juntarComFila, marcaNovidades, MSG_OS_CANCELADA, ordenarConversas,
+  estadoDaMensagem, esperaDepoisDeErro, marcaValida, filtrarConversas, horaDaLista, juntarComFila, marcaNovidades, MSG_OS_CANCELADA, ordenarConversas,
   rotuloDoDia, somenteLeitura, textoDaUltima, totalNaoLidas, urlConversaApp, urlConversaEscritorio, ESPERA_NOVIDADES_MS, PASSO_NOVIDADES_MS,
   type ConversaResumo,
 } from "@/lib/chat/regras";
@@ -157,9 +157,12 @@ describe("tempo real — o servidor (long-polling curto)", () => {
 
   it("a marca muda com mensagem nova E com leitura nova (o ✓✓ também é novidade); erro espera 2, 4, 8… até 30 s", () => {
     const m = new Date("2026-11-28T12:00:00.000Z");
-    expect(marcaNovidades(m, null)).toBe(`${m.getTime()}.0`);
+    expect(marcaNovidades(m, null)).toBe(`${m.getTime()}.0.0`);
     expect(marcaNovidades(m, m)).not.toBe(marcaNovidades(m, null));
-    expect(marcaNovidades(null, undefined)).toBe("0.0");
+    // a MINHA leitura também muda a marca (ler uma conversa que outro já leu zera o meu contador)
+    expect(marcaNovidades(m, m, m)).not.toBe(marcaNovidades(m, m));
+    expect(marcaNovidades(null, undefined)).toBe("0.0.0");
+    expect([marcaValida("1.0.0"), marcaValida("1.0"), marcaValida("1"), marcaValida("a.b"), marcaValida(undefined)]).toEqual([true, true, false, false, false]);
     expect([1, 2, 3, 4, 5, 6, 10].map(esperaDepoisDeErro)).toEqual([2000, 4000, 8000, 16000, 30000, 30000, 30000]);
     expect(esperaDepoisDeErro(0)).toBe(2000);
   });

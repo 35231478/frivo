@@ -7,7 +7,7 @@
  *  - erro de rede: espera crescente (2 s, 4 s, 8 s… até 30 s);
  *  - `avisar()` força uma pergunta agora (ex.: a notificação push chegou, ou a pessoa acabou de enviar).
  */
-import { esperaDepoisDeErro } from "@/lib/chat/regras";
+import { esperaDepoisDeErro, marcaValida } from "@/lib/chat/regras";
 
 export interface RespostaNovidades { marca: string; mudou: boolean; naoLidas?: number }
 type Ouvinte = (r: RespostaNovidades) => void;
@@ -93,10 +93,12 @@ export class LacoNovidades {
         const q = this.marca ? `${this.url.includes("?") ? "&" : "?"}desde=${encodeURIComponent(this.marca)}` : "";
         const res = await this.amb.fetch(`${this.url}${q}`, { signal: this.controle.signal, cache: "no-store" });
         if (!res.ok) throw new Error(String(res.status));
-        const r = (await res.json()) as RespostaNovidades;
+        const bruto = (await res.json()) as RespostaNovidades;
+        // Sem `naoLidas` na resposta (nada mudou): fica o último contador conhecido
+        const r: RespostaNovidades = { ...bruto, naoLidas: bruto?.naoLidas ?? this.ultima?.naoLidas };
         // Resposta sem marca válida (proxy, página de erro, servidor antigo): conta como erro — espera crescente, nunca
         // pergunta em laço apertado
-        if (typeof r?.marca !== "string" || !/^\d{1,16}\.\d{1,16}$/.test(r.marca)) throw new Error("resposta inválida");
+        if (!marcaValida(r.marca)) throw new Error("resposta inválida");
         const primeira = this.marca === null;
         this.marca = r.marca;
         this.falhas = 0;

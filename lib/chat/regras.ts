@@ -124,10 +124,15 @@ export const ESPERA_NOVIDADES_MS = 8_000;
 export const PASSO_NOVIDADES_MS = 2_000;
 export const ESPERA_ERRO_MAX_MS = 30_000;
 
-/** A marca do "estado" das conversas: a mensagem mais nova e a leitura mais nova (o ✓✓ também é novidade). */
-export function marcaNovidades(ultimaMensagem: Date | null | undefined, ultimaLeitura: Date | null | undefined): string {
-  return `${ultimaMensagem?.getTime() ?? 0}.${ultimaLeitura?.getTime() ?? 0}`;
+/**
+ * A marca do "estado" das conversas para quem pergunta: a mensagem mais nova, a 1ª leitura mais nova (o ✓✓ também é
+ * novidade) e a leitura mais nova DESTA pessoa (ler uma conversa que outro já tinha lido muda o contador dela).
+ */
+export function marcaNovidades(ultimaMensagem: Date | null | undefined, ultimaLeitura: Date | null | undefined, minhaLeitura?: Date | null): string {
+  return `${ultimaMensagem?.getTime() ?? 0}.${ultimaLeitura?.getTime() ?? 0}.${minhaLeitura?.getTime() ?? 0}`;
 }
+/** Uma marca que veio de fora tem o formato certo? */
+export const marcaValida = (m: unknown): m is string => typeof m === "string" && /^\d{1,16}(\.\d{1,16}){1,2}$/.test(m);
 
 /** Espera antes de tentar de novo depois de `falhas` erros seguidos (2 s, 4 s, 8 s… até 30 s). */
 export const esperaDepoisDeErro = (falhas: number) => Math.min(ESPERA_ERRO_MAX_MS, 2_000 * 2 ** Math.max(0, falhas - 1));

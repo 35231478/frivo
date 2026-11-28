@@ -10,6 +10,6 @@ export async function GET(req: NextRequest) {
   const g = await guardaTecnico();
   if (g.resposta) return g.resposta;
   const onde = await ondeNovidadesTecnico(g.empresaId, g.tecnicoId);
-  const r = await esperarNovidades(() => marcaAtual(onde), lerDesde(req.url), { cancelado: () => req.signal.aborted });
+  const r = await esperarNovidades(() => marcaAtual(onde, g.usuarioId), lerDesde(req.url), { cancelado: () => req.signal.aborted });
   return NextResponse.json(r, { headers: SEM_CACHE });
 }

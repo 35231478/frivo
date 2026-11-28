@@ -169,10 +169,13 @@ export async function conversaDoTecnico(empresaId: string, usuarioId: string, te
 
 // ── Tempo real ──────────────────────────────────────────────────────────────────────────────
 
-/** A marca atual (mensagem mais nova e leitura mais nova) de um conjunto de conversas. */
-export async function marcaAtual(onde: Prisma.OsComentarioWhereInput): Promise<string> {
-  const a = await prisma.osComentario.aggregate({ where: onde, _max: { criadoEm: true, lidaEm: true } });
-  return marcaNovidades(a._max.criadoEm, a._max.lidaEm);
+/** A marca atual de um conjunto de conversas para esta pessoa (mensagem mais nova, ✓✓ mais novo, a leitura dela). */
+export async function marcaAtual(onde: Prisma.OsComentarioWhereInput, usuarioId: string): Promise<string> {
+  const [a, minha] = await Promise.all([
+    prisma.osComentario.aggregate({ where: onde, _max: { criadoEm: true, lidaEm: true } }),
+    prisma.osComentarioLeitura.aggregate({ where: { usuarioId }, _max: { lidoEm: true } }),
+  ]);
+  return marcaNovidades(a._max.criadoEm, a._max.lidaEm, minha._max.lidoEm);
 }
 
 /** Onde olhar: o escritório olha a empresa toda (só diz "mudou"; quem lê depois filtra); o técnico, as OS dele. */

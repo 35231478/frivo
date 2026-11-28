@@ -8,6 +8,7 @@ import { exigirPermissao } from "@/lib/permissoes-server";
 import { escopoDaSessao } from "@/lib/tecnico/escopo";
 import { MSG_SEM_TECNICO, tecnicoDaSessao } from "@/lib/tecnico/sessao";
 import type { QuemEscritorio } from "@/lib/chat/servidor";
+import { marcaValida } from "@/lib/chat/regras";
 
 export const MSG_USE_O_APP = "O técnico conversa pelo app (menu Chat).";
 export const SEM_CACHE = { "Cache-Control": "private, no-store" } as const;
@@ -31,5 +32,5 @@ export async function guardaTecnico(): Promise<{ empresaId: string; usuarioId: s
 /** O `desde` do long-polling (a marca que o aparelho já tem) */
 export const lerDesde = (url: string) => {
   const d = new URL(url).searchParams.get("desde");
-  return d && /^\d{1,16}\.\d{1,16}$/.test(d) ? d : null;
+  return marcaValida(d) ? d : null;
 };

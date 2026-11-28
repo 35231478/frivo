@@ -14,7 +14,9 @@ export async function GET(req: NextRequest) {
   const g = await guardaEscritorio("visualizar");
   if (g.resposta) return g.resposta;
   const onde = ondeNovidadesEscritorio(g.quem.empresaId);
-  const r = await esperarNovidades(() => marcaAtual(onde), lerDesde(req.url), { cancelado: () => req.signal.aborted });
-  const naoLidas = await conversasNaoLidasDoEscritorio(g.quem);
-  return NextResponse.json({ ...r, naoLidas }, { headers: SEM_CACHE });
+  const desde = lerDesde(req.url);
+  const r = await esperarNovidades(() => marcaAtual(onde, g.quem.id), desde, { cancelado: () => req.signal.aborted });
+  // O contador do topo só se recalcula quando algo mudou (ou na 1ª pergunta): a marca já inclui a leitura desta pessoa
+  const naoLidas = r.mudou || !desde ? await conversasNaoLidasDoEscritorio(g.quem) : undefined;
+  return NextResponse.json({ ...r, ...(naoLidas !== undefined && { naoLidas }) }, { headers: SEM_CACHE });
 }
