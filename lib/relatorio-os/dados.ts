@@ -116,8 +116,8 @@ export type AtividadeParaBlocos = Atividade;
 type Atividade = {
   id: string; titulo: string; status: string; criadoEm: Date; dataAgendada: Date | null; duracaoMin: number | null;
   observacao: string | null; resumo: string | null;
-  tipoOs?: { nome: string } | null; tecnico?: { nome: string } | null; equipe?: { nome: string } | null;
-  tecnicosEquipe?: { tecnico: { nome: string } }[];
+  tipoOs?: { nome: string } | null; tecnico?: { nome: string; especialidades?: string[] } | null; equipe?: { nome: string } | null;
+  tecnicosEquipe?: { tecnico: { nome: string; especialidades?: string[] } }[];
   veiculo?: { placa: string; modelo: string; marca: string | null } | null;
   respostas: Resposta[];
   equipamentos: { feito: boolean; observacao?: string | null; equipamento: Equip }[];
@@ -321,7 +321,7 @@ export function blocosAtendidos(ativs: Atividade[], unidade: string | null, prin
 // A contagem dos atendidos é regra pura (também usada na tela): mora em lib/os/equipamentos-atendidos
 export { contarEquipamentosAtendidos } from "@/lib/os/equipamentos-atendidos";
 
-export function montarRelatorioOs(os: OsParaRelatorio, relatorio: RelatorioRef | null): RelatorioOsDados {
+export function montarRelatorioOs(os: OsParaRelatorio, relatorio: RelatorioRef | null, op: { especialidades?: boolean } = {}): RelatorioOsDados {
   const unidade = os.unidade?.nome ?? null;
   const ativs = os.atividades;
 
@@ -343,7 +343,8 @@ export function montarRelatorioOs(os: OsParaRelatorio, relatorio: RelatorioRef |
   const equipe: RelatorioOsDados["equipe"] = [];
   for (const a of ativs) {
     const linha = {
-      atividade: a.titulo, tecnicos: textoTecnicosAtividade(a),
+      // Leva J: "João Silva — especialista em VRF e Chiller" (Configurações › Impressão da OS, padrão ligado)
+      atividade: a.titulo, tecnicos: textoTecnicosAtividade(a, { especialidades: op.especialidades }),
       veiculo: a.veiculo ? [a.veiculo.placa, [a.veiculo.marca, a.veiculo.modelo].filter(Boolean).join(" ")].filter(Boolean).join(" — ") : null,
     };
     if ((linha.tecnicos || linha.veiculo) && !equipe.some((x) => x.tecnicos === linha.tecnicos && x.veiculo === linha.veiculo)) equipe.push(linha);
@@ -453,9 +454,9 @@ export async function carregarOsParaRelatorio(osId: string, empresaId: string): 
         orderBy: { criadoEm: "asc" },
         include: {
           tipoOs: { select: { nome: true } },
-          tecnico: { select: { nome: true } },
+          tecnico: { select: { nome: true, especialidades: true } },
           equipe: { select: { nome: true } },
-          tecnicosEquipe: { select: { tecnico: { select: { nome: true } } }, orderBy: { criadoEm: "asc" } },
+          tecnicosEquipe: { select: { tecnico: { select: { nome: true, especialidades: true } } }, orderBy: { criadoEm: "asc" } },
           veiculo: { select: { placa: true, modelo: true, marca: true } },
           respostas: { include: { campo: CAMPO, formulario: { select: { nome: true } } } },
           equipamentos: { orderBy: { criadoEm: "asc" }, include: { equipamento: { select: SELECT_EQUIP } } },
@@ -472,6 +473,12 @@ export async function carregarOsParaRelatorio(osId: string, empresaId: string): 
   return os as unknown as OsParaRelatorio | null;
 }
 
+/** Leva J: as especialidades do técnico junto ao nome (Configurações › Impressão da OS; sem a linha, o padrão: ligado) */
+export async function mostrarEspecialidades(empresaId: string): Promise<boolean> {
+  const c = await prisma.configuracao.findUnique({ where: { empresaId }, select: { mostrarEspecialidadesTecnico: true } });
+  return c?.mostrarEspecialidadesTecnico ?? true;
+}
+
 const SELECT_REL = { numero: true, observacao: true, assinaturaUrl: true, assinadoPor: true, assinadoEm: true } as const;
 
 /** Versão interna (logado): OS da empresa da sessão + o relatório geral dela, se já existir. */
@@ -479,7 +486,7 @@ export async function relatorioInterno(osId: string, empresaId: string) {
   const os = await carregarOsParaRelatorio(osId, empresaId);
   if (!os) return null;
   const rel = await prisma.relatorioOs.findFirst({ where: { ordemServicoId: osId, empresaId, escopo: "GERAL" }, orderBy: { criadoEm: "desc" }, select: SELECT_REL });
-  return { empresaId, dados: montarRelatorioOs(os, rel) };
+  return { empresaId, dados: montarRelatorioOs(os, rel, { especialidades: await mostrarEspecialidades(empresaId) }) };
 }
 
 /** Versão do cliente (link público): pelo token do relatório; a empresa vem do próprio relatório. */
@@ -488,5 +495,5 @@ export async function relatorioPorToken(token: string) {
   if (!rel) return null;
   const os = await carregarOsParaRelatorio(rel.ordemServicoId, rel.empresaId);
   if (!os) return null;
-  return { empresaId: rel.empresaId, dados: montarRelatorioOs(os, rel) };
+  return { empresaId: rel.empresaId, dados: montarRelatorioOs(os, rel, { especialidades: await mostrarEspecialidades(rel.empresaId) }) };
 }

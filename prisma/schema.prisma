@@ -761,6 +761,8 @@ model Configuracao {
   /// Impressão do relatório da OS: seções ligadas/desligadas e quem vê (cliente × só interno).
   /// JSON { [secao]: { ativo, cliente } }; ausente = padrões de lib/relatorio-os/config.ts
   relatorioOsConfig Json? @map("relatorio_os_config")
+  /// Leva J: as especialidades do técnico junto ao nome na OS, no relatório e no portal ("João — especialista em VRF")
+  mostrarEspecialidadesTecnico Boolean @default(true) @map("mostrar_especialidades_tecnico")
 
   /// Horário comercial da empresa: a jornada semanal que "só em horário comercial" usa no prazo de
   /// atendimento dos contratos. JSON { dias: [{ dia (0 = domingo … 6 = sábado), inicio "08:00", fim "18:00" }] };
@@ -1154,6 +1156,9 @@ model Tecnico {
   jornadaEntrada    String?           @map("jornada_entrada")
   jornadaSaida      String?           @map("jornada_saida")
   jornadaDias       String[]          @map("jornada_dias")
+  /// Leva J: a jornada em faixas [{ dias, entrada, saida, intervaloInicio, intervaloFim }] (lib/colaborador/jornada).
+  /// Os três campos acima seguem gravados (dias de todas as faixas; horário da 1ª) para quem ainda os lê.
+  jornadaFaixas     Json?             @map("jornada_faixas")
   statusColaborador StatusColaborador @default(ATIVO) @map("status_colaborador")
 
   latitude          Float?

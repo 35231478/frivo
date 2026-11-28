@@ -3,7 +3,7 @@
 import { InativarRegistro } from "@/components/ui/inativar-registro";
 import { SecaoInativos } from "@/components/forms/secao-inativos";
 import { useState, useEffect, useCallback } from "react";
-import { buscarCep, cepCompleto } from "@/lib/cep";
+import { buscarCep, cepCompleto, formatarCep } from "@/lib/cep";
 import { useAutoGeocode } from "@/hooks/use-auto-geocode";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -14,7 +14,8 @@ import { MapaEndereco } from "@/components/ui/mapa-endereco";
 import { EnderecoAutocomplete, type EnderecoSelecionado } from "@/components/ui/endereco-autocomplete";
 import { haversine, formatarDistancia } from "@/lib/geo";
 import type { Unidade } from "@prisma/client";
-import { Plus, Pencil, X, Check, ChevronDown, Navigation, Smartphone, Search } from "lucide-react";
+import { Plus, Pencil, X, Check, Navigation, Search, MapPin } from "lucide-react";
+import { enderecoEmUmaLinha } from "@/lib/clientes/ficha";
 import { MODOS_PEDIDO, ROTULO_HERDA, ROTULO_MODO_PEDIDO } from "@/lib/pedido-cliente/regra";
 import { cn, comparaNatural } from "@/lib/utils";
 
@@ -70,13 +71,14 @@ interface UnidadesManagerProps {
   inativosIniciais?: Unidade[];
   /** Endereço legado do cliente, usado para pré-preencher o 1º "Novo endereço" (não vem da consulta). */
   enderecoCliente?: EnderecoCliente;
+  /** Consulta de quem não pode editar o cliente: só a lista, sem ações */
+  somenteLeitura?: boolean;
 }
 
-export function UnidadesManager({ clienteId, unidadesIniciais, inativosIniciais = [], enderecoCliente }: UnidadesManagerProps) {
+export function UnidadesManager({ clienteId, unidadesIniciais, inativosIniciais = [], enderecoCliente, somenteLeitura = false }: UnidadesManagerProps) {
   const [unidades, setUnidades] = useState<Unidade[]>(unidadesIniciais);
   const [inativas, setInativas] = useState<Unidade[]>(inativosIniciais);
   const [editando, setEditando] = useState<string | "novo" | null>(null);
-  const [expandido, setExpandido] = useState<Set<string>>(new Set());
   const [form, setForm] = useState<UnidadeFormData>(emptyForm);
   const [erro, setErro] = useState("");
   const [salvando, setSalvando] = useState(false);
@@ -109,19 +111,11 @@ export function UnidadesManager({ clienteId, unidadesIniciais, inativosIniciais 
     handleAutoGeocode,
   );
 
-  function toggleExpand(id: string) {
-    setExpandido((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id); else next.add(id);
-      return next;
-    });
-  }
-
   function abrirNova() {
     const temPrincipal = unidades.some((u) => u.principal);
     const f: UnidadeFormData = { ...emptyForm, principal: !temPrincipal };
     if (unidades.length === 0 && enderecoCliente) {
-      f.nome = "Matriz";
+      f.nome = "Principal";
       f.logradouro = enderecoCliente.endereco ?? "";
       f.numero = enderecoCliente.numero ?? "";
       f.complemento = enderecoCliente.complemento ?? "";
@@ -146,7 +140,6 @@ export function UnidadesManager({ clienteId, unidadesIniciais, inativosIniciais 
       telefone: u.telefone ?? "", observacoes: u.observacoes ?? "", exigePedido: (u as { exigePedido?: string | null }).exigePedido ?? "",
     });
     setEditando(u.id);
-    setExpandido((prev) => { const n = new Set(prev); n.add(u.id); return n; });
     setErro("");
   }
 
@@ -156,11 +149,11 @@ export function UnidadesManager({ clienteId, unidadesIniciais, inativosIniciais 
     setForm((f) => ({ ...f, [field]: value }));
   }
 
-  async function buscarCepDaUnidade() {
-    if (!cepCompleto(form.cep)) return;
+  async function buscarCepDaUnidade(cep = form.cep) {
+    if (!cepCompleto(cep)) return;
     setBuscandoCep(true);
     try {
-      const d = await buscarCep(form.cep);
+      const d = await buscarCep(cep);
       if (!d) return; // sem rede ou CEP que não existe: a pessoa digita
       setForm((f) => ({
         ...f,
@@ -200,7 +193,6 @@ export function UnidadesManager({ clienteId, unidadesIniciais, inativosIniciais 
         if (!res.ok) { const e = await res.json(); setErro(e.erro ?? "Erro ao criar endereço."); return; }
         const nova = await res.json();
         setUnidades((prev) => [...prev, nova]);
-        setExpandido((prev) => { const n = new Set(prev); n.add(nova.id); return n; });
       } else {
         const res = await fetch(`/api/unidades/${editando}`, {
           method: "PUT", headers: { "Content-Type": "application/json" },
@@ -262,44 +254,46 @@ export function UnidadesManager({ clienteId, unidadesIniciais, inativosIniciais 
           </FormField>
         </FormGrid>
 
-        <FormField label="Logradouro" hint="Digite para buscar automaticamente">
-          <EnderecoAutocomplete
-            value={form.logradouro}
-            onChange={(v) => updateField("logradouro", v)}
-            onSelect={handleEnderecoSelect}
-            placeholder="Rua, Av., etc."
-          />
-        </FormField>
-
+        <FormGrid cols={3}>
+          <FormField label="CEP">
+            <div className="flex gap-2">
+              <Input value={form.cep} onChange={(e) => { const v = formatarCep(e.target.value); updateField("cep", v); if (cepCompleto(v) && !cepCompleto(form.cep)) void buscarCepDaUnidade(v); }}
+                placeholder="00000-000" maxLength={9} inputMode="numeric" aria-label="CEP do endereço" />
+              <Button type="button" variant="secondary" loading={buscandoCep} onClick={() => buscarCepDaUnidade()} className="shrink-0 px-3" aria-label="Consultar o CEP">
+                {!buscandoCep && <Search className="w-4 h-4" />}
+              </Button>
+            </div>
+          </FormField>
+          <FormField label="Logradouro" className="sm:col-span-2">
+            <EnderecoAutocomplete
+              value={form.logradouro}
+              onChange={(v) => updateField("logradouro", v)}
+              onSelect={handleEnderecoSelect}
+              placeholder="Rua, avenida…"
+            />
+          </FormField>
+        </FormGrid>
         <FormGrid cols={3}>
           <FormField label="Número">
             <Input value={form.numero} onChange={(e) => updateField("numero", e.target.value)} />
           </FormField>
-          <FormField label="Complemento" className="sm:col-span-2">
+          <FormField label="Complemento">
             <Input value={form.complemento} onChange={(e) => updateField("complemento", e.target.value)} />
           </FormField>
-        </FormGrid>
-        <FormGrid cols={3}>
           <FormField label="Bairro">
             <Input value={form.bairro} onChange={(e) => updateField("bairro", e.target.value)} />
           </FormField>
-          <FormField label="Cidade">
+        </FormGrid>
+        <FormGrid cols={3}>
+          <FormField label="Cidade" className="sm:col-span-2">
             <Input value={form.cidade} onChange={(e) => updateField("cidade", e.target.value)} />
           </FormField>
-          <FormField label="Estado">
+          <FormField label="UF">
             <Select value={form.estado} onChange={(e) => updateField("estado", e.target.value)} placeholder="UF">
               {ESTADOS_BR.map((uf) => (<option key={uf} value={uf}>{uf}</option>))}
             </Select>
           </FormField>
         </FormGrid>
-        <FormField label="CEP" hint="Digite o CEP e clique na lupa para preencher o endereço">
-          <div className="flex gap-2 max-w-[300px]">
-            <Input value={form.cep} onChange={(e) => updateField("cep", e.target.value)} placeholder="00000-000" maxLength={9} />
-            <Button type="button" variant="secondary" loading={buscandoCep} onClick={buscarCepDaUnidade} className="shrink-0 px-3">
-              <Search className="w-4 h-4" />
-            </Button>
-          </div>
-        </FormField>
         <FormField label="Observações">
           <Textarea value={form.observacoes} onChange={(e) => updateField("observacoes", e.target.value)} rows={2} />
         </FormField>
@@ -325,96 +319,65 @@ export function UnidadesManager({ clienteId, unidadesIniciais, inativosIniciais 
   }
 
   return (
-    <div className="space-y-2">
+    <div className="space-y-3">
       {erro && <div className="bg-atrasado-claro border border-atrasado/20 text-atrasado-texto text-sm rounded-lg px-3 py-2">{erro}</div>}
 
       {ordenadas.length === 0 && !editando && (
-        <p className="text-sm text-ink-muted py-2">Nenhum endereço cadastrado.</p>
+        <p className="text-sm text-ink-muted py-2" data-enderecos-vazio>Nenhum local de atendimento cadastrado.</p>
       )}
 
-      {ordenadas.map((u) => {
-        if (editando === u.id) return <div key={u.id}>{renderFormInline()}</div>;
-        const aberto = expandido.has(u.id);
-        const temEnd = !!(u.logradouro && u.cidade && u.estado);
-        const dist = calcDistancia(u);
-
-        return (
-          <div key={u.id} className="rounded-lg border border-surface-border overflow-hidden">
-            <button type="button" onClick={() => toggleExpand(u.id)}
-              className={cn("flex items-center justify-between w-full px-4 py-3.5 text-left transition-colors", aberto ? "bg-frivo-50" : "bg-frivo-50/60 hover:bg-frivo-50")}>
-              <div className="flex items-center gap-2 min-w-0 flex-wrap">
-                <span className="text-sm font-bold text-ink truncate">{u.nome}</span>
-                {u.principal && (
-                  <span className="inline-flex items-center text-[10px] font-semibold bg-atencao-claro text-atencao-texto px-1.5 py-0.5 rounded-full shrink-0">
-                    Principal
-                  </span>
-                )}
-                {dist && (
-                  <span className="inline-flex items-center gap-0.5 text-[10px] font-medium bg-acento-claro text-acento px-1.5 py-0.5 rounded-full shrink-0">
-                    <Navigation className="w-2.5 h-2.5" /> {dist} da empresa
-                  </span>
-                )}
-              </div>
-              <ChevronDown className={cn("w-5 h-5 text-ink-muted shrink-0 transition-transform", aberto && "rotate-180")} />
-            </button>
-
-            {aberto && (
-              <div className="border-t border-surface-border p-3 space-y-3 bg-white">
-                <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
-                  {u.logradouro && <div className="col-span-2"><span className="text-ink-muted">Logradouro:</span> <span className="text-ink">{u.logradouro}{u.numero ? `, ${u.numero}` : ""}</span></div>}
-                  {u.complemento && <div className="col-span-2"><span className="text-ink-muted">Complemento:</span> <span className="text-ink">{u.complemento}</span></div>}
-                  {u.bairro && <div><span className="text-ink-muted">Bairro:</span> <span className="text-ink">{u.bairro}</span></div>}
-                  {u.cep && <div><span className="text-ink-muted">CEP:</span> <span className="text-ink">{u.cep}</span></div>}
-                  {u.cidade && <div><span className="text-ink-muted">Cidade:</span> <span className="text-ink">{u.cidade} — {u.estado}</span></div>}
-                  {u.telefone && <div><span className="text-ink-muted">Telefone:</span> <span className="text-ink">{u.telefone}</span></div>}
-                  {u.observacoes && <div className="col-span-2 mt-1"><span className="text-ink-muted">Obs:</span> <span className="text-ink">{u.observacoes}</span></div>}
+      {/* Leva H: lista enxuta — nome, selo Principal e o endereço numa linha; as ações ao lado (sem sanfona) */}
+      {ordenadas.length > 0 && (
+        <ul className="rounded-lg border border-surface-border divide-y divide-surface-border bg-white" data-lista-enderecos>
+          {ordenadas.map((u) => {
+            if (editando === u.id) return <li key={u.id} className="p-2">{renderFormInline()}</li>;
+            const linha = enderecoEmUmaLinha(u);
+            const dist = calcDistancia(u);
+            return (
+              <li key={u.id} className="flex flex-col sm:flex-row sm:items-center gap-2 px-4 py-3" data-endereco={u.id}>
+                <div className="min-w-0 flex-1">
+                  <p className="flex items-center gap-2 flex-wrap text-sm font-semibold text-ink">
+                    <MapPin className="w-4 h-4 text-ink-muted shrink-0" aria-hidden />
+                    <span data-endereco-nome>{u.nome}</span>
+                    {u.principal && <span className="text-[10px] font-semibold uppercase tracking-wider text-acento bg-acento-claro rounded px-1.5 py-0.5" data-endereco-principal>Principal</span>}
+                    {dist && <span className="inline-flex items-center gap-0.5 text-[11px] font-normal text-ink-muted"><Navigation className="w-3 h-3" aria-hidden /> {dist}</span>}
+                  </p>
+                  <p className={cn("text-sm mt-0.5 sm:pl-6 break-words", linha ? "text-ink-muted" : "text-ink-muted italic")}>{linha || "Sem endereço preenchido"}</p>
                 </div>
-
-                {temEnd && (
-                  <MapaEndereco logradouro={u.logradouro!} numero={u.numero ?? undefined} cidade={u.cidade!} estado={u.estado!} cep={u.cep ?? undefined} />
-                )}
-
-                {/* Card Técnico mais próximo */}
-                <div className="flex items-center gap-3 p-2.5 bg-surface-linha rounded-lg">
-                  <Smartphone className="w-4 h-4 text-ink-muted" />
-                  <div>
-                    <p className="text-xs font-medium text-ink-muted">Técnico mais próximo</p>
-                    <p className="text-[11px] text-ink-muted">App do técnico necessário — disponível em breve</p>
+                {!somenteLeitura && (
+                  <div className="flex items-center gap-1 flex-wrap shrink-0 sm:justify-end">
+                    <Button type="button" variant="ghost" onClick={() => abrirEditar(u)} className="min-h-[44px] text-sm" data-editar-endereco={u.id}>
+                      <Pencil className="w-4 h-4" aria-hidden /> Editar
+                    </Button>
+                    {!u.principal && (
+                      <>
+                        <Button type="button" variant="ghost" onClick={() => marcarPrincipal(u.id)} className="min-h-[44px] text-sm">
+                          Tornar principal
+                        </Button>
+                        <InativarRegistro url={`/api/unidades/${u.id}`} modulo="clientes" acaoInativar="editar" acaoReativar="editar"
+                          ativo nome={u.nome} entidade="endereço" variante="botao" comMotivo={false}
+                          className="min-h-[44px] text-sm border-transparent bg-transparent"
+                          aoConcluir={() => inativada(u)} />
+                      </>
+                    )}
                   </div>
-                </div>
-
-                <div className="flex items-center gap-2 pt-1">
-                  <Button type="button" variant="secondary" onClick={() => abrirEditar(u)} className="text-xs h-7 px-2.5">
-                    <Pencil className="w-3 h-3" /> Editar
-                  </Button>
-                  {!u.principal && (
-                    <>
-                      <Button type="button" variant="ghost" onClick={() => marcarPrincipal(u.id)} className="text-xs h-7 px-2.5 text-atencao-texto hover:text-atencao-texto">
-                        Tornar principal
-                      </Button>
-                      <InativarRegistro url={`/api/unidades/${u.id}`} modulo="clientes" acaoInativar="editar" acaoReativar="editar"
-                        ativo nome={u.nome} entidade="endereço" variante="botao" comMotivo={false}
-                        className="text-xs h-7 px-2.5 py-0 gap-1 border-transparent bg-transparent [&_svg]:w-3 [&_svg]:h-3"
-                        aoConcluir={() => inativada(u)} />
-                    </>
-                  )}
-                </div>
-              </div>
-            )}
-          </div>
-        );
-      })}
+                )}
+              </li>
+            );
+          })}
+        </ul>
+      )}
 
       {editando === "novo" && renderFormInline()}
 
       <SecaoInativos itens={inativas} detalhe={(u) => [u.logradouro, u.numero].filter(Boolean).join(", ") || u.cidade}
-        acao={(u) => (
+        acao={(u) => somenteLeitura ? null : (
           <InativarRegistro url={`/api/unidades/${u.id}`} modulo="clientes" acaoInativar="editar" acaoReativar="editar"
             ativo={false} nome={u.nome} entidade="endereço" aoConcluir={(_, dados) => reativada(u, dados)} />
         )} />
 
-      {!editando && (
-        <Button type="button" variant="secondary" onClick={abrirNova} className="w-full justify-center border-dashed mt-2">
+      {!editando && !somenteLeitura && (
+        <Button type="button" variant="secondary" onClick={abrirNova} className="min-h-[44px]" data-novo-endereco>
           <Plus className="w-4 h-4" /> Novo endereço
         </Button>
       )}

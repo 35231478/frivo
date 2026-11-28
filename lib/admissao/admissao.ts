@@ -200,6 +200,30 @@ export const formatarPis = (s: string) => {
   return [d.slice(0, 3), d.slice(3, 8), d.slice(8, 10), d.slice(10, 11)].filter(Boolean).join(".").replace(/\.(\d)$/, "-$1");
 };
 
+/* ───────── contato e endereço (Leva J: obrigatórios no link) ───────── */
+
+export const UFS = [
+  "AC", "AL", "AP", "AM", "BA", "CE", "DF", "ES", "GO", "MA", "MT", "MS", "MG", "PA", "PB", "PR",
+  "PE", "PI", "RJ", "RN", "RS", "RO", "RR", "SC", "SP", "SE", "TO",
+] as const;
+export const ufValida = (v: string | null | undefined) => (UFS as readonly string[]).includes((v ?? "").trim().toUpperCase());
+
+/** E-mail com cara de e-mail (o código de confirmação, quando a empresa envia e-mail, confere de verdade) */
+export const emailValido = (v: string | null | undefined) => {
+  const t = (v ?? "").trim();
+  return t.length <= 160 && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(t);
+};
+
+/**
+ * Celular brasileiro: DDD + 9 dígitos começando por 9 (com ou sem o 55 do país). Telefone fixo não serve: o
+ * celular é por onde a empresa fala com o colaborador (WhatsApp, o app de campo).
+ */
+export function celularValido(v: string | null | undefined): boolean {
+  let d = digitos(v ?? "");
+  if (d.length === 13 && d.startsWith("55")) d = d.slice(2);
+  return d.length === 11 && /^[1-9]{2}9\d{8}$/.test(d);
+}
+
 /* ───────── o que falta para passar de cada etapa ───────── */
 
 const vazio = (v: string | undefined | null) => !(v ?? "").trim();
@@ -217,7 +241,8 @@ export function faltaNaEtapa(etapa: Etapa, f: FormAdmissao, docs: { enviados: st
     if (vazio(f.nomeMae)) falta.push("Nome da mãe");
     if (vazio(f.rg)) falta.push("RG");
     if (f.pis.trim() && !pisValido(f.pis)) falta.push("PIS/NIS válido");
-    if (vazio(f.telefone)) falta.push("Telefone");
+    if (!celularValido(f.telefone)) falta.push("Celular com DDD");
+    if (!emailValido(f.email)) falta.push("E-mail");
   }
   if (etapa === "ENDERECO") {
     if (digitos(f.cep).length !== 8) falta.push("CEP");
@@ -225,7 +250,7 @@ export function faltaNaEtapa(etapa: Etapa, f: FormAdmissao, docs: { enviados: st
     if (vazio(f.numero)) falta.push("Número");
     if (vazio(f.bairro)) falta.push("Bairro");
     if (vazio(f.cidade)) falta.push("Cidade");
-    if (vazio(f.estado)) falta.push("Estado");
+    if (!ufValida(f.estado)) falta.push("Estado (UF)");
   }
   if (etapa === "DOCUMENTOS") {
     for (const id of docs.obrigatorios) if (!docs.enviados.includes(id)) falta.push(id);

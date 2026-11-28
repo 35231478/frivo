@@ -15,9 +15,10 @@
  */
 
 import { prisma } from "@/lib/prisma";
+import { faixasDoColaborador, textoDaJornada } from "@/lib/colaborador/jornada";
 import { formatarData, formatarDataHora, formatarMoeda } from "@/lib/utils";
 import { formatarDocumento } from "@/lib/documento";
-import { formatarPis, textoJornada } from "@/lib/admissao/admissao";
+import { formatarPis } from "@/lib/admissao/admissao";
 import { validarFoto } from "@/lib/anexos-server";
 import { CATEGORIA_PADRAO } from "@/lib/colaborador/documentos";
 import { gerarDocumentoPdf } from "@/lib/documentos/documento-pdf";
@@ -53,7 +54,7 @@ export interface Origem { ip?: string | null; userAgent?: string | null }
 const SELECT_COLABORADOR = {
   id: true, nome: true, cpf: true, rg: true, pis: true, email: true, telefone: true,
   ctpsNumero: true, ctpsSerie: true, ctpsUf: true, dataNascimento: true, dataAdmissao: true,
-  salario: true, jornadaEntrada: true, jornadaSaida: true, jornadaDias: true,
+  salario: true, jornadaEntrada: true, jornadaSaida: true, jornadaDias: true, jornadaFaixas: true,
   endereco: true, numero: true, complemento: true, bairro: true, cidade: true, estado: true, cep: true,
   cargo: { select: { nome: true, cbo: true } },
   empresa: { select: { nome: true, nomeFantasia: true, cnpj: true, cidade: true, estado: true } },
@@ -104,7 +105,7 @@ export async function dadosAutomaticos(
     cargo: c.cargo?.nome ?? null,
     cbo: c.cargo?.cbo ?? null,
     salario: c.salario === null || c.salario === undefined ? null : formatarMoeda(Number(c.salario)),
-    jornada: textoJornada({ entrada: c.jornadaEntrada, saida: c.jornadaSaida, dias: c.jornadaDias }) || null,
+    jornada: textoDaJornada(faixasDoColaborador(c)) || null,
     admissao: c.dataAdmissao ? formatarData(c.dataAdmissao) : null,
     contratoEm: contrato?.assinaturaEm ? formatarData(contrato.assinaturaEm) : null,
     empresa,

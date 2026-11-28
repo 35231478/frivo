@@ -9,6 +9,7 @@
  */
 import { ROTULO_MODO_PEDIDO, modoDoCliente } from "@/lib/pedido-cliente/regra";
 import { formatarCpfCnpj, formatarTelefone } from "@/lib/utils";
+import { enderecoPrincipalEmUmaLinha } from "@/lib/clientes/endereco-principal";
 
 export interface LinhaFicha { rotulo: string; valor: string }
 export interface SecaoFicha { id: string; titulo: string; linhas: LinhaFicha[] }
@@ -34,6 +35,9 @@ export interface ClienteDaFicha {
   comprasTelefone?: string | null;
   agrupaAdicionais?: boolean | null;
   observacoes?: string | null;
+  /** Endereço principal (o de cobrança): campos do próprio cadastro */
+  endereco?: string | null; numero?: string | null; complemento?: string | null; bairro?: string | null;
+  cidade?: string | null; estado?: string | null; cep?: string | null;
 }
 
 export interface EnderecoDaFicha {
@@ -54,7 +58,7 @@ function linhas(pares: [string, string | null | undefined][]): LinhaFicha[] {
   return pares.map(([rotulo, v]) => ({ rotulo, valor: texto(v) })).filter((l) => l.valor !== "");
 }
 
-/** As seções de "Dados gerais" (Identificação, Fiscal, Comercial, Cobrança) — uma seção vazia some. */
+/** As seções de "Dados" (Identificação, Endereço principal, Fiscal, Comercial, Cobrança) — uma seção vazia some. */
 export function secoesDaFicha(c: ClienteDaFicha): SecaoFicha[] {
   const pf = c.tipoPessoa === "FISICA";
   const prefs = [
@@ -70,6 +74,7 @@ export function secoesDaFicha(c: ClienteDaFicha): SecaoFicha[] {
       [pf ? "Nome completo" : "Razão social", c.nome],
       [pf ? "Apelido" : "Nome fantasia", c.nomeFantasia],
     ]) },
+    { id: "endereco", titulo: "Endereço principal", linhas: linhas([["Endereço", enderecoPrincipalEmUmaLinha(c)]]) },
     { id: "fiscal", titulo: "Informações fiscais", linhas: linhas([
       ["Simples Nacional", c.optanteSimples == null ? "" : c.optanteSimples ? "Optante" : "Não optante"],
       ["Indicador de IE", c.indicadorInscricaoEstadual ? INDICADOR_IE[c.indicadorInscricaoEstadual] ?? c.indicadorInscricaoEstadual : ""],

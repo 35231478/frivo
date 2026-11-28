@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { toast } from "@/components/ui/avisos";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -10,6 +10,11 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { buscarCep, cepCompleto, formatarCep } from "@/lib/cep";
+import { enderecoDaConsulta, temEndereco, CAMPOS_ENDERECO } from "@/lib/clientes/endereco-principal";
+import { itensDoNovo, sinaisDoCliente } from "@/lib/clientes/cabecalho";
+import { CabecalhoCliente, subtituloDoCliente } from "@/components/clientes/cabecalho-cliente";
+import { HistoricoCliente } from "@/components/clientes/historico-cliente";
 import { PhoneInput } from "@/components/ui/phone-input";
 import { WhatsAppInput } from "@/components/ui/whatsapp-input";
 import { EmailsInput } from "@/components/ui/emails-input";
@@ -25,30 +30,21 @@ import { ContatosManager } from "@/components/forms/contatos-manager";
 import { ContatosLocal, novoContatoLocal, type ContatoLocal } from "@/components/forms/contatos-local";
 import { ComunicacaoPreferencias } from "@/components/forms/comunicacao-preferencias";
 import { PortalContatos } from "@/components/forms/portal-contatos";
-import { InteracoesManager } from "@/components/forms/interacoes-manager";
 import { ToggleSwitch, ToggleGroup } from "@/components/ui/toggle-switch";
 import { usePermissoes } from "@/components/providers/permissoes-provider";
-import { AtalhoDocumentacao } from "@/components/documentacao/atalho-documentacao";
 import { InativarRegistro } from "@/components/ui/inativar-registro";
 import { cn } from "@/lib/utils";
 import { DICA_MODO_PEDIDO, MODOS_PEDIDO, ROTULO_MODO_PEDIDO, camposDoModo, modoDoCliente, type ModoPedido } from "@/lib/pedido-cliente/regra";
-import {
-  LABELS_STATUS_FINANCEIRO_CALC, COR_STATUS_FINANCEIRO_CALC, type StatusFinanceiroCalc,
-} from "@/lib/status-financeiro";
-import Link from "next/link";
 import { SeletorCadastro, useCadastro } from "@/components/cadastros/seletor-cadastro";
 import type { Cliente, Tecnico, Unidade, Configuracao, ContatoCliente } from "@prisma/client";
 import type { ContatoSeguro } from "@/lib/contato-cliente";
 import {
-  Search, Loader2, FileCheck, Lock, Pencil, AlertCircle,
-  FileText, MapPin, Heart, Headset,
-  Building2, DollarSign, Users, Paperclip, Star, MessageSquare, Globe, Send, FileSignature,
-  ClipboardPlus, ClipboardList, Calculator, Receipt, ChevronDown, Wallet,
+  Search, FileCheck, Lock, Pencil, AlertCircle, FileText, MapPin, Headset, History,
+  Building2, DollarSign, Users, Paperclip, Globe, Send, ClipboardList, Receipt, ChevronDown, Wallet,
 } from "lucide-react";
 import { AlertaPerdasCliente, type PerdasCliente } from "@/components/financeiro/alerta-perdas-cliente";
 import { FichaCliente } from "@/components/clientes/ficha-cliente";
 import { NomeNaTrilha } from "@/components/layout/nome-na-trilha";
-import { SatisfacaoFicha } from "@/components/clientes/satisfacao-cliente";
 import type { ResumoSatisfacao } from "@/lib/clientes/satisfacao";
 
 type ResponsavelItem = Pick<Tecnico, "id" | "nome" | "crea">;
@@ -66,10 +62,10 @@ interface ClienteFormProps {
     interacoes?: InteracaoItem[];
     _count?: { contratos: number };
   };
-  /** Status financeiro calculado a partir das contas a receber (somente leitura). */
-  statusFinanceiroCalc?: StatusFinanceiroCalc;
-  /** Total a receber nos próximos 30 dias (parcelas em aberto). */
+  /** Total a receber nos próximos 30 dias (parcelas em aberto): o sinal só aparece com valor */
   totalProximos30Dias?: number;
+  /** Quanto está em atraso (parcelas vencidas em aberto): "Inadimplente" só aparece com valor */
+  valorEmAtraso?: number;
   /** Perdas (inadimplência) nos últimos 12 meses: alerta informativo, não bloqueia */
   perdas12m?: PerdasCliente | null;
   /** FICHA em modo consulta (/clientes/[id]): o cadastro como texto, "Editar" como ação */
@@ -80,7 +76,16 @@ interface ClienteFormProps {
   satisfacaoAceite?: ResumoSatisfacao | null;
 }
 
-const IDS_ABAS = ["geral", "atendimento", "comunicacao", "portal", "relacionamento", "documentos"];
+const IDS_ABAS = ["geral", "enderecos", "historico", "atendimento", "comunicacao", "portal", "documentos"];
+/** Links antigos (?aba=relacionamento): a aba virou o Histórico automático */
+const ABA_ANTIGA: Record<string, string> = { relacionamento: "historico" };
+
+const ESTADOS_BR = [
+  "AC","AL","AP","AM","BA","CE","DF","ES","GO","MA","MT","MS","MG",
+  "PA","PB","PR","PE","PI","RJ","RN","RS","RO","RR","SC","SP","SE","TO",
+];
+const DICA_ENDERECO_PRINCIPAL = "O endereço de cobrança, que vai na nota fiscal. A consulta do CNPJ preenche os campos vazios; o CEP completa a rua, o bairro e a cidade.";
+const DICA_LOCAIS = "Onde o serviço acontece: cada local tem seus equipamentos, OS, contratos e PMOC. O Principal é o padrão das telas.";
 
 // Mapeia cada campo (RHF) à aba onde ele está, para destacar abas com erro
 const CAMPO_ABA: Record<string, string> = {
@@ -89,7 +94,8 @@ const CAMPO_ABA: Record<string, string> = {
   statusFinanceiro: "geral", ativo: "geral",
   email: "geral", telefone: "geral", celular: "geral", contato: "geral",
   emailsFaturamento: "geral", whatsappFaturamento: "geral",
-  observacoes: "relacionamento",
+  observacoes: "geral",
+  endereco: "geral", numero: "geral", complemento: "geral", bairro: "geral", cidade: "geral", estado: "geral", cep: "geral",
 };
 
 // Painel de aba (componente estável no escopo do módulo para não remontar
@@ -98,7 +104,7 @@ function Painel({ ativo, children }: { ativo: boolean; children: React.ReactNode
   return <div className={cn("space-y-8", !ativo && "hidden")}>{children}</div>;
 }
 
-export function ClienteForm({ initialData, statusFinanceiroCalc, perdas12m, consulta: consultaPedida, abaInicial, satisfacaoAceite }: ClienteFormProps) {
+export function ClienteForm({ initialData, totalProximos30Dias, valorEmAtraso, perdas12m, consulta: consultaPedida, abaInicial, satisfacaoAceite }: ClienteFormProps) {
   const router = useRouter();
   const isEditing = !!initialData;
   // Consulta só existe para um cliente que já existe (o "novo" é sempre formulário)
@@ -107,11 +113,6 @@ export function ClienteForm({ initialData, statusFinanceiroCalc, perdas12m, cons
   // RBAC (o servidor também valida): sem permissão de salvar, a ficha abre somente leitura.
   const { pode } = usePermissoes();
   const podeSalvar = pode("clientes", isEditing ? "editar" : "criar");
-  // UX-2/E5: "cliente ligou → abrir OS" sem sair da ficha (RBAC igual ao resto do sistema)
-  const podeNovaOs = pode("ordens", "criar");
-  const podeNovoOrcamento = pode("orcamentos", "criar");
-  const statusCalc: StatusFinanceiroCalc = statusFinanceiroCalc ?? "SEM_HISTORICO";
-  const qtdContratosAtivos = initialData?._count?.contratos ?? 0;
   const [erroGlobal, setErroGlobal] = useState("");
   const [buscandoCnpj, setBuscandoCnpj] = useState(false);
   const [unidadesNovas, setUnidadesNovas] = useState<UnidadeLocal[]>([]);
@@ -125,19 +126,21 @@ export function ClienteForm({ initialData, statusFinanceiroCalc, perdas12m, cons
   const [config, setConfig] = useState<Partial<Configuracao>>({});
 
   // Abas
-  const [aba, setAba] = useState(abaInicial && IDS_ABAS.includes(abaInicial) ? abaInicial : "geral");
+  const abaPedida = abaInicial ? ABA_ANTIGA[abaInicial] ?? abaInicial : "";
+  const [aba, setAba] = useState(IDS_ABAS.includes(abaPedida) && (isEditing || !["historico", "atendimento", "comunicacao"].includes(abaPedida)) ? abaPedida : "geral");
+  const [buscandoCepPrincipal, setBuscandoCepPrincipal] = useState(false);
+  // O CEP que já veio (ou já foi buscado) não busca de novo ao digitar
+  const ultimoCepBuscado = useRef((initialData?.cep ?? "").replace(/\D/g, ""));
   const [abasErro, setAbasErro] = useState<Set<string>>(new Set());
   const [cnpjInfo, setCnpjInfo] = useState<{ nome: string; cidade?: string; estado?: string } | null>(null);
 
-  // Controle do status ativo/inativo (header)
-
-  // UX-2/E5: salvar um cliente novo aterrissa NESTA ficha (?criado=1) — confirma e já oferece as ações
+  // UX-2/E5: salvar um cliente novo aterrissa NESTA ficha (?criado=1) — confirma e já oferece as ações (o "Novo ▾")
   const searchParams = useSearchParams();
   const chegouCriado = isEditing && searchParams.get("criado") === "1";
   useEffect(() => {
     if (chegouCriado) {
       toast("Cliente cadastrado.");
-      router.replace(`/clientes/${initialData!.id}/editar`, { scroll: false });
+      router.replace(consulta ? `/clientes/${initialData!.id}` : `/clientes/${initialData!.id}/editar`, { scroll: false });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [chegouCriado]);
@@ -219,7 +222,9 @@ export function ClienteForm({ initialData, statusFinanceiroCalc, perdas12m, cons
       if (data.nomeFantasia) setValue("nomeFantasia", data.nomeFantasia);
       // A opção pelo Simples vem na consulta federal (quando disponível); IE/IM/Suframa não vêm (manuais).
       if (typeof data.optanteSimples === "boolean") { setValue("optanteSimples", data.optanteSimples); setFiscalAberto(true); }
-      // A consulta preenche razão social, nome fantasia e um contato. O endereço fica manual (sem criar card).
+      // Leva H: o endereço da consulta vai para o ENDEREÇO PRINCIPAL (campos do cadastro), só nos campos vazios
+      const atual = Object.fromEntries(CAMPOS_ENDERECO.map((c) => [c, watch(c) ?? ""]));
+      for (const [c, v] of Object.entries(enderecoDaConsulta(data, atual))) setValue(c as (typeof CAMPOS_ENDERECO)[number], v, { shouldDirty: true });
       const contato: ContatoConsulta = { email: data.email ?? "", telefone: data.telefone ?? "" };
       const nomeCli = data.nome || watch("nome") || "";
 
@@ -235,9 +240,32 @@ export function ClienteForm({ initialData, statusFinanceiroCalc, perdas12m, cons
     } catch { setErroGlobal("Falha na consulta do CNPJ. Tente novamente."); } finally { setBuscandoCnpj(false); }
   }
 
+  // CEP do endereço principal: formata ao digitar e, ao completar, busca rua, bairro, cidade e UF
+  async function buscarCepPrincipal(cep: string) {
+    if (!cepCompleto(cep)) return;
+    setBuscandoCepPrincipal(true);
+    try {
+      const d = await buscarCep(cep);
+      if (!d) return; // sem rede ou CEP que não existe: a pessoa digita
+      if (d.logradouro) setValue("endereco", d.logradouro, { shouldDirty: true });
+      if (d.bairro) setValue("bairro", d.bairro, { shouldDirty: true });
+      if (d.cidade) setValue("cidade", d.cidade, { shouldDirty: true });
+      if (d.estado) setValue("estado", d.estado, { shouldDirty: true });
+      if (d.complemento && !watch("complemento")) setValue("complemento", d.complemento, { shouldDirty: true });
+    } finally { setBuscandoCepPrincipal(false); }
+  }
+  function aoDigitarCep(valor: string) {
+    const v = formatarCep(valor);
+    if (v !== valor) setValue("cep", v);
+    const digitos = v.replace(/\D/g, "");
+    if (cepCompleto(v) && digitos !== ultimoCepBuscado.current) { ultimoCepBuscado.current = digitos; void buscarCepPrincipal(v); }
+  }
+
   // Valida regras dinâmicas da empresa; retorna { aba, msg } do primeiro erro
   function validarConfigDinamica(): { aba: string; msg: string } | null {
-    if (config.clienteExigirUnidade && !isEditing && unidadesNovas.length === 0) return { aba: "geral", msg: "Adicione pelo menos um endereço antes de salvar (configuração da empresa)." };
+    // O endereço principal vira o local "Principal" ao salvar: ele já atende a exigência de um local
+    if (config.clienteExigirUnidade && !isEditing && unidadesNovas.length === 0 && !temEndereco({ endereco: watch("endereco"), cidade: watch("cidade"), cep: watch("cep") }))
+      return { aba: "geral", msg: "Preencha o endereço principal ou adicione um local de atendimento (configuração da empresa)." };
     return null;
   }
 
@@ -290,7 +318,8 @@ export function ClienteForm({ initialData, statusFinanceiroCalc, perdas12m, cons
       // Cliente NOVO: qualquer salvar aterrissa na ficha do criado (UX-2/E5) —
       // o fluxo do balcão continua dali ("Nova OS", contatos, endereços…)
       if (!isEditing && saved?.id) {
-        router.push(`/clientes/${saved.id}/editar?criado=1`); router.refresh();
+        // Salvar: a ficha (com o "Novo ▾"); Salvar e continuar: segue na edição
+        router.push(continuar ? `/clientes/${saved.id}/editar?criado=1` : `/clientes/${saved.id}?criado=1`); router.refresh();
       } else if (continuar) {
         toast("Cliente salvo.");
         router.refresh();
@@ -301,183 +330,115 @@ export function ClienteForm({ initialData, statusFinanceiroCalc, perdas12m, cons
     } catch { setErroGlobal("Erro de conexão."); }
   }
 
-  function reqLabel(base: string, cfgKey: keyof Configuracao): string {
-    return config[cfgKey] ? `${base} *` : base;
-  }
-
   const qtdAnexos = isEditing ? (initialData!.anexos?.length ?? 0) : anexosNovos.length;
 
+  // Leva H: Dados · Endereços · Histórico · Atendimento · Comunicação · Portal · Anexos. O que só existe depois
+  // de salvar (histórico, atendimento, comunicação) não aparece no cliente novo.
   const ABAS = [
-    { id: "geral", label: "Dados gerais", icone: FileText },
-    { id: "atendimento", label: "Atendimento", icone: ClipboardList },
-    { id: "comunicacao", label: "Comunicação", icone: Send },
+    { id: "geral", label: "Dados", icone: FileText },
+    { id: "enderecos", label: "Endereços", icone: MapPin },
+    ...(isEditing ? [
+      { id: "historico", label: "Histórico", icone: History },
+      { id: "atendimento", label: "Atendimento", icone: ClipboardList },
+      { id: "comunicacao", label: "Comunicação", icone: Send },
+    ] : []),
     { id: "portal", label: "Portal", icone: Headset },
-    { id: "relacionamento", label: "Relacionamento", icone: Heart },
     { id: "documentos", label: "Anexos", icone: Paperclip, badge: qtdAnexos },
   ];
 
   const salvar = handleSubmit((d) => onSubmit(d, false), onError);
   const salvarEContinuar = handleSubmit((d) => onSubmit(d, true), onError);
-  const titulo = isEditing ? (initialData?.nome || "Editar cliente") : "Novo cliente";
 
-  // "Cliente ligou → abrir OS" sem sair da ficha (E5): atalhos no cabeçalho, só para cliente ativo
-  const AtalhosCliente = ({ compact = false }: { compact?: boolean }) => !isEditing || !ativoVal ? null : (
+  // Cabeçalho: só o que importa (lib/clientes/cabecalho) e o botão único "Novo ▾" (na consulta, cliente ativo)
+  const nomeExibido = isEditing ? (initialData!.nomeFantasia || initialData!.nome) : "Novo cliente";
+  const sinais = isEditing ? sinaisDoCliente({
+    clienteId: initialData!.id, ativo: ativoVal, valorEmAtraso: valorEmAtraso ?? 0, totalProximos30Dias: totalProximos30Dias ?? 0,
+    contratosAtivos: initialData!._count?.contratos ?? 0, satisfacao: satisfacaoAceite, podeVerReceber: pode("financeiro", "contasReceber"),
+  }) : [];
+  const itensNovo = consulta ? itensDoNovo(initialData!.id, ativoVal, pode) : [];
+  const editarHref = consulta && podeSalvar ? (aba === "geral" ? `${fichaHref}/editar` : `${fichaHref}/editar?aba=${aba}`) : null;
+  const voltar = consulta || !isEditing
+    ? { href: "/clientes", rotulo: "Voltar para a lista de clientes" }
+    : { href: aba === "geral" ? fichaHref : `${fichaHref}?aba=${aba}`, rotulo: "Voltar para a ficha do cliente" };
+
+  const acoesEdicao = consulta || !podeSalvar ? null : (
     <>
-      {podeNovaOs && (
-        <Link
-          href={`/ordens/nova?clienteId=${initialData!.id}`} data-nova-os
-          className={cn("inline-flex items-center gap-1.5 font-semibold bg-primary-500 hover:bg-primary-600 text-white rounded-lg shadow-sm whitespace-nowrap",
-            compact ? "text-xs px-3 py-1.5" : "text-sm px-4 py-2.5")}
-        >
-          <ClipboardPlus className="w-4 h-4" /> Nova OS
-        </Link>
-      )}
-      {podeNovoOrcamento && (
-        <Link
-          href={`/orcamentos/novo?clienteId=${initialData!.id}`} data-novo-orcamento
-          className={cn("inline-flex items-center gap-1.5 font-medium bg-white border border-primary-500 text-primary-600 hover:bg-primary-50 rounded-lg whitespace-nowrap",
-            compact ? "text-xs px-3 py-1.5" : "text-sm px-4 py-2.5")}
-        >
-          <Calculator className="w-4 h-4" /> <span className={compact ? "hidden lg:inline" : ""}>Novo orçamento</span><span className={compact ? "lg:hidden" : "hidden"}>Orçamento</span>
-        </Link>
-      )}
-      {/* Quem pode enviar documentação ao cliente parte daqui com o cliente já escolhido */}
-      <AtalhoDocumentacao clienteId={initialData!.id} compact={compact} />
+      <Button type="button" variant="secondary" className="min-h-[44px]" onClick={() => router.push(voltar.href)}>Cancelar</Button>
+      <Button type="button" variant="outline" className="min-h-[44px]" loading={isSubmitting} onClick={salvarEContinuar} data-salvar-continuar>
+        <span className="hidden sm:inline">Salvar e continuar</span><span className="sm:hidden">Continuar</span>
+      </Button>
+      <Button type="button" variant="primary" className="min-h-[44px]" loading={isSubmitting} onClick={salvar} data-salvar-cliente>
+        <FileCheck className="w-4 h-4" /> Salvar
+      </Button>
     </>
   );
 
-  // Consulta: os atalhos e "Editar" (só para quem pode editar). Editar abre na mesma aba.
-  const BotoesConsulta = ({ compact = false }: { compact?: boolean }) => (
-    <div className="flex items-center gap-2 flex-wrap">
-      <AtalhosCliente compact={compact} />
-      {podeSalvar && (
-        <Link
-          href={aba === "geral" ? `${fichaHref}/editar` : `${fichaHref}/editar?aba=${aba}`} data-editar-cliente
-          className={cn("inline-flex items-center gap-1.5 font-semibold bg-white border border-surface-border text-ink hover:bg-surface-page rounded-lg whitespace-nowrap",
-            compact ? "text-xs px-3 py-1.5" : "text-sm px-4 py-2.5")}
-        >
-          <Pencil className="w-4 h-4" aria-hidden /> Editar
-        </Link>
-      )}
-    </div>
-  );
+  // Inativar/Reativar: o mesmo botão e a mesma confirmação da lista. Inativar exige "excluir"; reativar,
+  // "editar" (o próprio botão confere). Fica na consulta: na edição, o cabeçalho é só cancelar/salvar.
+  const inativar = consulta ? (
+    <InativarRegistro
+      url={`/api/clientes/${initialData!.id}`} modulo="clientes" acaoReativar="editar" variante="botao"
+      ativo={ativoVal} nome={initialData?.nomeFantasia || initialData?.nome || ""} entidade="cliente" comMotivo={false}
+      className="min-h-[44px]"
+      aoConcluir={(novo) => { setValue("ativo", novo); router.refresh(); }}
+    />
+  ) : null;
 
-  const BotoesAcao = ({ compact = false }: { compact?: boolean }) => consulta ? <BotoesConsulta compact={compact} /> : !podeSalvar ? (
-    <div className="flex items-center gap-2 flex-wrap">
-      <AtalhosCliente compact={compact} />
-      <Button type="button" variant="secondary" size={compact ? "sm" : "md"} onClick={() => router.push(isEditing ? fichaHref : "/clientes")}>Voltar</Button>
-    </div>
-  ) : (
-    <div className="flex items-center gap-2 flex-wrap">
-      <AtalhosCliente compact={compact} />
-      <Button type="button" variant="secondary" size={compact ? "sm" : "md"} onClick={() => router.push(isEditing ? fichaHref : "/clientes")}>Cancelar</Button>
-      <Button type="button" variant="outline" size={compact ? "sm" : "md"} loading={isSubmitting} onClick={salvarEContinuar}>
-        <span className={compact ? "hidden lg:inline" : ""}>Salvar e continuar</span>
-        <span className={compact ? "lg:hidden" : "hidden"}>Continuar</span>
-      </Button>
-      <Button type="button" variant="primary" size={compact ? "sm" : "md"} loading={isSubmitting} onClick={salvar}>
-        <FileCheck className="w-4 h-4" /> Salvar
-      </Button>
-    </div>
-  );
+  const enderecoAtual = { endereco: watch("endereco"), cidade: watch("cidade"), cep: watch("cep") };
 
   return (
     <form onSubmit={salvar} className="min-h-full -m-6 bg-surface-page p-4 sm:p-6">
       {isEditing && <NomeNaTrilha id={initialData!.id} nome={initialData!.nomeFantasia || initialData!.nome} />}
       <div className="max-w-[1600px] mx-auto space-y-5">
-        {/* Cabeçalho fixo: título + status + ações */}
-        <div className="sticky top-0 z-30 -mx-4 sm:-mx-6 px-4 sm:px-6 py-3 bg-surface-page/90 backdrop-blur border-b border-surface-border">
-          <div className="max-w-[1600px] mx-auto flex items-center justify-between gap-3 flex-wrap">
-            <div className="flex items-center gap-3 flex-wrap min-w-0">
-              <h1 className="text-xl font-bold text-ink truncate">{titulo}</h1>
-              {isEditing && (
-                <Link
-                  href={`/contratos?clienteId=${initialData!.id}`}
-                  title="Ver contratos do cliente"
-                  className={cn(
-                    "inline-flex items-center gap-1.5 text-xs font-medium rounded-lg px-2.5 py-1 border transition-colors",
-                    qtdContratosAtivos > 0
-                      ? "bg-ok-claro border-ok/20 text-ok-texto hover:brightness-95"
-                      : "bg-surface-linha border-surface-border text-ink-muted hover:bg-surface-border",
-                  )}
-                >
-                  <FileSignature className="w-3.5 h-3.5" />
-                  {qtdContratosAtivos > 0
-                    ? `${qtdContratosAtivos} contrato${qtdContratosAtivos > 1 ? "s" : ""} ativo${qtdContratosAtivos > 1 ? "s" : ""}`
-                    : "Sem contratos"}
-                </Link>
-              )}
-              <span className={cn("text-xs font-medium px-2 py-0.5 rounded-full", COR_STATUS_FINANCEIRO_CALC[statusCalc])}>
-                {LABELS_STATUS_FINANCEIRO_CALC[statusCalc]}
-              </span>
-              {isEditing ? (
-                <span className="inline-flex items-center gap-1">
-                  <span data-status-cliente className={cn(
-                    "inline-flex items-center gap-1.5 text-xs font-medium rounded-lg px-2.5 py-1 border",
-                    ativoVal ? "bg-ok-claro border-ok/20 text-ok-texto" : "bg-atrasado-claro border-atrasado/20 text-atrasado",
-                  )}>
-                    <span className={cn("w-1.5 h-1.5 rounded-full", ativoVal ? "bg-ok" : "bg-atrasado")} />
-                    {ativoVal ? "Ativo" : "Inativo"}
-                  </span>
-                  {/* Inativar/Reativar: o mesmo botão e a mesma confirmação da lista (e dos outros cadastros),
-                      na consulta e na edição. Inativar exige "excluir"; reativar, "editar" (o próprio botão confere). */}
-                  <InativarRegistro
-                    url={`/api/clientes/${initialData!.id}`} modulo="clientes" acaoReativar="editar"
-                    ativo={ativoVal} nome={initialData?.nomeFantasia || initialData?.nome || ""} entidade="cliente" comMotivo={false}
-                    aoConcluir={(novo) => { setValue("ativo", novo); router.refresh(); }}
-                  />
-                </span>
-              ) : (
-                <span className="inline-flex items-center gap-1.5 text-xs font-medium rounded-lg px-2.5 py-1 border bg-ok-claro border-ok/20 text-ok-texto">
-                  <span className="w-1.5 h-1.5 rounded-full bg-ok" /> Ativo
-                </span>
-              )}
-            </div>
-            <BotoesAcao compact />
-          </div>
-        </div>
+        <CabecalhoCliente
+          titulo={nomeExibido}
+          subtitulo={isEditing ? subtituloDoCliente(initialData!) : []}
+          voltarHref={voltar.href} voltarRotulo={voltar.rotulo}
+          sinais={consulta ? sinais : sinais.filter((x) => x.id === "inativo")}
+          itensNovo={itensNovo} editarHref={editarHref} inativar={inativar} acoes={acoesEdicao}
+        />
 
         {!podeSalvar && !consulta && (
           <div className="bg-atencao-claro border border-atencao/20 text-atencao-texto text-sm rounded-lg px-4 py-3 flex items-center gap-2">
-            <Lock className="w-4 h-4 shrink-0" /> Modo somente leitura: seu perfil não tem permissão para {isEditing ? "editar" : "cadastrar"} clientes.
+            <Lock className="w-4 h-4 shrink-0" /> Somente leitura: seu perfil não pode {isEditing ? "editar" : "cadastrar"} clientes.
           </div>
         )}
 
         {isEditing && <AlertaPerdasCliente clienteId={initialData!.id} perdas={perdas12m} />}
 
         {erroGlobal && (
-          <div className="bg-atrasado-claro border border-atrasado/20 text-atrasado-texto text-sm rounded-lg px-4 py-3 flex items-center gap-2">
+          <div className="bg-atrasado-claro border border-atrasado/20 text-atrasado-texto text-sm rounded-lg px-4 py-3 flex items-center gap-2" role="alert">
             <AlertCircle className="w-4 h-4 shrink-0" /> {erroGlobal}
           </div>
         )}
 
-        {/* Card central branco com abas + conteúdo */}
         <div className="bg-white rounded-card shadow-card border border-surface-border overflow-hidden">
-          <nav className="flex flex-wrap gap-1.5 px-4 pt-4 pb-4 border-b border-surface-border">
+          {/* Abas: no celular rolam de lado (uma linha), sem quebrar em três */}
+          <nav className="flex gap-1 px-3 sm:px-4 pt-3 border-b border-surface-border overflow-x-auto" role="tablist" data-abas-cliente>
             {ABAS.map((t) => {
               const ativa = aba === t.id;
               const comErro = abasErro.has(t.id);
               return (
                 <button
-                  key={t.id} type="button" onClick={() => setAba(t.id)}
+                  key={t.id} type="button" role="tab" aria-selected={ativa} onClick={() => setAba(t.id)} data-aba={t.id}
                   className={cn(
-                    "flex items-center gap-2 px-4 py-2.5 text-sm font-medium rounded-card whitespace-nowrap transition-all",
-                    ativa ? "bg-primary-500 text-white shadow-sm" : "text-ink-muted hover:text-ink hover:bg-surface-alt",
-                    comErro && !ativa && "text-atrasado bg-atrasado-claro",
+                    "flex items-center gap-2 px-3.5 min-h-[44px] text-sm font-medium whitespace-nowrap border-b-2 -mb-px transition-colors",
+                    ativa ? "border-acento text-acento" : "border-transparent text-ink-muted hover:text-ink",
+                    comErro && !ativa && "text-atrasado",
                   )}
                 >
-                  <t.icone className="w-4 h-4" />
+                  <t.icone className="w-4 h-4" aria-hidden />
                   {t.label}
                   {t.badge != null && t.badge > 0 && (
-                    <span className={cn("text-[10px] font-semibold px-1.5 py-0.5 rounded-full", ativa ? "bg-white/25 text-white" : "bg-surface-alt text-ink-muted")}>{t.badge}</span>
+                    <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-surface-alt text-ink-muted">{t.badge}</span>
                   )}
-                  {comErro && <AlertCircle className={cn("w-3.5 h-3.5", ativa ? "text-white" : "text-atrasado")} />}
+                  {comErro && <AlertCircle className="w-3.5 h-3.5 text-atrasado" />}
                 </button>
               );
             })}
           </nav>
 
-          <div className="p-5 sm:p-6 lg:p-8">
+          <div className="p-4 sm:p-6 lg:p-8">
           {consulta && (
             <div className={cn("space-y-8", aba !== "geral" && "hidden")} data-ficha-cliente>
               <FichaCliente cliente={initialData!} />
@@ -485,8 +446,7 @@ export function ClienteForm({ initialData, statusFinanceiroCalc, perdas12m, cons
           )}
           <fieldset disabled={!podeSalvar && !consulta} className="min-w-0">
 
-      {/* ABA 1 — Dados Gerais */}
-      {/* Na consulta, "Dados gerais" é a ficha (acima) — o formulário nem é montado */}
+      {/* DADOS — na consulta é a ficha (acima): o formulário nem é montado */}
       {!consulta && (
       <Painel ativo={aba === "geral"}>
         <FormSection title="Identificação" icon={<Building2 className="w-3.5 h-3.5" />}>
@@ -503,16 +463,14 @@ export function ClienteForm({ initialData, statusFinanceiroCalc, perdas12m, cons
               </Select>
             </FormField>
             <FormField label={tipoPessoa === "FISICA" ? "CPF" : "CNPJ"} required error={errors.cpfCnpj?.message}>
-              <div>
-                <div className="flex gap-2">
-                  <Input {...register("cpfCnpj")} placeholder={tipoPessoa === "FISICA" ? "000.000.000-00" : "00.000.000/0001-00"} error={!!errors.cpfCnpj} valido={!errors.cpfCnpj && !!cnpjInfo} className="flex-1" />
-                  {tipoPessoa === "JURIDICA" && (
-                    <Button type="button" variant="secondary" loading={buscandoCnpj} onClick={buscarCnpj} className="shrink-0">
-                      {!buscandoCnpj && <Search className="w-4 h-4" />}
-                      <span className="hidden sm:inline ml-1">Consultar</span>
-                    </Button>
-                  )}
-                </div>
+              <div className="flex gap-2">
+                <Input {...register("cpfCnpj")} placeholder={tipoPessoa === "FISICA" ? "000.000.000-00" : "00.000.000/0001-00"} error={!!errors.cpfCnpj} valido={!errors.cpfCnpj && !!cnpjInfo} className="flex-1" />
+                {tipoPessoa === "JURIDICA" && (
+                  <Button type="button" variant="secondary" loading={buscandoCnpj} onClick={buscarCnpj} className="shrink-0" data-consultar-cnpj>
+                    {!buscandoCnpj && <Search className="w-4 h-4" />}
+                    <span className="hidden sm:inline ml-1">Consultar</span>
+                  </Button>
+                )}
               </div>
             </FormField>
           </FormGrid>
@@ -534,29 +492,68 @@ export function ClienteForm({ initialData, statusFinanceiroCalc, perdas12m, cons
               <Input {...register("nomeFantasia")} caixa="nome" />
             </FormField>
           </FormGrid>
-          {/* Status financeiro fica só no cabeçalho (selo ao lado do nome) — não repete aqui embaixo. */}
-          {/* Inscrição estadual migrou para "Informações fiscais" (abaixo), que concentra o fiscal. */}
         </FormSection>
 
-        {/* Informações fiscais — seção avançada, recolhida por padrão (progressive disclosure):
-            só abre quem vai emitir nota. Concentra o fiscal (IE, IM, Suframa, Simples, indicador de IE). */}
+        {/* Endereço principal (o de cobrança e da nota fiscal): campos do cadastro, preenchidos pela consulta do
+            CNPJ ou pelo CEP. Os locais de atendimento ficam na aba Endereços. */}
+        <FormSection title="Endereço principal" icon={<MapPin className="w-3.5 h-3.5" />} dica={DICA_ENDERECO_PRINCIPAL}>
+          <div className="space-y-4" data-endereco-principal>
+            <FormGrid cols={3}>
+              <FormField label="CEP">
+                <div className="flex gap-2">
+                  <Input {...register("cep", { onChange: (e) => aoDigitarCep(e.target.value) })} placeholder="00000-000" maxLength={9} inputMode="numeric" />
+                  <Button type="button" variant="secondary" loading={buscandoCepPrincipal} onClick={() => buscarCepPrincipal(watch("cep") ?? "")} className="shrink-0 px-3" aria-label="Consultar o CEP">
+                    {!buscandoCepPrincipal && <Search className="w-4 h-4" />}
+                  </Button>
+                </div>
+              </FormField>
+              <FormField label="Logradouro" className="sm:col-span-2">
+                <Input {...register("endereco")} caixa="endereco" placeholder="Rua, avenida…" />
+              </FormField>
+            </FormGrid>
+            <FormGrid cols={3}>
+              <FormField label="Número"><Input {...register("numero")} /></FormField>
+              <FormField label="Complemento"><Input {...register("complemento")} caixa="endereco" /></FormField>
+              <FormField label="Bairro"><Input {...register("bairro")} caixa="endereco" /></FormField>
+            </FormGrid>
+            <FormGrid cols={3}>
+              <FormField label="Cidade" className="sm:col-span-2"><Input {...register("cidade")} caixa="cidade" /></FormField>
+              <FormField label="UF">
+                <Select {...register("estado")} placeholder="UF">
+                  {ESTADOS_BR.map((uf) => (<option key={uf} value={uf}>{uf}</option>))}
+                </Select>
+              </FormField>
+            </FormGrid>
+          </div>
+        </FormSection>
+
+        <FormSection title="Contatos" icon={<Users className="w-3.5 h-3.5" />}>
+          {isEditing ? (
+            <ContatosManager clienteId={initialData!.id} contatosIniciais={initialData!.contatosCliente ?? []} inativosIniciais={initialData!.contatosInativos ?? []}
+              sugestao={sugestaoContato ? { nome: watch("nome"), email: sugestaoContato.email, telefone: sugestaoContato.telefone } : null}
+              prefillNonce={consultaNonce} />
+          ) : (
+            <ContatosLocal contatos={contatosNovos} onChange={setContatosNovos} />
+          )}
+        </FormSection>
+
+        {/* Informações fiscais — recolhida por padrão: só abre quem vai emitir nota */}
         <div className="space-y-4">
           <button type="button" onClick={() => setFiscalAberto((v) => !v)} aria-expanded={fiscalAberto} data-secao-fiscal-toggle
-            className="flex items-center gap-2 w-full text-xs font-semibold text-ink-muted uppercase tracking-wider pb-2 border-b border-surface-border">
+            className="flex items-center gap-2 w-full min-h-[44px] text-xs font-semibold text-ink-muted uppercase tracking-wider border-b border-surface-border">
             <span className="text-acento"><Receipt className="w-3.5 h-3.5" /></span>
             Informações fiscais
             <ChevronDown className={cn("w-4 h-4 ml-auto text-ink-muted transition-transform", fiscalAberto && "rotate-180")} />
           </button>
           {fiscalAberto && (
             <div className="space-y-4" data-secao-fiscal>
-              <p className="text-xs text-ink-muted -mt-1">Dados usados na emissão de nota fiscal. Preencha se este cliente for emitir NFS-e.</p>
               <FormGrid>
                 <FormField label="Optante pelo Simples Nacional?" dica="Ao marcar Sim, não há retenção de PIS, Cofins e CSLL nas notas de serviço deste cliente.">
                   <div className="flex gap-2" role="radiogroup" aria-label="Optante pelo Simples Nacional">
                     {[{ v: true, r: "Sim" }, { v: false, r: "Não" }].map((o) => (
                       <button key={o.r} type="button" role="radio" aria-checked={optanteSimplesVal === o.v}
                         onClick={() => setValue("optanteSimples", o.v, { shouldDirty: true })}
-                        className={cn("flex-1 h-10 rounded-lg border text-sm font-medium transition-colors",
+                        className={cn("flex-1 h-11 rounded-lg border text-sm font-medium transition-colors",
                           optanteSimplesVal === o.v ? "border-acento bg-frivo-50 text-frivo-700" : "border-surface-campo bg-white text-ink hover:bg-surface-alt")}>
                         {o.r}
                       </button>
@@ -582,64 +579,25 @@ export function ClienteForm({ initialData, statusFinanceiroCalc, perdas12m, cons
           )}
         </div>
 
-        {/* Endereços — logo abaixo da identificação; adicionados manualmente (o Consultar não cria endereço) */}
-        <FormSection title="Endereços" icon={<MapPin className="w-3.5 h-3.5" />}>
-          {(isEditing || config.clienteExigirUnidade) && (
-            <p className="text-xs text-ink-muted -mt-2 mb-3">
-              {isEditing
-                ? "Gerencie os endereços do cliente. O endereço com o selo Principal é o padrão."
-                : "Adicione pelo menos o endereço principal do cliente (obrigatório)."}
-            </p>
-          )}
-          {isEditing ? (
-            <UnidadesManager clienteId={initialData!.id} unidadesIniciais={initialData!.unidades ?? []} inativosIniciais={initialData!.unidadesInativas ?? []}
-              enderecoCliente={{ endereco: initialData!.endereco, numero: initialData!.numero, complemento: initialData!.complemento, bairro: initialData!.bairro, cidade: initialData!.cidade, estado: initialData!.estado, cep: initialData!.cep, telefone: initialData!.telefone }} />
-          ) : (
-            <UnidadesLocal unidades={unidadesNovas} onChange={setUnidadesNovas} />
-          )}
-        </FormSection>
-
-        {/* Contatos */}
-        <FormSection title="Contatos" icon={<Users className="w-3.5 h-3.5" />}>
-          {isEditing && (
-            <p className="text-xs text-ink-muted -mt-2 mb-3">
-              Contatos do cliente. Comunicação e acesso ao portal ficam nas abas Comunicação e Portal.
-            </p>
-          )}
-          {isEditing ? (
-            <ContatosManager clienteId={initialData!.id} contatosIniciais={initialData!.contatosCliente ?? []} inativosIniciais={initialData!.contatosInativos ?? []}
-              sugestao={sugestaoContato ? { nome: watch("nome"), email: sugestaoContato.email, telefone: sugestaoContato.telefone } : null}
-              prefillNonce={consultaNonce} />
-          ) : (
-            <ContatosLocal contatos={contatosNovos} onChange={setContatosNovos} />
-          )}
-        </FormSection>
-
-        {/* Comercial — tabela de preços */}
         <FormSection title="Comercial" icon={<DollarSign className="w-3.5 h-3.5" />}>
-          <FormField label="Tabela de preços" hint="Sem tabela, valem os preços padrão do catálogo.">
+          <FormField label="Tabela de preços">
             {/* Só ativas para nova escolha; a do cliente continua visível mesmo inativa (“(inativa)”) */}
             <SeletorCadastro entidade="tabelas-preco" valor={tabelaPrecoId} onChange={(v) => setTabelaPrecoId(v)} vazio="Sem tabela (preços do catálogo)" itens={tabelasPreco.itens} />
             {tabelaInativa && (
               <p className="text-xs text-atencao-texto mt-1" data-aviso-tabela-inativa>
-                “{tabelaInativa.nome}” está inativa: para este cliente valem os preços padrão do catálogo. Escolha outra tabela ou reative-a.
+                “{tabelaInativa.nome}” está inativa: valem os preços do catálogo. Escolha outra ou reative-a.
               </p>
             )}
           </FormField>
         </FormSection>
 
-        {/* Cobrança e faturamento — para onde vão as faturas/cobranças deste cliente (reaproveita colunas
-            do cliente; sem schema novo). Sem e-mail/WhatsApp aqui, o envio cai no contato principal. */}
+        {/* Cobrança e faturamento: para onde vão as faturas/cobranças (sem e-mail/WhatsApp, vai ao contato principal) */}
         <FormSection title="Cobrança e faturamento" icon={<Wallet className="w-3.5 h-3.5" />}>
           <FormGrid>
-            <FormField label="E-mails de cobrança"
-              hint="As faturas e cobranças deste cliente são enviadas para estes e-mails."
-              dica="Pode informar mais de um e-mail. Sem nenhum, a cobrança vai para o e-mail do contato principal do cliente.">
+            <FormField label="E-mails de cobrança" dica="Pode informar mais de um e-mail. Sem nenhum, a cobrança vai para o e-mail do contato principal do cliente.">
               <EmailsInput value={emailsFaturamento} onChange={setEmailsFaturamento} />
             </FormField>
-            <FormField label="WhatsApp de cobrança"
-              hint="Para enviar fatura/cobrança por WhatsApp."
-              dica="Sem este número, a cobrança por WhatsApp vai para o WhatsApp do contato principal do cliente.">
+            <FormField label="WhatsApp de cobrança" dica="Sem este número, a cobrança por WhatsApp vai para o WhatsApp do contato principal do cliente.">
               <WhatsAppInput {...register("whatsappFaturamento")} placeholder="(00) 00000-0000" />
             </FormField>
           </FormGrid>
@@ -670,7 +628,7 @@ export function ClienteForm({ initialData, statusFinanceiroCalc, perdas12m, cons
               />
             </div></div>
           )}
-          <ToggleGroup title="Preferências de cobrança" description="Como este cliente é cobrado e faturado.">
+          <ToggleGroup title="Preferências de cobrança">
             <ToggleSwitch
               label="Boleto único mensal" checked={boletoUnicoMensal} onChange={setBoletoUnicoMensal}
               dica="Agrupa as cobranças do mês num único boleto, em vez de um por lançamento."
@@ -681,33 +639,59 @@ export function ClienteForm({ initialData, statusFinanceiroCalc, perdas12m, cons
             />
           </ToggleGroup>
         </FormSection>
+
+        <FormSection title="Observações" icon={<FileText className="w-3.5 h-3.5" />}>
+          <FormField label="Observações internas">
+            <Textarea {...register("observacoes")} placeholder="Informações adicionais…" rows={3} />
+          </FormField>
+        </FormSection>
       </Painel>
       )}
 
-      {/* ABA — Atendimento (histórico de OS) */}
-      <Painel ativo={aba === "atendimento"}>
-        <FormSection title="Atendimento" icon={<ClipboardList className="w-3.5 h-3.5" />}>
-          {isEditing
-            ? <AtendimentoCliente clienteId={initialData!.id} ativo={aba === "atendimento"} />
-            : <p className="text-sm text-ink-muted py-2">Salve o cliente para ver o histórico de atendimento (ordens de serviço).</p>}
-        </FormSection>
-      </Painel>
-
-      {/* ABA — Comunicação */}
-      <Painel ativo={aba === "comunicacao"}>
-        <FormSection title="Preferências de comunicação" icon={<Send className="w-3.5 h-3.5" />}>
-          <p className="text-xs text-ink-muted -mt-2 mb-3">
-            Defina quais contatos recebem cada tipo de comunicação e por qual canal. Os contatos são cadastrados em <strong>Dados gerais</strong>.
-          </p>
+      {/* ENDEREÇOS — os locais de atendimento (unidades): ligados às OS, aos equipamentos, aos contratos e ao PMOC.
+          Na consulta também: a lista é a mesma, e quem pode editar o cliente adiciona, edita e inativa daqui. */}
+      <Painel ativo={aba === "enderecos"}>
+        <FormSection title="Locais de atendimento" icon={<MapPin className="w-3.5 h-3.5" />} dica={DICA_LOCAIS}>
           {isEditing ? (
-            <fieldset disabled={consulta} className="min-w-0"><ComunicacaoPreferencias clienteId={initialData!.id} ativo={aba === "comunicacao"} onGerenciar={() => setAba("geral")} /></fieldset>
+            <UnidadesManager clienteId={initialData!.id} unidadesIniciais={initialData!.unidades ?? []} inativosIniciais={initialData!.unidadesInativas ?? []}
+              somenteLeitura={!pode("clientes", "editar")}
+              enderecoCliente={{ endereco: initialData!.endereco, numero: initialData!.numero, complemento: initialData!.complemento, bairro: initialData!.bairro, cidade: initialData!.cidade, estado: initialData!.estado, cep: initialData!.cep, telefone: initialData!.telefone }} />
           ) : (
-            <p className="text-sm text-ink-muted">Salve o cliente para configurar a comunicação dos contatos.</p>
+            <div className="space-y-3">
+              {temEndereco(enderecoAtual) && (
+                <p className="text-sm text-ink-muted" data-principal-automatico>O endereço principal vira o local “Principal” ao salvar.</p>
+              )}
+              <UnidadesLocal unidades={unidadesNovas} onChange={setUnidadesNovas} principalNoCadastro={temEndereco(enderecoAtual)} />
+            </div>
           )}
         </FormSection>
       </Painel>
 
-      {/* ABA — Anexos */}
+      {/* HISTÓRICO — automático (OS, orçamentos, faturas e pagamentos, pedidos, portal, e-mails, contratos e notas) */}
+      {isEditing && (
+        <Painel ativo={aba === "historico"}>
+          <FormSection title="Histórico do cliente" icon={<History className="w-3.5 h-3.5" />}>
+            <HistoricoCliente clienteId={initialData!.id} ativo={aba === "historico"} />
+          </FormSection>
+        </Painel>
+      )}
+
+      {isEditing && (
+        <Painel ativo={aba === "atendimento"}>
+          <FormSection title="Atendimento" icon={<ClipboardList className="w-3.5 h-3.5" />}>
+            <AtendimentoCliente clienteId={initialData!.id} ativo={aba === "atendimento"} />
+          </FormSection>
+        </Painel>
+      )}
+
+      {isEditing && (
+        <Painel ativo={aba === "comunicacao"}>
+          <FormSection title="Preferências de comunicação" icon={<Send className="w-3.5 h-3.5" />} dica="Quais contatos recebem cada tipo de comunicação e por qual canal. Os contatos ficam na aba Dados.">
+            <fieldset disabled={consulta} className="min-w-0"><ComunicacaoPreferencias clienteId={initialData!.id} ativo={aba === "comunicacao"} onGerenciar={() => setAba("geral")} /></fieldset>
+          </FormSection>
+        </Painel>
+      )}
+
       <Painel ativo={aba === "documentos"}>
         <FormSection title="Anexos" icon={<Paperclip className="w-3.5 h-3.5" />}>
           {isEditing
@@ -716,58 +700,21 @@ export function ClienteForm({ initialData, statusFinanceiroCalc, perdas12m, cons
         </FormSection>
       </Painel>
 
-      {/* ABA 6 — Relacionamento */}
-      <Painel ativo={aba === "relacionamento"}>
-        {/* A satisfação vem do aceite das OS (média das notas): não se digita mais — o campo manual saiu */}
-        {isEditing && (
-          <FormSection title="Satisfação" icon={<Star className="w-3.5 h-3.5" />} dica="Média das notas que o cliente deu ao confirmar o serviço (aceite da OS), de 1 a 5 estrelas.">
-            <SatisfacaoFicha resumo={satisfacaoAceite} />
-          </FormSection>
-        )}
-        {isEditing && (
-          <FormSection title="Histórico de interações" icon={<MessageSquare className="w-3.5 h-3.5" />}>
-            <fieldset disabled={consulta} className="min-w-0"><InteracoesManager clienteId={initialData!.id} interacoesIniciais={initialData!.interacoes ?? []} /></fieldset>
-          </FormSection>
-        )}
-        <FormSection title="Observações" icon={<FileText className="w-3.5 h-3.5" />}>
-          {consulta ? (
-            <p className={cn("text-sm whitespace-pre-wrap", initialData?.observacoes ? "text-ink" : "text-ink-muted")} data-observacoes-ficha>{initialData?.observacoes || "Nenhuma observação."}</p>
-          ) : (
-            <FormField label="Observações internas">
-              <Textarea {...register("observacoes")} placeholder="Informações adicionais…" rows={3} />
-            </FormField>
-          )}
-        </FormSection>
-      </Painel>
-
-      {/* ABA 7 — Portal */}
       <Painel ativo={aba === "portal"}>
         <FormSection title="Portal do cliente" icon={<Globe className="w-3.5 h-3.5" />} dica="Acesso individual por contato: senha provisória, redefinição e revogação.">
-          <p className="text-xs text-ink-muted -mt-2 mb-1">Acesso do cliente ao portal externo.</p>
           <fieldset disabled={consulta} className="min-w-0 space-y-4">
           <ToggleSwitch
             label="Portal ativo"
-            description="Quando desligado, nenhum contato deste cliente consegue acessar o portal."
+            description="Desligado, nenhum contato deste cliente acessa o portal."
             checked={portalAtivo}
             onChange={setPortalAtivo}
           />
-          {!isEditing ? (
-            <p className="text-xs text-ink-muted">Salve o cliente para conceder acesso de portal aos contatos.</p>
-          ) : (
-            <PortalContatos clienteId={initialData!.id} ativo={aba === "portal"} onGerenciar={() => setAba("geral")} onAcessoLiberado={() => setPortalAtivo(true)} />
-          )}
+          {isEditing && <PortalContatos clienteId={initialData!.id} ativo={aba === "portal"} onGerenciar={() => setAba("geral")} onAcessoLiberado={() => setPortalAtivo(true)} />}
           </fieldset>
         </FormSection>
       </Painel>
           </fieldset>
           </div>{/* fim do conteúdo */}
-
-          {/* Barra de ações no rodapé (na consulta não há o que salvar: as ações ficam no cabeçalho) */}
-          {!consulta && (
-            <div className="flex items-center justify-end gap-3 px-5 sm:px-6 lg:px-8 py-4 bg-surface-alt/40 border-t border-surface-border">
-              <BotoesAcao />
-            </div>
-          )}
         </div>{/* fim do card */}
       </div>{/* fim do container */}
     </form>

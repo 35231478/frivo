@@ -14,22 +14,32 @@ const ALTURA_MENU = 300;
  * cobrem); perto do rodapé abre para cima; fecha ao rolar, redimensionar, clicar fora ou Esc.
  * Os itens recebem `fechar` para fechar o menu antes de agir.
  */
-export function MenuAcoes({ children, ocupado, largura = "w-60", rotulo = "Mais ações" }: {
+export function MenuAcoes({ children, ocupado, largura = "w-60", rotulo = "Mais ações", gatilho, classeGatilho, dadosGatilho }: {
   children: (fechar: () => void) => React.ReactNode;
+  /** Botão com texto no lugar do ⋮ (ex.: "Novo ▾"); sem isso, o ⋮ de sempre */
+  gatilho?: React.ReactNode;
+  classeGatilho?: string;
+  dadosGatilho?: Record<`data-${string}`, string>;
   /** Mostra o giro no lugar do ⋮ (ação em andamento) */
   ocupado?: boolean;
   largura?: string;
   rotulo?: string;
 }) {
   const [aberto, setAberto] = useState(false);
-  const [pos, setPos] = useState<{ top?: number; bottom?: number; right: number } | null>(null);
+  const [pos, setPos] = useState<{ top?: number; bottom?: number; right?: number; left?: number } | null>(null);
   const botao = useRef<HTMLButtonElement>(null);
+  const menu = useRef<HTMLDivElement>(null);
   useLayoutEffect(() => {
     if (!aberto || !botao.current) return;
     const r = botao.current.getBoundingClientRect();
     const right = Math.max(8, window.innerWidth - r.right);
     setPos(window.innerHeight - r.bottom < ALTURA_MENU ? { bottom: window.innerHeight - r.top + 4, right } : { top: r.bottom + 4, right });
   }, [aberto]);
+  // Botão perto da borda esquerda (celular): o menu, alinhado pela direita, sairia da tela — encosta à esquerda
+  useLayoutEffect(() => {
+    if (!pos || pos.left != null || !menu.current) return;
+    if (menu.current.getBoundingClientRect().left < 8) setPos({ ...pos, right: undefined, left: 8 });
+  }, [pos]);
   useEffect(() => {
     if (!aberto) return;
     const fechar = () => setAberto(false);
@@ -41,13 +51,13 @@ export function MenuAcoes({ children, ocupado, largura = "w-60", rotulo = "Mais 
   return (
     <>
       <button ref={botao} type="button" onClick={() => setAberto((v) => !v)} aria-haspopup="menu" aria-expanded={aberto} aria-label={rotulo} title={rotulo}
-        className="p-1.5 rounded text-ink-muted hover:text-primary-600" data-acao="menu">
-        {ocupado ? <Loader2 className="w-4 h-4 animate-spin" /> : <MoreVertical className="w-4 h-4" />}
+        className={gatilho ? classeGatilho : "p-1.5 rounded text-ink-muted hover:text-primary-600"} data-acao="menu" {...dadosGatilho}>
+        {ocupado ? <Loader2 className="w-4 h-4 animate-spin" /> : gatilho ?? <MoreVertical className="w-4 h-4" />}
       </button>
       {aberto && pos && createPortal(
         <>
           <div className="fixed inset-0 z-40" onClick={fechar} />
-          <div role="menu" style={pos} className={cn("fixed z-50 bg-white border border-surface-border rounded-lg shadow-card-hover py-1 text-left", largura)} data-menu-acoes
+          <div ref={menu} role="menu" style={pos} className={cn("fixed z-50 bg-white border border-surface-border rounded-lg shadow-card-hover py-1 text-left", largura)} data-menu-acoes
             onKeyDown={(e) => { if (e.key === "Escape") fechar(); }}>
             {children(fechar)}
           </div>
@@ -62,12 +72,12 @@ export function SeparadorMenu() {
   return <div role="separator" className="my-1 border-t border-surface-border" />;
 }
 
-export function ItemMenu({ icone: Icone, children, onClick, href, novaAba, desabilitado, motivo, perigo, id }: {
+export function ItemMenu({ icone: Icone, children, onClick, href, novaAba, desabilitado, motivo, perigo, id, className }: {
   icone: React.ComponentType<{ className?: string }>; children: React.ReactNode; onClick?: () => void; href?: string; novaAba?: boolean;
-  desabilitado?: boolean; motivo?: string | null; perigo?: boolean; id: string;
+  desabilitado?: boolean; motivo?: string | null; perigo?: boolean; id: string; className?: string;
 }) {
   // Desabilitado vence tudo: vira texto (sem link nem clique) com o motivo na dica
-  const cls = cn("flex items-center gap-2 w-full px-3 py-2 text-sm", desabilitado ? "text-ink-subtle cursor-not-allowed" : perigo ? "text-atrasado hover:bg-atrasado-claro" : "text-ink hover:bg-surface-alt");
+  const cls = cn("flex items-center gap-2 w-full px-3 py-2 text-sm", className, desabilitado ? "text-ink-subtle cursor-not-allowed" : perigo ? "text-atrasado hover:bg-atrasado-claro" : "text-ink hover:bg-surface-alt");
   if (desabilitado) {
     return (
       <span role="menuitem" aria-disabled="true" title={motivo ?? undefined} className={cls} data-item={id} data-desabilitado="">

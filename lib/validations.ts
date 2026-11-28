@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { DIAS_SEMANA, FAIXAS_MAX, problemasDaJornada } from "@/lib/colaborador/jornada";
 import { MAX_FOTOS_CHAMADO } from "@/lib/anexos";
 import {
   TipoServico, Prioridade, StatusOS,
@@ -379,6 +380,19 @@ export const tecnicoSchema = z.object({
   jornadaEntrada: z.string().optional(),
   jornadaSaida: z.string().optional(),
   jornadaDias: z.array(z.string()).default([]),
+  // Leva J: a jornada em faixas (lib/colaborador/jornada). Vindo, ela manda e os três campos acima são refeitos dela.
+  jornadaFaixas: z.array(z.object({
+    dias: z.array(z.enum(DIAS_SEMANA)).max(7),
+    entrada: z.string().max(5), saida: z.string().max(5),
+    intervaloInicio: z.string().max(5).nullish().transform((v) => v || null),
+    intervaloFim: z.string().max(5).nullish().transform((v) => v || null),
+  }).strict()).max(FAIXAS_MAX).optional()
+    .superRefine((faixas, ctx) => {
+      if (!faixas) return;
+      const p = problemasDaJornada(faixas);
+      const msg = [...p.geral, ...p.faixas.flatMap((x, i) => x.map((m) => `Faixa ${i + 1}: ${m}`))][0];
+      if (msg) ctx.addIssue({ code: z.ZodIssueCode.custom, message: msg });
+    }),
   statusColaborador: z.nativeEnum(StatusColaborador).default(StatusColaborador.ATIVO),
   // Competências e especialidades
   competenciaIds: z.array(z.string()).default([]),

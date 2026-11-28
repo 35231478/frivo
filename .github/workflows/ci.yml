@@ -64,6 +64,15 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
+      # Os testes de Postgres rodam em paralelo, cada um com o seu schema, e no fim apagam o schema inteiro
+      # (DROP SCHEMA ... CASCADE: ~400 objetos numa transação só). Com vários apagando ao mesmo tempo, a tabela
+      # de travas padrão (64 por conexão) esgota ("out of shared memory"). Mais travas = mesma suíte, sem corrida.
+      - name: Postgres com mais travas por transação
+        run: |
+          docker exec ${{ job.services.postgres.id }} psql -U ci -d ci -c "ALTER SYSTEM SET max_locks_per_transaction = 512"
+          docker restart ${{ job.services.postgres.id }}
+          for i in $(seq 1 30); do docker exec ${{ job.services.postgres.id }} pg_isready -U ci -d ci && break; sleep 1; done
+          docker exec ${{ job.services.postgres.id }} psql -U ci -d ci -Atc "show max_locks_per_transaction"
       - name: Testes (vitest, shard ${{ matrix.shard }}/4)
         run: npm test -- --shard=${{ matrix.shard }}/4
         env:
