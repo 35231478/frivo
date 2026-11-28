@@ -288,7 +288,7 @@ describe.skipIf(!URL_PG)("pedido do cliente (PostgreSQL real)", () => {
     const l = await carregarListaOs("e1", { periodo: "todos", pedido: "aguardando", sort: "numero", dir: "asc" }, DIA(27));
     expect(l.linhas.map((o) => o.id)).toEqual(["sFatVelha", "sFatNova", "sFatAberta", "sExe"]);
     expect(l.linhas.every((o) => o.pedidoCliente?.aguardando)).toBe(true);
-    expect(l.resumoPedido).toEqual({ quantidade: 4, total: 0 });
+    expect(l.resumoPedido).toEqual({ quantidade: 4, total: 0, conferir: 0 });
     const todas = await carregarListaOs("e1", { periodo: "todos", sort: "numero", dir: "asc" }, DIA(27));
     const por = Object.fromEntries(todas.linhas.map((o) => [o.id, o.pedidoCliente]));
     expect(por.oNao).toBeNull();                                         // o cliente não exige: sem etiqueta

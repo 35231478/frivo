@@ -237,11 +237,11 @@ describe("sino: NF chegou nos pedidos de quem pediu", () => {
     await clicar([...caixa.querySelectorAll("button")].find((b) => b.querySelector("svg.lucide-bell"))!);
   }
 
-  it("aparece para quem pediu (mesmo sem Compras) e leva ao pedido mais recente", async () => {
+  it("aparece para quem pediu (mesmo sem Compras); com mais de um pedido, leva à lista (pronto-janeiro-3: antes abria só o 1º)", async () => {
     await sino({ nfPedidos: 2, nfPedidoId: "pcA", total: 2 });
     const link = [...caixa.querySelectorAll("a")].find((a) => a.textContent?.includes("NF chegou nos seus pedidos"))!;
     expect(link).toBeTruthy();
-    expect(link.getAttribute("href")).toBe("/compras/pedidos/pcA");
+    expect(link.getAttribute("href")).toBe("/compras/pedidos?periodo=todos");
     expect(txt(link)).toContain("2");
     expect(txt(caixa)).not.toContain("Compras pendentes");
   });

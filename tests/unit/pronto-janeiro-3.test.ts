@@ -32,7 +32,7 @@ describe("trava de preço de tabela na tela (orçamento)", () => {
   });
 
   it("trocar para um cliente SEM tabela (ou com outra tabela sem o item) destrava os itens da tabela anterior", () => {
-    const marcado = aplicarTabelaAoItem({ catalogoId: "s1", valorUnitario: 1 }, tab.s1, false);
+    const marcado = aplicarTabelaAoItem<ItemDaTela>({ catalogoId: "s1", valorUnitario: 1 }, tab.s1, false);
     const [sem] = marcarItensDaTabela([marcado], null, false);
     expect(sem).toMatchObject({ valorUnitario: 150, bloqueado: false, origemPreco: undefined, valorTabela: undefined });
     const [outra] = marcarItensDaTabela([marcado], { s9: { valorFinal: 10 } }, false);

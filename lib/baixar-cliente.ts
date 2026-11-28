@@ -9,7 +9,8 @@ export async function baixarArquivo(url: string, nomePadrao: string, erroPadrao 
     const r = await fetch(url);
     if (!r.ok) {
       // A rota responde { erro } (JSON) ou um texto curto; uma página HTML de erro não vira mensagem
-      const corpo = await r.text().catch(() => "");
+      const corpo = typeof r.text === "function" ? await r.text().catch(() => "")
+        : JSON.stringify(await r.json().catch(() => ({}))); // respostas simplificadas (sem text)
       let erro: string | undefined;
       try { erro = JSON.parse(corpo)?.erro; } catch { erro = corpo.trim().startsWith("<") ? undefined : corpo.slice(0, 200); }
       return { ok: false, erro: (r.status === 401 ? "Sessão encerrada. Entre de novo para baixar." : erro) || erroPadrao };
