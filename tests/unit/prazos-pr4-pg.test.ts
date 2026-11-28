@@ -593,7 +593,7 @@ describe.skipIf(!URL_PG)("Prazos da OS — PR 4: prazo de atendimento do contrat
 
     it("a lista de OS filtra as MESMAS OS que o sino contou (?atendimento=vencendo|estourado) e convive com os outros filtros", async () => {
       const { whereOrdensDaLista } = await import("@/lib/listas/filtros-server");
-      const listar = async (sp: Record<string, string>, empresaId = "e1") => (await prisma.ordemServico.findMany({ where: await whereOrdensDaLista(empresaId, sp, AGORA), select: { id: true } })).map((o: any) => o.id).sort();
+      const listar = async (sp: Record<string, string>, empresaId = "e1") => (await prisma.ordemServico.findMany({ where: await whereOrdensDaLista(empresaId, { periodo: "todos", ...sp }, AGORA) /* Leva I: o mês olha a data agendada */, select: { id: true } })).map((o: any) => o.id).sort();
       expect(await listar({ atendimento: "estourado" })).toEqual(dos("ESTOURADO"));
       expect(await listar({ atendimento: "vencendo" })).toEqual(dos("VENCENDO"));
       // junto com o status: só a que está em andamento
@@ -612,7 +612,7 @@ describe.skipIf(!URL_PG)("Prazos da OS — PR 4: prazo de atendimento do contrat
     it("a exportação traz o que a lista mostra com o mesmo filtro", async () => {
       noRelogio();
       logar({ permissoes: permissoesTotais(), role: "ADMIN" });
-      const r = await chamar("ordens/export", "GET", {}, undefined, "atendimento=estourado&formato=csv");
+      const r = await chamar("ordens/export", "GET", {}, undefined, "periodo=todos&atendimento=estourado&formato=csv");
       expect(r.status).toBe(200);
       const numeros = (await prisma.ordemServico.findMany({ where: { id: { in: dos("ESTOURADO") } }, select: { numero: true } })).map((o: any) => o.numero);
       for (const n of numeros) expect(r.texto, n).toContain(n);

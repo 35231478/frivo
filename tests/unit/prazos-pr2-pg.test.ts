@@ -121,7 +121,7 @@ describe.skipIf(!URL_PG)("Prazos da OS — PR 2: prazo de execução nas telas (
       ["cancelada com prazo vencido", { prazoExecucao: diaCivil("2026-11-10"), status: "CANCELADA" }, "OUTRO"],
       ["atrasada e justificada", { prazoExecucao: diaCivil("2026-11-12"), atrasoJustificadoMotivo: "CLIENTE_AUSENTE", atrasoJustificadoObs: "Portaria fechada", descricao: "Troca do compressor" }, "ATRASADO"],
     ];
-    const listar = async (sp: Record<string, string>) => (await prisma.ordemServico.findMany({ where: whereOrdens("e1", sp, AGORA), select: { id: true } })).map((o: any) => o.id).sort();
+    const listar = async (sp: Record<string, string>) => (await prisma.ordemServico.findMany({ where: whereOrdens("e1", { periodo: "todos", ...sp }, AGORA) /* Leva I: o mês olha a data agendada, e estas OS não têm */, select: { id: true } })).map((o: any) => o.id).sort();
     const dos = (situacao: string) => casos.filter(([, , s]) => s === situacao).map(([nome]) => ids.get(nome)!).sort();
 
     beforeAll(async () => {
@@ -158,13 +158,15 @@ describe.skipIf(!URL_PG)("Prazos da OS — PR 2: prazo de execução nas telas (
       expect(await listar({ prazo: "hoje", status: "CONCLUIDA,CANCELADA" })).toEqual([]); // nem "vence hoje" o que já encerrou
       // período de hoje: das atrasadas, só entra a que tem algo HOJE (a prevista para hoje com o prazo de ontem)
       expect(await listar({ prazo: "atrasadas", periodo: "hoje" })).toContain(ids.get("prevista hoje, prazo próprio ontem"));
-      // o período olha também o PRAZO: a OS só com prazo próprio hoje aparece em "hoje"
-      expect(await listar({ periodo: "hoje" })).toContain(ids.get("prazo próprio hoje"));
+      // Leva I: o período olha a data agendada / de execução ou a previsão — o PRAZO não é agenda; a OS só com prazo
+      // próprio hoje não entra em "hoje" (ela aparece no filtro Prazo "vencem hoje" e em "Sem agendamento")
+      expect(await listar({ periodo: "hoje" })).not.toContain(ids.get("prazo próprio hoje"));
+      expect(await listar({ prazo: "hoje" })).toContain(ids.get("prazo próprio hoje"));
     });
 
     it("exportação: o arquivo traz o que a lista mostra (mesmo filtro) e as colunas do prazo", async () => {
       noRelogio();
-      const r = await chamar("ordens/export", "GET", {}, undefined, "prazo=atrasadas&sort=numero&dir=asc");
+      const r = await chamar("ordens/export", "GET", {}, undefined, "periodo=todos&prazo=atrasadas&sort=numero&dir=asc");
       expect(r.status).toBe(200);
       const linhas = r.texto.replace(/^﻿/, "").split("\r\n").map((l) => l.split(";").map((c) => c.replace(/^"|"$/g, "")));
       expect(linhas[0]).toEqual(["Número", "Cliente", "Tipo", "Status", "Prioridade", "Técnico", "Data abertura", "Data prevista", "Prazo", "Situação do prazo", "Atraso justificado", "Causa do atraso", "Conclusão"]);
@@ -177,7 +179,7 @@ describe.skipIf(!URL_PG)("Prazos da OS — PR 2: prazo de execução nas telas (
       const noite = linhas.find((l) => l[0] === todas.find((o: any) => o.id === ids.get("prevista ontem às 22h de Brasília (já é hoje em UTC)")).numero)!;
       expect(noite.slice(7, 10)).toEqual(["17/11/2026", "17/11/2026", "Atrasada 1 dia"]);
       // sem o filtro, o arquivo volta a ter todas as não canceladas
-      const tudo = await chamar("ordens/export", "GET", {}, undefined, "");
+      const tudo = await chamar("ordens/export", "GET", {}, undefined, "periodo=todos");
       expect(tudo.texto.split("\r\n").length - 1).toBe(casos.filter(([, d]) => d.status !== "CANCELADA").length);
     });
   });

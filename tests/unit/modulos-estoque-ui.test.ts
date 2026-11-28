@@ -20,6 +20,7 @@ import { permissoesTotais } from "@/lib/permissoes";
 import { resumoSeparacao } from "@/lib/estoque/separacao";
 
 (globalThis as any).IS_REACT_ACT_ENVIRONMENT = true;
+Object.defineProperty(window, "innerWidth", { configurable: true, value: 1440 }); // tela larga: o menu lateral abre (Leva I: < 1280 px começa recolhido)
 vi.mock("next-auth/react", () => ({ signOut: () => {}, useSession: () => ({ data: null, update: vi.fn() }) }));
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn(), refresh: vi.fn(), replace: vi.fn(), back: vi.fn() }),

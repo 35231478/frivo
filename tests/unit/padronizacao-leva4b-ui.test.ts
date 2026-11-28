@@ -1146,14 +1146,17 @@ describe("ficha do veículo: manutenções, seletores e aba Checklists", () => {
     expect(nav.push).toHaveBeenCalledWith("/veiculos");
   });
 
-  it("responsável e equipe: escolher, cadastrar na hora e editar o escolhido — só com Equipes › gerenciar", async () => {
+  it("responsável e equipe: escolher e cadastrar na hora (só com Equipes › gerenciar); o escolhido abre o cadastro em outra aba (Leva I: sem editar no contexto)", async () => {
     respostas["POST /api/equipes"] = { status: 201, corpo: { id: "eqN", nome: "Equipe Sul" } };
     await abrir(TUDO);
     await aba("Responsável");
     const resp = $("[data-responsavel-veiculo]")!, equipe = $("[data-equipe-veiculo]")!;
     expect(resp.getAttribute("data-responsavel-veiculo")).toBe("t1");
-    expect($('button[aria-label="Editar o colaborador selecionado"]', resp)).toBeTruthy();
-    expect($('button[aria-label="Editar a equipe selecionada"]', equipe)).toBeNull(); // nada escolhido
+    // Leva I: o nome do escolhido é um link para o cadastro, em outra aba — sem o "editar no contexto"
+    expect($('button[aria-label="Editar o colaborador selecionado"]', resp)).toBeNull();
+    const link = $('[data-link-cadastro="colaborador"]', resp) as HTMLAnchorElement;
+    expect([link.getAttribute("href"), link.getAttribute("target")]).toEqual(["/colaboradores/t1/editar", "_blank"]);
+    expect($('[data-link-cadastro="equipe"]', equipe)).toBeNull(); // nada escolhido
     await clicar($("button", equipe));
     expect($$(".max-h-60 button", equipe).map(txt)).toEqual(["Sem equipe", "Alfa"]);
     await clicar(botao("Nova equipe", equipe));
@@ -1162,14 +1165,13 @@ describe("ficha do veículo: manutenções, seletores e aba Checklists", () => {
     expect(gravacoes()).toEqual([{ url: "/api/equipes", metodo: "POST", corpo: { nome: "Equipe Sul" } }]);
     expect(await toasts()).toEqual([["Equipe cadastrada.", "sucesso"]]);
     expect(equipe.getAttribute("data-equipe-veiculo")).toBe("eqN");
-    expect($('button[aria-label="Editar a equipe selecionada"]', equipe)).toBeTruthy();
+    expect(($('[data-link-cadastro="equipe"]', equipe) as HTMLAnchorElement).getAttribute("href")).toBe("/equipes/eqN/editar");
     act(() => root.unmount()); caixa.remove();
 
     await abrir(V(["visualizar", "gerenciar"]));
     await aba("Responsável");
     await clicar($("button", $("[data-equipe-veiculo]")!));
     expect(botao("Nova equipe", $("[data-equipe-veiculo]")!)).toBeNull();
-    expect($('button[aria-label="Editar o colaborador selecionado"]')).toBeNull();
   });
 });
 

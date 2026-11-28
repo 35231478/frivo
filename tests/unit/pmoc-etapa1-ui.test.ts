@@ -20,6 +20,7 @@ import { ehTecnicoPuro, emModoTecnico, destinoModoTecnico } from "@/lib/tecnico/
 import type { PmocDados } from "@/components/pmoc/pmoc-editor";
 
 (globalThis as any).IS_REACT_ACT_ENVIRONMENT = true;
+Object.defineProperty(window, "innerWidth", { configurable: true, value: 1440 }); // tela larga: o menu lateral abre (Leva I: < 1280 px começa recolhido)
 const navegacao = vi.hoisted(() => ({ push: vi.fn(), refresh: vi.fn(), caminho: "/pmoc" }));
 vi.mock("next-auth/react", () => ({ signOut: () => {}, useSession: () => ({ data: null, update: vi.fn() }) }));
 vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: navegacao.refresh, push: navegacao.push, replace: vi.fn() }), usePathname: () => navegacao.caminho, useSearchParams: () => new URLSearchParams() }));

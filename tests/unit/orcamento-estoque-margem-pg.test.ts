@@ -222,7 +222,8 @@ describe.skipIf(!URL_PG)("Orçamento: estoque e margem (PostgreSQL real)", () =>
 
   it("página do Editar: o vendedor não recebe custoUnit nas props (o dado não chega ao navegador); o admin recebe", async () => {
     const { default: Pagina } = await import("@/app/(dashboard)/orcamentos/[id]/editar/page");
-    const props = async () => ((await Pagina({ params: Promise.resolve({ id: ids.orc }) })) as any).props;
+    // Leva I: o formulário vem dentro do <ProtegerSaida> (aviso de sair sem salvar)
+    const props = async () => { const p = ((await Pagina({ params: Promise.resolve({ id: ids.orc }) })) as any).props; return p.inicial ? p : p.children.props; };
     ADMIN();
     const a = await props();
     expect(a.inicial.servicos[0].materiais.map((m: any) => m.custoUnit)).toEqual([45]);
