@@ -325,7 +325,7 @@ describe.skipIf(!URL_PG)("push (PostgreSQL real)", () => {
     await ev.notificarComentarioOS("os1", "uAdmin", { comentarioId: "cm1", texto: "Levar escada" });
     const por = Object.fromEntries(h.enviados.map((e) => [e.endpoint.replace("https://push.exemplo/", ""), e.msg]));
     expect(Object.keys(por).sort()).toEqual(["carlos-cel", "carlos-tab", "fin", "rosa"]);
-    expect([por.rosa.url, por.fin.url, por.fin.corpo]).toEqual(["/tecnico?ver=chat", "/conversas?os=os1", "uAdmin · Levar escada"]); // CHAT-1: o toque abre a conversa (no app, a conversa Escritório)
+    expect([por.rosa.url, por.fin.url, por.fin.corpo]).toEqual(["/tecnico?ver=chat", "/conversas?os=os1", "uAdmin: Levar escada"]); // CHAT-1: o toque abre a conversa (no app, a conversa Escritório)
     limpar();
     await ev.notificarComentarioOS("os1", "uAdmin", { comentarioId: "cm1", texto: "Levar escada" });
     expect(recebidos()).toEqual([]); // o mesmo comentário não repete
@@ -337,8 +337,8 @@ describe.skipIf(!URL_PG)("push (PostgreSQL real)", () => {
     expect(c.ok).toBe(true);
     expect(h.enviados).toEqual([]); // nada antes da resposta
     await depoisDaResposta();
-    expect(recebidos().sort()).toEqual([["admin", "Mensagem nova na OS OS-0001"], ["carlos-cel", "Mensagem nova na OS OS-0001"], ["carlos-tab", "Mensagem nova na OS OS-0001"], ["rosa", "Mensagem nova na OS OS-0001"]]);
-    expect(h.enviados.find((e) => e.endpoint.endsWith("admin"))!.msg.corpo).toBe("uFin · Cliente pediu para ligar antes");
+    expect(recebidos().sort()).toEqual([["admin", "Mensagem nova · OS-0001 · Mercado do Zé"], ["carlos-cel", "Mensagem nova · OS-0001 · Mercado do Zé"], ["carlos-tab", "Mensagem nova · OS-0001 · Mercado do Zé"], ["rosa", "Mensagem nova · OS-0001 · Mercado do Zé"]]);
+    expect(h.enviados.find((e) => e.endpoint.endsWith("admin"))!.msg.corpo).toBe("uFin: Cliente pediu para ligar antes");
   });
 
   it("comentário do técnico pelo app: o escritório recebe; o autor não; reenviar a mesma gravação não avisa de novo", async () => {

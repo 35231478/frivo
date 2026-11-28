@@ -12,7 +12,7 @@ export function rotuloSync(e: EstadoSync): { texto: string; detalhe: string; cla
     case "offline": return { texto: n ? `Offline · ${n}` : "Offline", detalhe: n ? `${fila} no aparelho — sobe quando o sinal voltar` : "O que for gravado fica no aparelho", classe: "bg-previsto-claro text-previsto-texto" };
     case "sincronizando": return { texto: "Sincronizando…", detalhe: n ? `Enviando ${fila}` : "Conferindo com o escritório", classe: "bg-acento-claro text-acento" };
     case "pendente": return { texto: `${n} a enviar`, detalhe: "Envia sozinho em instantes", classe: "bg-atencao-claro text-atencao-texto" };
-    case "erro": return { texto: e.erros === 1 ? "1 recusada" : `${e.erros} recusadas`, detalhe: "Toque para ver o motivo", classe: "bg-atrasado text-white" };
+    case "erro": return { texto: e.erros === 1 ? "1 não enviada" : `${e.erros} não enviadas`, detalhe: "Toque para ver o motivo", classe: "bg-atrasado text-white" };
     case "sessao": return { texto: "Entre de novo", detalhe: "Sua sessão expirou — nada foi perdido", classe: "bg-atrasado text-white" };
     default: return { texto: "Sincronizado", detalhe: "Tudo enviado ao escritório", classe: "bg-ok-claro text-ok-texto" };
   }

@@ -177,7 +177,8 @@ export async function notificarComentarioOS(osId: string, autorId: string, opts:
   const chave = `comentario:${opts.comentarioId ?? `${os.id}:${autorId}:${Date.now()}`}`;
   await enviarPush({ empresaId: os.empresaId, tipo: "OS_COMENTARIO", alcance: "pessoal", usuarios: tecnicos, chave,
     // CHAT-1: o toque abre a conversa (no app, o Chat com o escritório; quem não está no modo técnico, a de Conversas)
-    mensagem: (q) => msgComentario(base, q.restrito ? urlConversaApp() : urlConversaEscritorio(os.id)) });
+    // A conversa: no app, a do técnico com o Escritório (uma só); fora do modo técnico, a da OS
+    mensagem: (q) => (q.restrito ? msgComentario(base, urlConversaApp(), "escritorio") : msgComentario(base, urlConversaEscritorio(os.id), `os-${os.id}`)) });
   // Hotfix: no escritório, QUEM ESTÁ LIGADO À OS (responsável, quem abriu, quem já conversou ou leu a conversa); se
   // nenhum deles tem aparelho, o escritório todo que vê OS (como antes), para o aviso não se perder
   const comAparelho = sem(await usuariosComAparelho(os.empresaId)).filter((u) => !tecnicos.includes(u));
@@ -185,7 +186,7 @@ export async function notificarComentarioOS(osId: string, autorId: string, opts:
   const alvo = comAparelho.filter((u) => ligados.has(u));
   return enviarPush({ empresaId: os.empresaId, tipo: "OS_COMENTARIO", alcance: "escritorio", usuarios: alvo.length ? alvo : comAparelho, chave,
     // CHAT-1: a do técnico abre a conversa COM ELE (a lista é por pessoa); a de outra pessoa do escritório, a da OS
-    mensagem: msgComentario(base, tecnicoAutor ? urlConversaPessoa(autorId) : urlConversaEscritorio(os.id)) });
+    mensagem: tecnicoAutor ? msgComentario(base, urlConversaPessoa(autorId), autorId) : msgComentario(base, urlConversaEscritorio(os.id), `os-${os.id}`) });
 }
 
 /**
@@ -205,13 +206,13 @@ export async function notificarMensagem(m: { empresaId: string; comentarioId: st
   const chave = `comentario:${m.comentarioId}`;
   if (m.origem === "ESCRITORIO" && m.paraUsuarioId && m.paraUsuarioId !== m.autorId) {
     return enviarPush({ empresaId: m.empresaId, tipo: "OS_COMENTARIO", alcance: "pessoal", usuarios: [m.paraUsuarioId], chave,
-      mensagem: (q) => msgComentario(base, q.restrito ? urlConversaApp() : urlConversaPessoa(m.paraUsuarioId)) });
+      mensagem: (q) => (q.restrito ? msgComentario(base, urlConversaApp(), "escritorio") : msgComentario(base, urlConversaPessoa(m.paraUsuarioId), m.paraUsuarioId!)) });
   }
   if (m.origem !== "APP") return null;
   const comAparelho = (await usuariosComAparelho(m.empresaId)).filter((u) => u !== m.autorId);
   const ligados = new Set(await usuariosLigadosAPessoa(m.empresaId, m.autorId));
   const alvo = comAparelho.filter((u) => ligados.has(u));
-  return enviarPush({ empresaId: m.empresaId, tipo: "OS_COMENTARIO", alcance: "escritorio", usuarios: alvo.length ? alvo : comAparelho, chave, mensagem: msgComentario(base, urlConversaPessoa(m.autorId)) });
+  return enviarPush({ empresaId: m.empresaId, tipo: "OS_COMENTARIO", alcance: "escritorio", usuarios: alvo.length ? alvo : comAparelho, chave, mensagem: msgComentario(base, urlConversaPessoa(m.autorId), m.autorId) });
 }
 
 /** As pessoas do escritório ligadas à conversa de um técnico: quem escreveu para ele e quem leu a conversa dele */
