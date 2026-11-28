@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
-import { conversasDoTecnico } from "@/lib/chat/servidor";
+import { conversasDoTecnico, semCliente } from "@/lib/chat/servidor";
+import { carregarConfigApp } from "@/lib/tecnico/config-app-server";
 import { guardaTecnico, SEM_CACHE } from "@/lib/chat/rotas-server";
 import { totalNaoLidas } from "@/lib/chat/regras";
 
@@ -7,6 +8,7 @@ import { totalNaoLidas } from "@/lib/chat/regras";
 export async function GET() {
   const g = await guardaTecnico();
   if (g.resposta) return g.resposta;
-  const conversas = await conversasDoTecnico(g.empresaId, g.usuarioId, g.tecnicoId);
+  const [lista, config] = await Promise.all([conversasDoTecnico(g.empresaId, g.usuarioId, g.tecnicoId), carregarConfigApp(g.empresaId)]);
+  const conversas = lista.map((c) => semCliente(c, config.exibirDadosCliente));
   return NextResponse.json({ conversas, naoLidas: totalNaoLidas(conversas) }, { headers: SEM_CACHE });
 }

@@ -138,6 +138,9 @@ async function osDoTecnico(empresaId: string, tecnicoId: string, agora: Date): P
   return porOs;
 }
 
+/** App do técnico com "Exibir dados do cliente" desligado (Equipes › App do colaborador): o nome do cliente nem sai do servidor. */
+export const semCliente = <T extends { cliente: string }>(c: T, exibirDadosCliente: boolean): T => (exibirDadosCliente ? c : { ...c, cliente: "" });
+
 /** As conversas do técnico (as OS dele), cada uma com a atividade por onde a mensagem sobe na fila do aparelho. */
 export async function conversasDoTecnico(empresaId: string, usuarioId: string, tecnicoId: string, agora: Date = new Date()): Promise<ConversaResumo[]> {
   const porOs = await osDoTecnico(empresaId, tecnicoId, agora);

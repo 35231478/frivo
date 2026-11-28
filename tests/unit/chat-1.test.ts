@@ -229,6 +229,19 @@ describe("tempo real — o navegador (um laço por aba)", () => {
     laco.parar();
   });
 
+  it("sair e assinar de novo no mesmo instante (o React em desenvolvimento faz isso): continua UM laço só", async () => {
+    const a = ambiente();
+    const laco = new LacoNovidades("/x", a.amb);
+    const s1 = laco.assinar(() => {});
+    await tique();
+    s1();
+    laco.assinar(() => {});
+    for (let i = 0; i < 6; i++) await tique();
+    // o 1º pedido ficou pendurado e foi cancelado; o laço novo fez UM pedido (também pendurado) — não dois
+    expect(a.pedidos).toEqual(["/x", "/x"]);
+    laco.parar();
+  });
+
   it("o último a sair desliga o laço (não pergunta mais)", async () => {
     const a = ambiente();
     a.respostas.push(a.ok({ marca: "1.0", mudou: false }));

@@ -37,6 +37,8 @@ export class LacoNovidades {
   private marca: string | null = null;
   private ultima: RespostaNovidades | null = null;
   private rodando = false;
+  /** Cada `rodar()` tem a sua vez: parar e assinar de novo no mesmo instante não deixa dois laços vivos */
+  private geracao = 0;
   private controle: AbortController | null = null;
   private acordar: (() => void) | null = null;
   private pararDeOuvir: (() => void) | null = null;
@@ -61,6 +63,7 @@ export class LacoNovidades {
   }
 
   parar() {
+    this.geracao += 1;
     this.rodando = false;
     this.controle?.abort();
     this.acordar?.();
@@ -73,9 +76,11 @@ export class LacoNovidades {
   }
 
   private async rodar() {
+    const vez = ++this.geracao;
+    const minha = () => this.geracao === vez;
     this.rodando = true;
     this.pararDeOuvir = this.amb.aoAparecer(() => this.avisar());
-    while (this.rodando && this.ouvintes.size) {
+    while (minha() && this.ouvintes.size) {
       if (this.amb.escondida()) { await this.esperarAparecer(); continue; }
       this.controle = new AbortController();
       try {
@@ -91,13 +96,13 @@ export class LacoNovidades {
           for (const o of [...this.ouvintes]) o(r);
         }
       } catch {
-        if (!this.rodando) break;
+        if (!minha()) break;
         if (this.controle?.signal.aborted) continue; // `avisar()`: pergunta de novo na hora
         this.falhas += 1;
         await Promise.race([this.amb.dormir(esperaDepoisDeErro(this.falhas)), this.esperarAparecer()]);
       }
     }
-    this.rodando = false;
+    if (minha()) this.rodando = false;
   }
 }
 

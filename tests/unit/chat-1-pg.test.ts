@@ -196,6 +196,18 @@ describe.skipIf(!URL_PG)("CHAT-1 (PostgreSQL real)", () => {
     expect(await prisma.osComentario.count({ where: { clientId: "intruso" } })).toBe(0);
   });
 
+  it("\"Exibir dados do cliente\" desligado no app: o nome do cliente nem sai do servidor (lista e conversa)", async () => {
+    await prisma.configuracao.upsert({ where: { empresaId: "e1" }, create: { empresaId: "e1", appExibirDadosCliente: false }, update: { appExibirDadosCliente: false } });
+    comoTecnico();
+    const l = await chamar("tecnico/conversas", "GET");
+    expect(l.json.conversas.map((c: any) => c.cliente)).toEqual(l.json.conversas.map(() => ""));
+    expect(JSON.stringify(l.json)).not.toContain("Hospital Fictício");
+    const c = await chamar("tecnico/conversas/[osId]", "GET", { osId: "os1" });
+    expect(c.json.conversa.cliente).toBe("");
+    await prisma.configuracao.update({ where: { empresaId: "e1" }, data: { appExibirDadosCliente: true } });
+    expect((await chamar("tecnico/conversas/[osId]", "GET", { osId: "os1" })).json.conversa.cliente).toBe("Hospital Fictício");
+  });
+
   it("OS cancelada: só leitura (escritório 409, app recusado); concluída segue aberta e volta à lista do técnico", async () => {
     comoAdmin();
     expect((await chamar("conversas/[osId]", "POST", { osId: "osC" }, { clientId: "c-x", texto: "oi" })).json).toEqual({ erro: MSG_OS_CANCELADA });
