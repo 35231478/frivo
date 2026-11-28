@@ -77,7 +77,7 @@ function Bloco({ titulo, descricao, children, rodape, ...dados }: {
  * Preferências (as notificações deste aparelho; só existe quando o push está ligado). As regras moram em
  * lib/perfil/abas.
  */
-export function PerfilClient({ initial, onAvatar, emailSomenteLeitura = false, notificacoes = false, abaNaUrl = false, abaPedida }: {
+export function PerfilClient({ initial, onAvatar, emailSomenteLeitura = false, notificacoes = false, abaNaUrl = false, abaPedida, semComissoes = false }: {
   initial: Initial;
   /** Foto nova salva (o app do técnico atualiza o topo na hora) */
   onAvatar?: (avatar: string) => void;
@@ -91,6 +91,8 @@ export function PerfilClient({ initial, onAvatar, emailSomenteLeitura = false, n
   /** Painel: a aba acompanha a URL (?aba=), para o refresh e os links voltarem na mesma aba */
   abaNaUrl?: boolean;
   abaPedida?: string | null;
+  /** App do técnico: as comissões têm a seção própria no Perfil do app (aqui, dentro de "Meus dados", não repete) */
+  semComissoes?: boolean;
 }) {
   const router = useRouter();
   const { update } = useSession();
@@ -100,6 +102,7 @@ export function PerfilClient({ initial, onAvatar, emailSomenteLeitura = false, n
   const [aba, setAba] = useState<AbaPerfil>(() => abaInicialDoPerfil(abaPedida, abas));
   const [erro, setErro] = useState("");
   useEffect(() => {
+    if (semComissoes) return;
     let vivo = true;
     fetch("/api/perfil/comissoes?so=ativo").then((r) => (r.ok ? r.json() : null)).then((d) => {
       if (!vivo || !d?.ativo) return;
@@ -107,7 +110,7 @@ export function PerfilClient({ initial, onAvatar, emailSomenteLeitura = false, n
       if (abaPedida === "comissoes") setAba("comissoes");
     }).catch(() => {});
     return () => { vivo = false; };
-  }, [abaPedida]);
+  }, [abaPedida, semComissoes]);
 
   function trocarAba(id: string) {
     const nova = abaInicialDoPerfil(id, abas);
