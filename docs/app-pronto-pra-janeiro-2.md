@@ -80,3 +80,14 @@ psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f prisma/sql/2027-02-22_janeiro2_trilha
 | `app-campo-leva1-pg` (+) | D5: o saldo no catálogo, o separado no retrato, o push ao escritório. |
 | `os-legenda-foto-pg` (+) | D4: a legenda pela fila, a trilha e a volta à do sistema. |
 | `sql-janeiro2-trilhas` | O SQL. |
+
+## Prints
+
+`docs/prints/janeiro2b/antes/` (master) e `docs/prints/janeiro2b/depois/` (este PR): as mesmas cenas em iPhone e
+Android, e o escritório no desktop.
+
+A auditoria automática de cada tela (alvos de toque, texto cortado, rolagem lateral) **não achou nada novo**.
+- **O que melhorou:** o "Limpar" da assinatura tinha 24 px de altura e agora tem 44 px.
+- **O que ficou como estava (fora desta leva):**
+  - o campo de data do formulário de despesa (38 px), o mesmo do "Lançar despesa";
+  - o "×" da orientação do iPhone em Notificações (20 px).
