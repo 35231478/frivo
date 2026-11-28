@@ -137,6 +137,8 @@ export async function POST(req: NextRequest) {
           unidadeId: data.unidadeId === undefined ? sugerido!.unidadeId : data.unidadeId || null,
           contatoClienteId: data.contatoClienteId === undefined ? sugerido!.contatoClienteId : data.contatoClienteId || null,
           criadoPorId: usuarioId,
+          // COM-1: o vendedor nasce = quem criou (travado; só "Trocar vendedor" muda, com motivo na trilha)
+          vendedorId: usuarioId,
           descricao: data.descricao ?? null,
           observacao: data.observacao ?? null,
           validadeEm: data.validadeEm === undefined ? validadeDoPadrao(padroes.validadeDias) : data.validadeEm ? new Date(data.validadeEm) : null,

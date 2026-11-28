@@ -38,7 +38,7 @@ export async function gerarOsDoOrcamento(p: { empresaId: string; usuarioId: stri
   const orc = await prisma.orcamento.findFirst({
     where: { id: orcamentoId, empresaId },
     select: {
-      id: true, codigo: true, nome: true, descricao: true, status: true, tipo: true, clienteId: true, unidadeId: true, cobrancaMateriais: true,
+      id: true, codigo: true, nome: true, descricao: true, status: true, tipo: true, clienteId: true, unidadeId: true, cobrancaMateriais: true, vendedorId: true,
       // E3.3b: o snapshot dos materiais e a peça derivada (materialId) vão para a OS, com os mesmos valores
       servicos: { select: { id: true, descricao: true, quantidade: true, valorUnitario: true, valorTotal: true, ordem: true, servicoId: true, valorBase: true, ajusteMateriais: true, valorManual: true, materiais: { orderBy: { ordem: "asc" } } } },
       produtos: { select: { descricao: true, quantidade: true, valorUnitario: true, valorTotal: true, ordem: true, produtoId: true, materialId: true } },
@@ -64,6 +64,8 @@ export async function gerarOsDoOrcamento(p: { empresaId: string; usuarioId: stri
             responsavelId: usuarioId, criadoPorId: usuarioId, status: "ABERTA", descricao: descricaoDaOs(orc),
             // "Orçamento E2": a OS segue a regra de cobrança dos materiais com que o orçamento nasceu
             cobrancaMateriais: orc.cobrancaMateriais,
+            // COM-1: o vendedor do orçamento segue para a OS
+            vendedorId: orc.vendedorId,
           },
           select: { id: true, numero: true },
         });

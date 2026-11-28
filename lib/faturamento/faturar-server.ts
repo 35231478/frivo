@@ -48,6 +48,8 @@ interface Origem {
   empresaId: string;
   usuarioId: string;
   clienteId: string;
+  /** COM-1: o vendedor da venda (do orçamento ou da OS) vai para a fatura */
+  vendedorId?: string | null;
   diaFaturamento: number | null;
   /** Descrição da fatura cheia ("Orçamento ORC-… — nome" / "OS … — título") */
   descricao: string;
@@ -90,7 +92,7 @@ async function criarFatura(o: Origem): Promise<ResultadoFaturar> {
     const numero = await proximoNumero(tx, o.empresaId, "medicao");
     const criada = await tx.medicao.create({
       data: {
-        empresaId: o.empresaId, clienteId: o.clienteId, numero, tipo: "ADICIONAL", avulsa: true,
+        empresaId: o.empresaId, clienteId: o.clienteId, vendedorId: o.vendedorId ?? null, numero, tipo: "ADICIONAL", avulsa: true,
         faturaParcial: ehParcial, percentualFaturado: ehParcial ? percentual : null,
         mes: agora.mes + 1, ano: agora.ano, descricao,
         // D3: o avulso vai direto para a nota (a aprovação do cliente é só da medição de contrato)
@@ -141,7 +143,7 @@ async function criarFatura(o: Origem): Promise<ResultadoFaturar> {
 }
 
 const SELECT_ORC = {
-  id: true, codigo: true, nome: true, status: true, tipo: true, clienteId: true,
+  id: true, codigo: true, nome: true, status: true, tipo: true, clienteId: true, vendedorId: true,
   descontoServicos: true, tipoDescontoServicos: true, descontoProdutos: true, tipoDescontoProdutos: true, issAliquota: true,
   cliente: { select: { diaFaturamento: true } },
   servicos: { select: { descricao: true, quantidade: true, valorUnitario: true, valorTotal: true, ordem: true, servicoId: true } },
@@ -161,7 +163,7 @@ export async function faturarOrcamento(p: { empresaId: string; usuarioId: string
   if (motivo) return { tipo: "bloqueado", erro: motivo };
   if (!fatura.linhas.length || fatura.valorLiquido <= 0) return { tipo: "vazio", erro: "Nada a faturar: o orçamento não tem itens com valor." };
   return criarFatura({
-    empresaId: p.empresaId, usuarioId: p.usuarioId, clienteId: orc.clienteId, diaFaturamento: orc.cliente.diaFaturamento,
+    empresaId: p.empresaId, usuarioId: p.usuarioId, clienteId: orc.clienteId, vendedorId: orc.vendedorId, diaFaturamento: orc.cliente.diaFaturamento,
     descricao: `Orçamento ${orc.codigo} — ${orc.nome}`.slice(0, 300), fatura, origem: { orcamentoId: orc.id },
     parcelamento: p.parcelamento, parcial: p.parcial,
     registrar: (tx, _numero, detalhe) => registrarEvento({ empresaId: p.empresaId, orcamentoId: orc.id, tipo: "FATURADO", detalhe, usuarioId: p.usuarioId }, tx),
@@ -172,7 +174,7 @@ export async function faturarOrcamento(p: { empresaId: string; usuarioId: string
 export async function faturarOs(p: { empresaId: string; usuarioId: string; osId: string; parcelamento?: ParcelamentoFaturar | null; parcial?: PedidoParcial | null }): Promise<ResultadoFaturar> {
   const os = await prisma.ordemServico.findFirst({
     where: { id: p.osId, empresaId: p.empresaId },
-    select: { id: true, numero: true, status: true, contratoId: true, clienteId: true, descricao: true, cliente: { select: { diaFaturamento: true } } },
+    select: { id: true, numero: true, status: true, contratoId: true, clienteId: true, descricao: true, vendedorId: true, orcamentoOrigem: { select: { vendedorId: true } }, cliente: { select: { diaFaturamento: true } } },
   });
   if (!os) return { tipo: "nao-encontrado" };
   const { itens, adicionais } = await itensFaturaveisDaOs(os.id);
@@ -189,7 +191,7 @@ export async function faturarOs(p: { empresaId: string; usuarioId: string; osId:
   }
   const titulo = (os.descricao ?? "").split("\n")[0].trim();
   return criarFatura({
-    empresaId: p.empresaId, usuarioId: p.usuarioId, clienteId: os.clienteId, diaFaturamento: os.cliente.diaFaturamento,
+    empresaId: p.empresaId, usuarioId: p.usuarioId, clienteId: os.clienteId, vendedorId: os.vendedorId ?? os.orcamentoOrigem?.vendedorId ?? null, diaFaturamento: os.cliente.diaFaturamento,
     descricao: `OS ${os.numero}${titulo ? ` — ${titulo}` : ""}`.slice(0, 300), fatura, origem: { osId: os.id },
     parcelamento: p.parcelamento, parcial: p.parcial,
     registrar: (tx, _numero, detalhe) => tx.osHistorico.create({

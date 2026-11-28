@@ -12,8 +12,8 @@ import { medicoesDaOrigem } from "@/lib/faturamento-os";
 import { ultimosCustos } from "@/lib/estoque/custo";
 import { valorDesconto } from "@/lib/orcamentos/calculo";
 import {
-  VENDA_VIVA, alvoLiberado, comissoesDaVenda, comissoesPorPessoa, descricaoDaRegra, fimDaCompetencia, fracaoRecebida, itensDaVenda,
-  movimentoNecessario, round2, situacaoDaComissao, type FaturaRecebida, type Quando, type RegraComissao,
+  VENDA_VIVA, alvoLiberado, chaveDaRegra, comissoesDaVenda, comissoesPorPessoa, descricaoDaRegra, fimDaCompetencia, fracaoRecebida, itensDaVenda,
+  movimentoNecessario, round2, situacaoDaComissao, type FaturaRecebida, type Quando, type RegraComissao, type normalizarRegra,
 } from "./regras";
 
 type Db = Prisma.TransactionClient | typeof prisma;
@@ -318,4 +318,105 @@ export async function extratoDoUsuario(empresaId: string, usuarioId: string, ago
       prevista: round2(lista.reduce((s, v) => s + v.prevista, 0)), liberada: round2(lista.reduce((s, v) => s + v.liberada, 0)), paga: round2(lista.reduce((s, v) => s + v.paga, 0)),
     },
   };
+}
+
+/**
+ * Chamado logo depois de o orçamento ser APROVADO (link do cliente ou equipe): gera as comissões. Nunca derruba a
+ * aprovação — se falhar, fica no log (a aprovação do cliente vale mais que a conta da comissão).
+ */
+export async function comissoesNaAprovacao(empresaId: string, orcamentoId: string): Promise<void> {
+  try {
+    await gerarComissoesDoOrcamento(empresaId, orcamentoId);
+  } catch (e) {
+    console.error("[comissoes] falha ao gerar as comissões do orçamento", orcamentoId, e);
+  }
+}
+
+/* ───────── trocar o vendedor ───────── */
+
+export const MSG_VENDEDOR_INVALIDO = "Escolha um usuário ativo desta empresa.";
+export const MSG_MESMO_VENDEDOR = "Este já é o vendedor do orçamento.";
+export const MSG_COMISSAO_LIBERADA = "Este orçamento já tem comissão liberada para o vendedor atual: a troca mudaria o que já é devido. Fale com o financeiro.";
+
+/**
+ * TROCA o vendedor do orçamento (só quem tem "Trocar vendedor": a rota confere): o novo segue para a OS gerada e
+ * para as faturas da venda; a trilha registra quem, de quem para quem e o motivo. Se a comissão já nasceu e
+ * nada foi liberado, ela é refeita para o novo vendedor; com algo liberado, a troca é recusada (não mexe no devido).
+ */
+export async function trocarVendedor(o: { empresaId: string; orcamentoId: string; vendedorId: string; motivo: string; quem: { id: string; nome: string } }):
+  Promise<{ ok: true; vendedor: { id: string; nome: string } } | { ok: false; status: number; erro: string }> {
+  const orc = await prisma.orcamento.findFirst({ where: { id: o.orcamentoId, empresaId: o.empresaId }, select: { id: true, status: true, vendedorId: true, vendedor: { select: { nome: true } } } });
+  if (!orc) return { ok: false, status: 404, erro: "Orçamento não encontrado" };
+  const novo = await prisma.usuario.findFirst({ where: { id: o.vendedorId, empresaId: o.empresaId, ativo: true }, select: { id: true, nome: true } });
+  if (!novo) return { ok: false, status: 400, erro: MSG_VENDEDOR_INVALIDO };
+  if (orc.vendedorId === novo.id) return { ok: false, status: 400, erro: MSG_MESMO_VENDEDOR };
+  const liberadas = await prisma.comissaoLancamento.count({ where: { empresaId: o.empresaId, comissao: { orcamentoId: orc.id } } });
+  if (liberadas) return { ok: false, status: 409, erro: MSG_COMISSAO_LIBERADA };
+  const tinhaComissao = await prisma.$transaction(async (tx) => {
+    await tx.orcamento.update({ where: { id: orc.id }, data: { vendedorId: novo.id } });
+    await tx.ordemServico.updateMany({ where: { empresaId: o.empresaId, orcamentoOrigemId: orc.id }, data: { vendedorId: novo.id } });
+    await tx.medicao.updateMany({ where: { empresaId: o.empresaId, itens: { some: { orcamentoId: orc.id } } }, data: { vendedorId: novo.id } });
+    await tx.orcamentoEvento.create({
+      data: {
+        empresaId: o.empresaId, orcamentoId: orc.id, tipo: "VENDEDOR", usuarioId: o.quem.id,
+        detalhe: `Vendedor: ${orc.vendedor?.nome ?? "sem vendedor"} → ${novo.nome}. Motivo: ${o.motivo.trim()}`.slice(0, 500),
+      },
+    });
+    const { count } = await tx.comissao.deleteMany({ where: { empresaId: o.empresaId, orcamentoId: orc.id, lancamentos: { none: {} } } });
+    return count > 0;
+  });
+  // A comissão (sem nada liberado) nasce de novo, para o novo vendedor
+  if (tinhaComissao) await comissoesNaAprovacao(o.empresaId, orc.id);
+  return { ok: true, vendedor: novo };
+}
+
+/* ───────── a configuração (Configurações › Comissões) ───────── */
+
+export const MSG_REGRA_REPETIDA = "Já existe uma regra ativa para a mesma pessoa/cargo e o mesmo alvo. Edite a que existe.";
+export const MSG_REFERENCIA = "Pessoa, cargo ou serviço não encontrado nesta empresa.";
+
+/** A tela de Comissões: as regras (com os nomes), a configuração da empresa e as opções dos seletores */
+export async function telaDeComissoes(empresaId: string) {
+  const [regras, cfg, pessoas, cargos, servicos] = await Promise.all([
+    prisma.comissaoRegra.findMany({
+      where: { empresaId }, orderBy: [{ ativo: "desc" }, { criadoEm: "asc" }],
+      select: { id: true, quemTipo: true, usuarioId: true, cargoId: true, papel: true, sobreTipo: true, categoria: true, servicoId: true, base: true, valor: true, ativo: true, usuario: { select: { nome: true } }, cargo: { select: { nome: true } }, servico: { select: { nome: true } } },
+    }),
+    prisma.configuracao.findUnique({ where: { empresaId }, select: { comissaoQuando: true, comissaoLiquidaImpostos: true } }),
+    prisma.usuario.findMany({ where: { empresaId, ativo: true }, orderBy: { nome: "asc" }, select: { id: true, nome: true } }),
+    prisma.cargo.findMany({ where: { empresaId, ativo: true }, orderBy: { nome: "asc" }, select: { id: true, nome: true } }),
+    prisma.servico.findMany({ where: { empresaId, ativo: true }, orderBy: { nome: "asc" }, select: { id: true, nome: true, categoria: true } }),
+  ]);
+  const categorias = [...new Set(servicos.map((s) => s.categoria?.trim()).filter(Boolean) as string[])].sort((a, b) => a.localeCompare(b, "pt-BR"));
+  return {
+    regras: regras.map((r) => ({
+      id: r.id, quemTipo: r.quemTipo, usuarioId: r.usuarioId, cargoId: r.cargoId, papel: r.papel, sobreTipo: r.sobreTipo, categoria: r.categoria, servicoId: r.servicoId,
+      base: r.base, valor: num(r.valor), ativo: r.ativo, nomes: { pessoa: r.usuario?.nome ?? null, cargo: r.cargo?.nome ?? null, servico: r.servico?.nome ?? null },
+    })),
+    config: { quando: (cfg?.comissaoQuando ?? "RECEBIMENTO") as Quando, liquidaImpostos: cfg?.comissaoLiquidaImpostos ?? false },
+    opcoes: { pessoas, cargos, servicos: servicos.map((s) => ({ id: s.id, nome: s.nome })), categorias },
+  };
+}
+
+/** Grava (cria ou edita) uma regra: as referências precisam ser da empresa e não pode haver outra ativa com a mesma chave. */
+export async function salvarRegra(empresaId: string, dados: ReturnType<typeof normalizarRegra>, o: { id?: string; criadoPorId?: string } = {}):
+  Promise<{ ok: true; id: string } | { ok: false; status: number; erro: string }> {
+  if (o.id && !(await prisma.comissaoRegra.findFirst({ where: { id: o.id, empresaId }, select: { id: true } }))) return { ok: false, status: 404, erro: "Regra não encontrada" };
+  const [u, c, s] = await Promise.all([
+    dados.usuarioId ? prisma.usuario.count({ where: { id: dados.usuarioId, empresaId } }) : 1,
+    dados.cargoId ? prisma.cargo.count({ where: { id: dados.cargoId, empresaId } }) : 1,
+    dados.servicoId ? prisma.servico.count({ where: { id: dados.servicoId, empresaId } }) : 1,
+  ]);
+  if (!u || !c || !s) return { ok: false, status: 400, erro: MSG_REFERENCIA };
+  if (dados.ativo) {
+    const outras = await prisma.comissaoRegra.findMany({ where: { empresaId, ativo: true, ...(o.id ? { id: { not: o.id } } : {}) }, select: { papel: true, quemTipo: true, usuarioId: true, cargoId: true, sobreTipo: true, servicoId: true, categoria: true } });
+    const chave = chaveDaRegra(dados as Parameters<typeof chaveDaRegra>[0]);
+    if (outras.some((r) => chaveDaRegra(r as Parameters<typeof chaveDaRegra>[0]) === chave)) return { ok: false, status: 409, erro: MSG_REGRA_REPETIDA };
+  }
+  if (o.id) {
+    await prisma.comissaoRegra.update({ where: { id: o.id }, data: dados });
+    return { ok: true, id: o.id };
+  }
+  const r = await prisma.comissaoRegra.create({ data: { ...dados, empresaId, criadoPorId: o.criadoPorId ?? null }, select: { id: true } });
+  return { ok: true, id: r.id };
 }
