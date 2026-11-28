@@ -162,7 +162,8 @@ export function chaveDaRegra(r: Pick<RegraComissao, "papel" | "quemTipo" | "usua
   const quem = r.quemTipo === "PESSOA" ? r.usuarioId : r.quemTipo === "CARGO" ? r.cargoId : "*";
   // COM-1.2: no contrato, o "% das mensalidades" e o "fixo no fechamento" são partes separadas (podem valer as duas)
   if (r.sobreTipo === "CONTRATOS") return `${r.papel}|${r.quemTipo}:${quem}|CONTRATOS:${r.tipoContrato ?? "*"}:${r.base ?? ""}`;
-  const sobre = r.sobreTipo === "SERVICO" ? r.servicoId : r.sobreTipo === "CATEGORIA" ? (r.categoria ?? "").trim().toLocaleLowerCase("pt-BR") : "*";
+  // PJ4: a categoria compara sem acento (como na hora de casar o item): "Instalação" e "Instalacao" são a mesma
+  const sobre = r.sobreTipo === "SERVICO" ? r.servicoId : r.sobreTipo === "CATEGORIA" ? semAcento(r.categoria ?? "") : "*";
   return `${r.papel}|${r.quemTipo}:${quem}|${r.sobreTipo}:${sobre}`;
 }
 
@@ -311,6 +312,48 @@ export function entradasDaFatura(f: FaturaRecebida, brutas: readonly EntradaDaVe
     resta -= v;
   }
   return r;
+}
+
+/**
+ * PJ4: a liberação por RECEBIMENTO repartida pelos meses em que o dinheiro entrou. O recálculo roda quando alguém
+ * olha; se ele pega recebimentos de dois meses de uma vez, a diferença não pode ir inteira para a data do último (o
+ * fechamento de outubro feito em 5/11 perderia a parte de outubro). Cada mês leva a parte da comissão coberta pelo
+ * que entrou nele, na data da última entrada do mês; o que já foi liberado consome os meses mais antigos primeiro. A
+ * soma é sempre `valor` (o movimento calculado); sem entradas, tudo numa data só (`reserva`).
+ */
+export function liberacaoPorMes(o: { valorComissao: number; totalVenda: number; jaLiberado: number; valor: number; entradas: readonly EntradaDaVenda[]; reserva: Date }): { data: Date; valor: number }[] {
+  const total = round2(num(o.valor));
+  if (total <= 0) return [];
+  const mes = (d: Date) => `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
+  const porMes = new Map<string, { data: Date; parte: number }>();
+  let acum = 0, anterior = 0;
+  if (num(o.totalVenda) > 0) {
+    for (const e of [...o.entradas].sort((x, y) => x.data.getTime() - y.data.getTime())) {
+      acum += num(e.valor);
+      const alvo = round2(num(o.valorComissao) * Math.min(1, Math.max(0, acum / num(o.totalVenda))));
+      const parte = round2(alvo - anterior);
+      anterior = alvo;
+      if (parte <= 0) continue;
+      const k = mes(e.data);
+      const ja = porMes.get(k);
+      porMes.set(k, { data: e.data, parte: round2((ja?.parte ?? 0) + parte) });
+    }
+  }
+  let pular = Math.max(0, round2(num(o.jaLiberado)));
+  const r: { data: Date; valor: number }[] = [];
+  for (const { data, parte } of porMes.values()) {
+    if (pular >= parte) { pular = round2(pular - parte); continue; }
+    r.push({ data, valor: round2(parte - pular) });
+    pular = 0;
+  }
+  // Ajuste ao movimento calculado (arredondamento ou fração vinda das faturas): o último mês absorve a diferença
+  const soma = round2(r.reduce((s, x) => s + x.valor, 0));
+  if (!r.length) return [{ data: o.reserva, valor: total }];
+  if (soma > total) {
+    let sobra = round2(soma - total);
+    for (let i = r.length - 1; i >= 0 && sobra > 0; i--) { const tira = Math.min(sobra, r[i].valor); r[i].valor = round2(r[i].valor - tira); sobra = round2(sobra - tira); }
+  } else if (soma < total) r[r.length - 1].valor = round2(r[r.length - 1].valor + (total - soma));
+  return r.filter((x) => x.valor > 0);
 }
 
 /** Quanto da venda (0 a 1) entrou ENTRE as datas [ini, fim): o relatório "por data de recebimento" */

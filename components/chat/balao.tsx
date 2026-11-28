@@ -7,12 +7,13 @@ import { horaBR } from "@/lib/fuso";
 import { Citacao } from "@/components/chat/citacao";
 import { EscolhaEquipamento } from "@/components/chat/escolha-equipamento";
 import { MOTIVO_EQUIPAMENTO, ROTULO_SEM_EQUIPAMENTO, type EquipamentoFotoTela } from "@/lib/chat/equipamento-foto";
-import { ARRASTE_RESPONDER_PX, estadoDaMensagem, podeResponder, ROTULO_ESTADO, TOQUE_LONGO_MS } from "@/lib/chat/regras";
+import { ARRASTE_RESPONDER_PX, estadoDaMensagem, podeResponder, ROTULO_ESTADO, TOQUE_LONGO_MS, type OsDoDia } from "@/lib/chat/regras";
 import type { ComentarioTela } from "@/lib/tecnico/comentarios";
 
 /** O espaço que o menu do balão precisa embaixo (três ações); menos que isso, abre para cima */
 const ALTURA_MENU_PX = 150;
 const ITEM_MENU = "flex w-full items-center gap-2 px-3 py-2 text-sm text-ink hover:bg-surface-alt touch-target";
+const ACAO = "text-xs font-semibold text-primary-700 touch-target";
 
 /** O "porquê" do estado, na dica do ✓ (quem leu e quando) */
 function dicaEstado(m: ComentarioTela): string {
@@ -26,12 +27,14 @@ function dicaEstado(m: ComentarioTela): string {
 /**
  * UM balão da conversa (escritório e app): à direita o que é meu, à esquerda o dos outros (com o nome e de onde
  * escreveu). Foto: a miniatura, que amplia no toque. Na minha mensagem, a hora e o estado: relógio (enviando), ✓
- * (enviada), ✓✓ (lida — quem e quando na dica) ou "Não enviada" com "Tentar de novo".
+ * (enviada), ✓✓ (lida — quem e quando na dica) ou "Não enviada" COM O MOTIVO à vista. Falha de rede: "Tentar de novo".
+ * Recusa de regra (a fila do app recusou de vez): "Enviar sem OS", "Trocar a OS" e "Descartar" — nada de tentar de novo
+ * sem fim o que o servidor não vai aceitar.
  *
  * Responder (como no WhatsApp): no computador, o ícone ao passar o mouse e o menu do botão direito; no celular, arrastar
  * o balão para a direita ou o toque longo (o mesmo menu). A citação no topo do balão leva até a original.
  */
-export function Balao({ m, mostrarAutor, onAmpliar, onTentarDeNovo, onResponder, onIrParaCitada, destacada, equipamentos, onCorrigirEquipamento, onRelatorio }: {
+export function Balao({ m, mostrarAutor, onAmpliar, onTentarDeNovo, onResponder, onIrParaCitada, destacada, equipamentos, onCorrigirEquipamento, onRelatorio, recusa }: {
   m: ComentarioTela;
   /** O nome em cima (1ª de uma sequência do mesmo autor) */
   mostrarAutor: boolean;
@@ -49,7 +52,10 @@ export function Balao({ m, mostrarAutor, onAmpliar, onTentarDeNovo, onResponder,
   onCorrigirEquipamento?: (m: ComentarioTela, equipamentoId: string | null) => Promise<string | null>;
   /** Escritório: pôr ou tirar a foto do relatório da atividade */
   onRelatorio?: (m: ComentarioTela, noRelatorio: boolean) => Promise<string | null>;
+  /** App: o que fazer com a mensagem recusada pela fila (reenviar noutra OS, sem OS, ou descartar a que nunca subiu) */
+  recusa?: { opcoesOs: OsDoDia[]; reenviar: (m: ComentarioTela, osId: string | null) => void; descartar: (m: ComentarioTela) => void };
 }) {
+  const [trocando, setTrocando] = useState(false);
   const estado = m.meu ? estadoDaMensagem(m) : null;
   const IconeEstado = estado === "lida" ? CheckCheck : estado === "enviada" ? Check : estado === "enviando" ? Clock : AlertCircle;
   const [menu, setMenuAberto] = useState(false);
@@ -179,7 +185,32 @@ export function Balao({ m, mostrarAutor, onAmpliar, onTentarDeNovo, onResponder,
             </span>
           )}
         </p>
-        {estado === "falhou" && onTentarDeNovo && (
+        {/* O porquê, à vista (no celular a dica não aparece) */}
+        {estado === "falhou" && m.falhou && <p className="text-xs text-atrasado text-right" data-motivo-recusa>{m.falhou}</p>}
+        {estado === "falhou" && m.recusa && recusa ? (
+          <div className="space-y-1.5" data-acoes-recusa>
+            <div className="flex flex-wrap justify-end gap-x-3 gap-y-1">
+              {(m.os || m.recusa.comOs) && (
+                <button type="button" onClick={() => recusa.reenviar(m, null)} data-enviar-sem-os className={ACAO}>Enviar sem OS</button>
+              )}
+              {recusa.opcoesOs.some((o) => o.osId !== m.os?.id) && (
+                <button type="button" onClick={() => setTrocando((v) => !v)} aria-expanded={trocando} data-trocar-os className={ACAO}>Trocar a OS</button>
+              )}
+              <button type="button" onClick={() => recusa.descartar(m)} data-descartar title="Apaga do aparelho: a mensagem nunca chegou ao servidor."
+                className={cn(ACAO, "text-ink-muted")}>Descartar</button>
+            </div>
+            {trocando && (
+              <div className="flex flex-wrap justify-end gap-1.5" role="group" aria-label="Enviar em outra OS" data-trocar-os-opcoes>
+                {recusa.opcoesOs.filter((o) => o.osId !== m.os?.id).map((o) => (
+                  <button key={o.osId} type="button" onClick={() => { setTrocando(false); recusa.reenviar(m, o.osId); }} data-trocar-para={o.osId}
+                    className="rounded-full border border-surface-border bg-white px-2.5 py-1 text-xs font-semibold text-ink-muted hover:border-primary-300 touch-target">
+                    {o.numero}{o.cliente ? ` · ${o.cliente}` : ""}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        ) : estado === "falhou" && onTentarDeNovo && (
           <button type="button" onClick={() => onTentarDeNovo(m)} data-tentar-de-novo
             className="inline-flex items-center gap-1 text-xs font-semibold text-primary-700 touch-target">
             <RotateCcw className="w-3.5 h-3.5" aria-hidden /> Tentar de novo

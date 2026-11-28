@@ -9,6 +9,7 @@ import { paramsDe } from "@/lib/listagem";
 import { statusVisualReceber } from "@/lib/financeiro-status";
 import { categoriaDaConta } from "@/lib/financeiro/categoria";
 import { formatarData } from "@/lib/utils";
+import { protegerFormula } from "@/lib/exportacao/formula";
 
 /** Teto do CSV: bem acima do dia a dia, sem deixar uma URL derrubar o servidor. */
 const MAX_LINHAS = 20000;
@@ -58,7 +59,8 @@ export async function GET(req: NextRequest) {
       reais(saldoDaConta(c)),
     ]);
   }
-  const csv = linhas.map((l) => l.map((x) => `"${String(x).replace(/"/g, '""')}"`).join(";")).join("\n");
+  // Texto que começa com = + - @ sai com apóstrofo (contra fórmula; números não) — lib/exportacao/formula
+  const csv = linhas.map((l) => l.map((x) => `"${String(protegerFormula(x)).replace(/"/g, '""')}"`).join(";")).join("\n");
   return new NextResponse("﻿" + csv, {
     status: 200,
     headers: {

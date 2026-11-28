@@ -372,7 +372,8 @@ export const tecnicoSchema = z.object({
   perfilAcessoId: z.string().optional().nullable(),
   /** Veículo "padrão" (opcional) — puxado na OS quando o colaborador executa sozinho */
   veiculoId: z.string().optional().nullable(),
-  tipoEquipe: z.enum(["CAMPO", "ADMINISTRATIVO"]).default("CAMPO"),
+  // Sem padrão: "não veio" é o cadastro rápido/cliente antigo, e a rota tira a equipe do `tipo` (lib/colaborador/funcao)
+  tipoEquipe: z.enum(["CAMPO", "ADMINISTRATIVO"]).optional(),
   tipo: z.nativeEnum(TipoTecnico).default(TipoTecnico.TECNICO_CAMPO),
   crea: z.string().optional(),
   dataAdmissao: z.string().optional().nullable(),
@@ -396,7 +397,10 @@ export const tecnicoSchema = z.object({
   statusColaborador: z.nativeEnum(StatusColaborador).default(StatusColaborador.ATIVO),
   // Competências e especialidades
   competenciaIds: z.array(z.string()).default([]),
-  especialidades: z.array(z.string()).default([]),
+  // Sem espaço sobrando, sem vazia e sem repetida (maiúscula/minúscula não conta); a OS e o relatório mostram a lista
+  especialidades: z.array(z.string().trim().max(60, "Cada especialidade pode ter até 60 caracteres"))
+    .max(20, "Informe no máximo 20 especialidades").default([])
+    .transform((l) => l.filter((e, i) => e && l.findIndex((x) => x.toLowerCase() === e.toLowerCase()) === i)),
   // Os DOCUMENTOS do colaborador NÃO entram no cadastro: cada arquivo tem a sua própria rota
   // (/api/tecnicos/[id]/documentos), que registra quem anexou e exclui com rastro. Salvar a ficha
   // não mexe nos papéis da pessoa.

@@ -103,6 +103,7 @@ describe("Abas do cliente", () => {
     await montar(CLIENTE, permissoesTotais(), { consulta: true });
     const link = [...caixa.querySelectorAll("a")].find((a) => (a.getAttribute("href") ?? "").includes("/contratos?clienteId="));
     expect(link).toBeTruthy();
-    expect(link!.getAttribute("href")).toBe("/contratos?clienteId=cl1");
+    // pj4 (H17, mudança intencional): o link já filtra os contratos ATIVOS (e só aparece com Contratos › Visualizar)
+    expect(link!.getAttribute("href")).toBe("/contratos?clienteId=cl1&status=ATIVO");
   });
 });

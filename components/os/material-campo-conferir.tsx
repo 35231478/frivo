@@ -3,6 +3,8 @@
 import { useState } from "react";
 import { Check, Trash2, Truck } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { confirmar } from "@/components/ui/avisos";
 import { Dica } from "@/components/ui/dica";
 import { CampoNumero } from "@/components/orcamento/itens-tabela";
 import { formatarMoeda } from "@/lib/utils";
@@ -41,6 +43,9 @@ function Linha({ osId, item, podeConferir, onConferido }: { osId: string; item: 
   const [valorUnitario, setValorUnitario] = useState(num(item.valorUnitario));
   const [enviando, setEnviando] = useState<"confirmar" | "remover" | null>(null);
   const [erro, setErro] = useState("");
+  // O preço fora da tabela do cliente: o servidor pede o motivo (a mesma trava dos itens da OS)
+  const [pedeMotivo, setPedeMotivo] = useState(false);
+  const [motivo, setMotivo] = useState("");
 
   async function conferir(acao: "confirmar" | "remover") {
     setErro("");
@@ -48,14 +53,21 @@ function Linha({ osId, item, podeConferir, onConferido }: { osId: string; item: 
       const v = lerConferencia({ quantidade: num(item.quantidade), valorUnitario: num(item.valorUnitario) }, { quantidade, valorUnitario });
       if (!v.ok) { setErro(v.erro); return; }
     }
+    if (acao === "remover" && !(await confirmar({
+      titulo: "Excluir da cobrança?", mensagem: `${item.descricao} sai da cobrança desta OS. O uso em campo e o estoque ficam como estão.`, perigo: true, confirmarTexto: "Excluir",
+    }))) return;
     setEnviando(acao);
     const res = await fetch(`/api/ordens/${osId}/orcamento/${item.id}/conferir-campo`, {
       method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(acao === "confirmar" ? { acao, quantidade, valorUnitario } : { acao }),
+      body: JSON.stringify(acao === "confirmar" ? { acao, quantidade, valorUnitario, ...(motivo.trim() ? { motivoPrecoTabela: motivo.trim() } : {}) } : { acao }),
     }).catch(() => null);
     const d = await res?.json().catch(() => null);
     setEnviando(null);
-    if (!res?.ok) { setErro(d?.erro ?? "Não foi possível concluir a conferência."); return; }
+    if (!res?.ok) {
+      if (d?.precoTabela && res?.status === 400) setPedeMotivo(true);
+      setErro(d?.erro ?? "Não foi possível concluir a conferência.");
+      return;
+    }
     onConferido(item.id, acao === "confirmar" ? d?.item ?? null : null);
   }
 
@@ -78,6 +90,11 @@ function Linha({ osId, item, podeConferir, onConferido }: { osId: string; item: 
         <span className="font-medium text-ink tabular-nums" data-campo-total>{formatarMoeda(Math.round(quantidade * valorUnitario * 100) / 100)}</span>
       </div>
       {!(num(item.valorUnitario) > 0) && <p className="text-xs text-atencao-texto" data-campo-sem-preco>Sem preço de venda no catálogo: informe o preço.</p>}
+      {podeConferir && pedeMotivo && (
+        <label className="block text-xs text-ink-muted">Motivo da alteração do preço de tabela (fica no histórico da OS)
+          <Input value={motivo} onChange={(ev) => setMotivo(ev.target.value)} maxLength={300} placeholder="Ex.: desconto negociado com o cliente" className="mt-0.5" data-campo-motivo-preco />
+        </label>
+      )}
       {erro && <p role="alert" className="text-xs text-atrasado-texto" data-erro-campo>{erro}</p>}
       {podeConferir && (
         <div className="flex flex-wrap justify-end gap-2">

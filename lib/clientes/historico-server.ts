@@ -3,18 +3,22 @@
  * ./historico). Tudo filtrado pela empresa E pelo cliente. Cada fonte traz no máximo `porFonte` registros (os mais
  * recentes); a linha do tempo final é cortada em `limite`.
  *
- * O financeiro (faturas, pagamentos, cobranças) só entra para quem vê o financeiro (`comFinanceiro`).
+ * O financeiro (faturas, pagamentos, cobranças) só entra para quem vê o financeiro (`comFinanceiro`). OS (com os
+ * aceites e os e-mails das OS), orçamentos, contratos e documentação da equipe só para quem vê cada módulo
+ * (`comOrdens`, `comOrcamentos`, `comContratos`, `comDocumentacao`; sem a opção, entram).
  * Com o "Ver só os próprios" da COM-1 (`escopo`), OS, orçamentos, aceites, e-mails das OS, pedidos do cliente e os
  * lembretes deles ficam só os da pessoa: nada que revele o trabalho (ou o volume) dos outros vendedores.
  */
 import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { comEscopo } from "@/lib/escopo/proprios";
-import { formatarMoeda } from "@/lib/utils";
+import { formatarMoeda, LABELS_STATUS_CONTRATO } from "@/lib/utils";
+import { ROTULO_SITUACAO_PORTAL } from "@/lib/pedido-cliente/lembretes";
 import { montarHistorico, ROTULO_NOTA, type EventoCliente } from "./historico";
 
 export interface OpcoesHistorico {
   comFinanceiro: boolean; porFonte?: number; limite?: number;
+  comOrdens?: boolean; comOrcamentos?: boolean; comContratos?: boolean; comDocumentacao?: boolean;
   /** "Ver só os próprios" (lib/escopo/proprios: filtroOrdens / filtroOrcamentos); vazio = sem limite */
   escopo?: { ordens?: Prisma.OrdemServicoWhereInput; orcamentos?: Prisma.OrcamentoWhereInput };
 }
@@ -29,6 +33,7 @@ export async function carregarHistoricoCliente(empresaId: string, clienteId: str
   const take = o.porFonte ?? 100;
   const doCliente = { empresaId, clienteId };
   const desc = { criadoEm: "desc" as const };
+  const comOs = o.comOrdens !== false, comOrc = o.comOrcamentos !== false, comCt = o.comContratos !== false, comDoc = o.comDocumentacao !== false;
   const eo = o.escopo?.ordens ?? {};
   const eorc = o.escopo?.orcamentos ?? {};
   const limitado = Object.keys(eo).length > 0 || Object.keys(eorc).length > 0;
@@ -45,23 +50,23 @@ export async function carregarHistoricoCliente(empresaId: string, clienteId: str
     : {};
 
   const [oss, aceites, orcs, eventosOrc, pedidos, lembretes, contratos, statusContrato, envios, notas, medicoes, recebimentos, cobrancas] = await Promise.all([
-    prisma.ordemServico.findMany({ where: comEscopo<Prisma.OrdemServicoWhereInput>(doCliente, eo), orderBy: desc, take, select: { id: true, numero: true, criadoEm: true, dataConclusao: true, origem: true, descricao: true, criadoPor: { select: { nome: true } } } }),
-    prisma.osAceite.findMany({ where: { empresaId, ordemServico: comEscopo<Prisma.OrdemServicoWhereInput>({ clienteId }, eo), confirmadoEm: { not: null } }, orderBy: { confirmadoEm: "desc" }, take, select: { id: true, confirmadoEm: true, avaliacao: true, ordemServico: { select: { id: true, numero: true } } } }),
-    prisma.orcamento.findMany({ where: comEscopo<Prisma.OrcamentoWhereInput>(doCliente, eorc), orderBy: desc, take, select: { id: true, codigo: true, nome: true, criadoEm: true, criadoPor: { select: { nome: true } } } }),
-    prisma.orcamentoEvento.findMany({
+    !comOs ? [] : prisma.ordemServico.findMany({ where: comEscopo<Prisma.OrdemServicoWhereInput>(doCliente, eo), orderBy: desc, take, select: { id: true, numero: true, criadoEm: true, dataConclusao: true, origem: true, descricao: true, criadoPor: { select: { nome: true } } } }),
+    !comOs ? [] : prisma.osAceite.findMany({ where: { empresaId, ordemServico: comEscopo<Prisma.OrdemServicoWhereInput>({ clienteId }, eo), confirmadoEm: { not: null } }, orderBy: { confirmadoEm: "desc" }, take, select: { id: true, confirmadoEm: true, avaliacao: true, ordemServico: { select: { id: true, numero: true } } } }),
+    !comOrc ? [] : prisma.orcamento.findMany({ where: comEscopo<Prisma.OrcamentoWhereInput>(doCliente, eorc), orderBy: desc, take, select: { id: true, codigo: true, nome: true, criadoEm: true, criadoPor: { select: { nome: true } } } }),
+    !comOrc ? [] : prisma.orcamentoEvento.findMany({
       where: { empresaId, orcamento: comEscopo<Prisma.OrcamentoWhereInput>({ clienteId }, eorc), tipo: { in: ["ENVIADO", "ENVIADO_EMAIL", "ENVIADO_WHATSAPP", "APROVADO", "RECUSADO", "VISUALIZADO"] } },
       orderBy: desc, take: take * 2, select: { id: true, tipo: true, detalhe: true, criadoEm: true, usuario: { select: { nome: true } }, orcamento: { select: { id: true, codigo: true } } },
     }),
     prisma.pedidoCliente.findMany({ where: comEscopo<Prisma.PedidoClienteWhereInput>(doCliente, pedidoNoEscopo), orderBy: desc, take, select: { id: true, numero: true, criadoEm: true, origem: true, situacao: true, conferidoEm: true, motivoRecusa: true } }),
     prisma.pedidoClienteLembrete.findMany({ where: comEscopo<Prisma.PedidoClienteLembreteWhereInput>(doCliente, lembreteNoEscopo), orderBy: { enviadoEm: "desc" }, take, select: { id: true, para: true, enviadoEm: true, etapa: true } }),
-    prisma.contrato.findMany({ where: doCliente, orderBy: desc, take, select: { id: true, numero: true, criadoEm: true } }),
-    prisma.contratoHistoricoStatus.findMany({ where: { empresaId, contrato: { clienteId } }, orderBy: { createdAt: "desc" }, take, select: { id: true, statusAnterior: true, statusNovo: true, createdAt: true, usuario: { select: { nome: true } }, contrato: { select: { id: true, numero: true } } } }),
-    prisma.documentacaoEnvioEvento.findMany({
+    !comCt ? [] : prisma.contrato.findMany({ where: doCliente, orderBy: desc, take, select: { id: true, numero: true, criadoEm: true } }),
+    !comCt ? [] : prisma.contratoHistoricoStatus.findMany({ where: { empresaId, contrato: { clienteId } }, orderBy: { createdAt: "desc" }, take, select: { id: true, statusAnterior: true, statusNovo: true, motivo: true, createdAt: true, usuario: { select: { nome: true } }, contrato: { select: { id: true, numero: true } } } }),
+    !comDoc ? [] : prisma.documentacaoEnvioEvento.findMany({
       where: { envio: { empresaId, clienteId }, OR: [{ tipo: "EMAIL_ENVIADO" }, { tipo: { in: ["ACESSO", "DOWNLOAD", "DOWNLOAD_ZIP"] }, usuarioId: null }] },
       orderBy: desc, take, select: { id: true, tipo: true, criadoEm: true, envioId: true },
     }),
     prisma.interacaoCliente.findMany({ where: doCliente, orderBy: desc, take, select: { id: true, tipo: true, descricao: true, criadoEm: true, usuario: { select: { nome: true } } } }),
-    o.comFinanceiro ? prisma.medicao.findMany({ where: doCliente, orderBy: desc, take, select: { id: true, numero: true, criadoEm: true, dataEnvio: true, dataPagamento: true, valorLiquido: true, status: true } }) : [],
+    o.comFinanceiro ? prisma.medicao.findMany({ where: doCliente, orderBy: desc, take, select: { id: true, numero: true, criadoEm: true, atualizadoEm: true, dataEnvio: true, dataPagamento: true, valorLiquido: true, status: true } }) : [],
     o.comFinanceiro ? prisma.contaReceberRecebimento.findMany({ where: { empresaId, contaReceber: { clienteId } }, orderBy: { data: "desc" }, take, select: { id: true, valor: true, data: true, estornadoEm: true, contaReceber: { select: { descricao: true } } } }) : [],
     o.comFinanceiro ? prisma.contaReceberEvento.findMany({ where: { empresaId, contaReceber: { clienteId }, tipo: "COBRANCA_ENVIADA" }, orderBy: desc, take, select: { id: true, criadoEm: true, detalhe: true, contaReceber: { select: { descricao: true } } } }) : [],
   ]);
@@ -93,12 +98,14 @@ export async function carregarHistoricoCliente(empresaId: string, clienteId: str
     ev.push(p.origem === "PORTAL"
       ? { id: `pedido-${p.id}`, tipo: "portal", titulo: `Cliente enviou o pedido ${p.numero} pelo portal`, quando: p.criadoEm }
       : { id: `pedido-${p.id}`, tipo: "pedido", titulo: `Pedido do cliente ${p.numero} registrado`, quando: p.criadoEm });
-    if (p.conferidoEm) ev.push({ id: `pedido-conf-${p.id}`, tipo: "pedido", titulo: p.situacao === "RECUSADO" ? `Pedido ${p.numero} recusado na conferência` : `Pedido ${p.numero} conferido`, detalhe: p.situacao === "RECUSADO" ? p.motivoRecusa : null, quando: p.conferidoEm });
+    const conferido = p.situacao === "RECUSADO" ? `Pedido ${p.numero} recusado na conferência`
+      : p.situacao === "RESOLVIDO" ? `Pedido ${p.numero}: ${ROTULO_SITUACAO_PORTAL.RESOLVIDO.toLowerCase()}` : `Pedido ${p.numero} conferido`;
+    if (p.conferidoEm) ev.push({ id: `pedido-conf-${p.id}`, tipo: "pedido", titulo: conferido, detalhe: p.situacao === "RECUSADO" ? p.motivoRecusa : null, quando: p.conferidoEm });
   }
   for (const l of lembretes) ev.push({ id: `lembrete-${l.id}`, tipo: "comunicacao", titulo: "Lembrete do pedido de compra enviado", detalhe: l.para, quando: l.enviadoEm });
   for (const c of contratos) ev.push({ id: `contrato-${c.id}`, tipo: "contrato", titulo: `Contrato ${c.numero} cadastrado`, quando: c.criadoEm, href: `/contratos/${c.id}` });
   // COM-1.2: a troca de vendedor do contrato fica no mesmo histórico (status igual antes e depois) — não é mudança de status
-  for (const h of statusContrato.filter((x) => x.statusAnterior !== x.statusNovo)) ev.push({ id: `contrato-st-${h.id}`, tipo: "contrato", titulo: `Contrato ${h.contrato.numero}: ${h.statusNovo.toLowerCase().replace(/_/g, " ")}`, quando: h.createdAt, href: `/contratos/${h.contrato.id}`, autor: h.usuario?.nome });
+  for (const h of statusContrato.filter((x) => x.statusAnterior !== x.statusNovo)) ev.push({ id: `contrato-st-${h.id}`, tipo: "contrato", titulo: `Contrato ${h.contrato.numero}: ${(LABELS_STATUS_CONTRATO[h.statusNovo] ?? h.statusNovo).toLowerCase()}`, detalhe: h.motivo?.trim() || null, quando: h.createdAt, href: `/contratos/${h.contrato.id}`, autor: h.usuario?.nome });
   for (const d of envios) {
     ev.push(d.tipo === "EMAIL_ENVIADO"
       ? { id: `doc-${d.id}`, tipo: "comunicacao", titulo: "Documentação da equipe enviada por e-mail", quando: d.criadoEm }
@@ -108,7 +115,10 @@ export async function carregarHistoricoCliente(empresaId: string, clienteId: str
   for (const m of medicoes) {
     const href = `/financeiro/medicoes/${m.id}`;
     const valor = formatarMoeda(Number(m.valorLiquido));
-    ev.push({ id: `fatura-${m.id}`, tipo: "financeiro", titulo: `Fatura ${m.numero} criada`, detalhe: valor, quando: m.criadoEm, href });
+    // Fatura cancelada não aparece como "criada": fica o cancelamento (a última mudança dela)
+    ev.push(m.status === "CANCELADA"
+      ? { id: `fatura-${m.id}`, tipo: "financeiro", titulo: `Fatura ${m.numero} cancelada`, detalhe: valor, quando: m.atualizadoEm, href }
+      : { id: `fatura-${m.id}`, tipo: "financeiro", titulo: `Fatura ${m.numero} criada`, detalhe: valor, quando: m.criadoEm, href });
     if (m.dataEnvio) ev.push({ id: `fatura-env-${m.id}`, tipo: "comunicacao", titulo: `Fatura ${m.numero} enviada ao cliente`, quando: m.dataEnvio, href });
     if (m.dataPagamento) ev.push({ id: `fatura-pag-${m.id}`, tipo: "financeiro", titulo: `Fatura ${m.numero} paga`, detalhe: valor, quando: m.dataPagamento, href });
   }

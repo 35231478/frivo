@@ -10,6 +10,7 @@ import { posicaoFlutuante, type PosicaoFlutuante } from "@/lib/ui/flutuante";
 import { cliqueAbreLinha, destinoDoClique, teclaAbreLinha } from "@/lib/listagem/abrir-linha";
 import { PLANILHA } from "@/lib/planilha";
 import { useLinhasSelecionadas } from "@/components/listagem/selecao-linhas";
+import { usePermissoes } from "@/components/providers/permissoes-provider";
 import {
   ajustarPreferencia, chaveTabela, LARGURA_MIN, lerPreferenciaTabela, moverColuna, ocultasEfetivas, ordenarColunas, PREFERENCIA_VAZIA,
   preferenciaVazia, type PreferenciaTabela,
@@ -118,7 +119,11 @@ export interface TabelaProProps {
 }
 
 const ALINHAR = { esquerda: "text-left", direita: "text-right", centro: "text-center" } as const;
-const chaveLocal = (chave: string) => `frivo:${chave}`;
+/**
+ * A reserva no navegador é de cada usuário (navegador compartilhado: um não vê nem sobe as colunas do outro).
+ * Sem o usuário (a tabela montada fora do painel), a chave de antes.
+ */
+export const chaveLocalTabela = (chave: string, usuarioId?: string | null) => (usuarioId ? `frivo:${chave}:${usuarioId}` : `frivo:${chave}`);
 
 /**
  * A preferência da tabela: o localStorage responde na hora (sem piscar depois do carregamento) e a
@@ -128,23 +133,25 @@ const chaveLocal = (chave: string) => `frivo:${chave}`;
  */
 export function usePreferenciaTabela(tela: string, colunas: ColunaPro[]) {
   const chave = chaveTabela(tela);
+  const { usuarioId } = usePermissoes();
+  const local = chaveLocalTabela(chave, usuarioId);
   const [pref, setPref] = useState<PreferenciaTabela>(PREFERENCIA_VAZIA);
   const colunasRef = useRef(colunas);
   colunasRef.current = colunas;
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const gravarLocal = useCallback((p: PreferenciaTabela) => {
-    try { localStorage.setItem(chaveLocal(chave), JSON.stringify(p)); } catch { /* navegador sem storage: segue sem reserva */ }
-  }, [chave]);
+    try { localStorage.setItem(local, JSON.stringify(p)); } catch { /* navegador sem storage: segue sem reserva */ }
+  }, [local]);
   const enviar = useCallback((p: PreferenciaTabela) => {
     fetch(`/api/preferencias/${chave}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(p) }).catch(() => {});
   }, [chave]);
 
   useEffect(() => {
-    let local: PreferenciaTabela | null = null;
+    let doNavegador: PreferenciaTabela | null = null;
     try {
-      const raw = localStorage.getItem(chaveLocal(chave));
-      if (raw) { local = ajustarPreferencia(lerPreferenciaTabela(JSON.parse(raw)), colunasRef.current); setPref(local); }
+      const raw = localStorage.getItem(local);
+      if (raw) { doNavegador = ajustarPreferencia(lerPreferenciaTabela(JSON.parse(raw)), colunasRef.current); setPref(doNavegador); }
     } catch { /* JSON torto ou sem storage: ignora */ }
     let vivo = true;
     fetch(`/api/preferencias/${chave}`, { cache: "no-store" })
@@ -154,13 +161,13 @@ export function usePreferenciaTabela(tela: string, colunas: ColunaPro[]) {
         if (j.valor) {
           const p = ajustarPreferencia(lerPreferenciaTabela(j.valor), colunasRef.current);
           setPref(p); gravarLocal(p);
-        } else if (local && !preferenciaVaziaLocal(local)) {
-          enviar(local);
+        } else if (doNavegador && !preferenciaVaziaLocal(doNavegador)) {
+          enviar(doNavegador);
         }
       })
       .catch(() => {});
     return () => { vivo = false; };
-  }, [chave, gravarLocal, enviar]);
+  }, [chave, local, gravarLocal, enviar]);
 
   const gravar = useCallback((p: PreferenciaTabela) => {
     setPref(p); gravarLocal(p);

@@ -30,6 +30,7 @@ export const AVISOS_DO_NUMERO = {
   pmocsVencendo: null, pmocsExpirados: null,
   aceitesRessalva: "aceiteRessalvaOsId", aceitesConfirmados: "aceiteConfirmadoOsId", avaliacoesBaixas: "avaliacaoBaixaOsId",
   admissoesAssinadas: "admissaoAssinadaId", estoqueNegativoCampo: null, atividadesEsquecidas: "atividadeEsquecidaOsId",
+  impedimentosAbertos: "impedimentoOsId", visitasNaoConcluidas: "naoConcluidaOsId",
   comentariosCampo: "comentarioCampoOsId", despesasCampo: null, osSemTecnico: "osSemTecnicoId", orcamentosVencendo: "orcamentoVencendoId",
   pedidosAtrasados: "pedidoAtrasadoOsId", pedidosConferir: "pedidoConferirId",
 } as const;

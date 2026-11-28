@@ -11,7 +11,7 @@ import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { execFileSync } from "node:child_process";
 import path from "node:path";
 import { NextRequest } from "next/server";
-import { montarPermissoes, permissoesTotais, type Permissoes } from "@/lib/permissoes";
+import { montarPermissoes, permissoesTotais, type Acao, type Permissoes } from "@/lib/permissoes";
 
 const URL_PG = process.env.PG_TESTE_URL;
 const SCHEMA = `teste_levah_ficha_${process.pid}`;
@@ -165,16 +165,21 @@ describe.skipIf(!URL_PG)("Leva H — ficha do cliente (PostgreSQL real)", () => 
   });
 
   it("API: quem vê clientes vê o histórico; o financeiro só com contas a receber ou faturas", async () => {
+    // pj4 (H02, mudança intencional): só "clientes" já não traz OS, orçamentos, contratos nem documentação da equipe
+    // (eram 17): ficam os pedidos do cliente, o lembrete e a nota
     logar(montarPermissoes({ clientes: ["visualizar"] }), "OPERADOR");
     let r = await historicoApi("c1");
     expect(r.status).toBe(200);
     expect(r.json.eventos.some((e: any) => e.tipo === "financeiro")).toBe(false);
-    expect(r.json.eventos.length).toBe(17);
+    expect(r.json.eventos.length).toBe(4);
 
-    logar(montarPermissoes({ clientes: ["visualizar"], financeiro: ["contasReceber"] }), "OPERADOR");
+    const modulos: Record<string, Acao[]> = { clientes: ["visualizar"], ordens: ["visualizar"], orcamentos: ["visualizar"], contratos: ["visualizar"], documentos: ["enviar"] };
+    logar(montarPermissoes({ ...modulos }), "OPERADOR");
+    expect((await historicoApi("c1")).json.eventos.length).toBe(17);
+    logar(montarPermissoes({ ...modulos, financeiro: ["contasReceber"] }), "OPERADOR");
     r = await historicoApi("c1");
     expect(r.json.eventos.length).toBe(23);
-    logar(montarPermissoes({ clientes: ["visualizar"], financeiro: ["medicoes"] }), "OPERADOR");
+    logar(montarPermissoes({ ...modulos, financeiro: ["medicoes"] }), "OPERADOR");
     expect((await historicoApi("c1")).json.eventos.length).toBe(23);
     // datas chegam como texto ISO, ordenadas
     expect(typeof r.json.eventos[0].quando).toBe("string");
@@ -191,7 +196,7 @@ describe.skipIf(!URL_PG)("Leva H — ficha do cliente (PostgreSQL real)", () => 
   it("cliente NOVO com endereço principal: ganha o local \"Principal\" com esse endereço", async () => {
     logar();
     const r = await criarCliente({
-      tipoPessoa: "JURIDICA", nome: "Clínica Nova", cpfCnpj: "44.444.444/0001-44", telefone: "6233334444",
+      tipoPessoa: "JURIDICA", nome: "Clínica Nova", cpfCnpj: "44.444.444/0001-91", telefone: "6233334444",
       cep: "74000-000", endereco: "Avenida Central", numero: "1000", complemento: "Sala 2", bairro: "Setor Central", cidade: "Goiânia", estado: "go",
     });
     expect(r.status).toBe(201);
@@ -203,7 +208,7 @@ describe.skipIf(!URL_PG)("Leva H — ficha do cliente (PostgreSQL real)", () => 
 
   it("cliente NOVO com endereço principal e outros locais: Principal + os outros como secundários", async () => {
     const r = await criarCliente({
-      tipoPessoa: "JURIDICA", nome: "Clínica Duas", cpfCnpj: "55.555.555/0001-55", endereco: "Avenida Central", numero: "1000", cidade: "Goiânia",
+      tipoPessoa: "JURIDICA", nome: "Clínica Duas", cpfCnpj: "55.555.555/0001-91", endereco: "Avenida Central", numero: "1000", cidade: "Goiânia",
       unidades: [{ nome: "Anexo", principal: true, logradouro: "Rua dos Ipês", numero: "80", cidade: "Goiânia" }],
     });
     expect(r.status).toBe(201);
@@ -213,11 +218,11 @@ describe.skipIf(!URL_PG)("Leva H — ficha do cliente (PostgreSQL real)", () => 
 
   it("um local informado igual ao endereço principal não duplica; sem endereço nem local, nenhum local", async () => {
     let r = await criarCliente({
-      tipoPessoa: "JURIDICA", nome: "Clínica Três", cpfCnpj: "66.666.666/0001-66", endereco: "Avenida Central", numero: "1000", cidade: "Goiânia",
+      tipoPessoa: "JURIDICA", nome: "Clínica Três", cpfCnpj: "66.666.666/0001-91", endereco: "Avenida Central", numero: "1000", cidade: "Goiânia",
       unidades: [{ nome: "Matriz", principal: true, logradouro: "avenida central", numero: "1000", cidade: "Goiânia" }],
     });
     expect((await prisma.unidade.findMany({ where: { clienteId: r.json.id } })).map((u: any) => [u.nome, u.principal])).toEqual([["Matriz", true]]);
-    r = await criarCliente({ tipoPessoa: "JURIDICA", nome: "Clínica Quatro", cpfCnpj: "77.777.777/0001-77" });
+    r = await criarCliente({ tipoPessoa: "JURIDICA", nome: "Clínica Quatro", cpfCnpj: "77.777.777/0001-91" });
     expect(r.status).toBe(201);
     expect(await prisma.unidade.count({ where: { clienteId: r.json.id } })).toBe(0);
   });
@@ -248,7 +253,8 @@ describe.skipIf(!URL_PG)("Leva H — ficha do cliente (PostgreSQL real)", () => 
     await prisma.pedidoCliente.create({ data: { id: "pc3", empresaId: "e1", clienteId: "c1", numero: "PC-3", data: D("2026-11-21T00:00:00Z"), criadoEm: D("2026-11-21T15:00:00Z"), ordens: { connect: [{ id: "os3" }] } } });
     await prisma.pedidoClienteLembrete.create({ data: { empresaId: "e1", clienteId: "c1", ordemServicoId: "os3", etapa: 1, chave: "lembrete-os3", envio: "EMAIL", para: "compras@c1.com", enviadoEm: D("2026-11-21T16:00:00Z") } });
 
-    logar(montarPermissoes({ clientes: ["visualizar"], ordens: ["visualizar", "verSoProprios"], orcamentos: ["visualizar", "verSoProprios"] }), "OPERADOR", "e1", "u3");
+    // pj4 (H02, mudança intencional): os contratos só entram para quem vê contratos (o perfil ganha contratos.visualizar)
+    logar(montarPermissoes({ clientes: ["visualizar"], ordens: ["visualizar", "verSoProprios"], orcamentos: ["visualizar", "verSoProprios"], contratos: ["visualizar"] }), "OPERADOR", "e1", "u3");
     const r = await historicoApi("c1");
     expect(r.status).toBe(200);
     const titulos: string[] = r.json.eventos.map((e: any) => e.titulo);

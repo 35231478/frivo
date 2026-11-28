@@ -777,7 +777,12 @@ export async function enviarCodigoEmail(
     console.error("[admissão] falha ao enviar o código", e);
     envio = { ok: false, erro: "erro inesperado" };
   }
-  if (!envio.ok) return { enviado: false, para, expiraEm: "", erro: envio.erro ?? "Não foi possível enviar o código." };
+  if (!envio.ok) {
+    // O código não saiu (modelo inativo, falha do provedor): marca a tentativa — sem hash e com a data — para a
+    // conclusão não cobrar um código que nunca chegou (o candidato ficaria preso). Um envio que dá certo apaga a marca.
+    await prisma.admissao.update({ where: { id: a.id }, data: { emailCodigoHash: null, emailCodigoExpiraEm: agora, emailCodigoTentativas: 0 } });
+    return { enviado: false, para, expiraEm: "", erro: envio.erro ?? "Não foi possível enviar o código." };
+  }
   await prisma.admissao.update({
     where: { id: a.id },
     data: { emailCodigoHash: hashCodigo(codigo), emailCodigoExpiraEm: expira, emailCodigoTentativas: 0 },
@@ -889,9 +894,10 @@ export async function concluirPreenchimento(token: string, agora: Date = new Dat
   if (digitos(form.cpf) !== digitos(a.colaborador.cpf)) {
     throw new ErroAdmissao("O CPF não confere com o do convite. Confira o número.", 409);
   }
-  // O e-mail agora é obrigatório (Leva J); a confirmação por código só é exigida quando a empresa envia e-mail —
-  // sem o envio configurado o código nunca chegaria e a admissão ficaria presa
-  if (form.email && !emailConfere(form.email, a.emailVerificado) && (await emailConfigAtiva(a.empresaId))) throw new ErroAdmissao(MSG_EMAIL_NAO_VERIFICADO, 409);
+  // O e-mail agora é obrigatório (Leva J); a confirmação por código só é exigida quando a empresa envia e-mail e o
+  // último pedido de código não falhou — sem o envio (ou com ele falhando) o código nunca chegaria e a admissão ficaria presa
+  const envioFalhou = !a.emailCodigoHash && !!a.emailCodigoExpiraEm;
+  if (form.email && !emailConfere(form.email, a.emailVerificado) && !envioFalhou && (await emailConfigAtiva(a.empresaId))) throw new ErroAdmissao(MSG_EMAIL_NAO_VERIFICADO, 409);
 
   const data = new Date(form.dataNascimento);
   const nascimento = Number.isNaN(data.getTime()) ? null : data;

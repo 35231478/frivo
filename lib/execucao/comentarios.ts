@@ -25,8 +25,9 @@ import {
   DIAS_SINO_COMENTARIOS, FOTO_TAMANHO_MAX, MINIATURA_TAMANHO_MAX, MSG_COMENTARIO_DUPLICADO, osComNovidade, ordenarComentarios,
   type ComentarioTela, type DadosComentario, type OrigemComentario,
 } from "@/lib/tecnico/comentarios";
-import { MSG_CITADA_NAO_ENCONTRADA, MSG_OS_CANCELADA, ROTULO_CITACAO_INDISPONIVEL, somenteLeitura, trechoDaCitacao } from "@/lib/chat/regras";
+import { lidasPelaResposta, MSG_CITADA_NAO_ENCONTRADA, MSG_OS_CANCELADA, ROTULO_CITACAO_INDISPONIVEL, somenteLeitura, trechoDaCitacao } from "@/lib/chat/regras";
 import type { RefCitacao } from "@/lib/tecnico/comentarios";
+import type { Prisma } from "@prisma/client";
 
 type Resultado<T> = { ok: true; status: number; dados: T } | { ok: false; status: number; erro: string };
 
@@ -405,6 +406,23 @@ export async function marcarConversaLida(empresaId: string, osId: string, usuari
   });
 }
 
+/**
+ * Responder é ler, para trás: na conversa (`onde`), as mensagens sem ✓✓ que o outro lado respondeu depois ficam lidas
+ * por quem respondeu, na hora da resposta (lidasPelaResposta). Roda ao abrir a conversa; sem nada pendente, uma consulta.
+ */
+export async function marcarRespondidas(empresaId: string, onde: Prisma.OsComentarioWhereInput) {
+  const where: Prisma.OsComentarioWhereInput = { AND: [{ empresaId }, onde] };
+  const primeira = await prisma.osComentario.findFirst({ where: { AND: [where, { lidaEm: null }] }, orderBy: { criadoEm: "asc" }, select: { criadoEm: true } });
+  if (!primeira) return;
+  const msgs = await prisma.osComentario.findMany({
+    where: { AND: [where, { criadoEm: { gte: primeira.criadoEm } }] }, orderBy: { criadoEm: "asc" }, take: 2000,
+    select: { id: true, origem: true, usuarioId: true, criadoEm: true, lidaEm: true },
+  });
+  for (const g of lidasPelaResposta(msgs)) {
+    await prisma.osComentario.updateMany({ where: { id: { in: g.ids }, lidaEm: null }, data: { lidaEm: g.lidaEm, lidaPorId: g.lidaPorId } });
+  }
+}
+
 /** Escritório abre a conversa: lê as mensagens e marca como lidas até agora (o sino e o contador apagam para esta pessoa). */
 export async function comentariosParaEscritorio(empresaId: string, osId: string, usuarioId: string, agora: Date = new Date(),
   op: { ate?: string | null; visivel?: Prisma.OsComentarioWhereInput } = {}): Promise<ComentarioTela[] | null> {
@@ -413,6 +431,7 @@ export async function comentariosParaEscritorio(empresaId: string, osId: string,
   const leitura = await prisma.osComentarioLeitura.findUnique({ where: { usuarioId_ordemServicoId: { usuarioId, ordemServicoId: osId } }, select: { lidoEm: true } });
   // "novo": de outra pessoa, depois da última vez que esta pessoa leu (nunca leu: todos os dos outros)
   const desde = leitura?.lidoEm?.toISOString() ?? null;
+  await marcarRespondidas(empresaId, { ordemServicoId: osId });
   await marcarConversaLida(empresaId, osId, usuarioId, agora);
   // TODAS as mensagens da OS, de todas as atividades (a do app vem com a atividade de onde foi escrita), já com o ✓✓
   const todos = await comentariosDaOs(empresaId, osId, usuarioId, op);

@@ -31,6 +31,8 @@ export const ENTIDADES_CADASTRO = [
   "perfis-acesso", "modelos-encargos", "usuarios",
   // Leva 3: cadastros operacionais que ficaram para trás
   "tipos-equipamento", "tabelas-preco", "termos-referencia", "modelos-prazo",
+  // D1: motivos de pausa da atividade no app do técnico
+  "motivos-pausa",
   // Leva 5.2: fornecedor de verdade (ligado na conta a pagar)
   "fornecedores",
   // E2.1: centro de custo (toda conta a pagar; aprendido por fornecedor na nota de compra)
@@ -50,7 +52,7 @@ export const ENTIDADES_CADASTRO = [
 export type EntidadeCadastro = (typeof ENTIDADES_CADASTRO)[number];
 export type ModeloCadastro = "produto" | "servico" | "cargo" | "categoriaFinanceira" | "perfilAcesso" | "modeloEncargos" | "usuario"
   | "tipoEquipamentoCustom" | "tabelaPreco" | "termoReferenciaTemplate" | "prazoTemplate" | "fornecedor" | "centroCusto" | "contaBancaria" | "categoriaProduto" | "kitMaterial"
-  | "tipoOs" | "tipoProblema" | "documentoModelo";
+  | "tipoOs" | "tipoProblema" | "documentoModelo" | "motivoPausa";
 export type AcaoCadastro = "listar" | "criar" | "editar" | "inativar" | "reativar";
 
 /** Basta UMA das permissões. `null` = qualquer usuário logado (catálogo lido nos seletores de outras telas). */
@@ -757,6 +759,32 @@ export const CADASTROS: Record<EntidadeCadastro, DefCadastro> = {
       validadeDias: z.preprocess((v) => (vazio(v) ? null : Number(v)), z.number().int().min(1).max(3650).nullable()),
       exigeAssinatura: z.boolean(),
     }, { categoria: null, temItens: false, validadeDias: null, exigeAssinatura: true }),
+  },
+
+  "motivos-pausa": {
+    entidade: "motivos-pausa", modelo: "motivoPausa", singular: "motivo de pausa", plural: "motivos de pausa",
+    // O técnico escolhe ao pausar a atividade no app. Impedimento avisa o escritório e permite encerrar a visita como
+    // "Não concluída"; intervalo (almoço) só para o relógio. Ler: qualquer usuário logado; gravar: Configurações › gerenciar
+    modulo: "configuracoes", permissoes: PERMISSOES_CONFIG, chave: "id", rota: "/configuracoes/motivos-pausa",
+    busca: ["nome"], ordem: [{ ordem: "asc" }, { nome: "asc" }],
+    campos: [
+      { key: "nome", label: "Motivo", obrigatorio: true, placeholder: "Ex: Falta de peça, Cliente ausente" },
+      { key: "tipo", label: "Tipo", tipo: "select", obrigatorio: true, opcoes: [{ value: "IMPEDIMENTO", label: "Impedimento (avisa o escritório)" }, { value: "INTERVALO", label: "Intervalo (almoço, pausa)" }],
+        ajuda: "Impedimento avisa o escritório (sino e push) e permite encerrar a visita como “Não concluída — precisa voltar”. Intervalo só para o relógio." },
+      { key: "pedeTexto", label: "O técnico escreve o motivo", tipo: "booleano", ajuda: "Para o “Outro”: o técnico precisa escrever o que aconteceu." },
+      { key: "ordem", label: "Ordem na lista", tipo: "inteiro", placeholder: "1" },
+    ],
+    colunas: [
+      { key: "nome", label: "Motivo", ordenar: "nome" },
+      { key: "tipo", label: "Tipo", rotulos: { IMPEDIMENTO: "Impedimento", INTERVALO: "Intervalo" } },
+      { key: "ordem", label: "Ordem", ordenar: "ordem" },
+    ],
+    ...schemas({
+      nome: nome.max(80),
+      tipo: z.enum(["IMPEDIMENTO", "INTERVALO"]),
+      pedeTexto: booleano,
+      ordem: z.preprocess((v) => (vazio(v) ? 0 : Number(v)), z.number().int().min(0).max(999)),
+    }, { pedeTexto: false, ordem: 0 }),
   },
 
   "tipos-problema": {

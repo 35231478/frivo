@@ -314,13 +314,15 @@ describe("API /api/configuracoes/impressao-os", () => {
   const nova = comConfig({ fotos: { ativo: true, cliente: false }, tempos: { ativo: false, cliente: false } });
 
   it("GET devolve o padrão; PUT salva na empresa da sessão; outra empresa não é afetada", async () => {
-    expect((await chamar("GET")).json).toEqual(CONFIG_RELATORIO_PADRAO);
+    // pj4 (J20): o GET devolve a mesma forma do PUT — as seções + "Mostrar especialidades do técnico" (padrão ligado)
+    const lido = (c: object) => ({ ...c, mostrarEspecialidadesTecnico: true });
+    expect((await chamar("GET")).json).toEqual(lido(CONFIG_RELATORIO_PADRAO));
     const r = await chamar("PUT", nova);
     expect([r.status, r.json]).toEqual([200, nova]);
     expect(T("configuracao")).toEqual([expect.objectContaining({ empresaId: "e1", relatorioOsConfig: nova })]);
-    expect((await chamar("GET")).json).toEqual(nova);
+    expect((await chamar("GET")).json).toEqual(lido(nova));
     logar(permissoesTotais(), "e2");
-    expect((await chamar("GET")).json).toEqual(CONFIG_RELATORIO_PADRAO);
+    expect((await chamar("GET")).json).toEqual(lido(CONFIG_RELATORIO_PADRAO));
     // regravar atualiza a mesma linha
     logar();
     await chamar("PUT", CONFIG_RELATORIO_PADRAO);

@@ -7,6 +7,7 @@ import { cn } from "@/lib/utils";
 import { cepCompleto, consultarCep, enderecoDoCep, formatarCep } from "@/lib/cep";
 import { Modal } from "@/components/ui/modal";
 import { Dica } from "@/components/ui/dica";
+import { DICA_CEP } from "@/components/ui/campo-cep";
 import { toast } from "@/components/ui/avisos";
 import { alcanceDaEdicao, camposAlterados, rotuloDaEdicao, type EscopoEdicao } from "@/lib/edicao-contexto";
 import { aplicarSugestao, notaDaSugestao } from "@/lib/cadastros/autofill-cnpj";
@@ -520,6 +521,9 @@ function MiniCadastro({
   const [erro, setErro] = useState("");
   const [faltando, setFaltando] = useState<Set<string>>(new Set());
   const [buscandoCep, setBuscandoCep] = useState(false);
+  // O CEP não achou ou a consulta não respondeu: a mesma frase do campo de CEP (components/ui/campo-cep)
+  const [dicaCep, setDicaCep] = useState<"naoEncontrado" | "indisponivel" | null>(null);
+  const cepDigitado = useRef("");
   const [consultando, setConsultando] = useState<string | null>(null);
   const valoresRef = useRef(valores);
   valoresRef.current = valores;
@@ -528,18 +532,23 @@ function MiniCadastro({
 
   // Reinicia a cada abertura (com o texto da busca, se houver)
   useEffect(() => {
-    if (aberto) { setValores(valoresIniciais); setErro(""); setFaltando(new Set()); setNotaConsulta(null); setConsultando(null); }
+    if (aberto) { setValores(valoresIniciais); setErro(""); setFaltando(new Set()); setNotaConsulta(null); setConsultando(null); setDicaCep(null); }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [aberto]);
 
   const set = (k: string, v: string) => setValores((s) => ({ ...s, [k]: v }));
 
   async function preencherPeloCep(cepBruto: string) {
-    if (!cepCompleto(cepBruto)) return;
+    const digitos = cepBruto.replace(/\D/g, "");
+    cepDigitado.current = digitos;
+    setDicaCep(null);
+    if (!cepCompleto(cepBruto)) { setBuscandoCep(false); return; }
     setBuscandoCep(true);
     try {
       const r = await consultarCep(cepBruto);
-      if (!r.ok) return; // sem rede ou CEP que não existe: a pessoa digita
+      if (cepDigitado.current !== digitos) return; // a pessoa já trocou o CEP: a resposta antiga não vale
+      // sem rede ou CEP que não existe: diz e a pessoa digita
+      if (!r.ok) { setDicaCep(r.motivo === "indisponivel" ? "indisponivel" : "naoEncontrado"); return; }
       // O mesmo jeito de toda tela (lib/cep › enderecoDoCep), só nos campos que este cadastro tem
       const nomes = new Set(campos.map((c) => c.nome));
       setValores((s) => {
@@ -548,7 +557,7 @@ function MiniCadastro({
         for (const [k, v] of Object.entries(vindo)) if (nomes.has(k) && v) novo[k] = v;
         return novo;
       });
-    } finally { setBuscandoCep(false); }
+    } finally { if (cepDigitado.current === digitos) setBuscandoCep(false); }
   }
 
   /** A consulta do campo sugere os outros: só entra no que está vazio, e a tela diz o que entrou */
@@ -664,6 +673,7 @@ function MiniCadastro({
                   </div>
                 );
               })()}
+              {c.tipo === "cep" && dicaCep && <p role="status" className="text-xs mt-1 text-ink-muted" data-dica-cep={dicaCep}>{DICA_CEP[dicaCep]}</p>}
               {notaConsulta?.campo === c.nome && (
                 <p role="status" data-nota-consulta={notaConsulta.erro ? "erro" : "ok"} className={cn("text-xs mt-1", notaConsulta.erro ? "text-atrasado" : "text-ink-muted")}>{notaConsulta.texto}</p>
               )}

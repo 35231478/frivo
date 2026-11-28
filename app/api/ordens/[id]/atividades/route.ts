@@ -3,7 +3,7 @@ import { exigirPermissao } from "@/lib/permissoes-server";
 import { prisma } from "@/lib/prisma";
 import { respostaRefEmpresa, validarRefEmpresa } from "@/lib/ref-empresa";
 import { z } from "zod";
-import { ErroTecnicos, INCLUDE_TECNICOS_ATIVIDADE, MSG_SEM_EXECUTOR, gravarTecnicos, lerDefinicao, lerVeiculo, resolverTecnicos, resolverVeiculo } from "@/lib/atividade-tecnicos";
+import { ErroTecnicos, INCLUDE_TECNICOS_ATIVIDADE, MSG_SEM_EXECUTOR, especialidadesConformeEmpresa, gravarTecnicos, lerDefinicao, lerVeiculo, resolverTecnicos, resolverVeiculo } from "@/lib/atividade-tecnicos";
 import { sincronizarStatusOs } from "@/lib/os/sincronizar-status";
 import { escopoBarra } from "@/lib/escopo/proprios-server";
 
@@ -83,5 +83,5 @@ export async function POST(req: NextRequest, { params }: Params) {
   });
 
   await sincronizarStatusOs(id, empresaId, session.user!.id);
-  return NextResponse.json(atividade, { status: 201 });
+  return NextResponse.json(await especialidadesConformeEmpresa(empresaId, atividade), { status: 201 });
 }

@@ -22,6 +22,8 @@ export interface CartaoTela {
   status: string; prioridade: string; dataAgendada: string | null; dia: string | null; hora: string | null; duracaoMin: number | null;
   cliente: string; telefone: string | null; unidade: string | null; endereco: string; rota: string | null; descricao: string;
   equipamentos: number; atendidos: number; adicionais: number;
+  /** D1: a pausa aberta (null = em execução); ausente em listas antigas */
+  pausa?: { clientId: string; motivo: string; inicio: string; impedimento: boolean } | null;
   /** A OS veio de um chamado do cliente: a descrição é o que ele pediu. Ausente em listas antigas */
   chamado?: boolean;
   /** O cliente exige o pedido dele antes da execução e ele não veio (lib/pedido-cliente). Ausente em listas antigas */
@@ -121,10 +123,19 @@ export interface ExecucaoTela {
   materiais?: MaterialTela[];
   /** Comentários da OS (conversa interna com o escritório); ausente em retratos antigos */
   comentarios?: ComentarioTela[];
+  /** D1: a pausa aberta (null = em execução); ausente em retratos antigos */
+  pausa?: PausaTela | null;
+  /** D1: a visita foi encerrada como "Não concluída — precisa voltar" neste aparelho (ainda na fila ou já enviada) */
+  naoConcluida?: { motivo: string; em: string } | null;
 }
+
+/** A pausa aberta da atividade (D1) */
+export interface PausaTela { clientId: string; motivo: string; impedimento: boolean; inicio: string; observacao?: string | null; pendente?: boolean }
 
 /** O que o servidor manda (e o aparelho guarda) de uma atividade */
 export interface RetratoAtividade {
+  /** D1: os motivos de pausa da empresa (ativos, na ordem); ausente em retratos antigos */
+  motivosPausa?: { id: string; nome: string; tipo: "IMPEDIMENTO" | "INTERVALO"; pedeTexto: boolean }[];
   cartao: CartaoTela;
   execucao: ExecucaoTela;
   equipamentosUnidade: EquipamentoUnidade[];
@@ -159,10 +170,12 @@ export type OperacaoFila = Operacao & {
   status?: number | null;
   /** Quando o servidor confirmou (fica aplicada na tela até chegar um retrato mais novo) */
   enviadaEm?: number | null;
+  /** Só no aparelho (não sobe): a OS como a pessoa escolheu ("OS-4440"), para dizer qual é mesmo se ela sair do dia */
+  osNumero?: string | null;
 };
 
 /** Distribui o Omit pelos membros da união (o Omit comum junta tudo e perde o "tipo"). */
 export type SemControle<T> = T extends unknown ? Omit<T, "id" | "em"> : never;
-export type NovaOperacao = SemControle<Operacao>;
+export type NovaOperacao = SemControle<Operacao> & Pick<OperacaoFila, "osNumero">;
 
 export interface RelatorioRetrato { link: string; empresa: string; osNumero: string }

@@ -11,9 +11,12 @@ Telas: `/clientes/[id]` (ficha, em consulta) e `/clientes/[id]/editar` (edição
 **Endereço principal** é o de cobrança, o que vai na nota fiscal como tomador. Fica em **campos normais** na aba
 Dados, logo depois da Identificação, como a razão social:
 
-- **Consultar** (CNPJ) preenche o endereço junto com a razão social e o nome fantasia. Só os campos **vazios**: o que
-  a pessoa já digitou fica (`enderecoDaConsulta`, `lib/clientes/endereco-principal.ts`);
-- o **CEP** completo busca rua, bairro, cidade e UF uma vez (o mesmo CEP não busca de novo). A lupa busca de novo;
+- **Consultar** (CNPJ) preenche o endereço junto com a razão social e o nome fantasia. O endereço é tudo ou nada:
+  só entra quando ainda não há rua nem CEP (não mistura a rua digitada com o CEP/bairro/cidade da Receita), e aí só
+  nos campos **vazios** (`enderecoDaConsulta`, `lib/clientes/endereco-principal.ts`). Num cliente que já existe, o
+  nome fantasia e o Simples só se estiverem vazios. Sem os 14 dígitos (ou com dígito errado), avisa e não consulta;
+- o **CEP** completo busca rua, bairro, cidade e UF uma vez (o mesmo CEP não busca de novo). Para buscar de novo,
+  troque o CEP;
 - na consulta, o endereço principal aparece numa linha: `Rua, 250 — Bloco B · Bairro · Cidade/UF · CEP`.
 
 Os **demais endereços** são os **locais de atendimento** (unidades). Decisão: ficam numa **aba própria,
@@ -37,8 +40,10 @@ Ao salvar um cliente novo com endereço principal, o servidor cria o local **"Pr
 os equipamentos e o PMOC precisam de um local (`locaisDoClienteNovo`, `app/api/clientes/route.ts`):
 
 - os outros locais informados na aba Endereços entram como **secundários**;
-- se um deles já é o mesmo endereço (rua + número, ou CEP + número; sem acento, caixa ou pontuação), não duplica;
-- a regra da empresa "exigir endereço" passa a aceitar o endereço principal.
+- se um deles já é o mesmo endereço (rua + número, ou CEP + número; sem acento, caixa ou pontuação), não duplica: ele
+  vira o principal;
+- a regra da empresa "exigir endereço" passa a aceitar o endereço principal, e vale também no servidor
+  (POST /api/clientes), não só na tela.
 
 Cliente que já existe não muda: o endereço principal e os locais continuam independentes, como antes.
 

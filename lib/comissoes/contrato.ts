@@ -135,7 +135,9 @@ export function mensalidadeCoberta(c: string, contrato: { ativo: boolean; parado
  */
 export function alvoDaParte(o: { base: BaseContrato; taxa: number; valor: number; recebido: number; mensalidade: number; coberta: boolean; jaLiberado: number }): number {
   const fracao = num(o.mensalidade) > 0 ? Math.min(1, Math.max(0, num(o.recebido) / num(o.mensalidade))) : 0;
-  const devido = o.base === "FIXO_CONTRATO" ? round2(num(o.valor) * fracao) : round2(Math.min(num(o.recebido), Math.max(0, num(o.mensalidade))) * num(o.taxa) / 100);
+  const porTaxa = round2(Math.min(num(o.recebido), Math.max(0, num(o.mensalidade))) * num(o.taxa) / 100);
+  // PJ4: o % da mensalidade nunca passa do valor congelado (reajuste depois de liberar uma parte não paga a mais)
+  const devido = o.base === "FIXO_CONTRATO" ? round2(num(o.valor) * fracao) : num(o.valor) > 0 ? Math.min(porTaxa, round2(num(o.valor))) : porTaxa;
   return o.coberta ? devido : Math.min(round2(num(o.jaLiberado)), devido);
 }
 

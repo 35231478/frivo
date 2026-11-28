@@ -59,6 +59,8 @@ export default async function OsDetalhePage({ params, searchParams }: { params: 
           equipamentos: { select: { feito: true, equipamentoId: true } },
           // Os toques "A caminho"/"Cheguei" de HOJE: o painel deriva "Em deslocamento" deles (lib/os/estado-atividade)
           avisosCliente: { where: { dia: hojeDiaCivil() }, select: { evento: true, registradoEm: true } },
+          // D1: as pausas (a aberta vira "Pausada — motivo — há X h"; todas descontam do tempo de execução)
+          pausas: { orderBy: { inicio: "asc" }, select: { id: true, motivo: true, impedimento: true, inicio: true, fim: true, observacao: true, naoConcluida: true } },
         },
         orderBy: { criadoEm: "asc" },
       },

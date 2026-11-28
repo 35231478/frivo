@@ -11,7 +11,7 @@ import { CapturaFoto } from "@/components/ui/captura-foto";
 import { Stepper } from "@/components/ui/stepper";
 import { cn } from "@/lib/utils";
 import {
-  ETAPAS, ROTULO_ETAPA_CURTO, faltaNaEtapa, formVazio, obrigatoriosDa,
+  ETAPAS, MSG_EMAIL_NAO_VERIFICADO, ROTULO_ETAPA_CURTO, faltaNaEtapa, formVazio, obrigatoriosDa,
   type Etapa, type FormAdmissao,
 } from "@/lib/admissao/admissao";
 import type { AdmissaoPublica } from "@/lib/admissao/admissao-server";
@@ -110,7 +110,11 @@ export function AdmissaoPublicaCliente({ token, inicial }: { token: string; inic
       setEtapa("CONTRATO");
       setFalta([]);
       subir();
-    } catch (e) { setErro((e as Error).message); } finally { setSalvando(false); }
+    } catch (e) {
+      setErro((e as Error).message);
+      // O e-mail sem confirmar é cobrado só aqui, no fim: volta à etapa Dados, onde está o código
+      if ((e as Error).message === MSG_EMAIL_NAO_VERIFICADO) { setEtapa("DADOS"); subir(); }
+    } finally { setSalvando(false); }
   }
 
   async function recarregar() {

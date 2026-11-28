@@ -173,6 +173,26 @@ export function preencherCitacoes(lista: ComentarioTela[]): ComentarioTela[] {
   });
 }
 
+/**
+ * Responder é ler — também para trás: a mensagem de um lado (app ou escritório) que ninguém marcou como lida e que o
+ * OUTRO lado respondeu depois foi lida por quem respondeu, na hora da resposta. Devolve os grupos a marcar (cada um com
+ * quem leu e quando). Serve as mensagens antigas, de antes de "responder é ler" existir, sem SQL de carga: marca ao abrir.
+ */
+export function lidasPelaResposta<T extends { id: string; origem: string; usuarioId: string; criadoEm: Date; lidaEm: Date | null }>(mensagens: readonly T[]):
+  { ids: string[]; lidaEm: Date; lidaPorId: string }[] {
+  const grupos: { ids: string[]; lidaEm: Date; lidaPorId: string }[] = [];
+  const pendentes: Record<string, string[]> = { APP: [], ESCRITORIO: [] };
+  for (const m of [...mensagens].sort((a, b) => a.criadoEm.getTime() - b.criadoEm.getTime())) {
+    const outro = m.origem === "APP" ? "ESCRITORIO" : "APP";
+    if (pendentes[outro].length) {
+      grupos.push({ ids: pendentes[outro], lidaEm: m.criadoEm, lidaPorId: m.usuarioId });
+      pendentes[outro] = [];
+    }
+    if (!m.lidaEm) (pendentes[m.origem] ??= []).push(m.id);
+  }
+  return grupos;
+}
+
 /** Mensagens do mesmo autor mais próximas que isto formam uma SEQUÊNCIA (o nome só na 1ª) */
 export const SEQUENCIA_MS = 5 * 60_000;
 
@@ -236,11 +256,16 @@ export function horaDaLista(iso: string, agora: Date = new Date()): string {
 
 // ── A foto ──────────────────────────────────────────────────────────────────────────────────
 
-/** O aparelho reduz a foto antes de enviar: o lado maior até FOTO_LADO_MAX, JPEG; a miniatura do balão, MINIATURA_LADO. */
-export const FOTO_LADO_MAX = 1600;
-export const FOTO_QUALIDADE = 0.8;
-export const MINIATURA_LADO = 320;
-export const MINIATURA_QUALIDADE = 0.7;
+/**
+ * O aparelho reduz a foto antes de enviar, em DEGRAUS (lado maior, qualidade JPEG), até caber no ALVO. A foto vai como
+ * texto (data URL) no banco: em produção elas chegavam com 520–556 KB cada (1600 px, 80%). O alvo agora é ≤ 200 KB
+ * (a miniatura do balão, ≤ 15 KB); o limite que o servidor aceita (FOTO_TAMANHO_MAX) não muda — fila antiga continua
+ * subindo. JPEG, e não WebP: o Safari do iPhone não gera WebP pelo canvas.
+ */
+export const ALVO_FOTO_BYTES = 200_000;
+export const ALVO_MINIATURA_BYTES = 15_000;
+export const DEGRAUS_FOTO: readonly (readonly [lado: number, qualidade: number])[] = [[1280, 0.7], [1024, 0.6], [800, 0.55]];
+export const DEGRAUS_MINIATURA: readonly (readonly [lado: number, qualidade: number])[] = [[256, 0.6], [192, 0.5]];
 
 // ── Tempo real ──────────────────────────────────────────────────────────────────────────────
 

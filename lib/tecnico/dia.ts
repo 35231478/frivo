@@ -28,6 +28,8 @@ const SELECT_CARTAO = {
   },
   _count: { select: { equipamentos: true, servicosAdicionais: true } },
   equipamentos: { where: { feito: true }, select: { id: true } },
+  // D1: a pausa aberta ("Pausada — motivo" no cartão)
+  pausas: { where: { fim: null }, orderBy: { inicio: "desc" }, take: 1, select: { clientId: true, motivo: true, inicio: true, impedimento: true } },
 } satisfies Prisma.AtividadeOsSelect;
 
 type AtividadeCartao = Prisma.AtividadeOsGetPayload<{ select: typeof SELECT_CARTAO }>;
@@ -78,6 +80,8 @@ export interface CartaoAtividade {
   /** Quem abriu a OS e como ela chegou (dado de escritório: fica em "Detalhes") */
   criadoPor: string | null;
   origem: string;
+  /** D1: a pausa aberta (null = em execução) */
+  pausa: { clientId: string; motivo: string; inicio: string; impedimento: boolean } | null;
 }
 
 /** Junta os textos do escritório (sem repetir o mesmo texto), um parágrafo cada. */
@@ -104,6 +108,7 @@ export function montarCartao(a: AtividadeCartao): CartaoAtividade {
     iniciadaEm: (a.iniciadaEm ?? (a.status === "EM_ANDAMENTO" ? a.dataAgendada : null))?.toISOString() ?? null,
     // Dado de escritório (vai para "Detalhes" no topo da OS)
     criadoPor: os.criadoPor?.nome ?? null, origem: os.origem,
+    pausa: a.pausas[0] ? { clientId: a.pausas[0].clientId, motivo: a.pausas[0].motivo, inicio: a.pausas[0].inicio.toISOString(), impedimento: a.pausas[0].impedimento } : null,
   };
 }
 
@@ -133,17 +138,27 @@ async function cartoesDe(atividades: AtividadeCartao[]): Promise<CartaoAtividade
 }
 
 /**
- * Hoje: as atividades marcadas para hoje (Brasília) + as que ele começou em outro dia e ainda não
+ * Hoje: as atividades marcadas para hoje (Brasília) + as que ele começou (em outro dia, ou sem data) e ainda não
  * concluiu (precisa terminar). Em ordem de horário.
  */
-export async function meuDia(empresaId: string, tecnicoId: string, agora = new Date()) {
+export const ondeMeuDia = (empresaId: string, tecnicoId: string, agora = new Date()): Prisma.AtividadeOsWhereInput => {
   const inicio = inicioHojeBR(agora);
   const fim = inicioHojeBR(agora, 1);
+  // AND explícito: o filtro do técnico já é um OR (responsável ou na equipe), e outro OR na mesma chave o apagaria
+  return {
+    AND: [
+      { empresaId, status: { not: "CANCELADA" } },
+      atividadesDoTecnico(tecnicoId),
+      // Em andamento entra com QUALQUER data — também sem data ou marcada para depois (começou e falta concluir); antes,
+      // `dataAgendada < hoje` deixava a sem data fora do Meu dia (e o chat a oferecia)
+      { OR: [{ dataAgendada: { gte: inicio, lt: fim } }, { status: "EM_ANDAMENTO" }] },
+    ],
+  };
+};
+
+export async function meuDia(empresaId: string, tecnicoId: string, agora = new Date()) {
   const atividades = await prisma.atividadeOs.findMany({
-    where: {
-      empresaId, status: { not: "CANCELADA" }, ...atividadesDoTecnico(tecnicoId),
-      AND: [{ OR: [{ dataAgendada: { gte: inicio, lt: fim } }, { status: "EM_ANDAMENTO", dataAgendada: { lt: inicio } }] }],
-    },
+    where: ondeMeuDia(empresaId, tecnicoId, agora),
     select: SELECT_CARTAO,
     take: 100,
   });

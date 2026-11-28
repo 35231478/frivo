@@ -190,8 +190,10 @@ describe("ficha do colaborador: a função (no lugar de Tipo + Tipo de equipe)",
     expect($("input[name='crea']")).toBeTruthy();
     await clicar(chave("[data-usa-app-campo]"));
     expect($("[data-usa-app-campo]")!.getAttribute("data-usa-app-campo")).toBe("nao");
+    // pj4 (J5): RT sem CREA não salva mais (tests/unit/pj4-colaborador-ui.test.ts); com o CREA, grava coerente
+    await digitar($("input[name='crea']"), "5012345-D/SP");
     await salvar();
-    expect(gravacoes()[0].corpo).toMatchObject({ tipo: "RESPONSAVEL_TECNICO", tipoEquipe: "ADMINISTRATIVO" });
+    expect(gravacoes()[0].corpo).toMatchObject({ tipo: "RESPONSAVEL_TECNICO", tipoEquipe: "ADMINISTRATIVO", crea: "5012345-D/SP" });
   });
 
   it("um motorista que não é RT continua motorista ao salvar", async () => {

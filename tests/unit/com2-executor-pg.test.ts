@@ -424,4 +424,31 @@ describe.skipIf(!URL_PG)("COM-2A — comissão do técnico (PostgreSQL real)", (
     expect(await prisma.comissao.count({ where: { ordemServicoId: osCancelada } })).toBeGreaterThan(0);
     expect(carlos.vendas.some((v) => v.chave === `os:${osCancelada}`)).toBe(false);
   });
+
+  it("PJ4: a comissão já liberada do técnico NÃO estorna quando a regra é desativada, o login é inativado ou o cargo muda; tirar a pessoa da atividade estorna", async () => {
+    const os = await novaOs({ status: "CONCLUIDA", equipamentos: [{ id: "q4", feito: true, feitoPor: "tCarlos" }] });
+    await sincronizar([os]);
+    const carlos = await liberado(os, "uCarlos"), ana = await liberado(os, "uAna");
+    expect(carlos).toBeGreaterThan(0);
+    expect(ana).toBeGreaterThan(0);
+    const estornos = () => prisma.comissaoLancamento.count({ where: { comissao: { ordemServicoId: os }, tipo: "ESTORNO" } });
+    const ativas = await prisma.comissaoRegra.findMany({ where: { empresaId: "e1", papel: "EXECUTOR", ativo: true }, select: { id: true } });
+    // 1) regra desativada
+    await prisma.comissaoRegra.updateMany({ where: { id: { in: ativas.map((r: any) => r.id) } }, data: { ativo: false } });
+    await sincronizar([os]);
+    expect([await liberado(os, "uCarlos"), await liberado(os, "uAna"), await estornos()]).toEqual([carlos, ana, 0]);
+    await prisma.comissaoRegra.updateMany({ where: { id: { in: ativas.map((r: any) => r.id) } }, data: { ativo: true } });
+    // 2) login da Ana inativado (saiu da empresa) e cargo do Carlos trocado
+    await prisma.usuario.update({ where: { id: "uAna" }, data: { ativo: false } });
+    await prisma.tecnico.update({ where: { id: "tCarlos" }, data: { cargoId: null } });
+    await sincronizar([os]);
+    expect([await liberado(os, "uCarlos"), await liberado(os, "uAna"), await estornos()]).toEqual([carlos, ana, 0]);
+    await prisma.usuario.update({ where: { id: "uAna" }, data: { ativo: true } });
+    await prisma.tecnico.update({ where: { id: "tCarlos" }, data: { cargoId: "cgTec" } });
+    // 3) a Ana saiu da atividade (lançada por engano): estorna só a dela
+    await prisma.atividadeTecnico.deleteMany({ where: { atividadeId: `at-${os}`, tecnicoId: "tAna" } });
+    await sincronizar([os]);
+    expect(await liberado(os, "uAna")).toBe(0);
+    expect(await liberado(os, "uCarlos")).toBeGreaterThanOrEqual(carlos);
+  });
 });

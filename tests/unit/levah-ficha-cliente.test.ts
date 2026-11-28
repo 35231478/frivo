@@ -109,8 +109,10 @@ describe("cabeçalho: só o que importa", () => {
     expect(sinaisDoCliente({ ...base, valorEmAtraso: 0.004, totalProximos30Dias: 0.004 })).toEqual([]);
     expect(sinaisDoCliente({ ...base, valorEmAtraso: 0.006 })[0].rotulo).toBe("Inadimplente · R$ 0,01 em atraso");
   });
-  it("contratos: singular e plural, com link para os contratos do cliente", () => {
-    expect(sinaisDoCliente({ ...base, contratosAtivos: 1 })).toEqual([{ id: "contratos", rotulo: "1 contrato ativo", tom: "ok", href: "/contratos?clienteId=c1" }]);
+  it("contratos: singular e plural; link para os contratos ATIVOS do cliente só para quem vê contratos", () => {
+    // pj4 (H17, mudança intencional): antes o link ia a /contratos?clienteId= para todos e sem o filtro de ativos
+    expect(sinaisDoCliente({ ...base, contratosAtivos: 1 })).toEqual([{ id: "contratos", rotulo: "1 contrato ativo", tom: "ok" }]);
+    expect(sinaisDoCliente({ ...base, contratosAtivos: 1, podeVerContratos: true })[0].href).toBe("/contratos?clienteId=c1&status=ATIVO");
     expect(sinaisDoCliente({ ...base, contratosAtivos: 3 })[0].rotulo).toBe("3 contratos ativos");
   });
   it("a receber nos próximos 30 dias: só com valor", () => {

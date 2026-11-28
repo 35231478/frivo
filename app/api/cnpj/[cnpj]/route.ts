@@ -101,8 +101,8 @@ export async function GET(_: NextRequest, { params }: Params) {
   }
 
   try {
-    // Tenta BrasilAPI primeiro, fallback para ReceitaWS
-    let resultado = await consultarBrasilApi(cnpjLimpo);
+    // Tenta BrasilAPI primeiro, fallback para ReceitaWS — também quando a BrasilAPI cai (rede/tempo esgotado)
+    let resultado = await consultarBrasilApi(cnpjLimpo).catch(() => null);
 
     if (resultado === null) {
       resultado = await consultarReceitaWs(cnpjLimpo);

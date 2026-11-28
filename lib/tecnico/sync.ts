@@ -9,6 +9,8 @@
  *    próxima rodada (não se conclui com uma resposta anterior pendente); as de outras atividades seguem;
  *  - a execução é do técnico: a gravação dele vale (a última), item a item.
  */
+import { naoConcluidaSchema, pausarSchema, retomarSchema } from "@/lib/pausas/regras";
+import { naoConcluirAtividade, pausarAtividade, retomarAtividade } from "@/lib/pausas/servidor";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { carregarContexto, type Ator } from "@/lib/execucao/contexto";
@@ -29,6 +31,7 @@ import { materialRemoverSchema, materialSchema } from "@/lib/tecnico/materiais";
 import { gravarMaterial, removerMaterial } from "@/lib/execucao/materiais-campo";
 import { comentarioSchema } from "@/lib/tecnico/comentarios";
 import { comentarDoApp, comentarSemOsDoApp, corrigirEquipamentoDaFoto, ondeTecnicoVe } from "@/lib/execucao/comentarios";
+import { NAO_TRAVAM } from "@/lib/tecnico/offline/trava";
 import { lerAoResponderTecnico } from "@/lib/chat/pessoas-servidor";
 
 /** O técnico escreveu: leu a conversa dele até aqui (o ✓✓ das mensagens do escritório) — responder é ler. */
@@ -85,6 +88,11 @@ export const operacaoSchema = z.discriminatedUnion("tipo", [
     .refine((d) => !!d.comentario.id !== !!d.comentario.clientId, { message: "Mensagem inválida." }) }).strict(),
   // Despesa de campo com a foto do cupom: numa atividade (vai para a OS dela) ou fora de OS (atividadeId = "sem-os")
   z.object({ ...base, tipo: z.literal("despesa"), dados: despesaSchema }).strict(),
+  // D1: pausar (motivo da lista da empresa), retomar e encerrar a visita como "Não concluída — precisa voltar".
+  // `clientId` da pausa gerado no aparelho: reenviar não cria outra pausa; retomar/encerrar apontam para ele
+  z.object({ ...base, tipo: z.literal("pausar"), dados: pausarSchema.strict() }).strict(),
+  z.object({ ...base, tipo: z.literal("retomar"), dados: retomarSchema.strict() }).strict(),
+  z.object({ ...base, tipo: z.literal("naoConcluida"), dados: naoConcluidaSchema.strict() }).strict(),
   z.object({ ...base, tipo: z.literal("concluir"), dados: concluirSchema }).strict(),
   // Aceite do cliente no local: nome + assinatura desenhada no aparelho, depois de concluir
   z.object({ ...base, tipo: z.literal("aceite"), dados: aceiteLocalSchema }).strict(),
@@ -130,6 +138,9 @@ async function executar(ator: Ator, op: Operacao, lote: OpcoesLote): Promise<Res
   if (!ctx.ok) return { ok: false, status: ctx.status, erro: ctx.erro };
   switch (op.tipo) {
     case "iniciar": return iniciarAtividade(ctx, { em: op.em, agoraAparelho: lote.agoraAparelho });
+    case "pausar": return pausarAtividade(ctx, op.dados, { em: op.em, agoraAparelho: lote.agoraAparelho });
+    case "retomar": return retomarAtividade(ctx, op.dados, { em: op.em, agoraAparelho: lote.agoraAparelho });
+    case "naoConcluida": return naoConcluirAtividade(ctx, op.dados, { em: op.em, agoraAparelho: lote.agoraAparelho });
     case "avisoCliente": return avisarCliente(ctx, op.dados, { em: op.em, agoraAparelho: lote.agoraAparelho });
     case "resposta": return responderItem(ctx, op.itemId, op.dados);
     case "audio": return gravarAudio(ctx, op.itemId, op.dataUrl);
@@ -188,7 +199,9 @@ export async function processarLote(ator: Ator, operacoes: unknown[], lote: Opco
     const idOp = (bruta as { id?: unknown })?.id;
     if (!parsed.success) {
       const atividadeId = (bruta as { atividadeId?: unknown })?.atividadeId;
-      if (typeof atividadeId === "string") travadas.add(atividadeId);
+      const tipo = (bruta as { tipo?: unknown })?.tipo;
+      // Mensagem do chat (ou QR) inválida: recusada, mas não segura o serviço da OS (o mesmo de NAO_TRAVAM abaixo)
+      if (typeof atividadeId === "string" && !(typeof tipo === "string" && NAO_TRAVAM.has(tipo))) travadas.add(atividadeId);
       resultados.push({ id: typeof idOp === "string" ? idOp : "", ok: false, status: 400, erro: parsed.error.issues[0]?.message ?? "Operação inválida." });
       continue;
     }
@@ -223,7 +236,8 @@ export async function processarLote(ator: Ator, operacoes: unknown[], lote: Opco
       jaFeitas.set(op.id, { id: op.id, empresaId: ator.empresaId, usuarioId: ator.usuarioId, resultado });
       resultados.push({ id: op.id, ok: true, status: r.status, dados: resultado });
     } else {
-      travadas.add(op.atividadeId);
+      // A mensagem do chat e o QR recusados não seguram o resto da atividade (o mesmo do aparelho: NAO_TRAVAM)
+      if (!NAO_TRAVAM.has(op.tipo)) travadas.add(op.atividadeId);
       resultados.push({ id: op.id, ok: false, status: r.status, erro: r.erro, ...(r.extra && { extra: json(r.extra) }) });
     }
   }

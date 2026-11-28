@@ -38,8 +38,10 @@ const chave = (m: Pick<ComentarioTela, "clientId" | "id">) => m.clientId ?? m.id
 export function ConversaChat({
   mensagens, carregando, erro, somenteLeitura, podeEscrever = true, semPermissao, onEnviar, urlFoto, onTentarDeNovo, className, placeholder = "Mensagem",
   mostrarOs = false, abrirOs, podeAbrirOs, acimaDoTexto, onCitar, carregarAte,
-  origem = "ESCRITORIO", osDaMensagem, equipamentosDaOs, lerQr, resolverQr, onCorrigirEquipamento, onRelatorio,
+  origem = "ESCRITORIO", osDaMensagem, equipamentosDaOs, lerQr, resolverQr, onCorrigirEquipamento, onRelatorio, recusa,
 }: {
+  /** App: o que fazer com a mensagem que a fila recusou de vez (ver Balao) */
+  recusa?: React.ComponentProps<typeof Balao>["recusa"];
   /** CHAT-1.1: quem escreve (o app usa a atividade em andamento e o QR; o escritório, só "um equipamento" e a escolha) */
   origem?: "APP" | "ESCRITORIO";
   /** A OS da próxima mensagem (a foto se vincula a um equipamento dela) */
@@ -237,7 +239,7 @@ export function ConversaChat({
                       <span className="h-px flex-1 bg-surface-border" aria-hidden />
                     </li>
                   )}
-                  <Balao m={m} mostrarAutor={mostrarAutor} onTentarDeNovo={onTentarDeNovo} onResponder={aoResponder} onIrParaCitada={irPara}
+                  <Balao m={m} mostrarAutor={mostrarAutor} onTentarDeNovo={onTentarDeNovo} recusa={recusa} onResponder={aoResponder} onIrParaCitada={irPara}
                     destacada={!!destaque && destaque === chave(m)}
                     equipamentos={m.os ? equipamentosDaOs?.(m.os.id)?.equipamentos : undefined}
                     onCorrigirEquipamento={bloqueio ? undefined : onCorrigirEquipamento} onRelatorio={bloqueio ? undefined : onRelatorio}

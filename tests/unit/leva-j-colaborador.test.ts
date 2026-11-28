@@ -106,6 +106,14 @@ describe("jornada: compatível com o que está gravado", () => {
     expect(faixasDoColaborador({ jornadaFaixas: null, jornadaEntrada: null, jornadaSaida: null, jornadaDias: [] })).toEqual([]);
     expect(faixasDoColaborador({ jornadaFaixas: [], jornadaEntrada: "08:00", jornadaSaida: "12:00", jornadaDias: ["SAB"] })).toEqual([F(["SAB"], "08:00", "12:00")]);
   });
+  it("PJ4: a ficha antiga com só os dias (Seg–Sex marcado por padrão, sem horário) é sem jornada e a ficha salva", () => {
+    const antiga = { jornadaFaixas: null, jornadaEntrada: null, jornadaSaida: null, jornadaDias: ["SEG", "TER", "QUA", "QUI", "SEX"] };
+    expect(faixasDoColaborador(antiga)).toEqual([]);
+    expect(jornadaValida(faixasDoColaborador(antiga))).toBe(true);
+    expect(textoDaJornada(faixasDoColaborador(antiga))).toBe(textoDaJornada([]));
+    // Com metade do horário continua sendo faixa (para a pessoa completar)
+    expect(faixasDoColaborador({ ...antiga, jornadaEntrada: "08:00" })).toEqual([F(["SEG", "TER", "QUA", "QUI", "SEX"], "08:00", "")]);
+  });
   it("com faixas, elas mandam (e o lixo gravado é limpo)", () => {
     expect(faixasDoColaborador({ jornadaFaixas: [SEG_QUI, SEX], jornadaEntrada: "01:00", jornadaSaida: "02:00", jornadaDias: ["DOM"] })).toEqual([SEG_QUI, SEX]);
     expect(faixasDoColaborador({ jornadaFaixas: [null, 3, { dias: ["TER", "SEG", "X"], entrada: " 08:00", saida: "99:99", intervaloInicio: "" }] }))

@@ -19,7 +19,7 @@ import { MSG_SEM_ESPACO } from "@/lib/tecnico/offline/armazenamento";
 import { comentarioSchema, type ComentarioTela } from "@/lib/tecnico/comentarios";
 import type { OperacaoFila } from "@/lib/tecnico/offline/tipos";
 import {
-  aplicarCorrecoesDaFila, atividadeDaOs, atividadeDoEnvio, CHAVE_CONVERSA, confirmadasForaDaConversa, conversaValida, dicaNaoLidas, mapaDeAtividades, mensagensDaFila,
+  aplicarCorrecoesDaFila, atividadeDaOs, atividadeDoEnvio, numeroDaOs, CHAVE_CONVERSA, confirmadasForaDaConversa, conversaValida, dicaNaoLidas, mapaDeAtividades, mensagensDaFila,
   mensagensSumidas, MSG_CONVERSA_SEM_SINAL, opcoesDoSeletor, osDoSeletor, precisaRecarregar, rotuloNaoLidas, semCliente, urlConversaAte, urlFotoApp,
   type OsEtiqueta, type RespostaConversa,
 } from "@/lib/tecnico/chat";
@@ -178,7 +178,7 @@ export function VistaChat() {
     });
     if (!v.success) return v.error.issues[0]?.message ?? MSG_SEM_ESPACO;
     try {
-      await motor.registrar([{ tipo: "comentario", atividadeId: atividadeDoEnvio(osEscolhida, opcoes), dados: v.data }]);
+      await motor.registrar([{ tipo: "comentario", atividadeId: atividadeDoEnvio(osEscolhida, opcoes), dados: v.data, osNumero: numeroDaOs(osEscolhida, opcoes) }]);
     } catch {
       return MSG_SEM_ESPACO; // o aparelho não guardou: nunca finge que enviou
     }
@@ -208,6 +208,28 @@ export function VistaChat() {
     }
     setFila(await motor.banco.fila());
     return null;
+  }
+
+  /**
+   * A mensagem RECUSADA pela fila (regra, não rede): reenviar noutra OS (ou sem OS) com o MESMO conteúdo e o mesmo
+   * clientId — ela nunca chegou ao servidor —, ou descartar. Primeiro entra a nova, depois sai a recusada: nada se perde.
+   */
+  const recusaDaFila = (m: ComentarioTela) => fila.find((o) => o.tipo === "comentario" && o.estado === "erro" && o.dados.clientId === m.clientId);
+  async function reenviar(m: ComentarioTela, osId: string | null) {
+    const op = recusaDaFila(m);
+    if (!motor || !op || op.tipo !== "comentario") return;
+    try {
+      await motor.registrar([{ tipo: "comentario", atividadeId: atividadeDoEnvio(osId, osDoDia), dados: op.dados, osNumero: numeroDaOs(osId, osDoDia) }]);
+      await motor.descartar(op.seq!);
+    } finally {
+      setFila(await motor.banco.fila());
+    }
+  }
+  async function descartar(m: ComentarioTela) {
+    const op = recusaDaFila(m);
+    if (!motor || !op) return;
+    await motor.descartar(op.seq!);
+    setFila(await motor.banco.fila());
   }
 
   // A etiqueta abre a execução da OS quando há uma atividade dele nela (a do dia; senão a guardada no aparelho)
@@ -248,6 +270,7 @@ export function VistaChat() {
         onCitar={aoCitar} carregarAte={carregarAte}
         origem="APP" osDaMensagem={osEscolhida} equipamentosDaOs={(id) => equipamentos[id]} lerQr={(f) => lerQrDaFoto(f)} resolverQr={resolverQr}
         onCorrigirEquipamento={corrigirEquipamento}
+        recusa={{ opcoesOs: osDoDia, reenviar: (m, osId) => { void reenviar(m, osId); }, descartar: (m) => { void descartar(m); } }}
         acimaDoTexto={<SeletorOs opcoes={opcoes} valor={osEscolhida} onValor={(id) => setEscolha(id)} />} />
     </div>
   );

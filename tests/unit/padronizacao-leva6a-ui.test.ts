@@ -308,7 +308,8 @@ describe("Leva 6A — a ficha do contrato: quem só visualiza não encontra cami
     await abrirFicha(montarPermissoes({ contratos: ["visualizar"] }), true);
     expect(botao("Salvar")).toBeNull();
     expect(botao(/Salvar e continuar|Continuar/)).toBeNull();
-    expect(botao("Voltar"), "o caminho de volta continua").toBeTruthy();
+    // pj4: "Voltar" virou link (o aviso de sair sem salvar só vê links)
+    expect([...document.querySelectorAll('a[href="/contratos"]')].some((a) => txt(a) === "Voltar"), "o caminho de volta continua").toBe(true);
     expect(txt($("[data-somente-leitura]"))).toContain("Contratos › editar");
     expect($<HTMLFieldSetElement>("fieldset")!.disabled).toBe(true);
     // o status aparece, mas como informação: não há menu para mudá-lo

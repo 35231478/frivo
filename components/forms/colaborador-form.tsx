@@ -38,7 +38,7 @@ import { InputData } from "@/components/ui/input-data";
 import { ToggleSwitch } from "@/components/ui/toggle-switch";
 import { JornadaFaixas } from "@/components/colaborador/jornada-faixas";
 import { faixasDoColaborador, jornadaValida, problemasDaJornada, type FaixaJornada } from "@/lib/colaborador/jornada";
-import { DICA_CAMPO, DICA_RT, ROTULO_CAMPO, ROTULO_RT, funcaoDaFicha, gravarFuncao } from "@/lib/colaborador/funcao";
+import { DICA_CAMPO, DICA_RT, MSG_RT_SEM_CREA, ROTULO_CAMPO, ROTULO_RT, funcaoDaFicha, gravarFuncao } from "@/lib/colaborador/funcao";
 
 const ESPECIALIDADES_SUGERIDAS = [
   "Split", "VRF", "Chiller", "Câmara Fria",
@@ -181,6 +181,8 @@ export function ColaboradorForm({ initialData, somenteLeitura = false, podeFolha
       setAba("profissionais");
       return;
     }
+    // RT sem CREA: a rota recusa (MSG_RT_SEM_CREA); a ficha avisa antes, na aba do campo
+    if (rt && !(data.crea ?? "").trim()) { setErroGlobal(MSG_RT_SEM_CREA); setAba("profissionais"); return; }
     try {
       const url = isEditing ? `/api/tecnicos/${initialData.id}` : "/api/tecnicos";
       const res = await fetch(url, {
@@ -390,8 +392,8 @@ export function ColaboradorForm({ initialData, somenteLeitura = false, podeFolha
                 <div data-responsavel-tecnico={rt ? "sim" : "nao"}><ToggleSwitch label={ROTULO_RT} dica={DICA_RT} checked={rt} onChange={setRt} disabled={somenteLeitura} /></div>
               </div>
               {rt && (
-                <FormField label="CREA / Registro profissional" hint="Obrigatório para responsáveis técnicos">
-                  <Input {...register("crea")} placeholder="Ex: 5012345-D/SP" />
+                <FormField label="CREA / Registro profissional" required hint="Obrigatório para responsáveis técnicos">
+                  <Input {...register("crea")} placeholder="Ex: 5012345-D/SP" data-campo-crea />
                 </FormField>
               )}
               <FormGrid>
