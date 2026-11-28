@@ -121,7 +121,7 @@ describe("o balão: a etiqueta do equipamento e a correção", () => {
 describe("a caixa de escrever: o equipamento da foto antes de enviar", () => {
   async function caixa(props: Record<string, unknown>) {
     const { ConversaChat } = await import("@/components/chat/conversa");
-    const onEnviar = vi.fn(async () => null);
+    const onEnviar = vi.fn(async (_envio: Record<string, unknown>) => null);
     await montar(createElement(ConversaChat, { mensagens: [], onEnviar, urlFoto: () => "", osDaMensagem: "os1", ...props }));
     return onEnviar;
   }
