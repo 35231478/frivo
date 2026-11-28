@@ -143,10 +143,21 @@ export interface RecebimentoDaVenda {
 }
 
 export async function recebimentoDaVenda(db: Db, empresaId: string, orcamentoId: string): Promise<RecebimentoDaVenda> {
-  const meds = await medicoesDaOrigem(db, { orcamentoId });
+  return recebimentoDaOrigem(db, empresaId, { orcamentoId });
+}
+
+/**
+ * O mesmo, a partir do orçamento (o vendedor) ou da OS (o técnico, COM-2): as faturas da origem e, nelas, a parte
+ * que é desta venda/OS (as linhas que apontam para o orçamento ou para a OS gerada dele).
+ */
+export async function recebimentoDaOrigem(db: Db, empresaId: string, origem: { orcamentoId?: string | null; osId?: string | null }): Promise<RecebimentoDaVenda> {
+  const meds = await medicoesDaOrigem(db, origem);
   if (!meds.length) return { faturas: [], ultimaData: null, entradas: [] };
   const ids = meds.map((m) => m.id);
-  const os = await db.ordemServico.findFirst({ where: { orcamentoOrigemId: orcamentoId, empresaId }, select: { id: true } });
+  const os = origem.osId
+    ? await db.ordemServico.findFirst({ where: { id: origem.osId, empresaId }, select: { id: true, orcamentoOrigemId: true } })
+    : await db.ordemServico.findFirst({ where: { orcamentoOrigemId: origem.orcamentoId!, empresaId }, select: { id: true, orcamentoOrigemId: true } });
+  const orcamentoId = origem.orcamentoId ?? os?.orcamentoOrigemId ?? null;
   const [itens, contas] = await Promise.all([
     db.medicaoItem.findMany({ where: { medicaoId: { in: ids } }, select: { medicaoId: true, valorTotal: true, orcamentoId: true, ordemServicoId: true } }),
     db.contaReceber.findMany({
@@ -204,7 +215,7 @@ export async function recebimentoDaVenda(db: Db, empresaId: string, orcamentoId:
   const faturas: FaturaRecebida[] = meds.map((m) => {
     const doMed = itens.filter((i) => i.medicaoId === m.id);
     const total = doMed.reduce((s, i) => s + num(i.valorTotal), 0);
-    const daVenda = doMed.filter((i) => i.orcamentoId === orcamentoId || (!!os && i.ordemServicoId === os.id)).reduce((s, i) => s + num(i.valorTotal), 0);
+    const daVenda = doMed.filter((i) => (!!orcamentoId && i.orcamentoId === orcamentoId) || (!!os && i.ordemServicoId === os.id)).reduce((s, i) => s + num(i.valorTotal), 0);
     // Fatura avulsa (desta venda) ou sem linha que aponte para a venda (achada pelo relatório da OS): é toda desta venda
     const parte = m.avulsa || total <= 0 || daVenda <= 0 ? 1 : Math.min(1, daVenda / total);
     const r = porMed.get(m.id) ?? { aCobrar: 0, recebido: 0 };
@@ -227,6 +238,14 @@ const MOTIVO: Record<Quando, string> = {
  * `orcamentoIds`/`usuarioId` limitam a conta (o extrato de uma pessoa, um orçamento recém-aprovado).
  */
 export async function sincronizarComissoes(empresaId: string, filtro: { orcamentoIds?: string[]; usuarioId?: string } = {}, agora: Date = new Date()): Promise<number> {
+  const doVendedor = await sincronizarVendedor(empresaId, filtro, agora);
+  // COM-2: o técnico (pela OS) — fica de fora quando a conta é só de alguns orçamentos (aprovação de uma venda)
+  if (filtro.orcamentoIds) return doVendedor;
+  const { sincronizarExecutor } = await import("./executor-server");
+  return doVendedor + (await sincronizarExecutor(empresaId, { usuarioId: filtro.usuarioId }, agora)).lancamentos;
+}
+
+async function sincronizarVendedor(empresaId: string, filtro: { orcamentoIds?: string[]; usuarioId?: string }, agora: Date): Promise<number> {
   return prisma.$transaction(async (tx) => {
     await travarEmpresa(tx, empresaId);
     const comissoes = await tx.comissao.findMany({
@@ -308,9 +327,13 @@ export function comissoesDoMes(movs: readonly MovimentoAberto[]) {
 /* ───────── o extrato da própria pessoa ───────── */
 
 export interface VendaNoExtrato {
-  orcamentoId: string; codigo: string; nome: string; cliente: string; osNumero: string | null;
+  /** A chave da linha: o orçamento (vendedor) ou "os:<id>" (técnico, COM-2) */
+  chave: string;
+  tipo: "VENDA" | "OS";
+  orcamentoId: string | null; codigo: string; nome: string; cliente: string; osNumero: string | null;
   prevista: number; liberada: number; paga: number;
-  itens: { descricao: string; regra: string; valor: number }[];
+  /** `emRevisao`: retorno no mesmo equipamento, aguardando o encarregado (não libera enquanto isso) */
+  itens: { descricao: string; regra: string; valor: number; emRevisao?: boolean }[];
 }
 export interface Extrato { vendas: VendaNoExtrato[]; totais: { prevista: number; liberada: number; paga: number } }
 
@@ -321,26 +344,42 @@ export interface Extrato { vendas: VendaNoExtrato[]; totais: { prevista: number;
 export async function extratoDoUsuario(empresaId: string, usuarioId: string, agora: Date = new Date()): Promise<Extrato> {
   await sincronizarComissoes(empresaId, { usuarioId }, agora);
   const cs = await prisma.comissao.findMany({
-    where: { empresaId, usuarioId, orcamentoId: { not: null } },
+    where: { empresaId, usuarioId },
     orderBy: { criadoEm: "desc" },
     select: {
-      orcamentoId: true, descricao: true, regraDescricao: true, valor: true,
+      orcamentoId: true, ordemServicoId: true, equipamentoId: true, descricao: true, regraDescricao: true, valor: true,
       orcamento: { select: { codigo: true, nome: true, cliente: { select: { nome: true } }, osGerada: { select: { numero: true } } } },
+      ordemServico: { select: { numero: true, chamadoNumero: true, cliente: { select: { nome: true } } } },
       lancamentos: { select: { valor: true, fechamento: { select: { situacao: true } } } },
+      revisoes: { where: { situacao: "A_REVISAR" }, select: { id: true } },
     },
     take: 600,
   });
+  // O nome do equipamento de cada comissão do técnico ("Limpeza — Split da recepção")
+  const equipIds = [...new Set(cs.map((c) => c.equipamentoId).filter(Boolean) as string[])];
+  const equips = equipIds.length ? await prisma.equipamento.findMany({ where: { id: { in: equipIds }, empresaId }, select: { id: true, nome: true, marca: true, modelo: true } }) : [];
+  const nomeEquip = (id: string | null) => {
+    const e = id ? equips.find((x) => x.id === id) : null;
+    return e ? ([e.nome, e.marca, e.modelo].filter(Boolean).join(" ") || null) : null;
+  };
   const vendas = new Map<string, VendaNoExtrato>();
   for (const c of cs) {
     const s = situacaoDaComissao(num(c.valor), c.lancamentos.map((l) => ({ valor: num(l.valor), pago: l.fechamento?.situacao === "FECHADO" })));
-    const orc = c.orcamento!;
-    const v = vendas.get(c.orcamentoId!) ?? {
-      orcamentoId: c.orcamentoId!, codigo: orc.codigo, nome: orc.nome, cliente: orc.cliente.nome, osNumero: orc.osGerada?.numero ?? null,
-      prevista: 0, liberada: 0, paga: 0, itens: [],
-    };
+    const chave = c.orcamentoId ?? `os:${c.ordemServicoId}`;
+    let v = vendas.get(chave);
+    if (!v) {
+      if (c.orcamento) {
+        const orc = c.orcamento;
+        v = { chave, tipo: "VENDA", orcamentoId: c.orcamentoId, codigo: orc.codigo, nome: orc.nome, cliente: orc.cliente.nome, osNumero: orc.osGerada?.numero ?? null, prevista: 0, liberada: 0, paga: 0, itens: [] };
+      } else {
+        const os = c.ordemServico;
+        v = { chave, tipo: "OS", orcamentoId: null, codigo: os?.chamadoNumero ?? os?.numero ?? "OS", nome: "Serviço executado", cliente: os?.cliente.nome ?? "", osNumero: null, prevista: 0, liberada: 0, paga: 0, itens: [] };
+      }
+    }
     v.prevista = round2(v.prevista + s.prevista); v.liberada = round2(v.liberada + s.liberada); v.paga = round2(v.paga + s.paga);
-    v.itens.push({ descricao: c.descricao, regra: c.regraDescricao, valor: num(c.valor) });
-    vendas.set(c.orcamentoId!, v);
+    const equip = nomeEquip(c.equipamentoId);
+    v.itens.push({ descricao: equip ? `${c.descricao} — ${equip}` : c.descricao, regra: c.regraDescricao, valor: num(c.valor), ...(c.revisoes.length ? { emRevisao: true } : {}) });
+    vendas.set(chave, v);
   }
   const lista = [...vendas.values()];
   return {
@@ -353,14 +392,20 @@ export async function extratoDoUsuario(empresaId: string, usuarioId: string, ago
 
 /* ───────── o relatório do mês: por data de emissão ou por data de recebimento ───────── */
 
-export interface VendaNoRelatorio { orcamentoId: string; codigo: string; nome: string; cliente: string; data: string; valor: number }
+export interface VendaNoRelatorio {
+  /** O orçamento (vendedor) ou "os:<id>" (técnico, COM-2) */
+  chave: string;
+  orcamentoId: string | null; codigo: string; nome: string; cliente: string; data: string; valor: number;
+}
 export interface PessoaNoRelatorio { usuarioId: string | null; nome: string; valor: number; vendas: VendaNoRelatorio[] }
 export interface RelatorioComissoes { competencia: string; vista: Vista; quando: Quando; pessoas: PessoaNoRelatorio[]; total: number }
 
 /**
  * As comissões do mês vistas por uma das datas — só LEITURA (o que o fechamento paga segue o "quando é devida"):
  *  - EMISSÃO: as vendas emitidas (orçamento aprovado = a comissão nasceu) no mês e ainda vivas, com a comissão inteira;
- *  - RECEBIMENTO: a parte de cada comissão coberta pelo dinheiro que entrou no mês (recebimento a recebimento).
+ *    e as comissões do técnico nascidas no mês (equipamento atendido com o relatório completo), de OS não cancelada;
+ *  - RECEBIMENTO: a parte de cada comissão coberta pelo dinheiro que entrou no mês (recebimento a recebimento) — da
+ *    venda, ou da OS no caso do técnico.
  * Sem `vista`, abre na do "quando é devida" da empresa.
  */
 export async function relatorioDeComissoes(empresaId: string, competencia: string, vista?: Vista): Promise<RelatorioComissoes> {
@@ -369,29 +414,44 @@ export async function relatorioDeComissoes(empresaId: string, competencia: strin
   const v: Vista = vista ?? vistaPadrao(quando);
   const ini = inicioDaCompetencia(competencia), fim = fimDaCompetencia(competencia);
   const cs = await prisma.comissao.findMany({
-    where: { empresaId, orcamentoId: { not: null }, ...(v === "EMISSAO" ? { criadoEm: { gte: ini, lt: fim }, orcamento: { status: { in: [...VENDA_VIVA] } } } : {}) },
+    where: {
+      empresaId,
+      ...(v === "EMISSAO" ? {
+        criadoEm: { gte: ini, lt: fim },
+        OR: [{ orcamento: { status: { in: [...VENDA_VIVA] } } }, { ordemServicoId: { not: null }, ordemServico: { status: { not: "CANCELADA" } } }],
+      } : {}),
+    },
     select: {
-      orcamentoId: true, usuarioId: true, beneficiarioNome: true, valor: true, criadoEm: true,
+      orcamentoId: true, ordemServicoId: true, usuarioId: true, beneficiarioNome: true, valor: true, criadoEm: true,
       orcamento: { select: { codigo: true, nome: true, totalGeral: true, cliente: { select: { nome: true } } } },
+      ordemServico: { select: { numero: true, chamadoNumero: true, cliente: { select: { nome: true } }, itensOrcamento: { select: { valorTotal: true } } } },
     },
     orderBy: { criadoEm: "asc" },
   });
-  const porVenda = new Map<string, { o: NonNullable<(typeof cs)[number]["orcamento"]>; data: Date; porPessoa: Map<string, { nome: string; usuarioId: string | null; valor: number }> }>();
+  interface Origem { orcamentoId: string | null; osId: string | null; codigo: string; nome: string; cliente: string; total: number }
+  const porVenda = new Map<string, { o: Origem; data: Date; porPessoa: Map<string, { nome: string; usuarioId: string | null; valor: number }> }>();
   for (const c of cs) {
-    const ven = porVenda.get(c.orcamentoId!) ?? { o: c.orcamento!, data: c.criadoEm, porPessoa: new Map() };
+    const chave = c.orcamentoId ?? `os:${c.ordemServicoId}`;
+    const origem: Origem = c.orcamento
+      ? { orcamentoId: c.orcamentoId, osId: null, codigo: c.orcamento.codigo, nome: c.orcamento.nome, cliente: c.orcamento.cliente.nome, total: num(c.orcamento.totalGeral) }
+      : {
+        orcamentoId: null, osId: c.ordemServicoId, codigo: c.ordemServico?.chamadoNumero ?? c.ordemServico?.numero ?? "OS", nome: "Serviço executado",
+        cliente: c.ordemServico?.cliente.nome ?? "", total: (c.ordemServico?.itensOrcamento ?? []).reduce((s, l) => s + num(l.valorTotal), 0),
+      };
+    const ven = porVenda.get(chave) ?? { o: origem, data: c.criadoEm, porPessoa: new Map() };
     const k = c.usuarioId ?? `nome:${c.beneficiarioNome}`;
     const p = ven.porPessoa.get(k) ?? { nome: c.beneficiarioNome, usuarioId: c.usuarioId, valor: 0 };
     p.valor += num(c.valor);
     ven.porPessoa.set(k, p);
-    porVenda.set(c.orcamentoId!, ven);
+    porVenda.set(chave, ven);
   }
   const pessoas = new Map<string, PessoaNoRelatorio>();
-  for (const [orcamentoId, ven] of porVenda) {
+  for (const [chave, ven] of porVenda) {
     let fator = 1;
     let data = ven.data;
     if (v === "RECEBIMENTO") {
-      const rec = await recebimentoDaVenda(prisma, empresaId, orcamentoId);
-      fator = fracaoRecebidaNoPeriodo(rec.entradas, num(ven.o.totalGeral), ini, fim);
+      const rec = await recebimentoDaOrigem(prisma, empresaId, ven.o.orcamentoId ? { orcamentoId: ven.o.orcamentoId } : { osId: ven.o.osId });
+      fator = fracaoRecebidaNoPeriodo(rec.entradas, ven.o.total, ini, fim);
       if (fator <= 0) continue;
       const noMes = rec.entradas.filter((e) => e.data >= ini && e.data < fim);
       data = noMes[noMes.length - 1]?.data ?? data;
@@ -401,7 +461,7 @@ export async function relatorioDeComissoes(empresaId: string, competencia: strin
       if (valor <= 0) continue;
       const linha = pessoas.get(k) ?? { usuarioId: p.usuarioId, nome: p.nome, valor: 0, vendas: [] };
       linha.valor = round2(linha.valor + valor);
-      linha.vendas.push({ orcamentoId, codigo: ven.o.codigo, nome: ven.o.nome, cliente: ven.o.cliente.nome, data: data.toISOString(), valor });
+      linha.vendas.push({ chave, orcamentoId: ven.o.orcamentoId, codigo: ven.o.codigo, nome: ven.o.nome, cliente: ven.o.cliente, data: data.toISOString(), valor });
       pessoas.set(k, linha);
     }
   }
