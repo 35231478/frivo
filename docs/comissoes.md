@@ -155,7 +155,12 @@ O filtro é do **servidor**, em todos estes pontos:
 - histórico do equipamento;
 - assistente;
 - **toda rota da API por id** (`/api/orcamentos/[id]/…` e `/api/ordens/[id]/…`, inclusive as que gravam), mais
-  os prazos da OS.
+  os prazos da OS;
+- o **pedido do cliente** (`/api/pedidos-cliente/…`):
+  - informar o pedido e liberar sem pedido: qualquer OS/orçamento de outro vendedor na lista dá 404;
+  - a gaveta (o que o pedido vai cobrir) mostra só os da pessoa;
+  - ler, corrigir, conferir o pedido e baixar o anexo: com a marca, tudo o que o pedido cobre tem de ser da pessoa;
+  - as contagens de OS aguardando pedido no painel e no sino.
 
 Abrir por link direto um registro de outro vendedor dá **404** (página: "não encontrado").
 
