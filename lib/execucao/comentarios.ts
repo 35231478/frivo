@@ -368,7 +368,8 @@ export async function mensagensDaConversa(empresaId: string, onde: Prisma.OsCome
     const citada = await prisma.osComentario.findFirst({ where: { AND: [where, { id: op.ate }] }, select: { criadoEm: true } });
     if (citada) take = Math.min(LIMITE_ATE_CITADA, Math.max(take, await prisma.osComentario.count({ where: { AND: [where, { criadoEm: { gte: citada.criadoEm } }] } })));
   }
-  const linhas = await prisma.osComentario.findMany({ where, orderBy: { criadoEm: "desc" }, take, select: SELECT_MENSAGEM });
+  // O id desempata mensagens do mesmo instante (sem isso a ordem delas mudava conforme o banco regravava as linhas)
+  const linhas = await prisma.osComentario.findMany({ where, orderBy: [{ criadoEm: "desc" }, { id: "desc" }], take, select: SELECT_MENSAGEM });
   linhas.reverse();
   const nomes = await nomesDeQuemLeu(empresaId, linhas);
   return protegerCitacoes(empresaId, linhas.map((c) => apresentar(c, usuarioId, nomes)), op.visivel);

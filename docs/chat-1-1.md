@@ -83,7 +83,7 @@ Também a resposta à pergunta do armazenamento das fotos: os números e a propo
 
 ## As fotos e o banco
 
-**Medido:** uma foto típica de trabalho fica com ~0,5 MB no banco, e o limite aplicado é 1,5 MB comprimida (~2 MB de texto). Com ~60 fotos por dia, são ~810 MB por mês.
+**Medido** (com a compressão do HOTFIX 2, #300): uma foto típica de trabalho fica com ~0,2–0,27 MB no banco, com alvo de 200 KB comprimida; o limite do servidor segue em 1,5 MB. Com ~60 fotos por dia, são ~390 MB por mês (antes do HOTFIX 2, ~810 MB).
 
 **Garantido por teste** (`chat-1-1-fotos-pg`): nenhuma listagem, conversa, tempo real, sino ou retrato lê a foto inteira (`os_comentarios_fotos.conteudo`); só a rota de ampliar.
 
