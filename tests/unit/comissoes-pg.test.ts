@@ -44,6 +44,13 @@ async function chamar(rota: string, metodo: string, params: Record<string, strin
 }
 const hoje = () => new Date().toISOString().slice(0, 10);
 const competencia = () => { const d = new Date(); return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`; };
+/** O N-º dia útil (seg–sex) do mês seguinte ao de hoje, contado à mão (o teste não usa a regra que testa) */
+const nesimoDiaUtilDoProximoMes = (n: number) => {
+  const d = new Date(); const ano = d.getUTCMonth() === 11 ? d.getUTCFullYear() + 1 : d.getUTCFullYear(); const mes = (d.getUTCMonth() + 1) % 12;
+  for (let dia = 1, uteis = 0; dia <= 31; dia++) { const x = new Date(Date.UTC(ano, mes, dia)); if (x.getUTCDay() % 6 !== 0 && ++uteis === n) return x.toISOString().slice(0, 10); }
+  return "";
+};
+const diaDoProximoMes = (dia: number) => { const d = new Date(); return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, dia)).toISOString().slice(0, 10); };
 
 describe.skipIf(!URL_PG)("COM-1 — comissões (PostgreSQL real)", () => {
   let prisma: any;
@@ -288,6 +295,35 @@ describe.skipIf(!URL_PG)("COM-1 — comissões (PostgreSQL real)", () => {
     expect((await comissoes(a.id))[0].quando).toBe("APROVACAO");
   });
 
+  it("COM-1.1 — 'na aprovação': a fatura cancelada (sem outra viva) ESTORNA; título cancelado também; refaturar devolve; sem fatura nunca estorna", async () => {
+    await prisma.configuracao.update({ where: { empresaId: "e1" }, data: { comissaoQuando: "APROVACAO" } });
+    const a = await novoOrcamento({ servicos: [{ servicoId: "sLimp", descricao: "Limpeza", v: 500 }] });
+    logar("uAdm");
+    await aprovar(a.id);
+    expect(await liberado(a.id)).toBe(50);
+    await srv.sincronizarComissoes("e1", { orcamentoIds: [a.id] });
+    expect(await liberado(a.id)).toBe(50); // ainda sem fatura: a venda vale
+    expect((await faturar(a.id)).status).toBe(201);
+    const med = await prisma.medicao.findFirst({ where: { itens: { some: { orcamentoId: a.id } } } });
+    expect((await chamar("medicoes/[id]/acao", "POST", { id: med.id }, { acao: "CANCELAR" })).status).toBe(200);
+    await srv.sincronizarComissoes("e1", { orcamentoIds: [a.id] });
+    expect(await liberado(a.id)).toBe(0);
+    expect((await prisma.comissaoLancamento.findFirst({ where: { comissao: { orcamentoId: a.id }, tipo: "ESTORNO" } })).motivo).toBe("Fatura cancelada");
+    // Refaturou: volta a valer
+    expect((await faturar(a.id)).status).toBe(201);
+    await srv.sincronizarComissoes("e1", { orcamentoIds: [a.id] });
+    expect(await liberado(a.id)).toBe(50);
+    // A fatura viva com TODOS os títulos cancelados conta como cancelada
+    const nova = await prisma.medicao.findFirst({ where: { itens: { some: { orcamentoId: a.id } }, status: { not: "CANCELADA" } } });
+    expect(await prisma.contaReceber.count({ where: { medicaoId: nova.id } })).toBeGreaterThan(0);
+    await prisma.contaReceber.updateMany({ where: { medicaoId: nova.id }, data: { status: "CANCELADO" } });
+    await srv.sincronizarComissoes("e1", { orcamentoIds: [a.id] });
+    expect(await liberado(a.id)).toBe(0);
+    // O gatilho "no recebimento" não muda: o dinheiro manda (aqui, sem dinheiro, nada é liberado de qualquer jeito)
+    await prisma.configuracao.update({ where: { empresaId: "e1" }, data: { comissaoQuando: "RECEBIMENTO" } });
+    expect((await comissoes(a.id))[0].quando).toBe("APROVACAO");
+  });
+
   it("gatilho 'na conclusão da OS': nada até concluir; concluída libera; o vendedor segue para a OS", async () => {
     await prisma.configuracao.update({ where: { empresaId: "e1" }, data: { comissaoQuando: "CONCLUSAO_OS" } });
     const o = await novoOrcamento({ servicos: [{ servicoId: "sInst", descricao: "Instalação split", v: 2000 }] });
@@ -336,6 +372,8 @@ describe.skipIf(!URL_PG)("COM-1 — comissões (PostgreSQL real)", () => {
     expect(gravada.contaPagar).toMatchObject({ fornecedor: "Vitor Vendas", tecnicoId: "tV", status: "PENDENTE" });
     expect(Number(gravada.contaPagar.valorTotal)).toBe(aberto);
     expect(gravada.contaPagar.descricao).toMatch(/^Comissões — /);
+    // COM-1.1: sem configurar, a conta vence no 5º dia útil do mês seguinte
+    expect(gravada.contaPagar.dataVencimento.toISOString().slice(0, 10)).toBe(nesimoDiaUtilDoProximoMes(5));
     expect(await prisma.comissaoLancamento.count({ where: { usuarioId: "uV", fechamentoId: null } })).toBe(0);
     // O extrato mostra "paga"
     logar("uV", montarPermissoes({ orcamentos: ["visualizar"] }));
@@ -346,10 +384,25 @@ describe.skipIf(!URL_PG)("COM-1 — comissões (PostgreSQL real)", () => {
     expect((await prisma.contaPagar.findUnique({ where: { id: gravada.contaPagar.id } })).status).toBe("CANCELADO");
     expect(await prisma.comissaoLancamento.count({ where: { usuarioId: "uV", fechamentoId: null } })).toBeGreaterThan(0);
 
+    // COM-1.1: Configurações › Comissões › vencimento — tipo e dia juntos, dentro do limite; vale no próximo fechamento
+    logar("uAdm");
+    const cfg = (x: object) => chamar("comissoes", "PUT", {}, { quando: "RECEBIMENTO", liquidaImpostos: false, ...x });
+    expect((await cfg({ vencimentoTipo: "DIA_UTIL", vencimentoDia: 21 })).status).toBe(400);
+    expect((await cfg({ vencimentoTipo: "DIA_FIXO", vencimentoDia: 32 })).status).toBe(400);
+    expect((await cfg({ vencimentoTipo: "DIA_FIXO" })).status).toBe(400);
+    expect((await cfg({ vencimentoTipo: "DIA_FIXO", vencimentoDia: 10 })).status).toBe(200);
+    expect((await chamar("comissoes", "GET")).json.config.vencimento).toEqual({ tipo: "DIA_FIXO", dia: 10 });
+    expect((await cfg({})).status).toBe(200); // sem o vencimento no corpo: fica como está
+    expect((await prisma.configuracao.findUnique({ where: { empresaId: "e1" } })).comissaoVencimentoDia).toBe(10);
+    // O banco recusa o que a tela recusa (o CHECK do SQL)
+    await expect(prisma.configuracao.update({ where: { empresaId: "e1" }, data: { comissaoVencimentoTipo: "DIA_UTIL", comissaoVencimentoDia: 25 } })).rejects.toThrow();
+
     // Fecha de novo (versão 2) e registra um pagamento na conta nova: aí não reabre
     const f2 = await fech.fecharMes(autor, { competencia: competencia(), ciente: true });
     expect(f2.versao).toBe(2);
     const l2 = await prisma.desempenhoFechamentoLinha.findFirst({ where: { fechamentoId: f2.id, usuarioId: "uV" } });
+    expect((await prisma.contaPagar.findUnique({ where: { id: l2.contaPagarId } })).dataVencimento.toISOString().slice(0, 10)).toBe(diaDoProximoMes(10));
+    await prisma.configuracao.update({ where: { empresaId: "e1" }, data: { comissaoVencimentoTipo: "DIA_UTIL", comissaoVencimentoDia: 5 } });
     await prisma.contaPagar.update({ where: { id: l2.contaPagarId }, data: { valorPago: 10, status: "PAGO_PARCIAL" } });
     await expect(fech.reabrirMes(autor, f2.id, "Tentando reabrir com pagamento")).rejects.toThrow(/já tem pagamento registrado/);
     expect((await prisma.desempenhoFechamento.findUnique({ where: { id: f2.id } })).situacao).toBe("FECHADO");
@@ -402,6 +455,11 @@ describe.skipIf(!URL_PG)("COM-1 — comissões (PostgreSQL real)", () => {
     expect((await chamar("perfil/comissoes", "GET")).json.vendas.some((v: any) => v.orcamentoId === b.id)).toBe(false);
     logar("uP", montarPermissoes({ orcamentos: ["visualizar"] }));
     expect((await chamar("perfil/comissoes", "GET")).json.vendas.find((v: any) => v.orcamentoId === b.id)).toMatchObject({ prevista: 0, liberada: 2, paga: 0 });
+    // O relatório por emissão (faturada a venda): só a da Paula; a substituída do Vitor não aparece
+    logar("uAdm");
+    expect((await faturar(b.id)).status).toBe(201);
+    const rel = await chamar("comissoes/relatorio", "GET", {}, undefined, `?mes=${competencia()}&vista=EMISSAO`);
+    expect(rel.json.pessoas.flatMap((p: any) => p.vendas.filter((v: any) => v.orcamentoId === b.id).map((v: any) => [p.nome, v.valor]))).toEqual([["Paula Pessoa", 2]]);
     // Já PAGA num fechamento: a troca é recusada, com o mês, e nada muda
     logar("uP");
     const f = await prisma.desempenhoFechamento.create({ data: { empresaId: "e1", competencia: "2027-01", versao: 90, painel: {}, premios: [], fechadoPorNome: "Fictício", fechadoEm: new Date() } });

@@ -16,6 +16,7 @@ import { validarDataUrl } from "@/lib/anexos-server";
 import { FATURAS_EMITIDAS, whereMedicaoAguardando, whereOrcamentoAguardando, whereOsAguardando } from "@/lib/pedido-cliente/where";
 export { whereOrcamentoAguardando, whereOsAguardando };
 import { chaveHojeBR } from "@/lib/fuso";
+import { MSG_FORA_DO_ESCOPO } from "@/lib/escopo/proprios-server";
 import { MSG_MOTIVO_RECUSA } from "@/lib/pedido-cliente/lembretes";
 import {
   aguardandoPedido, alertaValorPedido, inicioDaEspera, limparMotivo, limparNumeroPedido, modoEfetivo, MSG_MOTIVO, textoPedidoNaNota,
@@ -191,7 +192,14 @@ export async function registrarPedido(
     clienteDaFatura = m.clienteId;
     let daFaturaOs = m.itens.map((i) => i.ordemServicoId).filter(Boolean) as string[];
     let daFaturaOrc = m.itens.map((i) => i.orcamentoId).filter(Boolean) as string[];
-    if (ligar.soDaPessoa) [daFaturaOs, daFaturaOrc] = await Promise.all([ligar.soDaPessoa.os(daFaturaOs), ligar.soDaPessoa.orcamentos(daFaturaOrc)]);
+    if (ligar.soDaPessoa) {
+      const [os, orc] = await Promise.all([ligar.soDaPessoa.os(daFaturaOs), ligar.soDaPessoa.orcamentos(daFaturaOrc)]);
+      const compartilhada = os.length < daFaturaOs.length || orc.length < daFaturaOrc.length;
+      // Nada da fatura é da pessoa: a fatura não existe para ela. Parte é: o pedido vale só nas OS dela (a fatura
+      // segue "Aguardando PC" enquanto a OS do outro esperar o pedido dele, e mostra os números dos dois)
+      if (compartilhada && !os.length && !orc.length) return falha(404, MSG_FORA_DO_ESCOPO);
+      [daFaturaOs, daFaturaOrc] = [os, orc];
+    }
     osIds.push(...daFaturaOs); orcamentoIds.push(...daFaturaOrc);
   }
   if (!osIds.length && !orcamentoIds.length && !ligar.medicaoId) return falha(400, "Escolha ao menos uma OS ou orçamento.");

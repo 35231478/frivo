@@ -42,14 +42,15 @@ export async function GET(_: NextRequest, { params }: Params) {
   const orcamentos = daPessoa(conferindo ? propostosOrc : p.orcamentos, visivel.tudo ? null : visivel.orcamentoIds);
   const total = await totalLigado(ordens.map((o) => o.id), orcamentos.map((o) => o.id));
   const { osPropostas: _o, orcamentosPropostos: _c, enviadoPorContatoId: _e, ...resto } = p;
+  // COM-1.1: o pedido compartilhado (com OS de outro vendedor) só é corrigido/conferido por quem não tem a marca
+  const podeEditar = visivel.tudo || !(await pedidoForaDoEscopo(session.user, id));
   return NextResponse.json({
     ...resto, ordens, orcamentos, valor, data: p.data.toISOString().slice(0, 10), temAnexo: !!p.anexoNome, total,
     cliente: p.cliente.nomeFantasia ?? p.cliente.nome, alerta: alertaValorPedido(valor, total),
     enviadoPor: contato ? [contato.nome, contato.email].filter(Boolean).join(" · ") : null,
     // A mesma regra do POST …/conferir: quem não pode conferir não vê Confirmar/Recusar (compartilhado + marca: não pode)
-    podeConferir: visivel.tudo && podeInformarPedido(session, { os: p.osPropostas.length > 0, orcamentos: p.orcamentosPropostos.length > 0 }),
-    // COM-1.1: o pedido compartilhado só é corrigido por quem não tem a marca
-    podeEditar: visivel.tudo || !(await pedidoForaDoEscopo(session.user, id)),
+    podeConferir: podeEditar && podeInformarPedido(session, { os: p.osPropostas.length > 0, orcamentos: p.orcamentosPropostos.length > 0 }),
+    podeEditar,
   });
 }
 

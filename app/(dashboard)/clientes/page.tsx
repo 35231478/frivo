@@ -13,7 +13,7 @@ import {
 } from "@/lib/status-financeiro";
 import { Prisma } from "@prisma/client";
 import Link from "next/link";
-import { filtroOrdens, soProprios } from "@/lib/escopo/proprios";
+import { filtroOrdens, ordemSemVolumeDosOutros } from "@/lib/escopo/proprios";
 import { Users, Plus, FileCheck, Star } from "lucide-react";
 import { ClienteAcoes } from "@/components/clientes/cliente-acoes";
 import { ImportarClientes } from "@/components/clientes/importar-clientes";
@@ -40,9 +40,7 @@ export default async function ClientesPage({
   const massa = temAcaoMassa(session!.user!.permissoes, session!.user!.role, "clientes");
   const { pagina: paginaPedida, porPagina } = lerPaginacao(sp);
   // COM-1.1: com "Ver só os próprios" em OS, ordenar pela contagem de OS revelaria o volume dos outros: vale o padrão
-  const ordem = lerOrdem(sp, ORDEM_CLIENTES);
-  const ordemSegura = ordem.campo === "os" && soProprios(session!.user, "ordens") ? { ...ordem, campo: null } : ordem;
-  const orderBy = ordemPrisma(ordemSegura, ORDEM_CLIENTES, ORDEM_PADRAO_CLIENTES) as Prisma.ClienteOrderByWithRelationInput[];
+  const orderBy = ordemPrisma(ordemSemVolumeDosOutros(session!.user, lerOrdem(sp, ORDEM_CLIENTES)), ORDEM_CLIENTES, ORDEM_PADRAO_CLIENTES) as Prisma.ClienteOrderByWithRelationInput[];
 
   // O status financeiro é calculado (não é mais coluna filtrável no banco): vem à parte.
   const { where, statusFiltro } = whereClientes(empresaId, { busca, status, segmento, inativos });
