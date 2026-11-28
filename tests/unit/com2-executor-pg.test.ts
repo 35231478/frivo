@@ -131,6 +131,7 @@ describe.skipIf(!URL_PG)("COM-2A — comissão do técnico (PostgreSQL real)", (
   });
 
   let osA = "";
+  let osCancelada = "";
   it("a unidade: o equipamento atendido ganha a parte da linha (÷ vinculados), dividida igual; o não atendido e o sem checklist não geram", async () => {
     // 3 vinculados: q1 feito e respondido; q2 feito SEM o checklist; q3 não atendido. Linha R$ 300 → R$ 100 por equipamento
     osA = await novaOs({ equipamentos: [{ id: "q1", feito: true, feitoPor: "tCarlos" }, { id: "q2", feito: true, respondido: false }, { id: "q3" }] });
@@ -177,6 +178,7 @@ describe.skipIf(!URL_PG)("COM-2A — comissão do técnico (PostgreSQL real)", (
     expect(ex.vendas.find((v) => v.chave === `os:${osA}`)).toMatchObject({ prevista: 0, liberada: 5 });
 
     const osC = await novaOs({ status: "CONCLUIDA", equipamentos: [{ id: "q4", feito: true }] });
+    osCancelada = osC;
     await sincronizar([osC]);
     expect(await liberado(osC)).toBe(30); // 10% de R$ 300 (1 equipamento), 15 + 15
     await prisma.ordemServico.update({ where: { id: osC }, data: { status: "CANCELADA" } });
@@ -248,9 +250,20 @@ describe.skipIf(!URL_PG)("COM-2A — comissão do técnico (PostgreSQL real)", (
     // Quem anotou "Atenção" no equipamento avisou do problema: o retorno não vira revisão
     const osAt = await novaOs({ equipamentos: [{ id: "q2", feito: true, respondido: false }], feitoEm: haDias(10), criadaEm: haDias(11) });
     await prisma.checklistResposta.create({ data: { empresaId: "e1", atividadeId: `at-${osAt}`, equipamentoId: "q2", itemId: "i1", textoItem: "Filtro", status: "ATENCAO", observacao: "Compressor fazendo barulho" } });
+    await prisma.fotoAtendimento.create({ data: { empresaId: "e1", atividadeId: `at-${osAt}`, equipamentoId: "q2", itemId: "i1", url: "data:image/png;base64,QQ==" } });
     await corretiva("osRet2", "OS-RET2", haDias(4), "q2");
     const r2b = await sincronizar([osAt]);
-    expect(r2b.revisoes).toBe(0);
+    expect(r2b.criadas).toBe(2); // o relatório está completo (Atenção com foto e observação): a comissão nasce
+    expect(r2b.revisoes).toBe(0); // ...mas quem avisou do problema não entra no retorno
+
+    // A corretiva que nasceu de um ORÇAMENTO aprovado é serviço previsto, não retorno
+    const osOrc = await novaOs({ equipamentos: [{ id: "q1", feito: true }], feitoEm: haDias(10), criadaEm: haDias(11) });
+    await prisma.orcamento.create({ data: { id: "orcRet", empresaId: "e1", codigo: "ORC-RET", nome: "Troca do compressor", clienteId: "c1", criadoPorId: "uAdm", status: "APROVADO", tipo: "COMUM", tokenPublico: "tok-orc-ret" } });
+    await corretiva("osDoOrc", "OS-ORC", haDias(4), "q1");
+    await prisma.ordemServico.update({ where: { id: "osDoOrc" }, data: { orcamentoOrigemId: "orcRet" } });
+    const r3 = await sincronizar([osOrc]);
+    expect(r3.criadas).toBe(2);
+    expect(r3.revisoes).toBe(0);
   });
 
   it("outra empresa: a conta dela não vê nada desta (e a desta não vê a dela)", async () => {
@@ -338,14 +351,15 @@ describe.skipIf(!URL_PG)("COM-2A — comissão do técnico (PostgreSQL real)", (
     const os = await novaOs({ status: "CONCLUIDA", equipamentos: [{ id: "q2", feito: true }] });
     await sincronizar([os]);
     expect(await liberado(os)).toBe(0);
+    // A fatura junta esta OS (R$ 300) com OUTRA OS (R$ 300, sem orçamento): só a metade dela é desta OS
     await prisma.medicao.create({ data: {
-      id: `med-${os}`, empresaId: "e1", clienteId: "c1", numero: `FAT-${os}`, tokenPublico: `tokm-${os}`, status: "BOLETO_GERADO", valorLiquido: 300,
-      itens: { create: [{ descricao: "Limpeza de split", valorUnitario: 300, valorTotal: 300, ordemServicoId: os }] },
+      id: `med-${os}`, empresaId: "e1", clienteId: "c1", numero: `FAT-${os}`, tokenPublico: `tokm-${os}`, status: "BOLETO_GERADO", valorLiquido: 600,
+      itens: { create: [{ descricao: "Limpeza de split", valorUnitario: 300, valorTotal: 300, ordemServicoId: os }, { descricao: "Outra OS", valorUnitario: 300, valorTotal: 300, ordemServicoId: osA }] },
     } });
-    const conta = await prisma.contaReceber.create({ data: { empresaId: "e1", clienteId: "c1", numero: `CR-${os}`, descricao: "Fatura fictícia", valor: 300, status: "A_RECEBER", medicaoId: `med-${os}`, dataVencimento: agora } });
-    await prisma.contaReceberRecebimento.create({ data: { empresaId: "e1", contaReceberId: conta.id, valor: 150, data: haDias(1) } });
+    const conta = await prisma.contaReceber.create({ data: { empresaId: "e1", clienteId: "c1", numero: `CR-${os}`, descricao: "Fatura fictícia", valor: 600, status: "A_RECEBER", medicaoId: `med-${os}`, dataVencimento: agora } });
+    await prisma.contaReceberRecebimento.create({ data: { empresaId: "e1", contaReceberId: conta.id, valor: 300, data: haDias(1) } });
     await sincronizar([os]);
-    expect(await liberado(os)).toBe(15); // metade de R$ 30
+    expect(await liberado(os)).toBe(15); // entrou metade da fatura → metade desta OS → metade de R$ 30
     await prisma.configuracao.update({ where: { empresaId: "e1" }, data: { comissaoExecutorQuando: "CONCLUSAO_OS" } });
   });
 
@@ -396,11 +410,18 @@ describe.skipIf(!URL_PG)("COM-2A — comissão do técnico (PostgreSQL real)", (
     expect((await chamar("comissoes/revisoes/[id]", "POST", { id: daAna.id }, { decisao: "MANTER", motivo: "Não é minha" })).status).toBe(404);
   });
 
+  it("o extrato refaz a conta do técnico sozinho (sem ninguém chamar a sincronização antes)", async () => {
+    const os = await novaOs({ equipamentos: [{ id: "q3", feito: true }] });
+    const ex = await srv.extratoDoUsuario("e1", "uCarlos", agora);
+    expect(ex.vendas.find((v) => v.chave === `os:${os}`)).toMatchObject({ tipo: "OS", prevista: 15 });
+  });
+
   it("o relatório do mês (por emissão) traz as OS do técnico ao lado das vendas", async () => {
     const rel = await srv.relatorioDeComissoes("e1", competencia(agora), "EMISSAO");
     const carlos = rel.pessoas.find((p) => p.usuarioId === "uCarlos")!;
     expect(carlos.vendas.some((v) => v.chave.startsWith("os:") && v.orcamentoId === null && v.nome === "Serviço executado" && v.cliente === "Hospital Fictício")).toBe(true);
-    // a OS cancelada fica de fora
-    expect(carlos.vendas.some((v) => v.codigo === "OS-RET")).toBe(false);
+    // a OS cancelada (que tinha comissão) fica de fora
+    expect(await prisma.comissao.count({ where: { ordemServicoId: osCancelada } })).toBeGreaterThan(0);
+    expect(carlos.vendas.some((v) => v.chave === `os:${osCancelada}`)).toBe(false);
   });
 });

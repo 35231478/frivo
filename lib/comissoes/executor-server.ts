@@ -259,8 +259,8 @@ async function abrirRevisoes(
   const deste = servicos.filter((s) => atividadeIds.includes(s.atividadeId) && s.atividade.ordemServicoId === os.id && s.feitoEm);
   if (!deste.length) return 0;
   const primeiro = Math.min(...deste.map((s) => s.feitoEm!.getTime()));
+  // Sem tipo marcado, `in: []` não acha nenhuma OS: a revisão fica desligada
   const tiposRetorno = (await tx.desempenhoTipoRetorno.findMany({ where: { empresaId: c.empresaId }, select: { tipoOsId: true } })).map((t) => t.tipoOsId);
-  if (!tiposRetorno.length) return 0;
   const candidatas = await tx.ordemServico.findMany({
     where: {
       empresaId: c.empresaId, id: { not: os.id }, status: { not: "CANCELADA" }, orcamentoOrigemId: null, pmocOcorrenciasCorretivas: { none: {} },

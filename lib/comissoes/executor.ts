@@ -198,10 +198,9 @@ export function motivoDoEstornoExecutor(e: EstadoDoExecutor): string {
 /**
  * Este serviço (a atividade no equipamento) é a ORIGEM do retorno? Usa a mesma regra do Desempenho: o retorno
  * "volta" do ÚLTIMO serviço no equipamento antes de a OS do retorno ser aberta, em outra OS, dentro dos dias.
- * `dias` 0 = revisão de retorno desligada.
+ * `dias` 0 = revisão de retorno desligada (a janela fecha sozinha: nenhum serviço é posterior à abertura).
  */
 export function ehOrigemDoRetorno(servicos: readonly ServicoNoEquipamento[], retorno: { ordemServicoId: string; abertaEm: Date }, dias: number, servico: Pick<ServicoNoEquipamento, "atividadeId">): boolean {
-  if (dias <= 0) return false;
   return origemDoRetorno([...servicos], retorno, dias)?.atividadeId === servico.atividadeId;
 }
 
@@ -236,10 +235,10 @@ export function aplicarTetos(pessoas: readonly PessoaNoMes[], tetos: readonly Te
   return { pessoas: saida, excedentes };
 }
 
-/** O primeiro instante do mês seguinte à competência ("2027-01" → 2027-02-01T00:00Z): onde o excedente cai */
+/** O primeiro instante do mês seguinte à competência ("2027-01" → 2027-02-01T00:00Z; o mês 12 vira janeiro sozinho) */
 export function inicioDoMesSeguinte(competencia: string): Date {
   const [a, m] = competencia.split("-").map(Number);
-  return new Date(Date.UTC(m === 12 ? a + 1 : a, m === 12 ? 0 : m, 1));
+  return new Date(Date.UTC(a, m, 1));
 }
 
 /* ───────── o que a tela manda ───────── */
