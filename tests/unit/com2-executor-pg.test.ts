@@ -14,11 +14,24 @@
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { execFileSync } from "node:child_process";
 import path from "node:path";
+import { NextRequest } from "next/server";
+import { montarPermissoes, permissoesTotais, type Permissoes } from "@/lib/permissoes";
 
 const URL_PG = process.env.PG_TESTE_URL;
 const SCHEMA = `teste_com2_exec_${process.pid}`;
 const RAIZ = path.resolve(__dirname, "../..");
-vi.mock("@/lib/auth", () => ({ auth: vi.fn(async () => null) }));
+const sessao = vi.hoisted(() => ({ atual: null as any }));
+vi.mock("@/lib/auth", () => ({ auth: vi.fn(async () => sessao.atual) }));
+const NOMES: Record<string, [string, string]> = { uAdm: ["e1", "Gestora Fictícia"], uCarlos: ["e1", "Carlos Técnico"], uAna: ["e1", "Ana Ajudante"], uB: ["e2", "Beto Outra"] };
+const logar = (id: string, permissoes: Permissoes = permissoesTotais(), role = "OPERADOR") => {
+  sessao.atual = { user: { id, name: NOMES[id][1], email: `${id}@ficticio.test`, empresaId: NOMES[id][0], role, permissoes, tecnicoId: null } };
+};
+async function chamar(rota: string, metodo: string, params: Record<string, string> = {}, corpo?: unknown) {
+  const mod = await import(/* @vite-ignore */ `@/app/api/${rota}/route`);
+  const req = new NextRequest("http://localhost/api/x", { method: metodo, headers: { "Content-Type": "application/json" }, body: corpo === undefined ? undefined : JSON.stringify(corpo) });
+  const res: Response = metodo === "GET" && mod.GET.length === 0 ? await mod.GET() : await mod[metodo](req, { params: Promise.resolve(params) });
+  return { status: res.status, json: await res.json().catch(() => null) };
+}
 vi.setConfig({ testTimeout: 90_000 });
 
 const DIA = 86_400_000;
@@ -82,6 +95,7 @@ describe.skipIf(!URL_PG)("COM-2A — comissão do técnico (PostgreSQL real)", (
     srv = await import("@/lib/comissoes/servidor");
     fech = await import("@/lib/desempenho/fechamento-server");
     regras = await import("@/lib/comissoes/regras");
+    await Promise.all(["comissoes", "comissoes/regras", "comissoes/tetos", "comissoes/tetos/[id]", "comissoes/revisoes", "comissoes/revisoes/[id]", "configuracoes"].map((r) => import(/* @vite-ignore */ `@/app/api/${r}/route`)));
 
     await prisma.empresa.createMany({ data: [{ id: "e1", nome: "Clima Fictícia", cnpj: "12345678000190", email: "e1@ficticio.test" }, { id: "e2", nome: "Outra Fictícia", cnpj: "98765432000110", email: "e2@ficticio.test" }] });
     await prisma.configuracao.createMany({ data: [{ empresaId: "e1" }, { empresaId: "e2" }] });
@@ -270,5 +284,123 @@ describe.skipIf(!URL_PG)("COM-2A — comissão do técnico (PostgreSQL real)", (
 
     await fech.reabrirMes(autor, f.id, "Conferir o teto do Carlos", agora);
     expect(await prisma.comissaoLancamento.count({ where: { tetoCompetencia: competencia(agora) } })).toBe(0);
+  });
+
+  it("Configurações › Comissões: regra de Executor com % por cargo (cargo de outra empresa recusado); o técnico e os tipos de retorno; a tela antiga e a tela geral não apagam", async () => {
+    logar("uAdm");
+    await prisma.cargo.create({ data: { id: "cgOutra", empresaId: "e2", nome: "Da outra" } });
+    const regraCargo = { quemTipo: "CARGO", cargoId: "cgAj", papel: "EXECUTOR", sobreTipo: "SERVICO", servicoId: "sLimp", base: "FIXO_ITEM", valor: 12, divisao: "POR_CARGO" };
+    expect((await chamar("comissoes/regras", "POST", {}, { ...regraCargo, divisaoCargos: { cgOutra: 50 } })).status).toBe(400);
+    const criada = await chamar("comissoes/regras", "POST", {}, { ...regraCargo, divisaoCargos: { cgTec: 70, cgAj: 30 } });
+    expect(criada.status).toBe(201);
+    expect(await prisma.comissaoRegra.findUnique({ where: { id: criada.json.id } })).toMatchObject({ papel: "EXECUTOR", divisao: "POR_CARGO", divisaoCargos: { cgTec: 70, cgAj: 30 } });
+    await prisma.comissaoRegra.update({ where: { id: criada.json.id }, data: { ativo: false } }); // não atrapalha as contas abaixo
+
+    // o tipo de OS de outra empresa é recusado; o daqui grava (a mesma lista do Desempenho)
+    await prisma.tipoOs.create({ data: { id: "toOutra", empresaId: "e2", nome: "Corretiva da outra" } });
+    const cfg = { quando: "RECEBIMENTO", liquidaImpostos: false, executorQuando: "ACEITE", retornoDias: 45 };
+    expect((await chamar("comissoes", "PUT", {}, { ...cfg, tiposRetorno: ["toCorr", "toOutra"] })).status).toBe(400);
+    expect((await chamar("comissoes", "PUT", {}, { ...cfg, tiposRetorno: ["toCorr", "toPrev"] })).status).toBe(200);
+    expect(await prisma.configuracao.findUnique({ where: { empresaId: "e1" } })).toMatchObject({ comissaoExecutorQuando: "ACEITE", comissaoRetornoDias: 45 });
+    expect((await prisma.desempenhoTipoRetorno.findMany({ where: { empresaId: "e1" }, orderBy: { tipoOsId: "asc" } })).map((t: any) => t.tipoOsId)).toEqual(["toCorr", "toPrev"]);
+    // a tela antiga (só os dois campos de antes) não mexe no técnico nem nos tipos
+    expect((await chamar("comissoes", "PUT", {}, { quando: "RECEBIMENTO", liquidaImpostos: false })).status).toBe(200);
+    expect(await prisma.configuracao.findUnique({ where: { empresaId: "e1" } })).toMatchObject({ comissaoExecutorQuando: "ACEITE", comissaoRetornoDias: 45 });
+    expect(await prisma.desempenhoTipoRetorno.count({ where: { empresaId: "e1" } })).toBe(2);
+    // tirar um tipo
+    expect((await chamar("comissoes", "PUT", {}, { ...cfg, tiposRetorno: ["toCorr"] })).status).toBe(200);
+    expect((await prisma.desempenhoTipoRetorno.findMany({ where: { empresaId: "e1" } })).map((t: any) => t.tipoOsId)).toEqual(["toCorr"]);
+    // a tela geral de Configurações manda tudo de volta: não sobrescreve o técnico
+    const geral = (await chamar("configuracoes", "GET")).json;
+    expect((await chamar("configuracoes", "PUT", {}, { ...geral, comissaoExecutorQuando: "RECEBIMENTO", comissaoRetornoDias: 1 })).status).toBe(200);
+    expect(await prisma.configuracao.findUnique({ where: { empresaId: "e1" } })).toMatchObject({ comissaoExecutorQuando: "ACEITE", comissaoRetornoDias: 45 });
+    // a tela traz tudo isso de volta
+    const tela = (await chamar("comissoes", "GET")).json;
+    expect(tela.config).toMatchObject({ executorQuando: "ACEITE", retornoDias: 45, tiposRetorno: ["toCorr"] });
+    expect(tela.opcoes.tiposOs.map((t: any) => t.id).sort()).toEqual(["toCorr", "toPrev"]);
+    expect(tela.regras.find((r: any) => r.id === criada.json.id)).toMatchObject({ divisao: "POR_CARGO", divisaoCargos: { cgTec: 70, cgAj: 30 } });
+  });
+
+  it("gatilho 'aceite do cliente' (congelado na comissão): a OS concluída não basta; o aceite confirmado libera", async () => {
+    const os = await novaOs({ status: "CONCLUIDA", equipamentos: [{ id: "q1", feito: true }] });
+    await sincronizar([os]);
+    const cs = await doOs(os);
+    expect(cs.map((c: any) => c.quando)).toEqual(["ACEITE", "ACEITE"]);
+    expect(await liberado(os)).toBe(0);
+    await prisma.osAceite.create({ data: { empresaId: "e1", ordemServicoId: os, token: `tok-${os}`, situacao: "CONFIRMADO", confirmadoEm: haDias(1) } });
+    await sincronizar([os]);
+    expect(await liberado(os)).toBe(30);
+    expect((await prisma.comissaoLancamento.findFirst({ where: { comissao: { ordemServicoId: os } } })).motivo).toBe("Aceite do cliente");
+  });
+
+  it("gatilho 'recebimento da OS': libera a parte do que entrou na fatura da OS", async () => {
+    await prisma.configuracao.update({ where: { empresaId: "e1" }, data: { comissaoExecutorQuando: "RECEBIMENTO" } });
+    const os = await novaOs({ status: "CONCLUIDA", equipamentos: [{ id: "q2", feito: true }] });
+    await sincronizar([os]);
+    expect(await liberado(os)).toBe(0);
+    await prisma.medicao.create({ data: {
+      id: `med-${os}`, empresaId: "e1", clienteId: "c1", numero: `FAT-${os}`, tokenPublico: `tokm-${os}`, status: "BOLETO_GERADO", valorLiquido: 300,
+      itens: { create: [{ descricao: "Limpeza de split", valorUnitario: 300, valorTotal: 300, ordemServicoId: os }] },
+    } });
+    const conta = await prisma.contaReceber.create({ data: { empresaId: "e1", clienteId: "c1", numero: `CR-${os}`, descricao: "Fatura fictícia", valor: 300, status: "A_RECEBER", medicaoId: `med-${os}`, dataVencimento: agora } });
+    await prisma.contaReceberRecebimento.create({ data: { empresaId: "e1", contaReceberId: conta.id, valor: 150, data: haDias(1) } });
+    await sincronizar([os]);
+    expect(await liberado(os)).toBe(15); // metade de R$ 30
+    await prisma.configuracao.update({ where: { empresaId: "e1" }, data: { comissaoExecutorQuando: "CONCLUSAO_OS" } });
+  });
+
+  it("teto pela tela: criar, repetido 409, pessoa de outra empresa 400, excluir; sem 'Desempenho › Gerenciar' 403", async () => {
+    logar("uAdm");
+    expect((await chamar("comissoes/tetos", "POST", {}, { quemTipo: "CARGO", cargoId: "cgAj", valor: 900 })).status).toBe(201);
+    expect((await chamar("comissoes/tetos", "POST", {}, { quemTipo: "CARGO", cargoId: "cgAj", valor: 500 })).status).toBe(409);
+    expect((await chamar("comissoes/tetos", "POST", {}, { quemTipo: "PESSOA", usuarioId: "uB", valor: 500 })).status).toBe(400);
+    const tela = (await chamar("comissoes", "GET")).json;
+    const doCargo = tela.tetos.find((x: any) => x.cargoId === "cgAj");
+    expect(doCargo).toMatchObject({ quemTipo: "CARGO", nome: "Ajudante", valor: 900 });
+    expect((await chamar("comissoes/tetos/[id]", "DELETE", { id: doCargo.id })).status).toBe(200);
+    expect((await chamar("comissoes/tetos/[id]", "DELETE", { id: doCargo.id })).status).toBe(404);
+    logar("uCarlos", montarPermissoes({ desempenho: ["visualizar"] }));
+    expect((await chamar("comissoes/tetos", "POST", {}, { quemTipo: "CARGO", cargoId: "cgAj", valor: 900 })).status).toBe(403);
+    expect((await chamar("comissoes/revisoes", "GET")).status).toBe(403);
+  });
+
+  it("revisão pela tela: ninguém decide a própria; MANTER libera; decidida não muda de novo; ESTORNAR estorna", async () => {
+    const os = await novaOs({ status: "CONCLUIDA", equipamentos: [{ id: "q5", feito: true }], feitoEm: haDias(9), criadaEm: haDias(9) });
+    await prisma.ordemServico.create({ data: {
+      id: "osRet3", empresaId: "e1", numero: "OS-RET3", clienteId: "c1", criadoPorId: "uAdm", descricao: "Voltou", status: "ABERTA", criadoEm: haDias(6), equipamentoId: "q5",
+      atividades: { create: [{ id: "at-osRet3", empresaId: "e1", titulo: "Corretiva", tipoOsId: "toCorr", status: "AGENDADA" }] },
+    } });
+    await sincronizar([os]);
+    logar("uAdm");
+    const lista = (await chamar("comissoes/revisoes", "GET")).json.revisoes.filter((r: any) => r.descricao.startsWith("OS-RET3"));
+    expect(lista.map((r: any) => `${r.beneficiario}:${r.situacao}:${r.valor}`).sort()).toEqual(["Ana Ajudante:A_REVISAR:15", "Carlos Técnico:A_REVISAR:15"]);
+    const doCarlos = lista.find((r: any) => r.beneficiario === "Carlos Técnico");
+    const daAna = lista.find((r: any) => r.beneficiario === "Ana Ajudante");
+    expect(await liberado(os)).toBe(0);
+
+    logar("uCarlos");
+    const propria = await chamar("comissoes/revisoes/[id]", "POST", { id: doCarlos.id }, { decisao: "MANTER", motivo: "Foi outro defeito" });
+    expect(propria).toMatchObject({ status: 403, json: { erro: expect.stringMatching(/sua própria comissão/) } });
+    expect((await chamar("comissoes/revisoes/[id]", "POST", { id: daAna.id }, { decisao: "MANTER", motivo: "abc" })).status).toBe(400);
+
+    logar("uAdm");
+    expect((await chamar("comissoes/revisoes/[id]", "POST", { id: doCarlos.id }, { decisao: "MANTER", motivo: "Foi outro defeito" })).status).toBe(200);
+    expect(await liberado(os, "uCarlos")).toBe(15);
+    expect((await chamar("comissoes/revisoes/[id]", "POST", { id: doCarlos.id }, { decisao: "ESTORNAR", motivo: "Mudei de ideia" })).status).toBe(409);
+    expect((await chamar("comissoes/revisoes/[id]", "POST", { id: daAna.id }, { decisao: "ESTORNAR", motivo: "Mesmo vazamento" })).status).toBe(200);
+    expect(await liberado(os, "uAna")).toBe(0);
+    const decidida = (await chamar("comissoes/revisoes", "GET")).json.revisoes.find((r: any) => r.id === daAna.id);
+    expect(decidida).toMatchObject({ situacao: "ESTORNAR", motivo: "Mesmo vazamento", decididoPorNome: "Gestora Fictícia" });
+    // outra empresa não acha
+    logar("uB");
+    expect((await chamar("comissoes/revisoes/[id]", "POST", { id: daAna.id }, { decisao: "MANTER", motivo: "Não é minha" })).status).toBe(404);
+  });
+
+  it("o relatório do mês (por emissão) traz as OS do técnico ao lado das vendas", async () => {
+    const rel = await srv.relatorioDeComissoes("e1", competencia(agora), "EMISSAO");
+    const carlos = rel.pessoas.find((p) => p.usuarioId === "uCarlos")!;
+    expect(carlos.vendas.some((v) => v.chave.startsWith("os:") && v.orcamentoId === null && v.nome === "Serviço executado" && v.cliente === "Hospital Fictício")).toBe(true);
+    // a OS cancelada fica de fora
+    expect(carlos.vendas.some((v) => v.codigo === "OS-RET")).toBe(false);
   });
 });

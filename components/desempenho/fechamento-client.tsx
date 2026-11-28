@@ -17,6 +17,7 @@ import { MOTIVO_REABERTURA_MIN, MSG_MOTIVO_REABERTURA, TEXTO_CRITERIO, type Folh
 import type { FechamentoResumo, FolhaDoFechamento, PreviaDoFechamento } from "@/lib/desempenho/fechamento-server";
 import { competenciaCurta, formatarEscore, rotuloCompetencia } from "@/lib/desempenho/regras";
 import { RelatorioDeComissoes } from "@/components/comissoes/relatorio-comissoes";
+import { RevisoesDeComissao } from "@/components/comissoes/revisoes-comissao";
 import { CabecalhoDesempenho, Erro, JSON_HEADERS, SeletorDeMes, posicaoTexto, type PodeDesempenho } from "./comum";
 
 interface Dados { mes: PreviaDoFechamento; historico: FechamentoResumo[] }
@@ -89,6 +90,8 @@ export function FechamentoDesempenho({ mesInicial, mesAtual, pode }: { mesInicia
           </section>
 
           <TabelaDaFolha folha={previa.folha} definitiva={!!fechado} comissoes={previa.comissoes} />
+          {/* COM-2: o retorno no mesmo equipamento segura a comissão do técnico até alguém decidir */}
+          {previa.comissoes && <RevisoesDeComissao />}
           {previa.comissoes && <RelatorioDeComissoes key={mes} mes={mes} />}
           <Premiados premios={previa.premios} definitivo={!!fechado} />
           <Historico historico={dados.historico} aoVer={setVendo} />

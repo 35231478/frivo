@@ -610,6 +610,9 @@ export async function salvarRegra(empresaId: string, dados: ReturnType<typeof no
     dados.servicoId ? prisma.servico.count({ where: { id: dados.servicoId, empresaId } }) : 1,
   ]);
   if (!u || !c || !s) return { ok: false, status: 400, erro: MSG_REFERENCIA };
+  // COM-2: os cargos da divisão "% por cargo" também precisam ser desta empresa
+  const cargosDivisao = Object.keys(dados.divisaoCargos ?? {});
+  if (cargosDivisao.length && (await prisma.cargo.count({ where: { empresaId, id: { in: cargosDivisao } } })) !== cargosDivisao.length) return { ok: false, status: 400, erro: MSG_REFERENCIA };
   if (dados.ativo) {
     const outras = await prisma.comissaoRegra.findMany({ where: { empresaId, ativo: true, ...(o.id ? { id: { not: o.id } } : {}) }, select: { papel: true, quemTipo: true, usuarioId: true, cargoId: true, sobreTipo: true, servicoId: true, categoria: true } });
     const chave = chaveDaRegra(dados as Parameters<typeof chaveDaRegra>[0]);
