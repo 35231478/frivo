@@ -88,10 +88,8 @@ jobs:
     env:
       DATABASE_URL: postgresql://ci:ci@localhost:5432/ci
       NEXT_TELEMETRY_DISABLED: 1
-      # A checagem de tipos do `next build` passa de 2 GB de heap neste projeto (o padrão do Node estoura).
-      # Com as levas J e H juntas ela encostou em 4 GB (pico ~4,2 GB de RSS) e estourou no CI: 6 GB dá folga
-      # (o runner do ubuntu-latest tem 16 GB).
-      NODE_OPTIONS: --max-old-space-size=6144
+      # O heap do next build vem do scripts/build.mjs (6 GB aqui, onde o next build checa os tipos; menos na
+      # Vercel, que não checa). Ver docs/build-memoria.md.
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
