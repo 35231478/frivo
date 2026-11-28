@@ -74,7 +74,7 @@ export default async function PortalChamadoDetalhe({ params }: { params: Promise
           <span className="text-sm font-medium px-3 py-1 rounded-full bg-primary-50 text-primary-700">{LABELS_STATUS_OS[os.status] ?? os.status}</span>
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-4 text-sm">
-          <div className="flex items-center gap-2"><User className="w-4 h-4 text-ink-muted" /> <span className="text-ink-muted">{tecnicos.length > 1 ? "Técnicos:" : "Técnico:"}</span> <span data-portal-tecnicos>{textoTecnicos ?? os.responsavel?.nome ?? "A designar"}</span></div>
+          <div className="flex items-start gap-2 sm:col-span-2"><User className="w-4 h-4 mt-0.5 shrink-0 text-ink-muted" /> <p><span className="text-ink-muted">{tecnicos.length > 1 ? "Técnicos:" : "Técnico:"}</span> <span data-portal-tecnicos>{textoTecnicos ?? os.responsavel?.nome ?? "A designar"}</span></p></div>
           <div><span className="text-ink-muted">Prioridade:</span> {LABELS_PRIORIDADE[os.prioridade] ?? os.prioridade}</div>
           {os.unidade && <div><span className="text-ink-muted">Local:</span> {os.unidade.nome}</div>}
           {os.equipamento && <div><span className="text-ink-muted">Equipamento:</span> {os.equipamento.marca} {os.equipamento.modelo}</div>}

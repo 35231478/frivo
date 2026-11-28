@@ -233,14 +233,15 @@ export function ColaboradorForm({ initialData, somenteLeitura = false, podeFolha
     else setAba("profissionais");
   }
 
-  const ABAS: { id: Aba; label: string; icone: any; badge?: number }[] = [
-    { id: "pessoais", label: "Dados pessoais", icone: User },
-    { id: "profissionais", label: "Dados profissionais", icone: Briefcase },
-    { id: "competencias", label: "Competências", icone: ListChecks, badge: competenciaIds.length },
-    { id: "documentos", label: "Documentos", icone: FileText, badge: documentos.length + docsPendentes },
-    ...(podeAdmissao ? [{ id: "admissao" as const, label: "Admissão", icone: UserPlus }] : []),
-    ...(podeAcesso ? [{ id: "acesso" as const, label: "Acesso ao app", icone: KeyRound }] : []),
-    ...(podeFolha ? [{ id: "folha" as const, label: "Dados financeiros / Folha", icone: Wallet }] : []),
+  // `curto`: o rótulo no celular (as abas ficam 3 por linha em vez de uma por linha)
+  const ABAS: { id: Aba; label: string; curto: string; icone: any; badge?: number }[] = [
+    { id: "pessoais", label: "Dados pessoais", curto: "Pessoais", icone: User },
+    { id: "profissionais", label: "Dados profissionais", curto: "Profissionais", icone: Briefcase },
+    { id: "competencias", label: "Competências", curto: "Competências", icone: ListChecks, badge: competenciaIds.length },
+    { id: "documentos", label: "Documentos", curto: "Documentos", icone: FileText, badge: documentos.length + docsPendentes },
+    ...(podeAdmissao ? [{ id: "admissao" as const, label: "Admissão", curto: "Admissão", icone: UserPlus }] : []),
+    ...(podeAcesso ? [{ id: "acesso" as const, label: "Acesso ao app", curto: "Acesso", icone: KeyRound }] : []),
+    ...(podeFolha ? [{ id: "folha" as const, label: "Dados financeiros / Folha", curto: "Folha", icone: Wallet }] : []),
   ];
 
   const inputCls = "w-full bg-white border border-surface-border rounded-lg px-3 py-2.5 text-sm text-ink focus:outline-none focus:border-primary-500 focus:ring-4 focus:ring-primary-500/10 transition-all";
@@ -271,21 +272,22 @@ export function ColaboradorForm({ initialData, somenteLeitura = false, podeFolha
 
       <div className="bg-white rounded-card shadow-card border border-surface-border overflow-hidden">
         {/* Leva J: as abas quebram linha como na ficha do cliente (sem rolagem lateral; no celular, todas à vista) */}
-        <nav className="flex flex-wrap gap-1.5 px-4 pt-4 pb-4 border-b border-surface-border" data-abas-colaborador>
+        <nav className="flex flex-wrap gap-1 sm:gap-1.5 px-3 sm:px-4 py-3 sm:py-4 border-b border-surface-border" data-abas-colaborador>
           {ABAS.map((t) => {
             const ativa = aba === t.id;
             const comErro = abasErro.has(t.id);
             return (
               <button
-                key={t.id} type="button" onClick={() => setAba(t.id)} data-aba={t.id} aria-current={ativa ? "page" : undefined}
+                key={t.id} type="button" onClick={() => setAba(t.id)} data-aba={t.id} aria-current={ativa ? "page" : undefined} title={t.label}
                 className={cn(
-                  "flex items-center gap-2 px-4 py-2.5 text-sm font-medium rounded-card whitespace-nowrap transition-all",
+                  "flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-4 py-2 sm:py-2.5 text-[13px] sm:text-sm font-medium rounded-card whitespace-nowrap transition-all",
                   ativa ? "bg-primary-500 text-white shadow-sm" : "text-ink-muted hover:text-ink hover:bg-surface-alt",
                   comErro && !ativa && "text-atrasado bg-atrasado-claro",
                 )}
               >
-                <t.icone className="w-4 h-4" />
-                {t.label}
+                <t.icone className="w-4 h-4 shrink-0" />
+                <span className="sm:hidden">{t.curto}</span>
+                <span className="hidden sm:inline">{t.label}</span>
                 {t.badge != null && t.badge > 0 && (
                   <span className={cn("text-[10px] font-semibold px-1.5 py-0.5 rounded-full", ativa ? "bg-white/25 text-white" : "bg-surface-alt text-ink-muted")}>{t.badge}</span>
                 )}

@@ -137,11 +137,15 @@ describe.skipIf(!URL_PG)("Leva J — colaborador (PostgreSQL real)", () => {
     });
 
     it("salvar as seções sem a chave (tela antiga) não religa nem desliga; valor que não é sim/não é recusado", async () => {
+      const chave = async () => (await prisma.configuracao.findUnique({ where: { empresaId: "e1" } })).mostrarEspecialidadesTecnico;
       expect((await rota("api/configuracoes/impressao-os", "PUT", CONFIG_RELATORIO_PADRAO)).status).toBe(200);
-      expect((await prisma.configuracao.findUnique({ where: { empresaId: "e1" } })).mostrarEspecialidadesTecnico).toBe(false);
+      expect(await chave()).toBe(false);
       expect((await rota("api/configuracoes/impressao-os", "PUT", { ...CONFIG_RELATORIO_PADRAO, mostrarEspecialidadesTecnico: "sim" })).status).toBe(400);
       expect((await rota("api/configuracoes/impressao-os", "PUT", { ...CONFIG_RELATORIO_PADRAO, mostrarEspecialidadesTecnico: true })).status).toBe(200);
-      expect((await prisma.configuracao.findUnique({ where: { empresaId: "e1" } })).mostrarEspecialidadesTecnico).toBe(true);
+      expect(await chave()).toBe(true);
+      // ligada, a tela antiga (sem a chave) também não desliga
+      expect((await rota("api/configuracoes/impressao-os", "PUT", CONFIG_RELATORIO_PADRAO)).status).toBe(200);
+      expect(await chave()).toBe(true);
     });
   });
 });
