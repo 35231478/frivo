@@ -304,6 +304,22 @@ describe.skipIf(!URL_PG)("COM-1 — comissões (PostgreSQL real)", () => {
     expect(linha).toMatchObject({ nome: "Vitor Vendas", tecnicoId: "tV", perfil: "Comissão", valor: 0, comissao: aberto });
     expect(aberto).toBeGreaterThan(0);
 
+    // Corrida: alguém pega uma das comissões do mês no meio do fechamento (um gatilho no banco simula isso ao
+    // gravar o fechamento) → recusa com a mensagem e NADA fica gravado (nem fechamento, nem conta, nem comissão paga)
+    await prisma.$executeRawUnsafe(`CREATE OR REPLACE FUNCTION corrida_comissao() RETURNS trigger AS $f$ BEGIN
+      UPDATE comissao_lancamentos SET fechamento_id = NEW.id WHERE id = (SELECT id FROM comissao_lancamentos WHERE fechamento_id IS NULL AND empresa_id = NEW.empresa_id ORDER BY id LIMIT 1);
+      RETURN NEW; END $f$ LANGUAGE plpgsql`);
+    await prisma.$executeRawUnsafe(`CREATE TRIGGER corrida_comissao AFTER INSERT ON desempenho_fechamentos FOR EACH ROW EXECUTE FUNCTION corrida_comissao()`);
+    const contasAntes = await prisma.contaPagar.count();
+    try {
+      await expect(fech.fecharMes(autor, { competencia: competencia(), ciente: true })).rejects.toThrow(fech.MSG_COMISSOES_MUDARAM);
+    } finally {
+      await prisma.$executeRawUnsafe(`DROP TRIGGER corrida_comissao ON desempenho_fechamentos`);
+    }
+    expect(await prisma.desempenhoFechamento.count({ where: { empresaId: "e1", competencia: competencia() } })).toBe(0);
+    expect(await prisma.contaPagar.count()).toBe(contasAntes);
+    expect(Math.round((await prisma.comissaoLancamento.aggregate({ where: { usuarioId: "uV", fechamentoId: null }, _sum: { valor: true } }))._sum.valor * 100) / 100).toBe(aberto);
+
     const f = await fech.fecharMes(autor, { competencia: competencia(), ciente: true });
     expect(f.totalComissao).toBe(aberto);
     const gravada = await prisma.desempenhoFechamentoLinha.findFirst({ where: { fechamentoId: f.id, usuarioId: "uV" }, include: { contaPagar: true } });
