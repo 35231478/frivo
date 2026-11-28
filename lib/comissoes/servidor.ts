@@ -222,11 +222,12 @@ export async function sincronizarComissoes(empresaId: string, filtro: { orcament
   return prisma.$transaction(async (tx) => {
     await travarEmpresa(tx, empresaId);
     const comissoes = await tx.comissao.findMany({
-      where: { empresaId, ...(filtro.orcamentoIds ? { orcamentoId: { in: filtro.orcamentoIds } } : {}), ...(filtro.usuarioId ? { usuarioId: filtro.usuarioId } : {}) },
+      // Só as do VENDEDOR (vêm de um orçamento); as do técnico (vêm da OS) têm a conta própria (lib/comissoes/executor-server)
+      where: { empresaId, orcamentoId: filtro.orcamentoIds ? { in: filtro.orcamentoIds } : { not: null }, ...(filtro.usuarioId ? { usuarioId: filtro.usuarioId } : {}) },
       select: { id: true, orcamentoId: true, usuarioId: true, valor: true, quando: true, criadoEm: true, lancamentos: { select: { valor: true } } },
     });
     if (!comissoes.length) return 0;
-    const orcIds = [...new Set(comissoes.map((c) => c.orcamentoId))];
+    const orcIds = [...new Set(comissoes.map((c) => c.orcamentoId!))];
     const orcs = await tx.orcamento.findMany({
       where: { id: { in: orcIds }, empresaId },
       select: { id: true, status: true, totalGeral: true, osGerada: { select: { status: true, dataConclusao: true } } },
@@ -312,7 +313,7 @@ export interface Extrato { vendas: VendaNoExtrato[]; totais: { prevista: number;
 export async function extratoDoUsuario(empresaId: string, usuarioId: string, agora: Date = new Date()): Promise<Extrato> {
   await sincronizarComissoes(empresaId, { usuarioId }, agora);
   const cs = await prisma.comissao.findMany({
-    where: { empresaId, usuarioId },
+    where: { empresaId, usuarioId, orcamentoId: { not: null } },
     orderBy: { criadoEm: "desc" },
     select: {
       orcamentoId: true, descricao: true, regraDescricao: true, valor: true,
@@ -324,13 +325,14 @@ export async function extratoDoUsuario(empresaId: string, usuarioId: string, ago
   const vendas = new Map<string, VendaNoExtrato>();
   for (const c of cs) {
     const s = situacaoDaComissao(num(c.valor), c.lancamentos.map((l) => ({ valor: num(l.valor), pago: l.fechamento?.situacao === "FECHADO" })));
-    const v = vendas.get(c.orcamentoId) ?? {
-      orcamentoId: c.orcamentoId, codigo: c.orcamento.codigo, nome: c.orcamento.nome, cliente: c.orcamento.cliente.nome, osNumero: c.orcamento.osGerada?.numero ?? null,
+    const orc = c.orcamento!;
+    const v = vendas.get(c.orcamentoId!) ?? {
+      orcamentoId: c.orcamentoId!, codigo: orc.codigo, nome: orc.nome, cliente: orc.cliente.nome, osNumero: orc.osGerada?.numero ?? null,
       prevista: 0, liberada: 0, paga: 0, itens: [],
     };
     v.prevista = round2(v.prevista + s.prevista); v.liberada = round2(v.liberada + s.liberada); v.paga = round2(v.paga + s.paga);
     v.itens.push({ descricao: c.descricao, regra: c.regraDescricao, valor: num(c.valor) });
-    vendas.set(c.orcamentoId, v);
+    vendas.set(c.orcamentoId!, v);
   }
   const lista = [...vendas.values()];
   return {
@@ -359,21 +361,21 @@ export async function relatorioDeComissoes(empresaId: string, competencia: strin
   const v: Vista = vista ?? vistaPadrao(quando);
   const ini = inicioDaCompetencia(competencia), fim = fimDaCompetencia(competencia);
   const cs = await prisma.comissao.findMany({
-    where: { empresaId, ...(v === "EMISSAO" ? { criadoEm: { gte: ini, lt: fim }, orcamento: { status: { in: [...VENDA_VIVA] } } } : {}) },
+    where: { empresaId, orcamentoId: { not: null }, ...(v === "EMISSAO" ? { criadoEm: { gte: ini, lt: fim }, orcamento: { status: { in: [...VENDA_VIVA] } } } : {}) },
     select: {
       orcamentoId: true, usuarioId: true, beneficiarioNome: true, valor: true, criadoEm: true,
       orcamento: { select: { codigo: true, nome: true, totalGeral: true, cliente: { select: { nome: true } } } },
     },
     orderBy: { criadoEm: "asc" },
   });
-  const porVenda = new Map<string, { o: (typeof cs)[number]["orcamento"]; data: Date; porPessoa: Map<string, { nome: string; usuarioId: string | null; valor: number }> }>();
+  const porVenda = new Map<string, { o: NonNullable<(typeof cs)[number]["orcamento"]>; data: Date; porPessoa: Map<string, { nome: string; usuarioId: string | null; valor: number }> }>();
   for (const c of cs) {
-    const ven = porVenda.get(c.orcamentoId) ?? { o: c.orcamento, data: c.criadoEm, porPessoa: new Map() };
+    const ven = porVenda.get(c.orcamentoId!) ?? { o: c.orcamento!, data: c.criadoEm, porPessoa: new Map() };
     const k = c.usuarioId ?? `nome:${c.beneficiarioNome}`;
     const p = ven.porPessoa.get(k) ?? { nome: c.beneficiarioNome, usuarioId: c.usuarioId, valor: 0 };
     p.valor += num(c.valor);
     ven.porPessoa.set(k, p);
-    porVenda.set(c.orcamentoId, ven);
+    porVenda.set(c.orcamentoId!, ven);
   }
   const pessoas = new Map<string, PessoaNoRelatorio>();
   for (const [orcamentoId, ven] of porVenda) {

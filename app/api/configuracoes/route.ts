@@ -144,6 +144,8 @@ export async function PUT(req: NextRequest) {
     despesasCampoCategorias: _despCat,
     // COM-1 — quando a comissão fica devida e a base: rota própria (/api/comissoes); a tela geral não sobrescreve
     comissaoQuando: _comQuando, comissaoLiquidaImpostos: _comLiq,
+    // COM-2 — o técnico (quando fica devida, dias do retorno): rota própria (/api/comissoes); a tela geral não sobrescreve
+    comissaoExecutorQuando: _comExecQuando, comissaoRetornoDias: _comRetDias,
     ...entrada
   } = semCampoMorto(body);
   const parsed = configuracaoSchema.safeParse(entrada);
