@@ -56,6 +56,14 @@ describe("precedência: o ITEM manda, a pessoa desempata (como a comissão difer
     expect(ORDEM_PRECEDENCIA).toHaveLength(6);
   });
 
+  it("no mesmo alvo a pessoa vence o cargo pelo peso, não pela ordem dos ids (o id só desempata regra repetida)", () => {
+    const servico = [r("a", { quemTipo: "CARGO", cargoId: "cgVend", sobreTipo: "SERVICO", servicoId: "sInst" }), r("z", { quemTipo: "PESSOA", usuarioId: "uAna", sobreTipo: "SERVICO", servicoId: "sInst" })];
+    expect(regraVencedora(servico, ana, instalacao)?.id).toBe("z");
+    const fixo = [r("a", { quemTipo: "CARGO", cargoId: "cgVend" }), r("z", { quemTipo: "PESSOA", usuarioId: "uAna" })];
+    expect(regraVencedora(fixo, ana, instalacao)?.id).toBe("z");
+    expect(pesoDaRegra({ quemTipo: "PESSOA", sobreTipo: "SERVICO" })).toBeGreaterThan(pesoDaRegra({ quemTipo: "CARGO", sobreTipo: "SERVICO" }));
+  });
+
   it("categoria sem acento/maiúscula importando", () => {
     expect(regraVencedora([r("c", { sobreTipo: "CATEGORIA", categoria: "INSTALACAO" })], ana, instalacao)?.id).toBe("c");
   });
