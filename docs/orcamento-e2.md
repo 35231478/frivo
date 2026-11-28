@@ -106,3 +106,29 @@ As telas:
 - `03-documento`: a tela do orçamento (no à parte, sem a opção "Mostrar materiais ao cliente");
 - `04-implantacao`: a etapa de configuração, com "Como você cobra materiais?";
 - `05-documento-itens` (só depois): a tabela de Serviços e Produtos do documento do cliente. No à parte, os materiais vão em Produtos com valor; no Incluso, ficam dentro do serviço, sem valor.
+
+## Leva I.2 — material de campo no "Cobrado à parte" (item 7)
+
+Com a regra da OS em **Cobrado à parte** (`A_PARTE`), o material que o técnico lança no app vira **item cobrado** da OS.
+O app do técnico não mudou: quem decide é o servidor dos materiais de campo (`lib/execucao/materiais-campo.ts`), na
+mesma transação do uso. A regra pura está em `lib/os/material-campo-cobranca.ts`; o banco, em `-server.ts`.
+
+- **O item:** tipo PRODUTO, a quantidade usada (2 casas), o preço de **venda** (tabela do cliente; senão o valor padrão
+  do produto). Material fora do catálogo entra com R$ 0 e pede o preço na conferência. Nasce executado, com
+  `materialCampoId` (único: o mesmo uso nunca vira dois itens) e `conferirCampo = true`. A regra fica gravada na OS.
+- **Não cobra:** modo Incluso (nada muda); o uso que consome a separação de um material já cobrado na OS (a peça ou o
+  material derivado do serviço — não cobra duas vezes); a OS já faturada ou com nota.
+- **Enquanto não conferido:** corrigir o uso (técnico ou escritório) muda a quantidade do item; remover/estornar o uso
+  tira o item. Depois de conferido, o campo não mexe mais na cobrança. O item só nasce na 1ª gravação do uso.
+- **A conferência** (Comercial › Itens da OS, quadro "Material de campo a conferir"): **Confirmar** (preço e
+  quantidade ajustáveis; o preço precisa ser maior que zero) ou **Excluir da cobrança** (o uso e o estoque ficam como
+  estão). Quem pode: quem edita a OS (botões só para ela; o servidor recusa com 403). A assinatura do cliente não trava
+  a conferência; a fatura/nota trava. Fica na trilha da OS (quem e quando, em `conferidoCampo*`).
+- **Faturar** a OS (`faturarOs`) com item a conferir é **bloqueado**: "Há material de campo a conferir nesta OS…".
+  O item a conferir também não sai pelas rotas comuns (excluir, desmarcar executado, editar).
+- Rota nova: `POST /api/ordens/[id]/orcamento/[itemId]/conferir-campo` (`{ acao: "confirmar" | "remover", quantidade?, valorUnitario? }`).
+- Vocabulário: o glossário do sistema proíbe "Remover" em rótulo (`despoluicao-onda7`), por isso o botão é "Excluir da cobrança".
+
+Testes: `leva-i2c` (regra pura e ligações), `leva-i2c-ui` (o quadro: confirmar com ajuste, preço 0, excluir, sem
+permissão, faturada, assinada), `leva-i2c-pg` (pela fila real do app: preço da tabela, fora do catálogo, reenvio,
+Incluso, corrigir/remover, faturar bloqueado, 403, confirmar/excluir, conferido não muda, fatura sai depois).

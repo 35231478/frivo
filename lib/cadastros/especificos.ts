@@ -5,6 +5,7 @@ import { garantirModelosPadrao } from "@/lib/folha/server";
 import { ErroRefEmpresa, validarRefEmpresa, validarRefsEmpresa } from "@/lib/ref-empresa";
 import { calcularValorFinalTabela } from "@/lib/tabela-preco-helpers";
 import { enviarConvite, senhaInicialAleatoria } from "@/lib/usuarios/convite";
+import { emailDeLoginEmUso, MSG_EMAIL_LOGIN_EM_USO } from "@/lib/acesso/email-unico";
 import { CADASTROS, type EntidadeCadastro } from "@/lib/cadastros/registro";
 import { normalizarCodigoServico } from "@/lib/cadastros/codigos";
 import { colisaoDeCodigo, criarProdutoComCodigo, criarServicoComCodigo, servicoComCodigo } from "@/lib/cadastros/codigos-server";
@@ -179,8 +180,8 @@ async function conferirPerfil(perfilAcessoId: string | null | undefined, ator: A
 const usuarios: RegrasCadastro = {
   async criar(dados, ator) {
     const d = dados as { nome: string; email: string; perfilAcessoId: string | null };
-    if (await prisma.usuario.findFirst({ where: { empresaId: ator.empresaId, email: { equals: d.email, mode: "insensitive" } }, select: { id: true } }))
-      return falha(409, "Já existe um usuário com este e-mail.");
+    // O login procura o e-mail em TODAS as empresas: único no Frivo inteiro (lib/acesso/email-unico)
+    if (await emailDeLoginEmUso(d.email)) return falha(409, MSG_EMAIL_LOGIN_EM_USO);
     const erroPerfil = await conferirPerfil(d.perfilAcessoId, ator);
     if (erroPerfil) return erroPerfil;
     // Nunca ADMIN por aqui: o acesso vem do perfil. Senha aleatória até o convidado definir a dele.

@@ -6,7 +6,7 @@ import { AlertTriangle, ArrowLeft, Check, PackageOpen, Undo2 } from "lucide-reac
 import { Button } from "@/components/ui/button";
 import { StatusPill } from "@/components/ui/status-pill";
 import { Dica } from "@/components/ui/dica";
-import { PLANILHA } from "@/lib/planilha";
+import { TabelaPro, type ColunaPro } from "@/components/listagem/tabela-pro";
 import { confirmar, toast } from "@/components/ui/avisos";
 import { cn, formatarData, formatarDataHora } from "@/lib/utils";
 import { arred, formatarQtd } from "@/lib/estoque/regras";
@@ -23,6 +23,20 @@ import { TOM_SITUACAO_MATERIAL, TOM_SITUACAO_SEPARACAO } from "@/components/os/o
 
 const paraNumero = (v: string) => { const t = v.trim().replace(/\./g, "").replace(",", "."); return t === "" ? NaN : Number(t); };
 const texto = (n: number) => formatarQtd(n);
+
+/** A planilha da separação (TabelaPro: largura, mostrar/esconder e ordem por usuário); no celular, cartões */
+const COLUNAS_SEPARACAO: ColunaPro[] = [
+  { id: "material", titulo: "Material", obrigatoria: true, minimo: 220, classe: "truncate" },
+  { id: "necessario", titulo: "Necessário", largura: 120, alinhar: "direita" },
+  { id: "separado", titulo: "Separado", largura: 100, alinhar: "direita" },
+  {
+    id: "disponivel", titulo: "Disponível", largura: 130, alinhar: "direita",
+    cabecalho: <span className="inline-flex items-center gap-1 justify-end"><span aria-hidden="true">Disponível</span><Dica rotulo="Disponível" texto="Saldo atual do produto no estoque (já descontadas as reservas de outras OS). Se não cobrir, fica vermelho: a separação é registrada mesmo assim e o saldo fica negativo até a entrada." /></span>,
+  },
+  { id: "agora", titulo: "Separar agora", largura: 130, alinhar: "direita", obrigatoria: true },
+  { id: "situacao", titulo: "Situação", largura: 190 },
+  { id: "acoes", titulo: "Ações", fixa: true, semTitulo: true, largura: 110, alinhar: "direita", classe: "py-0.5" },
+];
 
 export function SeparacaoOs({ inicial }: { inicial: SeparacaoDaOs }) {
   const [dados, setDados] = useState<SeparacaoDaOs>(inicial);
@@ -114,92 +128,81 @@ export function SeparacaoOs({ inicial }: { inicial: SeparacaoDaOs }) {
         </div>
       ) : (
         <div className="card overflow-hidden">
-          {/* Celular: um cartão por material */}
-          <ul className="md:hidden divide-y divide-surface-border" data-cartoes>
-            {materiais.map((m) => {
-              const { aviso, saldoVermelho } = linhaMaterial(m);
-              return (
-                <li key={m.id} data-material-sep={m.id} data-situacao-material={m.situacao} className="px-4 py-3 space-y-2">
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="min-w-0">
-                      <p className="font-semibold text-ink">{m.descricao}</p>
-                      <p className="text-xs text-ink-subtle truncate">{m.item}{m.kitNome ? ` · Kit ${m.kitNome}` : ""}</p>
-                    </div>
-                    <StatusPill tom={TOM_SITUACAO_MATERIAL[m.situacao]} tamanho="sm">{LABEL_SITUACAO_MATERIAL[m.situacao]}</StatusPill>
-                  </div>
-                  <div className="grid grid-cols-3 gap-2 text-xs">
-                    <div><p className="text-ink-subtle uppercase text-[10px]">Necessário</p><p className="font-semibold tabular-nums" data-necessario>{texto(m.quantidade)} {m.unidade}</p></div>
-                    <div><p className="text-ink-subtle uppercase text-[10px]">Separado</p><p className="font-semibold tabular-nums" data-separado>{texto(m.quantidadeSeparada)}</p></div>
-                    <div><p className="text-ink-subtle uppercase text-[10px]">Disponível</p><p className={cn("font-semibold tabular-nums", saldoVermelho && "text-atrasado")} data-saldo>{m.saldo == null ? "—" : texto(m.saldo)}</p></div>
-                  </div>
-                  {m.falta > 0 && m.produtoId && (
-                    <label className="flex items-center gap-2 text-sm">
-                      <span className="text-ink-muted shrink-0">Separar agora</span>
-                      <input type="text" inputMode="decimal" value={agora[m.id] ?? ""} onChange={(e) => setAgora((a) => ({ ...a, [m.id]: e.target.value }))}
-                        className={cn("input-base w-24 py-1 text-right tabular-nums", saldoVermelho && "border-atrasado text-atrasado")} aria-label={`Separar agora: ${m.descricao}`} data-alvo />
-                      <span className="text-xs text-ink-subtle">{m.unidade}</span>
-                    </label>
-                  )}
-                  {aviso && <p className="text-xs text-atrasado-texto flex items-center gap-1" data-falta-saldo><AlertTriangle className="w-3.5 h-3.5" /> {aviso}</p>}
-                  {m.quantidadeSeparada > 0 && m.estadoSeparacao === "SEPARADO" && (
-                    <div className="flex items-center justify-between gap-2 text-xs text-ink-subtle">
-                      <span data-separado-por>por {m.separadoPor ?? "—"}{m.separadoEm ? ` · ${formatarDataHora(m.separadoEm)}` : ""}</span>
-                      <button type="button" onClick={() => desfazer(m)} disabled={salvando} className="inline-flex items-center gap-1 font-semibold text-atrasado hover:underline" data-acao="desfazer-separacao"><Undo2 className="w-3.5 h-3.5" /> Desfazer</button>
-                    </div>
-                  )}
-                </li>
-              );
-            })}
-          </ul>
-
-          {/* Desktop: a planilha */}
-          <table className={cn("hidden md:table", PLANILHA.tabela)} data-tabela-separacao>
-            <thead>
-              <tr className={PLANILHA.cabecalho}>
-                <th className={cn(PLANILHA.th, "text-left")}>Material</th>
-                <th className={cn(PLANILHA.th, "text-right")}>Necessário</th>
-                <th className={cn(PLANILHA.th, "text-right")}>Separado</th>
-                <th className={cn(PLANILHA.th, "text-right")}>
-                  <span className="inline-flex items-center gap-1 justify-end">Disponível <Dica rotulo="Disponível" texto="Saldo atual do produto no estoque (já descontadas as reservas de outras OS). Se não cobrir, fica vermelho: a separação é registrada mesmo assim e o saldo fica negativo até a entrada." /></span>
-                </th>
-                <th className={cn(PLANILHA.th, "text-right")}>Separar agora</th>
-                <th className={cn(PLANILHA.th, "text-left")}>Situação</th>
-                <th className={PLANILHA.th} />
-              </tr>
-            </thead>
-            <tbody>
-              {materiais.map((m) => {
-                const { aviso, saldoVermelho } = linhaMaterial(m);
-                return (
-                  <tr key={m.id} data-material-sep={m.id} data-situacao-material={m.situacao} className={cn(PLANILHA.linha, PLANILHA.linhaHover, saldoVermelho && "bg-atrasado-claro/40 even:bg-atrasado-claro/40 hover:bg-atrasado-claro/60")}>
-                    <td className={cn(PLANILHA.td, "min-w-0")}>
-                      <p className="font-medium text-ink">{m.descricao}</p>
-                      <p className="text-xs text-ink-subtle">{m.item}{m.kitNome ? ` · Kit ${m.kitNome}` : ""}</p>
-                      {aviso && <p className="text-xs text-atrasado-texto flex items-center gap-1 mt-0.5" data-falta-saldo><AlertTriangle className="w-3.5 h-3.5" /> {aviso}</p>}
-                    </td>
-                    <td className={cn(PLANILHA.td, PLANILHA.numero)} data-necessario>{texto(m.quantidade)} <span className="text-xs text-ink-muted">{m.unidade}</span></td>
-                    <td className={cn(PLANILHA.td, PLANILHA.numero, "text-ink-muted")} data-separado>{texto(m.quantidadeSeparada)}</td>
-                    <td className={cn(PLANILHA.td, PLANILHA.numero, "font-semibold", saldoVermelho ? "text-atrasado" : "text-ink")} data-saldo>{m.saldo == null ? "—" : texto(m.saldo)}</td>
-                    <td className={cn(PLANILHA.td, "text-right")}>
-                      {m.falta > 0 && m.produtoId ? (
-                        <input type="text" inputMode="decimal" value={agora[m.id] ?? ""} onChange={(e) => setAgora((a) => ({ ...a, [m.id]: e.target.value }))}
-                          className={cn("input-base w-24 py-1 text-right tabular-nums", saldoVermelho && "border-atrasado text-atrasado")} aria-label={`Separar agora: ${m.descricao}`} data-alvo />
-                      ) : <span className="text-ink-subtle">—</span>}
-                    </td>
-                    <td className={PLANILHA.td}>
-                      <StatusPill tom={TOM_SITUACAO_MATERIAL[m.situacao]} tamanho="sm">{LABEL_SITUACAO_MATERIAL[m.situacao]}</StatusPill>
-                      {m.quantidadeSeparada > 0 && m.separadoPor && <p className="text-[11px] text-ink-subtle mt-0.5" data-separado-por>por {m.separadoPor}{m.separadoEm ? ` · ${formatarDataHora(m.separadoEm)}` : ""}</p>}
-                    </td>
-                    <td className={cn(PLANILHA.td, "text-right")}>
-                      {m.quantidadeSeparada > 0 && m.estadoSeparacao === "SEPARADO" && (
-                        <button type="button" onClick={() => desfazer(m)} disabled={salvando} className="inline-flex items-center gap-1 text-xs font-semibold text-atrasado hover:underline" data-acao="desfazer-separacao"><Undo2 className="w-3.5 h-3.5" /> Desfazer</button>
+          <TabelaPro
+            tela="separacao-os" colunas={COLUNAS_SEPARACAO} atributos={{ "data-tabela-separacao": true }}
+            barra={<span>{materiais.length === 1 ? "1 material" : `${materiais.length} materiais`}</span>}
+            cartoes={(
+              <ul className="divide-y divide-surface-border" data-cartoes>
+                {materiais.map((m) => {
+                  const { aviso, saldoVermelho } = linhaMaterial(m);
+                  return (
+                    <li key={m.id} data-material-sep={m.id} data-situacao-material={m.situacao} className="px-4 py-3 space-y-2">
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0">
+                          <p className="font-semibold text-ink">{m.descricao}</p>
+                          <p className="text-xs text-ink-subtle truncate">{m.item}{m.kitNome ? ` · Kit ${m.kitNome}` : ""}</p>
+                        </div>
+                        <StatusPill tom={TOM_SITUACAO_MATERIAL[m.situacao]} tamanho="sm">{LABEL_SITUACAO_MATERIAL[m.situacao]}</StatusPill>
+                      </div>
+                      <div className="grid grid-cols-3 gap-2 text-xs">
+                        <div><p className="text-ink-subtle uppercase text-[10px]">Necessário</p><p className="font-semibold tabular-nums" data-necessario>{texto(m.quantidade)} {m.unidade}</p></div>
+                        <div><p className="text-ink-subtle uppercase text-[10px]">Separado</p><p className="font-semibold tabular-nums" data-separado>{texto(m.quantidadeSeparada)}</p></div>
+                        <div><p className="text-ink-subtle uppercase text-[10px]">Disponível</p><p className={cn("font-semibold tabular-nums", saldoVermelho && "text-atrasado")} data-saldo>{m.saldo == null ? "—" : texto(m.saldo)}</p></div>
+                      </div>
+                      {m.falta > 0 && m.produtoId && (
+                        <label className="flex items-center gap-2 text-sm">
+                          <span className="text-ink-muted shrink-0">Separar agora</span>
+                          <input type="text" inputMode="decimal" value={agora[m.id] ?? ""} onChange={(e) => setAgora((a) => ({ ...a, [m.id]: e.target.value }))}
+                            className={cn("input-base w-24 py-1 text-right tabular-nums", saldoVermelho && "border-atrasado text-atrasado")} aria-label={`Separar agora: ${m.descricao}`} data-alvo />
+                          <span className="text-xs text-ink-subtle">{m.unidade}</span>
+                        </label>
                       )}
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+                      {aviso && <p className="text-xs text-atrasado-texto flex items-center gap-1" data-falta-saldo><AlertTriangle className="w-3.5 h-3.5" /> {aviso}</p>}
+                      {m.quantidadeSeparada > 0 && m.estadoSeparacao === "SEPARADO" && (
+                        <div className="flex items-center justify-between gap-2 text-xs text-ink-subtle">
+                          <span data-separado-por>por {m.separadoPor ?? "—"}{m.separadoEm ? ` · ${formatarDataHora(m.separadoEm)}` : ""}</span>
+                          <button type="button" onClick={() => desfazer(m)} disabled={salvando} className="inline-flex items-center gap-1 font-semibold text-atrasado hover:underline" data-acao="desfazer-separacao"><Undo2 className="w-3.5 h-3.5" /> Desfazer</button>
+                        </div>
+                      )}
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+            linhas={materiais.map((m) => {
+              const { aviso, saldoVermelho } = linhaMaterial(m);
+              return {
+                id: m.id, atributos: { "data-material-sep": m.id, "data-situacao-material": m.situacao },
+                classe: saldoVermelho ? "bg-atrasado-claro/40 even:bg-atrasado-claro/40 hover:bg-atrasado-claro/60" : undefined,
+                titulos: { material: m.descricao },
+                celulas: {
+                  material: (
+                    <span className="block min-w-0">
+                      <span className="block font-medium text-ink truncate">{m.descricao}</span>
+                      <span className="block text-xs text-ink-subtle truncate">{m.item}{m.kitNome ? ` · Kit ${m.kitNome}` : ""}</span>
+                      {aviso && <span className="text-xs text-atrasado-texto flex items-center gap-1 mt-0.5" data-falta-saldo><AlertTriangle className="w-3.5 h-3.5" /> {aviso}</span>}
+                    </span>
+                  ),
+                  necessario: <span data-necessario>{texto(m.quantidade)} <span className="text-xs text-ink-muted">{m.unidade}</span></span>,
+                  separado: <span className="text-ink-muted" data-separado>{texto(m.quantidadeSeparada)}</span>,
+                  disponivel: <span className={cn("font-semibold", saldoVermelho ? "text-atrasado" : "text-ink")} data-saldo>{m.saldo == null ? "—" : texto(m.saldo)}</span>,
+                  agora: m.falta > 0 && m.produtoId ? (
+                    <input type="text" inputMode="decimal" value={agora[m.id] ?? ""} onChange={(e) => setAgora((a) => ({ ...a, [m.id]: e.target.value }))}
+                      className={cn("input-base w-24 py-1 text-right tabular-nums", saldoVermelho && "border-atrasado text-atrasado")} aria-label={`Separar agora: ${m.descricao}`} data-alvo />
+                  ) : <span className="text-ink-subtle">—</span>,
+                  situacao: (
+                    <span className="block">
+                      <StatusPill tom={TOM_SITUACAO_MATERIAL[m.situacao]} tamanho="sm">{LABEL_SITUACAO_MATERIAL[m.situacao]}</StatusPill>
+                      {m.quantidadeSeparada > 0 && m.separadoPor && <span className="block text-[11px] text-ink-subtle mt-0.5 truncate" data-separado-por>por {m.separadoPor}{m.separadoEm ? ` · ${formatarDataHora(m.separadoEm)}` : ""}</span>}
+                    </span>
+                  ),
+                  acoes: m.quantidadeSeparada > 0 && m.estadoSeparacao === "SEPARADO" ? (
+                    <button type="button" onClick={() => desfazer(m)} disabled={salvando} className="inline-flex items-center gap-1 text-xs font-semibold text-atrasado hover:underline" data-acao="desfazer-separacao"><Undo2 className="w-3.5 h-3.5" /> Desfazer</button>
+                  ) : null,
+                },
+              };
+            })}
+          />
 
           <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3 border-t border-surface-border bg-surface-page">
             <p className="text-xs text-ink-muted">

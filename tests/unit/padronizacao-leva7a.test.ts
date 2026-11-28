@@ -79,11 +79,11 @@ describe("as filas na tabela da casa", () => {
 describe("a planilha de trabalho da separação", () => {
   it("usa os tokens da casa, não classes próprias", () => {
     const src = ler(SEP_OS);
-    expect(src).toContain('import { PLANILHA } from "@/lib/planilha";');
-    expect(src).toMatch(/<table className=\{cn\("hidden md:table", PLANILHA\.tabela\)\}/);
-    expect(src).toContain("PLANILHA.cabecalho");
-    expect(src).toContain("PLANILHA.linha");
-    expect(src).toContain("PLANILHA.td");
+    // Leva I.2 (13): a planilha é a TabelaPro, que traz os tokens da casa (lib/planilha) — não há mais <table> própria
+    expect(src).toContain('import { TabelaPro, type ColunaPro } from "@/components/listagem/tabela-pro";');
+    expect(src).toContain("<TabelaPro");
+    expect(src).not.toMatch(/<table[\s>]/);
+    expect(ler("components/listagem/tabela-pro.tsx")).toContain("PLANILHA.tabela");
     // nada de cabeçalho/zebra escritos à mão
     expect(src).not.toContain('className="bg-surface-page text-[11px] font-semibold uppercase');
     expect(src).not.toContain('<tbody className="divide-y divide-surface-linha">');

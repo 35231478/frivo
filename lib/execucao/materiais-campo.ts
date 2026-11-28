@@ -12,6 +12,9 @@
  *  - linha sem separação: SAIDA direta (ESTORNO_SAIDA ao diminuir/estornar);
  *  - produto que não controla estoque, material fora do catálogo ou módulo Estoque desligado: só o registro.
  * Saldo negativo é permitido (o técnico não trava em campo): volta como aviso e o escritório vê no sino.
+ *
+ * Leva I.2 — materiais "Cobrado à parte" (regra da OS = A_PARTE): o uso vira item cobrado da OS, a conferir pelo
+ * escritório (lib/os/material-campo-cobranca). Criado, corrigido e removido NA MESMA TRANSAÇÃO do uso.
  */
 import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
@@ -20,6 +23,7 @@ import { movimentar } from "@/lib/estoque/servidor";
 import { arred } from "@/lib/estoque/regras";
 import { sincronizarStatusOs } from "@/lib/os/sincronizar-status";
 import { medicaoValida } from "@/lib/os/status";
+import { prepararCobrancaCampo, sincronizarItemCampo, type CobrancaCampo } from "@/lib/os/material-campo-cobranca-server";
 import type { ContextoExecucao } from "@/lib/execucao/contexto";
 import {
   deltaBaixaDireta, escolherSeparacao, identificado, MSG_EQUIP_FORA, MSG_SEM_MATERIAL, MSG_MATERIAL_REMOVIDO, MSG_PRODUTO_INVALIDO, MSG_SO_O_SEU, MSG_SOBRA_DEVOLVIDA,
@@ -120,6 +124,10 @@ function apresentar(l: Pick<Linha, "id" | "clientId" | "produtoId" | "descricao"
   };
 }
 
+/** O item cobrado acompanha o uso (Leva I.2). `cobranca` só na criação do uso. */
+const acompanharCobranca = (tx: Prisma.TransactionClient, l: Linha, quantidade: number, removido: boolean, cobranca: CobrancaCampo | null = null) =>
+  sincronizarItemCampo(tx, { id: l.id, ordemServicoId: l.ordemServicoId, produtoId: l.produtoId, osMaterialId: l.osMaterialId, descricao: l.descricao, quantidade, removido }, cobranca);
+
 async function executar<T>(fn: (tx: Prisma.TransactionClient) => Promise<T>): Promise<T | Resultado<never>> {
   try {
     return await prisma.$transaction(fn);
@@ -150,6 +158,8 @@ export async function gravarMaterial(ctx: ContextoExecucao, d: DadosMaterial): P
   }
   else if (!identificado(d)) return erro(400, MSG_SEM_MATERIAL);
   const veiculoId = existe ? existe.veiculoId : await veiculoDoUso(ctx);
+  // "Cobrado à parte": a regra da OS e o preço de venda, lidos antes (só quando o uso nasce)
+  const cobranca = existe ? null : await prepararCobrancaCampo(empresaId, osId, d.produtoId ?? null);
   let mexeu = false;
   const r = await executar(async (tx) => {
     const osNumero = await numeroDaOs(tx, osId);
@@ -164,6 +174,7 @@ export async function gravarMaterial(ctx: ContextoExecucao, d: DadosMaterial): P
         data: { quantidade: qtd, ...(d.equipamentoId !== undefined && { equipamentoId: d.equipamentoId ?? null }) },
         select: SELECT_LINHA,
       });
+      await acompanharCobranca(tx, nova, qtd, false);
       return { material: apresentar(nova, usuarioId), avisos: acerto.avisos };
     }
     let produto: { id: string; nome: string; unidade: string; controlaEstoque: boolean } | null = null;
@@ -193,6 +204,7 @@ export async function gravarMaterial(ctx: ContextoExecucao, d: DadosMaterial): P
     });
     const acerto = await acertarEstoque(tx, { ...criada, quantidade: criada.quantidade }, qtd, usuarioId, osNumero);
     mexeu = acerto.mexeuNaSeparacao;
+    await acompanharCobranca(tx, criada, qtd, false, cobranca);
     return { material: apresentar(criada, usuarioId), avisos: acerto.avisos };
   });
   if (ehErro(r)) return r;
@@ -221,6 +233,7 @@ async function retirar(l: Linha, usuarioId: string, historico: string | null): P
     const acerto = await acertarEstoque(tx, l, 0, usuarioId, osNumero);
     mexeu = acerto.mexeuNaSeparacao;
     await tx.atividadeMaterial.update({ where: { id: l.id }, data: { removidoEm: new Date(), removidoPorId: usuarioId } });
+    await acompanharCobranca(tx, l, 0, true);
     if (historico) await tx.osHistorico.create({ data: { ordemServicoId: l.ordemServicoId, usuarioId, acao: "Material usado em campo estornado", detalhes: historico.slice(0, 1000) } });
     return { removido: true };
   });
@@ -303,6 +316,7 @@ export async function corrigirMaterialEscritorio(empresaId: string, osId: string
     const acerto = await acertarEstoque(tx, l, qtd, usuarioId, await numeroDaOs(tx, osId));
     mexeu = acerto.mexeuNaSeparacao;
     await tx.atividadeMaterial.update({ where: { id: l.id }, data: { quantidade: qtd, corrigidoEm: new Date(), corrigidoPorId: usuarioId } });
+    await acompanharCobranca(tx, l, qtd, false);
     await tx.osHistorico.create({ data: {
       ordemServicoId: osId, usuarioId, acao: "Material usado em campo corrigido",
       detalhes: `${l.descricao}: ${textoQuantidade(Number(l.quantidade), l.unidade)} → ${textoQuantidade(qtd, l.unidade)}`.slice(0, 1000),

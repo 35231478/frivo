@@ -336,7 +336,8 @@ describe("pronto-janeiro-3: Empresas", () => {
     expect(document.querySelectorAll('[data-empresa="e1"] [data-situacao-empresa]')).toHaveLength(0);
     expect(document.querySelectorAll('[data-empresa="e2"] [data-situacao-empresa="inativar"]')).toHaveLength(2);
     expect($("[data-cartoes-empresas]")!.className).toContain("md:hidden");
-    expect($("[data-lista-empresas]")!.className).toContain("hidden md:table");
+    // Leva I.2: a tabela é a TabelaPro (colunas, reordenar) e some no celular pelo invólucro dela
+    expect($("[data-lista-empresas]")!.closest("[data-tabela-pro='admin-empresas'] > .hidden.md\\:block")).toBeTruthy();
     await clicar(document.querySelector('[data-lista-empresas] [data-empresa="e2"] [data-situacao-empresa]'));
     expect(chamadas.at(-1)).toEqual({ url: "/api/admin/empresas/e2", metodo: "PATCH", corpo: { ativo: false } });
     expect(document.querySelectorAll('[data-empresa="e2"] [data-empresa-inativa]')).toHaveLength(2);

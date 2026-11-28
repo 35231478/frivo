@@ -16,6 +16,8 @@ import { cn, formatarMoeda } from "@/lib/utils";
 import { usePermissoes } from "@/components/providers/permissoes-provider";
 import { itensComPrecoDeTabelaAlterado } from "@/lib/precos/trava-tabela";
 import { Plus, X, Check, CheckCircle, Lock, Trash2, Package, Wrench } from "lucide-react";
+import { MaterialCampoConferir } from "@/components/os/material-campo-conferir";
+import { ETIQUETA_CAMPO, travaDoCampo } from "@/lib/os/material-campo-cobranca";
 
 type Tipo = "SERVICO" | "PRODUTO";
 interface ItemOs {
@@ -24,6 +26,8 @@ interface ItemOs {
   valorBase?: unknown; ajusteMateriais?: unknown; valorManual?: boolean | null; materialId?: string | null;
   materiais?: (MaterialOrcamento & { id: string })[] | null; material?: { osItemId: string } | null;
   pecas?: ItemOs[];
+  /** Leva I.2: veio do material lançado em campo ("Cobrado à parte") e se ainda espera a conferência */
+  materialCampoId?: string | null; conferirCampo?: boolean | null;
 }
 /** O item em edição (novo ou existente): o unitário é o BASE quando há materiais */
 interface Edicao {
@@ -87,6 +91,11 @@ export function OsOrcamento({ osId, itens: iniciais, clienteId = null, situacao 
   const totalExecutado = itens.filter((i) => i.executado).reduce((acc, i) => acc + num(i.valorTotal), 0);
   const totalServicos = itens.filter((i) => (i.tipo ?? "SERVICO") === "SERVICO").reduce((acc, i) => acc + num(i.valorTotal), 0);
   const totalProdutos = total - totalServicos;
+  // Leva I.2: o material de campo a conferir (quem edita a OS confere; faturada ou com nota, só a lista)
+  const aConferir = itens.filter((i) => i.conferirCampo);
+  const podeConferir = podeEditar && !travaDoCampo(situacao);
+  const conferido = (itemId: string, item: Record<string, unknown> | null) =>
+    setItens((prev) => (item ? prev.map((i) => (i.id === itemId ? { ...i, ...item } : i)) : prev.filter((i) => i.id !== itemId)));
   const nomeDoServico = useMemo(() => new Map(itens.map((i) => [i.id, i.descricao])), [itens]);
 
   async function chamar(url: string, init: RequestInit) {
@@ -210,6 +219,8 @@ export function OsOrcamento({ osId, itens: iniciais, clienteId = null, situacao 
         <div><span className="text-ink-muted">Executado:</span> <span className="font-bold text-ok-texto">{formatarMoeda(totalExecutado)}</span></div>
       </div>
 
+      <MaterialCampoConferir osId={osId} itens={aConferir} podeConferir={podeConferir} onConferido={conferido} />
+
       {erro && <p className="text-sm text-atrasado bg-atrasado-claro border border-atrasado/20 rounded-lg px-3 py-2" data-erro-orcamento>{erro}</p>}
 
       {itens.length === 0 && !edicao && !modo && (
@@ -231,6 +242,7 @@ export function OsOrcamento({ osId, itens: iniciais, clienteId = null, situacao 
                   <span className="text-ink truncate">{i.descricao}</span>
                   {derivada && <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-acento-claro text-acento" data-peca-de={nomeDoServico.get(i.material?.osItemId ?? "") ?? ""}>Peça · {nomeDoServico.get(i.material?.osItemId ?? "") ?? "serviço"}</span>}
                   {doOrcamento && <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-surface-alt text-ink-muted">Do orçamento</span>}
+                  {i.materialCampoId && <span className={cn("text-[10px] font-semibold px-1.5 py-0.5 rounded", i.conferirCampo ? "bg-atencao-claro text-atencao-texto" : "bg-surface-alt text-ink-muted")} data-item-campo={i.conferirCampo ? "conferir" : "conferido"}>{ETIQUETA_CAMPO}{i.conferirCampo ? " · a conferir" : ""}</span>}
                   {!!i.materiais?.length && <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-surface-alt text-ink-muted" data-com-materiais>{i.materiais.length} materiais · ajuste {formatarMoeda(num(i.ajusteMateriais))}</span>}
                   {i.valorManual && <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-atencao-claro text-atencao-texto">Valor manual</span>}
                 </div>
@@ -243,7 +255,7 @@ export function OsOrcamento({ osId, itens: iniciais, clienteId = null, situacao 
                     <span className="inline-flex items-center gap-1">
                       <span className="inline-flex items-center gap-0.5 text-[10px] font-medium text-ok-texto bg-ok-claro px-1.5 py-0.5 rounded-full"><CheckCircle className="w-3 h-3" /> Executado</span>
                       {/* Desmarcar: corrige o "executado" (inclusive o marcado ao concluir a última atividade no app). Registro fechado não desmarca */}
-                      {podeEditar && !fechada && (
+                      {podeEditar && !fechada && !i.conferirCampo && (
                         <button type="button" onClick={() => marcarExecutado(i.id, false)} className="text-[10px] text-ink-muted hover:text-atrasado underline-offset-2 hover:underline" data-desmarcar-executado>Desmarcar</button>
                       )}
                     </span>

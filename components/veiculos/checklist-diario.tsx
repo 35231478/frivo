@@ -7,9 +7,11 @@
  * Abrir o histórico dá ciência dos "não vai usar" (saem do sino).
  */
 import { useCallback, useEffect, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { AlertTriangle, CheckCircle2, CircleSlash, Clock, WifiOff } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { PLANILHA } from "@/lib/planilha";
+import { TabelaPro, type ColunaPro } from "@/components/listagem/tabela-pro";
+import { useListagemUrl } from "@/components/listagem/use-listagem-url";
 import { InputData } from "@/components/ui/input-data";
 import { Dica } from "@/components/ui/dica";
 import { horaBR } from "@/lib/fuso";
@@ -24,6 +26,7 @@ const ESTILO: Record<SituacaoHistorico, { classe: string; Icone: typeof CheckCir
   PENDENTE: { classe: "bg-surface-alt text-ink-muted", Icone: Clock },
 };
 
+const NAVEGACAO_DIARIO = ["aba"] as const;
 const diaCurto = (dia: string) => `${dia.slice(8, 10)}/${dia.slice(5, 7)}`;
 
 function Selo({ s }: { s: SituacaoHistorico }) {
@@ -50,10 +53,30 @@ function Detalhes({ l }: { l: LinhaHistorico }) {
   );
 }
 
+/** A planilha do diário (TabelaPro: largura, mostrar/esconder e ordem por usuário); no celular, cartões */
+const COLUNAS_DIARIO: ColunaPro[] = [
+  { id: "dia", titulo: "Dia", largura: 72, obrigatoria: true },
+  { id: "colaborador", titulo: "Colaborador", minimo: 160, obrigatoria: true, classe: "truncate" },
+  { id: "veiculo", titulo: "Veículo", largura: 112 },
+  { id: "situacao", titulo: "Situação", largura: 150 },
+  { id: "detalhes", titulo: "Detalhes", largura: 260 },
+  { id: "acoes", titulo: "Checklist", fixa: true, semTitulo: true, largura: 110, alinhar: "direita", classe: "py-0.5" },
+];
+const DIA = /^\d{4}-\d{2}-\d{2}$/;
+/** O período na URL (`de`/`ate`, filtro lembrado); sem ele, os últimos 7 dias */
+export function periodoDiario(sp: { get(k: string): string | null }, hoje = hojeBR()): { de: string; ate: string } {
+  const ate = DIA.test(sp.get("ate") ?? "") ? sp.get("ate")! : hoje;
+  const de = DIA.test(sp.get("de") ?? "") ? sp.get("de")! : somarDias(ate, -6);
+  return de <= ate ? { de, ate } : { de: ate, ate: de };
+}
+
 export function ChecklistDiario({ colaboradores }: { colaboradores: { id: string; nome: string }[] }) {
-  const hoje = hojeBR();
-  const [de, setDe] = useState(somarDias(hoje, -6));
-  const [ate, setAte] = useState(hoje);
+  // O período vai para a URL e volta pelos filtros lembrados (a mesma regra das outras listas); a `aba` é da tela
+  const sp = useSearchParams();
+  const { navegar } = useListagemUrl({ chave: "checklist-diario", qAtual: "", navegacao: NAVEGACAO_DIARIO });
+  const { de, ate } = periodoDiario(sp);
+  const setDe = (v: string) => navegar({ de: v, aba: "diario" });
+  const setAte = (v: string) => navegar({ ate: v, aba: "diario" });
   const [dados, setDados] = useState<{ ativo: boolean; linhas: LinhaHistorico[] } | null>(null);
   const [erro, setErro] = useState("");
   const [aberto, setAberto] = useState<{ id: string; modo: "ver" | "editar" } | null>(null);
@@ -70,7 +93,6 @@ export function ChecklistDiario({ colaboradores }: { colaboradores: { id: string
   useEffect(() => { void carregar(); }, [carregar]);
 
   const linhas = dados?.linhas ?? [];
-  const td = cn(PLANILHA.td, "align-top");
   return (
     <div className="space-y-3" data-checklist-diario>
       <div className="flex flex-wrap items-end gap-3">
@@ -84,49 +106,42 @@ export function ChecklistDiario({ colaboradores }: { colaboradores: { id: string
       {erro && <p role="alert" className="rounded-lg bg-atrasado-claro px-3 py-2 text-sm text-atrasado-texto">{erro}</p>}
       {dados && !linhas.length && <p className="py-8 text-center text-sm text-ink-muted" data-diario-vazio>Nada no período.</p>}
       {linhas.length > 0 && (
-        <>
-          {/* Desktop: planilha */}
-          <table className={cn(PLANILHA.tabela, "hidden md:table")} data-tabela-diario>
-            <thead><tr className={PLANILHA.cabecalho}>
-              <th className={cn(PLANILHA.th, "text-left w-16")}>Dia</th>
-              <th className={cn(PLANILHA.th, "text-left")}>Colaborador</th>
-              <th className={cn(PLANILHA.th, "text-left w-28")}>Veículo</th>
-              <th className={cn(PLANILHA.th, "text-left w-36")}>Situação</th>
-              <th className={cn(PLANILHA.th, "text-left")}>Detalhes</th>
-              <th className={cn(PLANILHA.th, "w-24")}><span className="sr-only">Checklist</span></th>
-            </tr></thead>
-            <tbody>
-              {linhas.map((l) => (
-                <tr key={l.chave} className={PLANILHA.linha} data-linha-diario={l.situacao}>
-                  <td className={cn(td, "tabular-nums")}>{diaCurto(l.dia)}</td>
-                  <td className={cn(td, "text-ink")}>{l.nome}</td>
-                  <td className={cn(td, "font-mono text-ink-muted")}>{l.veiculo ?? "—"}</td>
-                  <td className={td}><Selo s={l.situacao} /></td>
-                  <td className={td}><Detalhes l={l} /></td>
-                  <td className={cn(td, "text-right")}>
-                    {l.registro?.checklistId && <button type="button" className="text-xs font-semibold text-acento hover:underline" onClick={() => setAberto({ id: l.registro!.checklistId!, modo: "ver" })} data-ver-checklist-diario>Ver checklist</button>}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          {/* Celular: cartões */}
-          <ul className="md:hidden divide-y divide-surface-border rounded-card border border-surface-border bg-white" data-cartoes-diario>
-            {linhas.map((l) => (
-              <li key={l.chave} className="flex items-start justify-between gap-3 px-3 py-2.5" data-linha-diario={l.situacao}>
-                <div className="min-w-0 space-y-1">
-                  <p className="text-sm text-ink"><span className="tabular-nums text-ink-muted">{diaCurto(l.dia)}</span> · {l.nome}</p>
-                  <p className="font-mono text-xs text-ink-muted">{l.veiculo ?? "—"}</p>
-                  <Detalhes l={l} />
-                </div>
-                <div className="flex shrink-0 flex-col items-end gap-1.5">
-                  <Selo s={l.situacao} />
-                  {l.registro?.checklistId && <button type="button" className="text-xs font-semibold text-acento" onClick={() => setAberto({ id: l.registro!.checklistId!, modo: "ver" })}>Ver checklist</button>}
-                </div>
-              </li>
-            ))}
-          </ul>
-        </>
+        <div className="rounded-card border border-surface-border bg-white overflow-hidden">
+          <TabelaPro
+            tela="checklist-diario" colunas={COLUNAS_DIARIO} atributos={{ "data-tabela-diario": true }}
+            barra={<span data-contagem-diario>{linhas.length === 1 ? "1 registro" : `${linhas.length} registros`}</span>}
+            cartoes={(
+              <ul className="divide-y divide-surface-border" data-cartoes-diario>
+                {linhas.map((l) => (
+                  <li key={l.chave} className="flex items-start justify-between gap-3 px-3 py-2.5" data-linha-diario={l.situacao}>
+                    <div className="min-w-0 space-y-1">
+                      <p className="text-sm text-ink"><span className="tabular-nums text-ink-muted">{diaCurto(l.dia)}</span> · {l.nome}</p>
+                      <p className="font-mono text-xs text-ink-muted">{l.veiculo ?? "—"}</p>
+                      <Detalhes l={l} />
+                    </div>
+                    <div className="flex shrink-0 flex-col items-end gap-1.5">
+                      <Selo s={l.situacao} />
+                      {l.registro?.checklistId && <button type="button" className="text-xs font-semibold text-acento" onClick={() => setAberto({ id: l.registro!.checklistId!, modo: "ver" })}>Ver checklist</button>}
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            )}
+            linhas={linhas.map((l) => ({
+              id: l.chave, atributos: { "data-linha-diario": l.situacao }, titulos: { colaborador: l.nome },
+              celulas: {
+                dia: <span className="tabular-nums">{diaCurto(l.dia)}</span>,
+                colaborador: <span className="text-ink">{l.nome}</span>,
+                veiculo: <span className="font-mono text-ink-muted">{l.veiculo ?? "—"}</span>,
+                situacao: <Selo s={l.situacao} />,
+                detalhes: <Detalhes l={l} />,
+                acoes: l.registro?.checklistId
+                  ? <button type="button" className="text-xs font-semibold text-acento hover:underline" onClick={() => setAberto({ id: l.registro!.checklistId!, modo: "ver" })} data-ver-checklist-diario>Ver checklist</button>
+                  : null,
+              },
+            }))}
+          />
+        </div>
       )}
       <PainelDoChecklist aberto={aberto} colaboradores={colaboradores} podeEditar={false} onFechar={() => setAberto(null)} onEditar={() => {}} onSalvo={() => {}} />
     </div>

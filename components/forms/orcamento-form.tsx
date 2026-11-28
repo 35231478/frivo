@@ -18,7 +18,7 @@ import { TotaisBloco, type DescontoGrupoState } from "@/components/orcamento/tot
 import { PropostaCampos, PROPOSTA_VAZIA, type PropostaState } from "@/components/orcamento/proposta-campos";
 import { cn } from "@/lib/utils";
 import type { TipoDesconto, TipoOrcamento } from "@prisma/client";
-import { AlertCircle, Tags, Sparkles, RefreshCw } from "lucide-react";
+import { AlertCircle, Sparkles, RefreshCw } from "lucide-react";
 import { chaveDiaCivil, chaveHojeBR } from "@/lib/fuso";
 import { calcularOrcamento, DIAS_VALIDADE_PADRAO, totalDoItem, validadePadrao } from "@/lib/orcamentos/calculo";
 import { pecasDosMateriais, regraDeCobranca, valorDaLinha } from "@/lib/orcamentos/materiais";
@@ -27,6 +27,7 @@ import { InfoProduto, ResumoCustoMargem, useSituacaoProdutos } from "@/component
 import { custosDoOrcamento, resumoMargem } from "@/lib/orcamentos/estoque-margem";
 import { usePermissoes } from "@/components/providers/permissoes-provider";
 import { aplicarTabelaAoItem, itensComPrecoDeTabelaAlterado, marcarItensDaTabela, MOTIVO_MIN } from "@/lib/precos/trava-tabela";
+import { MotivoPrecoTabela, SeloTabelaCliente } from "@/components/orcamento/preco-tabela-tela";
 import { confirmar, toast } from "@/components/ui/avisos";
 import { nomeAutomaticoOrcamento, type ContextoNomeOrcamento } from "@/lib/orcamentos/nome";
 import { Select } from "@/components/ui/select";
@@ -610,16 +611,7 @@ export function OrcamentoForm({
         </div>
       )}
 
-      {tabelaPreco && (
-        <div className="flex items-center gap-2">
-          <span className="inline-flex items-center gap-1.5 bg-success-50 text-success-700 text-xs font-semibold rounded-full px-3 py-1">
-            <Tags className="w-3.5 h-3.5" /> Tabela: {tabelaPreco.nome}
-          </span>
-          <span className="text-xs text-ink-muted" data-trava-tabela>
-            {podeAlterarPrecoTabela ? "Mudar o preço da tabela pede motivo" : "Preços da tabela travados"}
-          </span>
-        </div>
-      )}
+      {tabelaPreco && <SeloTabelaCliente nome={tabelaPreco.nome} podeAlterar={podeAlterarPrecoTabela} />}
       {tabelaInativa && (
         <p className="text-xs text-atencao-texto" data-aviso-tabela-inativa>A tabela do cliente (“{tabelaInativa.nome}”) está inativa: valem os preços padrão do catálogo.</p>
       )}
@@ -787,16 +779,7 @@ export function OrcamentoForm({
         />
       </div>
 
-      {pedirMotivo && (
-        <div className="card-padded" data-motivo-preco-tabela>
-          <FormField
-            label="Motivo da alteração do preço de tabela" required
-            hint={precosDeTabelaAlterados.length ? `Fora da tabela: ${precosDeTabelaAlterados.map((i) => i.descricao).join(", ")}` : "O preço de um item da tabela do cliente mudou."}
-          >
-            <Input value={motivoPrecoTabela} onChange={(e) => setMotivoPrecoTabela(e.target.value)} maxLength={300} placeholder="Ex.: desconto negociado com o cliente" />
-          </FormField>
-        </div>
-      )}
+      {pedirMotivo && <MotivoPrecoTabela alterados={precosDeTabelaAlterados} valor={motivoPrecoTabela} onChange={setMotivoPrecoTabela} />}
 
       {tipo !== "PROPOSTA_CONTRATO" && (
         <div className="card-padded space-y-6" data-condicoes-comerciais>

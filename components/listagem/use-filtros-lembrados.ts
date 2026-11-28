@@ -5,7 +5,7 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { usePermissoes } from "@/components/providers/permissoes-provider";
 import { TAMANHO_PADRAO } from "@/lib/listagem";
 import { chaveHojeBR } from "@/lib/fuso";
-import { abriuLimpa, chaveFiltrosLembrados, filtroDeHoje, lembrado } from "@/lib/listagem/filtros-lembrados";
+import { abriuLimpa, chaveFiltrosLembrados, comNavegacao, filtroDeHoje, lembrado } from "@/lib/listagem/filtros-lembrados";
 import { lerTamanhoPreferido } from "@/components/listagem/listagem-ui";
 
 function lerStorage(chave: string): string | null {
@@ -23,8 +23,10 @@ function gravarStorage(chave: string, valor: string) {
  *
  * Ao abrir limpa: restaura o filtro de hoje e aplica os itens por página preferidos (se a URL não disser
  * outro) — numa troca só de URL. A cada mudança de URL, guarda. Sem sessão (fora do painel), não lembra.
+ * `navegacao`: parâmetros da TELA, não filtro (ex.: `aba`, quando cada aba tem os seus filtros): não contam para
+ * "abriu limpa", não são guardados e ficam como estão ao restaurar.
  */
-export function useFiltrosLembrados(tela: string, ativo = true) {
+export function useFiltrosLembrados(tela: string, ativo = true, navegacao: readonly string[] = []) {
   const router = useRouter();
   const pathname = usePathname();
   const sp = useSearchParams();
@@ -39,9 +41,9 @@ export function useFiltrosLembrados(tela: string, ativo = true) {
     restaurou.current = true;
     let p = new URLSearchParams(sp.toString());
     let mudou = false;
-    if (chave && abriuLimpa(sp.toString())) {
+    if (chave && abriuLimpa(sp.toString(), navegacao)) {
       const salvo = filtroDeHoje(lerStorage(chave), chaveHojeBR());
-      if (salvo) { p = new URLSearchParams(salvo); mudou = true; }
+      if (salvo) { p = new URLSearchParams(comNavegacao(salvo, sp.toString(), navegacao)); mudou = true; }
     }
     // Itens por página: a preferência lembrada (se nem a URL nem o filtro lembrado disserem outro)
     const pref = lerTamanhoPreferido();
@@ -50,15 +52,17 @@ export function useFiltrosLembrados(tela: string, ativo = true) {
       restaurando.current = true;
       router.replace(`${pathname}?${p}`, { scroll: false });
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sp, pathname, router, chave]);
 
   useEffect(() => {
     if (!chave) return;
     // Enquanto restaura, não grava por cima a URL ainda vazia
     if (restaurando.current) {
-      if (abriuLimpa(sp.toString())) return;
+      if (abriuLimpa(sp.toString(), navegacao)) return;
       restaurando.current = false;
     }
-    gravarStorage(chave, lembrado(sp.toString(), chaveHojeBR()));
+    gravarStorage(chave, lembrado(sp.toString(), chaveHojeBR(), navegacao));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sp, chave]);
 }

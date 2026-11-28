@@ -124,7 +124,7 @@ describe("o portal e o escritório", () => {
   });
   it("os termos: no portal 'Pedido de compra'; no escritório 'Pedido do cliente' / 'Pedido recebido — conferir'", () => {
     expect(ETIQUETA_CONFERIR).toBe("Pedido recebido — conferir");
-    expect(ROTULO_SITUACAO_PORTAL).toEqual({ CONFERIR: "Recebido — em conferência", CONFIRMADO: "Confirmado", RECUSADO: "Recusado" });
+    expect(ROTULO_SITUACAO_PORTAL).toEqual({ CONFERIR: "Recebido — em conferência", CONFIRMADO: "Confirmado", RECUSADO: "Recusado", RESOLVIDO: "Resolvido por outro meio" });
     expect(ROTA_PORTAL_PEDIDO).toBe("/portal/pedidos-compra");
     expect(ler("components/portal/portal-shell.tsx")).toContain('label: "Pedido de compra"');
     const portal = ler("components/portal/pedido-compra-portal.tsx") + ler("app/(portal)/portal/(protegido)/pedidos-compra/page.tsx");

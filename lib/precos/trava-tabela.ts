@@ -11,6 +11,7 @@
  *    de tabela";
  *  - a não ser que o valor seja o MESMO já gravado antes para aquele item (salvar de novo um orçamento antigo,
  *    feito antes de a tabela mudar ou com uma alteração já autorizada, não pede tudo de novo).
+ * Vale também na medição/fatura avulsa (Leva I.2): criar e editar.
  * Regras puras aqui; a leitura da tabela e a gravação da trilha em lib/precos/trava-tabela-server.
  */
 
@@ -55,6 +56,15 @@ export function alteracoesDePrecoDeTabela(
     r.push({ descricao: it.descricao, valorTabela, valorNovo: novo });
   }
   return r;
+}
+
+type LinhaMedicao = { tipo: "SERVICO" | "PRODUTO"; servicoId?: string | null; produtoId?: string | null; descricao: string; valorUnitario: number | unknown };
+
+/** As linhas da medição (ou da fatura avulsa) no formato da conferência: o unitário de cada uma. */
+export function itensDaMedicaoParaTrava(itens: readonly LinhaMedicao[]): ItemComPreco[] {
+  return itens.map((it) => it.tipo === "PRODUTO"
+    ? { tipo: "produto" as const, catalogoId: it.produtoId ?? null, descricao: it.descricao, valorUnitario: Number(it.valorUnitario) }
+    : { tipo: "servico" as const, catalogoId: it.servicoId ?? null, descricao: it.descricao, valorUnitario: Number(it.valorUnitario) });
 }
 
 export type Veredito = { ok: true; motivo: string | null } | { ok: false; status: 400 | 403; erro: string };

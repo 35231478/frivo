@@ -14,7 +14,7 @@ import { randomUUID } from "node:crypto";
 import path from "node:path";
 import { NextRequest } from "next/server";
 import { PRESETS, permissoesTotais, permissoesVazias, type Permissoes } from "@/lib/permissoes";
-import { MSG_LEGENDA, MSG_LEGENDA_OS_ENCERRADA, MSG_LEGENDA_SEM_PERMISSAO } from "@/lib/os/galeria";
+import { MSG_LEGENDA, MSG_LEGENDA_OS_ENCERRADA, MSG_LEGENDA_SEM_PERMISSAO, MSG_SEM_LEGENDA_SISTEMA } from "@/lib/os/galeria";
 import { PNG, dataUrl } from "./arquivos-exemplo";
 
 const URL_PG = process.env.PG_TESTE_URL;
@@ -207,5 +207,34 @@ describe.skipIf(!URL_PG)("legenda editável das fotos da OS (PostgreSQL real)", 
     const { editarLegendaFoto } = await import("@/lib/os/legenda-foto-server");
     const r = await editarLegendaFoto({ empresaId: "e1", usuarioId: "uA", escopo: { restrito: false } as never, podeEditarOs: false }, "osA", { origem: "ANEXO", fotoId: "anEscr", legenda: "Fachada nova" });
     expect(r).toEqual({ ok: false, status: 403, erro: MSG_LEGENDA_SEM_PERMISSAO });
+  });
+  /* ───────── Leva I.2 (11): Restaurar legenda do sistema ───────── */
+  it("restaurar a legenda do sistema: volta à automática (galeria e histórico); anexo não tem; sem OS › Editar, 403; já na automática, nada", async () => {
+    const restaurar = (fotoId: string, origem: string, osId = "osA") => chamar("ordens/[id]/fotos/[fotoId]", "PATCH", { id: osId, fotoId }, { restaurar: true }, `?origem=${origem}`);
+    comoEscritorio();
+    const antes = (await prisma.fotoAtendimento.findUnique({ where: { id: "fAntes" } })).legenda;
+    expect(antes).not.toBeNull(); // foi escrita nos testes de cima
+    expect(await restaurar("fAntes", "EXECUCAO")).toEqual({ status: 200, json: { legenda: "Antes do serviço" } });
+    expect((await prisma.fotoAtendimento.findUnique({ where: { id: "fAntes" } })).legenda).toBeNull();
+    expect((await legendasDaGaleria()).fAntes).toBe("Antes do serviço");
+    const g = (await chamar("ordens/[id]/fotos", "GET", { id: "osA" })).json;
+    expect(g.fotos.find((f: any) => f.id === "fAntes").legendaSistema).toBe("Antes do serviço");
+    expect(g.fotos.find((f: any) => f.id === "anApp").legendaSistema ?? null).toBeNull(); // anexo: não tem
+    const trilha = await prisma.osHistorico.findMany({ where: { acao: "Legenda do sistema restaurada" } });
+    expect(trilha.map((h: any) => [h.ordemServicoId, h.usuarioId, h.detalhes])).toEqual([["osA", "uA", `“${antes}” → “Antes do serviço”`]]);
+    // de novo: já está na automática — nada muda, nada vai para o histórico
+    expect((await restaurar("fAntes", "EXECUCAO")).status).toBe(200);
+    expect(await prisma.osHistorico.count({ where: { acao: "Legenda do sistema restaurada" } })).toBe(1);
+    // serviço adicional também volta (a descrição do serviço)
+    expect(await restaurar("fAd", "ADICIONAL")).toEqual({ status: 200, json: { legenda: "Serviço adicional: Troca do controle remoto" } });
+    // anexo: não tem legenda do sistema
+    expect(await restaurar("anApp", "ANEXO")).toEqual({ status: 400, json: { erro: MSG_SEM_LEGENDA_SISTEMA } });
+    // mesmas permissões da edição
+    await prisma.fotoAtendimento.update({ where: { id: "fAntes" }, data: { legenda: "Escrita de novo" } });
+    comoEscritorio(soVer());
+    expect((await restaurar("fAntes", "EXECUCAO")).status).toBe(403);
+    comoEscritorio(permissoesTotais(), "uB", "e2");
+    expect((await restaurar("fAntes", "EXECUCAO")).status).toBe(404);
+    expect((await prisma.fotoAtendimento.findUnique({ where: { id: "fAntes" } })).legenda).toBe("Escrita de novo");
   });
 });

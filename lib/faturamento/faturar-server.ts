@@ -23,6 +23,7 @@ import { chaveDiaCivil, chaveHojeBR, partesBR } from "@/lib/fuso";
 import { retencoesHerdadas } from "@/lib/financeiro/retencoes-server";
 import { proximoNumero } from "@/lib/numeracao-server";
 import { travaFaturarOrcamento, travaFaturarOs } from "@/lib/pedido-cliente/server";
+import { travaFaturarCampoDaOs } from "@/lib/os/material-campo-cobranca-server";
 import {
   faturaDaOs, faturaDoOrcamento, faturaParcial, motivoNaoFaturarOrcamento, motivoNaoFaturarOs, numeroFatura, percentualDoTotal,
   rotuloParcial, validarParcial, vencimentoAvulso, type Fatura, type PedidoParcial,
@@ -196,6 +197,9 @@ export async function faturarOs(p: { empresaId: string; usuarioId: string; osId:
   // O cliente exige o pedido dele e a OS ainda não tem (nem foi liberada): não fatura (lib/pedido-cliente)
   const semPedido = await travaFaturarOs(p.empresaId, os.id);
   if (semPedido) return { tipo: "bloqueado", erro: semPedido };
+  // Leva I.2: material lançado em campo ("Cobrado à parte") espera a conferência do escritório
+  const campo = await travaFaturarCampoDaOs(os.id);
+  if (campo) return { tipo: "bloqueado", erro: campo };
   if (!fatura.linhas.length || fatura.valorLiquido <= 0) {
     return { tipo: "vazio", erro: "Nada a faturar: marque os itens executados (ou os adicionais \"Cobrar\" com preço)." };
   }

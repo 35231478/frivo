@@ -182,3 +182,34 @@ Testado em PostgreSQL real (`sql-pedido-cliente-portal`):
     trilha com os lembretes;
   - **configuração:** a régua em Configurações; o desligar na ficha do cliente;
   - **e-mail:** o e-mail do lembrete.
+
+## Leva I.2 — itens 8 a 10
+
+**8. Resolvido por outro meio.** O pedido do portal em conferência cujos serviços **todos** deixaram de aguardar o
+pedido (outro pedido informado, liberado sem pedido, OS cancelada, orçamento recusado, faturado, cliente que deixou de
+exigir) encerra **sozinho** na situação própria `RESOLVIDO` ("Resolvido por outro meio"). O portal mostra a situação
+na lista de enviados, com a dica "Nenhuma ação é necessária"; a trilha das OS registra o encerramento.
+- **Um ponto só:** a leitura dos pedidos em conferência (`emConferencia` em `portal-server.ts`), que o sino, o filtro, o
+  portal (lista e enviados) e o lembrete já usam. Assim nenhum caminho que resolve um item precisa lembrar de encerrar
+  (são muitos: registrar, liberar, cancelar, recusar orçamento, faturar, mudar a ficha). A troca é condicional
+  (`situacao: "CONFERIR"`): leituras simultâneas, ou a conferência do escritório no meio, encerram uma vez só.
+- O escritório não confirma nem recusa o encerrado (409 com o motivo); a gaveta explica.
+
+**9. Lembrete para o cliente sem portal.** Quando o e-mail de compras **não** é o login de um contato ativo com senha
+num cliente com portal ligado (`compradorTemPortal`), o lembrete usa o template novo
+`PEDIDO_CLIENTE_LEMBRETE_SEM_PORTAL` (editável em Configurações › E-mails): a mesma lista e, ao lado de cada OS, o
+**link público do relatório** (`/relatorio/os/<token>`; o orçamento, pelo link dele). **Anexo não**: o relatório da OS
+é uma página que o cliente imprime/salva em PDF; não há PDF da OS gerado no servidor. O texto pede que o cliente
+**responda o e-mail** com o pedido; a resposta vai para o e-mail da empresa quando a configuração de e-mail não tem um
+"responder para". Sem botão nem link do portal. A régua, a chave única e a trilha são as mesmas.
+
+**10. E-mail da recusa.** Ao recusar o pedido do portal, o cliente recebe o template novo `PEDIDO_CLIENTE_RECUSADO`
+("Pedido de compra recusado", editável; variável nova `motivo_recusa`, escapada) com o motivo, os serviços do pedido e
+o botão do portal. Vai ao contato que enviou **e** ao e-mail de compras (sem repetir). A recusa nunca depende do
+e-mail: sem e-mail configurado, sem destinatário ou com falha no envio, a recusa vale, a falha vai para o log e para a
+trilha da OS ("Recusa do pedido de compra não enviada por e-mail"), e a tela avisa.
+
+Testes: `leva-i2c` (regras e templates), `leva-i2c-ui` (portal e gaveta), `leva-i2c-pg` (encerramento, lembrete sem
+portal, recusa com e sem e-mail). Ajustados: `pedido-cliente-portal` (o rótulo novo na lista de situações) e
+`pedido-cliente-portal-pg` (os clientes da rotina ganharam o contato com portal, para seguir recebendo o lembrete com
+link; a trilha da recusa ganha a linha do e-mail).

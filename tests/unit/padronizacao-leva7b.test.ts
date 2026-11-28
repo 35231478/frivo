@@ -113,7 +113,8 @@ describe("as duas listas na tabela da casa", () => {
   });
 
   it("a coluna do número usa o token de código (mesma fonte do resto do sistema)", () => {
-    for (const arq of [NOTAS, PEDIDOS]) {
+    // Leva I.2: a lista "Notas descartadas" saiu da página para components/compras/notas-descartadas (com o Restaurar)
+    for (const arq of ["components/compras/notas-descartadas.tsx", PEDIDOS]) {
       expect(ler(arq), arq).toContain("PLANILHA.codigo");
     }
   });

@@ -10,7 +10,7 @@ import { agendarPush, notificarPedidoRecebido } from "@/lib/push/eventos";
 import { whereOrcamentoAguardando, whereOsAguardando } from "@/lib/pedido-cliente/where";
 import { lerDadosPedido, valoresDasOs, type DadosPedido } from "@/lib/pedido-cliente/server";
 import { diasEsperando, inicioDaEspera, modoEfetivo, reais } from "@/lib/pedido-cliente/regra";
-import { podePedidoNoPortal, type TipoItemPedido } from "@/lib/pedido-cliente/lembretes";
+import { ACAO_TRILHA_RESOLVIDO, podePedidoNoPortal, resolvidoPorOutroMeio, type TipoItemPedido } from "@/lib/pedido-cliente/lembretes";
 
 const num = (v: unknown) => Number(v ?? 0) || 0;
 
@@ -50,6 +50,12 @@ export async function acessoPedidoNoPortal(user: { empresaId: string; clienteId:
  * Os pedidos do portal em conferência deste cliente (ou da empresa toda): item → pedido. Só contam os itens que AINDA
  * esperam o pedido: se a OS/orçamento se resolveu por outro caminho (pedido informado em massa ou na fatura, liberado,
  * cancelado, faturado), o pedido do portal não fica "em conferência" para sempre no sino, no filtro e na etiqueta.
+ *
+ * Leva I.2 — e o pedido que NADA mais espera encerra aqui, como RESOLVIDO ("Resolvido por outro meio"), com a trilha
+ * nas OS. Um ponto só, na leitura: todo caminho que resolve um item (registrar, liberar, cancelar a OS, recusar o
+ * orçamento, faturar, mudar a exigência do cliente) passa a valer na próxima vez que o sino, o portal, a lista ou o
+ * lembrete olham — sem depender de cada um desses caminhos lembrar de encerrar. A troca é condicional
+ * (`situacao: "CONFERIR"`): duas leituras ao mesmo tempo, ou a conferência do escritório no meio, encerram uma vez só.
  */
 async function emConferencia(empresaId: string, clienteId?: string) {
   const todos = await prisma.pedidoCliente.findMany({
@@ -65,6 +71,8 @@ async function emConferencia(empresaId: string, clienteId?: string) {
   ]);
   const vivaOs = new Set(osVivas.map((o) => o.id));
   const vivoOrc = new Set(orcVivos.map((o) => o.id));
+  const resolvidos = todos.filter((p) => resolvidoPorOutroMeio({ situacao: "CONFERIR", ...p }, { os: vivaOs, orc: vivoOrc }));
+  if (resolvidos.length) await encerrarResolvidos(empresaId, resolvidos);
   const ps = todos
     .map((p) => ({ ...p, osPropostas: p.osPropostas.filter((id) => vivaOs.has(id)), orcamentosPropostos: p.orcamentosPropostos.filter((id) => vivoOrc.has(id)) }))
     .filter((p) => p.osPropostas.length || p.orcamentosPropostos.length);
@@ -75,6 +83,19 @@ async function emConferencia(empresaId: string, clienteId?: string) {
     for (const id of p.orcamentosPropostos) if (!orc.has(id)) orc.set(id, { pedidoId: p.id, numero: p.numero });
   }
   return { pedidos: ps, os, orc };
+}
+
+/** Leva I.2 — encerra os pedidos do portal que nada mais espera (RESOLVIDO), com a trilha nas OS do próprio cliente */
+async function encerrarResolvidos(empresaId: string, pedidos: { id: string; numero: string; clienteId: string; osPropostas: string[] }[]) {
+  const autor = await autorDoSistema(empresaId);
+  for (const p of pedidos) {
+    await prisma.$transaction(async (tx) => {
+      const r = await tx.pedidoCliente.updateMany({ where: { id: p.id, empresaId, situacao: "CONFERIR" }, data: { situacao: "RESOLVIDO", conferidoEm: new Date(), conferidoPorId: null } });
+      if (!r.count || !autor || !p.osPropostas.length) return;
+      const oss = await tx.ordemServico.findMany({ where: { id: { in: p.osPropostas }, empresaId, clienteId: p.clienteId }, select: { id: true } });
+      if (oss.length) await tx.osHistorico.createMany({ data: oss.map((o) => ({ ordemServicoId: o.id, usuarioId: autor, acao: ACAO_TRILHA_RESOLVIDO, detalhes: `nº ${p.numero}` })) });
+    }).catch((e: unknown) => console.error("[pedido do portal] encerrar resolvido", p.id, (e as Error)?.message));
+  }
 }
 
 /** O último lembrete de cada item (o escritório mostra "Último lembrete em …") */
@@ -146,6 +167,8 @@ export async function pendentesDoCliente(empresaId: string, clienteId: string, a
 
 /** Os pedidos de compra que o cliente enviou pelo portal (os mais recentes), com a situação e o motivo da recusa */
 export async function pedidosEnviadosPeloPortal(empresaId: string, clienteId: string) {
+  // Leva I.2: o que se resolveu por outro caminho já aparece como "Resolvido por outro meio"
+  await emConferencia(empresaId, clienteId);
   const ps = await prisma.pedidoCliente.findMany({
     where: { empresaId, clienteId, origem: "PORTAL" },
     select: {

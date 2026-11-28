@@ -36,6 +36,8 @@ const AJUDA =
 const FILTROS: { key: string; label: string; status: string[] | null }[] = [
   // "Todos" esconde os descartados (o padrão da casa); eles têm filtro próprio
   { key: "todos", label: "Todos", status: ["RASCUNHO", "ENVIADO", "APROVADO", "REPROVADO", "CONVERTIDA"] },
+  // Os das últimas 24h, em qualquer situação: o mesmo que o sino conta ("Novos leads do site")
+  { key: "novos", label: "Novos em 24h", status: null },
   { key: "aguardando", label: "Aguardando", status: ["RASCUNHO"] },
   { key: "andamento", label: "Em andamento", status: ["ENVIADO", "APROVADO"] },
   { key: "convertido", label: "Convertido", status: ["CONVERTIDA"] },
@@ -55,15 +57,16 @@ export default async function LeadsSitePage({
 
   const filtro = FILTROS.find((f) => f.key === status) ?? FILTROS[0];
 
-  const where: { empresaId: string; nome: { startsWith: string }; status?: { in: string[] } } = {
+  const desde = new Date(Date.now() - 24 * 60 * 60 * 1000);
+  const where: { empresaId: string; nome: { startsWith: string }; status?: { in: string[] }; criadoEm?: { gte: Date } } = {
     empresaId,
     nome: { startsWith: NOME_PREFIXO },
   };
   if (filtro.status) where.status = { in: filtro.status };
+  if (filtro.key === "novos") where.criadoEm = { gte: desde };
   // COM-1: "Ver só os próprios" — só os leads (orçamentos) em que a pessoa é o vendedor
   const escopo = filtroOrcamentos(session!.user);
 
-  const desde = new Date(Date.now() - 24 * 60 * 60 * 1000);
   // UX-4 (Y5): paginação de servidor no lugar do corte fixo de 200
   const { pagina: paginaPedida, porPagina } = lerPaginacao(sp);
   const [total, novos24h] = await Promise.all([
