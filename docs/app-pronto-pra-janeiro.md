@@ -25,7 +25,16 @@
 
 **Conversa da OS e push:** não mexi (a CHAT-1 está refazendo). Ficou só o registro, no fim.
 
-Prints antes e depois: `docs/prints/janeiro/` (iPhone e Android, mesmas cenas).
+Prints antes e depois: `docs/prints/janeiro/` (iPhone e Android, as mesmas 9 cenas, nesta ordem):
+1. login depois da sessão vencida;
+2. checklist do veículo com o item OK/NOK salvo sem opções;
+3. Meu dia;
+4. Minhas comissões;
+5. progresso do equipamento;
+6. excluir a foto antes;
+7. despesa com o que falta;
+8. OS cancelada;
+9. Perfil com a OS cancelada depois do trabalho sem sinal.
 
 ## Tabela: tela × problema × gravidade × corrigido?
 
@@ -38,7 +47,7 @@ Gravidade:
 |---|---|---|---|---|
 | C1 | Fila / login | **Sessão vencida com gravações no aparelho:** a API do app redirecionava para o login (HTML). O app quebrava ao ler a resposta e nunca dizia "Entre de novo". Ao navegar, caía no login sem explicar ("Acesse o painel de gestão"). | Alta | ✅ API do app sem sessão → 401. O app reconhece também o redirecionamento antigo. O login diz: "Sua sessão expirou. Entre de novo: o que você fez sem sinal continua guardado no aparelho e sobe depois." |
 | C2 | Checklist do veículo | Item OK/NOK salvo **sem opções** (o editor e a API deixavam) aparecia **sem nenhum botão**. Sendo obrigatório, o técnico ficava preso: só "Hoje não vou usar". | Alta | ✅ Item de opção sem opções vale "OK, NOK" (no app e na regra do alerta). |
-| C3 | Configurações › Modelo de checklist | Nada dizia que **a 1ª opção é a resposta esperada**. Com "Baixo, Médio, Cheio", responder "Cheio" virava alerta ("Checklist registrado com alertas" com tudo certo). | Média | ✅ Dica no editor: "A 1ª opção é a resposta esperada; as outras geram alerta para o gestor. Ex.: 'Cheio, Médio, Baixo'. Vazio vale 'OK, NOK'." |
+| C3 | Configurações › Modelo de checklist | A regra "a 1ª opção é a saudável" estava só no ⓘ dos itens, sem exemplo. Com "Baixo, Médio, Cheio", responder "Cheio" virava alerta ("Checklist registrado com alertas" com tudo certo). | Baixa | ✅ O mesmo ⓘ (padrão: não repete embaixo de cada item) ganhou o exemplo ("Cheio, Médio, Baixo", e não "Baixo, Médio, Cheio") e o "sem opções, vale OK, NOK". |
 | C4 | Checklist do veículo → Meu dia | O dia só baixava **depois** do checklist. Quem abriu o app com sinal e fez o checklist na garagem sem sinal ficava com "Sem sinal e nada guardado ainda". | Média | ✅ O dia desce em segundo plano enquanto o checklist está na tela. |
 | C5 | OS / equipamento | OS **cancelada** pelo escritório abria com "Atividade **concluída**. Só leitura." | Média | ✅ "Atividade cancelada pelo escritório. Só leitura: se precisar voltar a ela, fale com o escritório." (faixa de atenção) |
 | C6 | Equipamento | Progresso "**0 de 19**" e botão "**Faltam 18**": o ΔT, que o app calcula sozinho, entrava no total. | Média | ✅ O progresso conta os mesmos itens das pendências. |

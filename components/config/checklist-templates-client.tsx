@@ -40,8 +40,8 @@ const COLUNAS: ColunaPro[] = [
 interface ItemForm { id?: string; categoria: string; descricao: string; tipo: string; opcoesStr: string; obrigatorio: boolean }
 interface Modelo { id: string; nome: string; descricao?: string | null; frequencia: string; ativo?: boolean; itens?: any[]; _count?: { itens?: number; preenchidos?: number } }
 
-/** A regra do alerta (lib/veiculos/checklist › itemGeraAlerta), dita para quem monta o modelo */
-export const DICA_OPCOES = "A 1ª opção é a resposta esperada; as outras geram alerta para o gestor. Ex.: “Cheio, Médio, Baixo”. Vazio vale “OK, NOK”.";
+/** A regra do alerta (lib/veiculos/checklist › itemGeraAlerta), dita para quem monta o modelo — no ⓘ dos itens (padrão: não repete embaixo de cada item) */
+export const DICA_OPCOES = "Nas opções, a primeira é o estado saudável; as demais geram alerta. Ex.: “Cheio, Médio, Baixo” (e não “Baixo, Médio, Cheio”). Sem opções, vale “OK, NOK”. A ordem daqui é a ordem do preenchimento.";
 const ITEM_VAZIO: ItemForm = { categoria: "", descricao: "", tipo: "OK_NOK", opcoesStr: "OK, NOK", obrigatorio: true };
 const rotuloFrequencia = (f: string) => FREQUENCIAS.find((x) => x.v === f)?.l ?? f;
 const nItens = (t: Modelo) => t._count?.itens ?? t.itens?.length ?? 0;
@@ -225,7 +225,7 @@ export function ChecklistTemplatesClient() {
 
             <div className="space-y-2">
               <p className="text-xs font-semibold text-ink-muted uppercase flex items-center gap-1">Itens
-                <Dica texto="Nas opções, a primeira é o estado saudável; as demais geram alerta. A ordem daqui é a ordem do preenchimento." rotulo="Itens" />
+                <Dica texto={DICA_OPCOES} rotulo="Itens" />
               </p>
               {itens.map((it, i) => (
                 <div key={i} className="border border-surface-border bg-white rounded-lg p-3 space-y-3" data-item-modelo>
@@ -245,10 +245,7 @@ export function ChecklistTemplatesClient() {
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 sm:pl-6">
                     <Select value={it.tipo} onChange={(e) => updItem(i, "tipo", e.target.value)} aria-label={`Tipo do item ${i + 1}`}>{TIPOS_ITEM.map((t) => <option key={t.v} value={t.v}>{t.l}</option>)}</Select>
                     {(it.tipo === "OK_NOK" || it.tipo === "NIVEL") && (
-                      <div className="sm:col-span-2 space-y-1">
-                        <Input value={it.opcoesStr} onChange={(e) => updItem(i, "opcoesStr", e.target.value)} placeholder="Opções separadas por vírgula" aria-label={`Opções do item ${i + 1}`} />
-                        <p className="text-xs text-ink-muted" data-dica-opcoes>{DICA_OPCOES}</p>
-                      </div>
+                      <Input value={it.opcoesStr} onChange={(e) => updItem(i, "opcoesStr", e.target.value)} placeholder="Opções separadas por vírgula" aria-label={`Opções do item ${i + 1}`} className="sm:col-span-2" />
                     )}
                     <label className="flex items-center gap-2 text-sm text-ink-muted">
                       <input type="checkbox" checked={it.obrigatorio} onChange={(e) => updItem(i, "obrigatorio", e.target.checked)} className="rounded border-surface-border text-primary-600 focus:ring-primary-500" />

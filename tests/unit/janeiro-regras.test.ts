@@ -69,14 +69,14 @@ describe("checklist do veículo: item de opção sem opções não prende o téc
     expect(primeiroObrigatorioFaltando([it1], { i1: { valor: "OK", foto: null } })).toBeNull();
   });
 
-  it("a tela usa as opções com o padrão, em botões de 44 px; o editor diz que a 1ª é a esperada", () => {
+  it("a tela usa as opções com o padrão, em botões de 44 px; o ⓘ do editor dá o exemplo e o padrão", () => {
     const t = ler("components/veiculos/itens-checklist.tsx");
     expect(t).toContain("{opcoesDoItem(it).map((op, idx) => {");
     expect(t).not.toContain("it.opcoes.map(");
     expect(t).toContain("min-h-[44px] min-w-[44px]");
     const e = ler("components/config/checklist-templates-client.tsx");
-    expect(e).toContain("data-dica-opcoes>{DICA_OPCOES}");
-    expect(e).toContain('export const DICA_OPCOES = "A 1ª opção é a resposta esperada; as outras geram alerta para o gestor. Ex.: “Cheio, Médio, Baixo”. Vazio vale “OK, NOK”.";');
+    expect(e).toContain('<Dica texto={DICA_OPCOES} rotulo="Itens" />'); // no ⓘ dos itens (padrão da leva 3: não repete embaixo de cada item)
+    expect(e).toContain('export const DICA_OPCOES = "Nas opções, a primeira é o estado saudável; as demais geram alerta. Ex.: “Cheio, Médio, Baixo” (e não “Baixo, Médio, Cheio”). Sem opções, vale “OK, NOK”. A ordem daqui é a ordem do preenchimento.";');
   });
 });
 

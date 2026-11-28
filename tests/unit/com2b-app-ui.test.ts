@@ -161,7 +161,7 @@ describe("COM-2B — a comissão ao vivo no app", () => {
     expect(texto($("[data-aguardando-envio]"))).toBe("+ R$ 12,50 prevista (aguardando envio)");
     expect(total("prevista")).toEqual(["Prevista", "R$ 30,00"]); // o guardado, sem sinal
     await clicar($("[data-comissoes-dia]"));
-    expect(window.location.search).toBe("?ver=perfil");
+    expect(window.location.search).toBe("?ver=perfil&sec=comissoes"); // janeiro: o Perfil abre com a seção aberta
   });
 
   it("o extrato só é buscado de novo depois de 5 minutos (o Meu dia abre muitas vezes)", async () => {
