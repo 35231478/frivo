@@ -88,8 +88,9 @@ jobs:
     env:
       DATABASE_URL: postgresql://ci:ci@localhost:5432/ci
       NEXT_TELEMETRY_DISABLED: 1
-      # A checagem de tipos do `next build` passa de 2 GB de heap neste projeto (o padrão do Node estoura).
-      NODE_OPTIONS: --max-old-space-size=4096
+      # A checagem de tipos do `next build` passa de 2 GB de heap neste projeto (o padrão do Node estoura) e, desde
+      # as Levas H e J, também de 4 GB (o master ficou vermelho por falta de memória); o runner tem folga para 6 GB.
+      NODE_OPTIONS: --max-old-space-size=6144
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
