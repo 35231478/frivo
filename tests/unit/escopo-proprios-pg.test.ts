@@ -12,7 +12,7 @@ import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import { NextRequest } from "next/server";
-import { montarPermissoes, type Permissoes } from "@/lib/permissoes";
+import { montarPermissoes, permissoesTotais, type Permissoes } from "@/lib/permissoes";
 
 const URL_PG = process.env.PG_TESTE_URL;
 const SCHEMA = `teste_escopo_proprios_${process.pid}`;
@@ -44,6 +44,8 @@ const PESSOAS: Record<string, { nome: string; permissoes: Permissoes; role: stri
   uBeto: { nome: "Beto Vendas", permissoes: VENDAS, role: "OPERADOR" },
   uGestor: { nome: "Gil Gestor", permissoes: GESTOR, role: "OPERADOR" },
   uAdm: { nome: "Ada Admin", permissoes: VENDAS, role: "ADMIN" }, // a marca ligada não limita o ADMIN
+  // Todas as permissões + a marca: nenhuma rota recusa por permissão, então quem responde é o guarda do escopo
+  uTudo: { nome: "Tina Total", permissoes: { ...permissoesTotais(), orcamentos: { ...permissoesTotais().orcamentos, verSoProprios: true }, ordens: { ...permissoesTotais().ordens, verSoProprios: true } }, role: "OPERADOR" },
 };
 const logar = (id: string) => { const p = PESSOAS[id]; sessao.atual = { user: { id, name: p.nome, email: `${id}@ficticio.test`, empresaId: "e1", role: p.role, permissoes: p.permissoes, tecnicoId: null } }; };
 const usuario = (id: string) => ({ id, empresaId: "e1", role: PESSOAS[id].role, permissoes: PESSOAS[id].permissoes });
@@ -171,7 +173,7 @@ describe.skipIf(!URL_PG)("COM-1 — Ver só os próprios: nada vaza entre vended
   const METODOS = ["GET", "POST", "PUT", "PATCH", "DELETE"];
   const PARAMS_FALSOS = { atividadeId: "x", equipamentoId: "x", vinculoId: "x", itemId: "x", fotoId: "x", anexoId: "x", linhaId: "x", servicoId: "x" };
 
-  it("varredura: toda rota de /api/orcamentos/[id] e /api/ordens/[id] passa pelo guarda e recusa o registro do outro (404/403)", async () => {
+  it("varredura: toda rota de /api/orcamentos/[id] e /api/ordens/[id] passa pelo guarda e recusa o registro do outro com 404, mesmo com todas as permissões", async () => {
     const rotas = [...rotasPorId("app/api/orcamentos/[id]"), ...rotasPorId("app/api/ordens/[id]")];
     expect(rotas.length).toBeGreaterThan(50);
     const falhas: string[] = [];
@@ -181,12 +183,14 @@ describe.skipIf(!URL_PG)("COM-1 — Ver só os próprios: nada vaza entre vended
       const tipo = rota.startsWith("ordens/") ? "ordem" : "orcamento";
       const alvo = tipo === "ordem" ? "osBeto" : "oBeto";
       for (const m of METODOS.filter((x) => typeof mod[x] === "function")) {
-        logar("uAna");
+        // Com todas as permissões nenhuma rota recusa por permissão: TEM de ser o 404 do guarda (rota que chama o guarda
+        // e ignora a resposta cai aqui)
+        logar("uTudo");
         barrados.length = 0;
         const r = await chamar(rota, m, { id: alvo, ...PARAMS_FALSOS }, m === "GET" || m === "DELETE" ? undefined : {});
         chamadas++;
         const passou = barrados.some((b) => b.tipo === tipo && b.id === alvo && b.barrou);
-        if (![403, 404].includes(r.status) || (r.status === 404 && !passou)) falhas.push(`${m} ${rota} → ${r.status}${passou ? "" : " (sem o guarda)"}`);
+        if (r.status !== 404 || !passou) falhas.push(`${m} ${rota} → ${r.status}${passou ? "" : " (sem o guarda)"}`);
       }
     }
     expect(falhas).toEqual([]);
