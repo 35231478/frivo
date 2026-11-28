@@ -139,7 +139,7 @@ export function gravarJornada(faixas: readonly FaixaJornada[]) {
 }
 
 /**
- * O texto do contrato e dos documentos. Cada faixa no MESMO formato de antes ("08:00 às 18:00, de segunda a sexta"),
+ * O texto do contrato e dos documentos. Cada faixa no MESMO formato de antes ("07:00 às 16:00, de segunda a sexta"),
  * com o intervalo quando há; as faixas separadas por ponto e vírgula. As horas da semana entram quando a jornada é
  * das novas (mais de uma faixa ou com intervalo): a jornada antiga, de uma faixa sem intervalo, sai exatamente como
  * saía — os modelos de contrato das empresas continuam lendo igual.
