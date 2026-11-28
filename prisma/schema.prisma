@@ -763,6 +763,8 @@ model Configuracao {
   /// do mês seguinte; padrão 5) | DIA_FIXO (o dia N do mês seguinte; além do fim do mês = o último dia)
   comissaoVencimentoTipo  String  @default("DIA_UTIL") @map("comissao_vencimento_tipo")
   comissaoVencimentoDia   Int     @default(5) @map("comissao_vencimento_dia")
+  /// COM-1.2 — a renovação do contrato abre um ciclo novo de comissão (padrão: não — só o fechamento gera)
+  comissaoRenovacaoGera   Boolean @default(false) @map("comissao_renovacao_gera")
 
   /// Impressão do relatório da OS: seções ligadas/desligadas e quem vê (cliente × só interno).
   /// JSON { [secao]: { ativo, cliente } }; ausente = padrões de lib/relatorio-os/config.ts
@@ -955,6 +957,7 @@ model Usuario {
   orcamentosVendidos     Orcamento[]                 @relation("OrcamentoVendedor")
   osVendidas             OrdemServico[]              @relation("OsVendedor")
   medicoesVendidas       Medicao[]                   @relation("MedicaoVendedor")
+  contratosVendidos      Contrato[]                  @relation("ContratoVendedor")
   fechamentoLinhas       DesempenhoFechamentoLinha[] @relation("FechamentoLinhaUsuario")
   comissaoRegras         ComissaoRegra[]             @relation("ComissaoRegraUsuario")
   comissoes              Comissao[]                  @relation("ComissaoUsuario")
@@ -1633,6 +1636,9 @@ model Contrato {
 
   // Origem: proposta de contrato (orçamento) que gerou este contrato
   origemOrcamentoId String? @unique @map("origem_orcamento_id")
+  /// COM-1.2 — o vendedor do contrato: o da proposta que o originou (ou quem o criou), TRAVADO; só "Trocar vendedor"
+  /// (com motivo) muda. Nulo = contrato de antes da COM-1.2 (não gera comissão: sem retroativo)
+  vendedorId        String? @map("vendedor_id")
 
   // D3: adicionais na fatura do contrato (CONSOLIDADO) ou em faturas separadas (SEPARADO, padrão)
   faturamentoAdicionais FaturamentoAdicionais @default(SEPARADO) @map("faturamento_adicionais")
@@ -1650,6 +1656,7 @@ model Contrato {
 
   empresa              Empresa                       @relation(fields: [empresaId], references: [id], onDelete: Cascade)
   origemOrcamento      Orcamento?                    @relation("OrcamentoContrato", fields: [origemOrcamentoId], references: [id])
+  vendedor             Usuario?                      @relation("ContratoVendedor", fields: [vendedorId], references: [id], onDelete: SetNull)
   cliente              Cliente                       @relation(fields: [clienteId], references: [id])
   responsavelTecnico   Tecnico?                      @relation(fields: [responsavelTecnicoId], references: [id])
   tipoOsRecorrencia    TipoOs?                       @relation("ContratoTipoOsRecorrencia", fields: [tipoOsRecorrenciaId], references: [id])
@@ -1667,6 +1674,7 @@ model Contrato {
   contasReceber        ContaReceber[]
   execucoesFaturamento FaturamentoContratoExecucao[]
   documentacaoEnvios   DocumentacaoEnvio[]
+  comissoes            Comissao[]
 
   @@unique([numero, empresaId])
   @@index([empresaId, status])
@@ -1675,6 +1683,7 @@ model Contrato {
   @@index([clienteId])
   @@index([responsavelTecnicoId])
   @@index([servicoId])
+  @@index([empresaId, vendedorId])
   @@map("contratos")
 }
 
@@ -5722,11 +5731,17 @@ model ComissaoRegra {
   /// VENDEDOR (nesta leva) | EXECUTOR | RESPONSAVEL (o modelo já aceita; ainda não geram comissão)
   papel        String   @default("VENDEDOR")
   /// TODOS_SERVICOS | CATEGORIA (categoria do serviço) | SERVICO (servicoId) | PECAS (linhas de produto/peça)
+  /// | CONTRATOS (COM-1.2: o contrato fechado; `tipoContrato` nulo = todos os contratos)
   sobreTipo    String   @map("sobre_tipo")
   categoria    String?
   servicoId    String?  @map("servico_id")
+  /// COM-1.2 — CONTRATOS de um tipo só (TipoContrato); nulo = todos os contratos
+  tipoContrato String?  @map("tipo_contrato")
   /// PERC_VENDA (% do valor com desconto) | PERC_LUCRO (% do lucro: venda − custo, só no servidor) | FIXO_ITEM (R$ por unidade)
+  /// | PERC_MENSALIDADE (COM-1.2: % de cada mensalidade recebida nos primeiros `meses`) | FIXO_CONTRATO (R$ no fechamento)
   base         String
+  /// COM-1.2 — PERC_MENSALIDADE: quantos meses desde o início (0 = enquanto o contrato estiver ativo)
+  meses        Int?
   /// % (PERC_*) ou R$ por unidade (FIXO_ITEM)
   valor        Decimal  @db.Decimal(12, 4)
   /// COM-2 (Executor): IGUAL | POR_EXECUTOR (quem marcou o equipamento como feito) | POR_CARGO (divisaoCargos)
@@ -5756,6 +5771,12 @@ model Comissao {
   empresaId        String   @map("empresa_id")
   /// Vendedor (COM-1): o orçamento. Técnico (COM-2): null — a comissão vem da OS
   orcamentoId      String?  @map("orcamento_id")
+  /// COM-1.2 — comissão sobre CONTRATO: o contrato, a mensalidade ("AAAA-MM"; o fixo leva a do início do ciclo),
+  /// o 1º mês do ciclo (o fechamento ou uma renovação) e a janela de meses da regra (0 = enquanto ativo)
+  contratoId       String?  @map("contrato_id")
+  competencia      String?
+  cicloInicio      String?  @map("ciclo_inicio")
+  meses            Int?
   /// COM-2 (Executor): a OS, a atividade, o equipamento atendido (a linha é o itemId) e a parte dele na divisão
   ordemServicoId   String?  @map("ordem_servico_id")
   atividadeId      String?  @map("atividade_id")
@@ -5790,6 +5811,7 @@ model Comissao {
   empresa     Empresa              @relation(fields: [empresaId], references: [id], onDelete: Cascade)
   orcamento   Orcamento?           @relation(fields: [orcamentoId], references: [id], onDelete: Cascade)
   ordemServico OrdemServico?       @relation("ComissaoOs", fields: [ordemServicoId], references: [id], onDelete: Cascade)
+  contrato     Contrato?           @relation(fields: [contratoId], references: [id], onDelete: Cascade)
   usuario     Usuario?             @relation("ComissaoUsuario", fields: [usuarioId], references: [id], onDelete: SetNull)
   regra       ComissaoRegra?       @relation(fields: [regraId], references: [id], onDelete: SetNull)
   lancamentos ComissaoLancamento[]
@@ -5799,6 +5821,7 @@ model Comissao {
   @@index([empresaId, usuarioId])
   @@index([orcamentoId])
   @@index([ordemServicoId])
+  @@index([contratoId])
   @@map("comissoes")
 }
 

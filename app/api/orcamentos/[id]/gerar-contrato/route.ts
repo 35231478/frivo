@@ -69,6 +69,8 @@ export async function POST(_req: NextRequest, { params }: Params) {
         responsavelTecnicoId: orcamento.responsavelTecnicoId,
         observacoes: orcamento.descricao,
         origemOrcamentoId: orcamento.id,
+        // COM-1.2: o vendedor do contrato é o da proposta (sem vendedor na proposta, quem converte)
+        vendedorId: orcamento.vendedorId ?? session.user!.id,
         // Recorrência de OS já configurada a partir da proposta
         recorrencia: true,
         frequenciaRecorrencia: orcamento.frequenciaContrato ?? "MENSAL",
@@ -96,6 +98,10 @@ export async function POST(_req: NextRequest, { params }: Params) {
 
     return novo;
   });
+
+  // COM-1.2: a proposta virou contrato ATIVO — o contrato está fechado: gera a comissão do vendedor
+  const { comissoesDoContratoNoStatus } = await import("@/lib/comissoes/contrato-server");
+  await comissoesDoContratoNoStatus(empresaId, contrato.id, null, contrato.status);
 
   return NextResponse.json({ contratoId: contrato.id, numero: contrato.numero, jaExistia: false }, { status: 201 });
 }
