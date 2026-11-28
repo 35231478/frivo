@@ -7,6 +7,8 @@ import type { ModoPedido } from "@/lib/pedido-cliente/regra";
 
 /** O valor do filtro na URL das listas: ?pedido=aguardando */
 export const FILTRO_AGUARDANDO_PEDIDO = "aguardando";
+/** PC-2: as OS cobertas por um pedido de compra do portal que o escritório ainda não conferiu: ?pedido=conferir */
+export const FILTRO_CONFERIR_PEDIDO = "conferir";
 
 /** A fatura já saiu: a OS/orçamento não espera mais pedido (inclusive a do jeito antigo, com o PC na própria fatura) */
 export const FATURAS_EMITIDAS = ["NF_EMITIDA", "BOLETO_GERADO", "PAGO"] as const;

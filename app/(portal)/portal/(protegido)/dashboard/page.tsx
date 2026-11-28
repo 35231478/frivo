@@ -3,7 +3,8 @@ import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import { requirePortalSession, getPortalBranding, STATUS_CONTA_PORTAL } from "@/lib/portal-server";
 import { formatarData } from "@/lib/utils";
-import { ClipboardList, CalendarCheck, FileText, AlertTriangle, Bell, Headset } from "lucide-react";
+import { ClipboardList, CalendarCheck, FileText, AlertTriangle, Bell, Headset, FileSignature } from "lucide-react";
+import { acessoPedidoNoPortal, pendentesDoCliente } from "@/lib/pedido-cliente/portal-server";
 import { diaCivilPassou, diasAteDiaCivil, hojeDiaCivil } from "@/lib/fuso";
 import { AceitesPendentes } from "@/components/portal/aceites-pendentes";
 import { aceiteObrigatorioNoPortal, pendenciasDoCliente } from "@/lib/os/aceite-server";
@@ -44,7 +45,12 @@ export default async function PortalDashboard() {
   // Serviços concluídos à espera da confirmação do cliente (quem vê as OS ou abre chamados)
   const [pendencias, aceiteObrigatorio] = verChamados ? await Promise.all([pendenciasDoCliente(empresaId, clienteId), aceiteObrigatorioNoPortal(empresaId)]) : [[], false];
 
+  // PC-2: o comprador vê quantos serviços aguardam o pedido de compra (os que ele ainda não enviou)
+  const pedido = await acessoPedidoNoPortal(user);
+  const semPedido = pedido.pode ? (await pendentesDoCliente(empresaId, clienteId)).filter((i) => !i.emConferencia).length : 0;
+
   const alertas: { tipo: "info" | "warn" | "danger"; texto: string }[] = [];
+  if (semPedido > 0) alertas.push({ tipo: "warn", texto: `${semPedido} serviço(s) aguardando o pedido de compra.` });
   if (permissoes.verFinanceiro && medicoesPend > 0) alertas.push({ tipo: "warn", texto: `${medicoesPend} fatura(s) aguardando aprovação.` });
   if (permissoes.verBoletos) {
     const vencidos = boletos.filter((b) => diaCivilPassou(b.dataVencimento)).length;
@@ -66,6 +72,7 @@ export default async function PortalDashboard() {
     }] : []),
     ...(permissoes.verDocumentos ? [{ label: "Documentos disponíveis", valor: totalDocs, icone: FileText, href: "/portal/documentos" }] : []),
     ...(permissoes.verFinanceiro ? [{ label: "Pendências", valor: medicoesPend + boletos.length, icone: AlertTriangle, href: "/portal/financeiro" }] : []),
+    ...(pedido.pode ? [{ label: "Aguardando pedido de compra", valor: semPedido, icone: FileSignature, href: "/portal/pedidos-compra" }] : []),
   ];
 
   return (

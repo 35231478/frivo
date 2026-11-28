@@ -10,6 +10,7 @@ import { EscolhaCobrancaMateriais } from "@/components/orcamento/escolha-cobranc
 import { regraDeCobranca, type CobrancaMateriais } from "@/lib/orcamentos/materiais";
 import { FormField, FormGrid, FormSection } from "@/components/ui/form-field";
 import { DIAS_ALERTA_PEDIDO_PADRAO } from "@/lib/pedido-cliente/regra";
+import { MSG_REGUA, lerRegua, reguaEfetiva, textoRegua } from "@/lib/pedido-cliente/lembretes";
 import {
   GARANTIAS_PECAS_SUGERIDAS, GARANTIAS_SERVICO_SUGERIDAS, NaoInclusoCampo, NormasCampo,
 } from "@/components/orcamento/campos-corporativos";
@@ -26,6 +27,9 @@ export interface PadroesOrcamentoTela {
   orcamentoCobrancaMateriais?: string | null;
   /** Pedido do cliente: o sino avisa depois de tantos dias esperando */
   pedidoClienteDiasAlerta?: number;
+  /** PC-2: lembretes por e-mail ao contato de compras e a régua (dias) */
+  pedidoLembretesAtivo?: boolean;
+  pedidoLembretesDias?: number[];
 }
 
 /**
@@ -42,11 +46,15 @@ export function OrcamentoPadroesClient({ inicial, podeEditar }: { inicial: Padro
   const [mostrarMateriais, setMostrarMateriais] = useState(inicial.orcamentoMostrarMateriais !== false);
   const [cobranca, setCobranca] = useState<CobrancaMateriais>(regraDeCobranca(inicial.orcamentoCobrancaMateriais));
   const [diasPedido, setDiasPedido] = useState(String(inicial.pedidoClienteDiasAlerta ?? DIAS_ALERTA_PEDIDO_PADRAO));
+  const [lembretes, setLembretes] = useState(inicial.pedidoLembretesAtivo !== false);
+  const [regua, setRegua] = useState(reguaEfetiva(inicial.pedidoLembretesDias).join(", "));
+  const reguaLida = lerRegua(regua);
   const [salvando, setSalvando] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
   const mudou = <T,>(f: (v: T) => void) => (v: T) => { f(v); setMsg(null); };
 
   async function salvar() {
+    if (lembretes && !reguaLida) { setMsg(MSG_REGUA); return; }
     setSalvando(true); setMsg(null);
     try {
       const r = await fetch("/api/configuracoes", {
@@ -61,6 +69,8 @@ export function OrcamentoPadroesClient({ inicial, podeEditar }: { inicial: Padro
           orcamentoMostrarMateriais: mostrarMateriais,
           orcamentoCobrancaMateriais: cobranca,
           pedidoClienteDiasAlerta: diasPedido,
+          pedidoLembretesAtivo: lembretes,
+          ...(reguaLida ? { pedidoLembretesDias: reguaLida } : {}),
         }),
       });
       const j = await r.json().catch(() => ({}));
@@ -119,6 +129,23 @@ export function OrcamentoPadroesClient({ inicial, podeEditar }: { inicial: Padro
               <Input type="number" inputMode="numeric" min={1} max={90} value={diasPedido} onChange={(e) => mudou(setDiasPedido)(e.target.value)} data-dias-pedido-cliente />
             </FormField>
           </FormGrid>
+          <div className="mt-4 space-y-3" data-lembretes-pedido>
+            <ToggleSwitch
+              label="Lembrar o contato de compras por e-mail"
+              description="Com a lista do que espera o pedido e o link do portal."
+              dica="O e-mail vai ao contato de compras da ficha do cliente, que anexa o pedido de compra pelo portal. Cada cliente pode desligar na ficha (Cobrança e faturamento)."
+              checked={lembretes} disabled={!podeEditar}
+              onChange={mudou(setLembretes)}
+            />
+            {lembretes && (
+              <FormGrid cols={3}>
+                <FormField label="Enviar nos dias" hint={reguaLida ? `Após ${textoRegua(reguaLida)} de espera` : undefined} error={!reguaLida ? MSG_REGUA : undefined}
+                  dica="Dias contados da conclusão da OS (no modo “para executar e faturar”, da aprovação). Cada etapa vai uma vez; o que já tem pedido, foi liberado ou está em conferência não entra.">
+                  <Input value={regua} onChange={(e) => mudou(setRegua)(e.target.value)} placeholder="3, 7, 15" error={!reguaLida} data-regua-lembretes />
+                </FormField>
+              </FormGrid>
+            )}
+          </div>
         </FormSection>
 
         <FormSection title="Normas atendidas" dica="As normas marcadas vêm selecionadas em cada novo orçamento. Para orçamentos simples, deixe-as desmarcadas e selecione no orçamento quando necessário.">

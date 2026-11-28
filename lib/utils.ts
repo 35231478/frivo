@@ -122,6 +122,8 @@ export const PERMISSOES_PORTAL = [
   { chave: "verBoletos", label: "Ver e baixar boletos" },
   { chave: "aprovarMedicoes", label: "Aprovar medições" },
   { chave: "verValores", label: "Ver valores financeiros" },
+  // PC-2: o comprador vê o que aguarda o pedido de compra e anexa o pedido (o "Contato de compras" da ficha já vê)
+  { chave: "enviarPedidoCompra", label: "Enviar pedido de compra" },
 ] as const;
 
 export type PermissaoPortal = (typeof PERMISSOES_PORTAL)[number]["chave"];

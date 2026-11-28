@@ -84,6 +84,8 @@ describe("catálogo do painel", () => {
       osSemTecnico: "osSemTecnico", osAtrasadas: "prazos", atividadesEsquecidas: "atividadesEsquecidas", comentariosCampo: "comentariosCampo",
       pmocsVencendo: "pmoc", orcamentosVencendo: "orcamentosVencendo", despesasCampo: "despesasCampo", contasPagarHoje: "contasPagarHoje",
       contasReceberHoje: "contasReceberHoje", estoqueNegativoCampo: "estoqueNegativoCampo", pedidosCliente: "pedidosCliente",
+      // PC-2: os pedidos do portal para conferir (quem vê OS, como o pedido do cliente)
+      pedidosConferir: "pedidosCliente",
     });
   });
 });

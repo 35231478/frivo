@@ -31,7 +31,7 @@ export const AVISOS_DO_NUMERO = {
   aceitesRessalva: "aceiteRessalvaOsId", aceitesConfirmados: "aceiteConfirmadoOsId", avaliacoesBaixas: "avaliacaoBaixaOsId",
   admissoesAssinadas: "admissaoAssinadaId", estoqueNegativoCampo: null, atividadesEsquecidas: "atividadeEsquecidaOsId",
   comentariosCampo: "comentarioCampoOsId", despesasCampo: null, osSemTecnico: "osSemTecnicoId", orcamentosVencendo: "orcamentoVencendoId",
-  pedidosAtrasados: "pedidoAtrasadoOsId",
+  pedidosAtrasados: "pedidoAtrasadoOsId", pedidosConferir: "pedidoConferirId",
 } as const;
 
 export type AvisoDoNumero = keyof typeof AVISOS_DO_NUMERO;

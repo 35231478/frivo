@@ -497,6 +497,7 @@ model Empresa {
   checklistsDiarios      ChecklistDiario[]
   clientes               Cliente[]
   pedidosCliente         PedidoCliente[]
+  pedidosClienteLembretes PedidoClienteLembrete[]
   equipamentos           Equipamento[]
   faturamentoExecucoes   FaturamentoContratoExecucao[]
   contratos              Contrato[]
@@ -755,6 +756,9 @@ model Configuracao {
   orcamentoValidadeDias    Int      @default(10) @map("orcamento_validade_dias")
   /// Pedido do cliente: o sino avisa depois de tantos dias esperando (lib/pedido-cliente)
   pedidoClienteDiasAlerta  Int      @default(7) @map("pedido_cliente_dias_alerta")
+  /// Pedido do cliente (PC-2): lembretes por e-mail ao contato de compras, nos dias da régua (desde a conclusão)
+  pedidoLembretesAtivo     Boolean  @default(true) @map("pedido_lembretes_ativo")
+  pedidoLembretesDias      Int[]    @default([3, 7, 15]) @map("pedido_lembretes_dias")
   orcamentoGarantiaServico String?  @default("90 dias") @map("orcamento_garantia_servico")
   orcamentoGarantiaPecas   String?  @default("Conforme garantia do fabricante") @map("orcamento_garantia_pecas")
   orcamentoNaoIncluso      String?  @map("orcamento_nao_incluso") @db.Text
@@ -1222,6 +1226,8 @@ model Cliente {
   comprasNome         String?            @map("compras_nome")
   comprasEmail        String?            @map("compras_email")
   comprasTelefone     String?            @map("compras_telefone")
+  /// Lembretes do pedido do cliente por e-mail ao contato de compras (PC-2); desligável por cliente
+  pedidoLembretesAtivo Boolean           @default(true) @map("pedido_lembretes_ativo")
   agrupaAdicionais    Boolean            @default(false) @map("agrupa_adicionais")
   boletoUnicoMensal   Boolean            @default(false) @map("boleto_unico_mensal")
   emailsFaturamento   String[]           @map("emails_faturamento")
@@ -6078,6 +6084,17 @@ model PedidoCliente {
   criadoPorId  String?  @map("criado_por_id")
   criadoEm     DateTime @default(now()) @map("criado_em")
   atualizadoEm DateTime @default(now()) @updatedAt @map("atualizado_em")
+  /// PC-2: ESCRITORIO (informado pela equipe) | PORTAL (anexado pelo comprador no portal)
+  origem              String    @default("ESCRITORIO")
+  /// PC-2: CONFIRMADO | CONFERIR (o do portal, até o escritório conferir) | RECUSADO (com o motivo, que o cliente vê)
+  situacao            String    @default("CONFIRMADO")
+  /// PC-2: as OS e orçamentos que o comprador disse que o pedido cobre (só ligam de verdade ao confirmar)
+  osPropostas         String[]  @default([]) @map("os_propostas")
+  orcamentosPropostos String[]  @default([]) @map("orcamentos_propostos")
+  enviadoPorContatoId String?   @map("enviado_por_contato_id")
+  conferidoEm         DateTime? @map("conferido_em")
+  conferidoPorId      String?   @map("conferido_por_id")
+  motivoRecusa        String?   @map("motivo_recusa")
 
   empresa    Empresa        @relation(fields: [empresaId], references: [id], onDelete: Cascade)
   cliente    Cliente        @relation(fields: [clienteId], references: [id])
@@ -6085,5 +6102,29 @@ model PedidoCliente {
   orcamentos Orcamento[]
 
   @@index([empresaId, clienteId])
+  @@index([empresaId, situacao])
   @@map("pedidos_cliente")
+}
+
+/// PC-2: cada lembrete do pedido do cliente enviado por e-mail, por item (OS ou orçamento) e etapa da régua.
+/// A `chave` única ("os:<id>:<etapa>") é o que impede mandar a mesma etapa duas vezes (o cron pode rodar de novo).
+model PedidoClienteLembrete {
+  id             String   @id @default(cuid())
+  empresaId      String   @map("empresa_id")
+  clienteId      String   @map("cliente_id")
+  ordemServicoId String?  @map("ordem_servico_id")
+  orcamentoId    String?  @map("orcamento_id")
+  /// O dia da régua (3, 7, 15…); 0 = listado no e-mail antes da 1ª etapa
+  etapa          Int
+  chave          String   @unique
+  /// O envio (um e-mail) que levou este item
+  envio          String
+  para           String
+  enviadoEm      DateTime @default(now()) @map("enviado_em")
+
+  empresa Empresa @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+
+  @@index([empresaId, ordemServicoId])
+  @@index([empresaId, orcamentoId])
+  @@map("pedidos_cliente_lembretes")
 }
