@@ -220,6 +220,36 @@ describe("formato ao sair do campo", () => {
   });
 });
 
+describe("formato ao salvar", () => {
+  it("o salvar confere o formato do que foi digitado (sem ter saído do campo) — e o dado antigo intocado não trava", async () => {
+    function Salvar() {
+      const [cep, setCep] = useState("");
+      const f = useErrosDoFormulario();
+      api = f;
+      return h(ErrosDoFormulario, { valor: f }, h("form", { ref: f.ref },
+        h(FormField, { label: "CEP", name: "cep", formato: "cep" }, h(Input, { value: cep, onChange: (e: any) => setCep(e.target.value), "data-t": "cep" })),
+        h(FormField, { label: "E-mail antigo", name: "email", formato: "email" }, h(Input, { defaultValue: "antigo@", "data-t": "email" })),
+      ));
+    }
+    act(() => root.render(h(Salvar)));
+    let ok = true;
+    act(() => { ok = api.validar({}); });
+    expect(ok).toBe(true); // nada digitado: o e-mail antigo fora do formato não trava
+    digitar($<HTMLInputElement>('[data-t="cep"]')!, "1301");
+    act(() => { ok = api.validar({}); });
+    await flush();
+    expect(ok).toBe(false);
+    expect($('[data-t="cep"]')!.getAttribute("aria-invalid")).toBe("true");
+    expect($('[data-t="email"]')!.getAttribute("aria-invalid")).toBeNull();
+    expect(document.activeElement).toBe($('[data-t="cep"]'));
+    // a mensagem de formato que veio do salvar segue o formato: continua enquanto errado, some quando certo
+    digitar($<HTMLInputElement>('[data-t="cep"]')!, "13010-00");
+    expect($('[data-t="cep"]')!.getAttribute("aria-invalid")).toBe("true");
+    digitar($<HTMLInputElement>('[data-t="cep"]')!, "13010-000");
+    expect($('[data-t="cep"]')!.getAttribute("aria-invalid")).toBeNull();
+  });
+});
+
 describe("erro do servidor no campo certo", () => {
   it("{ erro, campos }: o CNPJ já cadastrado cai no CNPJ, com foco", async () => {
     act(() => root.render(h(Exemplo)));

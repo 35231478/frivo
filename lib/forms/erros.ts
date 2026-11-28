@@ -120,6 +120,9 @@ export const MSG_FORMATO = {
   valor: "Valor inválido: use só números (ex.: 1.250,00).",
 } as const;
 
+/** A mensagem é de formato (não de "obrigatório" nem do servidor)? */
+export const ehMensagemDeFormato = (m: string | null | undefined) => !!m && (Object.values(MSG_FORMATO) as string[]).includes(m);
+
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 
 /** Número digitado no jeito brasileiro ("1.250,50", "1250,5", "1250.50", "R$ 10") → número, ou null */

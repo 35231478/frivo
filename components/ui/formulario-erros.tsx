@@ -50,6 +50,8 @@ export interface ErrosFormulario {
   /** Rótulo de cada campo (o FormField registra) — para o resumo */
   rotuloDe: (nome: string) => string | undefined;
   registrarRotulo: (nome: string, rotulo: string) => void;
+  /** O FormField com `formato` registra como conferir o valor digitado: `validar` também confere o formato ao salvar */
+  registrarFormato: (nome: string, conferir: () => string | null) => () => void;
   /** A ordem em que os campos apareceram na tela */
   ordem: () => string[];
 }
@@ -101,6 +103,7 @@ export function useErrosDoFormulario(opcoes: OpcoesErros = {}): ErrosFormulario 
   const [abaDom, setAbaDom] = useState<Record<string, string>>({});
   const raiz = useRef<HTMLElement | null>(null);
   const rotulos = useRef<Map<string, string>>(new Map());
+  const formatos = useRef<Map<string, () => string | null>>(new Map());
   const op = useRef(opcoes);
   op.current = opcoes;
 
@@ -187,7 +190,11 @@ export function useErrosDoFormulario(opcoes: OpcoesErros = {}): ErrosFormulario 
   const limparTudo = useCallback(() => { setProprios({}); setGeral(null); }, []);
   const definirGeral = useCallback((m: string | null) => setGeral(m?.trim() || null), []);
   const validar = useCallback((c: ErrosDeCampo, g: string | null = null) => {
-    const limpos = limparCampos(c);
+    // Ao salvar, o formato de todo campo que a pessoa digitou também conta (ex.: CNPJ incompleto sem ter saído do campo)
+    const doRhfAgora = camposDoRhf(op.current.rhf);
+    const comFormato: ErrosDeCampo = {};
+    formatos.current.forEach((conferir, nome) => { if (!c[nome] && !doRhfAgora[nome]) { const m = conferir(); if (m) comFormato[nome] = m; } });
+    const limpos = limparCampos({ ...comFormato, ...c });
     definir(limpos, g);
     const ok = !Object.keys(limpos).length && !g && !Object.keys(camposDoRhf(op.current.rhf)).length;
     if (!ok) focar();
@@ -203,13 +210,17 @@ export function useErrosDoFormulario(opcoes: OpcoesErros = {}): ErrosFormulario 
   const ref = useCallback((el: HTMLElement | null) => { raiz.current = el; }, []);
   const registrarRotulo = useCallback((nome: string, rotulo: string) => { if (!rotulos.current.has(nome) || rotulos.current.get(nome) !== rotulo) rotulos.current.set(nome, rotulo); }, []);
   const rotuloDe = useCallback((nome: string) => rotulos.current.get(nome), []);
+  const registrarFormato = useCallback((nome: string, conferir: () => string | null) => {
+    formatos.current.set(nome, conferir);
+    return () => { if (formatos.current.get(nome) === conferir) formatos.current.delete(nome); };
+  }, []);
   const ordem = useCallback(() => Array.from(rotulos.current.keys()), []);
   const erroDe = useCallback((nome: string) => campos[nome], [campos]);
 
   return useMemo(() => ({
     campos, geral, temErros: !!geral || Object.keys(campos).length > 0, erroDe, definir, definirCampo, limpar, limparTudo, definirGeral,
-    validar, erroDaApi, focar, porAba, ref, rotuloDe, registrarRotulo, ordem,
-  }), [campos, geral, erroDe, definir, definirCampo, limpar, limparTudo, definirGeral, validar, erroDaApi, focar, porAba, ref, rotuloDe, registrarRotulo, ordem]);
+    validar, erroDaApi, focar, porAba, ref, rotuloDe, registrarRotulo, registrarFormato, ordem,
+  }), [campos, geral, erroDe, definir, definirCampo, limpar, limparTudo, definirGeral, validar, erroDaApi, focar, porAba, ref, rotuloDe, registrarRotulo, registrarFormato, ordem]);
 }
 
 /**

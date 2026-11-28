@@ -268,7 +268,9 @@ export function ClienteForm({ initialData, totalProximos30Dias, valorEmAtraso, e
 
   // Zod recusou: os erros já estão nos campos (rhf); rola e foca o primeiro, abrindo a aba dele
   function onError() {
-    erros.definir({});
+    // Junta o formato dos campos digitados (ex.: CNPJ incompleto) e foca o 1º. O foco é chamado sempre: aqui o
+    // react-hook-form acabou de achar os erros dele e o `validar` ainda pode não enxergá-los
+    erros.validar({});
     erros.focar();
   }
 
@@ -276,7 +278,7 @@ export function ClienteForm({ initialData, totalProximos30Dias, valorEmAtraso, e
     if (!podeSalvar) return;
     erros.limparTudo();
     const erroCfg = validarConfigDinamica();
-    if (erroCfg) { erros.validar({ [erroCfg.campo]: erroCfg.msg }); return; }
+    if (!erros.validar(erroCfg ? { [erroCfg.campo]: erroCfg.msg } : {})) return;
 
     const payload: any = {
       ...data,

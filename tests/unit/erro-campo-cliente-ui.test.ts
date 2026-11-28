@@ -112,6 +112,21 @@ describe("salvar com erro", () => {
     expect(chamadas.some((c) => c.metodo === "POST")).toBe(false);
   });
 
+  it("o print do Zé no Salvar: CNPJ incompleto digitado (sem sair do campo) é acusado no CNPJ, com foco, e não envia", async () => {
+    await montar();
+    await digitar(campo("cpfCnpj"), "11.222.333/0001");
+    await digitar(campo("nome"), "Polar Demo Refrigeração");
+    await clicar($("[data-salvar-cliente]"));
+    expect(campo("cpfCnpj").getAttribute("aria-invalid")).toBe("true");
+    expect(mensagemDe(campo("cpfCnpj"))).toBe("Informe os 14 dígitos do CNPJ.");
+    expect(document.activeElement).toBe(campo("cpfCnpj"));
+    expect(txt($("[data-resumo-erros]"))).toBe("Informe os 14 dígitos do CNPJ.");
+    expect(chamadas.some((c) => c.metodo === "POST")).toBe(false);
+    // completou certo: some, e o salvar segue
+    await digitar(campo("cpfCnpj"), "11.222.333/0001-81");
+    expect(campo("cpfCnpj").getAttribute("aria-invalid")).toBeNull();
+  });
+
   it("corrigiu a razão social: o erro dela some na hora (fica só o do CNPJ)", async () => {
     await montar();
     await clicar($("[data-salvar-cliente]"));

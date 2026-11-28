@@ -8,7 +8,7 @@ import {
 import { Dica } from "@/components/ui/dica";
 import { CampoCtx, juntarIds } from "@/components/ui/campo-contexto";
 import { useErrosCtx } from "@/components/ui/formulario-erros";
-import { validarFormato, type Formato } from "@/lib/forms/erros";
+import { ehMensagemDeFormato, validarFormato, type Formato } from "@/lib/forms/erros";
 
 interface FormFieldProps {
   label: string;
@@ -97,6 +97,20 @@ export function FormField({ label, error, name, formato, valor, required, hint, 
   // O resumo da faixa usa o rótulo do campo
   useEffect(() => { if (name && form) form.registrarRotulo(name, label); }, [name, label, form]);
 
+  // Ao SALVAR, o formulário também confere o formato deste campo — só se a pessoa digitou nele (um dado antigo fora do
+  // formato não trava o salvar de quem nem mexeu ali)
+  const caixaRef = useRef<HTMLDivElement>(null);
+  const digitou = useRef(false);
+  const registrarFormato = form?.registrarFormato;
+  useEffect(() => {
+    if (!name || !formato || !registrarFormato) return;
+    return registrarFormato(name, () => {
+      if (!digitou.current) return null;
+      const el = caixaRef.current?.querySelector<HTMLInputElement>('input:not([type="hidden"]):not([aria-hidden="true"]), textarea');
+      return el ? validarFormato(formato, el.value) : null;
+    });
+  }, [name, formato, registrarFormato]);
+
   // Controle sem digitação (seletor): o valor mudou, o erro de "obrigatório"/servidor some
   const valorAnterior = useRef(valor);
   useEffect(() => {
@@ -135,6 +149,7 @@ export function FormField({ label, error, name, formato, valor, required, hint, 
 
   // Digitou: o erro some assim que fica certo (o de formato, quando o formato fecha; os outros, na hora)
   const aoDigitar = (e: FormEvent<HTMLDivElement>) => {
+    digitou.current = true;
     if (!erro) return;
     const alvo = e.target as HTMLInputElement;
     // O calendário do aparelho (campo de data escondido) escolheu uma data: vale como correção
@@ -143,7 +158,7 @@ export function FormField({ label, error, name, formato, valor, required, hint, 
     if (v === null) return;
     // Já acusou o formato: some quando fica certo; enquanto segue errado, a mensagem acompanha o que está digitado
     // (ex.: "Informe os 14 dígitos" → "CNPJ inválido" quando os 14 dígitos chegam com o verificador errado)
-    if (formato && (erroFormato || formatoNoForm.current)) {
+    if (formato && (erroFormato || formatoNoForm.current || ehMensagemDeFormato(erroDoForm))) {
       const msg = validarFormato(formato, v);
       if (msg === null) limparTudo();
       else if (name && form) form.definirCampo(name, msg);
@@ -161,7 +176,7 @@ export function FormField({ label, error, name, formato, valor, required, hint, 
   );
   return (
     <div
-      className={cn("flex flex-col gap-1.5", className)}
+      ref={caixaRef} className={cn("flex flex-col gap-1.5", className)}
       data-campo-nome={name} data-campo-com-erro={erro ? "" : undefined}
       onBlur={formato ? aoSair : undefined} onInput={aoDigitar} onChange={aoDigitar}
     >
