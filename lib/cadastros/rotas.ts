@@ -49,6 +49,9 @@ async function resolver(ctx: Ctx | undefined, fixa?: EntidadeCadastro) {
   return { def: entidade && ehEntidadeCadastro(entidade) ? CADASTROS[entidade] : null, id: p.id };
 }
 const naoExiste = () => json({ erro: "Cadastro inexistente" }, 404);
+/** A gravação recusada: `{ erro }` de sempre + `campos` (ERRO NO CAMPO) quando o erro pertence a um campo do formulário */
+const recusa = (r: { erro: string; campos?: Record<string, string>; status: number }) =>
+  json(r.campos && Object.keys(r.campos).length ? { erro: r.erro, campos: r.campos } : { erro: r.erro }, r.status);
 
 /** Quem age, a partir da sessão (acessos atuais conferidos pelo Auth a cada requisição). */
 function atorDe(s: Sessao, req?: NextRequest): Ator {
@@ -90,7 +93,7 @@ export function rotasColecao(fixa?: EntidadeCadastro, opts: { ativoPadrao?: Filt
       const corpo = await lerCorpo(req);
       if (!corpo) return json({ erro: "Dados inválidos." }, 400);
       const r = await criarCadastro(def, atorDe(g.sessao, req), corpo);
-      return r.ok ? json(r.item, 201) : json({ erro: r.erro }, r.status);
+      return r.ok ? json(r.item, 201) : recusa(r);
     },
   };
 }
@@ -128,7 +131,7 @@ export function rotasItem(fixa?: EntidadeCadastro) {
     }
     if (temCampos) {
       const r = await editarCadastro(def, ator, id, campos);
-      if (!r.ok) return json({ erro: r.erro }, r.status);
+      if (!r.ok) return recusa(r);
     }
     // Ativo: a MESMA regra das ações em massa (com as travas do cadastro)
     if (typeof ativo === "boolean") {

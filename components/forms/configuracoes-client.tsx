@@ -11,6 +11,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { FormField, FormSection, FormGrid } from "@/components/ui/form-field";
+import { ErrosDoFormulario, ResumoDeErros, useErrosDoFormulario } from "@/components/ui/formulario-erros";
+import { validarFormato, type ErrosDeCampo } from "@/lib/forms/erros";
+import { digitos } from "@/lib/documento";
 import { PhoneInput } from "@/components/ui/phone-input";
 import { EnderecoAutocomplete, type EnderecoSelecionado } from "@/components/ui/endereco-autocomplete";
 import { MapaEndereco } from "@/components/ui/mapa-endereco";
@@ -57,8 +60,9 @@ export function ConfiguracoesClient({ empresa: initialEmpresa, config: initialCo
   const podeEditar = permissoes.pode("configuracoes", "gerenciar");
   const [salvandoEmpresa, setSalvandoEmpresa] = useState(false);
   const [salvandoConfig, setSalvandoConfig] = useState(false);
-  const [erroEmpresa, setErroEmpresa] = useState("");
-  const [erroConfig, setErroConfig] = useState("");
+  // ERRO NO CAMPO: cada parte (empresa, preferências) tem o seu formulário: o erro mora no campo, a faixa é o resumo
+  const errosEmpresa = useErrosDoFormulario();
+  const errosConfig = useErrosDoFormulario();
   const [logo, setLogo] = useState<string | null>(initialEmpresa.logo);
   const [uploadingLogo, setUploadingLogo] = useState(false);
   const logoInputRef = useRef<HTMLInputElement>(null);
@@ -155,46 +159,64 @@ export function ConfiguracoesClient({ empresa: initialEmpresa, config: initialCo
     } catch { toast("Sem conexão. Tente de novo.", "erro"); }
   }
 
+  /** O que a tela já sabe antes de mandar: razão social, e-mail e o formato do que foi trocado */
+  function errosDaEmpresa(): ErrosDeCampo {
+    const e: ErrosDeCampo = {};
+    if (emp.nome.trim().length < 2) e.nome = "Informe a razão social (mín. 2 letras).";
+    if (!(emp.email ?? "").trim()) e.email = "Informe o e-mail da empresa.";
+    else { const m = validarFormato("email", emp.email); if (m) e.email = m; }
+    // CNPJ: só o trocado (o antigo, mesmo inválido, continua salvando os outros campos — a regra do servidor)
+    if (digitos(emp.cnpj ?? "") !== digitos(initialEmpresa.cnpj ?? "")) { const m = validarFormato("cnpj", emp.cnpj); if (m) e.cnpj = m; }
+    for (const [k, f] of [["telefone", "telefone"], ["celular", "telefone"], ["cep", "cep"]] as const) {
+      const m = validarFormato(f, emp[k]); if (m) e[k] = m;
+    }
+    return e;
+  }
+
   async function salvarEmpresa() {
-    setErroEmpresa(""); setSalvandoEmpresa(true);
+    if (!errosEmpresa.validar(errosDaEmpresa())) return;
+    setSalvandoEmpresa(true);
     try {
       const res = await fetch("/api/empresa", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(emp),
       });
-      if (!res.ok) { setErroEmpresa(await erroDaResposta(res, "Não foi possível salvar.")); return; }
+      // O erro do servidor cai no campo certo (CNPJ inválido ou de outra empresa, RT, CNAE…)
+      if (!res.ok) { errosEmpresa.erroDaApi(await res.json().catch(() => ({})), "Não foi possível salvar."); return; }
       toast("Dados da empresa salvos.");
       marcarFormularioSalvo();
       router.refresh();
-    } catch { setErroEmpresa("Sem conexão. Tente de novo."); } finally { setSalvandoEmpresa(false); }
+    } catch { errosEmpresa.definirGeral("Sem conexão. Tente de novo."); errosEmpresa.focar(); } finally { setSalvandoEmpresa(false); }
   }
 
   async function salvarConfig() {
-    setErroConfig(""); setSalvandoConfig(true);
+    const iss = validarFormato("valor", issTexto);
+    if (!errosConfig.validar(iss ? { issAliquota: iss } : {})) return;
+    setSalvandoConfig(true);
     try {
       const res = await fetch("/api/configuracoes", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ ...cfg, issAliquota: issTexto.trim() === "" ? 0 : issTexto }),
       });
-      if (!res.ok) { setErroConfig(await erroDaResposta(res, "Não foi possível salvar.")); return; }
+      if (!res.ok) { errosConfig.erroDaApi(await res.json().catch(() => ({})), "Não foi possível salvar."); return; }
       toast("Preferências salvas.");
       marcarFormularioSalvo();
       router.refresh();
-    } catch { setErroConfig("Sem conexão. Tente de novo."); } finally { setSalvandoConfig(false); }
+    } catch { errosConfig.definirGeral("Sem conexão. Tente de novo."); errosConfig.focar(); } finally { setSalvandoConfig(false); }
   }
 
   return (
     <div ref={raizRef} className="space-y-8">
       {/* ========== DADOS DA EMPRESA ========== */}
-      {parte !== "preferencias" && <div className="bg-white rounded-card border border-surface-border p-6 space-y-6">
+      {parte !== "preferencias" && <ErrosDoFormulario valor={errosEmpresa}><div ref={errosEmpresa.ref} className="bg-white rounded-card border border-surface-border p-6 space-y-6" data-form-empresa>
         <div className="flex items-center gap-2">
           <Building2 className="w-5 h-5 text-frivo-600" />
           <h2 className="text-lg font-semibold text-ink">Dados da empresa</h2>
         </div>
 
-        {erroEmpresa && <div role="alert" className="bg-atrasado-claro border border-atrasado/20 text-atrasado-texto text-sm rounded-lg px-4 py-3" data-erro-empresa>{erroEmpresa}</div>}
+        <ResumoDeErros />
         {!podeEditar && <SomenteLeitura />}
         <fieldset disabled={!podeEditar} className="space-y-6 min-w-0">
 
@@ -225,34 +247,34 @@ export function ConfiguracoesClient({ empresa: initialEmpresa, config: initialCo
 
         <FormSection title="Informações">
           <FormGrid>
-            <FormField label="Razão social">
+            <FormField label="Razão social" name="nome" required>
               <Input value={emp.nome} onChange={(e) => updateEmp("nome", e.target.value)} />
             </FormField>
-            <FormField label="Nome fantasia">
+            <FormField label="Nome fantasia" name="nomeFantasia">
               <Input value={emp.nomeFantasia} onChange={(e) => updateEmp("nomeFantasia", e.target.value)} />
             </FormField>
           </FormGrid>
           <FormGrid>
-            <FormField label="CNPJ">
+            <FormField label="CNPJ" name="cnpj" formato="cnpj">
               <Input value={emp.cnpj} onChange={(e) => updateEmp("cnpj", e.target.value)} />
             </FormField>
-            <FormField label="E-mail">
+            <FormField label="E-mail" name="email" formato="email" required>
               <Input value={emp.email} onChange={(e) => updateEmp("email", e.target.value)} type="email" />
             </FormField>
           </FormGrid>
           <div data-campos-timbre>
             <FormGrid>
-              <FormField label="Inscrição estadual" dica="Impressa no cabeçalho do orçamento. Em branco, não é exibida. Informe “Isento” quando for o caso.">
+              <FormField label="Inscrição estadual" name="inscricaoEstadual" dica="Impressa no cabeçalho do orçamento. Em branco, não é exibida. Informe “Isento” quando for o caso.">
                 <Input value={emp.inscricaoEstadual} onChange={(e) => updateEmp("inscricaoEstadual", e.target.value)} maxLength={30} placeholder="Ex.: 123.456.789.110" />
               </FormField>
-              <FormField label="Inscrição municipal" dica="Impressa no cabeçalho do orçamento. Em branco, não é exibida.">
+              <FormField label="Inscrição municipal" name="inscricaoMunicipal" dica="Impressa no cabeçalho do orçamento. Em branco, não é exibida.">
                 <Input value={emp.inscricaoMunicipal} onChange={(e) => updateEmp("inscricaoMunicipal", e.target.value)} maxLength={30} />
               </FormField>
             </FormGrid>
           </div>
           <FormGrid>
             <FormField
-              label="CNAE principal"
+              label="CNAE principal" name="cnaePrincipal"
               dica="Usado na NFS-e dos serviços que não têm CNAE próprio. Formato: 0000-0/00."
               hint={podeFiscal ? undefined : "Somente leitura: requer a permissão Financeiro › Fiscal."}
             >
@@ -263,22 +285,22 @@ export function ConfiguracoesClient({ empresa: initialEmpresa, config: initialCo
             </FormField>
           </FormGrid>
           <FormGrid cols={3}>
-            <FormField label="Telefone">
+            <FormField label="Telefone" name="telefone" formato="telefone">
               <PhoneInput value={emp.telefone} onChange={(e: any) => updateEmp("telefone", e.target.value)} placeholder="(00) 0000-0000" />
             </FormField>
-            <FormField label="Celular">
+            <FormField label="Celular" name="celular" formato="telefone">
               <Input value={emp.celular} onChange={(e) => updateEmp("celular", e.target.value)} />
             </FormField>
-            <FormField label="Site">
+            <FormField label="Site" name="site">
               <Input value={emp.site} onChange={(e) => updateEmp("site", e.target.value)} placeholder="https://…" />
             </FormField>
           </FormGrid>
         </FormSection>
 
         <FormSection title="Endereço" dica="Usado no cálculo da distância até os clientes e na busca do município da NFS-e.">
-          <CampoCep valor={emp.cep} onValor={(v) => updateEmp("cep", v)}
+          <CampoCep nome="cep" valor={emp.cep} onValor={(v) => updateEmp("cep", v)}
             onEndereco={(d) => setEmp((e) => ({ ...e, ...enderecoDoCep(e, d, { logradouro: "endereco", bairro: "bairro", cidade: "cidade", estado: "estado" }) }))} />
-          <FormField label="Logradouro">
+          <FormField label="Logradouro" name="endereco" valor={emp.endereco}>
             <EnderecoAutocomplete value={emp.endereco} onChange={(v) => updateEmp("endereco", v)} onSelect={handleEnderecoSelect} placeholder="Digite para buscar o endereço" />
           </FormField>
           <FormGrid cols={3}>
@@ -288,7 +310,7 @@ export function ConfiguracoesClient({ empresa: initialEmpresa, config: initialCo
           <FormGrid cols={3}>
             <FormField label="Bairro"><Input value={emp.bairro} onChange={(e) => updateEmp("bairro", e.target.value)} /></FormField>
             <FormField label="Cidade"><Input value={emp.cidade} onChange={(e) => updateEmp("cidade", e.target.value)} /></FormField>
-            <FormField label="Estado">
+            <FormField label="Estado" name="estado">
               <Select value={emp.estado} onChange={(e) => updateEmp("estado", e.target.value)} placeholder="UF">
                 {ESTADOS_BR.map((uf) => (<option key={uf} value={uf}>{uf}</option>))}
               </Select>
@@ -321,7 +343,7 @@ export function ConfiguracoesClient({ empresa: initialEmpresa, config: initialCo
         </FormSection>
 
         <FormSection title="Responsável técnico" dica="Preenchido em cada novo orçamento; nome e CREA são impressos no documento, com a menção “ART emitida após aprovação”. Pode ser alterado em cada orçamento.">
-          <FormField label="Responsável técnico padrão" className="max-w-md">
+          <FormField label="Responsável técnico padrão" className="max-w-md" name="responsavelTecnicoId" valor={emp.responsavelTecnicoId}>
             <div data-rt-padrao={emp.responsavelTecnicoId}>
               <SelectCadastroRapido
                 value={emp.responsavelTecnicoId} onChange={(v) => updateEmp("responsavelTecnicoId", v)} disabled={!podeEditar}
@@ -349,16 +371,16 @@ export function ConfiguracoesClient({ empresa: initialEmpresa, config: initialCo
             <Button onClick={salvarEmpresa} loading={salvandoEmpresa} data-salvar-empresa>Salvar dados da empresa</Button>
           </div>
         )}
-      </div>}
+      </div></ErrosDoFormulario>}
 
       {/* ========== CONFIGURAÇÕES AVANÇADAS ========== */}
-      {parte !== "empresa" && <div id="preferencias" className="bg-white rounded-card border border-surface-border p-6 space-y-8 scroll-mt-20">
+      {parte !== "empresa" && <ErrosDoFormulario valor={errosConfig}><div id="preferencias" ref={errosConfig.ref} className="bg-white rounded-card border border-surface-border p-6 space-y-8 scroll-mt-20">
         <div className="flex items-center gap-2">
           <SlidersHorizontal className="w-5 h-5 text-frivo-600" />
           <h2 className="text-lg font-semibold text-ink">Preferências</h2>
         </div>
 
-        {erroConfig && <div role="alert" className="bg-atrasado-claro border border-atrasado/20 text-atrasado-texto text-sm rounded-lg px-4 py-3" data-erro-preferencias>{erroConfig}</div>}
+        <ResumoDeErros />
         {!podeEditar && <SomenteLeitura />}
         <fieldset disabled={!podeEditar} className="space-y-8 min-w-0">
 
@@ -401,7 +423,7 @@ export function ConfiguracoesClient({ empresa: initialEmpresa, config: initialCo
 
         <FormSection title="Orçamentos">
           <FormField
-            label="Alíquota de ISS sobre serviços (%)"
+            label="Alíquota de ISS sobre serviços (%)" name="issAliquota" formato="valor"
             hint="Vale para os orçamentos criados a partir de agora."
             dica="Somada ao total dos serviços, após o desconto. No orçamento, aparece em linha própria; no documento do cliente, embutida nos preços. Use 0 para não aplicar."
           >
@@ -423,7 +445,7 @@ export function ConfiguracoesClient({ empresa: initialEmpresa, config: initialCo
             <Button onClick={salvarConfig} loading={salvandoConfig} data-salvar-preferencias>Salvar preferências</Button>
           </div>
         )}
-      </div>}
+      </div></ErrosDoFormulario>}
     </div>
   );
 }

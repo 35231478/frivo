@@ -5,6 +5,7 @@ import { Check, Copy, Mail, ShieldCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { FormField } from "@/components/ui/form-field";
+import { ErrosDoFormulario, ResumoDeErros, useErrosDoFormulario } from "@/components/ui/formulario-erros";
 import { Drawer } from "@/components/ui/drawer";
 import { Modal } from "@/components/ui/modal";
 import { salvarCadastro, type EditorCadastroProps } from "@/components/cadastros/cadastro-padrao";
@@ -46,28 +47,32 @@ export function criarEditorUsuario(usuarioAtualId: string) {
     const [nome, setNome] = useState("");
     const [email, setEmail] = useState("");
     const [perfilAcessoId, setPerfilAcessoId] = useState("");
-    const [erro, setErro] = useState("");
+    // ERRO NO CAMPO: o e-mail de login já usado (ou inválido) fica no campo do e-mail, com foco nele
+    const erros = useErrosDoFormulario();
     const [salvando, setSalvando] = useState(false);
     const [convite, setConvite] = useState<ResultadoConvite | null>(null);
     const [salvo, setSalvo] = useState<any>(null);
 
     useEffect(() => {
       if (!aberto) return;
-      setErro(""); setNome(item?.nome ?? ""); setEmail(item?.email ?? ""); setPerfilAcessoId(item?.perfilAcessoId ?? "");
+      erros.limparTudo(); setNome(item?.nome ?? ""); setEmail(item?.email ?? ""); setPerfilAcessoId(item?.perfilAcessoId ?? "");
     }, [aberto, item]);
 
     const proprio = item?.id === usuarioAtualId;
     const admin = item?.role === "ADMIN";
 
     async function salvar() {
-      setErro("");
+      const faltando: Record<string, string> = {};
+      if (!nome.trim()) faltando.nome = "Informe o nome.";
+      if (!item && !email.trim()) faltando.email = "Informe o e-mail (é o login).";
+      if (!erros.validar(faltando)) return;
       const corpo: Record<string, unknown> = item
         ? { nome, ...(!proprio && !admin && { perfilAcessoId: perfilAcessoId || null }) }
         : { nome, email, perfilAcessoId: perfilAcessoId || null };
       setSalvando(true);
       const r = await salvarCadastro("usuarios", item?.id ?? null, corpo);
       setSalvando(false);
-      if (!r.ok) { setErro(r.erro); return; }
+      if (!r.ok) { erros.erroDaApi(r); return; }
       if (!item && r.item.convite) { setSalvo(r.item); setConvite(r.item.convite); return; }
       onSalvo(r.item);
     }
@@ -82,13 +87,14 @@ export function criarEditorUsuario(usuarioAtualId: string) {
             <Button type="button" loading={salvando} onClick={salvar}><Check className="w-4 h-4" /> {item ? "Salvar" : "Criar e enviar convite"}</Button>
           </>}
         >
-          <div className="space-y-4">
-            {erro && <div role="alert" className="bg-atrasado-claro border border-atrasado/20 text-atrasado-texto text-sm rounded-lg px-3 py-2">{erro}</div>}
-            <FormField label="Nome" required><Input value={nome} onChange={(e) => setNome(e.target.value)} placeholder="Nome completo" /></FormField>
-            <FormField label="E-mail (login)" required hint={item ? "O e-mail é o login: não muda depois de criado." : "Vai receber o convite para definir a própria senha."}>
+          <ErrosDoFormulario valor={erros}>
+          <div className="space-y-4" ref={erros.ref}>
+            <ResumoDeErros />
+            <FormField label="Nome" required name="nome"><Input value={nome} onChange={(e) => setNome(e.target.value)} placeholder="Nome completo" /></FormField>
+            <FormField label="E-mail (login)" required name="email" formato="email" hint={item ? "O e-mail é o login: não muda depois de criado." : "Vai receber o convite para definir a própria senha."}>
               <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} disabled={!!item} placeholder="nome@empresa.com.br" />
             </FormField>
-            <FormField label="Perfil de acesso" hint="Define o que a pessoa vê e faz. Sem perfil = sem acesso (só o início).">
+            <FormField label="Perfil de acesso" name="perfilAcessoId" valor={perfilAcessoId} hint="Define o que a pessoa vê e faz. Sem perfil = sem acesso (só o início).">
               {admin ? (
                 <p className="inline-flex items-center gap-1 text-xs font-semibold bg-atrasado-claro text-atrasado px-2 py-1 rounded-full"><ShieldCheck className="w-3.5 h-3.5" /> Administrador: acesso total</p>
               ) : proprio ? (
@@ -99,6 +105,7 @@ export function criarEditorUsuario(usuarioAtualId: string) {
             </FormField>
             {!item && <p className="text-xs text-ink-muted bg-surface-alt rounded-lg px-3 py-2">A senha não é definida aqui: a pessoa recebe um link (72 h, uso único) para criar a dela.</p>}
           </div>
+          </ErrosDoFormulario>
         </Drawer>
         <AvisoConvite convite={convite} nome={nome} onFechar={() => { setConvite(null); onSalvo(salvo); }} />
       </>

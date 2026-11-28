@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { erroDeValidacao } from "@/lib/forms/erros-server";
 import { limiteHorasSchema } from "@/lib/tecnico/andamento";
 import { auth } from "@/lib/auth";
 import { pode } from "@/lib/permissoes";
@@ -158,7 +159,7 @@ export async function PUT(req: NextRequest) {
   if (!parsed.success) {
     const campos = parsed.error.flatten().fieldErrors;
     const msg = campos.issAliquota?.[0] ?? campos.orcamentoValidadeDias?.[0] ?? campos.pedidoClienteDiasAlerta?.[0] ?? campos.pedidoLembretesDias?.[0] ?? campos.orcamentoNaoIncluso?.[0];
-    return NextResponse.json({ erro: msg ?? "Dados inválidos", detalhes: parsed.error.flatten() }, { status: 400 });
+    return erroDeValidacao(parsed.error, msg ?? "Dados inválidos");
   }
   const dados = parsed.data;
   delete dados.orcamentoMostrarValoresMateriais;

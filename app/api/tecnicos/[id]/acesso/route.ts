@@ -90,7 +90,7 @@ export async function PUT(req: NextRequest, { params }: Params) {
   if (usuario) {
     // Não sequestra uma conta de PAINEL com o mesmo e-mail: isso é login de gestão, não do app.
     if (usuario.role !== "TECNICO") {
-      return erroNoCampo("email", "Já existe um usuário de painel com este e-mail. Use um e-mail só para o acesso do técnico (ou gerencie em Configurações › Usuários).", 409);
+      return erroNoCampo("email", "E-mail já usado por um usuário do painel: use outro para o acesso do técnico.", 409);
     }
     await prisma.usuario.update({
       where: { id: usuario.id },

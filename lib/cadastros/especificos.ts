@@ -38,7 +38,8 @@ export interface Ator {
 }
 
 export type Registro = Record<string, unknown> & { id: string };
-export type Gravacao = { ok: true; item: Record<string, unknown> } | { ok: false; status: number; erro: string };
+/** `campos` (ERRO NO CAMPO): em qual campo do formulário o erro mora — a tela marca o campo certo */
+export type Gravacao = { ok: true; item: Record<string, unknown> } | { ok: false; status: number; erro: string; campos?: Record<string, string> };
 export interface ImpactoEspecifico { usos: { rotulo: string; total: number }[]; avisos: string[] }
 
 export interface RegrasCadastro {
@@ -52,7 +53,8 @@ export interface RegrasCadastro {
   impacto?: (registro: Registro, empresaId: string) => Promise<ImpactoEspecifico>;
 }
 
-const falha = (status: number, erro: string): Gravacao => ({ ok: false, status, erro });
+/** `campo`: o campo do formulário a que o erro pertence (nome repetido → "nome", código → "codigo") */
+const falha = (status: number, erro: string, campo?: string): Gravacao => ({ ok: false, status, erro, ...(campo ? { campos: { [campo]: erro } } : {}) });
 const pl = (n: number, um: string, varios: string) => `${n} ${n === 1 ? um : varios}`;
 const nomes = (xs: { nome: string }[], max = 5) =>
   xs.slice(0, max).map((x) => x.nome).join(", ") + (xs.length > max ? ` e mais ${xs.length - max}` : "");
@@ -114,7 +116,7 @@ const modelos: RegrasCadastro = {
   async criar(dados, ator) {
     const d = dados as { nome: string; regime: Regime; padrao: boolean; itens: unknown };
     if (await prisma.modeloEncargos.findFirst({ where: { empresaId: ator.empresaId, nome: d.nome }, select: { id: true } }))
-      return falha(409, "Já existe um modelo com esse nome.");
+      return falha(409, "Já existe um modelo com esse nome.", "nome");
     const item = await prisma.$transaction(async (tx) => {
       // Um padrão por regime
       if (d.padrao) await tx.modeloEncargos.updateMany({ where: { empresaId: ator.empresaId, regime: d.regime }, data: { padrao: false } });
@@ -127,7 +129,7 @@ const modelos: RegrasCadastro = {
     const d = dados as { nome?: string; regime?: Regime; padrao?: boolean; itens?: unknown };
     if (d.nome !== undefined && d.nome !== existente.nome
       && await prisma.modeloEncargos.findFirst({ where: { empresaId, nome: d.nome, id: { not: existente.id } }, select: { id: true } }))
-      return falha(409, "Já existe um modelo com esse nome.");
+      return falha(409, "Já existe um modelo com esse nome.", "nome");
     if (d.regime !== undefined && d.regime !== existente.regime && await prisma.colaboradorFolha.count({ where: { empresaId, modeloEncargosId: existente.id } }))
       return falha(409, "Há colaboradores usando este modelo: não dá para mudar o tipo de contrato dele.");
     if (d.padrao && !existente.ativo) return falha(400, "Reative o modelo antes de torná-lo o padrão.");
@@ -181,7 +183,7 @@ const usuarios: RegrasCadastro = {
   async criar(dados, ator) {
     const d = dados as { nome: string; email: string; perfilAcessoId: string | null };
     // O login procura o e-mail em TODAS as empresas: único no Frivo inteiro (lib/acesso/email-unico)
-    if (await emailDeLoginEmUso(d.email)) return falha(409, MSG_EMAIL_LOGIN_EM_USO);
+    if (await emailDeLoginEmUso(d.email)) return falha(409, MSG_EMAIL_LOGIN_EM_USO, "email");
     const erroPerfil = await conferirPerfil(d.perfilAcessoId, ator);
     if (erroPerfil) return erroPerfil;
     // Nunca ADMIN por aqui: o acesso vem do perfil. Senha aleatória até o convidado definir a dele.
@@ -237,14 +239,14 @@ async function nomeTipoEmUso(empresaId: string, nome: string, exceto?: string) {
 const tiposEquipamento: RegrasCadastro = {
   async criar(dados, ator) {
     const d = dados as { nome: string; descricao: string | null };
-    if (await nomeTipoEmUso(ator.empresaId, d.nome)) return falha(409, "Já existe um tipo de equipamento com esse nome.");
+    if (await nomeTipoEmUso(ator.empresaId, d.nome)) return falha(409, "Já existe um tipo de equipamento com esse nome.", "nome");
     const item = await prisma.tipoEquipamentoCustom.create({ data: { empresaId: ator.empresaId, nome: d.nome, descricao: d.descricao, ativo: true } });
     return { ok: true, item };
   },
   async editar(existente, dados, ator) {
     const d = dados as { nome?: string; descricao?: string | null };
     if (d.nome !== undefined && d.nome.toLowerCase() !== String(existente.nome).toLowerCase() && await nomeTipoEmUso(ator.empresaId, d.nome, existente.id))
-      return falha(409, "Já existe um tipo de equipamento com esse nome.");
+      return falha(409, "Já existe um tipo de equipamento com esse nome.", "nome");
     const item = await prisma.tipoEquipamentoCustom.update({ where: { id: existente.id }, data: d });
     return { ok: true, item };
   },
@@ -388,7 +390,7 @@ const fornecedores: RegrasCadastro = {
   async criar(dados, ator) {
     const d = dados as { nome: string; documento: string | null };
     const dup = await documentoEmUso(ator.empresaId, d.documento);
-    if (dup) return falha(409, msgDocumento(dup));
+    if (dup) return falha(409, msgDocumento(dup), "documento");
     const item = await prisma.fornecedor.create({ data: { ...(dados as any), empresaId: ator.empresaId, ativo: true } });
     return { ok: true, item };
   },
@@ -396,7 +398,7 @@ const fornecedores: RegrasCadastro = {
     const d = dados as { documento?: string | null };
     if (d.documento !== undefined && d.documento !== existente.documento) {
       const dup = await documentoEmUso(ator.empresaId, d.documento, existente.id);
-      if (dup) return falha(409, msgDocumento(dup));
+      if (dup) return falha(409, msgDocumento(dup), "documento");
     }
     const item = await prisma.fornecedor.update({ where: { id: existente.id }, data: dados as any });
     return { ok: true, item };
@@ -457,15 +459,15 @@ const servicos: RegrasCadastro = {
     const ret = motivoRetencaoServicoInvalida(d as RetencoesDoServico);
     if (ret) return falha(400, ret);
     const n = normalizarCodigoServico(d.codigo);
-    if (n.erro) return falha(400, n.erro);
-    if (n.codigo) { const dup = await servicoComCodigo(ator.empresaId, n.codigo); if (dup) return falha(409, msgCodigoServico(n.codigo, dup)); }
+    if (n.erro) return falha(400, n.erro, "codigo");
+    if (n.codigo) { const dup = await servicoComCodigo(ator.empresaId, n.codigo); if (dup) return falha(409, msgCodigoServico(n.codigo, dup), "codigo"); }
     const linhas = await montarMateriaisServico(materiais ?? [], ator.empresaId);
     try {
       const item = await criarServicoComCodigo(ator.empresaId, String(d.nome), n.codigo, (codigo, tx) =>
         tx.servico.create({ data: { ...(d as any), codigo, empresaId: ator.empresaId, ativo: true, materiais: { create: linhas } }, include: CADASTROS.servicos.incluir as any }));
       return { ok: true, item };
     } catch (e) {
-      if (n.codigo && colisaoDeCodigo(e)) return falha(409, `O código ${n.codigo} acabou de ser usado em outro serviço. Escolha outro.`);
+      if (n.codigo && colisaoDeCodigo(e)) return falha(409, `O código ${n.codigo} acabou de ser usado em outro serviço. Escolha outro.`, "codigo");
       throw e;
     }
   }),
@@ -479,11 +481,11 @@ const servicos: RegrasCadastro = {
     if (ret) return falha(400, ret);
     if ("codigo" in data) {
       const n = normalizarCodigoServico(data.codigo);
-      if (n.erro) return falha(400, n.erro);
+      if (n.erro) return falha(400, n.erro, "codigo");
       if (!n.codigo || n.codigo === existente.codigo) delete data.codigo;
       else {
         const dup = await servicoComCodigo(ator.empresaId, n.codigo);
-        if (dup) return falha(409, msgCodigoServico(n.codigo, dup));
+        if (dup) return falha(409, msgCodigoServico(n.codigo, dup), "codigo");
         data.codigo = n.codigo;
       }
     }
@@ -491,7 +493,7 @@ const servicos: RegrasCadastro = {
     try {
       return { ok: true, item: await prisma.servico.update({ where: { id: existente.id }, data: data as any }) };
     } catch (e) {
-      if (colisaoDeCodigo(e)) return falha(409, `O código ${String(data.codigo)} acabou de ser usado em outro serviço. Escolha outro.`);
+      if (colisaoDeCodigo(e)) return falha(409, `O código ${String(data.codigo)} acabou de ser usado em outro serviço. Escolha outro.`, "codigo");
       throw e;
     }
   }),
@@ -510,7 +512,7 @@ const kitsMaterial: RegrasCadastro = {
   criar: (dados, ator) => comRef(async () => {
     const { itens, ...d } = dados as { itens: { produtoId: string; quantidade: number }[]; nome: string; descricao?: string | null };
     const dup = await kitMaterialComNome(ator.empresaId, d.nome);
-    if (dup) return falha(409, msgKit(dup));
+    if (dup) return falha(409, msgKit(dup), "nome");
     const linhas = await montarItensKit(itens ?? [], ator.empresaId);
     // A resposta já traz os itens com o produto (o que a lista mostra), como a listagem
     const item = await prisma.kitMaterial.create({ data: { ...d, empresaId: ator.empresaId, ativo: true, itens: { create: linhas } }, include: CADASTROS["kits-material"].incluir as any });
@@ -521,7 +523,7 @@ const kitsMaterial: RegrasCadastro = {
     const { itens, ...d } = dados as { itens?: { produtoId: string; quantidade: number }[]; nome?: string; descricao?: string | null };
     if (typeof d.nome === "string") {
       const dup = await kitMaterialComNome(ator.empresaId, d.nome, existente.id);
-      if (dup) return falha(409, msgKit(dup));
+      if (dup) return falha(409, msgKit(dup), "nome");
     }
     const linhas = itens && await montarItensKit(itens, ator.empresaId, (existente.itens ?? []) as { produtoId?: unknown }[]);
     const item = await prisma.kitMaterial.update({ where: { id: existente.id }, data: { ...d, ...(linhas && { itens: { deleteMany: {}, create: linhas } }) } });
@@ -554,14 +556,14 @@ const msgContaBancaria = (c: { nome: string; ativo: boolean }) =>
 const contasBancarias: RegrasCadastro = {
   async criar(dados, ator) {
     const dup = await contaBancariaComNome(ator.empresaId, String(dados.nome));
-    if (dup) return falha(409, msgContaBancaria(dup));
+    if (dup) return falha(409, msgContaBancaria(dup), "nome");
     const item = await prisma.contaBancaria.create({ data: { ...(dados as { nome: string }), empresaId: ator.empresaId, ativo: true } });
     return { ok: true, item };
   },
   async editar(existente, dados, ator) {
     if (typeof dados.nome === "string") {
       const dup = await contaBancariaComNome(ator.empresaId, dados.nome, existente.id);
-      if (dup) return falha(409, msgContaBancaria(dup));
+      if (dup) return falha(409, msgContaBancaria(dup), "nome");
     }
     const item = await prisma.contaBancaria.update({ where: { id: existente.id }, data: dados as { nome?: string } });
     return { ok: true, item };
@@ -594,14 +596,14 @@ const categoriasProduto: RegrasCadastro = {
   antesDeListar: async (empresaId) => { await garantirCategoriasProdutoPadrao(empresaId); },
   async criar(dados, ator) {
     const dup = await categoriaProdutoComNome(ator.empresaId, String(dados.nome));
-    if (dup) return falha(409, msgCategoriaProduto(dup));
+    if (dup) return falha(409, msgCategoriaProduto(dup), "nome");
     const item = await prisma.categoriaProduto.create({ data: { ...(dados as { nome: string; comportamento: "VENDA_A_PARTE" | "INCLUSO_NO_SERVICO" }), empresaId: ator.empresaId, ativo: true } });
     return { ok: true, item };
   },
   async editar(existente, dados, ator) {
     if (typeof dados.nome === "string") {
       const dup = await categoriaProdutoComNome(ator.empresaId, dados.nome, existente.id);
-      if (dup) return falha(409, msgCategoriaProduto(dup));
+      if (dup) return falha(409, msgCategoriaProduto(dup), "nome");
     }
     const item = await prisma.categoriaProduto.update({ where: { id: existente.id }, data: dados as { nome?: string; comportamento?: "VENDA_A_PARTE" | "INCLUSO_NO_SERVICO" } });
     return { ok: true, item };
@@ -618,14 +620,14 @@ const categoriasProduto: RegrasCadastro = {
 const centrosCusto: RegrasCadastro = {
   async criar(dados, ator) {
     const dup = await centroComNome(ator.empresaId, String(dados.nome));
-    if (dup) return falha(409, msgCentro(dup));
+    if (dup) return falha(409, msgCentro(dup), "nome");
     const item = await prisma.centroCusto.create({ data: { nome: String(dados.nome), empresaId: ator.empresaId, ativo: true } });
     return { ok: true, item };
   },
   async editar(existente, dados, ator) {
     if (typeof dados.nome === "string") {
       const dup = await centroComNome(ator.empresaId, dados.nome, existente.id);
-      if (dup) return falha(409, msgCentro(dup));
+      if (dup) return falha(409, msgCentro(dup), "nome");
     }
     const item = await prisma.centroCusto.update({ where: { id: existente.id }, data: dados as { nome?: string } });
     return { ok: true, item };

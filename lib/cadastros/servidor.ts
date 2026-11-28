@@ -1,7 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import type { Impacto } from "@/lib/inativacao-server";
 import {
-  CADASTROS, camposSemPermissao, mapaOrdemCadastro, mensagemValidacao, whereCadastro, type DefCadastro, type EntidadeCadastro, type FiltroAtivo,
+  CADASTROS, camposSemPermissao, camposValidacao, mapaOrdemCadastro, mensagemValidacao, whereCadastro, type DefCadastro, type EntidadeCadastro, type FiltroAtivo,
 } from "@/lib/cadastros/registro";
 import { janela, lerOrdem, lerPaginacao, ordemPrisma, paginaValida, ranquearSugestoes, type ParamsUrl, type Sugestao } from "@/lib/listagem";
 import { REGRAS, type Ator, type Registro } from "@/lib/cadastros/especificos";
@@ -29,7 +29,8 @@ function bloqueioDeCampo(def: DefCadastro, ator: Ator, dados: Record<string, unk
   return { ok: false as const, status: 403, erro: `Sem permissão para alterar: ${campos.map((c) => c.label).join(", ")}. Exige a permissão ${exige}.` };
 }
 
-export type ResultadoGravacao = { ok: true; item: Record<string, unknown> } | { ok: false; status: number; erro: string };
+/** `campos` (ERRO NO CAMPO): o erro de cada campo do formulário; `erro` continua sendo a frase de sempre */
+export type ResultadoGravacao = { ok: true; item: Record<string, unknown> } | { ok: false; status: number; erro: string; campos?: Record<string, string> };
 
 /** Tira as colunas ocultas (ex.: hash da senha) de QUALQUER resposta. */
 export function limpar<T extends Record<string, unknown> | null>(def: DefCadastro, item: T): T {
@@ -104,7 +105,7 @@ export async function obterCadastro(def: DefCadastro, empresaId: string, id: str
 /** Cria (sempre ativo, sempre na empresa da sessão). Campo desconhecido no corpo = 400. */
 export async function criarCadastro(def: DefCadastro, ator: Ator, corpo: unknown): Promise<ResultadoGravacao> {
   const parsed = def.schemaCriar.safeParse(corpo ?? {});
-  if (!parsed.success) return { ok: false, status: 400, erro: mensagemValidacao(parsed.error, def) };
+  if (!parsed.success) return { ok: false, status: 400, erro: mensagemValidacao(parsed.error, def), campos: camposValidacao(parsed.error, def) };
   const bloqueio = bloqueioDeCampo(def, ator, parsed.data as Record<string, unknown>);
   if (bloqueio) return bloqueio;
   const especifico = REGRAS[def.entidade]?.criar;
@@ -119,7 +120,7 @@ export async function editarCadastro(def: DefCadastro, ator: Ator, id: string, c
   const existente = await obterBruto(def, ator.empresaId, id);
   if (!existente) return { ok: false, status: 404, erro: `${def.singular[0].toUpperCase()}${def.singular.slice(1)} não encontrad${def.feminino ? "a" : "o"}.` };
   const parsed = def.schemaEditar.safeParse(corpo ?? {});
-  if (!parsed.success) return { ok: false, status: 400, erro: mensagemValidacao(parsed.error, def) };
+  if (!parsed.success) return { ok: false, status: 400, erro: mensagemValidacao(parsed.error, def), campos: camposValidacao(parsed.error, def) };
   const data = Object.fromEntries(Object.entries(parsed.data as object).filter(([, v]) => v !== undefined));
   if (!Object.keys(data).length) return { ok: true, item: limpar(def, existente) };
   const bloqueio = bloqueioDeCampo(def, ator, data, existente);
