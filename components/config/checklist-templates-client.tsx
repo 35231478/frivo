@@ -16,6 +16,7 @@ import { TabelaPro, type ColunaPro } from "@/components/listagem/tabela-pro";
 import { PLANILHA } from "@/lib/planilha";
 import { Plus, Pencil, Trash2, Check, ArrowUp, ListChecks } from "lucide-react";
 import { InativarRegistro } from "@/components/ui/inativar-registro";
+import { opcoesDoItem } from "@/lib/veiculos/checklist";
 
 const FREQUENCIAS = [{ v: "DIARIO", l: "Diário" }, { v: "SEMANAL", l: "Semanal" }, { v: "MENSAL", l: "Mensal" }];
 const TIPOS_ITEM = [
@@ -39,6 +40,8 @@ const COLUNAS: ColunaPro[] = [
 interface ItemForm { id?: string; categoria: string; descricao: string; tipo: string; opcoesStr: string; obrigatorio: boolean }
 interface Modelo { id: string; nome: string; descricao?: string | null; frequencia: string; ativo?: boolean; itens?: any[]; _count?: { itens?: number; preenchidos?: number } }
 
+/** A regra do alerta (lib/veiculos/checklist › itemGeraAlerta), dita para quem monta o modelo — no ⓘ dos itens (padrão: não repete embaixo de cada item) */
+export const DICA_OPCOES = "Nas opções, a primeira é o estado saudável; as demais geram alerta. Ex.: “Cheio, Médio, Baixo” (e não “Baixo, Médio, Cheio”). Sem opções, vale “OK, NOK”. A ordem daqui é a ordem do preenchimento.";
 const ITEM_VAZIO: ItemForm = { categoria: "", descricao: "", tipo: "OK_NOK", opcoesStr: "OK, NOK", obrigatorio: true };
 const rotuloFrequencia = (f: string) => FREQUENCIAS.find((x) => x.v === f)?.l ?? f;
 const nItens = (t: Modelo) => t._count?.itens ?? t.itens?.length ?? 0;
@@ -102,7 +105,7 @@ export function ChecklistTemplatesClient() {
       // id dos itens existentes: o servidor atualiza no lugar (removido vira inativo, não é apagado)
       itens: itens.map((i, idx) => ({
         id: i.id, categoria: i.categoria, descricao: i.descricao, tipo: i.tipo,
-        opcoes: (i.tipo === "OK_NOK" || i.tipo === "NIVEL") ? i.opcoesStr.split(",").map((s) => s.trim()).filter(Boolean) : [],
+        opcoes: (i.tipo === "OK_NOK" || i.tipo === "NIVEL") ? opcoesDoItem({ tipo: i.tipo, opcoes: i.opcoesStr.split(",") }) : [],
         obrigatorio: i.obrigatorio, ordem: idx,
       })),
     };
@@ -222,7 +225,7 @@ export function ChecklistTemplatesClient() {
 
             <div className="space-y-2">
               <p className="text-xs font-semibold text-ink-muted uppercase flex items-center gap-1">Itens
-                <Dica texto="Nas opções, a primeira é o estado saudável; as demais geram alerta. A ordem daqui é a ordem do preenchimento." rotulo="Itens" />
+                <Dica texto={DICA_OPCOES} rotulo="Itens" />
               </p>
               {itens.map((it, i) => (
                 <div key={i} className="border border-surface-border bg-white rounded-lg p-3 space-y-3" data-item-modelo>

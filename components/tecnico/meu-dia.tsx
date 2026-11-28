@@ -167,19 +167,22 @@ export function CartaoAtividade({ c, fila, mostrarDia, proxima, guardado, listaE
         <div className="min-w-0 flex-1">
           {proxima && status === "AGENDADA" && <p className="text-[11px] font-bold uppercase tracking-wide text-primary-700 mb-0.5">Próxima</p>}
           <div className="flex items-start justify-between gap-2">
-            <h3 className={cn("font-bold text-base leading-snug truncate", concluida ? "text-ink-muted" : "text-ink")}>{cliente || c.titulo}</h3>
+            <h3 className={cn("font-bold text-base leading-snug line-clamp-2 break-words min-w-0", concluida ? "text-ink-muted" : "text-ink")} data-cliente-cartao>{cliente || c.titulo}</h3>
             {/* Seta para a direita = abre a OS; para baixo = só expande (ainda não chegou) */}
             {entra ? <ChevronRight className="w-5 h-5 text-ink-subtle shrink-0" data-abre-os /> : <ChevronDown className={cn("w-5 h-5 text-ink-subtle shrink-0 transition-transform", aberto && "rotate-180")} data-expande />}
           </div>
-          <p className="text-sm text-ink-muted truncate" data-linha-os>
+          <p className="text-sm text-ink-muted line-clamp-2 break-words" data-linha-os>
             {[c.osNumero, cliente ? c.titulo : null, verDados ? c.unidade : null].filter(Boolean).join(" · ")}
           </p>
           {verDados && c.endereco && <p className="text-sm text-ink mt-1 flex gap-1" data-endereco><MapPin className="w-4 h-4 text-ink-subtle shrink-0 mt-0.5" /><span className="line-clamp-2">{c.endereco}</span></p>}
           <div className="flex flex-wrap items-center gap-1.5 mt-2">
             <span className={cn("text-xs font-semibold rounded-full px-2 py-0.5", st.classe)} data-status={status}>{st.rotulo}</span>
-            <span className="text-xs font-medium rounded-full px-2 py-0.5 bg-surface-linha text-ink inline-flex items-center gap-1" data-equipamentos={c.equipamentos}>
-              <HardDrive className="w-3 h-3" /> {c.equipamentos === 1 ? "1 equipamento" : `${c.equipamentos} equipamentos`}
-            </span>
+            {/* Visita/instalação sem equipamento: "0 equipamentos" só confundia — o chip some */}
+            {c.equipamentos > 0 && (
+              <span className="text-xs font-medium rounded-full px-2 py-0.5 bg-surface-linha text-ink inline-flex items-center gap-1" data-equipamentos={c.equipamentos}>
+                <HardDrive className="w-3 h-3" /> {c.equipamentos === 1 ? "1 equipamento" : `${c.equipamentos} equipamentos`}
+              </span>
+            )}
             {c.visita && <span className="text-xs font-medium rounded-full px-2 py-0.5 bg-acento-claro text-acento" data-visita={c.visita.numero}>Visita {c.visita.numero} de {c.visita.total}</span>}
             <SeloPrazo prazo={c.prazo} status={status} agora={agora} />
             {!encerrada && <MarcaDeMateriais c={c} />}

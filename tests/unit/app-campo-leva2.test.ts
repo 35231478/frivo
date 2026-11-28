@@ -7,7 +7,7 @@
 import { describe, expect, it } from "vitest";
 import { seloGarantia } from "@/lib/tecnico/garantia";
 import {
-  aplicarComentario, chaveVisto, comentarioSchema, DIAS_SINO_COMENTARIOS, novosComentarios, ordenarComentarios, osComNovidade, TEXTO_MAX, type ComentarioTela,
+  aplicarComentario, chaveVisto, comentarioSchema, DIAS_SINO_COMENTARIOS, MSG_MENSAGEM_VAZIA, novosComentarios, ordenarComentarios, osComNovidade, TEXTO_MAX, type ComentarioTela,
 } from "@/lib/tecnico/comentarios";
 import { estadoDaAtividade } from "@/lib/tecnico/offline/estado";
 import type { OperacaoFila, RetratoAtividade } from "@/lib/tecnico/offline/tipos";
@@ -39,7 +39,7 @@ describe("garantia visível no app", () => {
 describe("comentário: o que a fila aceita", () => {
   it("texto obrigatório (espaços não contam), até 2.000; nada além de clientId e texto", () => {
     expect(comentarioSchema.safeParse({ clientId: "c1", texto: "Ruído no ventilador" }).success).toBe(true);
-    expect(comentarioSchema.safeParse({ clientId: "c1", texto: "   " }).error?.issues[0].message).toBe("Escreva o comentário.");
+    expect(comentarioSchema.safeParse({ clientId: "c1", texto: "   " }).error?.issues[0].message).toBe(MSG_MENSAGEM_VAZIA); // CHAT-1: texto e/ou foto
     expect(comentarioSchema.safeParse({ clientId: "c1", texto: "x".repeat(TEXTO_MAX) }).success).toBe(true);
     expect(comentarioSchema.safeParse({ clientId: "c1", texto: "x".repeat(TEXTO_MAX + 1) }).success).toBe(false);
     expect(comentarioSchema.safeParse({ clientId: "c1", texto: "ok", origem: "ESCRITORIO" }).success).toBe(false);
@@ -53,7 +53,7 @@ const c = (x: Partial<ComentarioTela>): ComentarioTela => ({ id: "i", clientId: 
 describe("comentários no aparelho", () => {
   it("entra na hora, como meu e pendente; o mesmo clientId não entra duas vezes", () => {
     const l = aplicarComentario([], { clientId: "k1", texto: "  Precisa de peça  " }, "2026-11-12T14:00:00.000Z");
-    expect(l).toEqual([{ id: null, clientId: "k1", texto: "Precisa de peça", autor: "Você", origem: "APP", criadoEm: "2026-11-12T14:00:00.000Z", meu: true, pendente: true }]);
+    expect(l).toEqual([{ id: null, clientId: "k1", texto: "Precisa de peça", autor: "Minha mensagem", origem: "APP", criadoEm: "2026-11-12T14:00:00.000Z", meu: true, pendente: true }]);
     expect(aplicarComentario(l, { clientId: "k1", texto: "de novo" }, "x")).toBe(l);
   });
   it("ordem: por data; o que ainda está no aparelho vai por último", () => {

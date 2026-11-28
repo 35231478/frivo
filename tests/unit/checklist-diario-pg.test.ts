@@ -186,6 +186,29 @@ describe.skipIf(!URL_PG)("Checklist obrigatório no app (PostgreSQL real)", () =
     expect((await resumoPorteiro("e1", "t1"))!.registro).toEqual({ dia: hoje, situacao: "FEITO" });
   });
 
+  it("janeiro: item OK/NOK salvo SEM opções (o técnico ficava preso): 'OK' é a resposta saudável, 'NOK' gera o alerta", async () => {
+    await prisma.checklistItemTemplate.update({ where: { id: "i-pneu" }, data: { opcoes: [] } });
+    try {
+      TECNICO();
+      const r = await enviar(feito({ itens: [{ itemTemplateId: "i-pneu", valor: "OK" }, { itemTemplateId: "i-oleo", valor: "Normal" }, { itemTemplateId: "i-foto", foto: "data:image/jpeg;base64,AAAA" }] }));
+      expect(r.status).toBe(200);
+      const [reg] = await registros();
+      const c = await prisma.checklistPreenchido.findUnique({ where: { id: reg.checklistId }, include: { itens: true } });
+      expect(c.status).toBe("CONCLUIDO"); // antes: sem opções, qualquer resposta... e nem havia botão para responder
+      expect(c.itens.find((i: any) => i.itemTemplateId === "i-pneu")).toMatchObject({ valor: "OK", alerta: false });
+      // o porteiro manda o item como está (o app mostra OK e NOK pela regra opcoesDoItem)
+      expect((await resumoPorteiro("e1", "t3"))!.modelo.itens.find((i: any) => i.id === "i-pneu")).toMatchObject({ tipo: "OK_NOK", opcoes: [] });
+      TECNICO("t3", "e1", "u3");
+      await enviar(feito({ itens: [{ itemTemplateId: "i-pneu", valor: "NOK" }, { itemTemplateId: "i-oleo", valor: "Normal" }, { itemTemplateId: "i-foto", foto: "data:image/jpeg;base64,AAAA" }] }));
+      const [reg3] = await registros("t3");
+      const c3 = await prisma.checklistPreenchido.findUnique({ where: { id: reg3.checklistId }, include: { itens: true } });
+      expect(c3.status).toBe("COM_ALERTAS");
+      expect(c3.itens.find((i: any) => i.itemTemplateId === "i-pneu")).toMatchObject({ valor: "NOK", alerta: true });
+    } finally {
+      await prisma.checklistItemTemplate.update({ where: { id: "i-pneu" }, data: { opcoes: ["OK", "NOK"] } });
+    }
+  });
+
   it("o mesmo envio de novo não duplica; segundo FEITO (outro aparelho) não cria outro checklist; corrida de dois envios = um checklist", async () => {
     TECNICO();
     const corpo = feito();

@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Camera, Loader2, Mic, Square, Trash2, X } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { confirmar } from "@/components/ui/avisos";
 import { useTecnico } from "@/components/tecnico/contexto";
 import type { ConfigApp } from "@/lib/tecnico/config-app";
 import { dataHoraMarca } from "@/lib/fuso";
@@ -74,7 +75,14 @@ export function BotaoFoto({ onFoto, rotulo = "Tirar foto", grande, desabilitado,
   );
 }
 
-export function Miniatura({ src, alt, pendente, onRemover }: { src: string; alt: string; pendente?: boolean; onRemover?: () => void }) {
+/** O título e o texto da pergunta antes de excluir uma foto (um toque no X apagava sem volta) */
+export const perguntaExcluirFoto = (alt: string) => ({ titulo: "Excluir foto?", mensagem: `A ${alt} sai daqui e não volta.`, perigo: true, confirmarTexto: "Excluir" });
+
+export function Miniatura({ src, alt, pendente, onRemover, jaConfirma }: {
+  src: string; alt: string; pendente?: boolean; onRemover?: () => void;
+  /** Quem chama já pergunta antes (fotos do serviço): não pergunta duas vezes */
+  jaConfirma?: boolean;
+}) {
   return (
     <div className="relative w-20 h-20 shrink-0" data-miniatura>
       {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -82,7 +90,8 @@ export function Miniatura({ src, alt, pendente, onRemover }: { src: string; alt:
       {pendente && <span className="absolute bottom-1 left-1 rounded bg-black/80 px-1 text-[10px] font-semibold text-white">no aparelho</span>}
       {onRemover && (
         // Y10: "Excluir" (não "Tirar", que soa como fotografar) e alvo de toque ≥44px (hitbox invisível)
-        <button type="button" aria-label={`Excluir ${alt}`} onClick={onRemover}
+        <button type="button" aria-label={`Excluir ${alt}`} data-excluir-foto
+          onClick={async () => { if (jaConfirma || (await confirmar(perguntaExcluirFoto(alt)))) onRemover(); }}
           className="absolute -top-2 -right-2 rounded-full bg-white border border-surface-border p-1.5 shadow before:absolute before:-inset-2.5 before:content-['']">
           <X className="w-4 h-4 text-ink-muted" />
         </button>

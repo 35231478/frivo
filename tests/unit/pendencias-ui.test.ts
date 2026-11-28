@@ -85,8 +85,8 @@ describe("sino: o link do painel e os itens novos", () => {
   it("os itens do painel no sino seguem o catálogo; sem a permissão, não aparecem (mesmo que a API mande)", async () => {
     const tudo = { osSemTecnico: 1, osSemTecnicoId: "os1", orcamentosVencendo: 1, orcamentoVencendoId: "o1", despesasCampo: 1, comentariosCampo: 1, comentarioCampoOsId: "os4", atividadesEsquecidas: 1, atividadeEsquecidaOsId: "os5", estoqueNegativoCampo: 1, pmocsVencendo: 1, atendimentosAtraso: 1, total: 8 };
     await sino(tudo);
-    expect([link("Comentários novos do campo"), link("Atividades esquecidas em andamento"), link("Saldo negativo por uso em campo"), link("PMOC perto de expirar"), link("OS atrasadas")].map((a) => a?.getAttribute("href")))
-      .toEqual(["/ordens/os4#comentarios", "/ordens/os5", "/estoque?situacao=negativo", "/pmoc?status=VENCENDO", "/ordens?prazo=atrasadas&periodo=todos"]);
+    expect([link("Mensagens novas do campo"), link("Atividades esquecidas em andamento"), link("Saldo negativo por uso em campo"), link("PMOC perto de expirar"), link("OS atrasadas")].map((a) => a?.getAttribute("href")))
+      .toEqual(["/conversas?os=os4", "/ordens/os5", "/estoque?situacao=negativo", "/pmoc?status=VENCENDO", "/ordens?prazo=atrasadas&periodo=todos"]);
     // só Financeiro: nada de OS, orçamento, estoque nem PMOC
     await sino(tudo, montarPermissoes({ financeiro: ["visualizar", "fluxoCaixa"] } as never));
     expect(["OS sem técnico", "Orçamentos vencendo", "Comentários novos do campo", "Saldo negativo por uso em campo", "PMOC perto de expirar", "OS atrasadas"].map(link)).toEqual([null, null, null, null, null, null]);

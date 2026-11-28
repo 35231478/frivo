@@ -65,8 +65,10 @@ describe("catálogo do painel", () => {
     expect(h("orcamentosVencendo", { orcamentosVencendo: 1, orcamentoVencendoId: "o3" })).toBe("/orcamentos/o3");
     expect(h("orcamentosVencendo", { orcamentosVencendo: 3, orcamentoVencendoId: "o3" })).toBe("/orcamentos?validade=vencendo&periodo=todos");
     // os do sino continuam com o mesmo destino de antes
-    expect(h("comentariosCampo", { comentariosCampo: 2, comentarioCampoOsId: "os4" })).toBe("/ordens/os4#comentarios");
-    expect(h("comentariosCampo", { comentariosCampo: 2, comentarioCampoOsId: null })).toBe("/ordens#comentarios");
+    // CHAT-1: mensagem do campo abre a CONVERSA (uma só: ela; várias: a lista de Conversas)
+    expect(h("comentariosCampo", { comentariosCampo: 1, comentarioCampoOsId: "os4" })).toBe("/conversas?os=os4");
+    expect(h("comentariosCampo", { comentariosCampo: 2, comentarioCampoOsId: "os4" })).toBe("/conversas");
+    expect(h("comentariosCampo", { comentariosCampo: 2, comentarioCampoOsId: null })).toBe("/conversas");
     expect(h("atividadesEsquecidas", { atividadesEsquecidas: 1, atividadeEsquecidaOsId: "os5" })).toBe("/ordens/os5");
     expect(h("atividadesEsquecidas", { atividadesEsquecidas: 1, atividadeEsquecidaOsId: null })).toBe("/ordens");
     expect(h("contasPagarHoje", {})).toBe(`/financeiro/contas-pagar?${CONTAS_HOJE}`);
