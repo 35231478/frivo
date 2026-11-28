@@ -16,7 +16,7 @@ import { posicaoFlutuante } from "@/lib/ui/flutuante";
 import { CAMADA, valorCamada, type Camada } from "@/lib/ui/camadas";
 import { chaveMenuLateral, estadoMenu, lerPreferenciaMenu, preferenciaDoClique } from "@/lib/layout/menu-lateral";
 import { devePerguntar, JANELA_DO_ENVIO_MS, linkSaiDaTela } from "@/lib/ui/sair-sem-salvar";
-import { consultarCep, enderecoDoCep, TEMPO_MAX_CEP_MS } from "@/lib/cep";
+import { buscarCep, consultarCep, enderecoDoCep, TEMPO_MAX_CEP_MS } from "@/lib/cep";
 import { FILTRO_SEM_AGENDAMENTO, whereOrdens, whereSemAgendamento } from "@/lib/listas/filtros";
 
 const RAIZ = path.resolve(__dirname, "../..");
@@ -178,6 +178,21 @@ describe("5. CEP global", () => {
     }
     expect(ler("components/ui/select-cadastro-rapido.tsx")).toContain("consultarCep(cepBruto)");
     expect(ler("components/cadastro-rapido/definicoes.ts")).not.toMatch(/nome: "cep", label: "CEP", placeholder/);
+  });
+  it("um jeito só de buscar CEP: a consulta mora só em lib/cep; o buscarCep de sempre (admissão, ficha do colaborador) passa pela mesma consulta, com a reserva e o prazo", async () => {
+    const fs = await import("node:fs");
+    const path = await import("node:path");
+    const arquivos = (d: string): string[] => fs.readdirSync(d, { withFileTypes: true }).flatMap((e) => (e.isDirectory() ? arquivos(path.join(d, e.name)) : /\.tsx?$/.test(e.name) ? [path.join(d, e.name)] : []));
+    // lib/nfse/municipio consulta o código IBGE do município (outro dado, para a NFS-e), não o endereço
+    const fora = ["app", "components", "lib"].flatMap((d) => arquivos(d)).filter((f) => f !== path.join("lib", "cep.ts") && f !== path.join("lib", "nfse", "municipio.ts"))
+      .filter((f) => /viacep\.com\.br|brasilapi\.com\.br\/api\/cep/.test(fs.readFileSync(f, "utf8")));
+    expect(fora).toEqual([]);
+    expect(ler("components/ui/campo-cep.tsx")).toContain('from "@/lib/cep"');
+    // a assinatura de sempre: endereço ou null; com o ViaCEP fora, vem da reserva
+    vi.stubGlobal("fetch", vi.fn(async (u: string) => { if (u.includes("viacep")) throw new Error("rede"); return resposta(brasilapi); }));
+    expect(await buscarCep("01310-100")).toMatchObject({ logradouro: expect.any(String), cidade: expect.any(String) });
+    vi.stubGlobal("fetch", vi.fn(async () => { throw new Error("rede"); }));
+    expect(await buscarCep("01310-100")).toBeNull();
   });
 });
 

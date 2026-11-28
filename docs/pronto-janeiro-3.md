@@ -236,6 +236,7 @@ Vai num segundo PR, sobre a varredura. Sem SQL.
 **Item 5, o CEP.** O `CampoCep` está em unidade (nas duas telas), colaborador, admissão, dados da empresa, cadastro rápido de unidade e na edição da unidade no contexto.
 - **Sem lupa:** completou os 8 dígitos, consulta. O endereço preenche logradouro, bairro, cidade e UF; número e complemento ficam com a pessoa.
 - **Consulta:** ViaCEP; se ela cair, a BrasilAPI. Cada uma espera no máximo 4 s, então nunca trava (`lib/cep`).
+- **Um jeito só:** a consulta é a do `lib/cep` que já existia no master (a mesma que a Leva J, #285, usa na admissão e na ficha do colaborador). O `buscarCep` mantém a assinatura de sempre (endereço ou nulo) e passa pela mesma consulta, com a reserva e o prazo. Um teste garante que nenhum outro arquivo consulta CEP por conta própria. Quando o #285 entrar, o campo de CEP da ficha do colaborador fica sendo o `CampoCep`.
 - **CEP inexistente ou consulta fora do ar:** diz e deixa digitar à mão.
 
 Neste ambiente de teste não há acesso à internet, por isso o print mostra a mensagem "A consulta de CEP não respondeu". A consulta que preenche está provada nos testes.

@@ -15,6 +15,7 @@ import { montarPermissoes } from "@/lib/permissoes";
 import type { DadosCentral, NotaLinha } from "@/lib/nfse/central-server";
 
 (globalThis as any).IS_REACT_ACT_ENVIRONMENT = true;
+Object.defineProperty(window, "innerWidth", { configurable: true, value: 1440 }); // tela larga: o menu lateral abre (Leva I: < 1280 px começa recolhido)
 const nav = vi.hoisted(() => ({ replace: vi.fn(), refresh: vi.fn(), push: vi.fn(), sp: "", path: "/financeiro/notas-fiscais" }));
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ replace: nav.replace, refresh: nav.refresh, push: nav.push, back: () => {} }),

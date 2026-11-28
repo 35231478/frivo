@@ -119,11 +119,14 @@ describe("quem compara datas usa a regra", () => {
     expect(whereContratos("e1", { status: "VENCIDO" }, agora).dataFim).toEqual({ lt: H(VENC) });
     const w = whereOrdens("e1", { data: "2026-10-28" });
     expect(w.AND[0].OR).toEqual([
-      { atividades: { some: { dataAgendada: { gte: H("2026-10-28T03:00:00Z"), lt: H("2026-10-29T03:00:00Z") } } } },
+      // Leva I: a data agendada / de execução (instante de Brasília) ou a previsão (dia civil ou hora); não a abertura
+      { atividades: { some: { OR: [
+        { dataAgendada: { gte: H("2026-10-28T03:00:00Z"), lt: H("2026-10-29T03:00:00Z") } },
+        { iniciadaEm: { gte: H("2026-10-28T03:00:00Z"), lt: H("2026-10-29T03:00:00Z") } },
+        { concluidaEm: { gte: H("2026-10-28T03:00:00Z"), lt: H("2026-10-29T03:00:00Z") } },
+      ] } } },
       { previsaoConclusao: { gte: H(VENC), lt: H("2026-10-29T00:00:00Z") } },
-      { prazoExecucao: { gte: H(VENC), lt: H("2026-10-29T00:00:00Z") } }, // o período olha também o PRAZO (dia civil)
       { previsaoConclusao: { gte: H("2026-10-28T03:00:00Z"), lt: H("2026-10-29T03:00:00Z") } },
-      { criadoEm: { gte: H("2026-10-28T03:00:00Z"), lt: H("2026-10-29T03:00:00Z") } },
     ]);
   });
 
