@@ -8,8 +8,7 @@ import { Dica } from "@/components/ui/dica";
 import { ROTULO_QUANDO, ROTULO_VISTA, VISTAS, type Vista } from "@/lib/comissoes/regras";
 import type { RelatorioComissoes } from "@/lib/comissoes/servidor";
 
-const DICA_VISTA = "Por data de emissão: as vendas aprovadas no mês, com a comissão inteira. Por data de recebimento: a parte "
-  + "da comissão coberta pelo dinheiro que entrou no mês. É só a vista: o fechamento paga pelo que está em Configurações › Comissões.";
+const DICA_VISTA = "Por data de emissão: as vendas aprovadas no mês, com a comissão inteira. Por data de recebimento: a parte da comissão coberta pelo dinheiro que entrou no mês. É só a vista: o fechamento paga pelo que está em Configurações › Comissões.";
 
 /**
  * COM-1 — as comissões do mês no fechamento, vistas por data de emissão ou por data de recebimento (o mesmo conceito

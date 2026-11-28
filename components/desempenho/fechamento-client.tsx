@@ -21,8 +21,7 @@ import { CabecalhoDesempenho, Erro, JSON_HEADERS, SeletorDeMes, posicaoTexto, ty
 
 interface Dados { mes: PreviaDoFechamento; historico: FechamentoResumo[] }
 const AJUDA_FOLHA = "Só o valor do bônus é registrado aqui: pagamento, imposto e encargo são lançados no financeiro. Enquanto o mês está aberto, o valor é projeção e muda com atividade, avaliação e revisão novas.";
-const AJUDA_FOLHA_COMISSAO = "Bônus do Desempenho e comissões liberadas até o fim do mês. Fechar gera uma conta a pagar por pessoa com o total "
-  + "e marca as comissões como pagas. Reabrir cancela essas contas (se nenhuma tiver pagamento) e as comissões voltam a liberadas.";
+const AJUDA_FOLHA_COMISSAO = "Bônus do Desempenho e comissões liberadas até o fim do mês. Fechar gera uma conta a pagar por pessoa com o total e marca as comissões como pagas. Reabrir cancela essas contas (se nenhuma tiver pagamento) e as comissões voltam a liberadas.";
 const AJUDA_PREMIACAO = "O prêmio do mês vai para quem tem o maior escore na disputa. Empate divide o prêmio; ninguém acima da meta mínima deixa o prêmio sem ganhador.";
 const AJUDA_HISTORICO = "Cada fechamento do mês fica guardado, inclusive os reabertos: a folha daquele momento, quem fechou, quem reabriu e o motivo.";
 

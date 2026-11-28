@@ -127,6 +127,8 @@ export async function PUT(req: NextRequest) {
     implantacaoDispensadas: _impl,
     // Categorias das despesas de campo: rota própria (/api/despesas-campo/categorias); a tela geral não sobrescreve
     despesasCampoCategorias: _despCat,
+    // COM-1 — quando a comissão fica devida e a base: rota própria (/api/comissoes); a tela geral não sobrescreve
+    comissaoQuando: _comQuando, comissaoLiquidaImpostos: _comLiq,
     ...entrada
   } = semCampoMorto(body);
   const parsed = configuracaoSchema.safeParse(entrada);
