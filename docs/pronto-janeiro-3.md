@@ -265,6 +265,46 @@ Em `docs/prints/leva-i/` (`antes-*` e `depois-*`, desktop e celular):
 
 ---
 
+## Leva I.2 — as 15 decisões do Zé
+
+PR próprio, depois da Leva I. **SQL 🔵** `prisma/sql/2027-02-14_leva_i2.sql`: aditivo e idempotente, com 2 tabelas novas (`empresa_eventos`, `tabela_preco_reajustes`) e 8 colunas novas (material de campo cobrado e conferência; o XML e a trilha da nota descartada). Nada muda nas linhas que já existem. O teste `sql-leva-i2` roda o SQL duas vezes num PostgreSQL real e compara o resultado com o Prisma.
+
+| # | Decisão | Tela | Situação |
+|---|---|---|---|
+| 1 | nova senha provisória do 1º administrador, mostrada uma vez, com troca obrigatória | Admin › Empresas | **corrigido** |
+| 2 | o dono do Frivo edita os dados da empresa, com trilha | Admin › Empresas | **corrigido** |
+| 3 | e-mail de login repetido em qualquer empresa é recusado, com mensagem clara | Usuários, colaborador, Meu perfil, Nova empresa, portal | **corrigido** |
+| 4 | CSV: `'` antes de `= + - @` na exportação; a Implantação tira na importação | exportação e Implantação | **corrigido** |
+| 5 | trava do preço de tabela na fatura avulsa (permissão + motivo) | Medição / fatura | **corrigido** |
+| 6 | reajuste em massa da tabela (% ou R$, todos ou escolhidos, prévia, motivo, trilha, desfazer o último) | Configurações › Tabelas de preço | **corrigido** |
+| 7 | material de campo "Cobrado à parte" vira item da OS a preço de venda, a conferir antes de faturar | OS › Itens da OS | **corrigido** |
+| 8 | pedido do portal resolvido por outro meio encerra como "Resolvido por outro meio", visível ao cliente | portal e gaveta do pedido | **corrigido** |
+| 9 | lembrete para cliente sem portal: e-mail com o resumo e o relatório de cada OS, pedindo a resposta com o pedido | e-mail | **corrigido** (o relatório vai como link, ver abaixo) |
+| 10 | e-mail ao cliente na recusa, com o motivo | gaveta do pedido | **corrigido** |
+| 11 | "Restaurar legenda do sistema" | OS › foto | **corrigido** |
+| 12 | "Restaurar" nota de compra descartada, com trilha | Estoque › Notas de compra | **corrigido** |
+| 13 | as 5 tabelas feitas à mão na TabelaPro | Faturamento de contratos, Empresas, Documentos do colaborador, Checklist diário, Separação | **corrigido** |
+| 14 | QR Codes, Checklists preenchidos e Despesas de campo com o hook de filtros lembrados | as três listas | **corrigido** |
+| 15 | sino de veículo e de lead direto ao item | sino | **corrigido** |
+
+**Pontos para o Zé conferir:**
+- **(9) Relatório como link, não anexo.** Hoje o relatório da OS é uma página que se imprime ou salva em PDF; não existe PDF gerado no servidor. O e-mail leva o link público do relatório de cada OS.
+- **(5) Trilha da fatura sem tela.** A alteração de preço fica gravada na trilha da empresa, mas ainda não aparece na ficha da medição.
+- **(6) Item com desconto %.** O reajuste passa o item para valor fixo com o preço novo; "Desfazer" devolve o desconto.
+- **(7) Medição de contrato.** A medição de contrato com OS que tem material de campo a conferir não foi travada; só o faturamento da OS espera a conferência.
+- **(7) Botão "Excluir da cobrança".** O teste de vocabulário da casa não aceita "Remover" em rótulos.
+- **(3) Usuário e contato do portal podem ter o mesmo e-mail.** Os dois logins são buscados em lugares separados, e a recusa vale dentro de cada um, em todas as empresas.
+- **(3) Meu perfil.** A recusa de e-mail repetido deixou de ser genérica e virou a mensagem clara pedida. Só chega a ela quem já informou a senha atual, e há limite de tentativas.
+
+### Prints da Leva I.2 (dados fictícios)
+
+Em `docs/prints/leva-i2/` (`antes-*` × `depois-*`, desktop e celular):
+- `empresas` e `empresas-editar`: só Inativar × Editar (com Histórico) e Nova senha do admin, na tabela da casa;
+- `tabela-reajuste`: o editor sem reajuste × "Reajustar preços" com a prévia (atual → novo);
+- `notas-descartadas`: nenhuma × a descartada com "Restaurar" e o porquê na dica.
+
+Os demais itens dependem de dados que o banco de exemplo não tem (material de campo, pedido do portal, foto com checklist). Eles estão provados nos testes de tela e de PostgreSQL real de cada grupo, abaixo.
+
 ## Leva I.2 — grupo A
 
 | # | O quê | Agora |

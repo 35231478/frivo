@@ -92,7 +92,11 @@ describe("12. Notas descartadas: Restaurar", () => {
   it("sem Estoque › gerenciar: nenhum botão (o servidor recusa de qualquer jeito)", async () => {
     await abrir(false);
     expect($$("[data-restaurar-nota]")).toHaveLength(0);
-    expect(txt($("[data-descartes-recuperar]"))).toContain("é de quem gerencia o estoque");
+    // o porquê fica na ⓘ do título: abre a dica e lê o balão
+    const dica = $("[data-descartes-recuperar] [data-dica]") as HTMLButtonElement;
+    expect(dica).not.toBeNull();
+    await act(async () => { dica.focus(); });
+    expect(txt(document.body)).toContain("é de quem gerencia o estoque");
   });
   it("restaurar: chama a rota, avisa e abre a nota; a chave já importada de novo: o motivo e o link da nota", async () => {
     respostas["POST /api/compras/notas/descartes/d1/restaurar"] = { status: 201, corpo: { nota: { id: "nVolta" } } };

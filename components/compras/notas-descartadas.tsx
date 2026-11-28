@@ -19,10 +19,11 @@ export function NotasDescartadas({ descartes, podeRestaurar, limite = 20 }: { de
   if (!descartes.length) return null;
   return (
     <details className="card px-4 py-3 text-sm" data-descartes>
-      <summary className="cursor-pointer text-ink-muted font-medium">Notas descartadas ({descartes.length}{descartes.length === limite ? " mais recentes" : ""})</summary>
-      <p className="mt-1 text-xs text-ink-muted" data-descartes-recuperar>
-        {podeRestaurar ? "Restaurar reimporta a nota pelo XML guardado no descarte." : "Restaurar uma nota descartada é de quem gerencia o estoque."} Descarte antigo, sem o XML: importe o XML de novo.
-      </p>
+      <summary className="cursor-pointer text-ink-muted font-medium">
+        Notas descartadas ({descartes.length}{descartes.length === limite ? " mais recentes" : ""})
+        {/* o porquê fica na ⓘ, não no texto da tela */}
+        <span data-descartes-recuperar className="ml-1"><Dica rotulo="Restaurar nota descartada" texto={`${podeRestaurar ? "Restaurar reimporta a nota pelo XML guardado no descarte." : "Restaurar uma nota descartada é de quem gerencia o estoque."} Descarte antigo, sem o XML: importe o XML de novo.`} /></span>
+      </summary>
       <ul className="mt-2 divide-y divide-surface-border">
         {descartes.map((d) => (
           <li key={d.id} className="py-2 flex flex-wrap items-center gap-x-3 gap-y-1" data-descarte={d.id}>
