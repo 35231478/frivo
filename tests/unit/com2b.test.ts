@@ -13,7 +13,8 @@ import { ROTULO_SITUACAO_APP, comissoesDaTela, totalAguardandoEnvio, type Comiss
 const RAIZ = path.resolve(__dirname, "../..");
 const ler = (f: string) => readFileSync(path.join(RAIZ, f), "utf8");
 const eq = (id: string, feito: boolean, completo: boolean) => ({ equipamento: { id }, feito, completo });
-const C: ComissaoRetrato = { porEquipamento: { q1: 15, q2: 12.345, q3: 15, q4: 0 }, confirmadas: { q3: 14.5 } };
+// q6 (feito, incompleto) e q7 (completo, não feito) TÊM valor no retrato: só a trava os deixa de fora
+const C: ComissaoRetrato = { porEquipamento: { q1: 15, q2: 12.345, q3: 15, q4: 0, q6: 9, q7: 9 }, confirmadas: { q3: 14.5 } };
 
 describe("a comissão na tela do app", () => {
   it("só o feito E completo; confirmada = Prevista (o valor do servidor), senão aguardando envio (o valor do retrato)", () => {

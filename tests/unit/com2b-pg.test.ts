@@ -103,6 +103,14 @@ describe.skipIf(!URL_PG)("COM-2B — a comissão no retrato da atividade (Postgr
     expect(JSON.stringify(corpo.comissao)).not.toMatch(/regra|base|custo|taxa|Ana/i);
   });
 
+  it("o app enviou o q2 feito: o próximo retrato já volta com ele confirmado (a rota refaz a conta da OS)", async () => {
+    await prisma.atividadeEquipamento.updateMany({ where: { atividadeId: "aA", equipamentoId: "q2" }, data: { feito: true, feitoEm: new Date(), feitoPorId: "tCarlos" } });
+    comoTecnico("uCarlos", "tCarlos");
+    const mod = await import("@/app/api/tecnico/atividades/[atividadeId]/route");
+    const res: Response = await mod.GET(new NextRequest("http://localhost/api/tecnico/atividades/aA"), { params: Promise.resolve({ atividadeId: "aA" }) });
+    expect((await res.json()).comissao.confirmadas).toEqual({ q1: 5, q2: 5 });
+  });
+
   it("quem não está na atividade e a OS cancelada: null", async () => {
     expect(await exe.comissaoParaRetrato("e1", "aA", "uFora")).toBeNull();
     await prisma.ordemServico.update({ where: { id: "os1" }, data: { status: "CANCELADA" } });
