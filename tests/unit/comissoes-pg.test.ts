@@ -74,7 +74,7 @@ describe.skipIf(!URL_PG)("COM-1 — comissões (PostgreSQL real)", () => {
     const url = `${URL_PG}${URL_PG!.includes("?") ? "&" : "?"}schema=${SCHEMA}&connection_limit=12`;
     execFileSync(path.join(RAIZ, "node_modules/.bin/prisma"), ["db", "push", "--skip-generate", "--schema", "prisma/schema.prisma"], { cwd: RAIZ, env: { ...process.env, DATABASE_URL: url }, stdio: "pipe" });
     // As travas de produção do faturamento e o SQL desta leva (CHECKs) por cima
-    for (const sql of ["2026-11-14_faturamento_travas_retencoes.sql", "2026-11-16_faturar_avulso.sql", "2026-11-08_faturamento_parcial.sql", "2027-02-11_comissoes.sql"]) {
+    for (const sql of ["2026-11-14_faturamento_travas_retencoes.sql", "2026-11-16_faturar_avulso.sql", "2026-11-08_faturamento_parcial.sql", "2027-02-11_comissoes.sql", "2027-02-14_comissoes_vencimento.sql"]) {
       execFileSync("psql", [URL_PG!, "-v", "ON_ERROR_STOP=1", "-q", "--single-transaction", "-f", path.join(RAIZ, "prisma/sql", sql)], {
         env: { ...process.env, PGOPTIONS: `--search_path=${SCHEMA} --client_min_messages=warning` }, stdio: "pipe",
       });
@@ -191,7 +191,7 @@ describe.skipIf(!URL_PG)("COM-1 — comissões (PostgreSQL real)", () => {
     expect(JSON.stringify(ext.json)).not.toMatch(/baseValor|custo|margem|lucro\b/i);
   });
 
-  it("relatório do mês por data de EMISSÃO (venda aprovada no mês, comissão inteira) ou de RECEBIMENTO (só o que entrou no mês); abre na vista da configuração; só Desempenho › Gerenciar", async () => {
+  it("relatório do mês por data de EMISSÃO (da fatura, como no OMIE) ou de RECEBIMENTO (só o que entrou no mês); abre na vista da configuração; só Desempenho › Gerenciar", async () => {
     const o = await novoOrcamento({ servicos: [{ servicoId: "sInst", descricao: "Instalação split", v: 1000 }] });
     logar("uAdm");
     await aprovar(o.id);
@@ -213,17 +213,27 @@ describe.skipIf(!URL_PG)("COM-1 — comissões (PostgreSQL real)", () => {
     expect(daVenda(recPassado).valor).toBe(15); // os 30% que entraram no mês passado
     const emi = await chamar("comissoes/relatorio", "GET", {}, undefined, `?mes=${mes}&vista=EMISSAO`);
     expect(emi.json.vista).toBe("EMISSAO");
-    expect(daVenda(emi).valor).toBe(50); // aprovada neste mês: a comissão inteira
+    expect(daVenda(emi).valor).toBe(50); // a fatura (inteira) foi emitida neste mês: a comissão inteira
     expect(daVenda(await chamar("comissoes/relatorio", "GET", {}, undefined, `?mes=${mesPassado}&vista=EMISSAO`))).toBeUndefined();
-    // Venda aprovada neste mês e cancelada depois: sai da vista por emissão (não é mais venda)
-    const cancelada = await novoOrcamento({ servicos: [{ servicoId: "sInst", descricao: "Instalação split", v: 400 }] });
-    await aprovar(cancelada.id);
-    const emiAntes = await chamar("comissoes/relatorio", "GET", {}, undefined, `?mes=${mes}&vista=EMISSAO`);
-    expect(emiAntes.json.pessoas.flatMap((p: any) => p.vendas).some((v: any) => v.orcamentoId === cancelada.id)).toBe(true);
-    await prisma.orcamento.update({ where: { id: cancelada.id }, data: { status: "CANCELADO" } });
-    const emiDepois = await chamar("comissoes/relatorio", "GET", {}, undefined, `?mes=${mes}&vista=EMISSAO`);
-    expect(emiDepois.json.pessoas.flatMap((p: any) => p.vendas).some((v: any) => v.orcamentoId === cancelada.id)).toBe(false);
-    expect(daVenda(emiDepois).valor).toBe(50);
+    // COM-1.1: a emissão é a da FATURA (não a aprovação) — aprovada sem fatura emitida não aparece; cancelada depois, sai
+    const naVista = async (id: string) => (await chamar("comissoes/relatorio", "GET", {}, undefined, `?mes=${mes}&vista=EMISSAO`)).json.pessoas.flatMap((p: any) => p.vendas).find((v: any) => v.orcamentoId === id);
+    const semFatura = await novoOrcamento({ servicos: [{ servicoId: "sInst", descricao: "Instalação split", v: 400 }] });
+    await aprovar(semFatura.id);
+    expect(await naVista(semFatura.id)).toBeUndefined();
+    expect((await faturar(semFatura.id)).status).toBe(201);
+    expect((await naVista(semFatura.id)).valor).toBe(20);
+    await prisma.orcamento.update({ where: { id: semFatura.id }, data: { status: "CANCELADO" } });
+    expect(await naVista(semFatura.id)).toBeUndefined();
+    // A data mostrada é a da emissão da fatura (NF registrada à mão vale mais que o título): NF no mês passado = emitida lá
+    const comNf = await novoOrcamento({ servicos: [{ servicoId: "sInst", descricao: "Instalação split", v: 200 }] });
+    await aprovar(comNf.id);
+    expect((await faturar(comNf.id)).status).toBe(201);
+    const medNf = await prisma.medicao.findFirst({ where: { itens: { some: { orcamentoId: comNf.id } } } });
+    await prisma.medicaoNf.create({ data: { medicaoId: medNf.id, numero: "NF-FICT-1", emitidaEm: new Date(`${passado}T12:00:00Z`) } });
+    expect(await naVista(comNf.id)).toBeUndefined();
+    const noPassado = (await chamar("comissoes/relatorio", "GET", {}, undefined, `?mes=${mesPassado}&vista=EMISSAO`)).json.pessoas.flatMap((p: any) => p.vendas).find((v: any) => v.orcamentoId === comNf.id);
+    expect([noPassado.valor, noPassado.data.slice(0, 10)]).toEqual([10, passado]);
+    expect(daVenda(await chamar("comissoes/relatorio", "GET", {}, undefined, `?mes=${mes}&vista=EMISSAO`)).valor).toBe(50);
     // A vista não muda o que o fechamento paga (segue a configuração): o liberado continua sendo os 40% que entraram
     await srv.sincronizarComissoes("e1");
     expect(await liberado(o.id)).toBe(20);
@@ -368,13 +378,40 @@ describe.skipIf(!URL_PG)("COM-1 — comissões (PostgreSQL real)", () => {
     logar("uAdm");
     await aprovar(o.id);
     expect((await comissoes(o.id)).map((c: any) => [c.usuarioId, Number(c.valor)])).toEqual([["uP", 2]]);
-    // Com comissão liberada, a troca é recusada
+    // COM-1.1 (decisão do item 2; antes: recusava): com comissão liberada a troca VALE — na mesma transação estorna do
+    // antigo (fica no histórico como substituída) e libera para o novo, com o mesmo "quando" congelado
     await prisma.configuracao.update({ where: { empresaId: "e1" }, data: { comissaoQuando: "APROVACAO" } });
     const b = await novoOrcamento({ servicos: [{ servicoId: "sLimp", descricao: "Limpeza", v: 100 }] });
     await aprovar(b.id);
-    expect(await liberado(b.id)).toBeGreaterThan(0);
-    expect((await chamar("orcamentos/[id]/vendedor", "PATCH", { id: b.id }, { vendedorId: "uP", motivo: "Tentando trocar" })).status).toBe(409);
-    await prisma.configuracao.update({ where: { empresaId: "e1" }, data: { comissaoQuando: "RECEBIMENTO" } });
+    const doVitor = await liberado(b.id);
+    expect(doVitor).toBeGreaterThan(0);
+    await prisma.configuracao.update({ where: { empresaId: "e1" }, data: { comissaoQuando: "RECEBIMENTO" } }); // a troca usa o "quando" da venda, não o de hoje
+    expect((await chamar("orcamentos/[id]/vendedor", "PATCH", { id: b.id }, { vendedorId: "uP", motivo: "Carteira redistribuída" })).status).toBe(200);
+    const depois = await comissoes(b.id);
+    const antiga = depois.find((c: any) => c.usuarioId === "uV");
+    const nova = depois.find((c: any) => c.usuarioId === "uP");
+    const soma = (c: any) => Math.round(c.lancamentos.reduce((s: number, l: any) => s + Number(l.valor), 0) * 100) / 100;
+    expect([antiga.papel, soma(antiga), antiga.lancamentos.at(-1).motivo, antiga.lancamentos.at(-1).tipo]).toEqual(["VENDEDOR_ANTERIOR", 0, "Troca de vendedor", "ESTORNO"]);
+    expect([nova.papel, nova.quando, Number(nova.valor), soma(nova)]).toEqual(["VENDEDOR", "APROVACAO", 2, 2]); // a regra da Paula (todos 2%), já liberada
+    expect((await prisma.orcamentoEvento.findFirst({ where: { orcamentoId: b.id, tipo: "VENDEDOR" } })).detalhe).toBe("Vendedor: Vitor Vendas → Paula Pessoa. Motivo: Carteira redistribuída");
+    // Sincronizar de novo não mexe em nada (a substituída vale 0; a nova já está no alvo) e não nasce comissão repetida
+    expect(await srv.sincronizarComissoes("e1", { orcamentoIds: [b.id] })).toBe(0);
+    expect(await srv.gerarComissoesDoOrcamento("e1", b.id)).toBe(0);
+    // O extrato do Vitor não tem nada a receber desta venda; o da Paula tem a comissão dela liberada
+    logar("uV", montarPermissoes({ orcamentos: ["visualizar"] }));
+    expect((await chamar("perfil/comissoes", "GET")).json.vendas.some((v: any) => v.orcamentoId === b.id)).toBe(false);
+    logar("uP", montarPermissoes({ orcamentos: ["visualizar"] }));
+    expect((await chamar("perfil/comissoes", "GET")).json.vendas.find((v: any) => v.orcamentoId === b.id)).toMatchObject({ prevista: 0, liberada: 2, paga: 0 });
+    // Já PAGA num fechamento: a troca é recusada, com o mês, e nada muda
+    logar("uP");
+    const f = await prisma.desempenhoFechamento.create({ data: { empresaId: "e1", competencia: "2027-01", versao: 90, painel: {}, premios: [], fechadoPorNome: "Fictício", fechadoEm: new Date() } });
+    await prisma.comissaoLancamento.updateMany({ where: { comissaoId: nova.id }, data: { fechamentoId: f.id } });
+    const recusa = await chamar("orcamentos/[id]/vendedor", "PATCH", { id: b.id }, { vendedorId: "uV", motivo: "Voltando para o Vitor" });
+    expect([recusa.status, recusa.json.erro]).toEqual([409, "A comissão desta venda já foi paga no fechamento de 01/2027: a troca de vendedor não pode mudar o que já foi pago. Fale com o financeiro."]);
+    expect((await prisma.orcamento.findUnique({ where: { id: b.id } })).vendedorId).toBe("uP");
+    expect((await comissoes(b.id)).length).toBe(2);
+    await prisma.comissaoLancamento.updateMany({ where: { comissaoId: nova.id }, data: { fechamentoId: null } });
+    await prisma.desempenhoFechamento.delete({ where: { id: f.id } });
 
     // Regras e configuração: só com Desempenho › Gerenciar
     logar("uP", montarPermissoes({ orcamentos: ["visualizar", "criar", "editar", "trocarVendedor"], desempenho: ["visualizar"] }));

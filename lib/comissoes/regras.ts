@@ -10,7 +10,7 @@
  *    QUANDO fica devida (configuração da empresa naquele dia). Mudar a regra depois não mexe no passado.
  *  - LIBERAR é chegar ao "alvo" do gatilho: na aprovação (tudo), na conclusão da OS (tudo) ou no recebimento
  *    (proporcional ao que entrou). O alvo descendo (fatura cancelada, recebimento estornado, orçamento cancelado)
- *    vira ESTORNO automático.
+ *    vira ESTORNO automático — também na aprovação e na conclusão (COM-1.1: fatura cancelada estorna; proteção da empresa).
  *  - "% do lucro" só se calcula no servidor, com o custo que o vendedor não vê: a tela do vendedor recebe só o valor.
  */
 import { z } from "zod";
@@ -34,13 +34,13 @@ export const ROTULO_PAPEL: Record<Papel, string> = { VENDEDOR: "Vendedor", EXECU
 export const ROTULO_SOBRE: Record<Sobre, string> = { TODOS_SERVICOS: "Todos os serviços", CATEGORIA: "Categoria de serviço", SERVICO: "Um serviço", PECAS: "Peças" };
 export const ROTULO_BASE: Record<Base, string> = { PERC_VENDA: "% da venda", PERC_LUCRO: "% do lucro", FIXO_ITEM: "Valor fixo por item" };
 export const ROTULO_QUANDO: Record<Quando, string> = {
-  RECEBIMENTO: "Por data de recebimento", APROVACAO: "Por data de emissão (aprovação do orçamento)", CONCLUSAO_OS: "Na conclusão da OS",
+  RECEBIMENTO: "Por data de recebimento", APROVACAO: "Na aprovação do orçamento", CONCLUSAO_OS: "Na conclusão da OS",
 };
 
 /**
- * O relatório do mês visto por uma das duas datas (o mesmo conceito do "quando é devida"): EMISSÃO = vendas
- * emitidas (orçamento aprovado) no mês, com a comissão inteira; RECEBIMENTO = a parte da comissão coberta pelo
- * dinheiro que entrou no mês. É só a VISTA: o que o fechamento paga segue a configuração da empresa.
+ * O relatório do mês visto por uma das duas datas: EMISSÃO = a parte da comissão coberta pelas faturas da venda
+ * EMITIDAS no mês (COM-1.1, como no OMIE: a data da fatura/NF, não a aprovação — sem fatura emitida, não aparece);
+ * RECEBIMENTO = a parte coberta pelo dinheiro que entrou no mês. É só a VISTA: o fechamento paga pelo "quando é devida".
  */
 export const VISTAS = ["EMISSAO", "RECEBIMENTO"] as const;
 export type Vista = (typeof VISTAS)[number];
@@ -281,17 +281,69 @@ export function fracaoRecebidaNoPeriodo(entradas: readonly EntradaDaVenda[], tot
   return Math.max(0, cap(ate) - cap(antes));
 }
 
+/* ───────── as faturas da venda: cancelada? emitida quando? (COM-1.1) ───────── */
+
+/** Uma fatura (medição) da venda, viva ou cancelada, com a data de emissão dela e o quanto é desta venda */
+export interface FaturaDaVenda {
+  /** Medição cancelada, ou todos os títulos dela cancelados/excluídos */
+  cancelada: boolean;
+  /** A emissão da fatura (`dataDeEmissao`); null = ainda não emitida (rascunho) */
+  emitidaEm: Date | null;
+  /** Em reais, o que a fatura cobra desta venda */
+  daVenda: number;
+}
+
+/**
+ * A fatura conta como CANCELADA para a comissão quando a medição foi cancelada OU todos os títulos dela foram
+ * cancelados/excluídos. Sem título nenhum, não há o que cancelar: a fatura segue viva.
+ */
+export function faturaFoiCancelada(statusMedicao: string, titulos: readonly { cancelado: boolean }[]): boolean {
+  return statusMedicao === "CANCELADA" || (titulos.length > 0 && titulos.every((t) => t.cancelado));
+}
+
+/** A venda perdeu a fatura: alguma foi cancelada e não sobrou nenhuma viva (refaturar devolve a comissão). */
+export function vendaComFaturaCancelada(faturas: readonly Pick<FaturaDaVenda, "cancelada">[]): boolean {
+  return faturas.some((f) => f.cancelada) && !faturas.some((f) => !f.cancelada);
+}
+
+/**
+ * A DATA DE EMISSÃO da fatura, na ordem do que é mais "documento fiscal": a NFS-e autorizada (a mais antiga) >
+ * a NF registrada à mão > a fatura enviada ao cliente > o primeiro título gerado. Nada disso = não emitida.
+ */
+export function dataDeEmissao(f: { nfseAutorizadas?: readonly (Date | null)[]; nfsRegistradas?: readonly Date[]; enviadaEm?: Date | null; titulosEm?: readonly Date[] }): Date | null {
+  const primeira = (ds: readonly (Date | null | undefined)[] | undefined) =>
+    (ds ?? []).filter((d): d is Date => d instanceof Date && !Number.isNaN(d.getTime())).sort((a, b) => a.getTime() - b.getTime())[0] ?? null;
+  return primeira(f.nfseAutorizadas) ?? primeira(f.nfsRegistradas) ?? (f.enviadaEm ?? null) ?? primeira(f.titulosEm);
+}
+
+/**
+ * Quanto da venda (0 a 1) foi EMITIDO entre [ini, fim): as faturas vivas e emitidas, cada uma com a parte dela,
+ * acumuladas na ordem da emissão sem passar do total da venda (faturar a mais não gera comissão a mais).
+ */
+export function fracaoEmitidaNoPeriodo(faturas: readonly FaturaDaVenda[], totalVenda: number, ini: Date, fim: Date): number {
+  const emitidas = faturas.filter((f) => !f.cancelada && f.emitidaEm).map((f) => ({ data: f.emitidaEm as Date, valor: num(f.daVenda) }));
+  return fracaoRecebidaNoPeriodo(emitidas, totalVenda, ini, fim);
+}
+
+/** A última emissão de fatura viva da venda no período (a data que o relatório mostra) */
+export function ultimaEmissaoNoPeriodo(faturas: readonly FaturaDaVenda[], ini: Date, fim: Date): Date | null {
+  const ds = faturas.filter((f) => !f.cancelada && f.emitidaEm && f.emitidaEm >= ini && f.emitidaEm < fim).map((f) => f.emitidaEm as Date);
+  return ds.sort((a, b) => b.getTime() - a.getTime())[0] ?? null;
+}
+
 export interface EstadoDaVenda {
   statusOrcamento: string;
   /** A OS gerada do orçamento está concluída (e não cancelada) */
   osConcluida: boolean;
   /** 0 a 1 (RECEBIMENTO) */
   fracao: number;
+  /** COM-1.1: a venda perdeu a fatura (cancelada, nenhuma viva) — estorna a comissão da aprovação e da conclusão */
+  faturaCancelada?: boolean;
 }
 
 /** O ALVO liberado da comissão agora: o quanto do valor já é devido pelo gatilho congelado nela. */
 export function alvoLiberado(c: { valor: number; quando: Quando }, e: EstadoDaVenda): number {
-  const viva = (VENDA_VIVA as readonly string[]).includes(e.statusOrcamento);
+  const viva = (VENDA_VIVA as readonly string[]).includes(e.statusOrcamento) && !e.faturaCancelada;
   if (c.quando === "APROVACAO") return viva ? round2(c.valor) : 0;
   if (c.quando === "CONCLUSAO_OS") return viva && e.osConcluida ? round2(c.valor) : 0;
   // RECEBIMENTO: o dinheiro manda (o que entrou continua contando, mesmo que a venda mude depois)
@@ -380,10 +432,62 @@ export function normalizarRegra(r: RegraEntrada) {
   };
 }
 
+/* ───────── o vencimento da conta a pagar do fechamento (COM-1.1) ───────── */
+
+export const VENCIMENTO_TIPOS = ["DIA_UTIL", "DIA_FIXO"] as const;
+export type VencimentoTipo = (typeof VENCIMENTO_TIPOS)[number];
+export interface VencimentoFechamento { tipo: VencimentoTipo; dia: number }
+/** O padrão: 5º dia útil do mês seguinte à competência */
+export const VENCIMENTO_PADRAO: VencimentoFechamento = { tipo: "DIA_UTIL", dia: 5 };
+export const ROTULO_VENCIMENTO_TIPO: Record<VencimentoTipo, string> = { DIA_UTIL: "Dia útil do mês seguinte", DIA_FIXO: "Dia do mês seguinte" };
+/** Todo mês tem ao menos 20 dias úteis (seg–sex), e o dia fixo além do fim do mês cai no último dia */
+export const MAX_DIA_UTIL = 20;
+export const MAX_DIA_FIXO = 31;
+
+export function lerVencimento(tipo: unknown, dia: unknown): VencimentoFechamento {
+  const t = (VENCIMENTO_TIPOS as readonly unknown[]).includes(tipo) ? (tipo as VencimentoTipo) : VENCIMENTO_PADRAO.tipo;
+  const max = t === "DIA_UTIL" ? MAX_DIA_UTIL : MAX_DIA_FIXO;
+  const d = Number(dia);
+  return { tipo: t, dia: Number.isInteger(d) && d >= 1 && d <= max ? d : Math.min(VENCIMENTO_PADRAO.dia, max) };
+}
+
+/** "5º dia útil do mês seguinte" / "Dia 10 do mês seguinte" */
+export function descricaoDoVencimento(v: VencimentoFechamento): string {
+  return v.tipo === "DIA_UTIL" ? `${v.dia}º dia útil do mês seguinte` : `Dia ${v.dia} do mês seguinte`;
+}
+
+/**
+ * A data do vencimento no mês seguinte à competência ("AAAA-MM"), em UTC à meia-noite. Dia útil = segunda a
+ * sexta (feriados não entram: não há cadastro de feriados). Dia fixo além do fim do mês = o último dia do mês.
+ */
+export function dataDoVencimento(competencia: string, v: VencimentoFechamento): Date {
+  const [a, m] = competencia.split("-").map(Number);
+  const ano = m === 12 ? a + 1 : a, mes = m === 12 ? 0 : m; // o mês seguinte (0–11)
+  if (v.tipo === "DIA_FIXO") {
+    const ultimo = new Date(Date.UTC(ano, mes + 1, 0)).getUTCDate();
+    return new Date(Date.UTC(ano, mes, Math.min(v.dia, ultimo)));
+  }
+  let uteis = 0;
+  for (let d = 1; d <= 31; d++) {
+    const data = new Date(Date.UTC(ano, mes, d));
+    if (data.getUTCMonth() !== mes) break;
+    const sem = data.getUTCDay();
+    if (sem !== 0 && sem !== 6 && ++uteis === v.dia) return data;
+  }
+  return new Date(Date.UTC(ano, mes + 1, 0)); // (não acontece com o limite de 20)
+}
+
 export const configComissaoSchema = z.object({
   quando: z.enum(QUANDO),
   liquidaImpostos: z.boolean(),
-}).strict();
+  /** COM-1.1: o vencimento da conta a pagar do fechamento (sem os dois, fica como está) */
+  vencimentoTipo: z.enum(VENCIMENTO_TIPOS).optional(),
+  vencimentoDia: z.number().int("Informe um dia inteiro.").min(1, "O dia vai de 1 em diante.").optional(),
+}).strict().superRefine((c, ctx) => {
+  if ((c.vencimentoTipo === undefined) !== (c.vencimentoDia === undefined)) ctx.addIssue({ code: "custom", message: "Informe o tipo e o dia do vencimento.", path: ["vencimentoDia"] });
+  const max = c.vencimentoTipo === "DIA_UTIL" ? MAX_DIA_UTIL : MAX_DIA_FIXO;
+  if (c.vencimentoDia !== undefined && c.vencimentoDia > max) ctx.addIssue({ code: "custom", message: c.vencimentoTipo === "DIA_UTIL" ? `O dia útil vai de 1 a ${MAX_DIA_UTIL}.` : `O dia vai de 1 a ${MAX_DIA_FIXO}.`, path: ["vencimentoDia"] });
+});
 
 export const MOTIVO_TROCA_MIN = 5;
 export const trocarVendedorSchema = z.object({
