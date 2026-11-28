@@ -39,7 +39,24 @@ export function detalhesDaOs(c: CartaoTela, op: { titulo?: string | null; verDad
 }
 
 /** "3 equipamentos · 1 atendido" */
-export function resumoEquipamentos(total: number, atendidos: number): string {
+export function resumoEquipamentos(total: number, comecados: number, completos: number): string {
   if (!total) return "Nenhum equipamento";
-  return `${total === 1 ? "1 equipamento" : `${total} equipamentos`} · ${atendidos === 1 ? "1 atendido" : `${atendidos} atendidos`}`;
+  return `${total === 1 ? "1 equipamento" : `${total} equipamentos`} · ${andamentoEquipamentos(comecados, completos)}`;
+}
+
+/**
+ * D14 — "1 começado · 0 completos": começado = tocado (marcado, respondido ou com foto); completo = sem nada faltando.
+ * Antes, o começado já contava como "atendido" ("1 de 3 atendidos" com "Faltam 9" no mesmo equipamento).
+ */
+export function andamentoEquipamentos(comecados: number, completos: number): string {
+  return `${comecados === 1 ? "1 começado" : `${comecados} começados`} · ${completos === 1 ? "1 completo" : `${completos} completos`}`;
+}
+export function contarAndamento(equipamentos: readonly { feito: boolean; completo: boolean; respostas?: Record<string, unknown>; fotos?: readonly unknown[] }[]) {
+  let comecados = 0, completos = 0;
+  for (const e of equipamentos) {
+    const tocado = e.feito || Object.keys(e.respostas ?? {}).length > 0 || (e.fotos?.length ?? 0) > 0;
+    if (tocado) comecados++;
+    if (tocado && e.completo) completos++;
+  }
+  return { comecados, completos };
 }

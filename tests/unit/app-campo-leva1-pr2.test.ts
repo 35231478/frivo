@@ -170,9 +170,10 @@ describe("topo da OS", () => {
       .toEqual([{ rotulo: "Horário", valor: "07:00" }, { rotulo: "Prioridade", valor: "X" }, { rotulo: "Origem", valor: "Recorrente (contrato/PMOC)" }]);
   });
   it("resumo dos equipamentos", () => {
-    expect(resumoEquipamentos(0, 0)).toBe("Nenhum equipamento");
-    expect(resumoEquipamentos(1, 1)).toBe("1 equipamento · 1 atendido");
-    expect(resumoEquipamentos(3, 0)).toBe("3 equipamentos · 0 atendidos");
+    // D14: "começado" e "completo" (antes: "atendido", que contava o começado)
+    expect(resumoEquipamentos(0, 0, 0)).toBe("Nenhum equipamento");
+    expect(resumoEquipamentos(1, 1, 1)).toBe("1 equipamento · 1 começado · 1 completo");
+    expect(resumoEquipamentos(3, 0, 0)).toBe("3 equipamentos · 0 começados · 0 completos");
   });
 });
 

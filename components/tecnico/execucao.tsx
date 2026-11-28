@@ -39,7 +39,7 @@ import { Dica } from "@/components/ui/dica";
 import { InputHora } from "@/components/ui/input-hora";
 import { FaixaAndamento, inicioLocal } from "@/components/tecnico/andamento";
 import { descricaoParaApp } from "@/lib/tecnico/cartao";
-import { detalhesDaOs, linkTelefone, linkWhatsapp, PRIORIDADE_DESTAQUE, resumoEquipamentos } from "@/lib/tecnico/topo-os";
+import { andamentoEquipamentos, contarAndamento, detalhesDaOs, linkTelefone, linkWhatsapp, PRIORIDADE_DESTAQUE, resumoEquipamentos } from "@/lib/tecnico/topo-os";
 import { horarioNoDia, MSG_TERMINO_FORA, situacaoAndamento, sugerirTermino, tempoSuspeito, terminoValido, ultimaDe } from "@/lib/tecnico/andamento";
 import { chaveDiaBR, horaBR } from "@/lib/fuso";
 import { LABELS_PRIORIDADE, formatarMoeda } from "@/lib/utils";
@@ -160,6 +160,8 @@ function ResumoOs({ r, x, fila, aEnviar, registrar, camera, incluir, fim }: { r:
   }
   const st = ROTULO_STATUS_ATIVIDADE[x.atividade.status] ?? { rotulo: x.atividade.status, classe: "bg-surface-linha text-ink" };
   const atendidos = x.equipamentos.filter((e) => e.feito).length;
+  // D14: começados × completos (o começado não é "atendido" enquanto falta algo)
+  const andamentoEq = contarAndamento(x.equipamentos);
   // Topo: o que fazer, contato e rota (1 toque); o dado de escritório vai para "Detalhes"
   const problema = descricaoParaApp(c.descricao, config);
   const rotaVisivel = config.exibirDadosCliente && (!!c.rota || !!c.cliente);
@@ -207,7 +209,7 @@ function ResumoOs({ r, x, fila, aEnviar, registrar, camera, incluir, fim }: { r:
               <p className="text-base text-ink whitespace-pre-line break-words" data-descricao>{problema}</p>
             </div>
           )}
-          <p className="text-sm text-ink inline-flex items-center gap-1.5" data-resumo-equipamentos><HardDrive className="w-4 h-4 text-ink-subtle" /> {resumoEquipamentos(x.equipamentos.length, atendidos)}</p>
+          <p className="text-sm text-ink inline-flex items-center gap-1.5" data-resumo-equipamentos><HardDrive className="w-4 h-4 text-ink-subtle" /> {resumoEquipamentos(x.equipamentos.length, andamentoEq.comecados, andamentoEq.completos)}</p>
           {config.exibirDadosCliente && c.endereco && <p className="text-sm text-ink flex gap-1.5" data-endereco-topo><MapPin className="w-4 h-4 text-ink-subtle shrink-0 mt-0.5" /> {c.endereco}</p>}
         </div>
         {/* Contato e rota: um toque cada (rota depende do endereço do cliente; ligar e WhatsApp, dos contatos) */}
@@ -274,7 +276,7 @@ function ResumoOs({ r, x, fila, aEnviar, registrar, camera, incluir, fim }: { r:
       <section className="space-y-2">
         <div className="flex items-end justify-between">
           <h2 className="text-base font-bold text-ink">Equipamentos</h2>
-          <span className="text-sm text-ink-muted" data-atendidos>{atendidos} de {x.equipamentos.length} atendidos</span>
+          <span className="text-sm text-ink-muted" data-atendidos>{andamentoEquipamentos(andamentoEq.comecados, andamentoEq.completos)} (de {x.equipamentos.length})</span>
         </div>
         {!x.equipamentos.length && <p className="rounded-card bg-white border border-surface-border p-4 text-sm text-ink-muted">Nenhum equipamento nesta OS ainda. Escaneie o QR do equipamento ou escolha na lista da unidade.</p>}
         <ul className="space-y-2">
