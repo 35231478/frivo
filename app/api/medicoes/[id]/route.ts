@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { erroDeValidacao } from "@/lib/forms/erros-server";
 import { travarParaFaturar } from "@/lib/faturamento-os";
 import { calcularRetencoes, retencoesDaMedicao } from "@/lib/financeiro/retencoes";
 import { exigirPermissao } from "@/lib/permissoes-server";
@@ -49,7 +50,7 @@ export async function PUT(req: NextRequest, { params }: Params) {
   const body = await req.json();
   const parsed = medicaoSchema.safeParse(body);
   if (!parsed.success) {
-    return NextResponse.json({ erro: "Dados inválidos", detalhes: parsed.error.flatten() }, { status: 400 });
+    return erroDeValidacao(parsed.error);
   }
   const data = parsed.data;
   // Serviços/produtos do catálogo precisam ser da mesma empresa

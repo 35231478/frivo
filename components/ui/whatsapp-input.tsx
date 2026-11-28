@@ -2,6 +2,7 @@
 
 import { forwardRef } from "react";
 import { cn } from "@/lib/utils";
+import { propsDoCampo, useCampo } from "@/components/ui/campo-contexto";
 import type { InputHTMLAttributes } from "react";
 
 interface WhatsAppInputProps extends InputHTMLAttributes<HTMLInputElement> {
@@ -21,7 +22,8 @@ function WhatsAppIcon({ className }: { className?: string }) {
 }
 
 export const WhatsAppInput = forwardRef<HTMLInputElement, WhatsAppInputProps>(
-  ({ className, error, value, defaultValue, ...props }, ref) => {
+  ({ className, error: errorProp, value, defaultValue, ...props }, ref) => {
+    const { error, ...aria } = propsDoCampo(useCampo(), { error: errorProp, "aria-invalid": props["aria-invalid"], "aria-describedby": props["aria-describedby"] });
     const numero = String(value ?? defaultValue ?? "");
     const tel = limparNumero(numero);
 
@@ -32,6 +34,7 @@ export const WhatsAppInput = forwardRef<HTMLInputElement, WhatsAppInputProps>(
           value={value}
           defaultValue={defaultValue}
           {...props}
+          {...aria}
           className={cn(
             "w-full border rounded-lg px-3 py-2 pr-10 text-sm bg-white transition-colors",
             "focus:outline-none focus:ring-2 focus:ring-acento focus:border-acento",
@@ -57,3 +60,4 @@ export const WhatsAppInput = forwardRef<HTMLInputElement, WhatsAppInputProps>(
   }
 );
 WhatsAppInput.displayName = "WhatsAppInput";
+(WhatsAppInput as unknown as { campoDeFormulario: boolean }).campoDeFormulario = true;

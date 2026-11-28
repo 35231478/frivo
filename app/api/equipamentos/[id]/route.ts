@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { erroDeValidacao } from "@/lib/forms/erros-server";
 import { exigirPermissao } from "@/lib/permissoes-server";
 import { definirAtivoEquipamento } from "@/lib/acoes-massa/regras";
 import { pode } from "@/lib/permissoes";
@@ -41,7 +42,7 @@ export async function PUT(req: NextRequest, { params }: Params) {
   const body = await req.json();
   const parsed = equipamentoSchema.safeParse(body);
   if (!parsed.success) {
-    return NextResponse.json({ erro: "Dados inválidos", detalhes: parsed.error.flatten() }, { status: 400 });
+    return erroDeValidacao(parsed.error);
   }
 
   const unidade = await prisma.unidade.findFirst({ where: { id: parsed.data.unidadeId, empresaId } });

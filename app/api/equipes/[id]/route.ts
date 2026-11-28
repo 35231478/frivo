@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { erroDeValidacao } from "@/lib/forms/erros-server";
 import { z } from "zod";
 import { caixaNome } from "@/lib/texto/zod";
 import { prisma } from "@/lib/prisma";
@@ -42,7 +43,7 @@ export async function PUT(req: NextRequest, { params }: Params) {
 
   const body = await req.json();
   const parsed = equipeSchema.safeParse(body);
-  if (!parsed.success) return NextResponse.json({ erro: "Dados inválidos", detalhes: parsed.error.flatten() }, { status: 400 });
+  if (!parsed.success) return erroDeValidacao(parsed.error);
 
   const { membroIds, veiculoId, veiculoIds, confirmarDesvinculo, liderId, status, ...rest } = parsed.data;
   // Status "Inativa" no formulário = inativar pela MESMA função do botão (impacto/bloqueio, motivo,

@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { erroDeValidacao } from "@/lib/forms/erros-server";
 import { prisma } from "@/lib/prisma";
 import { contaPagarSchema } from "@/lib/validations";
 import { exigirPermissao } from "@/lib/permissoes-server";
@@ -31,7 +32,7 @@ export async function POST(req: NextRequest) {
   const empresaId = guard.session.user.empresaId;
 
   const parsed = contaPagarSchema.safeParse(await req.json());
-  if (!parsed.success) return NextResponse.json({ erro: "Dados inválidos", detalhes: parsed.error.flatten() }, { status: 400 });
+  if (!parsed.success) return erroDeValidacao(parsed.error);
   const d = parsed.data;
 
   if (!d.fornecedorId) return NextResponse.json({ erro: "Escolha o fornecedor (cadastre-o em Financeiro › Fornecedores se ainda não existir)." }, { status: 400 });

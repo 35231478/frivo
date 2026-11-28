@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { erroDeValidacao } from "@/lib/forms/erros-server";
 import { prisma } from "@/lib/prisma";
 import { categoriaParaGravar, centroCustoParaGravar, contaBancariaParaGravar, respostaRefEmpresa } from "@/lib/ref-empresa";
 import { registrarEventoCR } from "@/lib/financeiro/conta-receber-server";
@@ -29,7 +30,7 @@ export async function POST(req: NextRequest) {
   const empresaId = guard.session.user.empresaId;
 
   const parsed = schema.safeParse(await req.json());
-  if (!parsed.success) return NextResponse.json({ erro: "Dados inválidos", detalhes: parsed.error.flatten() }, { status: 400 });
+  if (!parsed.success) return erroDeValidacao(parsed.error);
   const d = parsed.data;
 
   const cliente = await prisma.cliente.findFirst({ where: { id: d.clienteId, empresaId }, select: { cpfCnpj: true } });

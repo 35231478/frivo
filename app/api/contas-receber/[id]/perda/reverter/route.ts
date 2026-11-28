@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { erroDeValidacao } from "@/lib/forms/erros-server";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { exigirPermissao } from "@/lib/permissoes-server";
@@ -28,7 +29,7 @@ export async function POST(req: NextRequest, { params }: Params) {
   const { id } = await params;
   const empresaId = guard.session.user!.empresaId;
   const parsed = schema.safeParse(await req.json().catch(() => ({})));
-  if (!parsed.success) return NextResponse.json({ erro: "Dados inválidos", detalhes: parsed.error.flatten() }, { status: 400 });
+  if (!parsed.success) return erroDeValidacao(parsed.error);
   const d = parsed.data;
   let contaBancaria: Awaited<ReturnType<typeof contaBancariaParaGravar>>;
   try { contaBancaria = await contaBancariaParaGravar(d.contaBancariaId, empresaId); } catch (e) { const r = respostaRefEmpresa(e); if (r) return r; throw e; }

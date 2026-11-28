@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { erroDeValidacao } from "@/lib/forms/erros-server";
 import { Prisma } from "@prisma/client";
 import { auth } from "@/lib/auth";
 import { pode, type Permissoes } from "@/lib/permissoes";
@@ -68,7 +69,7 @@ export async function POST(req: NextRequest) {
   const p = u.permissoes as Permissoes;
   const parsed = pedidoCompraSchema.safeParse(await req.json().catch(() => null));
   if (!parsed.success) {
-    return NextResponse.json({ erro: "Dados inválidos", detalhes: parsed.error.flatten() }, { status: 400 });
+    return erroDeValidacao(parsed.error);
   }
   const data = parsed.data;
   const ordemServicoId = data.ordemServicoId || null;

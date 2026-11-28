@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { erroDeValidacao } from "@/lib/forms/erros-server";
 import { prisma } from "@/lib/prisma";
 import { pagamentoContaPagarSchema } from "@/lib/validations";
 import { exigirPermissao } from "@/lib/permissoes-server";
@@ -29,7 +30,7 @@ export async function POST(req: NextRequest, { params }: Params) {
   if (conta.status === "CANCELADO") return NextResponse.json({ erro: "Conta cancelada" }, { status: 400 });
 
   const parsed = pagamentoContaPagarSchema.safeParse(await req.json());
-  if (!parsed.success) return NextResponse.json({ erro: "Dados inválidos", detalhes: parsed.error.flatten() }, { status: 400 });
+  if (!parsed.success) return erroDeValidacao(parsed.error);
   const d = parsed.data;
 
   await prisma.pagamentoContaPagar.create({

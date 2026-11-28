@@ -5,6 +5,7 @@ import { createContext, useCallback, useContext, useEffect, useId, useRef, useSt
 import { createPortal } from "react-dom";
 import { cn } from "@/lib/utils";
 import { X } from "lucide-react";
+import { IndicadorErroAba } from "@/components/ui/formulario-erros";
 import { abrirCamada, fecharCamada, noTopo, prenderFoco } from "@/components/ui/camadas";
 
 type Icone = React.ComponentType<{ className?: string }>;
@@ -21,6 +22,8 @@ export interface DrawerAba {
   id: string;
   label: string;
   icone?: Icone;
+  /** Erros de formulário nesta aba (ERRO NO CAMPO): ponto vermelho com a contagem */
+  erros?: number;
 }
 
 interface DrawerProps {
@@ -143,6 +146,7 @@ export function Drawer({ aberto, onFechar, titulo, children, largura, rodape, ab
                 )}
               >
                 {t.icone && <t.icone className="w-4 h-4" />} {t.label}
+                {!!t.erros && <IndicadorErroAba n={t.erros} />}
               </button>
             ))}
           </nav>

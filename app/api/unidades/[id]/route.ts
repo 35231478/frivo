@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { erroDeValidacao } from "@/lib/forms/erros-server";
 import { prisma } from "@/lib/prisma";
 import { exigirAlgumaPermissao, exigirPermissao } from "@/lib/permissoes-server";
 import { dadosParciais, unidadeContextoSchema, unidadeSchema } from "@/lib/validations";
@@ -48,7 +49,7 @@ export async function PUT(req: NextRequest, { params }: Params) {
 
   const parsed = unidadeSchema.safeParse(body);
   if (!parsed.success) {
-    return NextResponse.json({ erro: "Dados inválidos", detalhes: parsed.error.flatten() }, { status: 400 });
+    return erroDeValidacao(parsed.error);
   }
 
   // Não permite reatribuir a unidade a outro cliente nesta rota (evita mover entre clientes/tenants)

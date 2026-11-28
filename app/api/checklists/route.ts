@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { erroDeValidacao } from "@/lib/forms/erros-server";
 import { prisma } from "@/lib/prisma";
 import { respostaRefEmpresa, validarRefEmpresa } from "@/lib/ref-empresa";
 import { exigirPermissao } from "@/lib/permissoes-server";
@@ -40,7 +41,7 @@ export async function POST(req: NextRequest) {
 
   const body = await req.json().catch(() => null);
   const parsed = checklistPreenchidoSchema.safeParse(body);
-  if (!parsed.success) return NextResponse.json({ erro: "Dados inválidos", detalhes: parsed.error.flatten() }, { status: 400 });
+  if (!parsed.success) return erroDeValidacao(parsed.error);
 
   const { veiculoId, templateId, observacaoGeral, itens } = parsed.data;
   const colaboradorId = ((body as { colaboradorId?: string }).colaboradorId as string) || null;

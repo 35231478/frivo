@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { erroDeValidacao } from "@/lib/forms/erros-server";
 import { prisma } from "@/lib/prisma";
 import { exigirAlgumaPermissao, exigirPermissao } from "@/lib/permissoes-server";
 import { unidadeSchema } from "@/lib/validations";
@@ -34,7 +35,7 @@ export async function POST(req: NextRequest) {
   const parsed = unidadeSchema.safeParse(body);
 
   if (!parsed.success) {
-    return NextResponse.json({ erro: "Dados inválidos", detalhes: parsed.error.flatten() }, { status: 400 });
+    return erroDeValidacao(parsed.error);
   }
 
   // Garante que o cliente pertence à empresa

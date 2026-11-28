@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { erroDeValidacao, erroNoCampo } from "@/lib/forms/erros-server";
 import { locaisDoClienteNovo } from "@/lib/clientes/endereco-principal";
 import { clienteComMesmoDocumento, erroDocumentoCliente } from "@/lib/clientes/documento-server";
 import { auth } from "@/lib/auth";
@@ -90,14 +91,14 @@ export async function POST(req: NextRequest) {
   const parsed = clienteComUnidadesSchema.safeParse(body);
 
   if (!parsed.success) {
-    return NextResponse.json({ erro: "Dados inválidos", detalhes: parsed.error.flatten() }, { status: 400 });
+    return erroDeValidacao(parsed.error);
   }
 
   // Documento válido de verdade; repetido = os mesmos dígitos, com ou sem pontuação (lib/clientes/documento-server)
   const erroDoc = erroDocumentoCliente(parsed.data.tipoPessoa, parsed.data.cpfCnpj);
-  if (erroDoc) return NextResponse.json({ erro: erroDoc }, { status: 400 });
+  if (erroDoc) return erroNoCampo("cpfCnpj", erroDoc);
   const existente = await clienteComMesmoDocumento(empresaId, parsed.data.cpfCnpj);
-  if (existente) return NextResponse.json({ erro: "CPF/CNPJ já cadastrado" }, { status: 409 });
+  if (existente) return erroNoCampo("cpfCnpj", "CPF/CNPJ já cadastrado", 409);
 
   const { responsavelTecnicoId, unidades, anexos, contatos, ...resto } = parsed.data;
   // Tabela de preço e responsável técnico precisam ser da mesma empresa (tabela: só ativa)
@@ -125,7 +126,7 @@ export async function POST(req: NextRequest) {
   // "Exigir endereço" da empresa vale também aqui, não só na tela: o endereço principal ou um local
   const cfg = await prisma.configuracao.findUnique({ where: { empresaId }, select: { clienteExigirUnidade: true } });
   if (cfg?.clienteExigirUnidade && locais.length === 0)
-    return NextResponse.json({ erro: "Preencha o endereço principal ou adicione um local de atendimento (configuração da empresa)." }, { status: 400 });
+    return erroNoCampo("endereco", "Preencha o endereço principal ou adicione um local de atendimento (configuração da empresa).");
 
   const cliente = await prisma.cliente.create({
     data: {

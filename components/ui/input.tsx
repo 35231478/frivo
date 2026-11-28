@@ -2,6 +2,7 @@ import { cn } from "@/lib/utils";
 import type { FocusEvent, InputHTMLAttributes } from "react";
 import { forwardRef } from "react";
 import { normalizarTexto, type TipoTexto } from "@/lib/texto/normalizar";
+import { propsDoCampo, useCampo } from "@/components/ui/campo-contexto";
 
 interface InputProps extends InputHTMLAttributes<HTMLInputElement> {
   error?: boolean;
@@ -16,7 +17,9 @@ interface InputProps extends InputHTMLAttributes<HTMLInputElement> {
 }
 
 export const Input = forwardRef<HTMLInputElement, InputProps>(
-  ({ className, error, valido, caixa, onBlur, ...props }, ref) => {
+  ({ className, error: errorProp, valido, caixa, onBlur, ...props }, ref) => {
+    // Dentro de um FormField com erro: borda vermelha + aria-invalid + aria-describedby (o explícito ganha)
+    const { error, ...aria } = propsDoCampo(useCampo(), { error: errorProp, "aria-invalid": props["aria-invalid"], "aria-describedby": props["aria-describedby"] });
     const aoSair = (e: FocusEvent<HTMLInputElement>) => {
       if (caixa) {
         const el = e.currentTarget;
@@ -35,6 +38,7 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
       <input
         ref={ref}
         {...props}
+        {...aria}
         onBlur={aoSair}
         className={cn(
           "w-full bg-white border rounded-lg px-3 py-2.5 text-sm text-ink transition-colors",
@@ -53,3 +57,4 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
   }
 );
 Input.displayName = "Input";
+(Input as unknown as { campoDeFormulario: boolean }).campoDeFormulario = true;

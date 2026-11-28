@@ -20,7 +20,7 @@ export const DICA_CEP = {
  * cadastro rápido). Completou os 8 dígitos, consulta (lib/cep: ViaCEP com reserva, com prazo) e devolve o endereço em
  * `onEndereco`; a tela decide o que preencher. Fora do ar ou CEP inexistente: diz e deixa a pessoa digitar.
  */
-export function CampoCep({ valor, onValor, onEndereco, required, label = "CEP", className, dataCampo = "cep", erro }: {
+export function CampoCep({ valor, onValor, onEndereco, required, label = "CEP", className, dataCampo = "cep", erro, nome }: {
   valor: string;
   onValor: (v: string) => void;
   onEndereco: (e: EnderecoCep) => void;
@@ -29,6 +29,8 @@ export function CampoCep({ valor, onValor, onEndereco, required, label = "CEP", 
   className?: string;
   dataCampo?: string;
   erro?: string;
+  /** O nome do campo no formulário (ERRO NO CAMPO): o erro do servidor/do salvar cai aqui */
+  nome?: string;
 }) {
   const [situacao, setSituacao] = useState<keyof typeof DICA_CEP>("inicial");
   const digitosDe = (v: string) => v.replace(/\D/g, "");
@@ -51,7 +53,7 @@ export function CampoCep({ valor, onValor, onEndereco, required, label = "CEP", 
   }
 
   return (
-    <FormField label={label} required={required} hint={DICA_CEP[situacao]} error={erro} className={className}>
+    <FormField label={label} required={required} hint={DICA_CEP[situacao]} error={erro} className={className} name={nome} formato="cep">
       <div className="relative max-w-[220px]">
         <Input
           value={formatarCep(valor)} inputMode="numeric" placeholder="00000-000" autoComplete="postal-code" maxLength={9}

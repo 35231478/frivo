@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { erroDeValidacao } from "@/lib/forms/erros-server";
 import { prisma } from "@/lib/prisma";
 import { exigirPermissao } from "@/lib/permissoes-server";
 import { Prisma } from "@prisma/client";
@@ -20,7 +21,7 @@ export async function PUT(req: NextRequest, { params }: Params) {
 
   // Só os campos do formulário (empresaId e afins do corpo são descartados) e edição parcial
   const parsed = formularioEditarSchema.safeParse(await req.json().catch(() => null));
-  if (!parsed.success) return NextResponse.json({ erro: "Dados inválidos", detalhes: parsed.error.flatten() }, { status: 400 });
+  if (!parsed.success) return erroDeValidacao(parsed.error);
   const { campos, tipoOsId, ...resto } = parsed.data;
   try { await validarRefEmpresa("tipoOs", tipoOsId, empresaId, "Tipo de OS"); }
   catch (e) { const r = respostaRefEmpresa(e); if (r) return r; throw e; }

@@ -2,11 +2,14 @@
 
 import { useState } from "react";
 import { cn } from "@/lib/utils";
+import { IndicadorErroAba } from "@/components/ui/formulario-erros";
 
 interface Tab {
   id: string;
   label: string;
   badge?: number;
+  /** Erros de formulário nesta aba (ERRO NO CAMPO): ponto vermelho com a contagem */
+  erros?: number;
 }
 
 interface TabsProps {
@@ -55,6 +58,7 @@ export function Tabs({ tabs, defaultTab, active: ativaControlada, onChange, chil
                   {tab.badge}
                 </span>
               )}
+              {!!tab.erros && <span className="ml-1.5 align-middle"><IndicadorErroAba n={tab.erros} /></span>}
             </button>
           ))}
         </nav>

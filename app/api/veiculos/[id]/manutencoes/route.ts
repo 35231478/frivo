@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { erroDeValidacao } from "@/lib/forms/erros-server";
 import { exigirPermissao } from "@/lib/permissoes-server";
 import { prisma } from "@/lib/prisma";
 import { veiculoManutencaoSchema } from "@/lib/validations";
@@ -18,7 +19,7 @@ export async function POST(req: NextRequest, { params }: Params) {
 
   const body = await req.json();
   const parsed = veiculoManutencaoSchema.safeParse(body);
-  if (!parsed.success) return NextResponse.json({ erro: "Dados inválidos", detalhes: parsed.error.flatten() }, { status: 400 });
+  if (!parsed.success) return erroDeValidacao(parsed.error);
 
   const { dataRealizacao, proximaData, anexoUrl, ...rest } = parsed.data;
 
