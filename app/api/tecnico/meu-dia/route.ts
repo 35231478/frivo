@@ -15,7 +15,7 @@ import { noticiaDoOutro, registrarNoticia, saidasDoDia } from "@/lib/tecnico/sai
  * dia, e por quê); os cabeçalhos do aparelho (id e quantas gravações tem na fila) → `outroAparelho` (D11: o outro
  * aparelho deu notícia de gravação sem enviar).
  */
-export async function GET(req?: NextRequest) {
+export async function GET(req: NextRequest) {
   const guard = await exigirPermissao("ordens", "visualizar");
   if (guard.erro) return guard.resposta;
   const tecnico = await tecnicoDaSessao(guard.session);
