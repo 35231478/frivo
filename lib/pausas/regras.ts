@@ -105,3 +105,21 @@ export const podeEncerrarNaoConcluida = (p: { fim: Date | string | null; impedim
 /** O texto que vai para os equipamentos não feitos (o mesmo "não atendido" de sempre) e para o histórico da OS */
 export const textoNaoConcluida = (motivo: string, observacao?: string | null) =>
   `Não concluída — precisa voltar: ${motivo}${observacao?.trim() ? ` (${observacao.trim()})` : ""}`;
+
+type PausaCartao = { clientId: string; motivo: string; inicio: string; impedimento: boolean };
+type OpPausa = { tipo: string; atividadeId: string; em?: string | null; criadoEm: string; dados?: unknown };
+/**
+ * A pausa que o cartão do Meu dia mostra: a do servidor, corrigida pelo que está na fila deste aparelho (pausou ou
+ * retomou sem sinal), na ordem em que o técnico tocou.
+ */
+export function pausaDoCartao(atividadeId: string, doServidor: PausaCartao | null | undefined, fila: readonly OpPausa[]): PausaCartao | null {
+  let p: PausaCartao | null = doServidor ?? null;
+  for (const op of fila) {
+    if (op.atividadeId !== atividadeId) continue;
+    const d = (op.dados ?? {}) as Record<string, unknown>;
+    if (op.tipo === "pausar" && !p) p = { clientId: String(d.clientId), motivo: String(d.motivo), inicio: op.em ?? op.criadoEm, impedimento: d.impedimento === true };
+    else if ((op.tipo === "retomar" || op.tipo === "naoConcluida") && p?.clientId === d.pausaClientId) p = null;
+    else if (op.tipo === "concluir") p = null;
+  }
+  return p;
+}

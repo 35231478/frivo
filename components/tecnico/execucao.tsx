@@ -38,6 +38,7 @@ import type { AdicionalTela, EquipamentoTela, ExecucaoTela, FotoServicoTela, Nov
 import { Dica } from "@/components/ui/dica";
 import { InputHora } from "@/components/ui/input-hora";
 import { FaixaAndamento, inicioLocal } from "@/components/tecnico/andamento";
+import { BotaoPausar, FaixaPausa } from "@/components/tecnico/pausa";
 import { descricaoParaApp } from "@/lib/tecnico/cartao";
 import { detalhesDaOs, linkTelefone, linkWhatsapp, PRIORIDADE_DESTAQUE, resumoEquipamentos } from "@/lib/tecnico/topo-os";
 import { horarioNoDia, MSG_TERMINO_FORA, situacaoAndamento, sugerirTermino, tempoSuspeito, terminoValido, ultimaDe } from "@/lib/tecnico/andamento";
@@ -187,7 +188,9 @@ function ResumoOs({ r, x, fila, aEnviar, registrar, camera, incluir, fim }: { r:
     <div className="space-y-4 pb-32" data-vista="os">
       <Voltar />
       {/* Atividade esquecida em andamento: o aviso fica no topo até concluir */}
-      <FaixaAndamento s={andamento} />
+      {/* D1: pausada, o aviso de "esquecida" não vale (o relógio está parado); a faixa da pausa manda */}
+      {!x.pausa && <FaixaAndamento s={andamento} />}
+      <FaixaPausa x={x} registrar={registrar} />
       <header className="bg-white rounded-card border border-surface-border overflow-hidden" data-topo-os>
         <div className="p-4 space-y-2">
           <div className="flex items-center justify-between gap-2">
@@ -238,6 +241,7 @@ function ResumoOs({ r, x, fila, aEnviar, registrar, camera, incluir, fim }: { r:
           </details>
         )}
       </header>
+      {!so && <BotaoPausar r={r} x={x} registrar={registrar} />}
 
       <ChegadaNaOs r={r} x={x} />
 
@@ -350,7 +354,8 @@ function ResumoOs({ r, x, fila, aEnviar, registrar, camera, incluir, fim }: { r:
         )}
       </section>
 
-      {!so && (
+      {/* Pausada: a ação é "Retomar" (na faixa do topo); concluir volta depois de retomar */}
+      {!so && !x.pausa && (
         <div className="fixed inset-x-0 bottom-[calc(4rem+env(safe-area-inset-bottom))] z-20 px-4 pb-2 pt-2 bg-surface-page/95 backdrop-blur border-t border-surface-border">
           <button type="button" data-concluir-atividade onClick={() => {
             // Foto sem equipamento não fica para trás: concluir espera a conferência

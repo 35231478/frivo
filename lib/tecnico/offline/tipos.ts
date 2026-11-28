@@ -22,6 +22,8 @@ export interface CartaoTela {
   status: string; prioridade: string; dataAgendada: string | null; dia: string | null; hora: string | null; duracaoMin: number | null;
   cliente: string; telefone: string | null; unidade: string | null; endereco: string; rota: string | null; descricao: string;
   equipamentos: number; atendidos: number; adicionais: number;
+  /** D1: a pausa aberta (null = em execução); ausente em listas antigas */
+  pausa?: { clientId: string; motivo: string; inicio: string; impedimento: boolean } | null;
   /** A OS veio de um chamado do cliente: a descrição é o que ele pediu. Ausente em listas antigas */
   chamado?: boolean;
   /** O cliente exige o pedido dele antes da execução e ele não veio (lib/pedido-cliente). Ausente em listas antigas */
