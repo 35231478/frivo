@@ -26,7 +26,7 @@ export default async function PortalPedidosCompra() {
       </div>
       <PedidoCompraPortal
         itens={itens.map((i) => ({ ...i, concluidoEm: i.concluidoEm?.toISOString() ?? null, ultimoLembrete: undefined }))}
-        enviados={enviados.map((p) => ({ id: p.id, numero: p.numero, data: p.data.toISOString(), valor: p.valor, situacao: p.situacao, motivoRecusa: p.motivoRecusa, enviadoEm: p.enviadoEm.toISOString(), itens: p.itens }))}
+        enviados={enviados.map((p) => ({ id: p.id, numero: p.numero, data: p.data.toISOString(), valor: p.valor, situacao: p.situacao, motivoRecusa: p.motivoRecusa, enviadoEm: p.enviadoEm.toISOString(), itens: p.itens, chaves: p.chaves, anexoNome: p.anexoNome }))}
       />
     </div>
   );

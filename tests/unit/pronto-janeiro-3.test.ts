@@ -124,6 +124,9 @@ describe("as ligações (cada tela usa a peça certa)", async () => {
     expect(s).toContain("const semPreco = (i.valorManual && comMateriais) || (naTabela(i) && !podeAlterarPrecoTabela);");
     expect(s).toContain('origemPreco: naTabela(i) ? "contrato" : undefined,');
   });
+  it("portal › Pedido de compra: a página repassa as chaves (o aviso de recusa enquanto espera) e o nome do arquivo (o link)", () => {
+    expect(ler("app/(portal)/portal/(protegido)/pedidos-compra/page.tsx")).toContain("itens: p.itens, chaves: p.chaves, anexoNome: p.anexoNome }");
+  });
   it("Cliente › Portal: liberar um contato liga a chave \"Portal ativo\" da ficha", () => {
     expect(ler("components/forms/cliente-form.tsx")).toContain("onAcessoLiberado={() => setPortalAtivo(true)}");
   });

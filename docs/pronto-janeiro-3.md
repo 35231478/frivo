@@ -152,6 +152,19 @@ CRON_SECRET=teste-local npx next start -p 3000
 curl -s -H "Authorization: Bearer teste-local" http://localhost:3000/api/cron/lembretes-pedido
 ```
 
+**Rodado localmente nesta varredura.** Sem o segredo, a rota respondeu `401`. Com o segredo, respondeu `{"ok":true,"clientes":1,"enviados":0,"itens":0,"erros":1,"pulados":0}`. O "erros: 1" é a empresa fictícia sem e-mail configurado: nada sai, e a rotina tenta de novo no dia seguinte.
+
+## Prints (dados fictícios)
+
+Em `docs/prints/pronto-janeiro-3/` (`antes-*` e `depois-*`, cada um em `-desktop` e `-celular`):
+- `empresas`: antes, a linha sem ação nenhuma; depois, Inativar/Reativar e, no celular, os cartões;
+- `cliente-portal`: o selo "Aguardando 1º acesso";
+- `os-conferir`: a lista que o sino abre. Antes, sem o filtro visível e com a OS já resolvida; depois, o chip "Pedido recebido — conferir" e só a OS que espera;
+- `pendencias`: a contagem de pedidos para conferir;
+- `portal-pedido`: antes, a recusa de um serviço já resolvido no topo; depois, só a recusa do que ainda espera.
+
+Também ficaram os da jornada do cliente novo: `antes-empresas-*` e `antes-primeiro-acesso-*`.
+
 ## Para o Zé decidir
 
 1. **Nova senha do 1º administrador pelo super admin.** Hoje, se o admin perde a senha inicial, não há saída: o "Esqueci minha senha" usa o e-mail da própria empresa, e a empresa nova nasce sem e-mail configurado. Isso dá ao super admin um poder dentro da empresa.
