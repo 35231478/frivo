@@ -2,8 +2,10 @@
 
 import { useEffect, useMemo, useState } from "react";
 import {
+  AlertCircle,
   ArrowLeft, Camera, CheckCircle2, ChevronRight, CircleDashed, ClipboardCheck, HardDrive, ListPlus, Loader2, MapPin, MessageCircle, Pencil, Phone, Plus, QrCode, Search, Sparkles, Trash2, WifiOff,
 } from "lucide-react";
+import { faixaSomenteLeitura } from "@/lib/tecnico/somente-leitura";
 import { cn } from "@/lib/utils";
 import { Modal } from "@/components/ui/modal";
 import { confirmar, toast } from "@/components/ui/avisos";
@@ -258,7 +260,11 @@ function ResumoOs({ r, x, fila, aEnviar, registrar, camera, incluir, fim }: { r:
       )}
 
       {aEnviar > 0 && <p className="rounded-card bg-atencao-claro border border-atencao/20 px-3 py-2 text-sm text-atencao-texto" data-a-enviar>{aEnviar === 1 ? "1 gravação" : `${aEnviar} gravações`} desta OS no aparelho — sobe sozinho quando houver sinal.</p>}
-      {so && <p className="rounded-card bg-success-50 border border-success-200 px-3 py-2 text-sm text-success-800 inline-flex items-center gap-2 w-full"><CheckCircle2 className="w-4 h-4" /> Atividade concluída{aEnviar ? " no aparelho (a enviar)" : ""}. Só leitura.</p>}
+      {so && (() => {
+        const f = faixaSomenteLeitura(x.atividade.status, aEnviar);
+        return <p className={cn("rounded-card border px-3 py-2 text-sm inline-flex items-center gap-2 w-full", f.tom === "ok" ? "bg-success-50 border-success-200 text-success-800" : "bg-atencao-claro border-atencao/20 text-atencao-texto")} data-somente-leitura-faixa={f.tom}>
+          {f.tom === "ok" ? <CheckCircle2 className="w-4 h-4 shrink-0" /> : <AlertCircle className="w-4 h-4 shrink-0" />} {f.texto}</p>;
+      })()}
       {/* Concluiu a atividade que fecha a OS: é a hora do aceite do cliente (assina aqui ou recebe o link) */}
       <AceiteNaOs r={r} x={x} aEnviar={aEnviar} registrar={registrar} />
       {/* Concluída: o relatório da visita ao cliente, pelo WhatsApp (espera a conclusão subir) */}
@@ -466,7 +472,7 @@ function FotosServico({ x, so, onAdicionar, registrar }: { x: ExecucaoTela; so: 
         <ul className="space-y-2">
           {fotos.map((f, i) => (
             <li key={f.clientId ?? f.id ?? i} className="rounded-card border border-surface-border bg-white p-2.5 flex gap-3 items-center" data-foto-servico>
-              <Miniatura src={srcFotoServico(x.os.id, f)} alt={f.legenda ?? `foto ${i + 1}`} pendente={f.pendente} onRemover={so ? undefined : () => remover(f)} />
+              <Miniatura src={srcFotoServico(x.os.id, f)} alt={f.legenda ?? `foto ${i + 1}`} pendente={f.pendente} onRemover={so ? undefined : () => remover(f)} jaConfirma />
               {editando === chaveDe(f) ? (
                 <span className="min-w-0 flex-1 space-y-2">
                   <input value={texto} onChange={(e) => setTexto(e.target.value)} maxLength={LEGENDA_MAX} aria-label="Legenda da foto" data-legenda-editar autoFocus

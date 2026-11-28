@@ -133,7 +133,9 @@ describe("checklist de veículo — as regras (tela e rota usam as mesmas)", () 
     expect(itemGeraAlerta(item("a", { tipo: "TEXTO" }), "qualquer coisa")).toBe(false);
     expect(itemGeraAlerta(item("a", { tipo: "FOTO" }), "NOK")).toBe(false);
     expect(itemGeraAlerta(item("a", { tipo: "FOTO", opcoes: [] }), "x")).toBe(false);
-    expect(itemGeraAlerta(item("a", { opcoes: [] }), "NOK")).toBe(false);
+    // Janeiro: item de opção salvo sem opções vale "OK, NOK" (antes não tinha botão e prendia o técnico) — NOK alerta
+    expect(itemGeraAlerta(item("a", { opcoes: [] }), "NOK")).toBe(true);
+    expect(itemGeraAlerta(item("a", { opcoes: [] }), "OK")).toBe(false);
   });
 
   it("situação: um alerta basta para 'Com alertas'; sem nenhum, 'Concluído'", () => {

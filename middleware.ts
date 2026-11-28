@@ -5,6 +5,7 @@ import { authConfig } from "@/auth.config";
 import { destinoSemPermissao, portaoBarra } from "@/lib/permissoes";
 import { apagarCookiesDaSessao, loginAposEncerrar, semCookieDaSessao } from "@/lib/acesso/cookie-sessao";
 import { ROTA_TECNICO, destinoModoTecnico, emModoTecnico } from "@/lib/tecnico/modo";
+import { MSG_SESSAO_EXPIRADA_API, semSessao } from "@/lib/acesso/sem-sessao";
 import { MENSAGEM_TROCA_PENDENTE, decisaoDaTroca, trocaPendente } from "@/lib/acesso/troca-obrigatoria";
 
 // Instância leve do Auth.js (sem provider/bcrypt/Prisma) — apenas lê e verifica o
@@ -60,8 +61,12 @@ const portao = auth(function middleware(req: NextRequest & { auth: any }) {
   const ehRotaPublica = rotasPublicasExatas.includes(pathname) || rotasPublicas.some((rota) => pathname.startsWith(rota));
 
   if (!req.auth && !ehRotaPublica) {
+    // App do técnico: a API responde 401 (o app avisa "Entre de novo" e guarda a fila); a página explica o porquê
+    const sem = semSessao(pathname);
+    if (sem.tipo === "api") return NextResponse.json({ erro: MSG_SESSAO_EXPIRADA_API }, { status: 401 });
     const loginUrl = new URL("/login", req.url);
     loginUrl.searchParams.set("callbackUrl", pathname);
+    if (sem.motivo) loginUrl.searchParams.set("motivo", sem.motivo);
     return NextResponse.redirect(loginUrl);
   }
 

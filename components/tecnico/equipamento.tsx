@@ -3,6 +3,7 @@
 import { ROTULO_SITUACAO_APP, comissoesDaTela, type ComissaoRetrato } from "@/lib/tecnico/comissao";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AlertTriangle, ArrowLeft, ArrowRight, Camera, Check, CheckCheck, ChevronLeft, ChevronRight, CircleSlash, ClipboardList, Ruler } from "lucide-react";
+import { faixaSomenteLeitura } from "@/lib/tecnico/somente-leitura";
 import { cn, formatarMoeda } from "@/lib/utils";
 import { Modal } from "@/components/ui/modal";
 import { Dica } from "@/components/ui/dica";
@@ -16,7 +17,7 @@ import { novoClientId } from "@/lib/tecnico/offline/motor";
 import { proximoEquipamento } from "@/lib/tecnico/offline/estado";
 import { UNIDADES_SUGERIDAS } from "@/lib/checklist/tipo";
 import { avaliarFaixa, avisoFaixa, ehCalculada, faixaNaUnidade, GRANDEZA, grandezaDoItem, textoFaixa } from "@/lib/checklist/faixas";
-import { listaCurta, respondido, type StatusItem } from "@/lib/execucao/pendencias";
+import { listaCurta, progressoDoChecklist, type StatusItem } from "@/lib/execucao/pendencias";
 import type { EquipamentoTela, ExecucaoTela, FotoTela, ItemTela, NovaOperacao, RespostaTela } from "@/lib/tecnico/offline/tipos";
 
 export const srcFoto = (f: { id: string | null; local?: string }) => f.local ?? `/api/fotos-atendimento/${f.id}`;
@@ -65,7 +66,7 @@ export function TelaEquipamento({ x, e, registrar, endereco, qr, comissao }: Pro
   const topo = useRef<HTMLDivElement>(null);
 
   const ativos = e.itens.filter((i) => i.ativo);
-  const feitos = ativos.filter((i) => respondido(i, e.respostas[i.id])).length;
+  const { feitos, total: totalItens } = progressoDoChecklist(e.itens, e.respostas);
   const semResposta = ativos.filter((i) => i.tipoResposta === "OK_ATENCAO_NA" && !e.respostas[i.id]?.status).length;
   const fotosDe = (itemId: string | null, momento: "ANTES" | "DEPOIS" | null) => e.fotos.filter((f) => f.itemId === itemId && (itemId ? true : f.momento === momento));
   const faltando = useMemo(() => new Set([...e.faltas.semResposta, ...e.faltas.semFoto, ...e.faltas.semObservacao]), [e.faltas]);
@@ -196,9 +197,9 @@ export function TelaEquipamento({ x, e, registrar, endereco, qr, comissao }: Pro
         {e.pendente && !e.vinculoId && <p className="text-xs text-atencao-texto" data-equipamento-no-aparelho>No aparelho: sobe sozinho quando houver sinal.</p>}
         <div className="flex items-center gap-2">
           <div className="h-2.5 flex-1 rounded-full bg-surface-page overflow-hidden">
-            <div className={cn("h-full rounded-full transition-all", e.completo ? "bg-success-500" : "bg-primary-500")} style={{ width: `${ativos.length ? (feitos / ativos.length) * 100 : 0}%` }} />
+            <div className={cn("h-full rounded-full transition-all", e.completo ? "bg-success-500" : "bg-primary-500")} style={{ width: `${totalItens ? (feitos / totalItens) * 100 : 0}%` }} />
           </div>
-          <span className="text-xs font-semibold text-ink-muted" data-progresso>{feitos} de {ativos.length}</span>
+          <span className="text-xs font-semibold text-ink-muted" data-progresso>{feitos} de {totalItens}</span>
           {/* G11: o número sozinho não diz O QUE está sendo contado (na dica: a tela fica curta, o TUDO OK sob o dedão) */}
           <Dica rotulo="Progresso" texto="Itens do checklist e medições respondidos. Fotos e observações pedidas contam à parte." lado="direita" />
         </div>
@@ -213,7 +214,10 @@ export function TelaEquipamento({ x, e, registrar, endereco, qr, comissao }: Pro
         })()}
       </header>
 
-      {so && <p className="rounded-card bg-success-50 border border-success-200 p-3 text-sm text-success-800">Atividade concluída: só leitura.</p>}
+      {so && (() => {
+        const f = faixaSomenteLeitura(x.atividade.status);
+        return <p className={cn("rounded-card border p-3 text-sm", f.tom === "ok" ? "bg-success-50 border-success-200 text-success-800" : "bg-atencao-claro border-atencao/20 text-atencao-texto")} data-somente-leitura-faixa={f.tom}>{f.texto}</p>;
+      })()}
       {mostrarFaltas && !e.completo && (
         <div className="rounded-card bg-atrasado-claro border border-atrasado/20 p-3 text-sm text-atrasado-texto" role="alert" data-faltas>
           <p className="font-semibold">Para concluir este equipamento, falta:</p>

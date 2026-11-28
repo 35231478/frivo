@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { SincronizarPush } from "@/components/push/sincronizar-push";
 import { CalendarDays, Loader2, MessageCircle, Sun, Trophy, UserRound } from "lucide-react";
 import { Avisos, toast } from "@/components/ui/avisos";
@@ -68,6 +68,15 @@ function Casca({ perfilInicial, resumoPorteiro }: { perfilInicial: PerfilInicial
   const nav = usuario.desempenho ? [NAV[0], NAV[1], NAV[2], NAV_DESEMPENHO, NAV[3]] : NAV;
   // O contador do Chat acompanha em tempo real em qualquer vista (o mesmo laço de novidades que a conversa assina)
   const naoLidas = useNaoLidasChat();
+
+  // Enquanto o checklist do veículo está na tela, o dia já desce (e fica no aparelho): quem abriu o app com sinal e
+  // fez o checklist na garagem sem sinal não fica com o Meu dia vazio ("Sem sinal e nada guardado ainda")
+  const adiantou = useRef(false);
+  useEffect(() => {
+    if (!travadoPorteiro || !motor || adiantou.current) return;
+    adiantou.current = true;
+    void motor.baixarLista("meuDia", "/api/tecnico/meu-dia").catch(() => { /* sem sinal: o Meu dia tenta de novo ao abrir */ });
+  }, [travadoPorteiro, motor]);
 
   // G12/UX-3: quem clicou num link do escritório foi trazido para cá — avisa em vez de só "piscar"
   useEffect(() => {
@@ -139,7 +148,7 @@ function Casca({ perfilInicial, resumoPorteiro }: { perfilInicial: PerfilInicial
 function Conteudo({ vista, perfilInicial }: { vista: Vista; perfilInicial: PerfilInicial }) {
   switch (vista.ver) {
     case "agenda": return <Agenda />;
-    case "perfil": return <PerfilTecnico perfilInicial={perfilInicial} />;
+    case "perfil": return <PerfilTecnico key={vista.sec ?? "perfil"} perfilInicial={perfilInicial} abrirComissoes={vista.sec === "comissoes"} />;
     case "desempenho": return <DesempenhoTecnico />;
     case "os": return <VistaOs key={vista.a} atividadeId={vista.a} equipamentoId={vista.e} camera={vista.cam} incluir={vista.inc} fim={vista.fim} primeiro={vista.primeiro} />;
     case "equipamento": return <VistaFichaEquipamento key={vista.q} valor={vista.q} />;
