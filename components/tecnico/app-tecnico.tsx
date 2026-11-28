@@ -29,7 +29,7 @@ type PerfilInicial = React.ComponentProps<typeof PerfilClient>["initial"];
 const NAV = [
   { ver: "dia" as const, rotulo: "Meu dia", Icone: Sun },
   { ver: "agenda" as const, rotulo: "Agenda", Icone: CalendarDays },
-  /** CHAT-1: as conversas (uma por OS) com o escritório, com o contador de não lidas */
+  /** CHAT-1: a conversa com o Escritório, com o contador de não lidas */
   { ver: "chat" as const, rotulo: "Chat", Icone: MessageCircle },
   { ver: "perfil" as const, rotulo: "Perfil", Icone: UserRound },
 ];
@@ -66,7 +66,7 @@ function Casca({ perfilInicial, resumoPorteiro }: { perfilInicial: PerfilInicial
   const porteiro = usePorteiro(resumoPorteiro);
   const travadoPorteiro = !travadoLoc && !!resumoPorteiro && (porteiro.aberto || porteiro.carregando);
   const nav = usuario.desempenho ? [NAV[0], NAV[1], NAV[2], NAV_DESEMPENHO, NAV[3]] : NAV;
-  // O contador do Chat acompanha em tempo real em qualquer vista (a mesma lista que a tela Chat lê)
+  // O contador do Chat acompanha em tempo real em qualquer vista (o mesmo laço de novidades que a conversa assina)
   const naoLidas = useNaoLidasChat();
 
   // G12/UX-3: quem clicou num link do escritório foi trazido para cá — avisa em vez de só "piscar"
@@ -144,7 +144,7 @@ function Conteudo({ vista, perfilInicial }: { vista: Vista; perfilInicial: Perfi
     case "os": return <VistaOs key={vista.a} atividadeId={vista.a} equipamentoId={vista.e} camera={vista.cam} incluir={vista.inc} fim={vista.fim} primeiro={vista.primeiro} />;
     case "equipamento": return <VistaFichaEquipamento key={vista.q} valor={vista.q} />;
     case "despesas": return <VistaDespesas />;
-    case "chat": return <VistaChat os={vista.os} />;
+    case "chat": return <VistaChat />;
     default: return <MeuDia />;
   }
 }
