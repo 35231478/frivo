@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
+import { SincronizarPush } from "@/components/push/sincronizar-push";
 import { CalendarDays, Loader2, Sun, Trophy, UserRound } from "lucide-react";
 import { Avisos, toast } from "@/components/ui/avisos";
 import { cn } from "@/lib/utils";
@@ -44,6 +45,8 @@ export function AppTecnico({ usuario, config, perfilInicial, porteiro = null }: 
 }) {
   return (
     <ProvedorTecnico usuario={usuario} config={config}>
+      {/* Hotfix push: refaz a inscrição feita com outra chave e devolve ao servidor a que ele apagou (sem pedir nada) */}
+      <SincronizarPush />
       <Casca perfilInicial={perfilInicial} resumoPorteiro={porteiro} />
     </ProvedorTecnico>
   );

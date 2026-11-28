@@ -161,8 +161,11 @@ describe.skipIf(!URL_PG)("push (PostgreSQL real)", () => {
     h.falhar = { "https://push.exemplo/rosa-velho": 410, "https://push.exemplo/rosa-instavel": 503 };
     const { enviarPush } = await import("@/lib/push/servidor");
     const r = await enviarPush({ empresaId: "e1", tipo: "TESTE", alcance: "pessoal", usuarios: ["uRosa"], chave: "t1", mensagem: { titulo: "Teste", corpo: "", url: "/", tag: "t" } });
-    expect(r.enviados).toEqual([{ usuarioId: "uRosa", aparelhos: 1 }]);
+    // hotfix push: o envio diz também em quantos aparelhos o serviço de push recusou
+    expect(r.enviados).toEqual([{ usuarioId: "uRosa", aparelhos: 1, falhas: 2 }]);
     expect(await prisma.pushSubscription.findUnique({ where: { id: "rosa-velho" } })).toBeNull();
+    const envio1 = await prisma.pushEnvio.findFirst({ where: { chave: "t1" } });
+    expect([envio1.aparelhos, envio1.falhas, (envio1.resultados as any[]).map((x) => [x.aparelho, x.ok, x.status]).sort()]).toEqual([1, 2, [["rosa", true, 201], ["rosa-instavel", false, 503], ["rosa-velho", false, 410]]]);
     expect((await prisma.pushSubscription.findUnique({ where: { id: "rosa-instavel" } })).falhas).toBe(4);
     expect((await prisma.pushSubscription.findUnique({ where: { id: "rosa" } })).ultimoEnvioEm).not.toBeNull();
     await enviarPush({ empresaId: "e1", tipo: "TESTE", alcance: "pessoal", usuarios: ["uRosa"], chave: "t2", mensagem: { titulo: "Teste", corpo: "", url: "/", tag: "t" } });
