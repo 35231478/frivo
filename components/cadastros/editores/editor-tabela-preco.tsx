@@ -47,6 +47,7 @@ function paraEdicao(itens: unknown): ItemEdit[] {
  */
 export function EditorTabelaPreco({ item, aberto, onFechar, onSalvo }: EditorCadastroProps) {
   const [catalogo, setCatalogo] = useState<CatalogoItem[]>([]);
+  const [erroCatalogo, setErroCatalogo] = useState(false);
   const [nome, setNome] = useState("");
   const [descricao, setDescricao] = useState("");
   const [tipo, setTipo] = useState("PERSONALIZADA");
@@ -77,9 +78,12 @@ export function EditorTabelaPreco({ item, aberto, onFechar, onSalvo }: EditorCad
   useEffect(() => {
     if (!aberto || catalogo.length) return;
     // Catálogo para ADICIONAR itens: só ativos (itens já na tabela trazem os próprios dados, mesmo inativos)
+    // Falhou carregar (sessão, servidor, conexão): o seletor diz isso, em vez de "nada para adicionar"
+    const lista = (url: string) => fetch(url).then((r) => (r.ok ? r.json() : Promise.reject())).catch(() => { setErroCatalogo(true); return []; });
+    setErroCatalogo(false);
     Promise.all([
-      fetch("/api/cadastros/servicos?ativo=sim").then((r) => r.json()).catch(() => []),
-      fetch("/api/cadastros/produtos?ativo=sim").then((r) => r.json()).catch(() => []),
+      lista("/api/cadastros/servicos?ativo=sim"),
+      lista("/api/cadastros/produtos?ativo=sim"),
     ]).then(([s, p]) => setCatalogo([
       ...(Array.isArray(s) ? s : []).map((x: any) => ({ id: x.id, nome: x.nome, codigo: x.codigo ?? null, valorPadrao: x.valorPadrao ? Number(x.valorPadrao) : 0, kind: "SERVICO" as const })),
       ...(Array.isArray(p) ? p : []).map((x: any) => ({ id: x.id, nome: x.nome, codigo: x.codigo ?? null, valorPadrao: x.valorPadrao ? Number(x.valorPadrao) : 0, kind: "PRODUTO" as const })),
@@ -145,7 +149,7 @@ export function EditorTabelaPreco({ item, aberto, onFechar, onSalvo }: EditorCad
 
         <div>
           <h5 className="text-xs font-bold text-ink-muted uppercase tracking-wider mb-2">Itens da tabela</h5>
-          <SeletorCatalogo catalogo={catalogo} jaAdicionados={itens.map((i) => i.catalogoId)} onAdicionar={adicionarDoCatalogo} />
+          <SeletorCatalogo catalogo={catalogo} erroCatalogo={erroCatalogo} jaAdicionados={itens.map((i) => i.catalogoId)} onAdicionar={adicionarDoCatalogo} />
 
           <div className="space-y-2 mt-3">
             {carregando && <p className="text-sm text-ink-subtle text-center py-4">Carregando itens…</p>}
@@ -193,7 +197,7 @@ export function EditorTabelaPreco({ item, aberto, onFechar, onSalvo }: EditorCad
  * Escolher serviços e produtos para a tabela: busca + tipo, uma caixa por linha e "Selecionar todos" do filtro
  * atual; "Adicionar selecionados" põe todos de uma vez (lib/tabela-preco-selecao).
  */
-function SeletorCatalogo({ catalogo, jaAdicionados, onAdicionar }: { catalogo: CatalogoItem[]; jaAdicionados: string[]; onAdicionar: (cs: CatalogoItem[]) => void }) {
+function SeletorCatalogo({ catalogo, erroCatalogo = false, jaAdicionados, onAdicionar }: { catalogo: CatalogoItem[]; erroCatalogo?: boolean; jaAdicionados: string[]; onAdicionar: (cs: CatalogoItem[]) => void }) {
   const [q, setQ] = useState("");
   const [tipo, setTipo] = useState<FiltroTipo>("TODOS");
   const [sel, setSel] = useState<Set<string>>(new Set());
@@ -232,7 +236,9 @@ function SeletorCatalogo({ catalogo, jaAdicionados, onAdicionar }: { catalogo: C
         Selecionar todos{q || tipo !== "TODOS" ? " do filtro" : ""} ({visiveis.length})
       </label>
       <ul className="max-h-64 overflow-y-auto divide-y divide-surface-border" data-lista-catalogo>
-        {!visiveis.length && <li className="px-3 py-4 text-sm text-ink-subtle text-center italic">Nada para adicionar com este filtro.</li>}
+        {!visiveis.length && (erroCatalogo
+          ? <li className="px-3 py-4 text-sm text-atrasado-texto text-center" role="alert" data-erro-catalogo>Não foi possível carregar o catálogo. Feche e abra a tabela de novo.</li>
+          : <li className="px-3 py-4 text-sm text-ink-subtle text-center italic">Nada para adicionar com este filtro.</li>)}
         {visiveis.map((c) => (
           <li key={c.id}>
             <label className="flex items-center gap-2 px-3 min-h-[44px] cursor-pointer hover:bg-primary-50" data-opcao-catalogo={c.id}>

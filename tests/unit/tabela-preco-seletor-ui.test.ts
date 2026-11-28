@@ -210,3 +210,31 @@ describe("seletor de itens × tabela de preços do cliente", () => {
     expect((await opcoes("produto")).itens).toEqual(["Capacitor → R$ 50,00", "Gás R410 → R$ 300,00"]);
   });
 });
+
+/* ───────── Pronto pra janeiro 3: o item que já está na tela quando o cliente muda ───────── */
+describe("pronto-janeiro-3: trocar o cliente com itens já lançados", () => {
+  async function adicionarServico(nome: string) {
+    const campo = $$<HTMLInputElement>("input").filter((i) => [SERV, TAB].includes(i.placeholder))[0];
+    await act(async () => { if (document.activeElement === campo) campo.blur(); });
+    await act(async () => { campo.focus(); campo.dispatchEvent(new Event("focus", { bubbles: true })); });
+    await esperar();
+    const opcao = [...campo.parentElement!.querySelector(".absolute.z-20")!.querySelectorAll("button")].find((b) => b.textContent?.includes(nome));
+    await act(async () => { opcao!.dispatchEvent(new MouseEvent("mousedown", { bubbles: true })); (opcao as HTMLElement).click(); });
+    await esperar();
+  }
+  const unitario = () => $<HTMLInputElement>('[data-campo="unitario"]');
+
+  it("lançado sem tabela (R$ 500) → cliente com tabela: o item passa ao preço da tabela (R$ 420), sem pedir motivo; → cliente sem tabela: destrava", async () => {
+    await montar({ clienteIdInicial: "c-sem" });
+    await adicionarServico("Limpeza de split");
+    expect(unitario()!.value).toMatch(/500/);
+    await trocarCliente("c-hosp");
+    expect(unitario()!.value).toMatch(/420/);
+    // o preço é o da tabela: o motivo da alteração não aparece
+    expect($("[data-motivo-preco-tabela]")).toBeNull();
+    await trocarCliente("c-sem");
+    expect(document.body.textContent).not.toContain("Preço da tabela do cliente");
+    expect(unitario()!.value).toMatch(/420/);
+    expect($("[data-motivo-preco-tabela]")).toBeNull();
+  });
+});

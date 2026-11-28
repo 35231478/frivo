@@ -323,7 +323,7 @@ export function Header({ session, avatarUrl }: HeaderProps) {
                   {doPainel("comentariosCampo")}
                   {doPainel("atividadesEsquecidas")}
                   {doPainel("estoqueNegativoCampo")}
-                  {(alertas?.nfPedidos ?? 0) > 0 && <AlertaItem href={`/compras/pedidos/${alertas?.nfPedidoId ?? ""}`} icone={PackageCheck} cor="text-ok" label="NF chegou nos seus pedidos" valor={alertas?.nfPedidos ?? 0} {...toque("nfPedidos")} />}
+                  {(alertas?.nfPedidos ?? 0) > 0 && <AlertaItem href={umOuLista(alertas?.nfPedidos, alertas?.nfPedidoId, (id) => `/compras/pedidos/${id}`, "/compras/pedidos?periodo=todos")} icone={PackageCheck} cor="text-ok" label="NF chegou nos seus pedidos" valor={alertas?.nfPedidos ?? 0} {...toque("nfPedidos")} />}
                   {podeVer("ordens") && <AlertaItem href="/ordens/etapas?status=ATRASADO" icone={AlertTriangle} cor="text-atrasado" label="Etapas com prazo vencidas" valor={alertas?.prazosVencidos ?? 0} {...toque("prazosVencidos")} />}
                   {podeVer("ordens") && <AlertaItem href="/ordens/etapas?status=ATIVO" icone={Clock} cor="text-atencao" label="Etapas vencendo hoje" valor={alertas?.etapasVencendoHoje ?? 0} {...toque("etapasVencendoHoje")} />}
                   {podeVer("compras") && <AlertaItem href="/compras/pedidos?abertos=1" icone={ShoppingCart} cor="text-atencao" label="Compras pendentes" valor={alertas?.pedidosPendentes ?? 0} {...toque("pedidosPendentes")} />}

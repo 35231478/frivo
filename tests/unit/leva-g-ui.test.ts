@@ -289,3 +289,51 @@ describe("botão de anotações — arrastar e lembrar", () => {
     expect($<HTMLElement>("[data-anotacoes-botao]")!.style.left).toBe("");
   });
 });
+
+/* ───────── Pronto pra janeiro 3 — as pontas soltas destas telas ───────── */
+
+describe("pronto-janeiro-3: editor da tabela de preço sem o catálogo", () => {
+  it("o catálogo não carregou: diz que deu erro (antes: \"Nada para adicionar com este filtro\")", async () => {
+    vi.stubGlobal("fetch", vi.fn(async (url: string) => new Response(JSON.stringify({ erro: "x" }), { status: String(url).startsWith("/api/cadastros/tabelas-preco") ? 200 : 500, headers: { "Content-Type": "application/json" } })));
+    const { EditorTabelaPreco } = await import("@/components/cadastros/editores/editor-tabela-preco");
+    await montar(createElement(EditorTabelaPreco, { item: null, aberto: true, onFechar: () => {}, onSalvo: () => {} } as any));
+    expect($("[data-erro-catalogo]")!.textContent).toBe("Não foi possível carregar o catálogo. Feche e abra a tabela de novo.");
+    expect(document.body.textContent).not.toContain("Nada para adicionar com este filtro");
+  });
+});
+
+describe("pronto-janeiro-3: Meu perfil — a foto escolhida fora da aba Dados", () => {
+  it("escolher a foto estando em Segurança leva à aba Dados (onde fica o Salvar da foto)", async () => {
+    const P = (await import("@/components/perfil/perfil-client")).PerfilClient;
+    await montar(createElement(P, { initial: { nome: "Ana Fictícia", email: "ana@ficticio.test", telefone: "", avatar: null, empresaNome: "Clima Fictícia", perfilNome: null, cargo: "Administrador", ultimoAcesso: null }, abaPedida: "seguranca" }));
+    expect($('[data-aba="seguranca"]')!.getAttribute("aria-current")).toBe("page");
+    const campo = $<HTMLInputElement>("[data-arquivo-foto]")!;
+    const arquivo = new File([new Uint8Array([137, 80, 78, 71])], "foto.png", { type: "image/png" });
+    Object.defineProperty(campo, "files", { configurable: true, value: [arquivo] });
+    await act(async () => { campo.dispatchEvent(new Event("change", { bubbles: true })); });
+    await esperar();
+    expect($('[data-aba="dados"]')!.getAttribute("aria-current")).toBe("page");
+  });
+});
+
+describe("pronto-janeiro-3: lápis da linha do orçamento — item da tabela do cliente", () => {
+  async function abrirLapis(permissoes: Record<string, string[]>, naTabela: boolean) {
+    const { PermissoesProvider } = await import("@/components/providers/permissoes-provider");
+    const { montarPermissoes } = await import("@/lib/permissoes");
+    const { EditarLinhaOrcamento } = await import("@/components/orcamento/editar-linha-orcamento");
+    const linha = { id: "l1", descricao: "Limpeza de split", quantidade: 1, valorUnitario: 150, observacao: null, materialId: null, comMateriais: false, valorManual: false, naTabela };
+    await montar(createElement(PermissoesProvider, { role: "OPERADOR", permissoes: montarPermissoes(permissoes as any), children: createElement(EditarLinhaOrcamento, { orcamentoId: "o1", status: "RASCUNHO", faturado: false, linha }) } as any));
+    await clicar($('[aria-label="Editar Limpeza de split"]'));
+    return document.body.textContent ?? "";
+  }
+  it("sem \"Alterar preço de tabela\": o campo de preço nem aparece (o servidor recusa do mesmo jeito)", async () => {
+    const tela = await abrirLapis({ orcamentos: ["visualizar", "editar"] }, true);
+    expect(tela).toContain("Quantidade");
+    expect(tela).not.toContain("Valor unitário (R$)");
+  });
+  it("com a permissão: o campo e o motivo; fora da tabela: o campo, como sempre", async () => {
+    expect(await abrirLapis({ orcamentos: ["visualizar", "editar", "alterarPrecoTabela"] }, true)).toMatch(/Valor unitário \(R\$\)[\s\S]*Motivo \(se alterar preço de tabela\)/);
+    act(() => raiz!.unmount()); raiz = null; document.body.innerHTML = ""; caixa = document.createElement("div"); document.body.appendChild(caixa);
+    expect(await abrirLapis({ orcamentos: ["visualizar", "editar"] }, false)).toContain("Valor unitário (R$)");
+  });
+});

@@ -26,7 +26,7 @@ import { MateriaisLinha } from "@/components/orcamento/materiais-linha";
 import { InfoProduto, ResumoCustoMargem, useSituacaoProdutos } from "@/components/orcamento/estoque-margem";
 import { custosDoOrcamento, resumoMargem } from "@/lib/orcamentos/estoque-margem";
 import { usePermissoes } from "@/components/providers/permissoes-provider";
-import { itensComPrecoDeTabelaAlterado, marcarItensDaTabela, MOTIVO_MIN } from "@/lib/precos/trava-tabela";
+import { aplicarTabelaAoItem, itensComPrecoDeTabelaAlterado, marcarItensDaTabela, MOTIVO_MIN } from "@/lib/precos/trava-tabela";
 import { confirmar, toast } from "@/components/ui/avisos";
 import { nomeAutomaticoOrcamento, type ContextoNomeOrcamento } from "@/lib/orcamentos/nome";
 import { Select } from "@/components/ui/select";
@@ -287,10 +287,11 @@ export function OrcamentoForm({
   const [gerandoIa, setGerandoIa] = useState(false);
   const [sugestaoIa, setSugestaoIa] = useState<string | null>(null);
   const [servicos, setServicos] = useState<ItemTabela[]>(
-    inicial?.servicos.map((s) => ({ ...s, id: s.id || novoId() })) ?? [],
+    // valorGravado: o preço já salvo (a tabela do cliente não o troca ao abrir; ver lib/precos/trava-tabela)
+    inicial?.servicos.map((s) => ({ ...s, id: s.id || novoId(), valorGravado: Number(s.valorUnitario) })) ?? [],
   );
   const [produtos, setProdutos] = useState<ItemTabela[]>(
-    inicial?.produtos.map((p) => ({ ...p, id: p.id || novoId() })) ?? [],
+    inicial?.produtos.map((p) => ({ ...p, id: p.id || novoId(), valorGravado: Number(p.valorUnitario) })) ?? [],
   );
   const [ordensIds, setOrdensIds] = useState<string[]>(
     inicial?.ordensServicoIds ?? (osInicialId ? [osInicialId] : []),
@@ -353,10 +354,12 @@ export function OrcamentoForm({
   const sugestoesItens = useSugestoesItens(clienteId, inicial?.id);
   const jaNaLista = (lista: ItemTabela[]) => (s: ItemSugerido) =>
     lista.some((it) => (s.catalogoId ? it.catalogoId === s.catalogoId : it.descricao.trim().toLowerCase() === s.descricao.trim().toLowerCase()));
-  const linhaDaSugestao = (s: ItemSugerido): ItemTabela => ({
-    id: novoId(), catalogoId: s.catalogoId ?? null, descricao: s.descricao, quantidade: 1,
-    valorUnitario: s.valorUnitario, valorTotal: s.valorUnitario,
-  });
+  const linhaDaSugestao = (s: ItemSugerido): ItemTabela => {
+    const linha: ItemTabela = { id: novoId(), catalogoId: s.catalogoId ?? null, descricao: s.descricao, quantidade: 1, valorUnitario: s.valorUnitario, valorTotal: s.valorUnitario };
+    // O item está na tabela do cliente: vale o preço da tabela (não o último praticado), como no catálogo
+    const t = s.catalogoId ? tabelaPreco?.itens[s.catalogoId] : undefined;
+    return t ? aplicarTabelaAoItem(linha, t, podeAlterarPrecoTabela) : linha;
+  };
 
   // "Orçamento E2": a regra de cobrança dos materiais — a do orçamento (edição) ou a da empresa (novo); o servidor
   // decide de novo ao gravar (o navegador não escolhe), aqui é só para a tela mostrar o mesmo que vai ser gravado
@@ -380,12 +383,20 @@ export function OrcamentoForm({
   const podeAlterarPrecoTabela = pode("orcamentos", "alterarPrecoTabela");
   const [motivoPrecoTabela, setMotivoPrecoTabela] = useState("");
   // Ao abrir um orçamento salvo (ou trocar de cliente), os itens que estão na tabela do cliente ficam marcados
+  // (sem tabela — cliente novo sem tabela — os itens marcados pela tabela do cliente anterior destravam)
   useEffect(() => {
-    if (!tabelaPreco) return;
-    setServicos((prev) => marcarItensDaTabela(prev, tabelaPreco.itens, podeAlterarPrecoTabela));
-    setProdutos((prev) => marcarItensDaTabela(prev, tabelaPreco.itens, podeAlterarPrecoTabela));
+    setServicos((prev) => marcarItensDaTabela(prev, tabelaPreco?.itens, podeAlterarPrecoTabela));
+    setProdutos((prev) => marcarItensDaTabela(prev, tabelaPreco?.itens, podeAlterarPrecoTabela));
   }, [tabelaPreco, podeAlterarPrecoTabela]);
-  const precosDeTabelaAlterados = itensComPrecoDeTabelaAlterado([...servicos, ...produtos]);
+  // O preço que o servidor compara (lib/precos/trava-tabela-server › precoComparavelDoServico): no serviço com o
+  // total digitado à mão, o unitário efetivo — assim a tela pede o motivo nos mesmos casos que o servidor
+  const precosDeTabelaAlterados = itensComPrecoDeTabelaAlterado([
+    ...servicos.map((s) => (s.valorManual && s.materiais?.length ? { ...s, valorUnitario: valorDaLinha(s, regraMateriais).valorUnitario, valorManual: false } : s)),
+    ...produtos,
+  ]);
+  // O servidor recusou pelo preço de tabela (400 sem motivo): o campo do motivo aparece mesmo que a conta da tela não o peça
+  const [servidorPediuMotivo, setServidorPediuMotivo] = useState(false);
+  const pedirMotivo = precosDeTabelaAlterados.length > 0 || servidorPediuMotivo;
   const totais = useMemo(() => calcularOrcamento({
     // Serviço com materiais: base + ajuste dos inclusos (ou o manual) — lib/orcamentos/materiais.ts
     servicos: servicos.filter((s) => s.descricao.trim()).map((s) => (s.materiais?.length ? { quantidade: s.quantidade, valorUnitario: valorDaLinha(s, regraMateriais).valorUnitario, valorTotal: valorDaLinha(s, regraMateriais).valorTotal } : s)),
@@ -469,7 +480,7 @@ export function OrcamentoForm({
     if (tipo === "PROPOSTA_CONTRATO" && (!proposta.valorMensal || Number(proposta.valorMensal) <= 0)) {
       return setErro("Informe o valor mensal do contrato proposto.");
     }
-    if (precosDeTabelaAlterados.length && motivoPrecoTabela.trim().length < MOTIVO_MIN) {
+    if (pedirMotivo && motivoPrecoTabela.trim().length < MOTIVO_MIN) {
       return setErro("Informe o motivo da alteração do preço de tabela.");
     }
     const limpar = (it: ItemTabela) => ({
@@ -496,7 +507,7 @@ export function OrcamentoForm({
     const prodPayload = produtos.filter((p) => p.descricao.trim() && !p.derivada).map(limpar);
 
     const payload: Record<string, any> = {
-      motivoPrecoTabela: precosDeTabelaAlterados.length ? motivoPrecoTabela.trim() : null,
+      motivoPrecoTabela: pedirMotivo ? motivoPrecoTabela.trim() : null,
       // Em branco = o servidor compõe o nome automático (a mesma regra da prévia)
       nome: nome.trim() || null,
       prazoExecucao: prazoExecucao.trim() || null,
@@ -560,6 +571,7 @@ export function OrcamentoForm({
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
         setErro(err.erro ?? "Erro ao salvar.");
+        if (err.precoTabela && res.status === 400) setServidorPediuMotivo(true);
         return;
       }
       const saved = await res.json();
@@ -775,11 +787,11 @@ export function OrcamentoForm({
         />
       </div>
 
-      {precosDeTabelaAlterados.length > 0 && (
+      {pedirMotivo && (
         <div className="card-padded" data-motivo-preco-tabela>
           <FormField
             label="Motivo da alteração do preço de tabela" required
-            hint={`Fora da tabela: ${precosDeTabelaAlterados.map((i) => i.descricao).join(", ")}`}
+            hint={precosDeTabelaAlterados.length ? `Fora da tabela: ${precosDeTabelaAlterados.map((i) => i.descricao).join(", ")}` : "O preço de um item da tabela do cliente mudou."}
           >
             <Input value={motivoPrecoTabela} onChange={(e) => setMotivoPrecoTabela(e.target.value)} maxLength={300} placeholder="Ex.: desconto negociado com o cliente" />
           </FormField>

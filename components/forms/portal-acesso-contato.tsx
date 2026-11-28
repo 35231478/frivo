@@ -102,8 +102,11 @@ export function PortalAcessoContato({
         setTemAcesso(false); setSenhaProvisoria(null);
         setFb({ t: "ok", m: "Acesso revogado." });
         onChange?.({ temAcesso: false, senhaProvisoria: null, acessoConcedidoEm: null });
+      } else {
+        const e = await res.json().catch(() => ({}));
+        setFb({ t: "erro", m: e.erro ?? "Não foi possível revogar o acesso." });
       }
-    } finally { setSalvando(false); setAcao(null); }
+    } catch { setFb({ t: "erro", m: "Erro de conexão." }); } finally { setSalvando(false); setAcao(null); }
   }
 
   const msgConvite = mensagemDoAcesso({ contatoNome, link: linkPortal, email, senha: senhaProvisoria });
@@ -125,7 +128,7 @@ export function PortalAcessoContato({
           <KeyRound className="w-3.5 h-3.5" /> Acesso ao portal
           {temAcesso && <span className="text-[10px] bg-success-50 text-success-700 px-1.5 py-0.5 rounded">Acesso ativo</span>}
         </p>
-        <button type="button" onClick={() => setAberto(false)} className="text-xs text-ink-muted hover:text-ink">fechar</button>
+        <button type="button" onClick={() => setAberto(false)} className="text-xs text-ink-muted hover:text-ink min-h-[44px] min-w-[44px] -my-3 px-2" data-fechar-acesso>Fechar</button>
       </div>
 
       {fb && (

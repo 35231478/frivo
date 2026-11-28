@@ -130,6 +130,8 @@ export function PerfilClient({ initial, onAvatar, emailSomenteLeitura = false, n
     setErro("");
     if (!["image/jpeg", "image/png", "image/webp"].includes(file.type)) { setErro("Use uma imagem JPG ou PNG."); return; }
     if (file.size > 2 * 1024 * 1024) { setErro("Imagem muito grande. Máximo 2 MB."); return; }
+    // A foto se salva na aba Dados (o "Salvar" é dela): escolhida de outra aba, a tela vai para Dados
+    if (aba !== "dados") trocarAba("dados");
     try { setPreview(await redimensionar(file)); }
     catch { setErro("Não foi possível processar a imagem."); }
   }

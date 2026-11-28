@@ -600,7 +600,7 @@ const produtos: DefImportacao = {
     { chave: "unidade", titulo: "unidade", ajuda: "Unidade (vazio = un)", exemplo: "kg", opcoes: UNIDADES_PRODUTO.map((u) => u.rotulo), apelidos: ["un", "und"] },
     { chave: "valor_padrao", titulo: "valor_padrao", ajuda: "Valor em R$ (ex.: 1.250,00)", exemplo: "890,00", apelidos: ["valor", "preco", "preco_padrao"] },
     { chave: "estoque_minimo", titulo: "estoque_minimo", ajuda: "Estoque mínimo (número inteiro)", exemplo: "5", apelidos: ["estoque", "minimo"] },
-    { chave: "uso", titulo: "uso", ajuda: "Material (vai dentro do serviço, sem valor para o cliente) ou Peça (vendida à parte). Vazio: produto novo vira Material; o que já existe não muda.", exemplo: "Material", opcoes: OPCOES_USO_PRODUTO.map((o) => o.rotulo), apelidos: ["tipo_uso", "uso_produto", "classificacao"] },
+    { chave: "uso", titulo: "uso", ajuda: "Material (consumo do serviço; a cobrança segue Configurações › Orçamento) ou Peça (vendida à parte). Vazio: produto novo vira Material; o que já existe não muda.", exemplo: "Material", opcoes: OPCOES_USO_PRODUTO.map((o) => o.rotulo), apelidos: ["tipo_uso", "uso_produto", "classificacao"] },
     COLUNA_ID,
   ],
   // O código do produto é sempre do sistema: informado e inexistente = erro (não inventa número)

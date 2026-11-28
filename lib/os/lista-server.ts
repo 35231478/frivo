@@ -13,6 +13,7 @@
  *     medições.
  * O resultado é o mesmo de antes (o teste no PostgreSQL compara linha a linha).
  */
+import { osEmConferencia } from "@/lib/pedido-cliente/portal-server";
 import { prisma } from "@/lib/prisma";
 import type { QuemVe } from "@/lib/escopo/proprios";
 import type { Prisma } from "@prisma/client";
@@ -58,7 +59,8 @@ export async function carregarListaOs(empresaId: string, sp: SPOrdens, agora: Da
     prisma.tipoOs.findMany({ where: { empresaId, ativo: true }, select: { id: true, nome: true }, orderBy: { nome: "asc" } }),
     prisma.contrato.findMany({ where: { empresaId }, select: { id: true, numero: true }, orderBy: { numero: "asc" } }),
     // Pedido do cliente (lib/pedido-cliente): a empresa usa? e o filtro rápido "Aguardando pedido" (contagem e R$)
-    usaPedidoCliente(empresaId).then((u) => (u ? resumoOsAguardando(where) : null)),
+    // + quantas OS têm pedido do portal para conferir (o filtro rápido "Pedido recebido — conferir")
+    usaPedidoCliente(empresaId).then(async (u) => (u ? { ...(await resumoOsAguardando(where)), conferir: (await osEmConferencia(empresaId)).length } : null)),
   ]);
   const pagina = paginaValida(pedida, porPagina, total);
   // Página pedida além da última (filtro mudou o total): busca a página válida — o caso raro

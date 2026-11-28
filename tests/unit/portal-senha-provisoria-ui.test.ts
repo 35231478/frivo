@@ -162,3 +162,37 @@ describe("portal: a tela de troca no 1º acesso", () => {
     expect(sair.n).toBe(1);
   });
 });
+
+/* ───────── Pronto pra janeiro 3: as pontas soltas da aba Portal ───────── */
+describe("pronto-janeiro-3: Cliente › Portal", () => {
+  async function montarLista(contatos: unknown[], onAcessoLiberado = vi.fn()) {
+    const { PortalContatos } = await import("@/components/forms/portal-contatos");
+    respostas["GET /api/clientes/cli1/contatos"] = { status: 200, corpo: contatos };
+    await act(async () => { raiz.render(createElement(PortalContatos, { clienteId: "cli1", ativo: true, onGerenciar: () => {}, onAcessoLiberado })); });
+    await esperar();
+    return onAcessoLiberado;
+  }
+  it("liberar o acesso avisa a ficha (a chave \"Portal ativo\" liga, como o servidor) e o contato fica \"Aguardando 1º acesso\"", async () => {
+    const aviso = await montarLista([{ id: "ct1", nome: "Paula Fictícia", email: "paula@clinica.test", temAcesso: false }]);
+    expect($("[data-situacao-portal]")!.getAttribute("data-situacao-portal")).toBe("sem");
+    respostas[`PUT ${URL_ACESSO}`] = { status: 200, corpo: { temAcesso: true, senhaProvisoria: "Prov-2026ab", acessoConcedidoEm: "2026-11-27T12:00:00.000Z" } };
+    await clicar(botao("Dar acesso ao portal"));
+    await clicar($("[data-salvar-acesso]"));
+    expect(aviso).toHaveBeenCalled();
+    expect(texto($("[data-situacao-portal]"))).toBe("Aguardando 1º acesso");
+  });
+  it("quem já entrou e criou a senha: \"Acesso ativo\"; quem ainda não: \"Aguardando 1º acesso\"", async () => {
+    await montarLista([
+      { id: "ct1", nome: "Paula", email: "p@x.test", temAcesso: true, trocarSenha: false },
+      { id: "ct2", nome: "Rafael", email: "r@x.test", temAcesso: true, trocarSenha: true },
+    ]);
+    expect([...caixa.querySelectorAll("[data-situacao-portal]")].map((e) => texto(e))).toEqual(["Acesso ativo", "Aguardando 1º acesso"]);
+  });
+  it("revogar que falha mostra o motivo (antes: nada acontecia)", async () => {
+    await montarAcesso(true);
+    respostas[`DELETE ${URL_ACESSO}`] = { status: 403, corpo: { erro: "Sem permissão para editar clientes." } };
+    await clicar(botao("Revogar"));
+    expect(texto(caixa)).toContain("Sem permissão para editar clientes.");
+    expect($("[data-fechar-acesso]")!.className).toContain("min-h-[44px]");
+  });
+});

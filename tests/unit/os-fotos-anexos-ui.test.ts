@@ -16,6 +16,9 @@ import { permissoesTotais, permissoesVazias } from "@/lib/permissoes";
 import type { Galeria } from "@/lib/os/galeria";
 
 const avisos = vi.hoisted(() => ({ toast: vi.fn(), confirmar: vi.fn(async () => true) }));
+// pronto-janeiro-3: excluir e editar a legenda atualizam a página (o Histórico da OS mostra na hora)
+const roteador = vi.hoisted(() => ({ refresh: vi.fn() }));
+vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: roteador.refresh, push: vi.fn(), replace: vi.fn() }), usePathname: () => "/ordens/os1", useSearchParams: () => new URLSearchParams() }));
 vi.mock("@/components/ui/avisos", () => ({ toast: avisos.toast, confirmar: avisos.confirmar }));
 // O mock nasce UMA vez (hoisted): se a fábrica do vi.mock rodar 2× ao mesmo tempo (import dinâmico da tela + o do
 // teste, num CI lento), as duas cópias do módulo usam a mesma função — o teste confere as chamadas certas.
@@ -42,7 +45,7 @@ beforeAll(async () => {
 }, 120_000);
 beforeEach(() => {
   chamadas.length = 0;
-  avisos.toast.mockClear(); avisos.confirmar.mockClear(); avisos.confirmar.mockImplementation(async () => true);
+  avisos.toast.mockClear(); avisos.confirmar.mockClear(); avisos.confirmar.mockImplementation(async () => true); roteador.refresh.mockClear();
   respostas = {};
   vi.stubGlobal("fetch", vi.fn(async (url: string, init: RequestInit = {}) => {
     const metodo = String(init.method ?? "GET");
@@ -181,6 +184,7 @@ describe("excluir", () => {
     expect(chamadas.map((c) => `${c.metodo} ${c.url}`)).toEqual(["DELETE /api/ordens/os1/fotos/f1?origem=EXECUCAO"]);
     expect(fotosDa("eqA")).toEqual(["EXECUCAO:f2"]);
     expect(avisos.toast).toHaveBeenCalledWith("Foto excluída.");
+    expect(roteador.refresh).toHaveBeenCalledTimes(1);
     expect(onMudou).toHaveBeenLastCalledWith(expect.objectContaining({ fotos: expect.not.arrayContaining([expect.objectContaining({ chave: "EXECUCAO:f1" })]) }));
 
     await clicar($('[data-foto="ANEXO:an1"] [data-excluir-foto]'));
@@ -308,6 +312,7 @@ describe("editar a legenda (Leva F)", () => {
     expect(txt($('[data-foto="EXECUCAO:f2"] [data-legenda]'))).toBe("Filtros lavados e secos");
     expect(avisos.toast).toHaveBeenCalledWith("Legenda atualizada.");
     expect(onMudou).toHaveBeenCalled();
+    expect(roteador.refresh).toHaveBeenCalledTimes(1);
   });
   it("anexo antigo sem legenda abre vazio; legenda inválida não chama o servidor; o erro do servidor aparece no modal", async () => {
     respostas["PATCH /api/ordens/os1/fotos/an1?origem=ANEXO"] = { status: 403, corpo: { erro: "Sem permissão para editar a OS." } };

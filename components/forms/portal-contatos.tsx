@@ -13,13 +13,19 @@ interface Contato {
   temAcesso?: boolean;
   acessoConcedidoEm?: string | null;
   permissoes?: Record<string, boolean> | null;
+  /** Ainda não criou a própria senha (1º acesso pendente) */
+  trocarSenha?: boolean;
 }
 
 /**
  * Aba Portal: lista todos os contatos do cliente e, para cada um, permite conceder,
  * revelar, redefinir e revogar o acesso ao portal (reutiliza PortalAcessoContato).
  */
-export function PortalContatos({ clienteId, ativo, onGerenciar }: { clienteId: string; ativo: boolean; onGerenciar: () => void }) {
+export function PortalContatos({ clienteId, ativo, onGerenciar, onAcessoLiberado }: {
+  clienteId: string; ativo: boolean; onGerenciar: () => void;
+  /** O servidor liga o portal do cliente ao liberar um contato: a chave "Portal ativo" da ficha acompanha */
+  onAcessoLiberado?: () => void;
+}) {
   const [contatos, setContatos] = useState<Contato[] | null>(null);
 
   useEffect(() => {
@@ -39,8 +45,11 @@ export function PortalContatos({ clienteId, ativo, onGerenciar }: { clienteId: s
           ...c,
           temAcesso: info.temAcesso,
           acessoConcedidoEm: info.acessoConcedidoEm ?? c.acessoConcedidoEm,
+          // senha provisória nova: o contato volta a dever o 1º acesso
+          trocarSenha: info.senhaProvisoria ? true : info.temAcesso ? c.trocarSenha : false,
         }
       : c));
+    if (info.temAcesso) onAcessoLiberado?.();
   }
 
   if (contatos === null) {
@@ -66,6 +75,7 @@ export function PortalContatos({ clienteId, ativo, onGerenciar }: { clienteId: s
       </p>
       {contatos.map((c) => {
         const temAcesso = !!c.temAcesso;
+        const aguardando = temAcesso && !!c.trocarSenha;
         return (
           <div key={c.id} className="border border-surface-border rounded-lg p-3 space-y-2">
             <div className="flex items-start justify-between gap-3 flex-wrap">
@@ -73,8 +83,12 @@ export function PortalContatos({ clienteId, ativo, onGerenciar }: { clienteId: s
                 <p className="text-sm font-semibold text-ink flex items-center gap-1.5"><UserCircle className="w-4 h-4 text-primary-600" /> {c.nome}</p>
                 <p className="text-xs text-ink-muted flex items-center gap-1"><Mail className="w-3 h-3" /> {c.email || "sem e-mail"}</p>
               </div>
-              <span className={cn("text-[10px] font-semibold px-2 py-0.5 rounded-full", temAcesso ? "bg-success-50 text-success-700" : "bg-surface-linha text-ink-muted")}>
-                {temAcesso ? "Acesso ativo" : "Sem acesso"}
+              <span
+                className={cn("text-[10px] font-semibold px-2 py-0.5 rounded-full", aguardando ? "bg-atencao-claro text-atencao-texto" : temAcesso ? "bg-success-50 text-success-700" : "bg-surface-linha text-ink-muted")}
+                title={aguardando ? "O contato ainda não entrou para criar a própria senha." : undefined}
+                data-situacao-portal={aguardando ? "aguardando" : temAcesso ? "ativo" : "sem"}
+              >
+                {aguardando ? "Aguardando 1º acesso" : temAcesso ? "Acesso ativo" : "Sem acesso"}
               </span>
             </div>
             <PortalAcessoContato

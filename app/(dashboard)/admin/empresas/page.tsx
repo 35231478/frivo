@@ -12,5 +12,5 @@ export default async function EmpresasAdminPage() {
   const session = await auth();
   if (!session?.user) redirect("/login");
   if (!ehDonoDoFrivo(session.user)) redirect("/sem-permissao");
-  return <EmpresasAdmin inicial={await listarEmpresas()} />;
+  return <EmpresasAdmin inicial={await listarEmpresas()} empresaDoDono={session.user.empresaId as string} />;
 }

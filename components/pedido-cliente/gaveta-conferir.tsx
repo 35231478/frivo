@@ -13,6 +13,8 @@ import { MSG_MOTIVO_RECUSA, limparMotivoRecusa } from "@/lib/pedido-cliente/lemb
 
 interface PedidoConferir {
   id: string; numero: string; data: string; valor: number | null; observacao: string | null; situacao: string;
+  /** Quem não pode conferir não vê Confirmar/Recusar (o servidor recusa do mesmo jeito) */
+  podeConferir?: boolean;
   temAnexo: boolean; anexoNome: string | null; total: number; alerta: string | null; cliente: string; enviadoPor: string | null; criadoEm: string;
   ordens: { id: string; numero: string }[]; orcamentos: { id: string; codigo: string }[];
 }
@@ -54,7 +56,9 @@ export function GavetaConferir({ aberto, onFechar, pedidoId }: { aberto: boolean
     const j = await res?.json().catch(() => ({}));
     setEnviando(false);
     if (!res?.ok) { setErro(j?.erro ?? "Não foi possível concluir a conferência."); return; }
-    toast(acao === "confirmar" ? "Pedido do cliente confirmado. O faturamento foi liberado." : "Pedido recusado. O cliente vê o motivo no portal.");
+    // Confirmado sem nada novo para ligar (os itens já tinham pedido): não diz que liberou o faturamento
+    toast(acao === "recusar" ? "Pedido recusado. O cliente vê o motivo no portal."
+      : j?.ligadas && (j.ligadas.os || j.ligadas.orcamentos) ? "Pedido do cliente confirmado. O faturamento foi liberado." : "Pedido do cliente confirmado.");
     if (acao === "confirmar" && j?.alerta) toast(j.alerta, "info");
     router.refresh();
     onFechar();
@@ -64,7 +68,7 @@ export function GavetaConferir({ aberto, onFechar, pedidoId }: { aberto: boolean
   const itens = p ? [...p.ordens.map((o) => o.numero), ...p.orcamentos.map((o) => `Orçamento ${o.codigo}`)] : [];
   return (
     <Drawer aberto={aberto} onFechar={onFechar} largura="sm:max-w-md" titulo="Conferir pedido do cliente"
-      rodape={p && conferindo && (
+      rodape={p && conferindo && p.podeConferir !== false && (
         <div className="flex flex-col-reverse sm:flex-row sm:justify-end gap-2 w-full">
           {recusando
             ? <>

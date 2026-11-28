@@ -5,11 +5,12 @@ import Link from "next/link";
 import { portalLogin, type LoginState } from "@/app/(portal)/portal/actions";
 import { AlertCircle, LogIn } from "lucide-react";
 
-export function PortalLoginForm() {
+export function PortalLoginForm({ destino = null }: { destino?: string | null }) {
   const [state, formAction, pending] = useActionState<LoginState, FormData>(portalLogin, {});
 
   return (
     <form action={formAction} className="space-y-4">
+      {destino && <input type="hidden" name="destino" value={destino} />}
       {state?.erro && (
         <div className="bg-atrasado-claro border border-atrasado/20 text-atrasado-texto text-sm rounded-lg px-3 py-2 flex items-center gap-2">
           <AlertCircle className="w-4 h-4 shrink-0" /> {state.erro}

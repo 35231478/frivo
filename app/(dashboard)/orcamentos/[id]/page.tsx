@@ -1,4 +1,5 @@
 import { NomeNaTrilha } from "@/components/layout/nome-na-trilha";
+import { precosDaTabelaDoCliente } from "@/lib/precos/trava-tabela-server";
 import { noEscopo } from "@/lib/escopo/proprios-server";
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
@@ -76,7 +77,11 @@ export default async function OrcamentoDetalhePage({
   });
 
   const podeEditar = orcamento.status === "RASCUNHO";
-  const pedidos = await pedidoDosOrcamentos(empresaId, [orcamento.id]);
+  const [pedidos, precosTabela] = await Promise.all([
+    pedidoDosOrcamentos(empresaId, [orcamento.id]),
+    // O lápis da linha: sem "Alterar preço de tabela", o item da tabela do cliente não mostra o campo de preço
+    precosDaTabelaDoCliente(empresaId, orcamento.clienteId),
+  ]);
   const u = session!.user!;
   // Conta a receber do orçamento aprovado (o outro lado do vínculo): só para quem vê o financeiro
   const contasReceber = pode(u.permissoes, "financeiro", "visualizar", u.role) ? await contasVinculadas(empresaId, { orcamentoId: orcamento.id }) : [];
@@ -220,7 +225,7 @@ export default async function OrcamentoDetalhePage({
             equipamentos={equipamentos}
           />
         ) : (
-          <OrcamentoDocumento orcamento={orcamento} empresa={empresa} cliente={orcamento.cliente} versao="interna" edicaoLinhas={{ orcamentoId: orcamento.id, faturado: temFaturas }} anexos={anexosDoDocumento(orcamento.anexos, `/api/orcamentos/${orcamento.id}/anexos`)} />
+          <OrcamentoDocumento orcamento={orcamento} empresa={empresa} cliente={orcamento.cliente} versao="interna" edicaoLinhas={{ orcamentoId: orcamento.id, faturado: temFaturas, naTabela: [...precosTabela.keys()] }} anexos={anexosDoDocumento(orcamento.anexos, `/api/orcamentos/${orcamento.id}/anexos`)} />
         )}
       </div>
 

@@ -782,7 +782,7 @@ describe("onde a edição no contexto está ligada (telas de OS e de orçamento)
     expect(vezes(src, "dica={DICA_LINHAS}")).toBe(2);
     expect(src).toContain('const DICA_LINHAS = "Descrição, quantidade e preço valem só neste orçamento. O catálogo não muda.";');
     expect(src).toContain("}, [clienteId, versaoDestinos]);");
-    expect(fonte("app/(dashboard)/orcamentos/[id]/page.tsx")).toContain("edicaoLinhas={{ orcamentoId: orcamento.id, faturado: temFaturas }}");
+    expect(fonte("app/(dashboard)/orcamentos/[id]/page.tsx")).toContain("edicaoLinhas={{ orcamentoId: orcamento.id, faturado: temFaturas, naTabela: [...precosTabela.keys()] }}");
   });
 
   it("o caso perigoso: a edição da linha nunca oferece editar o serviço nem o produto do catálogo", () => {

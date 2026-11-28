@@ -754,7 +754,7 @@ export function ClienteForm({ initialData, statusFinanceiroCalc, perdas12m, cons
           {!isEditing ? (
             <p className="text-xs text-ink-muted">Salve o cliente para conceder acesso de portal aos contatos.</p>
           ) : (
-            <PortalContatos clienteId={initialData!.id} ativo={aba === "portal"} onGerenciar={() => setAba("geral")} />
+            <PortalContatos clienteId={initialData!.id} ativo={aba === "portal"} onGerenciar={() => setAba("geral")} onAcessoLiberado={() => setPortalAtivo(true)} />
           )}
           </fieldset>
         </FormSection>

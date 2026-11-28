@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import {
   Camera, Download, Eye, FileText, ImagePlus, LayoutGrid, Loader2, Paperclip, Pencil, Trash2, Upload, Wrench, AlertTriangle,
 } from "lucide-react";
@@ -52,6 +53,7 @@ function travaExclusao(f: FotoGaleria): string | null {
  */
 export function OsFotosAnexos({ osId, galeria: inicial, onMudou }: { osId: string; galeria: Galeria; onMudou?: (g: Galeria) => void }) {
   const { pode } = usePermissoes();
+  const router = useRouter();
   const podeEditar = pode("ordens", "editar");
   const [galeria, setGaleria] = useState<Galeria>(inicial);
   const [enviarFoto, setEnviarFoto] = useState<{ referencia: string } | null>(null);
@@ -84,6 +86,7 @@ export function OsFotosAnexos({ osId, galeria: inicial, onMudou }: { osId: strin
     setGaleria((g) => ({ ...g, fotos: g.fotos.filter((x) => x.chave !== f.chave) }));
     setLightbox(null);
     toast("Foto excluída.");
+    router.refresh(); // o Histórico da OS (aba Resumo) mostra a exclusão sem recarregar
   }
 
   async function excluirDocumento(d: DocumentoGaleria) {
@@ -96,6 +99,7 @@ export function OsFotosAnexos({ osId, galeria: inicial, onMudou }: { osId: strin
     const data = await res?.json().catch(() => ({}));
     if (!res?.ok) { toast(data?.erro ?? "Não foi possível excluir o documento.", "erro"); return; }
     setGaleria((g) => ({ ...g, documentos: g.documentos.filter((x) => x.id !== d.id) }));
+    router.refresh();
     toast("Anexo excluído.");
   }
 
@@ -189,7 +193,7 @@ export function OsFotosAnexos({ osId, galeria: inicial, onMudou }: { osId: strin
 
       {legendaDe && (
         <ModalLegenda osId={osId} foto={legendaDe} onFechar={() => setLegendaDe(null)}
-          onSalva={(legenda) => { setGaleria((g) => ({ ...g, fotos: g.fotos.map((x) => (x.chave === legendaDe.chave ? { ...x, legenda, semReferencia: false } : x)) })); setLegendaDe(null); }} />
+          onSalva={(legenda) => { setGaleria((g) => ({ ...g, fotos: g.fotos.map((x) => (x.chave === legendaDe.chave ? { ...x, legenda, semReferencia: false } : x)) })); setLegendaDe(null); router.refresh(); }} />
       )}
       {enviarFoto && (
         <ModalEnviarFoto

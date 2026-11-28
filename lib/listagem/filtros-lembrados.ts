@@ -13,8 +13,11 @@
 /** O que fica guardado: a query da lista e o dia (AAAA-MM-DD de Brasília) em que foi guardada */
 export interface FiltroLembrado { q: string; dia: string }
 
-/** O número da página não volta (volta-se sempre à 1ª); o resto da query, sim */
-const NAO_LEMBRAR = ["pagina"];
+/**
+ * O número da página não volta (volta-se sempre à 1ª); nem o "de onde veio" (`de=contas-pagar` muda o voltar e os
+ * links da tela: é da navegação daquele momento, não um filtro). O resto da query, sim.
+ */
+const NAO_LEMBRAR = ["pagina", "de"];
 
 export const chaveFiltrosLembrados = (empresaId: string, usuarioId: string, tela: string) => `frivo:filtros:${empresaId}:${usuarioId}:${tela}`;
 

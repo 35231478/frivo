@@ -86,7 +86,7 @@ describe("portal: Pedido de compra", () => {
     expect(($('[data-item-pendente="os:os1"] [data-documento-item]') as HTMLAnchorElement).getAttribute("href")).toBe("/relatorio/os/tk1");
     expect($('[data-item-pendente="orcamento:orc1"] [data-marcar-item]')).toBeNull();
     expect(txt($('[data-item-pendente="orcamento:orc1"] [data-em-conferencia]'))).toBe("Pedido nº 4500100 enviado — em conferência");
-    expect(txt($('[data-item-pendente="os:os3"]'))).toContain("Em execução");
+    expect(txt($('[data-item-pendente="os:os3"]'))).toContain("Ainda não concluída");
     expect(txt($('[data-item-pendente="os:os3"]'))).not.toContain("há");
     // os alvos de toque: a caixa de marcar e o link do relatório têm 44 px
     expect($('[data-item-pendente="os:os1"] label')!.className).toContain("w-11 h-11");
@@ -150,7 +150,7 @@ describe("portal: Pedido de compra", () => {
   it("os enviados: a situação de cada um; o recusado com o motivo do escritório (no topo e na linha); tudo em conferência: sem formulário", async () => {
     await montarPortal([{ ...ITENS[0], emConferencia: { pedidoId: "p2", numero: "4500124" } }], [
       { id: "p2", numero: "4500124", data: "2026-11-21T00:00:00.000Z", valor: 1800, situacao: "CONFERIR", motivoRecusa: null, enviadoEm: "2026-11-21T13:00:00.000Z", itens: ["OS-1410"] },
-      { id: "p1", numero: "4500123", data: "2026-11-20T00:00:00.000Z", valor: null, situacao: "RECUSADO", motivoRecusa: "O valor não confere com a OS-1410.", enviadoEm: "2026-11-20T13:00:00.000Z", itens: ["OS-1410"] },
+      { id: "p1", numero: "4500123", data: "2026-11-20T00:00:00.000Z", valor: null, situacao: "RECUSADO", motivoRecusa: "O valor não confere com a OS-1410.", enviadoEm: "2026-11-20T13:00:00.000Z", itens: ["OS-1410"], chaves: ["os:os1"] },
       { id: "p0", numero: "4500100", data: "2026-11-01T00:00:00.000Z", valor: 500, situacao: "CONFIRMADO", motivoRecusa: null, enviadoEm: "2026-11-01T13:00:00.000Z", itens: ["OS-1300"] },
     ]);
     expect(txt($("[data-pedido-recusado]"))).toBe("Pedido de compra nº 4500123 recusado: O valor não confere com a OS-1410. Envie um novo pedido para os serviços abaixo.");
@@ -183,6 +183,56 @@ const PEDIDO = {
   enviadoPor: "Bruno Compras · compras@industria.test", criadoEm: "2026-11-21T13:00:00Z", ordens: [{ id: "os1", numero: "OS-1410" }], orcamentos: [{ id: "orc1", codigo: "ORC-7" }],
 };
 
+describe("pronto-janeiro-3: portal — as pontas soltas do Pedido de compra", () => {
+  it("a recusa só fica no topo enquanto algum serviço dela ainda espera; o cliente abre o arquivo que enviou", async () => {
+    await montarPortal([ITENS[1]], [
+      // recusado cuja OS (os1) já se resolveu por outro caminho: não aparece mais no topo
+      { id: "p1", numero: "4500123", data: "2026-11-20T00:00:00.000Z", valor: null, situacao: "RECUSADO", motivoRecusa: "Valor errado.", enviadoEm: "2026-11-20T13:00:00.000Z", itens: ["OS-1410"], chaves: ["os:os1"], anexoNome: "pedido.pdf" },
+      // recusado que cobre a os2, que ainda espera: aparece
+      { id: "p2", numero: "4500124", data: "2026-11-21T00:00:00.000Z", valor: null, situacao: "RECUSADO", motivoRecusa: "Sem assinatura.", enviadoEm: "2026-11-21T13:00:00.000Z", itens: ["OS-1411"], chaves: ["os:os2"], anexoNome: null },
+    ]);
+    expect($$("[data-pedido-recusado]").map(txt)).toEqual(["Pedido de compra nº 4500124 recusado: Sem assinatura. Envie um novo pedido para os serviços abaixo."]);
+    // a linha do enviado: o arquivo abre pela rota do portal (só do próprio cliente)
+    expect($$("[data-arquivo-enviado]").map((a) => a.getAttribute("href"))).toEqual(["/api/portal/pedidos-compra/p1/anexo?inline=1"]);
+  });
+
+  it("o valor no jeito brasileiro (1.500 é mil e quinhentos); arquivo acima de 3 MB não vai; o 413 da hospedagem vira o aviso do tamanho", async () => {
+    await montarPortal([ITENS[0]]);
+    await digitar($("[data-pc-numero]"), "4500123");
+    await digitar($("[data-pc-valor]"), "1.500");
+    // acima de 3 MB: recusado na tela, sem enviar
+    const grande = new File([new Uint8Array(3 * 1024 * 1024 + 1)], "grande.pdf", { type: "application/pdf" });
+    Object.defineProperty($("[data-pc-anexo]"), "files", { configurable: true, value: [grande] });
+    await act(async () => { $("[data-pc-anexo]")!.dispatchEvent(new Event("change", { bubbles: true })); });
+    await esperar();
+    expect(txt($("[data-erro-pc]"))).toBe("Arquivo acima de 3 MB. Envie um PDF menor ou uma foto com menos resolução.");
+    await anexar($("[data-pc-anexo]"));
+    respostas["POST /api/portal/pedidos-compra"] = { status: 413, corpo: "Request Entity Too Large" };
+    await enviar();
+    expect(chamadas.at(-1)!.corpo.valor).toBe(1500);
+    expect(txt($("[data-erro-pc]"))).toBe("Arquivo acima de 3 MB. Envie um PDF menor ou uma foto com menos resolução.");
+  });
+});
+
+describe("pronto-janeiro-3: escritório — a conferência", () => {
+  async function abrirGaveta(corpo: object) {
+    const { GavetaConferir } = await import("@/components/pedido-cliente/gaveta-conferir");
+    respostas["GET /api/pedidos-cliente/p1"] = { status: 200, corpo };
+    await montar(createElement(GavetaConferir, { aberto: true, onFechar: () => {}, pedidoId: "p1" }));
+  }
+  it("quem não pode conferir (podeConferir falso) não vê Confirmar nem Recusar", async () => {
+    await abrirGaveta({ ...PEDIDO, podeConferir: false });
+    expect($("[data-gaveta-conferir]")).not.toBeNull();
+    expect([$("[data-confirmar-pedido]"), $("[data-recusar-pedido]")]).toEqual([null, null]);
+  });
+  it("confirmar sem nada novo para ligar (os itens já tinham pedido): não diz que liberou o faturamento", async () => {
+    await abrirGaveta({ ...PEDIDO, podeConferir: true });
+    respostas["POST /api/pedidos-cliente/p1/conferir"] = { status: 200, corpo: { ok: true, alerta: null, ligadas: { os: 0, orcamentos: 0 } } };
+    await clicar($("[data-confirmar-pedido]"));
+    expect(avisos.toast.mock.calls.map((c) => c[0])).toEqual(["Pedido do cliente confirmado."]);
+  });
+});
+
 describe("escritório: conferir o pedido do portal", () => {
   async function montarEtiqueta(situacao: any, tamanho: "sm" | "md" = "md") {
     const { EtiquetaPedido } = await import("@/components/pedido-cliente/etiqueta-pedido");
@@ -210,7 +260,7 @@ describe("escritório: conferir o pedido do portal", () => {
   it("CONFIRMAR: envia a ação, avisa que o faturamento foi liberado (e o alerta), atualiza e fecha", async () => {
     await montarEtiqueta({ aguardando: true, pedido: null, conferir: { id: "p1", numero: "4500123" } });
     await clicar($('[data-etiqueta-pedido="conferir"]'));
-    respostas["POST /api/pedidos-cliente/p1/conferir"] = { status: 200, corpo: { ok: true, alerta: "valor menor" } };
+    respostas["POST /api/pedidos-cliente/p1/conferir"] = { status: 200, corpo: { ok: true, alerta: "valor menor", ligadas: { os: 1, orcamentos: 1 } } };
     await clicar($("[data-confirmar-pedido]"));
     expect(chamadas.at(-1)).toEqual({ url: "/api/pedidos-cliente/p1/conferir", metodo: "POST", corpo: { acao: "confirmar" } });
     expect(avisos.toast.mock.calls.map((c) => c[0])).toEqual(["Pedido do cliente confirmado. O faturamento foi liberado.", "valor menor"]);

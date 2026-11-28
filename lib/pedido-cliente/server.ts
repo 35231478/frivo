@@ -8,6 +8,7 @@
  * Um jeito só: o "Registrar PC recebido" da fatura (medição) também passa por `registrarPedido`, e a fatura
  * que estava "Aguardando PC" avança sozinha quando todas as OS e orçamentos dela têm pedido (ou foram liberados).
  */
+import { TAMANHO_MAX_PEDIDO } from "@/lib/pedido-cliente/arquivo";
 import { cache } from "react";
 import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
@@ -126,6 +127,7 @@ export function lerDadosPedido(d: DadosPedido): Falha | { numero: string; data: 
   if (d.anexo?.conteudo) {
     const v = validarDataUrl(d.anexo.conteudo, d.anexo.nome || "pedido", {
       tipos: ["application/pdf", "image/png", "image/jpeg", "image/webp"], mensagemTipo: "Envie o pedido em PDF ou foto (JPG, PNG, WEBP).",
+      tamanhoMax: TAMANHO_MAX_PEDIDO,
     });
     if (!v.ok) return falha(400, v.erro);
     anexo = { conteudo: v.arquivo.conteudo, nome: v.arquivo.nome, tipo: v.arquivo.tipo };

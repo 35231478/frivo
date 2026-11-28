@@ -17,7 +17,7 @@ export const COMPORTAMENTO_PADRAO: Comportamento = "INCLUSO_NO_SERVICO";
 export const LABEL_COMPORTAMENTO: Record<Comportamento, string> = { VENDA_A_PARTE: "Peça", INCLUSO_NO_SERVICO: "Material" };
 export const DESCRICAO_COMPORTAMENTO: Record<Comportamento, string> = {
   VENDA_A_PARTE: "Vendida à parte, em linha própria com valor (compressor, placa, motor, capacitor).",
-  INCLUSO_NO_SERVICO: "Consumo: vai dentro do serviço, sem valor para o cliente (tubo, suporte, cabo, fita, isolamento).",
+  INCLUSO_NO_SERVICO: "Consumo do serviço (tubo, suporte, cabo, fita, isolamento): entra no valor do serviço ou é cobrado à parte, conforme Configurações › Orçamento.",
 };
 /** Opções do select do cadastro (rótulo curto + o que significa) */
 export const OPCOES_COMPORTAMENTO = COMPORTAMENTOS.map((value) => ({ value, label: `${LABEL_COMPORTAMENTO[value]} — ${DESCRICAO_COMPORTAMENTO[value]}` }));

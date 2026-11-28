@@ -41,3 +41,12 @@ export const ehArraste = (inicio: Ponto, agora: Ponto, limiar = LIMIAR_ARRASTE) 
 export function posicaoArrastada(origemBotao: Ponto, inicioPonteiro: Ponto, ponteiro: Ponto, botao: Tamanho, janela: Tamanho): Ponto {
   return limitarPosicao({ x: origemBotao.x + ponteiro.x - inicioPonteiro.x, y: origemBotao.y + ponteiro.y - inicioPonteiro.y }, botao, janela);
 }
+
+/**
+ * Onde fica o botão "voltar à posição padrão": à esquerda do botão de anotações (40 px antes); encostado na borda
+ * esquerda (não cabe), à direita dele — nunca por cima.
+ */
+export function posicaoDoVoltar(botao: Ponto, larguraBotao: number): { left: number; top: number } {
+  const esquerda = botao.x - 40;
+  return { left: esquerda >= 8 ? esquerda : botao.x + larguraBotao + 8, top: botao.y + 2 };
+}

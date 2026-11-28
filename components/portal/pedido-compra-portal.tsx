@@ -1,5 +1,6 @@
 "use client";
 
+import { erroDoEnvio, lerArquivoComoDataUrl, lerValorPedido, MSG_ARQUIVO_ILEGIVEL, MSG_ARQUIVO_PEDIDO_GRANDE, TAMANHO_MAX_PEDIDO } from "@/lib/pedido-cliente/arquivo";
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { AlertCircle, CheckCircle2, ExternalLink, FileText, Paperclip, Send } from "lucide-react";
@@ -16,24 +17,15 @@ export interface ItemPortal {
 export interface PedidoEnviado {
   id: string; numero: string; data: string; valor: number | null; situacao: string; motivoRecusa: string | null;
   enviadoEm: string; itens: string[];
+  /** "os:id" / "orcamento:id" dos itens que o pedido cobria */
+  chaves?: string[];
+  /** O nome do arquivo enviado (o cliente pode abrir o que mandou) */
+  anexoNome?: string | null;
 }
 
-const TAMANHO_MAX = 5 * 1024 * 1024;
 const hoje = () => new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo" }).format(new Date());
 const dataBR = (iso: string | null) => (iso ? new Date(iso).toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo" }) : null);
 const diaBR = (iso: string) => new Date(`${iso.slice(0, 10)}T12:00:00Z`).toLocaleDateString("pt-BR", { timeZone: "UTC" });
-const lerValor = (v: string) => {
-  const t = v.trim().replace(/\s|R\$/g, "");
-  if (!t) return null;
-  const n = Number(t.includes(",") ? t.replace(/\./g, "").replace(",", ".") : t);
-  return Number.isFinite(n) ? n : NaN;
-};
-const lerArquivo = (f: File) => new Promise<string>((ok, falha) => {
-  const r = new FileReader();
-  r.onload = () => ok(String(r.result));
-  r.onerror = () => falha(r.error);
-  r.readAsDataURL(f);
-});
 const rotuloItem = (i: Pick<ItemPortal, "tipo" | "numero">) => (i.tipo === "os" ? i.numero : `Orçamento ${i.numero}`);
 
 /**
@@ -57,10 +49,12 @@ export function PedidoCompraPortal({ itens, enviados }: { itens: ItemPortal[]; e
 
   const escolhidos = useMemo(() => livres.filter((i) => marcados.has(`${i.tipo}:${i.id}`)), [livres, marcados]);
   const total = escolhidos.reduce((s, i) => s + i.valor, 0);
-  const valorNum = lerValor(valor);
+  const valorNum = lerValorPedido(valor);
   const numeroOk = limparNumeroPedido(numero);
   const valorOk = valorNum === null || (!Number.isNaN(valorNum) && valorNum >= 0);
-  const recusados = enviados.filter((p) => p.situacao === "RECUSADO");
+  // A recusa só aparece no topo enquanto algum serviço dela ainda espera o pedido (resolvido, o aviso sai)
+  const esperando = new Set(itens.map((i) => `${i.tipo}:${i.id}`));
+  const recusados = enviados.filter((p) => p.situacao === "RECUSADO" && (p.chaves ?? []).some((c) => esperando.has(c)));
 
   function alternar(chave: string) {
     setMarcados((m) => { const n = new Set(m); if (n.has(chave)) n.delete(chave); else n.add(chave); return n; });
@@ -70,9 +64,9 @@ export function PedidoCompraPortal({ itens, enviados }: { itens: ItemPortal[]; e
     const f = e.target.files?.[0];
     e.target.value = "";
     if (!f) return;
-    if (f.size > TAMANHO_MAX) { setErro("Arquivo muito grande. Tamanho máximo: 5 MB."); return; }
+    if (f.size > TAMANHO_MAX_PEDIDO) { setErro(MSG_ARQUIVO_PEDIDO_GRANDE); return; }
     setErro(null);
-    setAnexo({ conteudo: await lerArquivo(f), nome: f.name });
+    try { setAnexo({ conteudo: await lerArquivoComoDataUrl(f), nome: f.name }); } catch { setErro(MSG_ARQUIVO_ILEGIVEL); }
   }
 
   async function enviar(e: React.FormEvent) {
@@ -92,7 +86,7 @@ export function PedidoCompraPortal({ itens, enviados }: { itens: ItemPortal[]; e
     }).catch(() => null);
     const j = await res?.json().catch(() => ({}));
     setEnviando(false);
-    if (!res?.ok) { setErro(j?.erro ?? "Não foi possível enviar o pedido de compra. Tente de novo."); return; }
+    if (!res?.ok) { setErro(erroDoEnvio(res?.status, j, "Não foi possível enviar o pedido de compra. Tente de novo.")); return; }
     setEnviado(numeroOk);
     setNumero(""); setValor(""); setObservacao(""); setAnexo(null); setMarcados(new Set()); setTentou(false);
     router.refresh();
@@ -137,7 +131,7 @@ export function PedidoCompraPortal({ itens, enviados }: { itens: ItemPortal[]; e
                     <p className="text-sm font-semibold text-ink">{rotuloItem(i)}{i.unidade ? <span className="font-normal text-ink-muted"> · {i.unidade}</span> : null}</p>
                     <p className="text-xs text-ink-muted">
                       {[
-                        i.concluidoEm ? `${i.tipo === "os" ? "Concluída" : "Aprovado"} em ${dataBR(i.concluidoEm)}` : "Em execução",
+                        i.concluidoEm ? `${i.tipo === "os" ? "Concluída" : "Aprovado"} em ${dataBR(i.concluidoEm)}` : "Ainda não concluída",
                         i.diasEsperando ? `há ${i.diasEsperando} dia${i.diasEsperando === 1 ? "" : "s"}` : null,
                       ].filter(Boolean).join(" · ")}
                     </p>
@@ -223,6 +217,11 @@ export function PedidoCompraPortal({ itens, enviados }: { itens: ItemPortal[]; e
                     </span>
                   </div>
                   {situacao === "RECUSADO" && p.motivoRecusa && <p className="text-xs text-atrasado-texto mt-1" data-motivo-recusa-portal>Motivo: {p.motivoRecusa}</p>}
+                  {p.anexoNome && (
+                    <a href={`/api/portal/pedidos-compra/${p.id}/anexo?inline=1`} target="_blank" rel="noopener" className="inline-flex items-center gap-1 text-xs text-acento hover:underline min-h-[44px]" data-arquivo-enviado>
+                      <ExternalLink className="w-3.5 h-3.5" aria-hidden /> Ver o arquivo enviado
+                    </a>
+                  )}
                 </li>
               );
             })}

@@ -10,6 +10,8 @@ export interface LinhaParaEditar {
   /** O preço que se edita: o unitário — ou o unitário BASE, no serviço com materiais */
   valorUnitario: number;
   observacao: string | null; materialId: string | null; comMateriais: boolean; valorManual: boolean;
+  /** O item está na tabela de preço do cliente: sem "Alterar preço de tabela", o preço não se edita aqui */
+  naTabela?: boolean;
 }
 
 /**
@@ -20,9 +22,10 @@ export interface LinhaParaEditar {
  */
 export function EditarLinhaOrcamento({ orcamentoId, status, faturado, linha }: { orcamentoId: string; status: string; faturado: boolean; linha: LinhaParaEditar }) {
   const router = useRouter();
-  const semPreco = linha.valorManual && linha.comMateriais;
-  // Preço que veio da tabela do cliente: mudar pede o motivo (vai para a linha do tempo); sem a permissão, o servidor recusa
+  // Preço que veio da tabela do cliente: mudar pede o motivo (vai para a linha do tempo); sem a permissão, o campo
+  // nem aparece (o servidor recusa do mesmo jeito)
   const podeAlterarPrecoTabela = usePermissoes().pode("orcamentos", "alterarPrecoTabela");
+  const semPreco = (linha.valorManual && linha.comMateriais) || (!!linha.naTabela && !podeAlterarPrecoTabela);
   const edicao: EdicaoDoSelecionado = {
     escopo: "uso", alvo: "este item do orçamento", travado: motivoDaLinhaDoOrcamento(linha, { status, faturado }),
     permissao: { modulo: "orcamentos", acao: "editar" }, mensagemSucesso: "Item do orçamento atualizado.",
