@@ -18,7 +18,7 @@ export interface EnvioMensagem { texto: string; foto?: string; miniatura?: strin
  * computador). Quem envia de fato é a tela (`onEnviar`): o escritório pela rota; o app pela fila do aparelho.
  */
 export function ConversaChat({
-  mensagens, carregando, erro, somenteLeitura, podeEscrever = true, semPermissao, onEnviar, urlFoto, onTentarDeNovo, className, placeholder = "Escreva uma mensagem",
+  mensagens, carregando, erro, somenteLeitura, podeEscrever = true, semPermissao, onEnviar, urlFoto, onTentarDeNovo, className, placeholder = "Mensagem",
   mostrarOs = false, abrirOs, podeAbrirOs, acimaDoTexto,
 }: {
   /** Esta etiqueta abre a OS? (app: só a OS em que o técnico tem atividade); sem isso, todas abrem quando há abrirOs */

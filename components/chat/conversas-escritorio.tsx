@@ -118,7 +118,7 @@ export function ConversasEscritorio({ pessoaInicial, osInicial, podeEscrever, po
           </div>
         )}
       </div>
-      <div className="card p-0 overflow-hidden grid lg:grid-cols-[22rem_1fr] h-[calc(100dvh-11rem)] min-h-[28rem]">
+      <div className="card p-0 overflow-hidden grid grid-cols-1 lg:grid-cols-[22rem_minmax(0,1fr)] h-[calc(100dvh-11rem)] min-h-[28rem]">
         {/* Lista */}
         <aside className={cn("flex flex-col min-h-0 border-r border-surface-border", aberta && "hidden lg:flex")} data-lista-conversas>
           <div className="p-3 space-y-2 border-b border-surface-border">
