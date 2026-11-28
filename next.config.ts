@@ -80,7 +80,11 @@ const naVercel = !!process.env.VERCEL;
 const nextConfig: NextConfig = {
   typescript: { ignoreBuildErrors: naVercel },
   eslint: { ignoreDuringBuilds: naVercel },
-  experimental: { webpackMemoryOptimizations: process.env.FRIVO_MEDIR_MEMOPT === "1" },
+  experimental: {
+    webpackMemoryOptimizations: process.env.FRIVO_MEDIR_MEMOPT === "1",
+    ...(process.env.FRIVO_MEDIR_WORKER === "1" ? { webpackBuildWorker: true } : {}),
+    ...(process.env.FRIVO_MEDIR_CPUS ? { cpus: Number(process.env.FRIVO_MEDIR_CPUS) } : {}),
+  },
   // Cabeçalhos de segurança em todas as respostas (páginas e APIs):
   // - nosniff: o navegador nunca "adivinha" um tipo diferente do declarado;
   // - frame-ancestors 'self' / SAMEORIGIN: nenhum site de terceiro embute o Frivo em iframe
