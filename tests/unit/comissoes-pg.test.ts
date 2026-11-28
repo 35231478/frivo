@@ -407,6 +407,10 @@ describe.skipIf(!URL_PG)("COM-1 — comissões (PostgreSQL real)", () => {
     expect((await chamar("comissoes", "GET")).json.config.vencimento).toEqual({ tipo: "DIA_FIXO", dia: 10 });
     expect((await cfg({})).status).toBe(200); // sem o vencimento no corpo: fica como está
     expect((await prisma.configuracao.findUnique({ where: { empresaId: "e1" } })).comissaoVencimentoDia).toBe(10);
+    // A tela geral de Configurações (que manda a configuração INTEIRA de volta) não mexe no vencimento
+    const geral = (await chamar("configuracoes", "GET")).json;
+    expect((await chamar("configuracoes", "PUT", {}, { ...geral, comissaoVencimentoTipo: "DIA_UTIL", comissaoVencimentoDia: 3 })).status).toBe(200);
+    expect((await prisma.configuracao.findUnique({ where: { empresaId: "e1" } })).comissaoVencimentoDia).toBe(10);
     // O banco recusa o que a tela recusa (o CHECK do SQL)
     await expect(prisma.configuracao.update({ where: { empresaId: "e1" }, data: { comissaoVencimentoTipo: "DIA_UTIL", comissaoVencimentoDia: 25 } })).rejects.toThrow();
 

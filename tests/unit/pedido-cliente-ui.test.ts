@@ -155,6 +155,7 @@ describe("a gaveta do pedido do cliente", () => {
     expect($<HTMLInputElement>("[data-pedido-numero]")!.value).toBe("PO-7");
     expect($<HTMLInputElement>("[data-pedido-numero]")!.closest("fieldset")!.disabled).toBe(true);
     expect($("[data-salvar-pedido]")).toBeNull();
+    expect($("[data-pedido-anexo]")).toBeNull(); // sem "Escolher arquivo" no modo leitura
     expect($("[data-pedido-anexo-atual]")!.getAttribute("href")).toBe("/api/pedidos-cliente/p7/anexo?inline=1"); // o anexo abre
     // O pedido só da pessoa (podeEditar) segue editável
     respostas["GET /api/pedidos-cliente/p8"] = { status: 200, corpo: { numero: "PO-8", data: "2026-11-20", valor: null, observacao: "", temAnexo: false, podeEditar: true } };

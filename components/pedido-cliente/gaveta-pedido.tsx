@@ -186,10 +186,12 @@ export function GavetaPedido({ aberto, onFechar, alvo, pedidoId = null, onConclu
                 )}
                 <FormField label="Anexo (PDF ou foto)">
                   <div className="flex items-center gap-2 flex-wrap">
-                    <label className="btn-secondary cursor-pointer">
-                      <Paperclip className="w-4 h-4" aria-hidden /> {anexo ? "Trocar arquivo" : "Escolher arquivo"}
-                      <input type="file" accept=".pdf,image/png,image/jpeg,image/webp" className="sr-only" onChange={escolherArquivo} data-pedido-anexo />
-                    </label>
+                    {!compartilhado && (
+                      <label className="btn-secondary cursor-pointer">
+                        <Paperclip className="w-4 h-4" aria-hidden /> {anexo ? "Trocar arquivo" : "Escolher arquivo"}
+                        <input type="file" accept=".pdf,image/png,image/jpeg,image/webp" className="sr-only" onChange={escolherArquivo} data-pedido-anexo />
+                      </label>
+                    )}
                     {anexo && <span className="text-sm text-ink truncate max-w-[12rem]" data-pedido-anexo-nome>{anexo.nome}</span>}
                     {!anexo && anexoAtual && (
                       <a href={anexoAtual} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-sm text-acento hover:underline" data-pedido-anexo-atual>

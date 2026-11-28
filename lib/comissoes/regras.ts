@@ -439,7 +439,7 @@ export type VencimentoTipo = (typeof VENCIMENTO_TIPOS)[number];
 export interface VencimentoFechamento { tipo: VencimentoTipo; dia: number }
 /** O padrão: 5º dia útil do mês seguinte à competência */
 export const VENCIMENTO_PADRAO: VencimentoFechamento = { tipo: "DIA_UTIL", dia: 5 };
-export const ROTULO_VENCIMENTO_TIPO: Record<VencimentoTipo, string> = { DIA_UTIL: "Dia útil do mês seguinte", DIA_FIXO: "Dia do mês seguinte" };
+export const ROTULO_VENCIMENTO_TIPO: Record<VencimentoTipo, string> = { DIA_UTIL: "Dia útil", DIA_FIXO: "Dia fixo" };
 /** Todo mês tem ao menos 20 dias úteis (seg–sex), e o dia fixo além do fim do mês cai no último dia */
 export const MAX_DIA_UTIL = 20;
 export const MAX_DIA_FIXO = 31;

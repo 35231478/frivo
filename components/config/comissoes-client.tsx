@@ -132,7 +132,7 @@ export function ComissoesClient({ inicial }: { inicial: TelaComissoesDados }) {
             <Dica rotulo="Vencimento do pagamento" texto={DICA_VENCIMENTO} />
           </div>
           <div className="grid grid-cols-[1fr_6rem] gap-3 max-w-md">
-            <FormField label="Vence no">
+            <FormField label="Vence no mês seguinte">
               <Select value={config.vencimento.tipo} data-vencimento-tipo
                 onChange={(e) => setConfig((c) => ({ ...c, vencimento: { ...c.vencimento, tipo: e.target.value as VencimentoTipo } }))}>
                 {VENCIMENTO_TIPOS.map((t) => <option key={t} value={t}>{ROTULO_VENCIMENTO_TIPO[t]}</option>)}
