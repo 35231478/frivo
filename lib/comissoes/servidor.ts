@@ -6,7 +6,7 @@
  * não estornados das faturas vivas, status do orçamento e da OS) sempre que alguém olha — o fechamento do mês e
  * o extrato. Recalcular é idempotente: cria só a diferença (liberação ou estorno), e o fechamento trava a empresa.
  */
-import type { Prisma } from "@prisma/client";
+import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { medicoesDaOrigem } from "@/lib/faturamento-os";
 import { ultimosCustos } from "@/lib/estoque/custo";
@@ -44,7 +44,15 @@ export async function regrasAtivas(empresaId: string, db: Db = prisma): Promise<
   return rs.map((r) => ({
     id: r.id, quemTipo: r.quemTipo as RegraComissao["quemTipo"], usuarioId: r.usuarioId, cargoId: r.cargoId, papel: r.papel as RegraComissao["papel"],
     sobreTipo: r.sobreTipo as RegraComissao["sobreTipo"], categoria: r.categoria, servicoId: r.servicoId, base: r.base as RegraComissao["base"], valor: num(r.valor), ativo: r.ativo,
+    divisao: r.divisao as RegraComissao["divisao"], divisaoCargos: lerDivisaoCargos(r.divisaoCargos),
   }));
+}
+
+/** O { cargoId: % } gravado (o que não for número positivo fica de fora) */
+export function lerDivisaoCargos(v: unknown): Record<string, number> | null {
+  if (!v || typeof v !== "object" || Array.isArray(v)) return null;
+  const lidos = Object.entries(v as Record<string, unknown>).map(([k, x]) => [k, Number(x)] as const).filter(([, x]) => Number.isFinite(x) && x > 0);
+  return lidos.length ? Object.fromEntries(lidos) : null;
 }
 
 const travarEmpresa = (tx: Prisma.TransactionClient, empresaId: string) => tx.$queryRaw`SELECT 1 AS ok FROM pg_advisory_xact_lock(hashtext(${`comissoes:${empresaId}`}))`;
@@ -494,10 +502,11 @@ export async function salvarRegra(empresaId: string, dados: ReturnType<typeof no
     const chave = chaveDaRegra(dados as Parameters<typeof chaveDaRegra>[0]);
     if (outras.some((r) => chaveDaRegra(r as Parameters<typeof chaveDaRegra>[0]) === chave)) return { ok: false, status: 409, erro: MSG_REGRA_REPETIDA };
   }
+  const gravar = { ...dados, divisaoCargos: dados.divisaoCargos ?? Prisma.DbNull };
   if (o.id) {
-    await prisma.comissaoRegra.update({ where: { id: o.id }, data: dados });
+    await prisma.comissaoRegra.update({ where: { id: o.id }, data: gravar });
     return { ok: true, id: o.id };
   }
-  const r = await prisma.comissaoRegra.create({ data: { ...dados, empresaId, criadoPorId: o.criadoPorId ?? null }, select: { id: true } });
+  const r = await prisma.comissaoRegra.create({ data: { ...gravar, empresaId, criadoPorId: o.criadoPorId ?? null }, select: { id: true } });
   return { ok: true, id: r.id };
 }
