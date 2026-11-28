@@ -343,3 +343,13 @@ As rotas de gravar exigem a mesma permissão de editar a tabela (403 sem ela). A
 | `leva-i2-b` | as linhas da medição na conferência; 403/400/motivo e o já gravado; marcar, travar e destravar na tela; centavos; % e R$; todos e escolhidos; desconto % → valor fixo; negativo, nada muda e item ausente; a validação do pedido e do motivo; o plano do desfazer (volta, alterado, removido, desconto recalculado) e o aviso |
 | `leva-i2-b-ui` | medição: cadeado sem a permissão; o motivo pedido e enviado; o 400 do servidor abre o motivo. Editor: sem a permissão não há reajuste; marcados → prévia do servidor → motivo → aplicar → recarrega; todos em R$; alteração não salva desliga os botões; desfazer com a confirmação e o aviso |
 | `leva-i2-b-pg` (PostgreSQL real) | medição POST e PUT: 403, 400, trilha em `empresa_eventos` ("Medição"/"Fatura"), o já gravado não pede de novo, livres. Reajuste: prévia não grava; aplicar grava os preços e o lote; só os escolhidos depois de o editor recriar as linhas; 403, 404 e motivo; desfazer (o último, o item alterado fica, o anterior pelo serviço, desconto de volta), 409 sem lote |
+
+## Leva I.2 — grupo C
+
+- **7. Material de campo "Cobrado à parte":** o uso lançado no app vira item cobrado a conferir (preço de venda da
+  tabela do cliente ou do catálogo; fora do catálogo, R$ 0). Conferência em Comercial › Itens da OS (Confirmar /
+  Excluir da cobrança); faturar a OS espera a conferência. Incluso não muda. Detalhes em `docs/orcamento-e2.md`.
+- **8. "Resolvido por outro meio":** o pedido do portal que nada mais espera encerra sozinho, na leitura (um ponto só).
+- **9. Lembrete sem portal:** outro e-mail, com o link do relatório de cada OS, pedindo a resposta com o pedido.
+- **10. Recusa por e-mail:** com o motivo, ao contato e ao e-mail de compras; a falha não desfaz a recusa.
+- Detalhes de 8–10 em `docs/pedido-cliente-portal.md`. Testes: `leva-i2c`, `leva-i2c-ui`, `leva-i2c-pg`.

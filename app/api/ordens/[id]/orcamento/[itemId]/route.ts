@@ -15,6 +15,7 @@ import { ERRO_ITEM_SEPARADO, itemTemMaterialSeparado } from "@/lib/estoque/separ
 import { precoComparavelDoServico, verificarItemDaOs } from "@/lib/precos/trava-tabela-server";
 import { textoDaTrilha } from "@/lib/precos/trava-tabela";
 import { escopoBarra } from "@/lib/escopo/proprios-server";
+import { MSG_USE_CONFERENCIA } from "@/lib/os/material-campo-cobranca";
 
 /** O preço comparável já gravado no item (a edição não pede de novo o que já estava) */
 const anteriorDoItem = (it: { quantidade: unknown; valorUnitario: unknown; valorBase: unknown; valorManual: boolean }) =>
@@ -41,6 +42,8 @@ export async function PUT(req: NextRequest, { params }: Params) {
 
   const item = await prisma.osItemOrcamento.findFirst({ where: { id: itemId, ordemServicoId: id } });
   if (!item) return NextResponse.json({ erro: "Não encontrado" }, { status: 404 });
+  // Leva I.2: o material de campo a conferir só muda pela conferência (Confirmar / Excluir da cobrança)
+  if (item.conferirCampo) return NextResponse.json({ erro: MSG_USE_CONFERENCIA }, { status: 400 });
 
   if (body.executado === true && !item.executado) {
     const atualizado = await prisma.osItemOrcamento.update({
@@ -173,8 +176,9 @@ export async function DELETE(_: NextRequest, { params }: Params) {
   if (!(await osDaEmpresa(id, session.user!.empresaId))) return NextResponse.json({ erro: "OS não encontrada" }, { status: 404 });
 
   // Só apaga item desta OS (antes apagava qualquer item pelo id, de qualquer OS/empresa)
-  const item = await prisma.osItemOrcamento.findFirst({ where: { id: itemId, ordemServicoId: id }, select: { id: true, materialId: true } });
+  const item = await prisma.osItemOrcamento.findFirst({ where: { id: itemId, ordemServicoId: id }, select: { id: true, materialId: true, conferirCampo: true } });
   if (!item) return NextResponse.json({ erro: "Não encontrado" }, { status: 404 });
+  if (item.conferirCampo) return NextResponse.json({ erro: MSG_USE_CONFERENCIA }, { status: 400 });
   // Registro fechado: as linhas não saem mais
   const fechada = await travaDasLinhasDaOs(id);
   if (fechada) return NextResponse.json({ erro: fechada }, { status: 400 });

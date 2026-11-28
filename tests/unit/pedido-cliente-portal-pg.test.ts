@@ -103,6 +103,14 @@ describe.skipIf(!URL_PG)("PC-2 — pedido do cliente no portal + lembretes (Post
       cli("cNao", "e1", "Não exige (fictícia)", { exigePcAntesNf: false, comprasEmail: "compras@nao.test" }),
       cli("cE2", "e2", "Cliente da outra (fictícia)", { comprasEmail: "compras@e2.test" }),
     ] });
+    // Leva I.2: o lembrete com o link do portal é para quem tem o portal (o e-mail de compras é o login de um contato);
+    // B, L e o da outra empresa têm — o cliente sem portal recebe o outro e-mail (tests/unit/leva-i2c-pg)
+    await prisma.cliente.updateMany({ where: { id: { in: ["cB", "cL", "cE2"] } }, data: { portalAtivo: true } });
+    await prisma.contatoCliente.createMany({ data: [
+      { id: "pB", empresaId: "e1", clienteId: "cB", nome: "Compras B", email: "compras@b.test", senha: "hash" },
+      { id: "pL", empresaId: "e1", clienteId: "cL", nome: "Lia", email: "Compras@L.test", senha: "hash" },
+      { id: "pE2", empresaId: "e2", clienteId: "cE2", nome: "Compras E2", email: "compras@e2.test", senha: "hash" },
+    ] });
     const os = (id: string, clienteId: string, conclusao: Date | null, extra: Record<string, unknown> = {}, empresaId = "e1") => ({
       id, empresaId, numero: `OS-${id}`, clienteId, criadoPorId: empresaId === "e1" ? "uA" : "uB", descricao: "Manutenção",
       status: conclusao ? "CONCLUIDA" : "AGENDADA", criadoEm: DIA(1), dataConclusao: conclusao, ...extra,
@@ -224,7 +232,8 @@ describe.skipIf(!URL_PG)("PC-2 — pedido do cliente no portal + lembretes (Post
     const [env] = await ps.pedidosEnviadosPeloPortal("e1", "cA");
     expect([env.situacao, env.motivoRecusa, env.itens]).toEqual(["RECUSADO", "O valor do pedido não confere com a OS-oA1.", ["OS-oA1", "Orçamento ORC-A"]]);
     expect((await prisma.ordemServico.findUnique({ where: { id: "oA1" } })).pedidoClienteId).toBeNull();
-    expect((await hist("oA1")).at(-1)).toBe("Pedido de compra do portal recusado | nº 4500123 · O valor do pedido não confere com a OS-oA1.");
+    // Leva I.2: depois da recusa, a trilha registra o e-mail ao cliente com o motivo
+    expect((await hist("oA1")).slice(-2)).toEqual(["Pedido de compra do portal recusado | nº 4500123 · O valor do pedido não confere com a OS-oA1.", "Recusa do pedido de compra enviada ao cliente | Enviado a Compras@A.test"]);
     expect((await ps.pendentesDoCliente("e1", "cA", DIA(20))).every((i) => !i.emConferencia)).toBe(true);
     expect((await ps.contarPedidosConferir("e1")).pedidosConferir).toBe(0);
     // a outra empresa não enxerga o pedido recusado

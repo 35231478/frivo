@@ -9,6 +9,11 @@
  *     de tudo o que está pendente e o link do portal;
  *  3. cada item listado fica em pedidos_cliente_lembretes e na trilha da OS (ou no evento do orçamento).
  *
+ * Leva I.2 — o cliente SEM acesso ao portal (o e-mail de compras não é o login de um contato com portal) recebe o
+ * e-mail "sem portal": a mesma lista, com o link público do relatório de cada OS (o anexo do PDF não é viável: o
+ * relatório da OS é uma página que o cliente imprime/salva em PDF, não há PDF gerado no servidor), pedindo que
+ * RESPONDA com o pedido de compra — a resposta vai para o e-mail da empresa. Nenhum link do portal.
+ *
  * Sem duplicar: antes de enviar, a rotina GRAVA as chaves devidas (chave única "os:<id>:<etapa>"). Se outra rodada
  * já gravou (rodou de novo, ou duas ao mesmo tempo), nada sai. Se o envio falha, as chaves gravadas são apagadas
  * e a próxima rodada tenta de novo.
@@ -19,8 +24,8 @@ import { prisma } from "@/lib/prisma";
 import { enviarEmail } from "@/lib/email";
 import { autorDoSistema, pendentesDoCliente } from "@/lib/pedido-cliente/portal-server";
 import {
-  ACAO_TRILHA_LEMBRETE, ROTA_PORTAL_PEDIDO, TIPO_EMAIL_LEMBRETE, chaveLembrete, planejarLembrete, reguaEfetiva, textoTrilhaLembrete,
-  variaveisLembrete, type ItemLembrete,
+  ACAO_TRILHA_LEMBRETE, ROTA_PORTAL_PEDIDO, TIPO_EMAIL_LEMBRETE, TIPO_EMAIL_LEMBRETE_SEM_PORTAL, chaveLembrete, compradorTemPortal, planejarLembrete,
+  reguaEfetiva, textoTrilhaLembrete, variaveisLembrete, variaveisLembreteSemPortal, type ItemLembrete,
 } from "@/lib/pedido-cliente/lembretes";
 
 const baseUrl = () => (process.env.NEXTAUTH_URL || process.env.APP_URL || "").replace(/\/$/, "");
@@ -36,7 +41,7 @@ export async function lembrarCliente(
   agora: Date = new Date(), enviar: Enviar = enviarEmail,
 ): Promise<"enviado" | "nada" | "ja-enviado" | "erro"> {
   const pendentes = (await pendentesDoCliente(cliente.empresaId, cliente.id, agora)).filter((i) => !i.emConferencia);
-  const itens: ItemLembrete[] = pendentes.map((i) => ({ tipo: i.tipo, id: i.id, numero: i.numero, diasEsperando: i.diasEsperando, concluidoEm: i.concluidoEm, valor: i.valor }));
+  const itens: ItemLembrete[] = pendentes.map((i) => ({ tipo: i.tipo, id: i.id, numero: i.numero, diasEsperando: i.diasEsperando, concluidoEm: i.concluidoEm, valor: i.valor, documento: i.documento }));
   const candidatas = itens.flatMap((i) => empresa.regua.concat(0).map((e) => chaveLembrete(i.tipo, i.id, e)));
   const enviadas = new Set(candidatas.length
     ? (await prisma.pedidoClienteLembrete.findMany({ where: { chave: { in: candidatas } }, select: { chave: true } })).map((l) => l.chave)
@@ -55,10 +60,17 @@ export async function lembrarCliente(
   if (!reservadas.count) return "ja-enviado";
 
   const listados = plano.listados.map((l) => l.item);
-  const r = await enviar(cliente.empresaId, {
+  const comPortal = await temPortal(cliente.empresaId, cliente.id, para);
+  const r = await enviar(cliente.empresaId, comPortal ? {
     tipo: TIPO_EMAIL_LEMBRETE, para,
     variaveis: variaveisLembrete({ contatoNome: cliente.comprasNome, clienteNome: cliente.nome, itens: listados, link: linkDoPortal(baseUrl(), ROTA_PORTAL_PEDIDO) }),
     referenciaId: cliente.id, referenciaTipo: "PEDIDO_CLIENTE_LEMBRETE",
+  } : {
+    tipo: TIPO_EMAIL_LEMBRETE_SEM_PORTAL, para,
+    variaveis: variaveisLembreteSemPortal({ contatoNome: cliente.comprasNome, clienteNome: cliente.nome, itens: listados, base: baseUrl() }),
+    referenciaId: cliente.id, referenciaTipo: "PEDIDO_CLIENTE_LEMBRETE",
+    // a resposta com o pedido vai para a empresa (quando a configuração de e-mail não tem um "responder para")
+    responderPara: (await prisma.empresa.findUnique({ where: { id: cliente.empresaId }, select: { email: true } }))?.email ?? null,
   }).catch((e: unknown) => ({ ok: false, erro: (e as Error)?.message ?? "erro no envio" }));
   if (!r.ok) {
     // não saiu: devolve as chaves para a próxima rodada tentar de novo
@@ -80,6 +92,19 @@ export async function lembrarCliente(
   if (autor && os.length) await prisma.osHistorico.createMany({ data: os.map((l) => ({ ordemServicoId: l.item.id, usuarioId: autor, acao: ACAO_TRILHA_LEMBRETE, detalhes: trilha(l), criadoEm: agora })) });
   if (orcs.length) await prisma.orcamentoEvento.createMany({ data: orcs.map((l) => ({ empresaId: cliente.empresaId, orcamentoId: l.item.id, tipo: "PEDIDO_CLIENTE", detalhe: `${ACAO_TRILHA_LEMBRETE}: ${trilha(l)}`, usuarioId: autor, criadoEm: agora })) });
   return "enviado";
+}
+
+/** O e-mail de compras é o login de um contato com acesso ao portal (e ao pedido de compra)? */
+async function temPortal(empresaId: string, clienteId: string, comprasEmail: string): Promise<boolean> {
+  const c = await prisma.cliente.findFirst({
+    where: { id: clienteId, empresaId },
+    select: { portalAtivo: true, contatosCliente: { where: { email: { equals: comprasEmail, mode: "insensitive" } }, select: { email: true, ativo: true, senha: true, permissoes: true }, take: 10 } },
+  });
+  if (!c) return false;
+  return compradorTemPortal({
+    portalAtivo: c.portalAtivo, comprasEmail,
+    contatos: c.contatosCliente.map((x) => ({ email: x.email, ativo: x.ativo, temSenha: !!x.senha, permissoes: x.permissoes as Record<string, boolean> | null })),
+  });
 }
 
 /** A rotina: todas as empresas (ou uma), cliente a cliente; a falha de um não para os outros */
