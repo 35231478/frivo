@@ -27,7 +27,7 @@ export function MotivoPrecoTabela({ alterados, valor, onChange }: { alterados: r
   return (
     <div className="card-padded" data-motivo-preco-tabela>
       <FormField
-        label="Motivo da alteração do preço de tabela" required
+        label="Motivo da alteração do preço de tabela" required name="motivoPrecoTabela"
         hint={alterados.length ? `Fora da tabela: ${alterados.map((i) => i.descricao).join(", ")}` : "O preço de um item da tabela do cliente mudou."}
       >
         <Input value={valor} onChange={(e) => onChange(e.target.value)} maxLength={MOTIVO_MAX} placeholder="Ex.: desconto negociado com o cliente" />

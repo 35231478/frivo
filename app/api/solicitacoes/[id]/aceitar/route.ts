@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { erroDeValidacao, erroNoCampo } from "@/lib/forms/erros-server";
 import { fixarLimitesDaOs } from "@/lib/atendimento/prazo-server";
 import { z } from "zod";
 import { exigirPermissao } from "@/lib/permissoes-server";
@@ -47,34 +48,34 @@ export async function POST(req: NextRequest, { params }: Params) {
   const parsed = schema.safeParse(await req.json().catch(() => ({})));
   if (!parsed.success) {
     const msg = Object.values(parsed.error.flatten().fieldErrors).flat()[0];
-    return NextResponse.json({ erro: msg ?? "Dados inválidos" }, { status: 400 });
+    return erroDeValidacao(parsed.error, msg ?? "Dados inválidos");
   }
   const d = parsed.data;
   const [y, mo, di, h, mi] = d.dataHora.split(/[-T:]/).map(Number);
   // A data/hora escolhida é de Brasília (o servidor roda em UTC: antes gravava 3 h antes)
   const quando = instanteBR(y, mo - 1, di, h, mi);
-  if (Number.isNaN(quando.getTime())) return NextResponse.json({ erro: "Data inválida." }, { status: 400 });
+  if (Number.isNaN(quando.getTime())) return erroNoCampo("dataHora", "Data inválida.");
 
   // Tudo precisa ser do mesmo cliente/empresa
   const unidadeId = d.unidadeId || null;
   if (unidadeId && !(await prisma.unidade.findFirst({ where: { id: unidadeId, clienteId: os.clienteId, empresaId }, select: { id: true } })))
-    return NextResponse.json({ erro: "Endereço inválido para este cliente." }, { status: 400 });
+    return erroNoCampo("unidadeId", "Endereço inválido para este cliente.");
   const equipamentoId = d.equipamentoId || null;
   if (equipamentoId && !(await prisma.equipamento.findFirst({ where: { id: equipamentoId, empresaId, unidade: { clienteId: os.clienteId } }, select: { id: true } })))
-    return NextResponse.json({ erro: "Equipamento inválido para este cliente." }, { status: 400 });
+    return erroNoCampo("equipamentoId", "Equipamento inválido para este cliente.");
   const contratoId = d.contratoId || null;
   if (contratoId && !(await prisma.contrato.findFirst({ where: { id: contratoId, empresaId, clienteId: os.clienteId }, select: { id: true } })))
-    return NextResponse.json({ erro: "Contrato inválido para este cliente." }, { status: 400 });
+    return erroNoCampo("contratoId", "Contrato inválido para este cliente.");
   // Quem executa é obrigatório (equipe OU colaboradores); veículo puxado da equipe/colaborador ou escolhido
   const corpo = parsed.data as any;
   const def = lerDefinicao(corpo);
-  if (!def) return NextResponse.json({ erro: MSG_SEM_EXECUTOR }, { status: 400 });
+  if (!def) return erroNoCampo("execucao", MSG_SEM_EXECUTOR);
   let tecnicos: Awaited<ReturnType<typeof resolverTecnicos>>;
   let veiculoId: string | null;
   try {
     tecnicos = await resolverTecnicos(empresaId, def, null, { exigir: true });
     veiculoId = await resolverVeiculo(empresaId, lerVeiculo(corpo), tecnicos);
-  } catch (e) { if (e instanceof ErroTecnicos) return NextResponse.json({ erro: e.message }, { status: 400 }); throw e; }
+  } catch (e) { if (e instanceof ErroTecnicos) return erroNoCampo("execucao", e.message); throw e; }
 
   // Troca de status condicional: se outra pessoa tratou no meio do caminho, não sobrescreve
   const atualizado = await prisma.$transaction(async (tx) => {

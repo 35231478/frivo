@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { erroDeValidacao } from "@/lib/forms/erros-server";
 import { exigirPermissao } from "@/lib/permissoes-server";
 import { bloqueioPainelTecnico } from "@/lib/tecnico/painel";
 import { prisma } from "@/lib/prisma";
@@ -57,7 +58,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   if (e.resposta) return e.resposta;
 
   const parsed = atrasoJustificadoSchema.safeParse(await req.json().catch(() => null));
-  if (!parsed.success) return NextResponse.json({ erro: parsed.error.issues[0]?.message ?? "Dados inválidos." }, { status: 400 });
+  // O mesmo `erro` de antes (a 1ª mensagem) + `campos` (motivo, responsavel, observacao: os nomes da gaveta)
+  if (!parsed.success) return erroDeValidacao(parsed.error, parsed.error.issues[0]?.message ?? "Dados inválidos.");
   // Nenhum prazo descumprido (nem atividade atrasada): não há o que justificar
   if (!haDescumprimentoParaJustificar(e.os)) return NextResponse.json({ erro: MSG_ATRASO_NAO_ATRASADA }, { status: 409 });
 

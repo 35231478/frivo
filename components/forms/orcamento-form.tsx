@@ -7,6 +7,8 @@ import { Input } from "@/components/ui/input";
 import { InputData } from "@/components/ui/input-data";
 import { Textarea } from "@/components/ui/textarea";
 import { FormField, FormGrid, FormSection } from "@/components/ui/form-field";
+import { ErrosDoFormulario, ResumoDeErros, useErrosDoFormulario } from "@/components/ui/formulario-erros";
+import { lerErroDaApi, type ErrosDeCampo } from "@/lib/forms/erros";
 import { Dica } from "@/components/ui/dica";
 import { PageHeader } from "@/components/ui/page-header";
 import { ItensTabela, type ItemTabela, type CatalogoItem, type TabelaPrecoCliente, type CadastroCatalogo } from "@/components/orcamento/itens-tabela";
@@ -18,7 +20,7 @@ import { TotaisBloco, type DescontoGrupoState } from "@/components/orcamento/tot
 import { PropostaCampos, PROPOSTA_VAZIA, type PropostaState } from "@/components/orcamento/proposta-campos";
 import { cn } from "@/lib/utils";
 import type { TipoDesconto, TipoOrcamento } from "@prisma/client";
-import { AlertCircle, Sparkles, RefreshCw } from "lucide-react";
+import { Sparkles, RefreshCw } from "lucide-react";
 import { chaveDiaCivil, chaveHojeBR } from "@/lib/fuso";
 import { calcularOrcamento, DIAS_VALIDADE_PADRAO, totalDoItem, validadePadrao } from "@/lib/orcamentos/calculo";
 import { pecasDosMateriais, regraDeCobranca, valorDaLinha } from "@/lib/orcamentos/materiais";
@@ -298,7 +300,8 @@ export function OrcamentoForm({
     inicial?.ordensServicoIds ?? (osInicialId ? [osInicialId] : []),
   );
 
-  const [erro, setErro] = useState("");
+  // ERRO NO CAMPO: cada erro no campo dele (cliente, linhas da tabela, valor mensal, motivo); a faixa é o resumo
+  const erros = useErrosDoFormulario();
   const [salvando, setSalvando] = useState(false);
   const [tabelaPreco, setTabelaPreco] = useState<TabelaPrecoCliente | null>(null);
   /** O cliente está ligado a uma tabela inativa: valem os preços padrão do catálogo, e a tela avisa */
@@ -472,18 +475,21 @@ export function OrcamentoForm({
 
   async function salvar(e: React.FormEvent) {
     e.preventDefault();
-    setErro("");
 
-    if (!clienteId) return setErro("Selecione um cliente.");
-    if (servicos.length === 0 && produtos.length === 0) {
-      return setErro("Adicione ao menos um serviço ou produto.");
-    }
+    // Tudo o que falta de uma vez, cada um no campo dele; o primeiro recebe o foco
+    const faltando: ErrosDeCampo = {};
+    if (!clienteId) faltando.clienteId = "Selecione um cliente.";
+    if (servicos.length === 0 && produtos.length === 0) faltando.servicos = "Adicione ao menos um serviço ou produto.";
+    // Linha com descrição e sem quantidade: o servidor recusaria sem dizer qual
+    servicos.forEach((s, i) => { if (s.descricao.trim() && !(Number(s.quantidade) > 0)) faltando[`servicos.${i}.quantidade`] = "Quantidade maior que zero."; });
+    produtos.forEach((p, i) => { if (p.descricao.trim() && !p.derivada && !(Number(p.quantidade) > 0)) faltando[`produtos.${i}.quantidade`] = "Quantidade maior que zero."; });
     if (tipo === "PROPOSTA_CONTRATO" && (!proposta.valorMensal || Number(proposta.valorMensal) <= 0)) {
-      return setErro("Informe o valor mensal do contrato proposto.");
+      faltando.valorMensal = "Informe o valor mensal do contrato proposto.";
     }
     if (pedirMotivo && motivoPrecoTabela.trim().length < MOTIVO_MIN) {
-      return setErro("Informe o motivo da alteração do preço de tabela.");
+      faltando.motivoPrecoTabela = "Informe o motivo da alteração do preço de tabela.";
     }
+    if (!erros.validar(faltando)) return;
     const limpar = (it: ItemTabela) => ({
       catalogoId: it.catalogoId ?? null,
       descricao: it.descricao.trim(),
@@ -506,6 +512,11 @@ export function OrcamentoForm({
     }));
     // As peças derivadas NÃO vão como produto: o servidor as recompõe dos materiais
     const prodPayload = produtos.filter((p) => p.descricao.trim() && !p.derivada).map(limpar);
+    // As linhas em branco não vão: o erro do servidor em "servicos.N.x" volta para a linha N da TELA
+    const linhaDaTela = {
+      servicos: servicos.flatMap((s, i) => (s.descricao.trim() ? [i] : [])),
+      produtos: produtos.flatMap((p, i) => (p.descricao.trim() && !p.derivada ? [i] : [])),
+    };
 
     const payload: Record<string, any> = {
       motivoPrecoTabela: pedirMotivo ? motivoPrecoTabela.trim() : null,
@@ -571,7 +582,14 @@ export function OrcamentoForm({
       });
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
-        setErro(err.erro ?? "Erro ao salvar.");
+        const e = lerErroDaApi(err, "Erro ao salvar.");
+        const campos: ErrosDeCampo = {};
+        for (const [k, v] of Object.entries(e.campos)) {
+          const m = /^(servicos|produtos)\.(\d+)\.(.+)$/.exec(k);
+          const i = m ? linhaDaTela[m[1] as "servicos" | "produtos"][Number(m[2])] : undefined;
+          campos[m && i !== undefined ? `${m[1]}.${i}.${m[3]}` : k] = v;
+        }
+        erros.erroDaApi({ erro: e.geral ?? "", campos }, "Erro ao salvar.");
         if (err.precoTabela && res.status === 400) setServidorPediuMotivo(true);
         return;
       }
@@ -580,14 +598,16 @@ export function OrcamentoForm({
       router.push(`/orcamentos/${saved.id}`);
       router.refresh();
     } catch {
-      setErro("Erro de conexão.");
+      erros.definirGeral("Erro de conexão.");
+      erros.focar();
     } finally {
       setSalvando(false);
     }
   }
 
   return (
-    <form onSubmit={salvar} className="space-y-6" data-orcamento-form={embutido ? "embutido" : mode}>
+    <ErrosDoFormulario valor={erros}>
+    <form ref={erros.ref} onSubmit={salvar} noValidate className="space-y-6" data-orcamento-form={embutido ? "embutido" : mode}>
       {!embutido && <PageHeader
         title={mode === "novo" ? "Novo orçamento" : `Editar ${inicial?.codigo ?? "orçamento"}`}
         description={mode === "novo" ? "Proposta comercial para o cliente" : undefined}
@@ -604,12 +624,8 @@ export function OrcamentoForm({
         }
       />}
 
-      {erro && (
-        <div className="bg-atrasado-claro border border-atrasado/20 text-atrasado-texto text-sm rounded-lg px-4 py-3 flex items-center gap-2">
-          <AlertCircle className="w-4 h-4 shrink-0" />
-          {erro}
-        </div>
-      )}
+      {/* A faixa do topo é só o resumo: o erro mora no campo (ERRO NO CAMPO) */}
+      <ResumoDeErros />
 
       {tabelaPreco && <SeloTabelaCliente nome={tabelaPreco.nome} podeAlterar={podeAlterarPrecoTabela} />}
       {tabelaInativa && (
@@ -623,7 +639,7 @@ export function OrcamentoForm({
             <FormField label="Nome do orçamento" dica="Gerado automaticamente a partir do tipo da OS, do equipamento, do cliente ou dos itens. Pode ser editado; apague o texto para voltar ao nome automático.">
               <Input value={nome} onChange={(e) => setNome(e.target.value)} placeholder={nomeAuto} data-nome-orcamento />
             </FormField>
-            <FormField label="Cliente" required>
+            <FormField label="Cliente" required name="clienteId" valor={clienteId}>
               <SelectCadastroRapido
                 value={clienteId}
                 onChange={setClienteId}
@@ -646,7 +662,7 @@ export function OrcamentoForm({
                 edicao={CLIENTE.edicao({ aoMudarContatos: recarregarDestinos })}
               />
             </FormField>
-            <FormField label="Validade" dica={`Padrão: ${diasValidade} dias após a data do orçamento (Configurações › Orçamentos). Após a validade, o orçamento não pode ser aprovado.`}>
+            <FormField label="Validade" name="validadeEm" valor={validadeEm} dica={`Padrão: ${diasValidade} dias após a data do orçamento (Configurações › Orçamentos). Após a validade, o orçamento não pode ser aprovado.`}>
               <InputData value={validadeEm} onChange={setValidadeEm} aria-label="Validade" />
             </FormField>
           </FormGrid>
@@ -736,6 +752,7 @@ export function OrcamentoForm({
           titulo={tipo === "PROPOSTA_CONTRATO" ? "Serviços inclusos no contrato" : "Serviços"}
           dica={DICA_LINHAS}
           labelAdicionar="Pesquisar serviço por nome ou código..."
+          nome="servicos"
           catalogo={catalogoServicos}
           itens={servicos}
           onChange={setServicos}
@@ -764,6 +781,7 @@ export function OrcamentoForm({
           titulo="Produtos"
           dica={DICA_LINHAS}
           labelAdicionar="Pesquisar produto por nome ou código..."
+          nome="produtos"
           catalogo={catalogoProdutos}
           itens={[...produtos, ...pecasDerivadas]}
           onChange={(itens) => setProdutos(itens.filter((i) => !i.derivada))}
@@ -869,5 +887,6 @@ export function OrcamentoForm({
         </Button>
       </div>
     </form>
+    </ErrosDoFormulario>
   );
 }

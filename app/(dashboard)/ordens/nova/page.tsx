@@ -9,6 +9,8 @@ import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { FormField, FormSection, FormGrid } from "@/components/ui/form-field";
+import { ErrosDoFormulario, ResumoDeErros, useErrosDoFormulario } from "@/components/ui/formulario-erros";
+import type { ErrosDeCampo } from "@/lib/forms/erros";
 import { LABELS_PRIORIDADE } from "@/lib/utils";
 import { EditarNoContexto, SelectCadastroRapido } from "@/components/ui/select-cadastro-rapido";
 import { CLIENTE, UNIDADE, EQUIPAMENTO, TIPO_OS } from "@/components/cadastro-rapido/definicoes";
@@ -21,7 +23,7 @@ import { GavetaEquipamentos } from "@/components/os/gaveta-equipamentos";
 import { useModulos } from "@/components/providers/modulos-provider";
 import { detalheEquipamento, rotuloEquipamento, type EquipamentoResumo } from "@/lib/os/vincular-equipamentos";
 import { InputData } from "@/components/ui/input-data";
-import { InputDataHora, MSG_HORA_INVALIDA } from "@/components/ui/input-data-hora";
+import { InputDataHora } from "@/components/ui/input-data-hora";
 import { chaveDiaCivil, paraLocalBR } from "@/lib/fuso";
 import { useAgora } from "@/lib/ui/use-agora";
 import { prazoPadrao } from "@/lib/os/prazo-execucao";
@@ -55,7 +57,8 @@ export default function NovaOrdemPage() {
   const [clienteId, setClienteId] = useState("");
   const [carregandoClientes, setCarregandoClientes] = useState(true);
   const [carregandoUnidades, setCarregandoUnidades] = useState(false);
-  const [erro, setErro] = useState("");
+  // ERRO NO CAMPO: cada erro no campo dele (cliente, data/hora, quem executa, descrição); a faixa é o resumo
+  const erros = useErrosDoFormulario();
   const [salvando, setSalvando] = useState(false);
   const [form, setForm] = useState({
     prioridade: "NORMAL", descricao: "", unidadeId: "", contratoId: "",
@@ -88,7 +91,7 @@ export default function NovaOrdemPage() {
   }, [prazoSugerido, prazoMexido]);
   // Data escolhida sem hora válida: não salva (nada de 08:00 escondido nem de hora anterior valendo)
   const [horaRuim, setHoraRuim] = useState<string | null>(null);
-  const aoProblemaHora = (p: string | null) => { setHoraRuim(p); if (!p) setErro((e) => (e === MSG_HORA_INVALIDA ? "" : e)); };
+  const aoProblemaHora = (p: string | null) => { setHoraRuim(p); if (!p) { erros.limpar("dataHora"); erros.limpar("agendarPara"); } };
   const [equipamentoId, setEquipamentoId] = useState("");
   const [equipamentos, setEquipamentos] = useState<EquipItem[]>([]);
   // Equipamentos atendidos (opcional na abertura; dá para vincular na execução) — escolhidos na gaveta
@@ -116,17 +119,17 @@ export default function NovaOrdemPage() {
       setCarregandoSolicitacao(true);
       fetch(`/api/ordens/${solId}`).then(async (r) => {
         const os = await r.json().catch(() => null);
-        if (!r.ok || !os) { setErro(os?.erro ?? "Solicitação não encontrada."); return; }
+        if (!r.ok || !os) { erros.definirGeral(os?.erro ?? "Solicitação não encontrada."); return; }
         const pendente = os.origem === "PORTAL_CLIENTE" && os.status === "AGUARDANDO_ATENDIMENTO";
         setSolicitacao({ id: os.id, numero: os.chamadoNumero ?? os.numero, cliente: os.cliente?.nomeFantasia ?? os.cliente?.nome ?? "", pendente, equipamentoCliente: os.equipamentoId ?? null, equipamentoRotulo: os.equipamento ? rotuloEquip(os.equipamento) : null });
-        if (!pendente) setErro("Esta solicitação já foi tratada (aceita ou recusada).");
+        if (!pendente) erros.definirGeral("Esta solicitação já foi tratada (aceita ou recusada).");
         setClienteId(os.clienteId);
         setEquipamentoId(os.equipamentoId ?? "");
         setForm((f) => ({
           ...f, descricao: os.descricao ?? "", unidadeId: os.unidadeId ?? "", prioridade: os.prioridade ?? "NORMAL",
           contratoId: os.contratoId ?? "", observacoes: os.observacoes ?? "",
         }));
-      }).catch(() => setErro("Erro de conexão.")).finally(() => setCarregandoSolicitacao(false));
+      }).catch(() => erros.definirGeral("Erro de conexão.")).finally(() => setCarregandoSolicitacao(false));
       return;
     }
     const cli = sp.get("clienteId");
@@ -163,11 +166,14 @@ export default function NovaOrdemPage() {
 
   async function aceitarSolicitacao() {
     if (!solicitacao) return;
-    if (horaRuim) { setErro(horaRuim); return; }
-    if (!dataHora) { setErro("Escolha a data e a hora do atendimento."); return; }
-    if (form.descricao.trim().length < 5) { setErro("Descrição muito curta."); return; }
-    if (!temExecutor(execucao)) { setFaltaExecutor(true); setErro(MSG_SEM_EXECUTOR_TELA); return; }
-    setErro(""); setSalvando(true);
+    // Tudo o que falta de uma vez, cada um no campo dele; o primeiro (na ordem da tela) recebe o foco
+    const faltando: ErrosDeCampo = {};
+    if (horaRuim) faltando.dataHora = horaRuim;
+    else if (!dataHora) faltando.dataHora = "Escolha a data e a hora do atendimento.";
+    if (form.descricao.trim().length < 5) faltando.descricao = "Descrição muito curta.";
+    if (!temExecutor(execucao)) { setFaltaExecutor(true); faltando.execucao = MSG_SEM_EXECUTOR_TELA; }
+    if (!erros.validar(faltando)) return;
+    setSalvando(true);
     try {
       const res = await fetch(`/api/solicitacoes/${solicitacao.id}/aceitar`, {
         method: "POST", headers: { "Content-Type": "application/json" },
@@ -179,18 +185,21 @@ export default function NovaOrdemPage() {
         }),
       });
       const d = await res.json().catch(() => ({}));
-      if (!res.ok) { setErro(d.erro ?? "Não foi possível aceitar a solicitação."); return; }
+      if (!res.ok) { erros.erroDaApi(d, "Não foi possível aceitar a solicitação."); return; }
       const [y, m, dia] = String(d.data).split("-").map(Number);
       router.push(`/calendario?mes=${m}&ano=${y}&dia=${dia}&view=semanal`);
       router.refresh();
-    } catch { setErro("Erro de conexão."); } finally { setSalvando(false); }
+    } catch { erros.definirGeral("Erro de conexão."); erros.focar(); } finally { setSalvando(false); }
   }
 
   async function salvar() {
-    if (!clienteId || !form.descricao.trim()) { setErro("Cliente e descrição são obrigatórios."); return; }
-    if (!temExecutor(execucao)) { setFaltaExecutor(true); setErro(MSG_SEM_EXECUTOR_TELA); return; }
-    if (horaRuim) { setErro(horaRuim); return; }
-    setErro(""); setSalvando(true);
+    const faltando: ErrosDeCampo = {};
+    if (!clienteId) faltando.clienteId = "Selecione o cliente.";
+    if (horaRuim) faltando.agendarPara = horaRuim;
+    if (!temExecutor(execucao)) { setFaltaExecutor(true); faltando.execucao = MSG_SEM_EXECUTOR_TELA; }
+    if (!form.descricao.trim()) faltando.descricao = "Descreva o serviço ou problema.";
+    if (!erros.validar(faltando)) return;
+    setSalvando(true);
     try {
       const res = await fetch("/api/ordens", {
         method: "POST", headers: { "Content-Type": "application/json" },
@@ -205,20 +214,22 @@ export default function NovaOrdemPage() {
           execucao: { tipoOsId: tipoOsId || null, dataAgendada: agendarPara || null, ...corpoExecucao(execucao) },
         }),
       });
-      if (!res.ok) { const e = await res.json(); setErro(e.erro ?? "Erro ao criar OS."); return; }
+      if (!res.ok) { erros.erroDaApi(await res.json().catch(() => ({})), "Erro ao criar OS."); return; }
       const os = await res.json();
       router.push(`/ordens/${os.id}`);
-    } catch { setErro("Erro de conexão."); } finally { setSalvando(false); }
+    } catch { erros.definirGeral("Erro de conexão."); erros.focar(); } finally { setSalvando(false); }
   }
 
   return (
-    <div ref={raizRef} className="max-w-3xl mx-auto">
+    <ErrosDoFormulario valor={erros}>
+    <div ref={(el) => { (raizRef as React.MutableRefObject<HTMLDivElement | null>).current = el; erros.ref(el); }} className="max-w-3xl mx-auto">
       <PageHeader
         title={solicitacao ? `Aceitar solicitação ${solicitacao.numero}` : "Nova ordem de serviço"}
         backHref={solicitacao ? "/calendario" : "/ordens"}
       />
       <div className="bg-white rounded-card border border-surface-border p-6 space-y-6">
-        {erro && <div className="bg-atrasado-claro border border-atrasado/20 text-atrasado-texto text-sm rounded-lg px-4 py-3">{erro}</div>}
+        {/* A faixa do topo é só o resumo: o erro mora no campo (ERRO NO CAMPO) */}
+        <ResumoDeErros />
         {solicitacao && (
           <div className="flex items-start gap-3 bg-acento-claro border border-acento/20 text-acento-hover text-sm rounded-lg px-4 py-3">
             <Inbox className="w-4 h-4 shrink-0 mt-0.5" />
@@ -230,7 +241,7 @@ export default function NovaOrdemPage() {
         )}
 
         <FormSection title="Informações gerais">
-          <FormField label="Cliente" required>
+          <FormField label="Cliente" required name="clienteId" valor={clienteId}>
             {solicitacao ? (
               <p data-cliente-solicitacao className="text-sm text-ink bg-surface-alt rounded-lg px-3 py-2.5 border border-surface-border">{solicitacao.cliente}</p>
             ) : (
@@ -257,7 +268,7 @@ export default function NovaOrdemPage() {
             {clienteId && <AlertaPerdasCliente clienteId={clienteId} perdas={perdas12m} className="mt-2" />}
           </FormField>
           <FormGrid>
-            <FormField label="Endereço do cliente">
+            <FormField label="Endereço do cliente" name="unidadeId" valor={form.unidadeId}>
               <SelectCadastroRapido
                 value={form.unidadeId}
                 onChange={(v) => setForm((f) => ({ ...f, unidadeId: v }))}
@@ -280,7 +291,7 @@ export default function NovaOrdemPage() {
                 edicao={UNIDADE.edicao<UnidadeItem>(clienteId, (u) => setUnidades((l) => l.map((x) => (x.id === u.id ? { ...x, ...u } : x))))}
               />
             </FormField>
-            <FormField label="Contrato vinculado">
+            <FormField label="Contrato vinculado" name="contratoId">
               <Select value={form.contratoId} onChange={(e) => setForm((f) => ({ ...f, contratoId: e.target.value }))} placeholder="Sem contrato" disabled={!clienteId}>
                 {contratos.map((c) => (<option key={c.id} value={c.id}>{c.numero}</option>))}
               </Select>
@@ -293,12 +304,12 @@ export default function NovaOrdemPage() {
               </Select>
             </FormField>
             {solicitacao ? (
-              <FormField label="Data e hora do atendimento" required>
+              <FormField label="Data e hora do atendimento" required name="dataHora" valor={dataHora}>
                 <InputDataHora aria-label="Data e hora do atendimento" value={dataHora} onChange={setDataHora} onProblema={aoProblemaHora} />
               </FormField>
             ) : (
               // Data e hora da 1ª atividade (é ela que aparece no calendário)
-              <FormField label="Agendar para" dica="Opcional. Data e hora da primeira atividade, exibida no calendário.">
+              <FormField label="Agendar para" name="agendarPara" valor={agendarPara} dica="Opcional. Data e hora da primeira atividade, exibida no calendário.">
                 <InputDataHora aria-label="Agendar para" value={agendarPara} onChange={setAgendarPara} onProblema={aoProblemaHora} />
               </FormField>
             )}
@@ -328,7 +339,7 @@ export default function NovaOrdemPage() {
           {/* O equipamento que o cliente vinculou no chamado continua à vista mesmo sem o módulo */}
           {solicitacao && (temEquipamentos || solicitacao.equipamentoCliente) && (
             <FormGrid>
-              <FormField label="Equipamento">
+              <FormField label="Equipamento" name="equipamentoId" valor={equipamentoId}>
                 {solicitacao.equipamentoCliente ? (
                   <p className="text-sm text-ink bg-surface-alt rounded-lg px-3 py-2.5 border border-surface-border">
                     {solicitacao.equipamentoRotulo}
@@ -436,7 +447,7 @@ export default function NovaOrdemPage() {
                 )}
               </FormField>
               {/* O prazo da OS: é o que a central usa para dizer se está no prazo ou atrasada */}
-              <FormField label="Prazo para finalizar" dica="Opcional. Após esta data, a OS é sinalizada como atrasada. Se o tipo de OS tem prazo padrão, o campo já vem sugerido a partir do dia agendado — dá para ajustar."
+              <FormField label="Prazo para finalizar" name="prazoExecucao" formato="data" dica="Opcional. Após esta data, a OS é sinalizada como atrasada. Se o tipo de OS tem prazo padrão, o campo já vem sugerido a partir do dia agendado — dá para ajustar."
                 hint={prazoSugerido && !prazoMexido ? `Sugerido pelo tipo de OS: ${diasDoTipo === 0 ? "no dia agendado" : `${diasDoTipo} dia${diasDoTipo === 1 ? "" : "s"} após o agendamento`}.` : undefined}>
                 <InputData aria-label="Prazo para finalizar" value={form.prazoExecucao} onChange={(v) => { setPrazoMexido(true); setForm((f) => ({ ...f, prazoExecucao: v })); }} />
                 {prazoMexido && prazoSugerido && form.prazoExecucao !== prazoSugerido && (
@@ -447,17 +458,17 @@ export default function NovaOrdemPage() {
               </FormField>
             </FormGrid>
           )}
-          <FormField label="Equipe ou colaboradores" required>
-            <SeletorExecucao opcoes={opcoesExecucao} tipoOsId={solicitacao ? "" : tipoOsId} valor={execucao} onChange={(v) => { setExecucao(v); if (temExecutor(v)) { setFaltaExecutor(false); setErro((e) => (e === MSG_SEM_EXECUTOR_TELA ? "" : e)); } }} erro={faltaExecutor} />
+          <FormField label="Equipe ou colaboradores" required name="execucao" valor={temExecutor(execucao)}>
+            <SeletorExecucao opcoes={opcoesExecucao} tipoOsId={solicitacao ? "" : tipoOsId} valor={execucao} onChange={(v) => { setExecucao(v); if (temExecutor(v)) setFaltaExecutor(false); }} erro={faltaExecutor} />
             {sugestoes.executor && execSugerido && (
               <Sugestao oQue="executor" atributo="executor" nome={sugestoes.executor.nome} vezes={sugestoes.executor.vezes}
-                escondida={temExecutor(execucao)} onUsar={() => { setExecucao(execSugerido); setFaltaExecutor(false); setErro((e) => (e === MSG_SEM_EXECUTOR_TELA ? "" : e)); }} />
+                escondida={temExecutor(execucao)} onUsar={() => { setExecucao(execSugerido); setFaltaExecutor(false); }} />
             )}
           </FormField>
         </FormSection>
 
         <FormSection title="Descrição">
-          <FormField label={solicitacao ? "O que o cliente pediu (pode ajustar)" : "Descreva o serviço ou problema"} required>
+          <FormField label={solicitacao ? "O que o cliente pediu (pode ajustar)" : "Descreva o serviço ou problema"} required name="descricao">
             <Textarea value={form.descricao} onChange={(e) => setForm((f) => ({ ...f, descricao: e.target.value }))} rows={4} placeholder="Descreva o que precisa ser feito…" />
           </FormField>
           <FormField label="Observações">
@@ -475,5 +486,6 @@ export default function NovaOrdemPage() {
         </div>
       </div>
     </div>
+    </ErrosDoFormulario>
   );
 }
