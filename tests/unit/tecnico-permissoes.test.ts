@@ -29,8 +29,6 @@ function caminho(no: ReactNode, alvo: (el: ReactElement) => boolean, acc: ReactE
 const nome = (el: ReactElement) => (typeof el.type === "string" ? el.type : (el.type as any).name ?? (el.type as any).displayName);
 
 describe("app do técnico: permissões da tela", () => {
-  // O import a frio da página puxa a árvore inteira do app do técnico (~4 s sozinho na máquina local): no shard
-  // carregado do CI passava dos 5 s padrão. O tempo é do import, não da regra testada — daí o prazo explícito.
   it("o AppTecnico é renderizado dentro do PermissoesProvider com as permissões da sessão", async () => {
     const { default: TecnicoPage } = await import("@/app/tecnico/page");
     const arvore = await TecnicoPage();
@@ -40,5 +38,5 @@ describe("app do técnico: permissões da tela", () => {
     expect(provider).toBeTruthy();
     expect(provider!.props.role).toBe("TECNICO");
     expect(provider!.props.permissoes).toBe(permissoes);
-  }, 30_000);
+  });
 });
