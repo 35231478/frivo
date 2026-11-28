@@ -14,6 +14,7 @@ import { comentarioSchema, FOTO_TAMANHO_MAX, MSG_FOTO_GRANDE, MSG_MENSAGEM_VAZIA
 import { esperarNovidades } from "@/lib/chat/servidor";
 import { LacoNovidades, type AmbienteLaco } from "@/lib/chat/novidades-cliente";
 import { prepararFoto } from "@/lib/chat/foto-cliente";
+import { ALVO_FOTO_BYTES, ALVO_MINIATURA_BYTES } from "@/lib/chat/regras";
 
 vi.mock("@/lib/prisma", () => ({ prisma: {} }));
 
@@ -319,21 +320,30 @@ describe("tempo real — o navegador (um laço por aba)", () => {
 
 describe("a foto preparada no aparelho", () => {
   const arquivo = (tipo = "image/jpeg") => new Blob(["x"], { type: tipo });
-  const redutor = (tamanhos: number[]) => vi.fn(async (_f: Blob, lado: number) => ({ imagem: { dataUrl: `data:image/jpeg;base64,${"A".repeat(Math.ceil((tamanhos.shift() ?? 10) * 4 / 3))}#${lado}` } }));
+  const redutor = (tamanhos: number[]) => vi.fn(async (_f: Blob, lado: number, _q: number) => ({ imagem: { dataUrl: `data:image/jpeg;base64,${"A".repeat(Math.ceil((tamanhos.shift() ?? 10) * 4 / 3))}#${lado}` } }));
 
-  it("reduz (lado maior 1600) e faz a miniatura (320)", async () => {
-    const r = redutor([500_000, 20_000]);
-    const p = await prepararFoto(arquivo(), r);
-    expect(p.ok).toBe(true);
-    expect(r.mock.calls.map((c) => c[1])).toEqual([1600, 320]);
+  // Hotfix 2: em produção as fotos chegavam com 520–556 KB (1600 px, 80%). Agora DEGRAUS até caber no alvo
+  it("reduz pelo 1º degrau (1280 px, 70%) e faz a miniatura (256 px); cabendo no alvo, para ali", async () => {
+    const r = redutor([150_000, 10_000]);
+    expect((await prepararFoto(arquivo(), r)).ok).toBe(true);
+    expect(r.mock.calls.map((c) => [c[1], c[2]])).toEqual([[1280, 0.7], [256, 0.6]]);
   });
 
-  it("ainda grande depois de reduzida: reduz mais uma vez (1280); continua grande: avisa com o limite", async () => {
-    const r = redutor([FOTO_TAMANHO_MAX + 10, 900_000, 20_000]);
+  it("acima do alvo (200 KB): desce os degraus (1024/60%, 800/55%); a miniatura acima de 15 KB desce para 192/50%", async () => {
+    const r = redutor([ALVO_FOTO_BYTES + 1, 190_000, 20_000, 9_000]);
     expect((await prepararFoto(arquivo(), r)).ok).toBe(true);
-    expect(r.mock.calls.map((c) => c[1])).toEqual([1600, 1280, 320]);
-    const r2 = redutor([FOTO_TAMANHO_MAX + 10, FOTO_TAMANHO_MAX + 10]);
-    expect(await prepararFoto(arquivo(), r2)).toEqual({ ok: false, erro: MSG_FOTO_GRANDE });
+    expect(r.mock.calls.map((c) => [c[1], c[2]])).toEqual([[1280, 0.7], [1024, 0.6], [256, 0.6], [192, 0.5]]);
+    const r2 = redutor([ALVO_FOTO_BYTES + 1, ALVO_FOTO_BYTES + 1, 300_000, 9_000]);
+    const p2 = await prepararFoto(arquivo(), r2);
+    expect(p2.ok).toBe(true); // nenhum degrau coube no alvo: vai o menor (ainda dentro do limite)
+    expect(r2.mock.calls.map((c) => c[1])).toEqual([1280, 1024, 800, 256]);
+  });
+
+  it("nem o menor degrau cabe no limite do servidor: avisa com o limite", async () => {
+    const r = redutor([FOTO_TAMANHO_MAX + 10, FOTO_TAMANHO_MAX + 10, FOTO_TAMANHO_MAX + 10]);
+    expect(await prepararFoto(arquivo(), r)).toEqual({ ok: false, erro: MSG_FOTO_GRANDE });
+    expect(ALVO_FOTO_BYTES).toBe(200_000);
+    expect(ALVO_MINIATURA_BYTES).toBe(15_000);
   });
 
   it("não é imagem ou não dá para ler: avisa sem travar", async () => {

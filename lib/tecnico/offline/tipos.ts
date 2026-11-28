@@ -170,10 +170,12 @@ export type OperacaoFila = Operacao & {
   status?: number | null;
   /** Quando o servidor confirmou (fica aplicada na tela até chegar um retrato mais novo) */
   enviadaEm?: number | null;
+  /** Só no aparelho (não sobe): a OS como a pessoa escolheu ("OS-4440"), para dizer qual é mesmo se ela sair do dia */
+  osNumero?: string | null;
 };
 
 /** Distribui o Omit pelos membros da união (o Omit comum junta tudo e perde o "tipo"). */
 export type SemControle<T> = T extends unknown ? Omit<T, "id" | "em"> : never;
-export type NovaOperacao = SemControle<Operacao>;
+export type NovaOperacao = SemControle<Operacao> & Pick<OperacaoFila, "osNumero">;
 
 export interface RelatorioRetrato { link: string; empresa: string; osNumero: string }

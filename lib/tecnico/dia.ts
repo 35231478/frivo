@@ -138,17 +138,27 @@ async function cartoesDe(atividades: AtividadeCartao[]): Promise<CartaoAtividade
 }
 
 /**
- * Hoje: as atividades marcadas para hoje (Brasília) + as que ele começou em outro dia e ainda não
+ * Hoje: as atividades marcadas para hoje (Brasília) + as que ele começou (em outro dia, ou sem data) e ainda não
  * concluiu (precisa terminar). Em ordem de horário.
  */
-export async function meuDia(empresaId: string, tecnicoId: string, agora = new Date()) {
+export const ondeMeuDia = (empresaId: string, tecnicoId: string, agora = new Date()): Prisma.AtividadeOsWhereInput => {
   const inicio = inicioHojeBR(agora);
   const fim = inicioHojeBR(agora, 1);
+  // AND explícito: o filtro do técnico já é um OR (responsável ou na equipe), e outro OR na mesma chave o apagaria
+  return {
+    AND: [
+      { empresaId, status: { not: "CANCELADA" } },
+      atividadesDoTecnico(tecnicoId),
+      // Em andamento entra com QUALQUER data — também sem data ou marcada para depois (começou e falta concluir); antes,
+      // `dataAgendada < hoje` deixava a sem data fora do Meu dia (e o chat a oferecia)
+      { OR: [{ dataAgendada: { gte: inicio, lt: fim } }, { status: "EM_ANDAMENTO" }] },
+    ],
+  };
+};
+
+export async function meuDia(empresaId: string, tecnicoId: string, agora = new Date()) {
   const atividades = await prisma.atividadeOs.findMany({
-    where: {
-      empresaId, status: { not: "CANCELADA" }, ...atividadesDoTecnico(tecnicoId),
-      AND: [{ OR: [{ dataAgendada: { gte: inicio, lt: fim } }, { status: "EM_ANDAMENTO", dataAgendada: { lt: inicio } }] }],
-    },
+    where: ondeMeuDia(empresaId, tecnicoId, agora),
     select: SELECT_CARTAO,
     take: 100,
   });

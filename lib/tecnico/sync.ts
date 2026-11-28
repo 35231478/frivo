@@ -31,6 +31,7 @@ import { materialRemoverSchema, materialSchema } from "@/lib/tecnico/materiais";
 import { gravarMaterial, removerMaterial } from "@/lib/execucao/materiais-campo";
 import { comentarioSchema } from "@/lib/tecnico/comentarios";
 import { comentarDoApp, comentarSemOsDoApp } from "@/lib/execucao/comentarios";
+import { NAO_TRAVAM } from "@/lib/tecnico/offline/trava";
 import { lerAoResponderTecnico } from "@/lib/chat/pessoas-servidor";
 
 /** O técnico escreveu: leu a conversa dele até aqui (o ✓✓ das mensagens do escritório) — responder é ler. */
@@ -190,7 +191,9 @@ export async function processarLote(ator: Ator, operacoes: unknown[], lote: Opco
     const idOp = (bruta as { id?: unknown })?.id;
     if (!parsed.success) {
       const atividadeId = (bruta as { atividadeId?: unknown })?.atividadeId;
-      if (typeof atividadeId === "string") travadas.add(atividadeId);
+      const tipo = (bruta as { tipo?: unknown })?.tipo;
+      // Mensagem do chat (ou QR) inválida: recusada, mas não segura o serviço da OS (o mesmo de NAO_TRAVAM abaixo)
+      if (typeof atividadeId === "string" && !(typeof tipo === "string" && NAO_TRAVAM.has(tipo))) travadas.add(atividadeId);
       resultados.push({ id: typeof idOp === "string" ? idOp : "", ok: false, status: 400, erro: parsed.error.issues[0]?.message ?? "Operação inválida." });
       continue;
     }
@@ -225,7 +228,8 @@ export async function processarLote(ator: Ator, operacoes: unknown[], lote: Opco
       jaFeitas.set(op.id, { id: op.id, empresaId: ator.empresaId, usuarioId: ator.usuarioId, resultado });
       resultados.push({ id: op.id, ok: true, status: r.status, dados: resultado });
     } else {
-      travadas.add(op.atividadeId);
+      // A mensagem do chat e o QR recusados não seguram o resto da atividade (o mesmo do aparelho: NAO_TRAVAM)
+      if (!NAO_TRAVAM.has(op.tipo)) travadas.add(op.atividadeId);
       resultados.push({ id: op.id, ok: false, status: r.status, erro: r.erro, ...(r.extra && { extra: json(r.extra) }) });
     }
   }

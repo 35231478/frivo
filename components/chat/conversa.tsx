@@ -19,8 +19,10 @@ export interface EnvioMensagem { texto: string; foto?: string; miniatura?: strin
  */
 export function ConversaChat({
   mensagens, carregando, erro, somenteLeitura, podeEscrever = true, semPermissao, onEnviar, urlFoto, onTentarDeNovo, className, placeholder = "Mensagem",
-  mostrarOs = false, abrirOs, podeAbrirOs, acimaDoTexto,
+  mostrarOs = false, abrirOs, podeAbrirOs, acimaDoTexto, recusa,
 }: {
+  /** App: o que fazer com a mensagem que a fila recusou de vez (ver Balao) */
+  recusa?: React.ComponentProps<typeof Balao>["recusa"];
   /** Esta etiqueta abre a OS? (app: só a OS em que o técnico tem atividade); sem isso, todas abrem quando há abrirOs */
   podeAbrirOs?: (osId: string) => boolean;
   /** Conversa da PESSOA: a etiqueta da OS (nº + cliente, abre a OS) quando a OS muda; seguidas da mesma OS agrupam */
@@ -134,7 +136,7 @@ export function ConversaChat({
                       <span className="h-px flex-1 bg-surface-border" aria-hidden />
                     </li>
                   )}
-                  <Balao m={m} mostrarAutor={mostrarAutor} onTentarDeNovo={onTentarDeNovo}
+                  <Balao m={m} mostrarAutor={mostrarAutor} onTentarDeNovo={onTentarDeNovo} recusa={recusa}
                     onAmpliar={(x) => { const k = fotos.findIndex((f) => f.foto?.id === x.foto?.id); if (k >= 0) setAmpliar(k); }} />
                 </Fragment>
               );

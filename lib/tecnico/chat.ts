@@ -73,13 +73,42 @@ export function mensagensDaFila(fila: OperacaoFila[], atividades: ReadonlyMap<st
   return fila.flatMap((o): ComentarioTela[] => {
     if (o.tipo !== "comentario") return [];
     const d = o.dados;
-    const falhou = o.estado === "erro" ? (o.erro || "Recusada pelo servidor.") : null;
+    const recusada = o.estado === "erro";
+    const falhou = recusada ? motivoDaRecusa(o.status ?? null, o.erro ?? null, o.atividadeId !== SEM_OS) : null;
     return [{
       id: null, clientId: d.clientId, texto: (d.texto ?? "").trim(), autor, origem: "APP", criadoEm: o.criadoEm, meu: true,
-      pendente: !falhou, falhou, os: o.atividadeId === SEM_OS ? null : atividades.get(o.atividadeId) ?? null,
+      pendente: !falhou, falhou, os: o.atividadeId === SEM_OS ? null : atividades.get(o.atividadeId) ?? (o.osNumero ? { id: "", numero: o.osNumero, cliente: "" } : null),
+      // `comOs`: ela foi para uma OS (mesmo que a OS já não esteja nas do dia — ex.: cancelada — e a etiqueta não a ache)
+      ...(recusada && o.seq != null && { recusa: { seq: o.seq, status: o.status ?? null, comOs: o.atividadeId !== SEM_OS } }),
       ...(d.miniatura && { foto: { id: null, miniatura: d.miniatura } }),
     }];
   });
+}
+
+/**
+ * O PORQUÊ da mensagem recusada, em português, no balão (antes ficava só "Não enviada", com o motivo escondido numa dica
+ * que o celular não mostra). Recusa de regra é definitiva: o texto já diz o que fazer.
+ */
+export function motivoDaRecusa(status: number | null, erro: string | null, comOs: boolean): string {
+  const saida = comOs ? " Envie sem OS ou troque a OS." : "";
+  if (status === 403) return `Esta OS não está atribuída a este técnico.${saida}`;
+  if (status === 404) return `OS não encontrada.${saida}`;
+  if (status === 409 && /cancelad/i.test(erro ?? "")) return `OS cancelada: não recebe mais mensagens.${saida}`;
+  return (erro ?? "").trim() || "Recusada pelo servidor.";
+}
+
+/** O tamanho do começo do texto no rótulo da gravação (Perfil › Sincronização) */
+export const INICIO_TEXTO = 40;
+
+/**
+ * Como a mensagem do chat aparece na lista de gravações (Perfil › Sincronização): "Mensagem do chat · OS-4440 · “Opa”"
+ * (ou "Foto"; sem OS, "Sem OS"), para a pessoa saber QUAL é. A OS: a guardada com ela; senão a do retrato no aparelho.
+ */
+export function rotuloMensagemDaFila(o: Pick<OperacaoFila, "atividadeId" | "osNumero"> & { dados: { texto?: string; foto?: string } }, osDoRetrato?: string): string {
+  const os = o.atividadeId === SEM_OS ? "Sem OS" : o.osNumero || osDoRetrato || null;
+  const t = (o.dados.texto ?? "").trim().replace(/\s+/g, " ");
+  const conteudo = t ? `“${t.length > INICIO_TEXTO ? `${t.slice(0, INICIO_TEXTO - 1).trimEnd()}…` : t}”` : o.dados.foto ? "Foto" : "";
+  return ["Mensagem do chat", os, conteudo].filter(Boolean).join(" · ");
 }
 
 /** clientIds que o servidor já confirmou (estado "enviada") e a conversa baixada ainda não tem: hora de recarregar. */
@@ -110,6 +139,11 @@ export function osDoSeletor(escolha: string | null | undefined, osPadrao: string
 /** Por qual atividade a mensagem sobe na fila: a da OS escolhida; "Sem OS" = SEM_OS. */
 export function atividadeDoEnvio(osId: string | null, osDoDia: readonly OsDoDia[]): string {
   return (osId && osDoDia.find((o) => o.osId === osId)?.atividadeId) || SEM_OS;
+}
+
+/** O número da OS escolhida (guardado com a mensagem na fila); sem OS = null. */
+export function numeroDaOs(osId: string | null, osDoDia: readonly OsDoDia[]): string | null {
+  return (osId && osDoDia.find((o) => o.osId === osId && o.atividadeId)?.numero) || null;
 }
 
 /**

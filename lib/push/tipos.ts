@@ -186,15 +186,21 @@ export function msgAceite(a: AceiteResumo, url: string): MensagemPush {
   };
 }
 
-export function msgComentario(a: { osNumero: string | null; cliente?: string | null; autor?: string | null; texto?: string | null }, url: string): MensagemPush {
-  return {
-    // CHAT-1: sem OS ("passa no escritório antes de ir embora"), o título diz de quem é
-    titulo: a.osNumero ? `Mensagem nova na OS ${a.osNumero}` : `Mensagem nova${a.autor ? ` de ${a.autor}` : ""}`,
-    corpo: juntar(a.autor, curto(a.texto, 110) || a.cliente),
-    // CHAT-1: o toque abre a conversa; a mesma conversa substitui o aviso anterior (tag pela OS, ou pela pessoa)
-    url, tag: a.osNumero ? `comentario-${a.osNumero}` : `conversa-${a.autor ?? ""}`, acao: "Abrir conversa",
-  };
+/**
+ * A mensagem do chat. Título: "Mensagem nova · OS-4442 · Mercado Exemplo" (o número da OS já traz "OS"; o cliente,
+ * curto) ou, sem OS, "Mensagem nova · Fulano". Corpo: "Fulano: texto" (foto: "Fulano: Foto"). `conversa`: a mesma
+ * conversa SUBSTITUI o aviso anterior (tag) e toca de novo (renotify, no service worker) — cinco mensagens seguidas do
+ * mesmo técnico são um aviso só, atualizado, em vez de cinco empilhados.
+ */
+export function msgComentario(a: { osNumero: string | null; cliente?: string | null; autor?: string | null; texto?: string | null }, url: string, conversa: string): MensagemPush {
+  const titulo = a.osNumero
+    ? ["Mensagem nova", a.osNumero, curto(a.cliente, CLIENTE_CURTO)].filter(Boolean).join(" · ")
+    : `Mensagem nova${a.autor ? ` · ${a.autor}` : ""}`;
+  const texto = curto(a.texto, 110) || "Foto";
+  return { titulo, corpo: a.autor ? `${a.autor}: ${texto}` : texto, url, tag: `conversa-${conversa}`, acao: "Abrir conversa" };
 }
+/** Quanto do nome do cliente cabe no título do aviso do chat */
+export const CLIENTE_CURTO = 24;
 
 export type SituacaoDespesa = "ENVIADA" | "APROVADA" | "RECUSADA";
 export function msgDespesa(a: { situacao: SituacaoDespesa; descricao?: string | null; valor?: number | null; autor?: string | null; motivo?: string | null }, url: string): MensagemPush {
