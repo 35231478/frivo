@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ArrowLeft, Camera, CheckCheck, MessageCircle, Search, X } from "lucide-react";
@@ -28,6 +28,9 @@ export function ConversasEscritorio({ osInicial, podeEscrever }: { osInicial: st
   const [busca, setBusca] = useState("");
   const [soNaoLidas, setSoNaoLidas] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
+  // A conversa aberta está sendo lida: o contador dela fica zerado mesmo quando a lista chega depois dela
+  const abertaRef = useRef(aberta);
+  abertaRef.current = aberta;
 
   const carregar = useCallback(async (q: string) => {
     try {
@@ -35,7 +38,7 @@ export function ConversasEscritorio({ osInicial, podeEscrever }: { osInicial: st
       const j = await r.json().catch(() => null);
       if (!r.ok || !Array.isArray(j?.conversas)) { setErro(j?.erro ?? "Não foi possível carregar as conversas."); setConversas((c) => c ?? []); return; }
       setErro(null);
-      setConversas(j.conversas);
+      setConversas((j.conversas as ConversaResumo[]).map((c) => (c.osId === abertaRef.current ? { ...c, naoLidas: 0 } : c)));
       setSemConversa(j.semConversa ?? []);
     } catch {
       setErro("Sem conexão: a lista não foi atualizada.");
