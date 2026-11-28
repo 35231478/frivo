@@ -58,8 +58,8 @@ const ms = (d: Date | string) => (d instanceof Date ? d : new Date(d)).getTime()
 
 /** Quanto do período [de, ate] ficou pausado (as pausas abertas vão até `ate`; sobreposição conta uma vez só) */
 export function tempoPausadoMs(de: Date | string, ate: Date | string, pausas: readonly Intervalo[]): number {
+  // Período invertido ou vazio: todo pedaço fica com fim <= início e sai no filtro (dá 0)
   const a = ms(de), b = ms(ate);
-  if (!(b > a)) return 0;
   const partes = pausas
     .map((p) => [Math.max(a, ms(p.inicio)), Math.min(b, p.fim ? ms(p.fim) : b)] as const)
     .filter(([x, y]) => y > x)

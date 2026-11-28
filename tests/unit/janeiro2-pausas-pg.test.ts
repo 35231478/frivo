@@ -90,9 +90,13 @@ describe.skipIf(!URL_PG)("D1 — pausar / impedimento (PostgreSQL real)", () => 
     expect(lista.status).toBe(200);
     const nomes = (lista.json.itens ?? lista.json).map((m: any) => m.nome);
     expect(nomes).toEqual(["Falta de peça/material", "Cliente ausente", "Acesso negado", "Aguardando aprovação do cliente", "Chuva/condição do local", "Almoço/intervalo", "Outro"]);
-    // listar de novo não duplica
+    // listar de novo não duplica — nem traz de volta o padrão que a empresa renomeou ou apagou
+    const chuva = await prisma.motivoPausa.findFirst({ where: { empresaId: "e1", nome: "Chuva/condição do local" } });
+    await prisma.motivoPausa.update({ where: { id: chuva.id }, data: { nome: "Chuva forte" } });
     await chamar("cadastros/[entidade]", "GET", { entidade: "motivos-pausa" });
     expect(await prisma.motivoPausa.count({ where: { empresaId: "e1" } })).toBe(7);
+    expect(await prisma.motivoPausa.count({ where: { empresaId: "e1", nome: "Chuva/condição do local" } })).toBe(0);
+    await prisma.motivoPausa.update({ where: { id: chuva.id }, data: { nome: "Chuva/condição do local" } });
     comoTecnico();
     const r = (await chamar("tecnico/atividades/[atividadeId]", "GET", { atividadeId: "aA" })).json;
     motivos = r.motivosPausa;
@@ -200,7 +204,10 @@ describe.skipIf(!URL_PG)("D1 — pausar / impedimento (PostgreSQL real)", () => 
     ]);
     const hist = await prisma.osHistorico.findMany({ where: { ordemServicoId: "osC", acao: "Visita não concluída — reagendar" } });
     expect(hist).toHaveLength(1);
+    // atividade sem data que só teve uma pausa comum (não encerrada): não é "não concluída"
+    await prisma.atividadeOs.update({ where: { id: "aD" }, data: { status: "AGENDADA", dataAgendada: null } });
     const s = await sino();
+    await prisma.atividadeOs.update({ where: { id: "aD" }, data: { status: "EM_ANDAMENTO", dataAgendada: new Date() } });
     expect(s.visitasNaoConcluidas).toBe(1);
     expect(s.naoConcluidaOsId).toBe("osC");
   });

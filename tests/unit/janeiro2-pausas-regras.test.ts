@@ -39,6 +39,7 @@ describe("tempo de execução sem as pausas", () => {
     expect(tempoPausadoMs(t(0), t(120), [{ inicio: t(-30), fim: t(10) }, { inicio: t(110), fim: t(200) }])).toBe(20 * 60_000); // cortadas nas bordas
     expect(tempoPausadoMs(t(0), t(120), [{ inicio: t(-60), fim: t(-10) }])).toBe(0);
     expect(tempoPausadoMs(t(0), t(120), [{ inicio: t(10), fim: t(20) }, { inicio: t(50), fim: t(70) }])).toBe(30 * 60_000); // separadas
+    expect(tempoPausadoMs(t(0), t(120), [{ inicio: t(30), fim: t(90) }, { inicio: t(45), fim: t(60) }])).toBe(60 * 60_000); // uma dentro da outra
     expect(tempoPausadoMs(t(120), t(0), [{ inicio: t(30), fim: t(60) }])).toBe(0); // período invertido
     expect(tempoPausadoMs(t(0), t(120), [{ inicio: t(30), fim: t(30) }])).toBe(0); // pausa de 0 min
     expect(tempoPausadoMs(t(0).toISOString(), t(120).toISOString(), [{ inicio: t(30).toISOString(), fim: t(60).toISOString() }])).toBe(30 * 60_000);
@@ -76,6 +77,7 @@ describe("o que o escritório e o técnico leem", () => {
     const a = { inicio: t(20), fim: null }, b = { inicio: t(40), fim: null };
     expect(pausaAberta([{ inicio: t(0), fim: t(10) }, a])).toBe(a);
     expect(pausaAberta([b, a])).toBe(b);
+    expect(pausaAberta([a, b])).toBe(b); // a mais recente, em qualquer ordem
   });
   it("encerrar como não concluída: só com uma pausa aberta de impedimento; o texto leva motivo e observação", () => {
     expect(podeEncerrarNaoConcluida(null)).toBe(false);
