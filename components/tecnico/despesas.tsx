@@ -5,6 +5,8 @@ import { ArrowLeft, Receipt, Plus, Loader2 } from "lucide-react";
 import { cn, formatarMoeda } from "@/lib/utils";
 import { Modal } from "@/components/ui/modal";
 import { InputData } from "@/components/ui/input-data";
+import { FormField } from "@/components/ui/form-field";
+import { Input } from "@/components/ui/input";
 import { Dica } from "@/components/ui/dica";
 import { toast } from "@/components/ui/avisos";
 import { BotaoFoto, Miniatura } from "@/components/tecnico/captura";
@@ -121,6 +123,8 @@ export function ModalDespesa({ atividadeId, osNumero, onFechar }: { atividadeId?
   const [descricao, setDescricao] = useState("");
   const [foto, setFoto] = useState<string | null>(null);
   const [gravando, setGravando] = useState(false);
+  // ERRO NO CAMPO: o valor só acusa depois que a pessoa sai do campo (nunca enquanto digita pela 1ª vez)
+  const [saiuDoValor, setSaiuDoValor] = useState(false);
   const n = lerValor(valor);
   const valorOk = Number.isFinite(n) && n > 0 && n <= VALOR_MAX;
   const erroData = dataDespesaValida(data, hoje);
@@ -151,18 +155,14 @@ export function ModalDespesa({ atividadeId, osNumero, onFechar }: { atividadeId?
           ))}
         </div>
         <div className="grid grid-cols-2 gap-2">
-          <label className="block space-y-1">
-            <span className="text-sm font-semibold text-ink">Valor (R$)</span>
-            <input value={valor} onChange={(e) => setValor(e.target.value)} inputMode="decimal" placeholder="0,00" aria-label="Valor da despesa" data-valor-despesa-campo
-              className={cn("w-full rounded-card border px-3 py-3 text-lg font-bold tabular-nums", valor && !valorOk ? "border-atrasado" : "border-surface-border")} />
-          </label>
-          <label className="block space-y-1">
-            <span className="text-sm font-semibold text-ink">Dia</span>
+          <FormField label="Valor (R$)" name="valor" error={saiuDoValor && valor && !valorOk ? "Informe um valor maior que zero." : undefined}>
+            <Input value={valor} onChange={(e) => setValor(e.target.value)} onBlur={() => setSaiuDoValor(true)} inputMode="decimal" placeholder="0,00" aria-label="Valor da despesa" data-valor-despesa-campo
+              className="rounded-card py-3 text-lg font-bold tabular-nums min-h-[44px]" />
+          </FormField>
+          <FormField label="Dia" name="data" error={erroData ?? undefined}>
             <InputData value={data} onChange={setData} aria-label="Dia da despesa" />
-          </label>
+          </FormField>
         </div>
-        {valor && !valorOk && <p className="text-xs text-atrasado-texto" data-valor-invalido>Informe um valor maior que zero.</p>}
-        {erroData && <p className="text-xs text-atrasado-texto" data-data-invalida>{erroData}</p>}
         <div className="grid grid-cols-1 gap-2" role="radiogroup" aria-label="Como foi paga">
           {(Object.keys(PAGAMENTOS) as Pagamento[]).map((p) => (
             <button key={p} type="button" role="radio" aria-checked={pagamento === p} onClick={() => setPagamento(p)} data-pagamento={p}
@@ -171,11 +171,10 @@ export function ModalDespesa({ atividadeId, osNumero, onFechar }: { atividadeId?
             </button>
           ))}
         </div>
-        <label className="block space-y-1">
-          <span className="text-sm font-semibold text-ink">Descrição{categoria === "OUTROS" ? "" : " (opcional)"}</span>
-          <input value={descricao} onChange={(e) => setDescricao(e.target.value)} maxLength={DESCRICAO_MAX} aria-label="Descrição da despesa" data-descricao-despesa
-            className="w-full rounded-card border border-surface-border px-3 py-3 text-base" />
-        </label>
+        <FormField label={`Descrição${categoria === "OUTROS" ? "" : " (opcional)"}`} name="descricao">
+          <Input value={descricao} onChange={(e) => setDescricao(e.target.value)} maxLength={DESCRICAO_MAX} aria-label="Descrição da despesa" data-descricao-despesa
+            className="rounded-card py-3 text-base min-h-[44px]" />
+        </FormField>
         <div className="space-y-2">
           {foto ? <Miniatura src={foto} alt="foto do cupom" pendente onRemover={() => setFoto(null)} />
             : <BotaoFoto grande rotulo="Foto do cupom" onFoto={setFoto} />}

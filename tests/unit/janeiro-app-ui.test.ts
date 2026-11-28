@@ -105,7 +105,10 @@ describe("login depois de a sessão do app vencer", () => {
 
   it("a troca obrigatória também: campos de 44 px e 16 px; o subtítulo do login serve ao técnico", () => {
     const t = lerArq("components/auth/trocar-senha-obrigatoria-form.tsx");
-    expect(t).toContain('const cls = "w-full bg-white border border-surface-border rounded-lg px-3 py-2.5 min-h-[44px] text-base text-ink');
+    // ERRO NO CAMPO: os campos viraram o <Input> compartilhado (que já traz w-full, borda, raio e padding);
+    // a troca obrigatória só acrescenta os 44 px e o texto de 16 px (sem zoom no celular)
+    expect(t).toContain('const cls = "min-h-[44px] text-base";');
+    expect(t).toContain("<Input type={mostrar ? \"text\" : \"password\"} value={atual}");
     const p = lerArq("app/(auth)/login/page.tsx");
     expect(p).toContain("Painel de gestão e app do técnico");
     expect(p).not.toContain("Acesse o painel de gestão");

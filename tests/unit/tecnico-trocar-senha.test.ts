@@ -75,7 +75,8 @@ describe("servidor: a rota que já existia serve ao técnico, só para a PRÓPRI
     expect((await trocarNoServidor({ senhaAtual: SENHA_ANTIGA, novaSenha: "curta1", confirmar: "curta1" })).json.erro).toBe("A senha precisa ter pelo menos 8 caracteres.");
     expect((await trocarNoServidor({ senhaAtual: SENHA_ANTIGA, novaSenha: "somenteletras", confirmar: "somenteletras" })).json.erro).toBe("A senha precisa ter pelo menos um número.");
     expect((await trocarNoServidor({ senhaAtual: SENHA_ANTIGA, novaSenha: "12345678", confirmar: "12345678" })).json.erro).toBe("A senha precisa ter pelo menos uma letra.");
-    expect(await trocarNoServidor({ senhaAtual: "errada-999", novaSenha: "Nova-senha9", confirmar: "Nova-senha9" })).toEqual({ status: 400, json: { erro: "Senha atual incorreta." } });
+    // ERRO NO CAMPO: o mesmo `erro` de sempre + o campo dele (a tela marca a "Senha atual")
+    expect(await trocarNoServidor({ senhaAtual: "errada-999", novaSenha: "Nova-senha9", confirmar: "Nova-senha9" })).toEqual({ status: 400, json: { erro: "Senha atual incorreta.", campos: { senhaAtual: "Senha atual incorreta." } } });
     expect((await trocarNoServidor({ novaSenha: "Nova-senha9", confirmar: "Nova-senha9" })).status).toBe(400);
     sessao.atual = null;
     expect((await trocarNoServidor({ senhaAtual: SENHA_ANTIGA, novaSenha: "Nova-senha9", confirmar: "Nova-senha9" })).status).toBe(401);

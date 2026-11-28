@@ -9,6 +9,9 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { loginSchema, type LoginInput } from "@/lib/validations";
 import { AlertCircle, Eye, EyeOff, Loader2, LogIn } from "lucide-react";
 import { MSG_SESSAO_EXPIRADA } from "@/lib/acesso/sem-sessao";
+import { FormField } from "@/components/ui/form-field";
+import { Input } from "@/components/ui/input";
+import { ErrosDoFormulario, ResumoDeErros, useErrosDoFormulario } from "@/components/ui/formulario-erros";
 
 const CHAVE_LEMBRAR = "frivo:manter-conectado";
 
@@ -41,7 +44,6 @@ export function LoginForm() {
   // Vindo de /definir-senha (convite): senha criada, é só entrar
   const senhaDefinida = searchParams.get("senha") === "definida";
   const [mostrarSenha, setMostrarSenha] = useState(false);
-  const [erro, setErro] = useState("");
   // "Manter conectado": desmarcado por padrão; o aparelho lembra a última escolha
   const [lembrar, setLembrar] = useState(false);
   useEffect(() => { try { setLembrar(localStorage.getItem(CHAVE_LEMBRAR) === "1"); } catch { /* sem storage */ } }, []);
@@ -50,10 +52,14 @@ export function LoginForm() {
     register,
     handleSubmit,
     formState: { errors, isSubmitting },
-  } = useForm<LoginInput>({ resolver: zodResolver(loginSchema), defaultValues: { email: searchParams.get("email") ?? "" } });
+  } = useForm<LoginInput>({ resolver: zodResolver(loginSchema), defaultValues: { email: searchParams.get("email") ?? "" }, shouldFocusError: false });
+  // ERRO NO CAMPO: o e-mail/senha mal digitados ficam no campo; e-mail ou senha errados (o servidor não diz qual,
+  // para não revelar se a conta existe) e o bloqueio ficam na faixa do topo
+  const erros = useErrosDoFormulario({ rhf: errors });
+  const erro = erros.geral ?? "";
 
   const onSubmit = async (data: LoginInput) => {
-    setErro("");
+    erros.limparTudo();
     try { localStorage.setItem(CHAVE_LEMBRAR, lembrar ? "1" : "0"); } catch { /* sem storage */ }
     const resultado = await signIn("credentials", {
       email: data.email,
@@ -63,7 +69,7 @@ export function LoginForm() {
     });
 
     if (resultado?.error) {
-      setErro(mensagemErroLogin(resultado.code));
+      erros.definirGeral(mensagemErroLogin(resultado.code));
       return;
     }
 
@@ -72,7 +78,8 @@ export function LoginForm() {
   };
 
   return (
-    <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
+    <ErrosDoFormulario valor={erros}>
+    <form ref={erros.ref} onSubmit={handleSubmit(onSubmit, () => erros.focar())} className="space-y-5" noValidate>
       {senhaDefinida && !erro && (
         <div className="bg-ok-claro border border-ok/20 text-ok-texto text-sm rounded-lg px-3 py-2.5 flex items-center gap-2" role="status">
           <AlertCircle className="w-4 h-4 shrink-0" />
@@ -94,42 +101,33 @@ export function LoginForm() {
         </div>
       )}
 
-      {erro && (
-        <div className="bg-atrasado-claro border border-atrasado/20 text-atrasado-texto text-sm rounded-lg px-3 py-2.5 flex items-center gap-2">
-          <AlertCircle className="w-4 h-4 shrink-0" />
-          {erro}
-        </div>
-      )}
+      {/* A faixa do topo: e-mail ou senha errados / bloqueio (o que não é de um campo só) */}
+      <ResumoDeErros className="py-2.5 px-3" />
 
-      <div className="space-y-1.5">
-        <label className="text-sm font-semibold text-ink">E-mail</label>
-        <input
+      <FormField label="E-mail" name="email" formato="email">
+        <Input
           {...register("email")}
           type="email"
           autoComplete="email"
           placeholder="seu@email.com.br"
-          className="w-full bg-white border border-surface-border rounded-lg px-3 py-2.5 min-h-[44px] text-base text-ink placeholder:text-ink-subtle focus:outline-none focus:border-primary-500 focus:ring-4 focus:ring-primary-500/10 disabled:opacity-50 transition-all"
+          className="min-h-[44px] text-base disabled:opacity-50"
           disabled={isSubmitting}
         />
-        {errors.email && (
-          <p className="text-xs text-atrasado font-medium">{errors.email.message}</p>
-        )}
-      </div>
+      </FormField>
 
-      <div className="space-y-1.5">
-        <div className="flex items-center justify-between gap-2">
-          <label className="text-sm font-semibold text-ink">Senha</label>
-          <Link href="/esqueci-senha" className="inline-flex items-center min-h-[44px] -my-3 text-sm font-semibold text-primary-600 hover:text-primary-700 hover:underline" data-esqueci-senha>
-            Esqueci minha senha
-          </Link>
-        </div>
+      <div className="relative">
+        {/* O link fica na linha do rótulo, fora do campo (não entra no nome nem na mensagem de erro) */}
+        <Link href="/esqueci-senha" className="absolute right-0 top-0 -mt-3 z-[1] inline-flex items-center min-h-[44px] text-sm font-semibold text-primary-600 hover:text-primary-700 hover:underline" data-esqueci-senha>
+          Esqueci minha senha
+        </Link>
+        <FormField label="Senha" name="senha">
         <div className="relative">
-          <input
+          <Input
             {...register("senha")}
             type={mostrarSenha ? "text" : "password"}
             autoComplete="current-password"
             placeholder="••••••••"
-            className="w-full bg-white border border-surface-border rounded-lg px-3 py-2.5 pr-12 min-h-[44px] text-base text-ink placeholder:text-ink-subtle focus:outline-none focus:border-primary-500 focus:ring-4 focus:ring-primary-500/10 disabled:opacity-50 transition-all"
+            className="pr-12 min-h-[44px] text-base disabled:opacity-50"
             disabled={isSubmitting}
           />
           <button
@@ -142,9 +140,7 @@ export function LoginForm() {
             {mostrarSenha ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
           </button>
         </div>
-        {errors.senha && (
-          <p className="text-xs text-atrasado font-medium">{errors.senha.message}</p>
-        )}
+        </FormField>
       </div>
 
       <label className="flex items-start gap-2.5 cursor-pointer select-none py-1" data-manter-conectado>
@@ -182,5 +178,6 @@ export function LoginForm() {
         )}
       </button>
     </form>
+    </ErrosDoFormulario>
   );
 }

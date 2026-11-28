@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { erroDeValidacao, erroNoCampo } from "@/lib/forms/erros-server";
 import { z } from "zod";
 import { definirSenhaPorConvite, mensagemErroLink, verificarTokenConvite } from "@/lib/usuarios/convite";
 import { problemaSenha } from "@/lib/acesso/senha";
@@ -21,9 +22,9 @@ const schema = z.object({
 
 export async function POST(req: NextRequest) {
   const parsed = schema.safeParse(await req.json().catch(() => null));
-  if (!parsed.success) return NextResponse.json({ erro: parsed.error.issues[0]?.message ?? "Dados inválidos" }, { status: 400 });
+  if (!parsed.success) return erroDeValidacao(parsed.error, parsed.error.issues[0]?.message ?? "Dados inválidos");
   const { token, senha, confirmar } = parsed.data;
-  if (senha !== confirmar) return NextResponse.json({ erro: "A confirmação não confere com a senha." }, { status: 400 });
+  if (senha !== confirmar) return erroNoCampo("confirmar", "A confirmação não confere com a senha.");
   const r = await definirSenhaPorConvite(token, senha);
   if (!r.ok) return NextResponse.json({ erro: mensagemErroLink(r.erro, r.finalidade) }, { status: 400 });
   return NextResponse.json({ ok: true, email: r.usuario.email });

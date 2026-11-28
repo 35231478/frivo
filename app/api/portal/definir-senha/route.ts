@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { erroNoCampo } from "@/lib/forms/erros-server";
 import { z } from "zod";
 import { problemaSenha, SENHA_MAXIMA } from "@/lib/acesso/senha";
 import { definirSenhaPortal, MENSAGEM_ERRO_TOKEN_PORTAL } from "@/lib/portal/recuperacao";
@@ -12,7 +13,7 @@ export async function POST(req: NextRequest) {
   const { token, senha } = parsed.data;
 
   const problema = problemaSenha(senha);
-  if (problema) return NextResponse.json({ erro: problema }, { status: 400 });
+  if (problema) return erroNoCampo("senha", problema);
 
   const r = await definirSenhaPortal(token, senha);
   if (!r.ok) return NextResponse.json({ erro: MENSAGEM_ERRO_TOKEN_PORTAL[r.erro] }, { status: 400 });

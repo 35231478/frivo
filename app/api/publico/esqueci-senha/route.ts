@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse, after } from "next/server";
+import { erroDeValidacao } from "@/lib/forms/erros-server";
 import { z } from "zod";
 import { conferirBloqueio, ipDaRequisicao, registrarTentativa } from "@/lib/acesso/limite";
 import { MENSAGEM_ESQUECI, enviarRecuperacaoSenha, urlBasePublica } from "@/lib/acesso/recuperacao";
@@ -12,7 +13,7 @@ const schema = z.object({ email: z.string().trim().max(200).email("Informe um e-
 
 export async function POST(req: NextRequest) {
   const parsed = schema.safeParse(await req.json().catch(() => null));
-  if (!parsed.success) return NextResponse.json({ erro: parsed.error.issues[0]?.message ?? "Dados inválidos" }, { status: 400 });
+  if (!parsed.success) return erroDeValidacao(parsed.error, parsed.error.issues[0]?.message ?? "Dados inválidos");
   const { email } = parsed.data;
 
   const alvos = { email, ip: ipDaRequisicao(req.headers) };
