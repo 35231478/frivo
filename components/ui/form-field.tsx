@@ -141,8 +141,13 @@ export function FormField({ label, error, name, formato, valor, required, hint, 
     if (alvo?.tagName === "INPUT" && alvo.getAttribute("aria-hidden") === "true") { limparTudo(); return; }
     const v = valorDoAlvo(alvo);
     if (v === null) return;
+    // Já acusou o formato: some quando fica certo; enquanto segue errado, a mensagem acompanha o que está digitado
+    // (ex.: "Informe os 14 dígitos" → "CNPJ inválido" quando os 14 dígitos chegam com o verificador errado)
     if (formato && (erroFormato || formatoNoForm.current)) {
-      if (validarFormato(formato, v) === null) limparTudo();
+      const msg = validarFormato(formato, v);
+      if (msg === null) limparTudo();
+      else if (name && form) form.definirCampo(name, msg);
+      else setErroFormato(msg);
       return;
     }
     if (name && erroDoForm) form?.limpar(name);

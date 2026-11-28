@@ -170,6 +170,9 @@ describe("o erro some quando a pessoa corrige", () => {
     expect(cnpj.getAttribute("aria-invalid")).toBe("true");
     digitar(cnpj, "11.222.333/0001-8");
     expect(cnpj.getAttribute("aria-invalid")).toBe("true");
+    // os 14 dígitos chegaram com o verificador errado: a mensagem acompanha (não fica a "14 dígitos" velha)
+    digitar(cnpj, "11.222.333/0001-80");
+    expect(document.getElementById(cnpj.getAttribute("aria-describedby")!)!.textContent).toBe("CNPJ inválido: confira os dígitos.");
     digitar(cnpj, "11.222.333/0001-81");
     expect(cnpj.getAttribute("aria-invalid")).toBeNull();
     expect($("[data-resumo-erros]")).toBeNull();
@@ -210,6 +213,8 @@ describe("formato ao sair do campo", () => {
     sair(el);
     expect(el.getAttribute("aria-invalid")).toBe("true");
     expect(caixa.querySelector("[data-erro-campo]")!.textContent).toBe("E-mail inválido: confira o endereço.");
+    digitar(el, "joao@empresa");
+    expect(el.getAttribute("aria-invalid")).toBe("true");
     digitar(el, "joao@empresa.com.br");
     expect(el.getAttribute("aria-invalid")).toBeNull();
   });
