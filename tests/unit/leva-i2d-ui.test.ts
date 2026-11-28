@@ -102,7 +102,7 @@ describe("12. Notas descartadas: Restaurar", () => {
     expect(avisos.toast).toHaveBeenCalledWith("NF D1/1 restaurada.");
     expect(nav.push).toHaveBeenCalledWith("/estoque/notas/nVolta");
 
-    respostas["POST /api/compras/notas/descartes/d1/restaurar"] = { status: 409, corpo: { erro: "A NF D1/1 já foi importada de novo em 22/11/2026: não há o que restaurar. Abra a nota importada.", notaId: "nOutra" } };
+    respostas["POST /api/compras/notas/descartes/d1/restaurar"] = { status: 409, corpo: { erro: "A NF D1/1 já foi importada de novo em 22/11/2026. Abra a nota importada.", notaId: "nOutra" } };
     await clicar($('[data-restaurar-nota="d1"]'));
     expect(txt($("[data-erro-restaurar]"))).toContain("já foi importada de novo");
     expect($("[data-erro-restaurar] a")!.getAttribute("href")).toBe("/estoque/notas/nOutra");

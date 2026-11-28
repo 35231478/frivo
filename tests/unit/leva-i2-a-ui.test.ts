@@ -32,7 +32,8 @@ beforeEach(() => {
   pedidos = []; respostas = {}; copiado = []; avisos.confirma = true; avisos.perguntas = []; avisos.toasts = [];
   vi.stubGlobal("fetch", vi.fn(async (url: string, init?: RequestInit) => {
     const metodo = init?.method ?? "GET";
-    pedidos.push({ url, metodo, corpo: init?.body ? JSON.parse(String(init.body)) : null });
+    // a preferência de colunas que a TabelaPro lê ao montar (Leva I.2, item 13) não é ação da tela
+    if (!url.startsWith("/api/preferencias/")) pedidos.push({ url, metodo, corpo: init?.body ? JSON.parse(String(init.body)) : null });
     const r = respostas[`${metodo} ${url}`] ?? { status: 404, corpo: { erro: "não mapeado" } };
     return new Response(JSON.stringify(r.corpo), { status: r.status, headers: { "content-type": "application/json" } });
   }));

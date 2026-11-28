@@ -47,7 +47,7 @@ describe("12. restaurar nota descartada", () => {
   });
   it("a chave já importada de novo: mensagem clara, com a NF e a data", () => {
     expect(msgNotaJaImportadaDeNovo({ numero: "4521", serie: "1", em: "20/11/2026" }))
-      .toBe("A NF 4521/1 já foi importada de novo em 20/11/2026: não há o que restaurar. Abra a nota importada.");
+      .toBe("A NF 4521/1 já foi importada de novo em 20/11/2026. Abra a nota importada.");
   });
 });
 

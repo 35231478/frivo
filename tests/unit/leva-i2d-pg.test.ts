@@ -116,7 +116,7 @@ describe.skipIf(!URL_PG)("Leva I.2 — grupo D (PostgreSQL real)", () => {
     const reimportada = await lib.importarNota({ empresaId: "e1", usuarioId: "u1", xml: XML_4610 });
     const r = await rota("compras/notas/descartes/[id]/restaurar", { id: d.id }, "POST");
     expect(r.status).toBe(409);
-    expect(r.json.erro).toMatch(/^A NF \d+\/\d+ já foi importada de novo em \d{2}\/\d{2}\/\d{4}: não há o que restaurar\. Abra a nota importada\.$/);
+    expect(r.json.erro).toMatch(/^A NF \d+\/\d+ já foi importada de novo em \d{2}\/\d{2}\/\d{4}\. Abra a nota importada\.$/);
     expect(r.json.notaId).toBe(reimportada.nota.id);
     expect((await prisma.notaCompraDescarte.findUnique({ where: { id: d.id } })).restauradaEm).toBeNull();
     expect(await prisma.notaCompra.count({ where: { empresaId: "e1", chaveAcesso: d.chaveAcesso } })).toBe(1);

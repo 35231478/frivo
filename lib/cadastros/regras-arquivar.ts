@@ -299,4 +299,4 @@ export function motivoNaoRestaurarNota(d: { temXml: boolean; restauradaEm: Date 
 
 /** A nota já foi importada de novo (alguém subiu o XML depois do descarte): restaurar duplicaria. */
 export const msgNotaJaImportadaDeNovo = (n: { numero: string; serie: string; em: string }) =>
-  `A NF ${n.numero}/${n.serie} já foi importada de novo em ${n.em}: não há o que restaurar. Abra a nota importada.`;
+  `A NF ${n.numero}/${n.serie} já foi importada de novo em ${n.em}. Abra a nota importada.`;
