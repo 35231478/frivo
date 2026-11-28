@@ -17,8 +17,8 @@ import { z } from "zod";
 
 export const QUEM = ["PESSOA", "CARGO", "TODOS"] as const;
 export const PAPEIS = ["VENDEDOR", "EXECUTOR", "RESPONSAVEL"] as const;
-/** Os papéis que já geram comissão (o modelo aceita os outros; a COM-2 liga o Executor) */
-export const PAPEIS_ATIVOS = ["VENDEDOR"] as const;
+/** Os papéis que já geram comissão (o modelo aceita o Responsável; a COM-2 ligou o Executor) */
+export const PAPEIS_ATIVOS = ["VENDEDOR", "EXECUTOR"] as const;
 export const SOBRE = ["TODOS_SERVICOS", "CATEGORIA", "SERVICO", "PECAS"] as const;
 export const BASES = ["PERC_VENDA", "PERC_LUCRO", "FIXO_ITEM"] as const;
 export const QUANDO = ["RECEBIMENTO", "APROVACAO", "CONCLUSAO_OS"] as const;
@@ -65,7 +65,15 @@ export interface RegraComissao {
   base: Base;
   valor: number;
   ativo?: boolean;
+  /** COM-2 (Executor): como dividir entre os técnicos da atividade; POR_CARGO usa divisaoCargos ({ cargoId: % }) */
+  divisao?: Divisao | null;
+  divisaoCargos?: Record<string, number> | null;
 }
+
+/** COM-2: a divisão entre os técnicos (só no papel Executor) */
+export const DIVISOES = ["IGUAL", "POR_EXECUTOR", "POR_CARGO"] as const;
+export type Divisao = (typeof DIVISOES)[number];
+export const ROTULO_DIVISAO: Record<Divisao, string> = { IGUAL: "Igual entre os técnicos", POR_EXECUTOR: "Para quem executou", POR_CARGO: "% por cargo" };
 
 /** Quem recebe: o usuário e o cargo dele (do colaborador ligado pelo e-mail; null = sem cadastro de colaborador) */
 export interface Beneficiario { usuarioId: string; cargoId: string | null }
@@ -398,6 +406,9 @@ export function comissoesPorPessoa(movs: readonly { usuarioId: string | null; no
 /* ───────── o que a tela manda ───────── */
 
 const PCT_MAX = 100;
+/** O % de cada cargo na divisão (normalizado depois sobre os cargos presentes: 60/40 e 6/4 dão o mesmo) */
+export const PCT_DIVISAO_MAX = 100;
+export const MSG_PAPEL_INATIVO = "Por enquanto só os papéis Vendedor e Executor geram comissão.";
 export const regraSchema = z.object({
   quemTipo: z.enum(QUEM),
   usuarioId: z.string().trim().min(1).nullish(),
@@ -409,9 +420,16 @@ export const regraSchema = z.object({
   base: z.enum(BASES),
   valor: z.coerce.number({ invalid_type_error: "Informe o valor." }).min(0, "O valor não pode ser negativo."),
   ativo: z.boolean().optional(),
+  /** COM-2: só no papel Executor */
+  divisao: z.enum(DIVISOES).optional(),
+  divisaoCargos: z.record(z.string().trim().min(1).max(64), z.coerce.number().min(0).max(PCT_DIVISAO_MAX)).nullish(),
 }).strict().superRefine((r, ctx) => {
   const erro = (path: string, message: string) => ctx.addIssue({ code: z.ZodIssueCode.custom, path: [path], message });
-  if (!(PAPEIS_ATIVOS as readonly string[]).includes(r.papel)) erro("papel", "Por enquanto só o papel Vendedor gera comissão.");
+  if (!(PAPEIS_ATIVOS as readonly string[]).includes(r.papel)) erro("papel", MSG_PAPEL_INATIVO);
+  if (r.papel === "EXECUTOR" && r.divisao === "POR_CARGO") {
+    const pcts = Object.values(r.divisaoCargos ?? {});
+    if (!pcts.length || pcts.every((v) => v <= 0)) erro("divisaoCargos", "Informe o % de pelo menos um cargo.");
+  }
   if (r.quemTipo === "PESSOA" && !r.usuarioId) erro("usuarioId", "Escolha a pessoa.");
   if (r.quemTipo === "CARGO" && !r.cargoId) erro("cargoId", "Escolha o cargo.");
   if (r.sobreTipo === "CATEGORIA" && !r.categoria) erro("categoria", "Informe a categoria de serviço.");
@@ -429,8 +447,21 @@ export function normalizarRegra(r: RegraEntrada) {
     cargoId: r.quemTipo === "CARGO" ? r.cargoId ?? null : null,
     categoria: r.sobreTipo === "CATEGORIA" ? r.categoria?.trim() ?? null : null,
     servicoId: r.sobreTipo === "SERVICO" ? r.servicoId ?? null : null,
+    // A divisão só existe no Executor (o vendedor é um só); "% por cargo" guarda só os cargos com % > 0
+    divisao: r.papel === "EXECUTOR" ? r.divisao ?? "IGUAL" : "IGUAL",
+    divisaoCargos: r.papel === "EXECUTOR" && r.divisao === "POR_CARGO"
+      ? Object.fromEntries(Object.entries(r.divisaoCargos ?? {}).filter(([, v]) => v > 0))
+      : null,
   };
 }
+
+/** COM-2: quando a comissão do TÉCNICO fica devida (o vendedor segue o `quando` da COM-1) */
+export const QUANDO_EXECUTOR = ["CONCLUSAO_OS", "ACEITE", "RECEBIMENTO"] as const;
+export type QuandoExecutor = (typeof QUANDO_EXECUTOR)[number];
+export const ROTULO_QUANDO_EXECUTOR: Record<QuandoExecutor, string> = {
+  CONCLUSAO_OS: "Na conclusão da OS", ACEITE: "No aceite do cliente", RECEBIMENTO: "No recebimento da OS",
+};
+export const RETORNO_DIAS_MAX = 365;
 
 /* ───────── o vencimento da conta a pagar do fechamento (COM-1.1) ───────── */
 
@@ -480,6 +511,11 @@ export function dataDoVencimento(competencia: string, v: VencimentoFechamento): 
 export const configComissaoSchema = z.object({
   quando: z.enum(QUANDO),
   liquidaImpostos: z.boolean(),
+  // COM-2 (opcionais: a tela antiga manda só os dois de cima)
+  executorQuando: z.enum(QUANDO_EXECUTOR).optional(),
+  retornoDias: z.coerce.number().int("Dias do retorno: número inteiro.").min(0, "Dias do retorno: de 0 a 365.").max(RETORNO_DIAS_MAX, "Dias do retorno: de 0 a 365.").optional(),
+  /** Os tipos de OS que contam como retorno (a mesma lista do Desempenho: mudar aqui muda lá) */
+  tiposRetorno: z.array(z.string().trim().min(1).max(64)).max(200).optional(),
   /** COM-1.1: o vencimento da conta a pagar do fechamento (sem os dois, fica como está) */
   vencimentoTipo: z.enum(VENCIMENTO_TIPOS).optional(),
   vencimentoDia: z.number().int("Informe um dia inteiro.").min(1, "O dia vai de 1 em diante.").optional(),

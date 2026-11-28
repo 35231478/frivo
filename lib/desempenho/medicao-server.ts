@@ -76,10 +76,10 @@ export async function medirMes(empresaId: string, competencia: string): Promise<
 }
 
 /** Por atividade, cada equipamento ATENDIDO: o relatório dele está completo (regra do app)? Tem foto antes e depois? */
-async function relatoriosDasAtividades(
+export async function relatoriosDasAtividades(
   empresaId: string, atividades: { id: string; tipoOsId: string | null; concluidaEm: Date }[],
-): Promise<Map<string, { completo: boolean; antesEDepois: boolean }[]>> {
-  const saida = new Map<string, { completo: boolean; antesEDepois: boolean }[]>();
+): Promise<Map<string, { completo: boolean; antesEDepois: boolean; equipamentoId: string }[]>> {
+  const saida = new Map<string, { completo: boolean; antesEDepois: boolean; equipamentoId: string }[]>();
   const ids = atividades.map((a) => a.id);
   if (!ids.length) return saida;
   const vinculos = await prisma.atividadeEquipamento.findMany({
@@ -153,7 +153,7 @@ async function relatoriosDasAtividades(
       })),
     } : null;
     const entrada = paraPendencia({ feito: true, equipamento: { id: e.id, titulo: "", tag: null, local: null }, itens: itensDaEpoca, respostas: resp, fotos: minhasFotos, formulario });
-    saida.set(a.id, [...(saida.get(a.id) ?? []), { completo: completo(faltasEquipamento(entrada)), antesEDepois: temAntesEDepois(minhasFotos) }]);
+    saida.set(a.id, [...(saida.get(a.id) ?? []), { completo: completo(faltasEquipamento(entrada)), antesEDepois: temAntesEDepois(minhasFotos), equipamentoId: e.id }]);
   }
   return saida;
 }

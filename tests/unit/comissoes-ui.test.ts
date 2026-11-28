@@ -105,8 +105,10 @@ describe("Configurações › Comissões", () => {
       regra({ id: "r2", quemTipo: "CARGO", cargoId: "cg", sobreTipo: "CATEGORIA", categoria: "Instalação", valor: 5, nomes: { pessoa: null, cargo: "Vendedores", servico: null } }),
       regra({ id: "r3", sobreTipo: "PECAS", base: "FIXO_ITEM", valor: 10, ativo: false }),
     ],
-    config: { quando: "RECEBIMENTO", liquidaImpostos: false, vencimento: { tipo: "DIA_UTIL", dia: 5 } },
-    opcoes: { pessoas: [{ id: "uA", nome: "Ana" }], cargos: [{ id: "cg", nome: "Vendedores" }], servicos: [{ id: "s1", nome: "Limpeza" }], categorias: ["Instalação", "Manutenção"] },
+    // COM-1.1: o vencimento; COM-2: o técnico, os tipos de OS (retorno) e os tetos vêm junto
+    config: { quando: "RECEBIMENTO", liquidaImpostos: false, vencimento: { tipo: "DIA_UTIL", dia: 5 }, executorQuando: "CONCLUSAO_OS", retornoDias: 30, tiposRetorno: [] },
+    opcoes: { pessoas: [{ id: "uA", nome: "Ana" }], cargos: [{ id: "cg", nome: "Vendedores" }], servicos: [{ id: "s1", nome: "Limpeza" }], categorias: ["Instalação", "Manutenção"], tiposOs: [] },
+    tetos: [],
   };
   const abrir = async (dados: any = DADOS) => {
     const { ComissoesClient } = await import("@/components/config/comissoes-client");
@@ -130,12 +132,12 @@ describe("Configurações › Comissões", () => {
     expect(texto($("[data-sem-regras]"))).toMatch(/Sem regra, ninguém ganha comissão/);
   });
 
-  it("nova regra: campos conforme o tipo; Executor e Responsável ainda desligados; manda o POST; erro do servidor no diálogo", async () => {
+  it("nova regra: campos conforme o tipo; Executor ligado (COM-2), Responsável ainda desligado; manda o POST; erro do servidor no diálogo", async () => {
     await abrir();
     await clicar($("[data-nova-regra]"));
     expect($("[data-campo-cargo]")).toBeNull();
     const papeis = $$<HTMLOptionElement>("[data-campo-papel] option").map((o) => [o.textContent, o.disabled]);
-    expect(papeis).toEqual([["Vendedor", false], ["Executor (em breve)", true], ["Responsável (em breve)", true]]);
+    expect(papeis).toEqual([["Vendedor", false], ["Executor", false], ["Responsável (em breve)", true]]);
     await escolher($("[data-campo-quem]"), "CARGO");
     await escolher($("[data-campo-cargo]"), "cg");
     await escolher($("[data-campo-sobre]"), "SERVICO");
@@ -160,8 +162,8 @@ describe("Configurações › Comissões", () => {
     await escolher($("[data-comissao-quando]"), "CONCLUSAO_OS");
     expect(salvar.disabled).toBe(false);
     await clicar(salvar);
-    // COM-1.1: o PUT leva também o vencimento do fechamento (o que estava na tela)
-    expect(chamadas.find((c) => c.metodo === "PUT")).toEqual({ url: "/api/comissoes", metodo: "PUT", corpo: { quando: "CONCLUSAO_OS", liquidaImpostos: false, vencimentoTipo: "DIA_UTIL", vencimentoDia: 5 } });
+    // COM-1.1 + COM-2: a configuração inteira (o vencimento do fechamento e o técnico, o que estava na tela)
+    expect(chamadas.find((c) => c.metodo === "PUT")).toEqual({ url: "/api/comissoes", metodo: "PUT", corpo: { quando: "CONCLUSAO_OS", liquidaImpostos: false, vencimentoTipo: "DIA_UTIL", vencimentoDia: 5, executorQuando: "CONCLUSAO_OS", retornoDias: 30, tiposRetorno: [] } });
   });
 
   it("COM-1.1 — vencimento do pagamento: padrão 5º dia útil; trocar para dia fixo; dia fora do limite trava o Salvar", async () => {
@@ -187,7 +189,7 @@ describe("Configurações › Comissões", () => {
     expect(texto($("[data-vencimento-resumo]"))).toBe("Dia 10 do mês seguinte.");
     expect(salvar.disabled).toBe(false);
     await clicar(salvar);
-    expect(chamadas.find((c) => c.metodo === "PUT")!.corpo).toEqual({ quando: "RECEBIMENTO", liquidaImpostos: false, vencimentoTipo: "DIA_FIXO", vencimentoDia: 10 });
+    expect(chamadas.find((c) => c.metodo === "PUT")!.corpo).toEqual({ quando: "RECEBIMENTO", liquidaImpostos: false, vencimentoTipo: "DIA_FIXO", vencimentoDia: 10, executorQuando: "CONCLUSAO_OS", retornoDias: 30, tiposRetorno: [] });
     // Salvo: sem mudança de novo, o botão volta a travar
     expect(salvar.disabled).toBe(true);
   });
@@ -197,7 +199,7 @@ describe("Meu perfil — Minhas comissões", () => {
   const initial = { nome: "Vitor Vendas", email: "v@ficticio.test", telefone: "", avatar: null, empresaNome: "Clima Fictícia", perfilNome: null, cargo: "Operador", ultimoAcesso: null };
   const EXTRATO = {
     ativo: true, totais: { prevista: 30, liberada: 20, paga: 50 },
-    vendas: [{ orcamentoId: "o1", codigo: "ORC-1", nome: "Instalação fictícia", cliente: "Hospital Fictício", osNumero: "OS-7", prevista: 30, liberada: 20, paga: 50, itens: [{ descricao: "Instalação split", regra: "Vendedores (cargo) · Instalação (categoria) · 5% do lucro", valor: 100 }] }],
+    vendas: [{ chave: "o1", tipo: "VENDA", orcamentoId: "o1", codigo: "ORC-1", nome: "Instalação fictícia", cliente: "Hospital Fictício", osNumero: "OS-7", prevista: 30, liberada: 20, paga: 50, itens: [{ descricao: "Instalação split", regra: "Vendedores (cargo) · Instalação (categoria) · 5% do lucro", valor: 100 }] }],
   };
 
   it("empresa sem comissão: nada de aba Comissões", async () => {
@@ -252,7 +254,7 @@ describe("folha do mês com comissões", () => {
   it("comissões do mês por data de emissão ou de recebimento: abre na vista da configuração; trocar pede a outra; diz o que o fechamento paga", async () => {
     const relatorio = (vista: string, valor: number) => ({
       competencia: "2026-10", vista, quando: "RECEBIMENTO", total: valor,
-      pessoas: [{ usuarioId: "uA", nome: "Ana Dias", valor, vendas: [{ orcamentoId: "o1", codigo: "ORC-1", nome: "Venda fictícia", cliente: "Cliente Fictício", data: "2026-10-12T12:00:00.000Z", valor }] }],
+      pessoas: [{ usuarioId: "uA", nome: "Ana Dias", valor, vendas: [{ chave: "o1", orcamentoId: "o1", codigo: "ORC-1", nome: "Venda fictícia", cliente: "Cliente Fictício", data: "2026-10-12T12:00:00.000Z", valor }] }],
     });
     respostas["GET /api/comissoes/relatorio?mes=2026-10"] = { status: 200, corpo: relatorio("RECEBIMENTO", 5) };
     respostas["GET /api/comissoes/relatorio?mes=2026-10&vista=EMISSAO"] = { status: 200, corpo: relatorio("EMISSAO", 50) };

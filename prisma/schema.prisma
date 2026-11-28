@@ -580,6 +580,8 @@ model Empresa {
   comissaoRegras             ComissaoRegra[]
   comissoes                  Comissao[]
   comissaoLancamentos        ComissaoLancamento[]
+  comissaoTetos              ComissaoTeto[]
+  comissaoRevisoes           ComissaoRevisao[]
 
   admissoes          Admissao[]
   admissaoConfig     AdmissaoConfig?
@@ -751,6 +753,10 @@ model Configuracao {
   comissaoQuando          String  @default("RECEBIMENTO") @map("comissao_quando")
   /// COM-1 — base "líquida de impostos": tira o ISS do valor da venda (padrão: o valor com desconto, com o ISS)
   comissaoLiquidaImpostos Boolean @default(false) @map("comissao_liquida_impostos")
+  /// COM-2: quando a comissão do TÉCNICO fica devida: CONCLUSAO_OS | ACEITE (do cliente) | RECEBIMENTO
+  comissaoExecutorQuando  String  @default("CONCLUSAO_OS") @map("comissao_executor_quando")
+  /// COM-2: retorno no mesmo equipamento até N dias depois do serviço põe a comissão do técnico em revisão (0 = desligado)
+  comissaoRetornoDias     Int     @default(30) @map("comissao_retorno_dias")
   /// COM-1.1 — o vencimento da conta a pagar do fechamento (bônus + comissão): DIA_UTIL (o N-º dia útil, seg–sex,
   /// do mês seguinte; padrão 5) | DIA_FIXO (o dia N do mês seguinte; além do fim do mês = o último dia)
   comissaoVencimentoTipo  String  @default("DIA_UTIL") @map("comissao_vencimento_tipo")
@@ -951,6 +957,7 @@ model Usuario {
   comissaoRegras         ComissaoRegra[]             @relation("ComissaoRegraUsuario")
   comissoes              Comissao[]                  @relation("ComissaoUsuario")
   comissaoLancamentos    ComissaoLancamento[]        @relation("ComissaoLancamentoUsuario")
+  comissaoTetos          ComissaoTeto[]              @relation("ComissaoTetoUsuario")
   orcamentoAnexos        OrcamentoAnexo[]            @relation("OrcamentoAnexoAutor")
   orcamentoEventos       OrcamentoEvento[]           @relation("OrcamentoEventoAutor")
   contaReceberEventos    ContaReceberEvento[]        @relation("ContaReceberEventoUsuario")
@@ -2187,6 +2194,9 @@ model OrdemServico {
   /// Ocorrências do PMOC detectadas nesta OS / que geraram esta OS corretiva
   pmocOcorrencias           PmocOcorrencia[] @relation("PmocOcorrenciaOs")
   pmocOcorrenciasCorretivas PmocOcorrencia[] @relation("PmocOcorrenciaOsCorretiva")
+  /// COM-2: as comissões do técnico nascidas desta OS e as revisões em que ela é o retorno
+  comissoesExecutor         Comissao[]        @relation("ComissaoOs")
+  comissaoRevisoesRetorno   ComissaoRevisao[] @relation("ComissaoRevisaoOsRetorno")
   /// Aceite do cliente na conclusão (uma linha por OS). Ver OsAceite.
   aceite                    OsAceite?
 
@@ -4401,6 +4411,7 @@ model Cargo {
   empresa        Empresa         @relation(fields: [empresaId], references: [id], onDelete: Cascade)
   colaboradores  Tecnico[]
   comissaoRegras ComissaoRegra[]
+  comissaoTetos  ComissaoTeto[]
 
   @@map("cargos")
 }
@@ -5701,6 +5712,10 @@ model ComissaoRegra {
   base         String
   /// % (PERC_*) ou R$ por unidade (FIXO_ITEM)
   valor        Decimal  @db.Decimal(12, 4)
+  /// COM-2 (Executor): IGUAL | POR_EXECUTOR (quem marcou o equipamento como feito) | POR_CARGO (divisaoCargos)
+  divisao      String   @default("IGUAL")
+  /// POR_CARGO: { [cargoId]: % } — normalizado sobre os cargos presentes
+  divisaoCargos Json?   @map("divisao_cargos")
   ativo        Boolean  @default(true)
   criadoPorId  String?  @map("criado_por_id")
   criadoEm     DateTime @default(now()) @map("criado_em")
@@ -5722,7 +5737,16 @@ model ComissaoRegra {
 model Comissao {
   id               String   @id @default(cuid())
   empresaId        String   @map("empresa_id")
-  orcamentoId      String   @map("orcamento_id")
+  /// Vendedor (COM-1): o orçamento. Técnico (COM-2): null — a comissão vem da OS
+  orcamentoId      String?  @map("orcamento_id")
+  /// COM-2 (Executor): a OS, a atividade, o equipamento atendido (a linha é o itemId) e a parte dele na divisão
+  ordemServicoId   String?  @map("ordem_servico_id")
+  atividadeId      String?  @map("atividade_id")
+  equipamentoId    String?  @map("equipamento_id")
+  parte            Decimal  @default(1) @db.Decimal(7, 4)
+  divisao          String?
+  /// Uma comissão por atividade × equipamento × linha × pessoa (null nas do vendedor)
+  chave            String?
   /// Quem recebe (o vendedor do orçamento na aprovação) e o nome como era
   usuarioId        String?  @map("usuario_id")
   beneficiarioNome String   @map("beneficiario_nome")
@@ -5747,13 +5771,17 @@ model Comissao {
   criadoEm         DateTime @default(now()) @map("criado_em")
 
   empresa     Empresa              @relation(fields: [empresaId], references: [id], onDelete: Cascade)
-  orcamento   Orcamento            @relation(fields: [orcamentoId], references: [id], onDelete: Cascade)
+  orcamento   Orcamento?           @relation(fields: [orcamentoId], references: [id], onDelete: Cascade)
+  ordemServico OrdemServico?       @relation("ComissaoOs", fields: [ordemServicoId], references: [id], onDelete: Cascade)
   usuario     Usuario?             @relation("ComissaoUsuario", fields: [usuarioId], references: [id], onDelete: SetNull)
   regra       ComissaoRegra?       @relation(fields: [regraId], references: [id], onDelete: SetNull)
   lancamentos ComissaoLancamento[]
+  revisoes    ComissaoRevisao[]
 
+  @@unique([empresaId, chave])
   @@index([empresaId, usuarioId])
   @@index([orcamentoId])
+  @@index([ordemServicoId])
   @@map("comissoes")
 }
 
@@ -5773,6 +5801,8 @@ model ComissaoLancamento {
   data         DateTime
   motivo       String
   fechamentoId String?  @map("fechamento_id")
+  /// COM-2: o par −/+ do teto do mês ("AAAA-MM" da competência que estourou); reabrir o mês apaga o par
+  tetoCompetencia String? @map("teto_competencia")
   criadoEm     DateTime @default(now()) @map("criado_em")
 
   empresa    Empresa               @relation(fields: [empresaId], references: [id], onDelete: Cascade)
@@ -5783,7 +5813,54 @@ model ComissaoLancamento {
   @@index([empresaId, usuarioId])
   @@index([comissaoId])
   @@index([fechamentoId])
+  @@index([empresaId, tetoCompetencia])
   @@map("comissao_lancamentos")
+}
+
+/// COM-2: o teto mensal de comissão por pessoa ou por cargo (a pessoa vence o cargo). O excedente passa para o mês seguinte.
+model ComissaoTeto {
+  id           String   @id @default(cuid())
+  empresaId    String   @map("empresa_id")
+  /// PESSOA (usuarioId) | CARGO (cargoId)
+  quemTipo     String   @map("quem_tipo")
+  usuarioId    String?  @map("usuario_id")
+  cargoId      String?  @map("cargo_id")
+  valor        Decimal  @db.Decimal(12, 2)
+  ativo        Boolean  @default(true)
+  criadoEm     DateTime @default(now()) @map("criado_em")
+  atualizadoEm DateTime @updatedAt @map("atualizado_em")
+
+  empresa Empresa  @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  usuario Usuario? @relation("ComissaoTetoUsuario", fields: [usuarioId], references: [id], onDelete: Cascade)
+  cargo   Cargo?   @relation(fields: [cargoId], references: [id], onDelete: Cascade)
+
+  @@index([empresaId, ativo])
+  @@map("comissao_tetos")
+}
+
+/// COM-2: retorno no mesmo equipamento dentro dos dias da configuração — a comissão do técnico fica em revisão
+model ComissaoRevisao {
+  id              String    @id @default(cuid())
+  empresaId       String    @map("empresa_id")
+  comissaoId      String    @map("comissao_id")
+  osRetornoId     String    @map("os_retorno_id")
+  equipamentoId   String?   @map("equipamento_id")
+  /// A_REVISAR | ESTORNAR | MANTER
+  situacao        String    @default("A_REVISAR")
+  descricao       String
+  motivo          String?
+  decididoPorId   String?   @map("decidido_por_id")
+  decididoPorNome String?   @map("decidido_por_nome")
+  decididoEm      DateTime? @map("decidido_em")
+  criadoEm        DateTime  @default(now()) @map("criado_em")
+
+  empresa   Empresa      @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  comissao  Comissao     @relation(fields: [comissaoId], references: [id], onDelete: Cascade)
+  osRetorno OrdemServico @relation("ComissaoRevisaoOsRetorno", fields: [osRetornoId], references: [id], onDelete: Cascade)
+
+  @@unique([comissaoId, osRetornoId])
+  @@index([empresaId, situacao])
+  @@map("comissao_revisoes")
 }
 
 // ─────────────────────────────────────────────
