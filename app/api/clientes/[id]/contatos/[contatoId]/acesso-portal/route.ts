@@ -5,6 +5,7 @@ import { pode } from "@/lib/permissoes";
 import { prisma } from "@/lib/prisma";
 import { acessoPortalSchema } from "@/lib/validations";
 import { gerarSenhaProvisoria } from "@/lib/portal/gerar-senha";
+import { emailDePortalEmUso, MSG_EMAIL_PORTAL_EM_USO } from "@/lib/acesso/email-unico";
 
 type Params = { params: Promise<{ id: string; contatoId: string }> };
 
@@ -34,12 +35,9 @@ export async function PUT(req: NextRequest, { params }: Params) {
   }
   const d = parsed.data;
 
-  // E-mail de acesso único entre contatos com portal habilitado da empresa
-  const conflito = await prisma.contatoCliente.findFirst({
-    where: { empresaId, email: { equals: d.email, mode: "insensitive" }, senha: { not: null }, id: { not: contatoId } },
-    select: { id: true },
-  });
-  if (conflito) return NextResponse.json({ erro: "Já existe acesso de portal com este e-mail" }, { status: 409 });
+  // E-mail de acesso único entre os contatos com portal de TODAS as empresas: o login do portal procura em
+  // todas (lib/auth-portal) — lib/acesso/email-unico. O próprio contato não conflita consigo.
+  if (await emailDePortalEmUso(d.email, contatoId)) return NextResponse.json({ erro: MSG_EMAIL_PORTAL_EM_USO }, { status: 409 });
 
   // Acesso novo (sem senha ainda): o sistema gera a provisória. Já com acesso: muda e-mail e permissões, a senha fica.
   const data: Record<string, unknown> = { email: d.email, permissoes: d.permissoes, senhaProvisoria: null };
@@ -83,6 +81,9 @@ export async function POST(_: NextRequest, { params }: Params) {
   const contato = await prisma.contatoCliente.findFirst({ where: { id: contatoId, clienteId: id, empresaId } });
   if (!contato) return NextResponse.json({ erro: "Contato não encontrado" }, { status: 404 });
   if (!contato.email) return NextResponse.json({ erro: "Contato sem e-mail de acesso" }, { status: 400 });
+  // Sem acesso ainda, a senha nova LIBERA o acesso: o e-mail não pode ser acesso de outro contato do Frivo
+  if (!contato.senha && await emailDePortalEmUso(contato.email, contatoId))
+    return NextResponse.json({ erro: MSG_EMAIL_PORTAL_EM_USO }, { status: 409 });
 
   const novaSenha = gerarSenhaProvisoria();
   const atualizado = await prisma.contatoCliente.update({

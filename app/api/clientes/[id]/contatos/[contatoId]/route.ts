@@ -4,8 +4,18 @@ import { pode } from "@/lib/permissoes";
 import { prisma } from "@/lib/prisma";
 import { contatoClienteSchema, contatoContextoSchema, dadosParciais } from "@/lib/validations";
 import { contatoSeguro } from "@/lib/contato-cliente";
+import { emailDePortalEmUso, MSG_EMAIL_PORTAL_EM_USO } from "@/lib/acesso/email-unico";
 
 type Params = { params: Promise<{ id: string; contatoId: string }> };
+
+/**
+ * Contato COM acesso ao portal: o e-mail é o login dele. Trocar por um que já é acesso de outro contato do
+ * Frivo (qualquer empresa) é recusado — lib/acesso/email-unico. Sem acesso, o e-mail é só contato.
+ */
+async function emailDoPortalRecusado(c: { id: string; email: string | null; senha: string | null }, novo: string | null | undefined) {
+  if (!c.senha || !novo || novo.trim().toLowerCase() === (c.email ?? "").trim().toLowerCase()) return null;
+  return (await emailDePortalEmUso(novo, c.id)) ? NextResponse.json({ erro: MSG_EMAIL_PORTAL_EM_USO }, { status: 409 }) : null;
+}
 
 export async function PUT(req: NextRequest, { params }: Params) {
   const session = await auth();
@@ -25,6 +35,9 @@ export async function PUT(req: NextRequest, { params }: Params) {
   if (!parsed.success) {
     return NextResponse.json({ erro: "Dados inválidos" }, { status: 400 });
   }
+
+  const erroPortal = await emailDoPortalRecusado(existente, parsed.data.email);
+  if (erroPortal) return erroPortal;
 
   const atualizado = await prisma.contatoCliente.update({
     where: { id: contatoId },
@@ -47,7 +60,7 @@ export async function PATCH(req: NextRequest, { params }: Params) {
   const { id, contatoId } = await params;
   const empresaId = session.user!.empresaId;
 
-  const existente = await prisma.contatoCliente.findFirst({ where: { id: contatoId, clienteId: id, empresaId }, select: { id: true } });
+  const existente = await prisma.contatoCliente.findFirst({ where: { id: contatoId, clienteId: id, empresaId }, select: { id: true, email: true, senha: true } });
   if (!existente) return NextResponse.json({ erro: "Contato não encontrado" }, { status: 404 });
 
   const body = await req.json().catch(() => null);
@@ -60,6 +73,8 @@ export async function PATCH(req: NextRequest, { params }: Params) {
   if (!parsed.success) return NextResponse.json({ erro: parsed.error.issues[0]?.message ?? "Dados inválidos" }, { status: 400 });
   const dados = dadosParciais(parsed.data);
   if (!Object.keys(dados).length) return NextResponse.json({ erro: "Nada para alterar." }, { status: 400 });
+  const erroPortal = await emailDoPortalRecusado(existente, (dados as { email?: string | null }).email);
+  if (erroPortal) return erroPortal;
   const atualizado = await prisma.contatoCliente.update({ where: { id: contatoId }, data: dados });
   return NextResponse.json(contatoSeguro(atualizado));
 }

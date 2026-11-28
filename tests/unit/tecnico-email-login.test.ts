@@ -111,7 +111,7 @@ describe("servidor: o técnico do app não troca o próprio e-mail de login", ()
 
   it("quem troca o e-mail de login do técnico é o escritório: a ficha do colaborador leva o login junto (código que já existia)", () => {
     const rota = fs.readFileSync(path.resolve(__dirname, "../../app/api/tecnicos/[id]/route.ts"), "utf8");
-    expect(rota).toMatch(/emailNovo\.toLowerCase\(\) !== emailAntigo\.toLowerCase\(\)[\s\S]{0,700}prisma\.usuario\.update\(\{ where: \{ id: login\.id \}, data: \{ email: emailNovo \} \}\)/);
+    expect(rota).toMatch(/emailNovo\.toLowerCase\(\) !== emailAntigo\.toLowerCase\(\)[\s\S]{0,4000}prisma\.usuario\.update\(\{ where: \{ id: login\.id \}, data: \{ email: emailNovo \} \}\)/);
   });
 });
 

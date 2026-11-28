@@ -261,3 +261,22 @@ Em `docs/prints/leva-i/` (`antes-*` e `depois-*`, desktop e celular):
 | `leva-i` | posição do menu flutuante; a ordem das camadas e que cada componente usa a sua (e nenhum modal solto em z-50); a regra do menu lateral; quando um link sai da tela e a janela do envio; o CEP (ViaCEP, reserva, prazo, inexistente × fora do ar, o endereço aplicado); as ligações (telas com o aviso, formulários com o `CampoCep`, a chave, o veículo) |
 | `leva-i-ui` | o menu "Colunas" em portal fora da tabela; o modal por cima da gaveta; sair sem salvar (sem alteração, com alteração, busca não conta, depois do envio, salvo na tela, fechar a aba); o `CampoCep`; a chave copiando |
 | `leva-i-pg` (PostgreSQL real) | novembro mostra as agendadas, executadas ou previstas para novembro (não as só abertas nele); outubro vazio; "Sem agendamento" mostra e conta a OS sem data em qualquer período; o padrão é o mês atual |
+
+---
+
+## Leva I.2 — grupo A
+
+| # | O quê | Agora |
+|---|---|---|
+| 1 | **Empresas › Nova senha do admin** | ação na linha (tabela e cartão do celular), com confirmação. O sistema gera a senha provisória do 1º administrador (o ADMIN **ativo mais antigo**), mostra **uma vez** com Copiar e grava só o hash com `trocarSenha` (troca obrigatória no próximo acesso). As sessões abertas dele caem na requisição seguinte (a impressão da senha no token muda, `lib/sessao-ativa`) e o bloqueio por senha errada do e-mail é zerado. Trilha `NOVA_SENHA_ADMIN` em `empresa_eventos`, sem a senha. Só SUPER_ADMIN (página e `POST /api/admin/empresas/[id]/nova-senha-admin`, 403 para os outros) |
+| 2 | **Empresas › Editar** | modal com razão social, nome fantasia, CNPJ (máscara, dígitos verificadores, único entre as empresas), e-mail e telefone (`GET`/`PUT /api/admin/empresas/[id]`). O que mudou vai para a trilha `DADOS_EDITADOS`, uma linha "Campo: antes → depois" por campo; nada mudou = nada gravado. O **Histórico** (os 20 eventos mais recentes, com quem fez) fica no mesmo modal. Inativar/reativar também entram (`INATIVADA`/`REATIVADA`) |
+| 3 | **E-mail de login único** | um helper só, `lib/acesso/email-unico`: recusa o e-mail que já é login em **qualquer** empresa ("Este e-mail já é login de outro usuário do Frivo. Use outro e-mail."), sem diferença de caixa, e o próprio registro não conflita consigo. Usado em Configurações › Usuários, acesso ao app do técnico, ficha do colaborador (o login acompanha o e-mail), Meu perfil e Nova empresa. **Dois espaços separados**: usuários (`/login`, tabela `usuarios`) e contatos com acesso ao portal (`/portal/login`, contatos com senha) — cada login procura só no seu, então um usuário e um contato de portal podem ter o mesmo e-mail. No portal a conferência vale ao liberar o acesso, ao gerar senha para quem ainda não tinha e ao editar o e-mail de um contato que tem acesso |
+| 4 | **CSV contra fórmula** | na exportação, a célula de **texto** que começa com `=` `+` `-` `@`, TAB ou CR sai com `'` na frente (padrão OWASP); números, inclusive os já formatados ("-5", "-1250,50"), não. A importação da Implantação tira o `'` quando ele vem antes de um desses caracteres (`lib/exportacao/formula`), então exportar e importar de volta devolve o valor original. O LEIA-ME do pacote explica |
+
+**Testes:**
+
+| Arquivo | O que prova |
+|---|---|
+| `leva-i2-a` | o "antes → depois" e o detalhe da senha (sem a senha); o helper do e-mail (caixa, exceto, sem `empresaId`, só contatos com senha) e que todos os lugares o usam; proteger/desproteger (texto × número) e a ida e volta pelo leitor e pelo motor da importação |
+| `leva-i2-a-ui` | nova senha: tabela e cartão, cancelar não chama o servidor, a senha uma vez com Copiar, Fechar descarta, erro vira aviso; editar: dados e Histórico, máscara e CNPJ inválido sem ir ao servidor, salvar atualiza a linha, CNPJ em uso no modal; a mensagem do e-mail repetido na tela do portal |
+| `leva-i2-a-pg` (PostgreSQL real) | só o dono (401/403); o ADMIN ativo mais antigo, hash e troca obrigatória, a sessão antiga cai, o bloqueio zera, a trilha sem a senha; sem admin 409; editar com CNPJ inválido/repetido, a trilha, nada mudou, o Histórico; o e-mail repetido recusado em todos os lugares, com os dois espaços separados; o pacote exportado de verdade importado de volta devolve `=HYPERLINK(...)`, "-5 graus", "@..." e "+55..." originais, e o número "-5" sai sem apóstrofo |

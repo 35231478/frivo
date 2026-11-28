@@ -1,15 +1,18 @@
 "use client";
 
-import { useState } from "react";
-import { Building2, CheckCircle2, Plus, AlertCircle, X } from "lucide-react";
+import { useEffect, useState } from "react";
+import { Building2, Check, CheckCircle2, Copy, KeyRound, Pencil, Plus, AlertCircle, X } from "lucide-react";
 import { PageHeader } from "@/components/ui/page-header";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { FormField } from "@/components/ui/form-field";
 import { Modal } from "@/components/ui/modal";
+import { Dica } from "@/components/ui/dica";
 import { confirmar, toast } from "@/components/ui/avisos";
 import { REQUISITOS_SENHA } from "@/lib/acesso/senha";
-import { cn, formatarData } from "@/lib/utils";
+import { cnpjValido } from "@/lib/documento";
+import { rotuloEventoEmpresa, type DadosEmpresa } from "@/lib/empresa/eventos";
+import { cn, formatarData, formatarDataHora } from "@/lib/utils";
 
 export interface EmpresaDaLista {
   id: string; nome: string; nomeFantasia: string | null; cnpj: string; ativo: boolean; criadoEm: string; usuarios: number;
@@ -27,6 +30,8 @@ export function mascararCnpj(v: string): string {
  * Área de Empresas do dono do Frivo: a lista mínima e "Nova empresa". A empresa nasce pronta para
  * usar (perfis, tipos de OS, configuração) e com o 1º administrador. A senha inicial é do super
  * admin: no 1º login o sistema só abre a tela de troca (lib/acesso/troca-obrigatoria).
+ * Em cada empresa: Editar (dados do cadastro, com o Histórico), Nova senha do 1º administrador
+ * (mostrada uma vez) e Inativar/Reativar. A página e a API são só do SUPER_ADMIN.
  */
 export function EmpresasAdmin({ inicial, empresaDoDono }: { inicial: EmpresaDaLista[]; empresaDoDono?: string }) {
   const [empresas, setEmpresas] = useState(inicial);
@@ -62,6 +67,27 @@ export function EmpresasAdmin({ inicial, empresaDoDono }: { inicial: EmpresaDaLi
   }
 
   /** Inativar (ninguém da empresa entra; nada é apagado) ou reativar */
+  const [editando, setEditando] = useState<EmpresaDaLista | null>(null);
+  const [gerando, setGerando] = useState<string | null>(null);
+  const [senhaGerada, setSenhaGerada] = useState<{ empresa: string; nome: string; email: string; senha: string } | null>(null);
+
+  /** Nova senha provisória do 1º administrador: confirma, gera no servidor e mostra UMA vez */
+  async function novaSenhaAdmin(e: EmpresaDaLista) {
+    const nome = e.nomeFantasia || e.nome;
+    const ok = await confirmar({
+      mensagem: `Gerar nova senha provisória do 1º administrador de ${nome}? A senha atual deixa de valer.`,
+      confirmarTexto: "Gerar nova senha",
+    });
+    if (!ok) return;
+    setGerando(e.id);
+    try {
+      const res = await fetch(`/api/admin/empresas/${e.id}/nova-senha-admin`, { method: "POST" });
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok) { toast(d.erro ?? "Não foi possível gerar a nova senha.", "erro"); return; }
+      setSenhaGerada({ empresa: nome, nome: d.admin.nome, email: d.admin.email, senha: d.senha });
+    } catch { toast("Erro de conexão. Tente novamente.", "erro"); } finally { setGerando(null); }
+  }
+
   async function alterarSituacao(e: EmpresaDaLista) {
     const nome = e.nomeFantasia || e.nome;
     const ok = await confirmar(e.ativo
@@ -77,6 +103,19 @@ export function EmpresasAdmin({ inicial, empresaDoDono }: { inicial: EmpresaDaLi
       toast(d.ativo ? "Empresa reativada." : "Empresa inativada.");
     } catch { toast("Erro de conexão. Tente novamente.", "erro"); } finally { setMudando(null); }
   }
+
+  /** As ações da linha (tabela e cartão do celular): Editar, Nova senha do admin e Inativar/Reativar */
+  const acoes = (e: EmpresaDaLista) => (
+    <>
+      <Button type="button" variant="secondary" className="text-xs h-8" onClick={() => setEditando(e)} data-editar-empresa={e.id}>
+        <Pencil className="w-3.5 h-3.5" aria-hidden /> Editar
+      </Button>
+      <Button type="button" variant="secondary" className="text-xs h-8" loading={gerando === e.id} onClick={() => novaSenhaAdmin(e)} data-nova-senha-admin={e.id}>
+        <KeyRound className="w-3.5 h-3.5" aria-hidden /> Nova senha do admin
+      </Button>
+      <BotaoSituacao e={e} propria={e.id === empresaDoDono} alterar={alterarSituacao} ocupado={mudando === e.id} />
+    </>
+  );
 
   return (
     <div className="max-w-5xl mx-auto" data-admin-empresas>
@@ -118,7 +157,7 @@ export function EmpresasAdmin({ inicial, empresaDoDono }: { inicial: EmpresaDaLi
                   <td className="px-4 py-2.5 tabular-nums text-ink-muted whitespace-nowrap">{e.cnpj}</td>
                   <td className="px-4 py-2.5 tabular-nums">{e.usuarios}</td>
                   <td className="px-4 py-2.5 text-ink-muted whitespace-nowrap">{formatarData(e.criadoEm)}</td>
-                  <td className="px-4 py-2.5 text-right"><BotaoSituacao e={e} propria={e.id === empresaDoDono} alterar={alterarSituacao} ocupado={mudando === e.id} /></td>
+                  <td className="px-4 py-2.5"><span className="flex justify-end gap-2">{acoes(e)}</span></td>
                 </tr>
               ))}
             </tbody>
@@ -130,7 +169,7 @@ export function EmpresasAdmin({ inicial, empresaDoDono }: { inicial: EmpresaDaLi
                 <p className="flex items-center gap-2 font-medium text-ink"><Building2 className="w-4 h-4 text-ink-subtle shrink-0" aria-hidden /> {e.nomeFantasia || e.nome} {!e.ativo && <SeloInativa />}</p>
                 {e.nomeFantasia && <p className="text-xs text-ink-muted">{e.nome}</p>}
                 <p className="text-xs text-ink-muted tabular-nums">{e.cnpj} · {e.usuarios} {e.usuarios === 1 ? "usuário" : "usuários"} · criada em {formatarData(e.criadoEm)}</p>
-                <div className="pt-1"><BotaoSituacao e={e} propria={e.id === empresaDoDono} alterar={alterarSituacao} ocupado={mudando === e.id} /></div>
+                <div className="pt-1 flex flex-wrap gap-2">{acoes(e)}</div>
               </li>
             ))}
           </ul>
@@ -182,7 +221,130 @@ export function EmpresasAdmin({ inicial, empresaDoDono }: { inicial: EmpresaDaLi
           </div>
         </form>
       </Modal>
+
+      {editando && (
+        <EditarEmpresa empresa={editando} onFechar={() => setEditando(null)}
+          onSalvo={(d) => setEmpresas((lista) => lista.map((x) => (x.id === editando.id ? { ...x, nome: d.razaoSocial ?? x.nome, nomeFantasia: d.nomeFantasia, cnpj: d.cnpj ?? x.cnpj } : x)))} />
+      )}
+      <SenhaDoAdmin gerada={senhaGerada} onFechar={() => setSenhaGerada(null)} />
     </div>
+  );
+}
+
+/** A senha provisória gerada: aparece só aqui, uma vez, com Copiar. Fechar descarta (não fica em lugar nenhum). */
+function SenhaDoAdmin({ gerada, onFechar }: { gerada: { empresa: string; nome: string; email: string; senha: string } | null; onFechar: () => void }) {
+  const [copiou, setCopiou] = useState(false);
+  const [erroCopia, setErroCopia] = useState(false);
+  useEffect(() => { setCopiou(false); setErroCopia(false); }, [gerada?.senha]);
+  async function copiar() {
+    if (!gerada) return;
+    try { await navigator.clipboard.writeText(gerada.senha); setCopiou(true); } catch { setErroCopia(true); }
+  }
+  return (
+    <Modal aberto={!!gerada} onFechar={onFechar} titulo="Nova senha provisória" tamanho="sm">
+      {gerada && (
+        <div className="space-y-4" data-senha-admin-gerada>
+          <p className="text-sm text-ink">1º administrador de <strong>{gerada.empresa}</strong>: {gerada.nome}, login <strong>{gerada.email}</strong>.</p>
+          <div className="flex items-center justify-between gap-2 rounded-lg border border-surface-border bg-surface-alt px-3 py-2">
+            <span className="text-sm font-mono text-ink select-all" data-senha-admin>{gerada.senha}</span>
+            <button type="button" onClick={copiar} className="inline-flex items-center gap-1 text-xs font-semibold text-primary-700 hover:text-primary-800 min-h-[32px] px-1" data-copiar-senha-admin>
+              {copiou ? <Check className="w-3.5 h-3.5" aria-hidden /> : <Copy className="w-3.5 h-3.5" aria-hidden />} {copiou ? "Copiada" : "Copiar"}
+            </button>
+          </div>
+          {erroCopia && <p className="text-xs text-atrasado-texto" role="alert">Não foi possível copiar. Selecione a senha e copie.</p>}
+          <p className="text-xs text-ink-muted flex items-center gap-1" data-aviso-senha-admin>Aparece só agora. Copie e entregue ao administrador.
+            <Dica rotulo="Nova senha provisória" texto="No próximo acesso, o sistema pede que ele crie a própria senha. As sessões abertas dele foram encerradas." /></p>
+          <div className="flex justify-end"><Button type="button" onClick={onFechar} data-fechar-senha-admin>Fechar</Button></div>
+        </div>
+      )}
+    </Modal>
+  );
+}
+
+interface EventoDaEmpresa { id: string; tipo: string; detalhe: string | null; criadoEm: string; autor: string | null }
+const DADOS_VAZIOS = { razaoSocial: "", nomeFantasia: "", cnpj: "", email: "", telefone: "" };
+
+/** Editar os dados do cadastro da empresa (com a trilha recente embaixo). O servidor confere tudo de novo. */
+function EditarEmpresa({ empresa, onFechar, onSalvo }: { empresa: EmpresaDaLista; onFechar: () => void; onSalvo: (d: DadosEmpresa) => void }) {
+  const [f, setF] = useState(DADOS_VAZIOS);
+  const [eventos, setEventos] = useState<EventoDaEmpresa[]>([]);
+  const [carregando, setCarregando] = useState(true);
+  const [salvando, setSalvando] = useState(false);
+  const [erro, setErro] = useState("");
+
+  useEffect(() => {
+    let vivo = true;
+    fetch(`/api/admin/empresas/${empresa.id}`).then(async (r) => {
+      const d = await r.json().catch(() => ({}));
+      if (!vivo) return;
+      if (!r.ok) { setErro(d.erro ?? "Não foi possível carregar a empresa."); return; }
+      const e = d.empresa as DadosEmpresa;
+      setF({ razaoSocial: e.razaoSocial ?? "", nomeFantasia: e.nomeFantasia ?? "", cnpj: e.cnpj ?? "", email: e.email ?? "", telefone: e.telefone ?? "" });
+      setEventos(d.eventos ?? []);
+    }).catch(() => { if (vivo) setErro("Erro de conexão. Tente novamente."); }).finally(() => { if (vivo) setCarregando(false); });
+    return () => { vivo = false; };
+  }, [empresa.id]);
+
+  const muda = (k: keyof typeof DADOS_VAZIOS) => (e: React.ChangeEvent<HTMLInputElement>) => {
+    setF((v) => ({ ...v, [k]: k === "cnpj" ? mascararCnpj(e.target.value) : e.target.value })); setErro("");
+  };
+
+  async function salvar(e: React.FormEvent) {
+    e.preventDefault();
+    if (!cnpjValido(f.cnpj)) { setErro("CNPJ inválido."); return; }
+    setErro(""); setSalvando(true);
+    try {
+      const res = await fetch(`/api/admin/empresas/${empresa.id}`, {
+        method: "PUT", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ razaoSocial: f.razaoSocial, nomeFantasia: f.nomeFantasia || null, cnpj: f.cnpj, email: f.email, telefone: f.telefone || null }),
+      });
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok) { setErro(d.erro ?? "Não foi possível salvar."); return; }
+      onSalvo(d.empresa);
+      toast(d.alterado ? "Dados da empresa salvos." : "Nenhum dado foi alterado.");
+      onFechar();
+    } catch { setErro("Erro de conexão. Tente novamente."); } finally { setSalvando(false); }
+  }
+
+  return (
+    <Modal aberto onFechar={() => { if (!salvando) onFechar(); }} titulo={`Editar ${empresa.nomeFantasia || empresa.nome}`} tamanho="lg">
+      <form onSubmit={salvar} className="space-y-5" data-form-editar-empresa>
+        <fieldset className="grid sm:grid-cols-2 gap-3" disabled={salvando || carregando}>
+          <FormField label="Razão social" required><Input value={f.razaoSocial} onChange={muda("razaoSocial")} data-editar-campo="razaoSocial" /></FormField>
+          <FormField label="Nome fantasia"><Input value={f.nomeFantasia} onChange={muda("nomeFantasia")} data-editar-campo="nomeFantasia" /></FormField>
+          <FormField label="CNPJ" required dica="Precisa ser válido e não pode ser o CNPJ de outra empresa do Frivo.">
+            <Input value={f.cnpj} onChange={muda("cnpj")} inputMode="numeric" placeholder="00.000.000/0000-00" data-editar-campo="cnpj" />
+          </FormField>
+          <FormField label="E-mail da empresa" required><Input type="email" value={f.email} onChange={muda("email")} data-editar-campo="email" /></FormField>
+          <FormField label="Telefone"><Input value={f.telefone} onChange={muda("telefone")} inputMode="tel" data-editar-campo="telefone" /></FormField>
+        </fieldset>
+        {erro && (
+          <div role="alert" className="flex items-center gap-2 bg-atrasado-claro border border-atrasado/20 text-atrasado-texto text-sm rounded-lg px-3 py-2" data-erro-editar-empresa>
+            <AlertCircle className="w-4 h-4 shrink-0" aria-hidden /> {erro}
+          </div>
+        )}
+        <div className="flex flex-col-reverse sm:flex-row sm:justify-end gap-2">
+          <Button type="button" variant="secondary" onClick={onFechar} disabled={salvando}>Cancelar</Button>
+          <Button type="submit" loading={salvando} disabled={carregando} data-salvar-empresa>Salvar</Button>
+        </div>
+      </form>
+      <section className="mt-6 border-t border-surface-linha pt-4" data-historico-empresa>
+        <h3 className="text-xs font-semibold uppercase tracking-wide text-ink-muted mb-2">Histórico</h3>
+        {carregando ? <p className="text-sm text-ink-muted">Carregando...</p> : eventos.length === 0 ? (
+          <p className="text-sm text-ink-muted" data-historico-vazio>Nenhum registro ainda.</p>
+        ) : (
+          <ul className="space-y-2 max-h-60 overflow-y-auto">
+            {eventos.map((ev) => (
+              <li key={ev.id} className="text-sm" data-evento-empresa={ev.tipo}>
+                <p className="text-ink"><span className="font-medium">{rotuloEventoEmpresa(ev.tipo)}</span>
+                  <span className="text-xs text-ink-muted"> · {formatarDataHora(ev.criadoEm)}{ev.autor ? ` · ${ev.autor}` : ""}</span></p>
+                {ev.detalhe && <p className="text-xs text-ink-muted whitespace-pre-line">{ev.detalhe}</p>}
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+    </Modal>
   );
 }
 

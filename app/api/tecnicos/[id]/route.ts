@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
+import { emailDeLoginEmUso, MSG_EMAIL_LOGIN_EM_USO } from "@/lib/acesso/email-unico";
 import { validarFoto } from "@/lib/anexos-server";
 import { respostaRefEmpresa, validarRefEmpresa, validarRefsEmpresa } from "@/lib/ref-empresa";
 import { tecnicoSchema } from "@/lib/validations";
@@ -83,6 +84,16 @@ export async function PUT(req: NextRequest, { params }: Params) {
     if (!r.ok) return NextResponse.json({ erro: `Foto do colaborador: ${r.erro}` }, { status: 400 });
     rest.avatar = r.arquivo.conteudo;
   }
+  // O login do app acompanha o e-mail do colaborador (o vínculo é por e-mail). Se o e-mail muda e há um
+  // usuário ligado ao antigo, ele é renomeado junto — e o novo não pode ser login de outro usuário do Frivo
+  // (de qualquer empresa: lib/acesso/email-unico). Confere ANTES de gravar: nada muda se não der.
+  const emailAntigo = (existente.email ?? "").trim();
+  const emailNovo = (email ?? "").trim();
+  const login = emailNovo && emailAntigo && emailNovo.toLowerCase() !== emailAntigo.toLowerCase()
+    ? await prisma.usuario.findFirst({ where: { empresaId, email: { equals: emailAntigo, mode: "insensitive" } }, select: { id: true } })
+    : null;
+  if (login && await emailDeLoginEmUso(emailNovo, login.id)) return NextResponse.json({ erro: MSG_EMAIL_LOGIN_EM_USO }, { status: 409 });
+
   // Status "Inativo" no formulário = inativar o colaborador pela MESMA função do botão e da ação em
   // massa (impacto/bloqueio, motivo e anotação nas observações; exige "excluir"). Sair de "Inativo"
   // = reativar pela mesma função. `ativo` só muda por essas funções.
@@ -119,17 +130,8 @@ export async function PUT(req: NextRequest, { params }: Params) {
       // mexe nos papéis da pessoa.
     },
   });
-  // O login do app acompanha o e-mail do colaborador (o vínculo é por e-mail). Se o e-mail mudou e
-  // havia um usuário ligado ao e-mail antigo, renomeia junto — evita um login órfão no e-mail velho.
-  const emailAntigo = (existente.email ?? "").trim();
-  const emailNovo = (email ?? "").trim();
-  if (emailNovo && emailAntigo && emailNovo.toLowerCase() !== emailAntigo.toLowerCase()) {
-    const login = await prisma.usuario.findFirst({ where: { empresaId, email: { equals: emailAntigo, mode: "insensitive" } }, select: { id: true } });
-    if (login) {
-      const colide = await prisma.usuario.findFirst({ where: { empresaId, email: { equals: emailNovo, mode: "insensitive" }, id: { not: login.id } }, select: { id: true } });
-      if (!colide) await prisma.usuario.update({ where: { id: login.id }, data: { email: emailNovo } });
-    }
-  }
+  // Renomeia o login junto (evita um login órfão no e-mail velho); a unicidade já foi conferida acima
+  if (login) await prisma.usuario.update({ where: { id: login.id }, data: { email: emailNovo } });
   if (virandoInativo) {
     const r = await inativarColaborador(id, ctxStatus);
     if (!r.ok) return NextResponse.json({ erro: r.motivo }, { status: statusHttp(r) });

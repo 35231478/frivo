@@ -13,7 +13,11 @@ import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { cnpjValido, digitos } from "@/lib/documento";
 import { problemaSenha } from "@/lib/acesso/senha";
+import { emailDeLoginEmUso, MSG_EMAIL_LOGIN_EM_USO } from "@/lib/acesso/email-unico";
 import { perfisPadrao, TIPOS_OS_PADRAO, faltando } from "@/lib/empresa/padroes";
+import { detalheNovaSenhaAdmin, diferencasEmpresa, type DadosEmpresa, type TipoEventoEmpresa } from "@/lib/empresa/eventos";
+import { gerarSenhaProvisoria } from "@/lib/portal/gerar-senha";
+import { limparTentativas } from "@/lib/acesso/limite";
 
 type Db = Prisma.TransactionClient | typeof prisma;
 
@@ -34,6 +38,16 @@ export type NovaEmpresa = z.infer<typeof novaEmpresaSchema>;
 
 /** CNPJ gravado como no restante do sistema: 00.000.000/0000-00 */
 export const formatarCnpj = (s: string) => digitos(s).replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/, "$1.$2.$3/$4-$5");
+
+export const MSG_CNPJ_EM_USO = "Já existe uma empresa com este CNPJ.";
+
+/** Outra empresa já tem este CNPJ (com ou sem máscara)? `exceto` = a própria, na edição. */
+async function cnpjDeOutraEmpresa(cnpj: string, exceto?: string) {
+  return !!(await prisma.empresa.findFirst({
+    where: { OR: [{ cnpj: formatarCnpj(cnpj) }, { cnpj: digitos(cnpj) }], ...(exceto ? { id: { not: exceto } } : {}) },
+    select: { id: true },
+  }));
+}
 
 /**
  * Perfis e tipos de OS padrão que faltam na empresa (mesmo nome = já existe e fica como está).
@@ -65,12 +79,9 @@ export type ResultadoNovaEmpresa =
 export async function criarEmpresa(d: NovaEmpresa): Promise<ResultadoNovaEmpresa> {
   const cnpj = formatarCnpj(d.cnpj);
   // O login procura o e-mail em todas as empresas: o do 1º administrador não pode existir em nenhuma
-  const [cnpjEmUso, emailEmUso] = await Promise.all([
-    prisma.empresa.findFirst({ where: { OR: [{ cnpj }, { cnpj: digitos(d.cnpj) }] }, select: { id: true } }),
-    prisma.usuario.findFirst({ where: { email: { equals: d.admin.email, mode: "insensitive" } }, select: { id: true } }),
-  ]);
-  if (cnpjEmUso) return { ok: false, status: 409, erro: "Já existe uma empresa com este CNPJ." };
-  if (emailEmUso) return { ok: false, status: 409, erro: "Este e-mail já é login de outro usuário. Use outro e-mail para o administrador." };
+  const [cnpjEmUso, emailEmUso] = await Promise.all([cnpjDeOutraEmpresa(d.cnpj), emailDeLoginEmUso(d.admin.email)]);
+  if (cnpjEmUso) return { ok: false, status: 409, erro: MSG_CNPJ_EM_USO };
+  if (emailEmUso) return { ok: false, status: 409, erro: MSG_EMAIL_LOGIN_EM_USO };
 
   const senha = await bcrypt.hash(d.admin.senha, 12);
   try {
@@ -90,7 +101,7 @@ export async function criarEmpresa(d: NovaEmpresa): Promise<ResultadoNovaEmpresa
     });
   } catch (e) {
     // Corrida com outro cadastro igual (CNPJ único no banco)
-    if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002") return { ok: false, status: 409, erro: "Já existe uma empresa com este CNPJ." };
+    if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002") return { ok: false, status: 409, erro: MSG_CNPJ_EM_USO };
     throw e;
   }
 }
@@ -110,10 +121,103 @@ export const MSG_NAO_INATIVA_PROPRIA = "A empresa do administrador do Frivo não
  * Inativar / reativar uma empresa (área do dono do Frivo). Inativa: ninguém dela entra, e as sessões abertas caem na
  * próxima requisição (lib/sessao-ativa confere `empresa.ativo`). Nada é apagado: reativar devolve tudo como estava.
  */
-export async function alterarSituacaoEmpresa(p: { id: string; ativo: boolean; empresaDoDono: string }):
+export async function alterarSituacaoEmpresa(p: { id: string; ativo: boolean; empresaDoDono: string; autorId?: string | null }):
   Promise<{ ok: true; ativo: boolean } | { ok: false; status: number; erro: string }> {
   if (!p.ativo && p.id === p.empresaDoDono) return { ok: false, status: 409, erro: MSG_NAO_INATIVA_PROPRIA };
   const r = await prisma.empresa.updateMany({ where: { id: p.id }, data: { ativo: p.ativo } });
   if (!r.count) return { ok: false, status: 404, erro: "Empresa não encontrada." };
+  await registrarEvento(prisma, { empresaId: p.id, usuarioId: p.autorId, tipo: p.ativo ? "REATIVADA" : "INATIVADA" });
   return { ok: true, ativo: p.ativo };
+}
+
+/* ───────────────────────── A trilha da empresa (empresa_eventos) ───────────────────────── */
+
+async function registrarEvento(db: Db, e: { empresaId: string; usuarioId?: string | null; tipo: TipoEventoEmpresa; detalhe?: string | null }) {
+  await db.empresaEvento.create({ data: { empresaId: e.empresaId, usuarioId: e.usuarioId ?? null, tipo: e.tipo, detalhe: e.detalhe ?? null } });
+}
+
+const MSG_EMPRESA_NAO_ENCONTRADA = "Empresa não encontrada.";
+type Falha = { ok: false; status: number; erro: string };
+
+/* ───────────────────────── Nova senha provisória do 1º administrador ───────────────────────── */
+
+export const MSG_SEM_ADMIN = "A empresa não tem administrador ativo.";
+
+/** O "1º administrador" da empresa: o ADMIN ativo mais antigo (desempate pelo id, para a resposta ser sempre a mesma). */
+export function primeiroAdministrador(db: Db, empresaId: string) {
+  return db.usuario.findFirst({
+    where: { empresaId, role: "ADMIN", ativo: true },
+    orderBy: [{ criadoEm: "asc" }, { id: "asc" }],
+    select: { id: true, nome: true, email: true },
+  });
+}
+
+/**
+ * Nova senha provisória do 1º administrador (área do dono do Frivo): o sistema GERA a senha (ninguém digita a de
+ * ninguém), grava só o hash, marca a troca obrigatória no próximo acesso e devolve o texto UMA vez, para o super
+ * admin repassar. As sessões abertas desse usuário caem na leitura seguinte: a impressão da senha no token deixa
+ * de bater (lib/sessao-ativa). O bloqueio por senhas erradas do e-mail é zerado (quem esqueceu a senha costuma
+ * estar bloqueado). Na trilha entra de quem foi — nunca a senha.
+ */
+export async function gerarNovaSenhaDoAdmin(p: { empresaId: string; autorId?: string | null }):
+  Promise<{ ok: true; senha: string; admin: { nome: string; email: string } } | Falha> {
+  const empresa = await prisma.empresa.findUnique({ where: { id: p.empresaId }, select: { id: true } });
+  if (!empresa) return { ok: false, status: 404, erro: MSG_EMPRESA_NAO_ENCONTRADA };
+  const admin = await primeiroAdministrador(prisma, p.empresaId);
+  if (!admin) return { ok: false, status: 409, erro: MSG_SEM_ADMIN };
+  const senha = gerarSenhaProvisoria();
+  const hash = await bcrypt.hash(senha, 12);
+  await prisma.$transaction(async (tx) => {
+    await tx.usuario.update({ where: { id: admin.id }, data: { senha: hash, trocarSenha: true } });
+    await registrarEvento(tx, { empresaId: p.empresaId, usuarioId: p.autorId, tipo: "NOVA_SENHA_ADMIN", detalhe: detalheNovaSenhaAdmin(admin) });
+  });
+  await limparTentativas("LOGIN", { email: admin.email });
+  return { ok: true, senha, admin: { nome: admin.nome, email: admin.email } };
+}
+
+/* ───────────────────────── Editar os dados da empresa ───────────────────────── */
+
+export const editarEmpresaSchema = novaEmpresaSchema.omit({ admin: true }).strict();
+export type DadosEditados = z.infer<typeof editarEmpresaSchema>;
+
+const SELECT_DADOS = { nome: true, nomeFantasia: true, cnpj: true, email: true, telefone: true } as const;
+const comoDados = (e: { nome: string; nomeFantasia: string | null; cnpj: string; email: string; telefone: string | null }): DadosEmpresa =>
+  ({ razaoSocial: e.nome, nomeFantasia: e.nomeFantasia, cnpj: e.cnpj, email: e.email, telefone: e.telefone });
+
+/**
+ * Editar razão social, nome fantasia, CNPJ (válido e único entre as empresas), e-mail e telefone. O que mudou vai
+ * para a trilha num evento só ("Campo: antes → depois", uma linha por campo). Nada mudou: nada é gravado.
+ */
+export async function editarEmpresa(p: { id: string; dados: DadosEditados; autorId?: string | null }):
+  Promise<{ ok: true; alterado: boolean; empresa: DadosEmpresa } | Falha> {
+  const atual = await prisma.empresa.findUnique({ where: { id: p.id }, select: SELECT_DADOS });
+  if (!atual) return { ok: false, status: 404, erro: MSG_EMPRESA_NAO_ENCONTRADA };
+  const d = p.dados;
+  const depois: DadosEmpresa = { razaoSocial: d.razaoSocial, nomeFantasia: d.nomeFantasia || null, cnpj: formatarCnpj(d.cnpj), email: d.email, telefone: d.telefone || null };
+  const mudancas = diferencasEmpresa(comoDados(atual), depois);
+  if (!mudancas.length) return { ok: true, alterado: false, empresa: comoDados(atual) };
+  if (digitos(depois.cnpj!) !== digitos(atual.cnpj) && await cnpjDeOutraEmpresa(depois.cnpj!, p.id)) return { ok: false, status: 409, erro: MSG_CNPJ_EM_USO };
+  try {
+    await prisma.$transaction(async (tx) => {
+      await tx.empresa.update({ where: { id: p.id }, data: { nome: depois.razaoSocial!, nomeFantasia: depois.nomeFantasia, cnpj: depois.cnpj!, email: depois.email!, telefone: depois.telefone } });
+      await registrarEvento(tx, { empresaId: p.id, usuarioId: p.autorId, tipo: "DADOS_EDITADOS", detalhe: mudancas.join("\n") });
+    });
+  } catch (e) {
+    if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002") return { ok: false, status: 409, erro: MSG_CNPJ_EM_USO };
+    throw e;
+  }
+  return { ok: true, alterado: true, empresa: depois };
+}
+
+/** O modal de edição: os dados de agora e a trilha recente (com o nome de quem fez). */
+export async function detalheDaEmpresa(id: string, limite = 20) {
+  const empresa = await prisma.empresa.findUnique({ where: { id }, select: SELECT_DADOS });
+  if (!empresa) return null;
+  const eventos = await prisma.empresaEvento.findMany({ where: { empresaId: id }, orderBy: [{ criadoEm: "desc" }, { id: "desc" }], take: limite });
+  const ids = [...new Set(eventos.map((e) => e.usuarioId).filter((x): x is string => !!x))];
+  const autores = new Map((ids.length ? await prisma.usuario.findMany({ where: { id: { in: ids } }, select: { id: true, nome: true } }) : []).map((u) => [u.id, u.nome]));
+  return {
+    empresa: comoDados(empresa),
+    eventos: eventos.map((e) => ({ id: e.id, tipo: e.tipo, detalhe: e.detalhe, criadoEm: e.criadoEm.toISOString(), autor: e.usuarioId ? autores.get(e.usuarioId) ?? null : null })),
+  };
 }

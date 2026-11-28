@@ -11,6 +11,7 @@
  */
 import { chaveDiaBR, chaveDiaCivil, dataHoraMarca } from "@/lib/fuso";
 import type { EntidadeImportacao } from "@/lib/importacao/entidades";
+import { protegerFormula } from "@/lib/exportacao/formula";
 
 /* ───────── o CSV ───────── */
 
@@ -18,9 +19,13 @@ export const BOM = "﻿";
 export const SEPARADOR = ";";
 export const FIM_LINHA = "\r\n";
 
-/** Uma célula: aspas quando tem separador, aspas, quebra de linha ou espaço nas pontas; aspas internas dobradas. */
+/**
+ * Uma célula: aspas quando tem separador, aspas, quebra de linha ou espaço nas pontas; aspas internas dobradas.
+ * Texto que começa com = + - @ TAB ou CR sai com apóstrofo (contra fórmula; números não) — lib/exportacao/formula.
+ */
 export function celulaCsv(v: unknown): string {
-  const t = v === null || v === undefined ? "" : String(v);
+  const p = protegerFormula(v);
+  const t = p === null || p === undefined ? "" : String(p);
   return /[;"\r\n]|^\s|\s$/.test(t) ? `"${t.replace(/"/g, '""')}"` : t;
 }
 
@@ -150,6 +155,8 @@ export function leiaMe(i: InfoLeiaMe): string {
     "- Uma planilha CSV por cadastro, em UTF-8 com BOM, separada por ponto e vírgula (;). Abre direto no Excel.",
     "- Datas: dd/mm/aaaa; data e hora em horário de Brasília. Valores: vírgula decimal, sem separador de milhar.",
     "- id_sistema: o identificador do registro no Frivo (liga os arquivos entre si e evita duplicar na importação).",
+    "- Texto que começa com = + - ou @ sai com um apóstrofo na frente ('=...), para a planilha não o executar como",
+    "  fórmula. A importação pela Implantação tira o apóstrofo: o valor volta igual ao original.",
     "- Os arquivos marcados [mesmas colunas da importação] podem ser importados em outra empresa pela Implantação",
     "  (Configurações › Implantação), nesta ordem: clientes, unidades, contatos, equipamentos, fornecedores, serviços,",
     "  produtos, estoque, colaboradores, veículos, contratos, PMOC.",
