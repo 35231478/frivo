@@ -63,6 +63,8 @@ describe("tela Impressão da OS", () => {
     expect(enviados).toEqual([{ url: "/api/configuracoes/impressao-os", metodo: "PUT", corpo: {
       ...CONFIG_RELATORIO_PADRAO,
       tempos: { ativo: true, cliente: true }, fotos: { ativo: true, cliente: false }, equipe: { ativo: false, cliente: true },
+      // Leva J: "Mostrar especialidades do técnico" vai junto (padrão ligado)
+      mostrarEspecialidadesTecnico: true,
     } }]);
     // Leva 3 da padronização: a confirmação do salvar é o toast (não mais o texto verde na tela)
     const { toast } = await import("@/components/ui/avisos");

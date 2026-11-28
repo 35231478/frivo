@@ -31,15 +31,17 @@ export function CampoCep({ valor, onValor, onEndereco, required, label = "CEP", 
   erro?: string;
 }) {
   const [situacao, setSituacao] = useState<keyof typeof DICA_CEP>("inicial");
-  const ultimo = useRef<string | null>(null);
+  const digitosDe = (v: string) => v.replace(/\D/g, "");
+  // O último CEP consultado — o que o registro já tinha ao abrir conta como consultado: abrir a edição, apagar um
+  // dígito e voltar ao mesmo CEP não busca de novo (nem sobrescreve o endereço que já estava lá)
+  const consultado = useRef<string | null>(cepCompleto(valor) ? digitosDe(valor) : null);
+  const digitado = useRef(digitosDe(valor));
 
-  async function consultar(cep: string) {
-    const digitos = cep.replace(/\D/g, "");
-    if (ultimo.current === digitos) return; // o mesmo CEP não consulta de novo
-    ultimo.current = digitos;
+  async function consultar(digitos: string) {
+    consultado.current = digitos;
     setSituacao("buscando");
     const r = await consultarCep(digitos);
-    if (ultimo.current !== digitos) return; // a pessoa já trocou o CEP
+    if (digitado.current !== digitos) return; // a pessoa já trocou o CEP
     if (r.ok) { onEndereco(r.endereco); setSituacao("achou"); }
     else setSituacao(r.motivo === "indisponivel" ? "indisponivel" : "naoEncontrado");
   }
@@ -51,11 +53,13 @@ export function CampoCep({ valor, onValor, onEndereco, required, label = "CEP", 
           value={formatarCep(valor)} inputMode="numeric" placeholder="00000-000" autoComplete="postal-code" maxLength={9}
           onChange={(e) => {
             const v = formatarCep(e.target.value);
+            const d = digitosDe(v);
+            digitado.current = d;
             onValor(v);
-            if (cepCompleto(v)) void consultar(v);
-            else { ultimo.current = null; setSituacao("inicial"); }
+            if (!cepCompleto(v)) setSituacao("inicial");
+            else if (d !== consultado.current) void consultar(d); // o mesmo CEP não consulta de novo
           }}
-          data-campo={dataCampo} data-situacao-cep={situacao}
+          name={dataCampo} data-campo={dataCampo} data-campo-cep data-situacao-cep={situacao}
         />
         {situacao === "buscando" && <Loader2 className="w-4 h-4 animate-spin absolute right-3 top-1/2 -translate-y-1/2 text-ink-muted" aria-hidden />}
       </div>

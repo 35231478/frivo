@@ -1,50 +1,35 @@
-import { Building2, DollarSign, MapPin, Receipt, Users, Wallet } from "lucide-react";
+import { Building2, DollarSign, FileText, MapPin, Receipt, Users, Wallet } from "lucide-react";
 import { FormSection } from "@/components/ui/form-field";
 import {
-  emOrdem, enderecoEmUmaLinha, meiosDoContato, secoesDaFicha,
-  type ClienteDaFicha, type ContatoDaFicha, type EnderecoDaFicha,
+  emOrdem, meiosDoContato, secoesDaFicha,
+  type ClienteDaFicha, type ContatoDaFicha,
 } from "@/lib/clientes/ficha";
 
 const ICONE: Record<string, React.ReactNode> = {
   identificacao: <Building2 className="w-3.5 h-3.5" />,
+  endereco: <MapPin className="w-3.5 h-3.5" />,
   fiscal: <Receipt className="w-3.5 h-3.5" />,
   comercial: <DollarSign className="w-3.5 h-3.5" />,
   cobranca: <Wallet className="w-3.5 h-3.5" />,
 };
 
 /**
- * "Dados gerais" da ficha em CONSULTA: o cadastro como texto, nas mesmas seções da edição, só com o que
- * está preenchido. Endereços e contatos em lista. Mudar qualquer coisa é pelo "Editar" do cabeçalho.
+ * "Dados" da ficha em CONSULTA: o cadastro como texto, nas mesmas seções da edição, só com o que está
+ * preenchido. Contatos em lista; os locais de atendimento ficam na aba Endereços. Mudar é pelo "Editar".
  */
 export function FichaCliente({ cliente }: {
-  cliente: ClienteDaFicha & { unidades?: EnderecoDaFicha[]; contatosCliente?: ContatoDaFicha[] };
+  cliente: ClienteDaFicha & { contatosCliente?: ContatoDaFicha[] };
 }) {
   const secoes = secoesDaFicha(cliente);
-  const enderecos = emOrdem(cliente.unidades ?? []);
   const contatos = emOrdem(cliente.contatosCliente ?? []);
-  const [identificacao, ...resto] = secoes;
+  // Identificação e endereço principal primeiro; depois os contatos; depois o resto (fiscal, comercial, cobrança)
+  const topo = secoes.filter((x) => x.id === "identificacao" || x.id === "endereco");
+  const resto = secoes.filter((x) => !topo.includes(x));
+  const observacoes = cliente.observacoes?.trim();
 
   return (
     <>
-      <Secao id={identificacao.id} titulo={identificacao.titulo} linhas={identificacao.linhas} />
-
-      <FormSection title="Endereços" icon={<MapPin className="w-3.5 h-3.5" />}>
-        {enderecos.length === 0 ? (
-          <p className="text-sm text-ink-muted" data-ficha-vazio="enderecos">Nenhum endereço cadastrado.</p>
-        ) : (
-          <ul className="grid gap-3 md:grid-cols-2" data-ficha-enderecos>
-            {enderecos.map((u) => (
-              <li key={u.id} className="rounded-lg border border-surface-border px-4 py-3" data-ficha-endereco={u.id}>
-                <p className="text-sm font-semibold text-ink flex items-center gap-2">
-                  {u.nome}
-                  {u.principal && <span className="text-[10px] font-semibold uppercase tracking-wider text-acento bg-acento-claro rounded px-1.5 py-0.5">Principal</span>}
-                </p>
-                {enderecoEmUmaLinha(u) && <p className="text-sm text-ink-muted mt-0.5">{enderecoEmUmaLinha(u)}</p>}
-              </li>
-            ))}
-          </ul>
-        )}
-      </FormSection>
+      {topo.map((x) => <Secao key={x.id} id={x.id} titulo={x.titulo} linhas={x.linhas} />)}
 
       <FormSection title="Contatos" icon={<Users className="w-3.5 h-3.5" />}>
         {contatos.length === 0 ? (
@@ -66,6 +51,12 @@ export function FichaCliente({ cliente }: {
       </FormSection>
 
       {resto.map((s) => <Secao key={s.id} id={s.id} titulo={s.titulo} linhas={s.linhas} />)}
+
+      {observacoes && (
+        <FormSection title="Observações" icon={<FileText className="w-3.5 h-3.5" />}>
+          <p className="text-sm text-ink whitespace-pre-wrap break-words" data-observacoes-ficha>{observacoes}</p>
+        </FormSection>
+      )}
     </>
   );
 }

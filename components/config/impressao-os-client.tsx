@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Eye, FileText, Lock } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { ToggleSwitch } from "@/components/ui/toggle-switch";
 import { Dica } from "@/components/ui/dica";
 import { toast } from "@/components/ui/avisos";
 import { SomenteLeitura } from "@/components/config/permissao-config";
@@ -16,8 +17,10 @@ import {
  * "Cliente vê" (sai na versão do cliente e na interna) ou "Só interno" (só na versão interna).
  * Salvou: toast. Sem Configurações › gerenciar: só leitura, sem os botões.
  */
-export function ImpressaoOsClient({ inicial, podeEditar }: { inicial: ConfigRelatorioOs; podeEditar: boolean }) {
+export function ImpressaoOsClient({ inicial, especialidadesInicial = true, podeEditar }: { inicial: ConfigRelatorioOs; especialidadesInicial?: boolean; podeEditar: boolean }) {
   const [cfg, setCfg] = useState<ConfigRelatorioOs>(inicial);
+  // Leva J: as especialidades do técnico junto ao nome (OS, relatório e portal)
+  const [especialidades, setEspecialidades] = useState(especialidadesInicial);
   const [salvando, setSalvando] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
 
@@ -30,7 +33,7 @@ export function ImpressaoOsClient({ inicial, podeEditar }: { inicial: ConfigRela
   async function salvar() {
     setSalvando(true); setMsg(null);
     try {
-      const r = await fetch("/api/configuracoes/impressao-os", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(cfg) });
+      const r = await fetch("/api/configuracoes/impressao-os", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...cfg, mostrarEspecialidadesTecnico: especialidades }) });
       const j = await r.json().catch(() => ({}));
       if (!r.ok) { setMsg(j.erro ?? "Não foi possível salvar."); return; }
       toast("Configuração salva. Vale para os próximos relatórios abertos ou impressos.");
@@ -98,10 +101,18 @@ export function ImpressaoOsClient({ inicial, podeEditar }: { inicial: ConfigRela
         </ul>
       </div>
 
+      <div className="card p-4" data-config-especialidades>
+        <ToggleSwitch
+          label="Mostrar especialidades do técnico" checked={especialidades} disabled={!podeEditar}
+          onChange={(v) => { setEspecialidades(v); setMsg(null); }}
+          dica="Junto ao nome do técnico na OS, no relatório (PDF) e no portal do cliente: “João Silva — especialista em VRF e Chiller”. As especialidades vêm do cadastro do colaborador."
+        />
+      </div>
+
       {msg && <p role="alert" className="text-sm font-medium text-atrasado">{msg}</p>}
       {podeEditar ? (
         <div className="flex justify-end gap-2">
-          <Button type="button" variant="secondary" onClick={() => { setCfg(CONFIG_RELATORIO_PADRAO); setMsg(null); }}>Restaurar padrão</Button>
+          <Button type="button" variant="secondary" onClick={() => { setCfg(CONFIG_RELATORIO_PADRAO); setEspecialidades(true); setMsg(null); }}>Restaurar padrão</Button>
           <Button type="button" onClick={salvar} loading={salvando}>Salvar</Button>
         </div>
       ) : (

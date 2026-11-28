@@ -75,21 +75,29 @@ describe("b) satisfação do aceite", () => {
     id: "cl1", nome: "Clínica Vida Plena", tipoPessoa: "JURIDICA", cpfCnpj: "11222333000181", ativo: true, statusFinanceiro: "ADIMPLENTE",
     satisfacao: 5, unidades: [], anexos: [], contatosCliente: [], interacoes: [], _count: { contratos: 0 },
   };
+  // Leva H (mudança intencional): a seção "Satisfação" da aba Relacionamento virou um sinal no cabeçalho da ficha
+  // ("★ 3,7 (3)", com a origem no title) — e só aparece quando há avaliação ("só o que importa")
   for (const consulta of [true, false]) {
     it(`ficha (${consulta ? "consulta" : "edição"}): a média do aceite, sem as estrelas digitadas à mão`, async () => {
       const { ClienteForm } = await import("@/components/forms/cliente-form");
-      await montar(await comPermissoes(permissoesTotais(), createElement(ClienteForm, { initialData: CLIENTE, consulta, abaInicial: "relacionamento", satisfacaoAceite: { media: 3.7, avaliacoes: 3 } } as any)));
-      const s = $("[data-satisfacao-ficha]")!;
-      expect(txt(s)).toBe("3,7 de 5 · 3 avaliações no aceite das OS");
+      await montar(await comPermissoes(permissoesTotais(), createElement(ClienteForm, { initialData: CLIENTE, consulta, satisfacaoAceite: { media: 3.7, avaliacoes: 3 } } as any)));
+      const s = $('[data-sinal="satisfacao"]');
+      if (consulta) {
+        expect(txt(s)).toBe("★ 3,7 (3)");
+        expect(s!.parentElement!.getAttribute("title")).toBe("Média 3,7 de 5 em 3 avaliações no aceite das OS");
+      } else {
+        expect(s).toBeNull(); // na edição, o cabeçalho é só cancelar/salvar
+      }
       // o campo manual (5 estrelas gravadas) não aparece nem é editável
       expect(caixa.querySelector('button[aria-label*="estrela" i], button[aria-label*="star" i]')).toBeNull();
       expect(txt(caixa)).not.toContain("Nível de satisfação");
     });
   }
 
-  it("ficha sem avaliação: diz de onde a nota virá", async () => {
-    const { SatisfacaoFicha } = await import("@/components/clientes/satisfacao-cliente");
-    expect(renderToStaticMarkup(createElement(SatisfacaoFicha, { resumo: null }))).toContain("Nenhuma avaliação ainda. A nota vem do aceite das OS");
+  it("ficha sem avaliação: nenhum sinal de satisfação", async () => {
+    const { ClienteForm } = await import("@/components/forms/cliente-form");
+    await montar(await comPermissoes(permissoesTotais(), createElement(ClienteForm, { initialData: CLIENTE, consulta: true, satisfacaoAceite: { media: null, avaliacoes: 0 } } as any)));
+    expect($('[data-sinal="satisfacao"]')).toBeNull();
   });
 });
 

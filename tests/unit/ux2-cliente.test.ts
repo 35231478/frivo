@@ -141,41 +141,64 @@ const CLIENTE_FICHA: any = {
 };
 
 describe("E5: ficha do cliente com 'Nova OS'/'Novo orçamento' e pós-salvar na ficha", () => {
-  async function montarCliente(permissoes: Permissoes = permissoesTotais(), initialData?: any) {
+  async function montarCliente(permissoes: Permissoes = permissoesTotais(), initialData?: any, consulta = false) {
     const { ClienteForm } = await import("@/components/forms/cliente-form");
-    await montar(createElement(ClienteForm, { initialData }), permissoes);
+    await montar(createElement(ClienteForm, { initialData, consulta }), permissoes);
   }
+  // O menu abre em portal (no <body>), fora da caixa da tela
+  const itensDoMenu = () => [...document.querySelectorAll("[data-menu-acoes] [data-item]")].map((a) => [a.getAttribute("data-item"), a.getAttribute("href")]);
 
-  it("atalhos no cabeçalho com os links certos; RBAC; só cliente ativo; não aparecem no 'novo'", { timeout: 40000 }, async () => {
-    await montarCliente(permissoesTotais(), CLIENTE_FICHA);
-    expect($<HTMLAnchorElement>("[data-nova-os]")!.getAttribute("href")).toBe("/ordens/nova?clienteId=cl1");
-    expect($<HTMLAnchorElement>("[data-novo-orcamento]")!.getAttribute("href")).toBe("/orcamentos/novo?clienteId=cl1");
-    await act(async () => root.unmount()); caixa.remove();
-
-    // sem ordens.criar / orcamentos.criar: atalhos somem (a ficha continua)
-    await montarCliente(montarPermissoes({ clientes: ["visualizar", "editar"] }), CLIENTE_FICHA);
+  // Leva H (mudança intencional): os atalhos "Nova OS"/"Novo orçamento"/"Enviar documentação" viraram o botão único
+  // "Novo ▾" do cabeçalho da ficha (consulta), com os mesmos links e o mesmo RBAC; na edição, o cabeçalho é só salvar
+  it("botão único “Novo ▾” com os links certos; RBAC; só cliente ativo; não aparece no 'novo' nem na edição", { timeout: 40000 }, async () => {
+    await montarCliente(permissoesTotais(), CLIENTE_FICHA, true);
+    expect($$("[data-menu-novo]").length).toBe(1);
+    await clicar($("[data-menu-novo]"));
+    expect(itensDoMenu()).toEqual([
+      ["novo-os", "/ordens/nova?clienteId=cl1"],
+      ["novo-orcamento", "/orcamentos/novo?clienteId=cl1"],
+      ["novo-contrato", "/contratos/novo?clienteId=cl1"],
+      ["novo-documentacao", "/documentacao-equipe/novo?clienteId=cl1"],
+    ]);
+    // os botões repetidos de antes saíram
     expect($("[data-nova-os]")).toBeNull();
     expect($("[data-novo-orcamento]")).toBeNull();
+    expect($("[data-atalho-documentacao]")).toBeNull();
     await act(async () => root.unmount()); caixa.remove();
 
-    // cliente inativo: sem atalhos (não se abre OS para inativo)
-    await montarCliente(permissoesTotais(), { ...CLIENTE_FICHA, ativo: false });
-    expect($("[data-nova-os]")).toBeNull();
+    // só ordens.criar: o menu só oferece a OS
+    await montarCliente(montarPermissoes({ clientes: ["visualizar"], ordens: ["criar"] }), CLIENTE_FICHA, true);
+    await clicar($("[data-menu-novo]"));
+    expect(itensDoMenu()).toEqual([["novo-os", "/ordens/nova?clienteId=cl1"]]);
     await act(async () => root.unmount()); caixa.remove();
 
-    // cadastro novo (sem id ainda): sem atalhos
+    // sem nenhuma permissão de criar: sem botão (a ficha continua)
+    await montarCliente(montarPermissoes({ clientes: ["visualizar", "editar"] }), CLIENTE_FICHA, true);
+    expect($("[data-menu-novo]")).toBeNull();
+    await act(async () => root.unmount()); caixa.remove();
+
+    // cliente inativo: sem "Novo" (não se abre OS para inativo)
+    await montarCliente(permissoesTotais(), { ...CLIENTE_FICHA, ativo: false }, true);
+    expect($("[data-menu-novo]")).toBeNull();
+    await act(async () => root.unmount()); caixa.remove();
+
+    // edição e cadastro novo: sem "Novo"
+    await montarCliente(permissoesTotais(), CLIENTE_FICHA);
+    expect($("[data-menu-novo]")).toBeNull();
+    await act(async () => root.unmount()); caixa.remove();
     await montarCliente(permissoesTotais(), undefined);
-    expect($("[data-nova-os]")).toBeNull();
+    expect($("[data-menu-novo]")).toBeNull();
   });
 
-  it("salvar um cliente NOVO aterrissa na ficha dele (?criado=1)", { timeout: 40000 }, async () => {
+  it("salvar um cliente NOVO aterrissa na ficha dele (?criado=1), onde está o “Novo ▾”", { timeout: 40000 }, async () => {
     rotas["POST /api/clientes"] = { id: "c-novo" };
     await montarCliente();
     await digitar($('input[name="cpfCnpj"]'), "12.345.678/0001-90");
     await digitar($('input[name="nome"]'), "Clínica Vida Nova");
     await clicar($$("button").find((b) => b.textContent!.trim() === "Salvar"));
     expect(chamadas.some((c) => c.metodo === "POST" && c.url === "/api/clientes")).toBe(true);
-    expect(nav.push).toEqual(["/clientes/c-novo/editar?criado=1"]);
+    // Leva H: "Salvar" leva à ficha (consulta, com o "Novo ▾"); "Salvar e continuar" segue na edição
+    expect(nav.push).toEqual(["/clientes/c-novo?criado=1"]);
   });
 
   it("chegando com ?criado=1: toast de sucesso e a URL é limpa", { timeout: 40000 }, async () => {

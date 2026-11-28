@@ -9,12 +9,14 @@ import { Textarea } from "@/components/ui/textarea";
 import { FormField, FormGrid } from "@/components/ui/form-field";
 import { MapaEndereco } from "@/components/ui/mapa-endereco";
 import { EnderecoAutocomplete, type EnderecoSelecionado } from "@/components/ui/endereco-autocomplete";
-import { Plus, Pencil, Trash2, X, Check, ChevronDown, Search } from "lucide-react";
+import { Plus, Pencil, Trash2, X, Check, MapPin } from "lucide-react";
+import { enderecoEmUmaLinha } from "@/lib/clientes/ficha";
 import { enderecoDoCep } from "@/lib/cep";
 import { CampoCep } from "@/components/ui/campo-cep";
 
-const CAMPOS_ENDERECO_UNIDADE = { logradouro: "logradouro", bairro: "bairro", cidade: "cidade", estado: "estado" } as const;
 import { cn, comparaNatural } from "@/lib/utils";
+
+const CAMPOS_ENDERECO_UNIDADE = { logradouro: "logradouro", bairro: "bairro", cidade: "cidade", estado: "estado" } as const;
 
 const ESTADOS_BR = [
   "AC","AL","AP","AM","BA","CE","DF","ES","GO","MA","MT","MS","MG",
@@ -48,11 +50,12 @@ const emptyForm = (): UnidadeLocal => ({
 interface UnidadesLocalProps {
   unidades: UnidadeLocal[];
   onChange: (unidades: UnidadeLocal[]) => void;
+  /** Leva H: o endereço principal está nos campos do cadastro (vira o local "Principal" ao salvar): aqui só os outros */
+  principalNoCadastro?: boolean;
 }
 
-export function UnidadesLocal({ unidades, onChange }: UnidadesLocalProps) {
+export function UnidadesLocal({ unidades, onChange, principalNoCadastro = false }: UnidadesLocalProps) {
   const [editando, setEditando] = useState<string | "novo" | null>(null);
-  const [expandido, setExpandido] = useState<Set<string>>(new Set());
   const [form, setForm] = useState<UnidadeLocal>(emptyForm());
 
   const handleAutoGeocode = useCallback((coords: { lat: number; lng: number }) => {
@@ -66,20 +69,11 @@ export function UnidadesLocal({ unidades, onChange }: UnidadesLocalProps) {
     handleAutoGeocode,
   );
 
-
-  function toggleExpand(id: string) {
-    setExpandido((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id); else next.add(id);
-      return next;
-    });
-  }
-
   function abrirNova() {
     const temPrincipal = unidades.some((u) => u.principal);
     const f = emptyForm();
-    f.principal = !temPrincipal;
-    if (unidades.length === 0) f.nome = "Matriz";
+    f.principal = !principalNoCadastro && !temPrincipal;
+    if (unidades.length === 0 && !principalNoCadastro) f.nome = "Principal";
     setForm(f);
     setEditando("novo");
   }
@@ -87,7 +81,6 @@ export function UnidadesLocal({ unidades, onChange }: UnidadesLocalProps) {
   function abrirEditar(u: UnidadeLocal) {
     setForm({ ...u });
     setEditando(u._tempId);
-    setExpandido((prev) => { const n = new Set(prev); n.add(u._tempId); return n; });
   }
 
   function cancelar() { setEditando(null); }
@@ -114,7 +107,6 @@ export function UnidadesLocal({ unidades, onChange }: UnidadesLocalProps) {
     if (!form.nome.trim()) return;
     if (editando === "novo") {
       onChange([...unidades, form]);
-      setExpandido((prev) => { const n = new Set(prev); n.add(form._tempId); return n; });
     } else {
       onChange(unidades.map((u) => (u._tempId === editando ? form : u)));
     }
@@ -137,7 +129,6 @@ export function UnidadesLocal({ unidades, onChange }: UnidadesLocalProps) {
     return comparaNatural(a.nome, b.nome);
   });
 
-
   function renderFormInline() {
     return (
       <div className="border border-frivo-200 bg-frivo-50/30 rounded-lg p-4 space-y-4">
@@ -157,33 +148,34 @@ export function UnidadesLocal({ unidades, onChange }: UnidadesLocalProps) {
           </FormField>
         </FormGrid>
 
-        <CampoCep valor={form.cep} onValor={(v) => updateField("cep", v)}
-          onEndereco={(d) => setForm((f) => ({ ...f, ...enderecoDoCep(f, d, CAMPOS_ENDERECO_UNIDADE) }))} />
-        <FormField label="Logradouro" hint="Digite para buscar automaticamente">
-          <EnderecoAutocomplete
-            value={form.logradouro}
-            onChange={(v) => updateField("logradouro", v)}
-            onSelect={handleEnderecoSelect}
-            placeholder="Rua, Av., etc."
-          />
-        </FormField>
-
+        <FormGrid cols={3}>
+          <CampoCep valor={form.cep} onValor={(v) => updateField("cep", v)}
+            onEndereco={(d) => setForm((f) => ({ ...f, ...enderecoDoCep(f, d, CAMPOS_ENDERECO_UNIDADE) }))} />
+          <FormField label="Logradouro" className="sm:col-span-2">
+            <EnderecoAutocomplete
+              value={form.logradouro}
+              onChange={(v) => updateField("logradouro", v)}
+              onSelect={handleEnderecoSelect}
+              placeholder="Rua, avenida…"
+            />
+          </FormField>
+        </FormGrid>
         <FormGrid cols={3}>
           <FormField label="Número">
             <Input value={form.numero} onChange={(e) => updateField("numero", e.target.value)} />
           </FormField>
-          <FormField label="Complemento" className="sm:col-span-2">
+          <FormField label="Complemento">
             <Input value={form.complemento} onChange={(e) => updateField("complemento", e.target.value)} caixa="endereco" />
           </FormField>
-        </FormGrid>
-        <FormGrid cols={3}>
           <FormField label="Bairro">
             <Input value={form.bairro} onChange={(e) => updateField("bairro", e.target.value)} caixa="endereco" />
           </FormField>
-          <FormField label="Cidade">
+        </FormGrid>
+        <FormGrid cols={3}>
+          <FormField label="Cidade" className="sm:col-span-2">
             <Input value={form.cidade} onChange={(e) => updateField("cidade", e.target.value)} caixa="cidade" />
           </FormField>
-          <FormField label="Estado">
+          <FormField label="UF">
             <Select value={form.estado} onChange={(e) => updateField("estado", e.target.value)} placeholder="UF">
               {ESTADOS_BR.map((uf) => (<option key={uf} value={uf}>{uf}</option>))}
             </Select>
@@ -210,69 +202,47 @@ export function UnidadesLocal({ unidades, onChange }: UnidadesLocalProps) {
   return (
     <div className="space-y-2">
       {ordenadas.length === 0 && !editando && (
-        <p className="text-sm text-ink-muted py-2">Nenhum endereço adicionado. Adicione pelo menos o endereço principal.</p>
+        <p className="text-sm text-ink-muted py-2" data-enderecos-vazio>Nenhum outro local de atendimento.</p>
       )}
 
-      {ordenadas.map((u) => {
-        if (editando === u._tempId) return <div key={u._tempId}>{renderFormInline()}</div>;
-        const aberto = expandido.has(u._tempId);
-        const temEnd = !!(u.logradouro && u.cidade && u.estado);
-
-        return (
-          <div key={u._tempId} className="rounded-lg border border-surface-border overflow-hidden">
-            <button type="button" onClick={() => toggleExpand(u._tempId)}
-              className={cn("flex items-center justify-between w-full px-4 py-3.5 text-left transition-colors", aberto ? "bg-frivo-50" : "bg-frivo-50/60 hover:bg-frivo-50")}>
-              <div className="flex items-center gap-2 min-w-0">
-                <span className="text-sm font-bold text-ink truncate">{u.nome}</span>
-                {u.principal && (
-                  <span className="inline-flex items-center text-[10px] font-semibold bg-atencao-claro text-atencao-texto px-1.5 py-0.5 rounded-full shrink-0">
-                    Principal
-                  </span>
-                )}
-              </div>
-              <ChevronDown className={cn("w-5 h-5 text-ink-muted shrink-0 transition-transform", aberto && "rotate-180")} />
-            </button>
-
-            {aberto && (
-              <div className="border-t border-surface-border p-3 space-y-3 bg-white">
-                <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
-                  {u.logradouro && <div className="col-span-2"><span className="text-ink-muted">Logradouro:</span> <span className="text-ink">{u.logradouro}{u.numero ? `, ${u.numero}` : ""}</span></div>}
-                  {u.complemento && <div className="col-span-2"><span className="text-ink-muted">Complemento:</span> <span className="text-ink">{u.complemento}</span></div>}
-                  {u.bairro && <div><span className="text-ink-muted">Bairro:</span> <span className="text-ink">{u.bairro}</span></div>}
-                  {u.cep && <div><span className="text-ink-muted">CEP:</span> <span className="text-ink">{u.cep}</span></div>}
-                  {u.cidade && <div><span className="text-ink-muted">Cidade:</span> <span className="text-ink">{u.cidade} — {u.estado}</span></div>}
-                  {u.telefone && <div><span className="text-ink-muted">Telefone:</span> <span className="text-ink">{u.telefone}</span></div>}
+      {ordenadas.length > 0 && (
+        <ul className="rounded-lg border border-surface-border divide-y divide-surface-border bg-white" data-lista-enderecos>
+          {ordenadas.map((u) => {
+            if (editando === u._tempId) return <li key={u._tempId} className="p-2">{renderFormInline()}</li>;
+            const linha = enderecoEmUmaLinha({ id: u._tempId, ...u });
+            return (
+              <li key={u._tempId} className="flex flex-col sm:flex-row sm:items-center gap-2 px-4 py-3" data-endereco={u._tempId}>
+                <div className="min-w-0 flex-1">
+                  <p className="flex items-center gap-2 flex-wrap text-sm font-semibold text-ink">
+                    <MapPin className="w-4 h-4 text-ink-muted shrink-0" aria-hidden />
+                    <span data-endereco-nome>{u.nome}</span>
+                    {u.principal && !principalNoCadastro && <span className="text-[10px] font-semibold uppercase tracking-wider text-acento bg-acento-claro rounded px-1.5 py-0.5" data-endereco-principal>Principal</span>}
+                  </p>
+                  <p className={cn("text-sm text-ink-muted mt-0.5 sm:pl-6 break-words", !linha && "italic")}>{linha || "Sem endereço preenchido"}</p>
                 </div>
-
-                {temEnd && (
-                  <MapaEndereco logradouro={u.logradouro} numero={u.numero} cidade={u.cidade} estado={u.estado} cep={u.cep} />
-                )}
-
-                <div className="flex items-center gap-2 pt-1">
-                  <Button type="button" variant="secondary" onClick={() => abrirEditar(u)} className="text-xs h-7 px-2.5">
-                    <Pencil className="w-3 h-3" /> Editar
+                <div className="flex items-center gap-1 flex-wrap shrink-0 sm:justify-end">
+                  <Button type="button" variant="ghost" onClick={() => abrirEditar(u)} className="min-h-[44px] text-sm">
+                    <Pencil className="w-4 h-4" aria-hidden /> Editar
                   </Button>
-                  {!u.principal && (
+                  {(!u.principal || principalNoCadastro) && (
                     <>
-                      <Button type="button" variant="ghost" onClick={() => marcarPrincipal(u._tempId)} className="text-xs h-7 px-2.5 text-atencao-texto hover:text-atencao-texto">
-                        Tornar principal
-                      </Button>
-                      <Button type="button" variant="ghost" onClick={() => remover(u._tempId)} className="text-xs h-7 px-2.5 text-atrasado hover:text-atrasado-texto">
-                        <Trash2 className="w-3 h-3" /> Excluir
+                      {!principalNoCadastro && <Button type="button" variant="ghost" onClick={() => marcarPrincipal(u._tempId)} className="min-h-[44px] text-sm">Tornar principal</Button>}
+                      <Button type="button" variant="ghost" onClick={() => remover(u._tempId)} className="min-h-[44px] text-sm text-atrasado hover:text-atrasado-texto">
+                        <Trash2 className="w-4 h-4" aria-hidden /> Excluir
                       </Button>
                     </>
                   )}
                 </div>
-              </div>
-            )}
-          </div>
-        );
-      })}
+              </li>
+            );
+          })}
+        </ul>
+      )}
 
       {editando === "novo" && renderFormInline()}
 
       {!editando && (
-        <Button type="button" variant="secondary" onClick={abrirNova} className="w-full justify-center border-dashed mt-2">
+        <Button type="button" variant="secondary" onClick={abrirNova} className="min-h-[44px]" data-novo-endereco>
           <Plus className="w-4 h-4" /> Novo endereço
         </Button>
       )}

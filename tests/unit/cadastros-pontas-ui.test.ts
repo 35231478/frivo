@@ -78,12 +78,19 @@ describe("ficha do cliente: inativar e reativar pelo botão padrão", () => {
     const { ClienteForm } = await import("@/components/forms/cliente-form");
     await montar(createElement(ClienteForm, { initialData: dados, consulta } as any), permissoes);
   }
-  const status = () => txt($("[data-status-cliente]"));
+  // Leva H (mudança intencional): "Ativo" é o normal e não ocupa espaço; só o cliente inativo ganha o selo "Inativo"
+  const status = () => ($('[data-sinal="inativo"]') ? "Inativo" : "Ativo");
 
-  for (const consulta of [true, false]) {
+  it("edição: o cabeçalho é só Cancelar / Salvar — Inativar e Reativar ficam na ficha", async () => {
+    await ficha(false, permissoesTotais());
+    expect($("[data-inativar-registro]")).toBeNull();
+  });
+
+  for (const consulta of [true]) {
     it(`${consulta ? "consulta" : "edição"}: Inativar com o texto padrão e o que continua andando; confirmado, o selo vira Inativo`, async () => {
       respostas["GET /api/clientes/cl1/impacto"] = { status: 200, corpo: { bloqueio: null, avisos: ["Tem 1 contrato ativo (CT-L4-001): continua gerando OS e cobrança até o encerramento."] } };
       await ficha(consulta, permissoesTotais());
+      expect($('[data-sinal="inativo"]')).toBeNull();
       expect(status()).toBe("Ativo");
       // o antigo seletor de status (com o texto próprio) saiu
       expect($('button[title="Mudar status do cliente"]')).toBeNull();
@@ -128,7 +135,7 @@ describe("ficha do cliente: inativar e reativar pelo botão padrão", () => {
   it("recusado pelo servidor: o selo não muda e o motivo aparece", async () => {
     respostas["GET /api/clientes/cl1/impacto"] = { status: 200, corpo: { bloqueio: null, avisos: [] } };
     respostas["DELETE /api/clientes/cl1"] = { status: 403, corpo: { erro: "Sem permissão" } };
-    await ficha(false, permissoesTotais());
+    await ficha(true, permissoesTotais());
     await clicar($('[data-inativar-registro="inativar"]'));
     await clicar(botao("Sim, inativar"));
     expect(txt($('[role="dialog"]'))).toContain("Sem permissão");
@@ -143,7 +150,7 @@ describe("endereço e contato: Inativar, com o texto padrão", () => {
     const { UnidadesManager } = await import("@/components/forms/unidades-manager");
     const u = (id: string, nome: string, principal: boolean) => ({ id, nome, principal, logradouro: null, numero: null, complemento: null, bairro: null, cidade: "Osasco", estado: "SP", cep: null, telefone: null, observacoes: null, latitude: null, longitude: null });
     await montar(createElement(UnidadesManager, { clienteId: "cl1", unidadesIniciais: [u("u1", "Loja Centro", true), u("u2", "Depósito", false)] } as any), permissoesTotais());
-    await clicar([...document.querySelectorAll("button")].find((b) => txt(b).startsWith("Depósito")));
+    // Leva H: lista enxuta — as ações ficam na própria linha (sem abrir a sanfona)
     expect(botao("Excluir")).toBeNull();
     // Leva 5: o botão padrão dos cadastros, e o texto voltou a prometer a reativação (agora existe pela tela)
     expect(txt($('[data-inativar-registro="inativar"]'))).toBe("Inativar");
@@ -154,7 +161,8 @@ describe("endereço e contato: Inativar, com o texto padrão", () => {
     expect(txt(d)).toContain("Voltar");
     await clicar(botao("Sim, inativar", d));
     expect(gravacoes()).toEqual([{ url: "/api/unidades/u2", metodo: "DELETE", corpo: { motivo: "" } }]);
-    expect([...document.querySelectorAll("button")].some((b) => txt(b).startsWith("Depósito"))).toBe(false);
+    expect($('[data-endereco="u2"]')).toBeNull();
+    expect($('[data-endereco="u1"]')).toBeTruthy();
   });
 
   it("contato: o mesmo texto; voltar não grava", async () => {

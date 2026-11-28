@@ -35,20 +35,17 @@ import {
   X, Plus, Upload, Trash2, AlertCircle, CalendarClock, User, Briefcase, ListChecks, FileText, Wallet, KeyRound, UserPlus,
 } from "lucide-react";
 import { InputData } from "@/components/ui/input-data";
-import { InputHora } from "@/components/ui/input-hora";
+import { ToggleSwitch } from "@/components/ui/toggle-switch";
+import { JornadaFaixas } from "@/components/colaborador/jornada-faixas";
+import { faixasDoColaborador, jornadaValida, problemasDaJornada, type FaixaJornada } from "@/lib/colaborador/jornada";
+import { DICA_CAMPO, DICA_RT, ROTULO_CAMPO, ROTULO_RT, funcaoDaFicha, gravarFuncao } from "@/lib/colaborador/funcao";
 
 const ESPECIALIDADES_SUGERIDAS = [
   "Split", "VRF", "Chiller", "Câmara Fria",
   "Refrigeração Comercial", "Ar Central", "Fan Coil", "Torres de Resfriamento",
 ];
 
-const DIAS_SEMANA = [
-  { code: "SEG", label: "Seg" }, { code: "TER", label: "Ter" }, { code: "QUA", label: "Qua" },
-  { code: "QUI", label: "Qui" }, { code: "SEX", label: "Sex" }, { code: "SAB", label: "Sáb" },
-  { code: "DOM", label: "Dom" },
-];
-
-interface TipoOsOpt { id: string; nome: string; cor: string }
+interface TipoOsOpt { id: string; nome: string; cor: string; ativo?: boolean }
 
 interface ColaboradorFormProps {
   initialData?: any;
@@ -78,7 +75,9 @@ export function ColaboradorForm({ initialData, somenteLeitura = false, podeFolha
 
   const [especialidades, setEspecialidades] = useState<string[]>(initialData?.especialidades ?? []);
   const [novaEsp, setNovaEsp] = useState("");
-  const [jornadaDias, setJornadaDias] = useState<string[]>(initialData?.jornadaDias ?? ["SEG", "TER", "QUA", "QUI", "SEX"]);
+  // Leva J: a jornada em faixas (a antiga, de um horário só, abre como uma faixa); colaborador novo nasce com Seg–Sex
+  const [faixas, setFaixas] = useState<FaixaJornada[]>(() => (initialData ? faixasDoColaborador(initialData)
+    : [{ dias: ["SEG", "TER", "QUA", "QUI", "SEX"], entrada: "08:00", saida: "17:00", intervaloInicio: "12:00", intervaloFim: "13:00" }]));
   const [competenciaIds, setCompetenciaIds] = useState<string[]>(
     initialData?.competencias?.map((c: any) => c.id) ?? [],
   );
@@ -93,7 +92,9 @@ export function ColaboradorForm({ initialData, somenteLeitura = false, podeFolha
   // Perfis (ativos e inativos): o SeletorCadastro só oferece os ativos e mantém o atual se inativo
   const { itens: perfis } = useCadastro("perfis-acesso");
   const [perfilAcessoId, setPerfilAcessoId] = useState<string>(initialData?.perfilAcessoId ?? "");
-  const [tipoEquipe, setTipoEquipe] = useState<string>(initialData?.tipoEquipe ?? "CAMPO");
+  // Leva J: "Usa o app de campo" + "Responsável técnico (ART/PMOC)" no lugar de "Tipo" + "Tipo de equipe" (lib/colaborador/funcao)
+  const [campo, setCampo] = useState<boolean>(() => funcaoDaFicha(initialData ?? {}).campo);
+  const [rt, setRt] = useState<boolean>(() => funcaoDaFicha(initialData ?? {}).rt);
   // Veículo "padrão" (opcional): puxado automaticamente na OS quando ele executa sozinho
   const [veiculoId, setVeiculoId] = useState<string>(initialData?.veiculoId ?? "");
   const [veiculos, setVeiculos] = useState<VeiculoResumo[]>([]);
@@ -102,15 +103,16 @@ export function ColaboradorForm({ initialData, somenteLeitura = false, podeFolha
   const temFrota = useModulos().tem("veiculos");
 
   useEffect(() => {
-    fetch("/api/tipos-os").then((r) => r.json()).then((d) => setTiposOs(Array.isArray(d) ? d.filter((t: any) => t.ativo !== false) : [])).catch(() => {});
+    // Competências = os tipos de OS da empresa (Configurações › Tipos de OS); o inativo some da lista, menos o já marcado
+    fetch("/api/tipos-os").then((r) => r.json()).then((d) => setTiposOs(Array.isArray(d) ? d : [])).catch(() => {});
     fetch("/api/veiculos?resumo=1").then((r) => (r.ok ? r.json() : [])).then((d) => setVeiculos(Array.isArray(d) ? d : [])).catch(() => {});
   }, []);
 
-  // Ao escolher o tipo de equipe, sugere um perfil compatível (se nenhum estiver escolhido)
-  function escolherTipoEquipe(novo: string) {
-    setTipoEquipe(novo);
+  // Ao marcar/desmarcar "Usa o app de campo", sugere um perfil compatível (se nenhum estiver escolhido)
+  function escolherCampo(novo: boolean) {
+    setCampo(novo);
     if (perfilAcessoId) return;
-    const alvo = novo === "CAMPO" ? ["TECNICO"] : ["SUPERVISOR", "FINANCEIRO"];
+    const alvo = novo ? ["TECNICO"] : ["SUPERVISOR", "FINANCEIRO"];
     const sugestao = perfis.find((p) => p.ativo !== false && alvo.includes(String(p.tipo)));
     if (sugestao) setPerfilAcessoId(sugestao.id);
   }
@@ -133,21 +135,18 @@ export function ColaboradorForm({ initialData, somenteLeitura = false, podeFolha
           cidade: initialData.cidade ?? "", estado: initialData.estado ?? "", cep: initialData.cep ?? "",
           cargoId: initialData.cargoId ?? "", tipo: initialData.tipo, crea: initialData.crea ?? "",
           dataAdmissao: dataIso(initialData.dataAdmissao),
-          jornadaEntrada: initialData.jornadaEntrada ?? "", jornadaSaida: initialData.jornadaSaida ?? "",
           statusColaborador: initialData.statusColaborador ?? "ATIVO",
           observacoes: initialData.observacoes ?? "",
         }
       : { tipo: "TECNICO_CAMPO", statusColaborador: "ATIVO" },
   });
 
-  const tipo = watch("tipo");
   // Status → Inativo (editando): mostra o impacto e pede motivo, como o botão Inativar
   const [motivoInativacao, setMotivoInativacao] = useState("");
   const inativandoPeloStatus = isEditing && watch("statusColaborador") === "INATIVO" && initialData?.ativo !== false && initialData?.statusColaborador !== "INATIVO";
 
-  function toggleDia(code: string) {
-    setJornadaDias((p) => (p.includes(code) ? p.filter((d) => d !== code) : [...p, code]));
-  }
+  const jornadaOk = jornadaValida(faixas);
+  const tiposOsVisiveis = tiposOs.filter((t) => t.ativo !== false || competenciaIds.includes(t.id));
   function toggleCompetencia(id: string) {
     setCompetenciaIds((p) => (p.includes(id) ? p.filter((c) => c !== id) : [...p, id]));
   }
@@ -176,6 +175,12 @@ export function ColaboradorForm({ initialData, somenteLeitura = false, podeFolha
 
   async function onSubmit(data: TecnicoInput) {
     setErroGlobal("");
+    if (!jornadaOk) {
+      const p = problemasDaJornada(faixas);
+      setErroGlobal(`Jornada: ${[...p.geral, ...p.faixas.flatMap((x, i) => x.map((m) => `faixa ${i + 1}: ${m}`))][0] ?? "confira as faixas."}`);
+      setAba("profissionais");
+      return;
+    }
     try {
       const url = isEditing ? `/api/tecnicos/${initialData.id}` : "/api/tecnicos";
       const res = await fetch(url, {
@@ -186,8 +191,8 @@ export function ColaboradorForm({ initialData, somenteLeitura = false, podeFolha
           avatar: avatar ?? "",
           perfilAcessoId: perfilAcessoId || null,
           veiculoId: veiculoId || null,
-          tipoEquipe,
-          especialidades, competenciaIds, jornadaDias,
+          ...gravarFuncao({ campo, rt }, initialData?.tipo),
+          especialidades, competenciaIds, jornadaFaixas: faixas,
           ...(inativandoPeloStatus && { motivoInativacao }),
         }),
       });
@@ -203,20 +208,32 @@ export function ColaboradorForm({ initialData, somenteLeitura = false, podeFolha
     }
   }
 
-  const ABAS: { id: Aba; label: string; icone: any; badge?: number }[] = [
-    { id: "pessoais", label: "Dados pessoais", icone: User },
-    { id: "profissionais", label: "Dados profissionais", icone: Briefcase },
-    { id: "competencias", label: "Competências", icone: ListChecks, badge: competenciaIds.length },
-    { id: "documentos", label: "Documentos", icone: FileText, badge: documentos.length + docsPendentes },
-    ...(podeAdmissao ? [{ id: "admissao" as const, label: "Admissão", icone: UserPlus }] : []),
-    ...(podeAcesso ? [{ id: "acesso" as const, label: "Acesso ao app", icone: KeyRound }] : []),
-    ...(podeFolha ? [{ id: "folha" as const, label: "Dados financeiros / Folha", icone: Wallet }] : []),
+  // As abas com erro (a mesma marca da ficha do cliente): o salvar recusado leva à primeira
+  const CAMPOS_PESSOAIS = ["nome", "cpf", "email", "telefone", "rg", "dataNascimento", "cep", "endereco", "numero", "bairro", "cidade", "estado"] as const;
+  const abasErro = new Set<Aba>([
+    ...(CAMPOS_PESSOAIS.some((c) => (errors as Record<string, unknown>)[c]) ? ["pessoais" as const] : []),
+    ...(!jornadaOk ? ["profissionais" as const] : []),
+  ]);
+  function invalido(e: Record<string, unknown>) {
+    if (CAMPOS_PESSOAIS.some((c) => e[c])) setAba("pessoais");
+    else setAba("profissionais");
+  }
+
+  // `curto`: o rótulo no celular (as abas ficam 3 por linha em vez de uma por linha)
+  const ABAS: { id: Aba; label: string; curto: string; icone: any; badge?: number }[] = [
+    { id: "pessoais", label: "Dados pessoais", curto: "Pessoais", icone: User },
+    { id: "profissionais", label: "Dados profissionais", curto: "Profissionais", icone: Briefcase },
+    { id: "competencias", label: "Competências", curto: "Competências", icone: ListChecks, badge: competenciaIds.length },
+    { id: "documentos", label: "Documentos", curto: "Documentos", icone: FileText, badge: documentos.length + docsPendentes },
+    ...(podeAdmissao ? [{ id: "admissao" as const, label: "Admissão", curto: "Admissão", icone: UserPlus }] : []),
+    ...(podeAcesso ? [{ id: "acesso" as const, label: "Acesso ao app", curto: "Acesso", icone: KeyRound }] : []),
+    ...(podeFolha ? [{ id: "folha" as const, label: "Dados financeiros / Folha", curto: "Folha", icone: Wallet }] : []),
   ];
 
   const inputCls = "w-full bg-white border border-surface-border rounded-lg px-3 py-2.5 text-sm text-ink focus:outline-none focus:border-primary-500 focus:ring-4 focus:ring-primary-500/10 transition-all";
 
   return (
-    <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
+    <form onSubmit={handleSubmit(onSubmit, invalido)} className="space-y-5">
       {erroGlobal && (
         <div className="flex items-center gap-2 bg-atrasado-claro border border-atrasado/20 text-atrasado-texto text-sm rounded-lg px-4 py-3">
           <AlertCircle className="w-4 h-4 shrink-0" /> {erroGlobal}
@@ -240,25 +257,27 @@ export function ColaboradorForm({ initialData, somenteLeitura = false, podeFolha
       )}
 
       <div className="bg-white rounded-card shadow-card border border-surface-border overflow-hidden">
-        <nav className="flex gap-1.5 overflow-x-auto px-4 pt-4 pb-4 border-b border-surface-border">
+        {/* Leva J: as abas quebram linha como na ficha do cliente (sem rolagem lateral; no celular, todas à vista) */}
+        <nav className="flex flex-wrap gap-1 sm:gap-1.5 px-3 sm:px-4 py-3 sm:py-4 border-b border-surface-border" data-abas-colaborador>
           {ABAS.map((t) => {
             const ativa = aba === t.id;
+            const comErro = abasErro.has(t.id);
             return (
               <button
-                key={t.id} type="button" onClick={() => setAba(t.id)}
-                // No celular a tira de abas rola: a ativa tem de vir para a vista, senão trocar de
-                // aba pelo atalho do aviso deixa a tira mostrando outra aba
-                ref={ativa ? ((el) => el?.scrollIntoView({ block: "nearest", inline: "nearest" })) : undefined}
+                key={t.id} type="button" onClick={() => setAba(t.id)} data-aba={t.id} aria-current={ativa ? "page" : undefined} title={t.label}
                 className={cn(
-                  "flex items-center gap-2 px-4 py-2.5 text-sm font-medium rounded-card whitespace-nowrap transition-all",
+                  "flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-4 py-2 sm:py-2.5 text-[13px] sm:text-sm font-medium rounded-card whitespace-nowrap transition-all",
                   ativa ? "bg-primary-500 text-white shadow-sm" : "text-ink-muted hover:text-ink hover:bg-surface-alt",
+                  comErro && !ativa && "text-atrasado bg-atrasado-claro",
                 )}
               >
-                <t.icone className="w-4 h-4" />
-                {t.label}
+                <t.icone className="w-4 h-4 shrink-0" />
+                <span className="sm:hidden">{t.curto}</span>
+                <span className="hidden sm:inline">{t.label}</span>
                 {t.badge != null && t.badge > 0 && (
                   <span className={cn("text-[10px] font-semibold px-1.5 py-0.5 rounded-full", ativa ? "bg-white/25 text-white" : "bg-surface-alt text-ink-muted")}>{t.badge}</span>
                 )}
+                {comErro && <AlertCircle className={cn("w-3.5 h-3.5", ativa ? "text-white" : "text-atrasado")} aria-label="Tem erro" />}
               </button>
             );
           })}
@@ -351,23 +370,6 @@ export function ColaboradorForm({ initialData, somenteLeitura = false, podeFolha
                     onChange={(v) => setValue("cargoId", v, { shouldDirty: true })}
                   />
                 </FormField>
-                <FormField label="Tipo" required>
-                  <Select {...register("tipo")}>
-                    <option value="TECNICO_CAMPO">Técnico de campo</option>
-                    <option value="RESPONSAVEL_TECNICO">Responsável técnico</option>
-                    <option value="ADMINISTRATIVO">Administrativo</option>
-                    <option value="MOTORISTA">Motorista</option>
-                    <option value="OUTRO">Outro</option>
-                  </Select>
-                </FormField>
-              </FormGrid>
-              <FormGrid>
-                <FormField label="Tipo de equipe" hint="Define em qual equipe o colaborador aparece">
-                  <Select value={tipoEquipe} onChange={(e) => escolherTipoEquipe(e.target.value)}>
-                    <option value="CAMPO">Campo</option>
-                    <option value="ADMINISTRATIVO">Administrativo</option>
-                  </Select>
-                </FormField>
                 <FormField label="Perfil de acesso" hint="Permissões no sistema (Configurações › Perfis)">
                   <SeletorCadastro entidade="perfis-acesso" itens={perfis} valor={perfilAcessoId} vazio="Sem perfil" onChange={setPerfilAcessoId} />
                 </FormField>
@@ -382,7 +384,12 @@ export function ColaboradorForm({ initialData, somenteLeitura = false, podeFolha
                   </Select>
                 </FormField>
               )}
-              {tipo === "RESPONSAVEL_TECNICO" && (
+              {/* Leva J: dois conceitos claros no lugar de "Tipo" e "Tipo de equipe" (decisão no doc da leva) */}
+              <div className="grid gap-3 sm:grid-cols-2" data-funcao-colaborador>
+                <div data-usa-app-campo={campo ? "sim" : "nao"}><ToggleSwitch label={ROTULO_CAMPO} dica={DICA_CAMPO} checked={campo} onChange={escolherCampo} disabled={somenteLeitura} /></div>
+                <div data-responsavel-tecnico={rt ? "sim" : "nao"}><ToggleSwitch label={ROTULO_RT} dica={DICA_RT} checked={rt} onChange={setRt} disabled={somenteLeitura} /></div>
+              </div>
+              {rt && (
                 <FormField label="CREA / Registro profissional" hint="Obrigatório para responsáveis técnicos">
                   <Input {...register("crea")} placeholder="Ex: 5012345-D/SP" />
                 </FormField>
@@ -403,31 +410,8 @@ export function ColaboradorForm({ initialData, somenteLeitura = false, podeFolha
               {isEditing && <AvisoInativacaoStatus url={`/api/tecnicos/${initialData.id}`} mostrar={inativandoPeloStatus} motivo={motivoInativacao} onMotivo={setMotivoInativacao} />}
             </FormSection>
 
-            <FormSection title="Jornada de trabalho">
-              <FormGrid>
-                <FormField label="Horário de entrada">
-                  <Controller name="jornadaEntrada" control={control} render={({ field }) => <InputHora value={(field.value as string) ?? ""} onChange={field.onChange} aria-label="Horário de entrada" />} />
-                </FormField>
-                <FormField label="Horário de saída">
-                  <Controller name="jornadaSaida" control={control} render={({ field }) => <InputHora value={(field.value as string) ?? ""} onChange={field.onChange} aria-label="Horário de saída" />} />
-                </FormField>
-              </FormGrid>
-              <FormField label="Dias da semana">
-                <div className="flex flex-wrap gap-2">
-                  {DIAS_SEMANA.map((d) => {
-                    const sel = jornadaDias.includes(d.code);
-                    return (
-                      <button key={d.code} type="button" onClick={() => toggleDia(d.code)}
-                        className={cn(
-                          "px-3 py-1.5 rounded-lg text-sm font-medium border transition-colors",
-                          sel ? "bg-primary-500 border-primary-500 text-white" : "bg-white border-surface-border text-ink-muted hover:border-primary-300",
-                        )}>
-                        {d.label}
-                      </button>
-                    );
-                  })}
-                </div>
-              </FormField>
+            <FormSection title="Jornada de trabalho" dica="Uma faixa por grupo de dias com o mesmo horário (ex.: Seg–Qui 07:30–17:30 e Sex 07:30–16:30). O intervalo é descontado das horas. Vai para o contrato e os documentos.">
+              <JornadaFaixas faixas={faixas} onChange={setFaixas} disabled={somenteLeitura} />
             </FormSection>
 
             <FormSection title="Observações">
@@ -443,14 +427,14 @@ export function ColaboradorForm({ initialData, somenteLeitura = false, podeFolha
               <p className="text-sm text-ink-muted -mt-1">
                 Tipos de OS que este colaborador pode executar; só eles são sugeridos ao criar a OS.
               </p>
-              {tiposOs.length === 0 ? (
-                <p className="text-sm text-ink-subtle">Nenhum tipo de OS cadastrado. Cadastre em Configurações → Tipos de OS.</p>
+              {tiposOsVisiveis.length === 0 ? (
+                <p className="text-sm text-ink-subtle" data-competencias-vazio>Nenhum tipo de OS cadastrado. Cadastre em Configurações → Tipos de OS.</p>
               ) : (
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                  {tiposOs.map((t) => {
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2" data-competencias>
+                  {tiposOsVisiveis.map((t) => {
                     const sel = competenciaIds.includes(t.id);
                     return (
-                      <label key={t.id} className={cn(
+                      <label key={t.id} data-competencia={t.id} className={cn(
                         "flex items-center gap-3 px-3 py-2.5 rounded-lg border cursor-pointer transition-colors",
                         sel ? "border-primary-300 bg-primary-50" : "border-surface-border hover:bg-surface-alt",
                       )}>
@@ -458,6 +442,7 @@ export function ColaboradorForm({ initialData, somenteLeitura = false, podeFolha
                           className="w-4 h-4 rounded border-surface-border text-primary-600 focus:ring-primary-500" />
                         <span className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: t.cor }} />
                         <span className="text-sm text-ink">{t.nome}</span>
+                        {t.ativo === false && <span className="text-xs text-ink-subtle" data-competencia-inativa>(inativo)</span>}
                       </label>
                     );
                   })}
