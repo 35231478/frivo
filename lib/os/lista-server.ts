@@ -81,6 +81,13 @@ export async function carregarListaOs(empresaId: string, sp: SPOrdens, agora: Da
     prisma.medicao.findMany({ where: { itens: { some: { ordemServicoId: { in: ids } } } }, select: { id: true, status: true } }),
   ]) : [[], [], [], [], [], [], [], []];
 
+  // COM-1: o vendedor da OS (gravado ao gerar do orçamento) ou, na OS antiga, o do orçamento de origem
+  const origens = ordens.filter((o) => !o.vendedorId && o.orcamentoOrigemId).map((o) => o.orcamentoOrigemId!);
+  const vendasOrigem = origens.length ? await prisma.orcamento.findMany({ where: { id: { in: origens }, empresaId }, select: { id: true, vendedorId: true } }) : [];
+  const vendedorDaOrigem = new Map(vendasOrigem.map((v) => [v.id, v.vendedorId]));
+  const vendedorDa = (o: (typeof ordens)[number]) => o.vendedorId ?? (o.orcamentoOrigemId ? vendedorDaOrigem.get(o.orcamentoOrigemId) ?? null : null);
+  const idsVendedores = [...new Set(ordens.map(vendedorDa).filter((x): x is string => !!x))];
+  const vendedores = porId(idsVendedores.length ? await prisma.usuario.findMany({ where: { id: { in: idsVendedores } }, select: { id: true, nome: true } }) : []);
   const cliente = porId(clientesOs), unidade = porId(unidades), responsavel = porId(responsaveis), tecnico = porId(tecnicos);
   const medicao = porId(medicoes);
   const equipeDa = new Map<string, string[]>();
@@ -110,6 +117,7 @@ export async function carregarListaOs(empresaId: string, sp: SPOrdens, agora: Da
       clienteLogo: cli?.logo ?? null,
       unidade: (o.unidadeId && unidade.get(o.unidadeId)?.nome) || null,
       responsavel: (o.responsavelId && responsavel.get(o.responsavelId)?.nome) || null,
+      vendedor: (vendedorDa(o) && vendedores.get(vendedorDa(o)!)?.nome) || null,
       atividades: ats.length,
       tecnicos: tecnicosOs.map((t) => ({ id: t.id, nome: t.nome, avatar: t.avatar ?? null })),
       status: o.status,

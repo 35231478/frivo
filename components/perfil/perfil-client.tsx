@@ -14,6 +14,7 @@ import { problemaSenha } from "@/lib/acesso/senha";
 import { RequisitosSenha } from "@/components/auth/requisitos-senha";
 import { AlertCircle, Camera, MonitorSmartphone } from "lucide-react";
 import { NotificacoesAparelho } from "@/components/push/notificacoes-aparelho";
+import { MinhasComissoes } from "@/components/perfil/minhas-comissoes";
 import { abaInicialDoPerfil, abasDoPerfil, alteracoesDoPerfil, linhaDaConta, type AbaPerfil } from "@/lib/perfil/abas";
 
 interface Initial {
@@ -93,9 +94,20 @@ export function PerfilClient({ initial, onAvatar, emailSomenteLeitura = false, n
 }) {
   const router = useRouter();
   const { update } = useSession();
-  const abas = abasDoPerfil({ notificacoes });
+  // COM-1: a aba "Comissões" só aparece quando a empresa usa comissão (o servidor diz; nada de comissão sem regra)
+  const [comissoes, setComissoes] = useState(false);
+  const abas = abasDoPerfil({ notificacoes, comissoes });
   const [aba, setAba] = useState<AbaPerfil>(() => abaInicialDoPerfil(abaPedida, abas));
   const [erro, setErro] = useState("");
+  useEffect(() => {
+    let vivo = true;
+    fetch("/api/perfil/comissoes?so=ativo").then((r) => (r.ok ? r.json() : null)).then((d) => {
+      if (!vivo || !d?.ativo) return;
+      setComissoes(true);
+      if (abaPedida === "comissoes") setAba("comissoes");
+    }).catch(() => {});
+    return () => { vivo = false; };
+  }, [abaPedida]);
 
   function trocarAba(id: string) {
     const nova = abaInicialDoPerfil(id, abas);
@@ -333,6 +345,8 @@ export function PerfilClient({ initial, onAvatar, emailSomenteLeitura = false, n
                 </Bloco>
               </>
             )}
+
+            {ativa === "comissoes" && comissoes && <MinhasComissoes />}
 
             {ativa === "preferencias" && notificacoes && (
               <Bloco titulo="Notificações" descricao="Avisos deste aparelho, mesmo com o Frivo fechado." data-bloco="notificacoes">

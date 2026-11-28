@@ -77,6 +77,7 @@ export default async function OrcamentosPage({
     where,
     include: {
       cliente: { select: { id: true, nome: true, nomeFantasia: true, logo: true } },
+      vendedor: { select: { nome: true } },
       _count: { select: { ordensServico: true } },
     },
     orderBy,
@@ -157,6 +158,8 @@ export default async function OrcamentosPage({
               { id: "nome", titulo: "Nome", ordenar: "nome", obrigatoria: true, classe: "truncate" },
               { id: "cliente", titulo: "Cliente", largura: 220, ordenar: "cliente", classe: "truncate" },
               { id: "tipo", titulo: "Tipo", largura: 128, oculta: true, classe: "truncate" },
+              // COM-1: quem vendeu (escondida por padrão; liga em "Colunas")
+              { id: "vendedor", titulo: "Vendedor", largura: 160, oculta: true, classe: "truncate" },
               { id: "status", titulo: "Status", largura: 136, ordenar: "status" },
               { id: "valor", titulo: "Valor (R$)", alinhar: "direita", largura: 120, ordenar: "valor", obrigatoria: true },
               { id: "validade", titulo: "Validade", largura: 92 },
@@ -177,6 +180,7 @@ export default async function OrcamentosPage({
                   nome: <span className={PLANILHA.nome} data-nome-orcamento>{o.nome}</span>,
                   cliente: <span className="text-ink" data-cliente-orcamento>{cliente}</span>,
                   tipo: <span className={CLASSE_TIPO_ORCAMENTO[o.tipo]}>{LABELS_TIPO_ORCAMENTO[o.tipo]}</span>,
+                  vendedor: <span className="text-ink" data-vendedor-orcamento>{o.vendedor?.nome ?? "—"}</span>,
                   status: <PilulaEtapa etapa={etapaCiclo(o, agora)} desde={dataDaEtapa(o, agora)} compacta />,
                   valor: <span className={cn(PLANILHA.numero, "font-semibold text-ink")} data-valor>{valorSemMoeda(Number(o.totalGeral))}</span>,
                   validade: <span className={cn(PLANILHA.data, PLANILHA.apagado)} data-validade>{o.validadeEm ? formatarData(o.validadeEm) : "—"}</span>,
