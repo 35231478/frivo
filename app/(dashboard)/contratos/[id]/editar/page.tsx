@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { ProtegerSaida } from "@/components/ui/proteger-saida";
 import { notFound, redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
 import { pode } from "@/lib/permissoes";
@@ -37,5 +38,5 @@ export default async function EditarContratoPage({ params }: { params: Promise<{
   if (!contrato) notFound();
   const horarioComercial = rotuloDaJornada(await jornadaDaEmpresa(prisma, empresaId));
 
-  return <ContratoForm initialData={contrato} somenteLeitura={!podeEditar} horarioComercial={horarioComercial} />;
+  return <ProtegerSaida><ContratoForm initialData={contrato} somenteLeitura={!podeEditar} horarioComercial={horarioComercial} /></ProtegerSaida>;
 }

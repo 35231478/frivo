@@ -228,7 +228,7 @@ export function MontadorEquipes({ equipesIniciais, colaboradores, podeGerenciar 
 
       {/* Adicionar sem arrastar (celular / acessibilidade) */}
       {adicionarDe && (
-        <div role="dialog" aria-modal="true" className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40 p-4" onClick={() => setAdicionarDe(null)}>
+        <div role="dialog" aria-modal="true" className="fixed inset-0 z-[70] flex items-end sm:items-center justify-center bg-black/40 p-4" onClick={() => setAdicionarDe(null)}>
           <div className="bg-white rounded-card shadow-2xl w-full max-w-sm p-4 space-y-3" onClick={(ev) => ev.stopPropagation()} data-escolher-equipe>
             <p className="font-semibold text-ink">Adicionar {porId.get(adicionarDe)?.nome} em…</p>
             <div className="space-y-1.5 max-h-72 overflow-y-auto">

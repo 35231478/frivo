@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { ProtegerSaida } from "@/components/ui/proteger-saida";
 import { redirect } from "next/navigation";
 import { exigirModuloNaPagina } from "@/lib/modulos/pagina";
 import { pode } from "@/lib/permissoes";
@@ -17,7 +18,7 @@ export default async function NovoEquipamentoPage({
   if (!pode(session?.user?.permissoes, "equipamentos", "criar", session?.user?.role)) redirect("/equipamentos");
   return (
     <div className="max-w-4xl mx-auto">
-      <EquipamentoForm unidadeIdFixo={unidadeId} />
+      <ProtegerSaida><EquipamentoForm unidadeIdFixo={unidadeId} /></ProtegerSaida>
     </div>
   );
 }

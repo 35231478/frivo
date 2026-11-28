@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { ProtegerSaida } from "@/components/ui/proteger-saida";
 import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
 import { exigirModuloNaPagina } from "@/lib/modulos/pagina";
@@ -20,7 +21,7 @@ export default async function NovoPedidoAvulsoPage() {
     <div className="space-y-6 max-w-5xl mx-auto">
       <PageHeader title="Novo pedido avulso" description="Sem OS nem orçamento — por exemplo, reposição de estoque." dica={AJUDA} backHref="/compras/pedidos" />
       <div className="card-padded">
-        <NovoPedidoAvulso />
+        <ProtegerSaida><NovoPedidoAvulso /></ProtegerSaida>
       </div>
     </div>
   );

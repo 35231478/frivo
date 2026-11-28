@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { ProtegerSaida } from "@/components/ui/proteger-saida";
 import { notFound, redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
@@ -149,7 +150,7 @@ export default async function EditarOrcamentoPage({
   };
 
   return (
-    <OrcamentoForm
+    <ProtegerSaida><OrcamentoForm
       mode="editar"
       clientes={clientes}
       catalogoServicos={servicos.map(({ _count, ...s }) => ({ ...s, valorPadrao: s.valorPadrao ? Number(s.valorPadrao) : null, temMateriais: _count.materiais > 0 }))}
@@ -160,6 +161,6 @@ export default async function EditarOrcamentoPage({
       issAliquota={Number(cfg?.issAliquota ?? 0)}
       iaDisponivel={!!process.env.ANTHROPIC_API_KEY}
       padroes={padroes}
-    />
+    /></ProtegerSaida>
   );
 }

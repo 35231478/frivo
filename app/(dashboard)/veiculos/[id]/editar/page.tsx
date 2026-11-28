@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { ProtegerSaida } from "@/components/ui/proteger-saida";
 import { notFound } from "next/navigation";
 import { auth } from "@/lib/auth";
 import { exigirModuloNaPagina } from "@/lib/modulos/pagina";
@@ -78,10 +79,10 @@ export default async function EditarVeiculoPage({ params }: { params: Promise<{ 
           Este veículo está <strong>inativo</strong>: não aparece na lista padrão nem no checklist. Use “Reativar” para voltar a usá-lo.
         </div>
       )}
-      <VeiculoForm
+      <ProtegerSaida><VeiculoForm
         key={veiculo.status} initialData={initialData} ocorrencias={ocorrencias}
         somenteLeitura={!pode(session!.user!.permissoes, "veiculos", "gerenciar", session!.user!.role)}
-      />
+      /></ProtegerSaida>
     </div>
   );
 }

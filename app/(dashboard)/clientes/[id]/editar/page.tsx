@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { ProtegerSaida } from "@/components/ui/proteger-saida";
 import { notFound } from "next/navigation";
 import { auth } from "@/lib/auth";
 import { ClienteForm } from "@/components/forms/cliente-form";
@@ -12,5 +13,5 @@ export default async function EditarClientePage({ params, searchParams }: { para
   const session = await auth();
   const ficha = await carregarFichaCliente(id, session!.user!.empresaId);
   if (!ficha) notFound();
-  return <ClienteForm abaInicial={aba} initialData={ficha.dados} statusFinanceiroCalc={ficha.status} totalProximos30Dias={ficha.totalProximos30Dias} perdas12m={ficha.perdas12m} satisfacaoAceite={ficha.satisfacao} />;
+  return <ProtegerSaida><ClienteForm abaInicial={aba} initialData={ficha.dados} statusFinanceiroCalc={ficha.status} totalProximos30Dias={ficha.totalProximos30Dias} perdas12m={ficha.perdas12m} satisfacaoAceite={ficha.satisfacao} /></ProtegerSaida>;
 }

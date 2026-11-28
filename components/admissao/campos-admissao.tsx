@@ -9,7 +9,8 @@ import { FormField, FormGrid } from "@/components/ui/form-field";
 import { InputData } from "@/components/ui/input-data";
 import { cn } from "@/lib/utils";
 import { digitos, formatarDocumento } from "@/lib/documento";
-import { buscarCep, cepCompleto, formatarCep } from "@/lib/cep";
+import { enderecoDoCep } from "@/lib/cep";
+import { CampoCep } from "@/components/ui/campo-cep";
 import {
   CODIGO_TAMANHO, ESCOLARIDADES, ESTADOS_CIVIS, PARENTESCOS, TIPOS_CONTA, formatarPis,
   type DocumentoPedido, type FormAdmissao,
@@ -214,32 +215,14 @@ export function VerificarEmail({ form, set, token, verificado, onVerificado }: C
 /* ───────── etapa 2: endereço (com CEP) ───────── */
 
 export function CamposEndereco({ form, set }: CamposProps) {
-  const [buscando, setBuscando] = useState(false);
-  const [achou, setAchou] = useState<boolean | null>(null);
-
-  async function completar(cep: string) {
-    if (!cepCompleto(cep)) return;
-    setBuscando(true);
-    const e = await buscarCep(cep);
-    setBuscando(false);
-    setAchou(!!e);
-    if (!e) return;
-    if (e.logradouro) set("endereco", e.logradouro);
-    if (e.bairro) set("bairro", e.bairro);
-    if (e.cidade) set("cidade", e.cidade);
-    if (e.estado) set("estado", e.estado);
-  }
-
   return (
     <div className="space-y-4" data-etapa-campos="ENDERECO">
       <FormGrid>
-        <FormField label="CEP" required hint={buscando ? "Buscando o endereço…" : achou === false ? "CEP não encontrado: preencha à mão." : "O endereço é preenchido pelo CEP."}>
-          <div className="relative">
-            <Input value={formatarCep(form.cep)} onChange={(e) => { const v = formatarCep(e.target.value); set("cep", v); setAchou(null); if (cepCompleto(v)) completar(v); }}
-              inputMode="numeric" data-campo="cep" placeholder="00000-000" autoComplete="postal-code" />
-            {buscando && <Loader2 className="w-4 h-4 animate-spin absolute right-3 top-1/2 -translate-y-1/2 text-ink-muted" aria-hidden />}
-          </div>
-        </FormField>
+        <CampoCep valor={form.cep} onValor={(v) => set("cep", v)} required
+          onEndereco={(d) => {
+            const novo = enderecoDoCep(form, d, { logradouro: "endereco", bairro: "bairro", cidade: "cidade", estado: "estado" });
+            for (const [k, v] of Object.entries(novo)) set(k as "endereco", (v as string) ?? "");
+          }} />
         <FormField label="Número" required>
           <Input value={form.numero} onChange={(e) => set("numero", e.target.value)} data-campo="numero" />
         </FormField>

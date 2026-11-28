@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { ProtegerSaida } from "@/components/ui/proteger-saida";
 import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
 import { pode } from "@/lib/permissoes";
@@ -12,5 +13,5 @@ export default async function NovoPmocPage() {
   if (!pode(session?.user?.permissoes, "pmoc", "criar", session?.user?.role)) redirect("/pmoc");
   // O plano novo nasce com o texto técnico padrão DESTA empresa (ou o do sistema, se ela não tiver o seu)
   const config = await configPmoc(session!.user!.empresaId);
-  return <div className="max-w-5xl mx-auto"><PmocEditor config={config} /></div>;
+  return <div className="max-w-5xl mx-auto"><ProtegerSaida><PmocEditor config={config} /></ProtegerSaida></div>;
 }

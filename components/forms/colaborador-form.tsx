@@ -1,5 +1,7 @@
 "use client";
 
+import { CampoCep } from "@/components/ui/campo-cep";
+import { enderecoDoCep } from "@/lib/cep";
 import { useState, useRef, useEffect, KeyboardEvent } from "react";
 import { useForm, Controller } from "react-hook-form";
 import { chaveDiaCivil } from "@/lib/fuso";
@@ -318,7 +320,12 @@ export function ColaboradorForm({ initialData, somenteLeitura = false, podeFolha
 
             <FormSection title="Endereço">
               <FormGrid cols={3}>
-                <FormField label="CEP"><Input {...register("cep")} placeholder="00000-000" /></FormField>
+                <CampoCep valor={watch("cep") ?? ""} onValor={(v) => setValue("cep", v, { shouldDirty: true })}
+                  onEndereco={(d) => {
+                    // O mesmo jeito de toda tela (lib/cep › enderecoDoCep): o logradouro do colaborador é "endereco"
+                    const novo = enderecoDoCep({ endereco: watch("endereco"), bairro: watch("bairro"), cidade: watch("cidade"), estado: watch("estado") }, d, { logradouro: "endereco", bairro: "bairro", cidade: "cidade", estado: "estado" });
+                    for (const [k, v] of Object.entries(novo)) setValue(k as "endereco", (v as string) ?? "", { shouldDirty: true });
+                  }} />
                 <FormField label="Logradouro" className="sm:col-span-2"><Input {...register("endereco")} caixa="endereco" placeholder="Rua, avenida…" /></FormField>
               </FormGrid>
               <FormGrid cols={3}>

@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { ProtegerSaida } from "@/components/ui/proteger-saida";
 import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
 import { pode } from "@/lib/permissoes";
@@ -10,5 +11,5 @@ export default async function NovoClientePage() {
   const session = await auth();
   // Sem permissão de criar: volta para a listagem (o botão "Novo cliente" já fica oculto).
   if (!pode(session?.user?.permissoes, "clientes", "criar", session?.user?.role)) redirect("/clientes");
-  return <ClienteForm />;
+  return <ProtegerSaida><ClienteForm /></ProtegerSaida>;
 }

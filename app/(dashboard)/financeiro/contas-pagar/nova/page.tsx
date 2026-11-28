@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { ProtegerSaida } from "@/components/ui/proteger-saida";
 import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
 import { pode } from "@/lib/permissoes";
@@ -17,7 +18,7 @@ export default async function NovaContaPagarPage() {
   return (
     <div className="max-w-3xl mx-auto">
       <PageHeader title="Nova conta a pagar" description="Registre uma despesa a pagar" dica={AJUDA} backHref="/financeiro/contas-pagar" />
-      <ContaPagarForm />
+      <ProtegerSaida><ContaPagarForm /></ProtegerSaida>
     </div>
   );
 }

@@ -117,7 +117,7 @@ export function ScannerQR({ onFechar, onLer }: { onFechar: () => void; onLer: (v
   }
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/80 flex items-end sm:items-center justify-center p-0 sm:p-4" role="dialog" aria-modal="true" aria-label="Ler QR Code do equipamento" data-scanner-qr data-fase={fase} data-motor={motor ?? undefined}>
+    <div className="fixed inset-0 z-[70] bg-black/80 flex items-end sm:items-center justify-center p-0 sm:p-4" role="dialog" aria-modal="true" aria-label="Ler QR Code do equipamento" data-scanner-qr data-fase={fase} data-motor={motor ?? undefined}>
       <div className="bg-white w-full sm:max-w-md sm:rounded-card rounded-t-card overflow-hidden max-h-[100dvh] overflow-y-auto">
         <div className="flex items-center justify-between pl-4 pr-1 border-b border-surface-linha">
           <span className="text-sm font-semibold text-ink">Escanear QR Code do equipamento</span>

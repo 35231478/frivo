@@ -3,7 +3,10 @@
 import { InativarRegistro } from "@/components/ui/inativar-registro";
 import { SecaoInativos } from "@/components/forms/secao-inativos";
 import { useState, useEffect, useCallback } from "react";
-import { buscarCep, cepCompleto } from "@/lib/cep";
+import { enderecoDoCep } from "@/lib/cep";
+import { CampoCep } from "@/components/ui/campo-cep";
+
+const CAMPOS_ENDERECO_UNIDADE = { logradouro: "logradouro", bairro: "bairro", cidade: "cidade", estado: "estado" } as const;
 import { useAutoGeocode } from "@/hooks/use-auto-geocode";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -80,7 +83,6 @@ export function UnidadesManager({ clienteId, unidadesIniciais, inativosIniciais 
   const [form, setForm] = useState<UnidadeFormData>(emptyForm);
   const [erro, setErro] = useState("");
   const [salvando, setSalvando] = useState(false);
-  const [buscandoCep, setBuscandoCep] = useState(false);
   const [empresaCoords, setEmpresaCoords] = useState<EmpresaCoords>({ latitude: null, longitude: null });
 
   useEffect(() => {
@@ -156,22 +158,6 @@ export function UnidadesManager({ clienteId, unidadesIniciais, inativosIniciais 
     setForm((f) => ({ ...f, [field]: value }));
   }
 
-  async function buscarCepDaUnidade() {
-    if (!cepCompleto(form.cep)) return;
-    setBuscandoCep(true);
-    try {
-      const d = await buscarCep(form.cep);
-      if (!d) return; // sem rede ou CEP que não existe: a pessoa digita
-      setForm((f) => ({
-        ...f,
-        logradouro: d.logradouro || f.logradouro,
-        bairro: d.bairro || f.bairro,
-        cidade: d.cidade || f.cidade,
-        estado: d.estado || f.estado,
-        complemento: d.complemento || f.complemento,
-      }));
-    } finally { setBuscandoCep(false); }
-  }
 
   function handleEnderecoSelect(e: EnderecoSelecionado) {
     setForm((f) => ({
@@ -262,6 +248,8 @@ export function UnidadesManager({ clienteId, unidadesIniciais, inativosIniciais 
           </FormField>
         </FormGrid>
 
+        <CampoCep valor={form.cep} onValor={(v) => updateField("cep", v)}
+          onEndereco={(d) => setForm((f) => ({ ...f, ...enderecoDoCep(f, d, CAMPOS_ENDERECO_UNIDADE) }))} />
         <FormField label="Logradouro" hint="Digite para buscar automaticamente">
           <EnderecoAutocomplete
             value={form.logradouro}
@@ -292,14 +280,6 @@ export function UnidadesManager({ clienteId, unidadesIniciais, inativosIniciais 
             </Select>
           </FormField>
         </FormGrid>
-        <FormField label="CEP" hint="Digite o CEP e clique na lupa para preencher o endereço">
-          <div className="flex gap-2 max-w-[300px]">
-            <Input value={form.cep} onChange={(e) => updateField("cep", e.target.value)} placeholder="00000-000" maxLength={9} />
-            <Button type="button" variant="secondary" loading={buscandoCep} onClick={buscarCepDaUnidade} className="shrink-0 px-3">
-              <Search className="w-4 h-4" />
-            </Button>
-          </div>
-        </FormField>
         <FormField label="Observações">
           <Textarea value={form.observacoes} onChange={(e) => updateField("observacoes", e.target.value)} rows={2} />
         </FormField>

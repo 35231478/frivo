@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { ProtegerSaida } from "@/components/ui/proteger-saida";
 import { notFound, redirect } from "next/navigation";
 import { exigirModuloNaPagina } from "@/lib/modulos/pagina";
 import { pode } from "@/lib/permissoes";
@@ -37,7 +38,7 @@ export default async function EditarEquipamentoPage({ params, searchParams }: { 
 
   return (
     <div className="max-w-4xl mx-auto">
-      <EquipamentoForm initialData={equipamento} abaInicial={aba} />
+      <ProtegerSaida><EquipamentoForm initialData={equipamento} abaInicial={aba} /></ProtegerSaida>
     </div>
   );
 }

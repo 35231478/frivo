@@ -158,7 +158,7 @@ export const UNIDADE = {
   /** Editar no contexto: nome e endereço do CADASTRO da unidade (muda em todo lugar). */
   camposEdicao: [
     { nome: "nome", label: "Nome do local", obrigatorio: true },
-    { nome: "cep", label: "CEP", placeholder: "00000-000", colunas: 2, inputMode: "numeric" },
+    { nome: "cep", label: "CEP", tipo: "cep", placeholder: "00000-000", colunas: 2 },
     { nome: "logradouro", label: "Endereço", placeholder: "Rua / Avenida", colunas: 4 },
     { nome: "numero", label: "Número", colunas: 2 },
     { nome: "complemento", label: "Complemento", colunas: 4 },

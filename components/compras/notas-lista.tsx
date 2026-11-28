@@ -7,7 +7,7 @@ import { Eye } from "lucide-react";
 import { BarraFiltros } from "@/components/listagem/barra-filtros";
 import { BarraPeriodo } from "@/components/listagem/periodo-cards";
 import { BuscaUrl, ConteudoUrl, FiltroSelectUrl, TabelaProUrl, useListaUrl } from "@/components/listagem/lista-url";
-import { CopiarCodigo } from "@/components/financeiro/copiar-codigo";
+import { ChaveCopiavel } from "@/components/compras/chave-copiavel";
 import { GavetaNota } from "@/components/compras/gaveta-nota";
 import { cn, formatarCpfCnpj, formatarData, formatarMoeda } from "@/lib/utils";
 import { COR_STATUS_NOTA, LABEL_STATUS_NOTA } from "@/lib/compras/rotulos";
@@ -112,9 +112,8 @@ export function NotasLista({ notas, periodo, doFinanceiro, vazio, paginacao }: {
                 nf: <Link href={hrefNota(n.id)} className={cn(PLANILHA.codigo, "font-semibold text-ink hover:text-primary-600")}>{n.numero}/{n.serie}</Link>,
                 serie: <span className="tabular-nums text-ink-muted">{n.serie}</span>,
                 chave: (
-                  <span className="flex items-center gap-1.5 min-w-0">
-                    <span className="font-mono text-[11px] text-ink-muted truncate">{n.chave}</span>
-                    <CopiarCodigo texto={n.chave} rotulo="Copiar" />
+                  <span className="flex items-center min-w-0">
+                    <ChaveCopiavel chave={n.chave} linha className="text-[11px] text-ink-muted" />
                   </span>
                 ),
                 fornecedor: <span className="text-ink-muted">{n.fornecedor}</span>,

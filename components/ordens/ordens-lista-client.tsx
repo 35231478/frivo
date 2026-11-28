@@ -1,5 +1,6 @@
 "use client";
 
+import { DICA_SEM_AGENDAMENTO, FILTRO_SEM_AGENDAMENTO } from "@/lib/listas/filtros";
 import { FILTRO_SEM_TECNICO } from "@/lib/os/sem-tecnico";
 import { ALERTAS_ATENDIMENTO, ROTULO_FILTRO_ATENDIMENTO } from "@/lib/atendimento/prazo";
 import { useEffect, useMemo, useState, useTransition } from "react";
@@ -54,7 +55,7 @@ const CLASSE_PRIORIDADE: Record<string, string> = {
 const PARAMS_FILTROS_OS = ["status", "prioridade", "prazo", "atendimento", "origem", "clienteId", "responsavelId", "tecnico", "tipoOsId", "contratoId", "numero"];
 
 /** Princípio 7: o que a lista mostra fica no ⓘ do título, não num parágrafo acima da tabela. */
-const AJUDA = "Todas as OS do período escolhido: o período olha o dia agendado, a data prevista, o prazo ou a abertura. A coluna Status mostra o estágio da OS (o mesmo da barra de andamento) e avisa quando ela vence hoje ou atrasou. Prevista é o dia marcado para o serviço; o prazo de conclusão (coluna escondida por padrão, em Colunas) é um compromisso à parte e, quando a OS não tem um próprio, vale a data prevista. A linha inteira abre a OS. OS canceladas ficam fora até o filtro de status pedir.";
+const AJUDA = "Todas as OS do período escolhido: o período olha a data agendada ou de execução das atividades e a data prevista (não a abertura). OS sem data nenhuma ficam em Sem agendamento. A coluna Status mostra o estágio da OS (o mesmo da barra de andamento) e avisa quando ela vence hoje ou atrasou. Prevista é o dia marcado para o serviço; o prazo de conclusão (coluna escondida por padrão, em Colunas) é um compromisso à parte e, quando a OS não tem um próprio, vale a data prevista. A linha inteira abre a OS. OS canceladas ficam fora até o filtro de status pedir.";
 
 /** A situação do prazo que merece destaque na lista: só o que pede ação (o resto não ganha selo) */
 const SELO_PRAZO: Record<string, string> = { ATRASADO: "pill-atrasado", VENCE_HOJE: "pill-atencao" };
@@ -91,10 +92,12 @@ function PrazoDaOs({ os, compacto }: { os: OrdemView; compacto?: boolean }) {
     : <span className={cn(PLANILHA.data, PLANILHA.apagado, "whitespace-nowrap")} data-prazo-herdado title={TITULO_PRAZO_HERDADO}>{data}</span>;
 }
 
-export function OrdensListaClient({ ordens, total, pagina, porPagina, opcoes, periodo, resumoPedido = null }: {
+export function OrdensListaClient({ ordens, total, pagina, porPagina, opcoes, periodo, resumoPedido = null, semAgendamento = 0 }: {
   ordens: OrdemView[]; total: number; pagina: number; porPagina: number; opcoes: Opcoes; periodo: PeriodoTela;
   /** O filtro rápido "Aguardando pedido" (contagem e R$); null = a empresa não tem cliente que exige pedido */
   resumoPedido?: { quantidade: number; total: number; conferir?: number } | null;
+  /** Quantas OS sem agendamento (o filtro rápido) */
+  semAgendamento?: number;
 }) {
   const router = useRouter();
   const { pode } = usePermissoes();
@@ -185,7 +188,7 @@ export function OrdensListaClient({ ordens, total, pagina, porPagina, opcoes, pe
 
       {/* Barra enxuta: período + busca + "Mais filtros" (painel recolhido) — padrão da casa */}
       <BarraFiltros
-        periodo={<BarraPeriodo periodo={periodo} navegar={(m) => setParams(m)} permitirTodos dica="Pelo dia agendado, pela data prevista, pelo prazo ou pela abertura da OS. Atalhos: ← → mudam o período, T volta para hoje." />}
+        periodo={<BarraPeriodo periodo={periodo} navegar={(m) => setParams(m)} permitirTodos dica="Pela data agendada ou de execução das atividades e pela data prevista da OS (não pela abertura). Atalhos: ← → mudam o período, T volta para hoje." />}
         busca={
           <CampoBusca
             valor={buscaLocal} onChange={setBuscaLocal} placeholder="Pesquisar" rotulo="Pesquisar ordens de serviço"
@@ -193,11 +196,15 @@ export function OrdensListaClient({ ordens, total, pagina, porPagina, opcoes, pe
           />
         }
         paramBusca="busca" navegar={(m) => setParams(m)}
-        rapidos={resumoPedido ? [
+        rapidos={[
+          ...(resumoPedido ? [
           { param: "pedido", valor: FILTRO_AGUARDANDO_PEDIDO, rotulo: "Aguardando pedido", quantidade: resumoPedido.quantidade, total: resumoPedido.total, dica: DICA_FILTRO_AGUARDANDO },
           // PC-2: o sino leva para cá; o filtro aparece, conta e sai pelo "Limpar filtros" como qualquer outro
           { param: "pedido", valor: FILTRO_CONFERIR_PEDIDO, rotulo: "Pedido recebido — conferir", quantidade: resumoPedido.conferir ?? 0, dica: DICA_FILTRO_CONFERIR },
-        ] : []}
+        ] : []),
+          // Leva I: o período olha a data agendada; a OS sem data aparece aqui, para não se perder
+          { param: "agenda", valor: FILTRO_SEM_AGENDAMENTO, rotulo: "Sem agendamento", quantidade: semAgendamento, dica: DICA_SEM_AGENDAMENTO },
+        ]}
         extras={
           <>
             <a href={exportUrl} className="btn-secondary px-3 py-2 font-medium text-ink-muted">

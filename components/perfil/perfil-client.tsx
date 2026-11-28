@@ -1,5 +1,7 @@
 "use client";
 
+import { marcarFormularioSalvo } from "@/lib/ui/sair-sem-salvar";
+import { useAvisoSairSemSalvar } from "@/components/ui/proteger-saida";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "@/components/ui/avisos";
 import { useRouter } from "next/navigation";
@@ -166,6 +168,7 @@ export function PerfilClient({ initial, onAvatar, emailSomenteLeitura = false, n
         await update({ name: data.nome, email: data.email }); // atualiza o JWT (menu e topo)
       }
       toast("Dados salvos.");
+      marcarFormularioSalvo();
       router.refresh(); // reflete no menu e no topo (a foto vem do banco no layout)
     } catch { setErro("Erro de conexão."); }
     finally { setSalvandoDados(false); }
@@ -200,10 +203,14 @@ export function PerfilClient({ initial, onAvatar, emailSomenteLeitura = false, n
       if (!res.ok) { setErro(data?.erro ?? "Erro ao alterar senha."); return; }
       setSenhaAtual(""); setNovaSenha(""); setConfirmar("");
       toast("Senha alterada. As outras sessões com a senha antiga foram encerradas.");
+      marcarFormularioSalvo();
     } catch { setErro("Erro de conexão."); }
     finally { setSalvandoSenha(false); }
   }
 
+  // Sair sem salvar (lib/ui/sair-sem-salvar): o aviso de toda tela de edição
+  const raizRef = useRef<HTMLDivElement>(null);
+  useAvisoSairSemSalvar(raizRef);
   // O erro é de uma aba: trocar de aba limpa (já feito em trocarAba); sair da tela também
   useEffect(() => () => setErro(""), []);
 
@@ -211,7 +218,7 @@ export function PerfilClient({ initial, onAvatar, emailSomenteLeitura = false, n
   const foto = preview ?? avatar;
 
   return (
-    <div className="max-w-4xl mx-auto space-y-6" data-perfil>
+    <div ref={raizRef} className="max-w-4xl mx-auto space-y-6" data-perfil>
       {/* Cabeçalho: quem é (o perfil de acesso aparece uma vez só) */}
       <header className="flex items-center gap-4" data-topo-perfil>
         <button
