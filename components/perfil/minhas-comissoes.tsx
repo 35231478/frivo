@@ -5,12 +5,12 @@ import { ChevronDown, Loader2 } from "lucide-react";
 import { cn, formatarMoeda } from "@/lib/utils";
 import type { VendaNoExtrato } from "@/lib/comissoes/servidor";
 
-// A venda (vendedor) ou a OS (técnico, COM-2): o mesmo formato do extrato do servidor
+// A venda (vendedor), a OS (técnico, COM-2) ou o contrato (COM-1.2): o mesmo formato do extrato do servidor
 type Venda = VendaNoExtrato;
 interface Extrato { vendas: Venda[]; totais: { prevista: number; liberada: number; paga: number } }
 
 const SITUACOES = [
-  { id: "prevista", rotulo: "Prevista", dica: "Venda aprovada; ainda não liberada" },
+  { id: "prevista", rotulo: "Prevista", dica: "Venda aprovada ou contrato fechado; ainda não liberada" },
   { id: "liberada", rotulo: "Liberada", dica: "Devida; entra no próximo fechamento do mês" },
   { id: "paga", rotulo: "Paga", dica: "Já entrou num fechamento do mês" },
 ] as const;

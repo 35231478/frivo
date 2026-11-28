@@ -54,6 +54,7 @@ export async function regrasAtivas(empresaId: string, db: Db = prisma): Promise<
     id: r.id, quemTipo: r.quemTipo as RegraComissao["quemTipo"], usuarioId: r.usuarioId, cargoId: r.cargoId, papel: r.papel as RegraComissao["papel"],
     sobreTipo: r.sobreTipo as RegraComissao["sobreTipo"], categoria: r.categoria, servicoId: r.servicoId, base: r.base as RegraComissao["base"], valor: num(r.valor), ativo: r.ativo,
     divisao: r.divisao as RegraComissao["divisao"], divisaoCargos: lerDivisaoCargos(r.divisaoCargos),
+    tipoContrato: r.tipoContrato as RegraComissao["tipoContrato"], meses: r.meses,
   }));
 }
 
@@ -179,16 +180,44 @@ export async function recebimentoDaOrigem(db: Db, empresaId: string, origem: { o
     ? await db.ordemServico.findFirst({ where: { id: origem.osId, empresaId }, select: { id: true, orcamentoOrigemId: true } })
     : await db.ordemServico.findFirst({ where: { orcamentoOrigemId: origem.orcamentoId!, empresaId }, select: { id: true, orcamentoOrigemId: true } });
   const orcamentoId = origem.orcamentoId ?? os?.orcamentoOrigemId ?? null;
-  const [itens, contas] = await Promise.all([
+  const [itens, { porMed, brutas, ultimaData }] = await Promise.all([
     db.medicaoItem.findMany({ where: { medicaoId: { in: ids } }, select: { medicaoId: true, valorTotal: true, orcamentoId: true, ordemServicoId: true } }),
-    db.contaReceber.findMany({
-      where: { empresaId, excluidaEm: null, status: { notIn: ["CANCELADO", "PARCELADO"] }, OR: [{ medicaoId: { in: ids } }, { lancamento: { medicaoId: { in: ids } } }] },
-      select: {
-        id: true, medicaoId: true, valor: true, status: true, dataRecebimento: true, renegociadaEmId: true, lancamento: { select: { medicaoId: true } },
-        recebimentos: { where: { estornadoEm: null }, select: { valor: true, data: true } },
-      },
-    }),
+    recebidoDasMedicoes(db, empresaId, ids),
   ]);
+  const entradas: EntradaDaVenda[] = [];
+  const faturas: FaturaRecebida[] = meds.map((m) => {
+    const doMed = itens.filter((i) => i.medicaoId === m.id);
+    const total = doMed.reduce((s, i) => s + num(i.valorTotal), 0);
+    const daVenda = doMed.filter((i) => (!!orcamentoId && i.orcamentoId === orcamentoId) || (!!os && i.ordemServicoId === os.id)).reduce((s, i) => s + num(i.valorTotal), 0);
+    // Fatura avulsa (desta venda) ou sem linha que aponte para a venda (achada pelo relatório da OS): é toda desta venda
+    const parte = m.avulsa || total <= 0 || daVenda <= 0 ? 1 : Math.min(1, daVenda / total);
+    const r = porMed.get(m.id) ?? { aCobrar: 0, recebido: 0 };
+    const f = { daVenda: round2(num(m.valorLiquido) * parte), aCobrar: round2(r.aCobrar), recebido: round2(r.recebido) };
+    entradas.push(...entradasDaFatura(f, brutas.get(m.id) ?? []));
+    return f;
+  });
+  return { faturas, ultimaData, entradas };
+}
+
+/**
+ * O que cada fatura (medição) cobra e o que já entrou dela: as contas a receber (e as parcelas), os recebimentos
+ * não estornados e, na conta renegociada, a parte dela no que já entrou da renegociação. Conta RECEBIDA antiga (sem
+ * recebimentos registrados) vale o valor dela. `brutas`: cada entrada de dinheiro da fatura, com a data.
+ * (Compartilhado pela venda — COM-1 — e pela mensalidade do contrato — COM-1.2.)
+ */
+export async function recebidoDasMedicoes(db: Db, empresaId: string, ids: string[]) {
+  const porMed = new Map<string, { aCobrar: number; recebido: number }>();
+  /** As entradas cruas de cada fatura (valor recebido nela, com a data), antes de virar a parte desta venda */
+  const brutas = new Map<string, { data: Date; valor: number }[]>();
+  let ultimaData: Date | null = null;
+  if (!ids.length) return { porMed, brutas, ultimaData };
+  const contas = await db.contaReceber.findMany({
+    where: { empresaId, excluidaEm: null, status: { notIn: ["CANCELADO", "PARCELADO"] }, OR: [{ medicaoId: { in: ids } }, { lancamento: { medicaoId: { in: ids } } }] },
+    select: {
+      id: true, medicaoId: true, valor: true, status: true, dataRecebimento: true, renegociadaEmId: true, lancamento: { select: { medicaoId: true } },
+      recebimentos: { where: { estornadoEm: null }, select: { valor: true, data: true } },
+    },
+  });
   // Renegociação: o que entrou na conta nova, repartido pelo saldo de cada conta renegociada
   const novasIds = [...new Set(contas.map((c) => c.renegociadaEmId).filter(Boolean) as string[])];
   const novas = novasIds.length ? await db.contaReceber.findMany({
@@ -197,11 +226,7 @@ export async function recebimentoDaOrigem(db: Db, empresaId: string, origem: { o
   }) : [];
   const saldo = (c: { valor: unknown; recebimentos: { valor: unknown }[] }) => Math.max(0, num(c.valor) - c.recebimentos.reduce((s, r) => s + num(r.valor), 0));
 
-  let ultimaData: Date | null = null;
   const marcar = (d: Date | null | undefined) => { if (d && (!ultimaData || d > ultimaData)) ultimaData = d; };
-  const porMed = new Map<string, { aCobrar: number; recebido: number }>();
-  /** As entradas cruas de cada fatura (valor recebido nela, com a data), antes de virar a parte desta venda */
-  const brutas = new Map<string, { data: Date; valor: number }[]>();
   const entrar = (med: string, data: Date | null | undefined, valor: number) => {
     if (!data || valor <= 0) return;
     brutas.set(med, [...(brutas.get(med) ?? []), { data, valor }]);
@@ -232,19 +257,7 @@ export async function recebimentoDaOrigem(db: Db, empresaId: string, origem: { o
     a.recebido += recebido;
     porMed.set(med, a);
   }
-  const entradas: EntradaDaVenda[] = [];
-  const faturas: FaturaRecebida[] = meds.map((m) => {
-    const doMed = itens.filter((i) => i.medicaoId === m.id);
-    const total = doMed.reduce((s, i) => s + num(i.valorTotal), 0);
-    const daVenda = doMed.filter((i) => (!!orcamentoId && i.orcamentoId === orcamentoId) || (!!os && i.ordemServicoId === os.id)).reduce((s, i) => s + num(i.valorTotal), 0);
-    // Fatura avulsa (desta venda) ou sem linha que aponte para a venda (achada pelo relatório da OS): é toda desta venda
-    const parte = m.avulsa || total <= 0 || daVenda <= 0 ? 1 : Math.min(1, daVenda / total);
-    const r = porMed.get(m.id) ?? { aCobrar: 0, recebido: 0 };
-    const f = { daVenda: round2(num(m.valorLiquido) * parte), aCobrar: round2(r.aCobrar), recebido: round2(r.recebido) };
-    entradas.push(...entradasDaFatura(f, brutas.get(m.id) ?? []));
-    return f;
-  });
-  return { faturas, ultimaData, entradas };
+  return { porMed, brutas, ultimaData: ultimaData as Date | null };
 }
 
 /* ───────── as faturas da venda, vivas e canceladas (COM-1.1) ───────── */
@@ -307,10 +320,12 @@ const MOTIVO: Record<Quando, string> = {
  */
 export async function sincronizarComissoes(empresaId: string, filtro: { orcamentoIds?: string[]; usuarioId?: string } = {}, agora: Date = new Date()): Promise<number> {
   const doVendedor = await prisma.$transaction((tx) => sincronizarNaTransacao(tx, empresaId, filtro, agora), { timeout: 60_000 });
-  // COM-2: o técnico (pela OS) — fica de fora quando a conta é só de alguns orçamentos (aprovação de uma venda)
+  // COM-2: o técnico (pela OS) e COM-1.2: o contrato — ficam de fora quando a conta é só de alguns orçamentos (aprovação de uma venda)
   if (filtro.orcamentoIds) return doVendedor;
   const { sincronizarExecutor } = await import("./executor-server");
-  return doVendedor + (await sincronizarExecutor(empresaId, { usuarioId: filtro.usuarioId }, agora)).lancamentos;
+  const { sincronizarContratos } = await import("./contrato-server");
+  return doVendedor + (await sincronizarExecutor(empresaId, { usuarioId: filtro.usuarioId }, agora)).lancamentos
+    + (await sincronizarContratos(empresaId, { usuarioId: filtro.usuarioId }, agora));
 }
 
 /** O recálculo das comissões do VENDEDOR, dentro de uma transação que já existe (a troca de vendedor) */
@@ -441,9 +456,9 @@ export function lancamentosDoTeto(empresaId: string, competencia: string, fecham
 /* ───────── o extrato da própria pessoa ───────── */
 
 export interface VendaNoExtrato {
-  /** A chave da linha: o orçamento (vendedor) ou "os:<id>" (técnico, COM-2) */
+  /** A chave da linha: o orçamento (vendedor), "os:<id>" (técnico, COM-2) ou "ct:<id>" (contrato, COM-1.2) */
   chave: string;
-  tipo: "VENDA" | "OS";
+  tipo: "VENDA" | "OS" | "CONTRATO";
   orcamentoId: string | null; codigo: string; nome: string; cliente: string; osNumero: string | null;
   prevista: number; liberada: number; paga: number;
   /** `emRevisao`: retorno no mesmo equipamento, aguardando o encarregado (não libera enquanto isso) */
@@ -461,8 +476,9 @@ export async function extratoDoUsuario(empresaId: string, usuarioId: string, ago
     where: { empresaId, usuarioId },
     orderBy: { criadoEm: "desc" },
     select: {
-      orcamentoId: true, ordemServicoId: true, equipamentoId: true, descricao: true, regraDescricao: true, valor: true, papel: true,
+      orcamentoId: true, ordemServicoId: true, contratoId: true, equipamentoId: true, descricao: true, regraDescricao: true, valor: true, papel: true,
       orcamento: { select: { codigo: true, nome: true, cliente: { select: { nome: true } }, osGerada: { select: { numero: true } } } },
+      contrato: { select: { numero: true, tipo: true, cliente: { select: { nome: true } } } },
       ordemServico: { select: { numero: true, chamadoNumero: true, cliente: { select: { nome: true } } } },
       lancamentos: { select: { valor: true, fechamento: { select: { situacao: true } } } },
       revisoes: { where: { situacao: "A_REVISAR" }, select: { id: true } },
@@ -482,11 +498,13 @@ export async function extratoDoUsuario(empresaId: string, usuarioId: string, ago
     const substituida = c.papel === PAPEL_SUBSTITUIDO;
     const s = situacaoDaComissao(substituida ? 0 : num(c.valor), c.lancamentos.map((l) => ({ valor: num(l.valor), pago: l.fechamento?.situacao === "FECHADO" })));
     if (substituida && !s.prevista && !s.liberada && !s.paga) continue;
-    // COM-2: a do vendedor agrupa pelo orçamento; a do técnico, pela OS
-    const chave = c.orcamentoId ?? `os:${c.ordemServicoId}`;
+    // COM-2: a do vendedor agrupa pelo orçamento; a do técnico, pela OS; COM-1.2: a do contrato, pelo contrato
+    const chave = c.contratoId ? `ct:${c.contratoId}` : c.orcamentoId ?? `os:${c.ordemServicoId}`;
     let v = vendas.get(chave);
     if (!v) {
-      if (c.orcamento) {
+      if (c.contrato) {
+        v = { chave, tipo: "CONTRATO", orcamentoId: null, codigo: c.contrato.numero, nome: "Contrato", cliente: c.contrato.cliente.nome, osNumero: null, prevista: 0, liberada: 0, paga: 0, itens: [] };
+      } else if (c.orcamento) {
         const orc = c.orcamento;
         v = { chave, tipo: "VENDA", orcamentoId: c.orcamentoId, codigo: orc.codigo, nome: orc.nome, cliente: orc.cliente.nome, osNumero: orc.osGerada?.numero ?? null, prevista: 0, liberada: 0, paga: 0, itens: [] };
       } else {
@@ -502,6 +520,9 @@ export async function extratoDoUsuario(empresaId: string, usuarioId: string, ago
     vendas.set(chave, v);
   }
   const lista = [...vendas.values()];
+  // COM-1.2: no contrato, as partes nascem juntas — o fechamento (ou a renovação) primeiro, depois as mensalidades em ordem
+  const ordemDaParte = (d: string) => { const m = /(\d{2})\/(\d{4})$/.exec(d); return m ? `1${m[2]}${m[1]}` : `0${d}`; };
+  for (const v of lista) if (v.tipo === "CONTRATO") v.itens.sort((a, b) => ordemDaParte(a.descricao).localeCompare(ordemDaParte(b.descricao)));
   return {
     vendas: lista,
     totais: {
@@ -537,7 +558,8 @@ export async function relatorioDeComissoes(empresaId: string, competencia: strin
   const ini = inicioDaCompetencia(competencia), fim = fimDaCompetencia(competencia);
   const cs = await prisma.comissao.findMany({
     where: {
-      empresaId, ...valendo,
+      // COM-1.2: o contrato tem a conta própria (abaixo) — o gatilho dele é sempre o recebimento
+      empresaId, ...valendo, contratoId: null,
       ...(v === "EMISSAO" ? {
         OR: [
           { orcamento: { status: { in: [...VENDA_VIVA] } } },
@@ -595,6 +617,29 @@ export async function relatorioDeComissoes(empresaId: string, competencia: strin
       linha.vendas.push({ chave, orcamentoId: ven.o.orcamentoId, codigo: ven.o.codigo, nome: ven.o.nome, cliente: ven.o.cliente, data: data.toISOString(), valor });
       pessoas.set(k, linha);
     }
+  }
+  // COM-1.2 — o CONTRATO nas duas vistas: o que foi liberado (menos o estornado) no mês, pelas mensalidades recebidas
+  // (a comissão de contrato é sempre pelo recebimento; o par do teto não conta: é só o fechamento empurrando o excedente)
+  const movsCt = await prisma.comissaoLancamento.findMany({
+    where: { empresaId, data: { gte: ini, lt: fim }, tetoCompetencia: null, comissao: { contratoId: { not: null } } },
+    select: { valor: true, data: true, usuarioId: true, comissao: { select: { contratoId: true, beneficiarioNome: true, contrato: { select: { numero: true, cliente: { select: { nome: true } } } } } } },
+    orderBy: { data: "asc" },
+  });
+  const porContrato = new Map<string, { k: string; usuarioId: string | null; nome: string; contratoId: string; numero: string; cliente: string; valor: number; data: Date }>();
+  for (const m of movsCt) {
+    const k = m.usuarioId ?? `nome:${m.comissao.beneficiarioNome}`;
+    const chave = `${k}|${m.comissao.contratoId}`;
+    const a = porContrato.get(chave) ?? { k, usuarioId: m.usuarioId, nome: m.comissao.beneficiarioNome, contratoId: m.comissao.contratoId!, numero: m.comissao.contrato?.numero ?? "Contrato", cliente: m.comissao.contrato?.cliente.nome ?? "", valor: 0, data: m.data };
+    a.valor += num(m.valor); a.data = m.data;
+    porContrato.set(chave, a);
+  }
+  for (const a of porContrato.values()) {
+    const valor = round2(a.valor);
+    if (valor <= 0) continue;
+    const linha = pessoas.get(a.k) ?? { usuarioId: a.usuarioId, nome: a.nome, valor: 0, vendas: [] };
+    linha.valor = round2(linha.valor + valor);
+    linha.vendas.push({ chave: `ct:${a.contratoId}`, orcamentoId: null, codigo: a.numero, nome: "Contrato", cliente: a.cliente, data: a.data.toISOString(), valor });
+    pessoas.set(a.k, linha);
   }
   const lista = [...pessoas.values()].sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR"));
   return { competencia, vista: v, quando, pessoas: lista, total: round2(lista.reduce((s, p) => s + p.valor, 0)) };
@@ -687,10 +732,10 @@ export async function telaDeComissoes(empresaId: string) {
       where: { empresaId }, orderBy: [{ ativo: "desc" }, { criadoEm: "asc" }],
       select: {
         id: true, quemTipo: true, usuarioId: true, cargoId: true, papel: true, sobreTipo: true, categoria: true, servicoId: true, base: true, valor: true, ativo: true,
-        divisao: true, divisaoCargos: true, usuario: { select: { nome: true } }, cargo: { select: { nome: true } }, servico: { select: { nome: true } },
+        divisao: true, divisaoCargos: true, tipoContrato: true, meses: true, usuario: { select: { nome: true } }, cargo: { select: { nome: true } }, servico: { select: { nome: true } },
       },
     }),
-    prisma.configuracao.findUnique({ where: { empresaId }, select: { comissaoQuando: true, comissaoLiquidaImpostos: true, comissaoVencimentoTipo: true, comissaoVencimentoDia: true, comissaoExecutorQuando: true, comissaoRetornoDias: true } }),
+    prisma.configuracao.findUnique({ where: { empresaId }, select: { comissaoQuando: true, comissaoLiquidaImpostos: true, comissaoVencimentoTipo: true, comissaoVencimentoDia: true, comissaoExecutorQuando: true, comissaoRetornoDias: true, comissaoRenovacaoGera: true } }),
     prisma.usuario.findMany({ where: { empresaId, ativo: true }, orderBy: { nome: "asc" }, select: { id: true, nome: true } }),
     prisma.cargo.findMany({ where: { empresaId, ativo: true }, orderBy: { nome: "asc" }, select: { id: true, nome: true } }),
     prisma.servico.findMany({ where: { empresaId, ativo: true }, orderBy: { nome: "asc" }, select: { id: true, nome: true, categoria: true } }),
@@ -704,6 +749,7 @@ export async function telaDeComissoes(empresaId: string) {
       id: r.id, quemTipo: r.quemTipo, usuarioId: r.usuarioId, cargoId: r.cargoId, papel: r.papel, sobreTipo: r.sobreTipo, categoria: r.categoria, servicoId: r.servicoId,
       base: r.base, valor: num(r.valor), ativo: r.ativo, nomes: { pessoa: r.usuario?.nome ?? null, cargo: r.cargo?.nome ?? null, servico: r.servico?.nome ?? null },
       divisao: (r.divisao ?? "IGUAL") as RegraComissao["divisao"], divisaoCargos: lerDivisaoCargos(r.divisaoCargos),
+      tipoContrato: (r.tipoContrato ?? null) as RegraComissao["tipoContrato"], meses: r.meses,
     })),
     config: {
       quando: (cfg?.comissaoQuando ?? "RECEBIMENTO") as Quando, liquidaImpostos: cfg?.comissaoLiquidaImpostos ?? false,
@@ -711,6 +757,8 @@ export async function telaDeComissoes(empresaId: string) {
       // COM-2: o técnico e os tipos de OS que contam como retorno (a mesma lista do Desempenho)
       executorQuando: (cfg?.comissaoExecutorQuando ?? "CONCLUSAO_OS") as QuandoExecutor, retornoDias: cfg?.comissaoRetornoDias ?? 30,
       tiposRetorno: tiposRetorno.map((t) => t.tipoOsId),
+      // COM-1.2: a renovação do contrato abre um ciclo novo de comissão
+      renovacaoGera: cfg?.comissaoRenovacaoGera ?? false,
     },
     opcoes: { pessoas, cargos, servicos: servicos.map((s) => ({ id: s.id, nome: s.nome })), categorias, tiposOs },
     tetos,
@@ -731,7 +779,7 @@ export async function salvarRegra(empresaId: string, dados: ReturnType<typeof no
   const cargosDivisao = Object.keys(dados.divisaoCargos ?? {});
   if (cargosDivisao.length && (await prisma.cargo.count({ where: { empresaId, id: { in: cargosDivisao } } })) !== cargosDivisao.length) return { ok: false, status: 400, erro: MSG_REFERENCIA };
   if (dados.ativo) {
-    const outras = await prisma.comissaoRegra.findMany({ where: { empresaId, ativo: true, ...(o.id ? { id: { not: o.id } } : {}) }, select: { papel: true, quemTipo: true, usuarioId: true, cargoId: true, sobreTipo: true, servicoId: true, categoria: true } });
+    const outras = await prisma.comissaoRegra.findMany({ where: { empresaId, ativo: true, ...(o.id ? { id: { not: o.id } } : {}) }, select: { papel: true, quemTipo: true, usuarioId: true, cargoId: true, sobreTipo: true, servicoId: true, categoria: true, tipoContrato: true, base: true } });
     const chave = chaveDaRegra(dados as Parameters<typeof chaveDaRegra>[0]);
     if (outras.some((r) => chaveDaRegra(r as Parameters<typeof chaveDaRegra>[0]) === chave)) return { ok: false, status: 409, erro: MSG_REGRA_REPETIDA };
   }

@@ -218,6 +218,70 @@ Testes:
 - `tests/unit/escopo-proprios.test.ts`: regra e presets.
 - `tests/unit/escopo-proprios-ui.test.ts`: editor de perfil.
 
+## Comissão sobre contrato (COM-1.2)
+
+A proposta de contrato **gera comissão quando vira contrato ATIVO** (proposta aceita não basta). Não há retroativo:
+contrato de antes desta leva não tem vendedor e não gera nada.
+
+### O vendedor do contrato
+
+- É o vendedor da **proposta** que originou o contrato. Contrato criado à mão: quem o criou.
+- Fica **travado** no cabeçalho do contrato. Só quem tem **Orçamentos › "Trocar vendedor"** (a mesma permissão da
+  venda) vê o "Trocar", escolhe a pessoa e informa o motivo.
+- O motivo vai para o **Histórico de status** do contrato, mostrado como "Vendedor trocado". A linha do tempo do
+  cliente não mostra a troca (não é mudança de status).
+- A troca funciona como no orçamento (COM-1.1), na mesma transação:
+  - o que foi liberado para o antigo é estornado ("Troca de vendedor do contrato"), e a comissão dele fica no
+    histórico como substituída;
+  - o novo ganha a dele nos mesmos ciclos, com as regras de hoje;
+  - se algo já entrou num fechamento **fechado** (pago), a troca é recusada.
+
+### As regras
+
+Em Configurações › Comissões, o "Sobre" ganhou **Contratos**, com um **tipo de contrato** opcional (vazio = todos
+os contratos). Duas bases, só para contratos:
+
+| Base | O que vale |
+|---|---|
+| **% das mensalidades recebidas** | A % de cada mensalidade **recebida** durante os primeiros **N meses** (padrão 3). **0 = enquanto o contrato estiver ativo.** |
+| **Valor fixo no fechamento** | Um valor em R$ por contrato fechado. |
+
+- O papel é sempre **Vendedor**.
+- Precedência: a regra de um **tipo de contrato** vence a de **todos os contratos**. No mesmo alvo, **pessoa >
+  cargo > todos**.
+- Cada base tem a sua precedência. A mesma pessoa pode ter o % e o fixo ao mesmo tempo.
+- A descrição congela a regra: "Vendedores (cargo) · Contratos de Locação · 10% das mensalidades enquanto o contrato
+  estiver ativo".
+
+### Quando nasce e quando é liberada
+
+- **Nasce PREVISTA** quando o contrato é **fechado**: criado já ativo, proposta convertida, ou saída de
+  "Aguardando assinatura" para "Ativo". Nasce uma comissão por mensalidade da janela, mais uma do fixo.
+- A janela conta do 1º mês do ciclo: o mais tarde entre o mês do início do contrato e o mês do fechamento. Cobrança a
+  cada N meses (bimestral, trimestral…) conta cada cobrança como uma mensalidade.
+- Na janela "enquanto ativo", cada mensalidade nova que o contrato passa a cobrar (previsão ou fatura) ganha a sua
+  comissão.
+- **Liberada no recebimento, sempre** (para contrato, o "quando" da empresa não vale): cada mensalidade libera a
+  taxa sobre o que **entrou** dela, proporcional. O **fixo** sai com a **1ª mensalidade** do ciclo, proporcional ao
+  que entrou dela.
+- A mensalidade é a parte do contrato na fatura dela. Adicionais e outros contratos da fatura única não contam.
+- **Mensalidade estornada ou fatura cancelada**: estorna a comissão daquela mensalidade.
+- **Contrato suspenso, cancelado ou encerrado**: as mensalidades do mês em que ele parou em diante não geram mais
+  nada. O previsto delas vai a zero; o que já foi liberado fica. Reativar volta a valer.
+- **Reajuste** vale para as próximas mensalidades: enquanto nada foi liberado, o previsto acompanha o valor da
+  mensalidade.
+- **Renovação** (voltar a "Ativo" de "Em renovação" ou "Vencido") **não gera** comissão nova, a não ser com
+  **"Renovação também gera"** ligado (padrão: desligado). Com ele, a renovação abre um ciclo novo a partir do mês dela.
+
+### Onde aparece
+
+- **Minhas comissões**: o contrato aparece como uma linha ("CT-101 · Contrato"), com o fechamento e cada
+  mensalidade.
+- **Fechamento do mês**: como as demais. Uma conta a pagar por pessoa; o teto do mês também vale.
+- **Relatório do mês**: nas duas vistas, o contrato entra pelo que foi liberado no mês (o gatilho dele é sempre o
+  recebimento).
+- "Ver só os próprios": cada pessoa vê só as próprias comissões, como antes.
+
 ## Banco
 
 SQL aditivo e idempotente: `prisma/sql/2027-02-11_comissoes.sql`.
@@ -237,6 +301,14 @@ COM-1.1: `prisma/sql/2027-02-14_comissoes_vencimento.sql`, também aditivo e ide
 - CHECK dos limites.
 
 Nada é reescrito. A troca de vendedor usa o `papel` que já existe (`VENDEDOR_ANTERIOR`), sem coluna nova.
+
+COM-1.2: `prisma/sql/2027-02-15_comissao_contrato.sql`, aditivo e idempotente, **sem nenhum UPDATE**:
+- `contratos.vendedor_id` (nulo nos contratos de antes: não geram comissão);
+- `comissao_regras.tipo_contrato` e `comissao_regras.meses`;
+- `comissoes.contrato_id`, `.competencia`, `.ciclo_inicio` e `.meses`;
+- `configuracoes.comissao_renovacao_gera` (padrão `false`);
+- três CHECKs **ampliados**: `sobre_tipo` aceita `CONTRATOS`; `base` aceita `PERC_MENSALIDADE` e `FIXO_CONTRATO`;
+  a origem da comissão aceita o contrato. Tudo o que já está gravado continua valendo.
 
 ## Testes
 
@@ -262,5 +334,14 @@ Nada é reescrito. A troca de vendedor usa o `papel` que já existe (`VENDEDOR_A
   compartilhado e a contagem de OS no escopo.
 - `tests/unit/comissoes-app.test.ts`: a seção Minhas comissões no Perfil do app do técnico.
 - `tests/unit/sql-comissoes.test.ts`: o SQL sobre o banco de hoje (backfill, travas, idempotência, igual ao Prisma).
+- COM-1.2 (contrato):
+  - `tests/unit/com12-contrato-regras.test.ts`: regras puras (janela de N meses, precedência por tipo e por base,
+    alvo de cada parte, contrato parado, fechamento × renovação, o que a tela aceita);
+  - `tests/unit/com12-contrato-pg.test.ts`: PostgreSQL real (proposta convertida, recebimento parcial, estorno,
+    fatura cancelada, fora da janela, tipo × geral, janela aberta, suspensão, renovação, troca de vendedor, contrato
+    antigo, isolamento, fechamento e relatório);
+  - `tests/unit/sql-com12-contrato.test.ts`: o SQL sobre o banco de hoje (3 rodadas, CHECKs, migrate diff vazio);
+  - `tests/unit/com12-ui.test.ts` e `tests/unit/contrato-form-ui.test.ts`: a regra de contrato na tela, a chave da
+    renovação, o vendedor travado e a troca no histórico.
 
-Prints: `docs/prints/com1` (antes e depois, desktop e celular, dados fictícios).
+Prints: `docs/prints/com1` e, da COM-1.2, `docs/prints/com12` (antes e depois, desktop e celular, dados fictícios).

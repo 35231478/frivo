@@ -19,8 +19,20 @@ export const QUEM = ["PESSOA", "CARGO", "TODOS"] as const;
 export const PAPEIS = ["VENDEDOR", "EXECUTOR", "RESPONSAVEL"] as const;
 /** Os papéis que já geram comissão (o modelo aceita o Responsável; a COM-2 ligou o Executor) */
 export const PAPEIS_ATIVOS = ["VENDEDOR", "EXECUTOR"] as const;
-export const SOBRE = ["TODOS_SERVICOS", "CATEGORIA", "SERVICO", "PECAS"] as const;
-export const BASES = ["PERC_VENDA", "PERC_LUCRO", "FIXO_ITEM"] as const;
+export const SOBRE = ["TODOS_SERVICOS", "CATEGORIA", "SERVICO", "PECAS", "CONTRATOS"] as const;
+export const BASES = ["PERC_VENDA", "PERC_LUCRO", "FIXO_ITEM", "PERC_MENSALIDADE", "FIXO_CONTRATO"] as const;
+/** COM-1.2 — as bases que só existem em "Sobre: Contratos" (e lá só elas) */
+export const BASES_CONTRATO = ["PERC_MENSALIDADE", "FIXO_CONTRATO"] as const;
+/** COM-1.2 — os tipos de contrato (os do cadastro do contrato) */
+export const TIPOS_CONTRATO = ["MANUTENCAO_PREVENTIVA", "MANUTENCAO_CORRETIVA", "MANUTENCAO_COMPLETA", "INSTALACAO", "LOCACAO", "ASSISTENCIA_TECNICA"] as const;
+export type TipoContrato = (typeof TIPOS_CONTRATO)[number];
+export const ROTULO_TIPO_CONTRATO: Record<TipoContrato, string> = {
+  MANUTENCAO_PREVENTIVA: "Manutenção Preventiva", MANUTENCAO_CORRETIVA: "Manutenção Corretiva", MANUTENCAO_COMPLETA: "Manutenção Completa",
+  INSTALACAO: "Instalação", LOCACAO: "Locação", ASSISTENCIA_TECNICA: "Assistência Técnica",
+};
+/** COM-1.2 — "% das mensalidades recebidas durante os primeiros N meses": o padrão e o limite (0 = enquanto ativo) */
+export const MESES_PADRAO = 3;
+export const MESES_MAX = 120;
 export const QUANDO = ["RECEBIMENTO", "APROVACAO", "CONCLUSAO_OS"] as const;
 
 export type Quem = (typeof QUEM)[number];
@@ -31,8 +43,11 @@ export type Quando = (typeof QUANDO)[number];
 
 export const ROTULO_QUEM: Record<Quem, string> = { PESSOA: "Pessoa", CARGO: "Cargo", TODOS: "Todos" };
 export const ROTULO_PAPEL: Record<Papel, string> = { VENDEDOR: "Vendedor", EXECUTOR: "Executor", RESPONSAVEL: "Responsável" };
-export const ROTULO_SOBRE: Record<Sobre, string> = { TODOS_SERVICOS: "Todos os serviços", CATEGORIA: "Categoria de serviço", SERVICO: "Um serviço", PECAS: "Peças" };
-export const ROTULO_BASE: Record<Base, string> = { PERC_VENDA: "% da venda", PERC_LUCRO: "% do lucro", FIXO_ITEM: "Valor fixo por item" };
+export const ROTULO_SOBRE: Record<Sobre, string> = { TODOS_SERVICOS: "Todos os serviços", CATEGORIA: "Categoria de serviço", SERVICO: "Um serviço", PECAS: "Peças", CONTRATOS: "Contratos" };
+export const ROTULO_BASE: Record<Base, string> = {
+  PERC_VENDA: "% da venda", PERC_LUCRO: "% do lucro", FIXO_ITEM: "Valor fixo por item",
+  PERC_MENSALIDADE: "% das mensalidades recebidas", FIXO_CONTRATO: "Valor fixo no fechamento",
+};
 export const ROTULO_QUANDO: Record<Quando, string> = {
   RECEBIMENTO: "Por data de recebimento", APROVACAO: "Na aprovação do orçamento", CONCLUSAO_OS: "Na conclusão da OS",
 };
@@ -65,6 +80,9 @@ export interface RegraComissao {
   base: Base;
   valor: number;
   ativo?: boolean;
+  /** COM-1.2 — "Sobre: Contratos" de um tipo só (nulo = todos os contratos) e a janela de meses (PERC_MENSALIDADE; 0 = enquanto ativo) */
+  tipoContrato?: TipoContrato | null;
+  meses?: number | null;
   /** COM-2 (Executor): como dividir entre os técnicos da atividade; POR_CARGO usa divisaoCargos ({ cargoId: % }) */
   divisao?: Divisao | null;
   divisaoCargos?: Record<string, number> | null;
@@ -102,6 +120,8 @@ export function regraSeAplica(r: RegraComissao, pessoa: Beneficiario, item: Pick
   if (r.ativo === false || r.papel !== papel) return false;
   if (r.quemTipo === "PESSOA" && r.usuarioId !== pessoa.usuarioId) return false;
   if (r.quemTipo === "CARGO" && (!pessoa.cargoId || r.cargoId !== pessoa.cargoId)) return false;
+  // COM-1.2: regra de contrato vale só para o contrato (lib/comissoes/contrato), nunca para um item de orçamento ou OS
+  if (r.sobreTipo === "CONTRATOS") return false;
   if (item.tipo === "PRODUTO") return r.sobreTipo === "PECAS";
   if (r.sobreTipo === "PECAS") return false;
   if (r.sobreTipo === "SERVICO") return !!item.servicoId && r.servicoId === item.servicoId;
@@ -110,7 +130,9 @@ export function regraSeAplica(r: RegraComissao, pessoa: Beneficiario, item: Pick
 }
 
 const PESO_QUEM: Record<Quem, number> = { PESSOA: 3, CARGO: 2, TODOS: 1 };
-const PESO_SOBRE: Record<Sobre, number> = { SERVICO: 3, CATEGORIA: 2, TODOS_SERVICOS: 1, PECAS: 1 };
+const PESO_SOBRE: Record<Sobre, number> = { SERVICO: 3, CATEGORIA: 2, TODOS_SERVICOS: 1, PECAS: 1, CONTRATOS: 1 };
+/** COM-1.2 — o peso da regra de contrato: o tipo de contrato (específica) vence "todos os contratos" (geral); depois, pessoa > cargo > todos */
+export const pesoDaRegraDeContrato = (r: Pick<RegraComissao, "quemTipo" | "tipoContrato">) => (r.tipoContrato ? 2 : 1) * 10 + PESO_QUEM[r.quemTipo];
 
 /**
  * O peso da regra: primeiro SOBRE (o item: serviço > categoria > todos os serviços), depois QUEM (pessoa > cargo >
@@ -136,8 +158,10 @@ export function regraVencedora(regras: readonly RegraComissao[], pessoa: Benefic
 }
 
 /** Duas regras com a mesma chave disputariam o mesmo item: o servidor não deixa gravar a segunda. */
-export function chaveDaRegra(r: Pick<RegraComissao, "papel" | "quemTipo" | "usuarioId" | "cargoId" | "sobreTipo" | "servicoId" | "categoria">): string {
+export function chaveDaRegra(r: Pick<RegraComissao, "papel" | "quemTipo" | "usuarioId" | "cargoId" | "sobreTipo" | "servicoId" | "categoria"> & Partial<Pick<RegraComissao, "tipoContrato" | "base">>): string {
   const quem = r.quemTipo === "PESSOA" ? r.usuarioId : r.quemTipo === "CARGO" ? r.cargoId : "*";
+  // COM-1.2: no contrato, o "% das mensalidades" e o "fixo no fechamento" são partes separadas (podem valer as duas)
+  if (r.sobreTipo === "CONTRATOS") return `${r.papel}|${r.quemTipo}:${quem}|CONTRATOS:${r.tipoContrato ?? "*"}:${r.base ?? ""}`;
   const sobre = r.sobreTipo === "SERVICO" ? r.servicoId : r.sobreTipo === "CATEGORIA" ? (r.categoria ?? "").trim().toLocaleLowerCase("pt-BR") : "*";
   return `${r.papel}|${r.quemTipo}:${quem}|${r.sobreTipo}:${sobre}`;
 }
@@ -178,9 +202,19 @@ const pct = (v: number) => `${v.toLocaleString("pt-BR", { maximumFractionDigits:
 /** "Vendedores (cargo) · Instalação (categoria) · 5% da venda" — como a regra era (fica na comissão) */
 export function descricaoDaRegra(r: RegraComissao, nomes: { pessoa?: string | null; cargo?: string | null; servico?: string | null } = {}): string {
   const quem = r.quemTipo === "PESSOA" ? `${nomes.pessoa ?? "Pessoa"} (pessoa)` : r.quemTipo === "CARGO" ? `${nomes.cargo ?? "Cargo"} (cargo)` : "Todos";
-  const sobre = r.sobreTipo === "SERVICO" ? `${nomes.servico ?? "Serviço"} (serviço)` : r.sobreTipo === "CATEGORIA" ? `${r.categoria ?? ""} (categoria)` : ROTULO_SOBRE[r.sobreTipo];
-  const valor = r.base === "FIXO_ITEM" ? `${brl(num(r.valor))} por item` : r.base === "PERC_LUCRO" ? `${pct(num(r.valor))} do lucro` : `${pct(num(r.valor))} da venda`;
+  const sobre = r.sobreTipo === "SERVICO" ? `${nomes.servico ?? "Serviço"} (serviço)` : r.sobreTipo === "CATEGORIA" ? `${r.categoria ?? ""} (categoria)`
+    : r.sobreTipo === "CONTRATOS" ? (r.tipoContrato ? `Contratos de ${ROTULO_TIPO_CONTRATO[r.tipoContrato]}` : "Todos os contratos") : ROTULO_SOBRE[r.sobreTipo];
+  const valor = r.base === "FIXO_ITEM" ? `${brl(num(r.valor))} por item` : r.base === "PERC_LUCRO" ? `${pct(num(r.valor))} do lucro`
+    : r.base === "PERC_MENSALIDADE" ? `${pct(num(r.valor))} das mensalidades ${textoDosMeses(r.meses)}`
+    : r.base === "FIXO_CONTRATO" ? `${brl(num(r.valor))} no fechamento` : `${pct(num(r.valor))} da venda`;
   return `${quem} · ${sobre} · ${valor}`;
+}
+
+/** COM-1.2 — "nos 3 primeiros meses" · "no 1º mês" · "enquanto o contrato estiver ativo" (0) */
+export function textoDosMeses(meses: number | null | undefined): string {
+  const m = Number.isInteger(meses) ? Number(meses) : MESES_PADRAO;
+  if (m <= 0) return "enquanto o contrato estiver ativo";
+  return m === 1 ? "no 1º mês" : `nos ${m} primeiros meses`;
 }
 
 /* ───────── a venda, item por item ───────── */
@@ -409,6 +443,9 @@ const PCT_MAX = 100;
 /** O % de cada cargo na divisão (normalizado depois sobre os cargos presentes: 60/40 e 6/4 dão o mesmo) */
 export const PCT_DIVISAO_MAX = 100;
 export const MSG_PAPEL_INATIVO = "Por enquanto só os papéis Vendedor e Executor geram comissão.";
+export const MSG_BASE_CONTRATO = "Em contratos, escolha \"% das mensalidades recebidas\" ou \"Valor fixo no fechamento\".";
+export const MSG_BASE_SO_CONTRATO = "Esta base é só para contratos.";
+export const MSG_CONTRATO_VENDEDOR = "Comissão sobre contrato é do vendedor.";
 export const regraSchema = z.object({
   quemTipo: z.enum(QUEM),
   usuarioId: z.string().trim().min(1).nullish(),
@@ -420,6 +457,9 @@ export const regraSchema = z.object({
   base: z.enum(BASES),
   valor: z.coerce.number({ invalid_type_error: "Informe o valor." }).min(0, "O valor não pode ser negativo."),
   ativo: z.boolean().optional(),
+  /** COM-1.2: só em "Sobre: Contratos" */
+  tipoContrato: z.enum(TIPOS_CONTRATO).nullish(),
+  meses: z.coerce.number({ invalid_type_error: "Meses: número inteiro." }).int("Meses: número inteiro.").min(0, `Meses: de 0 a ${MESES_MAX}.`).max(MESES_MAX, `Meses: de 0 a ${MESES_MAX}.`).nullish(),
   /** COM-2: só no papel Executor */
   divisao: z.enum(DIVISOES).optional(),
   divisaoCargos: z.record(z.string().trim().min(1).max(64), z.coerce.number().min(0).max(PCT_DIVISAO_MAX)).nullish(),
@@ -434,7 +474,12 @@ export const regraSchema = z.object({
   if (r.quemTipo === "CARGO" && !r.cargoId) erro("cargoId", "Escolha o cargo.");
   if (r.sobreTipo === "CATEGORIA" && !r.categoria) erro("categoria", "Informe a categoria de serviço.");
   if (r.sobreTipo === "SERVICO" && !r.servicoId) erro("servicoId", "Escolha o serviço.");
-  if (r.base !== "FIXO_ITEM" && r.valor > PCT_MAX) erro("valor", "O percentual vai de 0 a 100.");
+  // COM-1.2: o contrato tem as bases dele (e só ele as tem); o vendedor é quem fecha o contrato
+  const baseDeContrato = (BASES_CONTRATO as readonly string[]).includes(r.base);
+  if (r.sobreTipo === "CONTRATOS" && !baseDeContrato) erro("base", MSG_BASE_CONTRATO);
+  if (r.sobreTipo !== "CONTRATOS" && baseDeContrato) erro("base", MSG_BASE_SO_CONTRATO);
+  if (r.sobreTipo === "CONTRATOS" && r.papel !== "VENDEDOR") erro("papel", MSG_CONTRATO_VENDEDOR);
+  if (r.base !== "FIXO_ITEM" && r.base !== "FIXO_CONTRATO" && r.valor > PCT_MAX) erro("valor", "O percentual vai de 0 a 100.");
   if (r.valor <= 0) erro("valor", "Informe um valor maior que zero.");
 });
 export type RegraEntrada = z.infer<typeof regraSchema>;
@@ -447,6 +492,9 @@ export function normalizarRegra(r: RegraEntrada) {
     cargoId: r.quemTipo === "CARGO" ? r.cargoId ?? null : null,
     categoria: r.sobreTipo === "CATEGORIA" ? r.categoria?.trim() ?? null : null,
     servicoId: r.sobreTipo === "SERVICO" ? r.servicoId ?? null : null,
+    // COM-1.2: o tipo de contrato só em "Sobre: Contratos"; a janela de meses só no "% das mensalidades" (padrão 3)
+    tipoContrato: r.sobreTipo === "CONTRATOS" ? r.tipoContrato ?? null : null,
+    meses: r.base === "PERC_MENSALIDADE" ? r.meses ?? MESES_PADRAO : null,
     // A divisão só existe no Executor (o vendedor é um só); "% por cargo" guarda só os cargos com % > 0
     divisao: r.papel === "EXECUTOR" ? r.divisao ?? "IGUAL" : "IGUAL",
     divisaoCargos: r.papel === "EXECUTOR" && r.divisao === "POR_CARGO"
@@ -519,6 +567,8 @@ export const configComissaoSchema = z.object({
   /** COM-1.1: o vencimento da conta a pagar do fechamento (sem os dois, fica como está) */
   vencimentoTipo: z.enum(VENCIMENTO_TIPOS).optional(),
   vencimentoDia: z.number().int("Informe um dia inteiro.").min(1, "O dia vai de 1 em diante.").optional(),
+  /** COM-1.2: a renovação do contrato também gera comissão (abre um ciclo novo) */
+  renovacaoGera: z.boolean().optional(),
 }).strict().superRefine((c, ctx) => {
   if ((c.vencimentoTipo === undefined) !== (c.vencimentoDia === undefined)) ctx.addIssue({ code: "custom", message: "Informe o tipo e o dia do vencimento.", path: ["vencimentoDia"] });
   const max = c.vencimentoTipo === "DIA_UTIL" ? MAX_DIA_UTIL : MAX_DIA_FIXO;

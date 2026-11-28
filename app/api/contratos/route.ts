@@ -72,6 +72,8 @@ export async function POST(req: NextRequest) {
       tipoOsRecorrenciaId: tipoOsRecorrenciaId || null,
       tecnicoRecorrenciaId: tecnicoRecorrenciaId || null,
       artVencimento: artVencimento ? new Date(artVencimento) : null,
+      // COM-1.2: o vendedor do contrato criado à mão é quem o criou (travado; "Trocar vendedor" muda)
+      vendedorId: session.user!.id,
       unidades: {
         create: unidadeIds.map((unidadeId) => ({ unidadeId })),
       },
@@ -103,6 +105,9 @@ export async function POST(req: NextRequest) {
   // Gera as OS recorrentes: por local (novo) + contrato-nível legado (idempotentes).
   await gerarOsRecorrentesLocais(contrato.id, session.user!.id).catch(() => 0);
   if (contrato.recorrencia) await gerarOsRecorrentesContrato(contrato.id, session.user!.id).catch(() => 0);
+  // COM-1.2: contrato que já nasce ATIVO está fechado — gera a comissão do vendedor (nunca derruba a criação)
+  const { comissoesDoContratoNoStatus } = await import("@/lib/comissoes/contrato-server");
+  await comissoesDoContratoNoStatus(empresaId, contrato.id, null, contrato.status);
 
   return NextResponse.json(contrato, { status: 201 });
 }

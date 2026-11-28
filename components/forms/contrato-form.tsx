@@ -93,6 +93,8 @@ interface ContratoComRelacoes extends Contrato {
 interface ContratoFormProps {
   initialData?: ContratoComRelacoes;
   somenteLeitura?: boolean;
+  /** COM-1.2: o vendedor do contrato (travado, com o "Trocar" para quem pode), mostrado no cabeçalho */
+  vendedor?: React.ReactNode;
   /** O horário comercial da empresa, por extenso (Configurações › Horário comercial) */
   horarioComercial?: string;
 }
@@ -133,7 +135,7 @@ const CAMPOS_MAIS_OPCOES = ["tipo", "ajusteFinsDeSemana", "nfseReferencia"];
  * `somenteLeitura`: quem tem "Contratos › visualizar" mas não "Contratos › editar" abre a ficha,
  * lê tudo e não encontra caminho nenhum que o servidor fosse recusar (o PUT exige editar).
  */
-export function ContratoForm({ initialData, somenteLeitura = false, horarioComercial = rotuloDaJornada(JORNADA_PADRAO) }: ContratoFormProps) {
+export function ContratoForm({ initialData, somenteLeitura = false, horarioComercial = rotuloDaJornada(JORNADA_PADRAO), vendedor }: ContratoFormProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const isEditing = !!initialData;
@@ -604,6 +606,7 @@ export function ContratoForm({ initialData, somenteLeitura = false, horarioComer
                 </span>
               )}
               <span className={cn("text-xs font-medium px-2 py-0.5 rounded-full", bv.cls)}>{bv.txt}</span>
+              {vendedor}
             </div>
             <BotoesAcao compact />
           </div>
@@ -1186,13 +1189,18 @@ export function ContratoForm({ initialData, somenteLeitura = false, horarioComer
               {historicoStatus.map((h) => (
                 <div key={h.id} className="border border-surface-border rounded-lg p-3">
                   <div className="flex items-center gap-2 flex-wrap text-sm">
-                    <span className={cn("text-[10px] font-semibold px-2 py-0.5 rounded-full", COR_STATUS_CONTRATO[h.statusAnterior] ?? "bg-surface-linha text-ink-muted")}>
-                      {LABELS_STATUS_CONTRATO[h.statusAnterior] ?? h.statusAnterior}
-                    </span>
-                    <span className="text-ink-subtle">→</span>
-                    <span className={cn("text-[10px] font-semibold px-2 py-0.5 rounded-full", COR_STATUS_CONTRATO[h.statusNovo] ?? "bg-surface-linha text-ink-muted")}>
-                      {LABELS_STATUS_CONTRATO[h.statusNovo] ?? h.statusNovo}
-                    </span>
+                    {h.statusAnterior === h.statusNovo ? (
+                      // COM-1.2: a troca de vendedor fica neste histórico com o status igual antes e depois
+                      <span className="text-xs font-semibold text-ink" data-historico-vendedor>Vendedor trocado</span>
+                    ) : (<>
+                      <span className={cn("text-[10px] font-semibold px-2 py-0.5 rounded-full", COR_STATUS_CONTRATO[h.statusAnterior] ?? "bg-surface-linha text-ink-muted")}>
+                        {LABELS_STATUS_CONTRATO[h.statusAnterior] ?? h.statusAnterior}
+                      </span>
+                      <span className="text-ink-subtle">→</span>
+                      <span className={cn("text-[10px] font-semibold px-2 py-0.5 rounded-full", COR_STATUS_CONTRATO[h.statusNovo] ?? "bg-surface-linha text-ink-muted")}>
+                        {LABELS_STATUS_CONTRATO[h.statusNovo] ?? h.statusNovo}
+                      </span>
+                    </>)}
                     <span className="ml-auto text-xs text-ink-muted">{formatarDataHora(h.createdAt)}</span>
                   </div>
                   {h.motivo && <p className="text-sm text-ink mt-1.5">{h.motivo}</p>}
