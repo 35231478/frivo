@@ -1,5 +1,8 @@
 "use client";
 
+import { CartaoPrimeirosDias } from "@/components/tecnico/primeiros-dias";
+import { AvisoOutroAparelho, FaixasSaiuDoDia } from "@/components/tecnico/saiu-do-dia";
+import { CABECALHO_ANTES, idsParaConferir, type SaidaDoDia } from "@/lib/tecnico/saiu-do-dia";
 import { ComissoesDoDia } from "@/components/tecnico/comissoes-do-dia";
 import { useCallback, useEffect, useState } from "react";
 import { CalendarDays, Camera, Car, CheckCircle2, ChevronDown, ChevronRight, Clock, HardDrive, MapPin, MessageCircle, RefreshCw, Sun, WifiOff } from "lucide-react";
@@ -276,6 +279,10 @@ interface RespostaMeuDia {
   tecnico: { id: string; nome: string } | null; aviso?: string; dia: string | null; atividades: CartaoTela[]; anteriores: CartaoTela[];
   /** Atividade esquecida em andamento: limite da empresa e jornada (ausente em listas antigas) */
   andamento?: DadosAndamento;
+  /** D9 — as OS que o escritório tirou do dia (dos ids que o aparelho tinha); ausente em listas antigas */
+  saidas?: SaidaDoDia[];
+  /** D11 — o outro aparelho deu notícia de gravação sem enviar */
+  outroAparelho?: { pendentes: number; em: string; umAparelho: boolean } | null;
 }
 interface RespostaAgenda { tecnico: { id: string; nome: string } | null; aviso?: string; dias: { dia: string; atividades: CartaoTela[] }[] }
 
@@ -323,7 +330,9 @@ export function MeuDia() {
     // Abrir o Meu dia é um dos momentos em que o app envia a localização (só com o rastreamento ligado)
     capturarPosicao("ABRIU_APP");
     setAtualizando(true);
-    const x = await motor.baixarLista<RespostaMeuDia>("meuDia", "/api/tecnico/meu-dia");
+    // D9: os ids que o aparelho tinha hoje vão junto (o servidor diz quais saíram do dia e por quê)
+    const antes = idsParaConferir((await motor.banco.ler<{ dados: RespostaMeuDia }>("meuDia").catch(() => null))?.dados, chaveDiaBR(new Date()));
+    const x = await motor.baixarLista<RespostaMeuDia>("meuDia", "/api/tecnico/meu-dia", antes.length ? { [CABECALHO_ANTES]: antes.join(",") } : undefined);
     setR(x);
     setAtualizando(false);
     // Deixa cada OS do dia pronta para abrir sem sinal
@@ -373,6 +382,13 @@ export function MeuDia() {
         </div>
       )}
       {d?.aviso && <p className="rounded-card bg-atencao-claro border border-atencao/20 p-4 text-sm text-atencao-texto" data-aviso>{d.aviso}</p>}
+
+      {/* D11: o outro aparelho ainda tem gravação sem enviar · D9: o que o escritório tirou do dia (até "Entendi") */}
+      {d && d.tecnico && <AvisoOutroAparelho outro={r?.doAparelho ? null : d.outroAparelho} />}
+      {d && d.tecnico && d.dia && <FaixasSaiuDoDia hoje={d.dia} novas={r?.doAparelho ? undefined : d.saidas} />}
+
+      {/* D8: nos primeiros dias neste aparelho, o cartão único "Instale o app e ative as notificações" */}
+      {d && d.tecnico && <CartaoPrimeirosDias />}
 
       {/* Atividade esquecida em andamento: um toque abre a OS para concluir */}
       {d && <AvisosDoDia cartoes={[...d.anteriores, ...d.atividades]} fila={fila} andamento={d.andamento} />}

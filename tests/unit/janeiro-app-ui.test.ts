@@ -150,7 +150,7 @@ describe("telas do app: textos e alvos (os pedaços corrigidos)", () => {
   });
   it("checklist do veículo: 'Hoje não vou usar' e 'Voltar sem fazer' com alvo de 44 px; o dia desce enquanto o checklist está na tela", () => {
     const p = ler("components/tecnico/porteiro.tsx");
-    expect(p.match(/underline underline-offset-2 py-2 min-h-\[44px\] px-2/g)?.length).toBe(2);
+    expect(p.match(/underline underline-offset-2 py-2 min-h-\[44px\] px-2/g)?.length).toBe(3); // + "Voltar sem corrigir" (D13)
     const a = ler("components/tecnico/app-tecnico.tsx");
     expect(a).toContain('if (!travadoPorteiro || !motor || adiantou.current) return;');
     expect(a).toContain('void motor.baixarLista("meuDia", "/api/tecnico/meu-dia")');

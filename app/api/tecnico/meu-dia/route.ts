@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+import { NextResponse, type NextRequest } from "next/server";
 import { exigirPermissao } from "@/lib/permissoes-server";
 import { meuDia } from "@/lib/tecnico/dia";
 import { MSG_SEM_TECNICO, tecnicoDaSessao } from "@/lib/tecnico/sessao";
@@ -6,9 +6,16 @@ import { aplicarPrivacidade } from "@/lib/tecnico/cartao";
 import { carregarConfigApp } from "@/lib/tecnico/config-app-server";
 import { comMateriaisPrevistos } from "@/lib/tecnico/o-que-levar-server";
 import { andamentoDaEmpresa } from "@/lib/execucao/andamento-server";
+import { CABECALHO_ANTES, CABECALHO_APARELHO, CABECALHO_FILA, idsDoAntes, lerNoticia } from "@/lib/tecnico/saiu-do-dia";
+import { noticiaDoOutro, registrarNoticia, saidasDoDia } from "@/lib/tecnico/saiu-do-dia-server";
 
-/** "Meu dia": as atividades de hoje atribuídas ao técnico do usuário (+ as começadas e não concluídas). */
-export async function GET() {
+/**
+ * "Meu dia": as atividades de hoje atribuídas ao técnico do usuário (+ as começadas e não concluídas).
+ * App pronto pra janeiro 2: o cabeçalho "antes" (os ids que o aparelho tinha hoje) → `saidas` (D9: as que o escritório tirou do
+ * dia, e por quê); os cabeçalhos do aparelho (id e quantas gravações tem na fila) → `outroAparelho` (D11: o outro
+ * aparelho deu notícia de gravação sem enviar).
+ */
+export async function GET(req?: NextRequest) {
   const guard = await exigirPermissao("ordens", "visualizar");
   if (guard.erro) return guard.resposta;
   const tecnico = await tecnicoDaSessao(guard.session);
@@ -21,5 +28,12 @@ export async function GET() {
   const [atividades, anteriores] = await Promise.all([
     comMateriaisPrevistos(empresaId, dia.atividades, config.oQueLevar), comMateriaisPrevistos(empresaId, dia.anteriores, config.oQueLevar),
   ]);
-  return NextResponse.json({ tecnico, dia: dia.dia, atividades: atividades.map(ver), anteriores: anteriores.map(ver), andamento }, { headers: { "Cache-Control": "private, no-store" } });
+  const usuarioId = guard.session.user.id;
+  const noticia = lerNoticia(req?.headers.get(CABECALHO_APARELHO), req?.headers.get(CABECALHO_FILA));
+  const noMeuDia = new Set([...dia.atividades, ...dia.anteriores].map((c) => c.atividadeId));
+  const [saidas, outroAparelho] = await Promise.all([
+    saidasDoDia({ empresaId, tecnicoId: tecnico.id, usuarioId, ids: idsDoAntes(req?.headers.get(CABECALHO_ANTES)), noMeuDia }),
+    noticia ? registrarNoticia(usuarioId, noticia).then(() => noticiaDoOutro(empresaId, usuarioId, noticia.aparelho)) : Promise.resolve(null),
+  ]);
+  return NextResponse.json({ tecnico, dia: dia.dia, atividades: atividades.map(ver), anteriores: anteriores.map(ver), andamento, saidas, outroAparelho }, { headers: { "Cache-Control": "private, no-store" } });
 }

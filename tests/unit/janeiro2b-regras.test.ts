@@ -149,3 +149,83 @@ describe("D13: corrigir o checklist do veículo (regras)", async () => {
     expect(mudancasDoChecklist(itens, antes, { itens: { o: { valor: "Normal", fotoNova: false }, f: { valor: null, fotoNova: false } }, observacao: null })).toEqual(["Calibragem: OK → (sem)"]);
   });
 });
+
+describe("D8: o cartão dos primeiros dias (regra)", async () => {
+  const { passoPrimeirosDias, DIAS_PRIMEIROS } = await import("@/lib/tecnico/primeiros-dias");
+  const agora = Date.parse("2027-01-10T12:00:00Z");
+  const g = { desde: agora - 86_400_000 };
+  const p = (o: Partial<Parameters<typeof passoPrimeirosDias>[0]>) => passoPrimeirosDias({ guardado: g, agora, instalado: false, iphone: false, push: "inativo", ...o });
+  it("o passo que falta, na ordem: instalar (iPhone: o do Safari) → ativar; bloqueado diz onde liberar", () => {
+    expect(p({ iphone: true, push: "instalar-iphone" })).toBe("instalar-iphone");
+    expect(p({})).toBe("instalar");
+    expect(p({ instalado: true })).toBe("ativar");
+    expect(p({ instalado: true, push: "bloqueado" })).toBe("bloqueado");
+  });
+  it("some quando feito, dispensado, depois dos primeiros dias ou sem notificações no servidor", () => {
+    expect(p({ instalado: true, push: "ativo" })).toBeNull();
+    expect(p({ instalado: true, push: "sem-suporte" })).toBeNull();
+    expect(p({ guardado: { ...g, dispensado: true } })).toBeNull();
+    expect(p({ guardado: null })).toBeNull();
+    expect(p({ push: "desligado" })).toBeNull();
+    expect(p({ guardado: { desde: agora - DIAS_PRIMEIROS * 86_400_000 } })).toBe("instalar"); // o 7º dia ainda vale
+    expect(p({ guardado: { desde: agora - DIAS_PRIMEIROS * 86_400_000 - 1 } })).toBeNull();
+  });
+});
+
+describe("D9 e D11: os avisos do Meu dia (regras)", async () => {
+  const m = await import("@/lib/tecnico/saiu-do-dia");
+  it("D9: os ids que o aparelho manda: só de hoje, sem concluídas/canceladas; o servidor só aceita formato de id", () => {
+    const guardado = { dia: "2027-01-10", atividades: [{ atividadeId: "a1", status: "AGENDADA" }, { atividadeId: "a2", status: "CONCLUIDA" }, { atividadeId: "a3", status: "EM_ANDAMENTO" }] };
+    expect(m.idsParaConferir(guardado, "2027-01-10")).toEqual(["a1", "a3"]);
+    expect(m.idsParaConferir(guardado, "2027-01-11")).toEqual([]);
+    expect(m.idsParaConferir(null, "2027-01-10")).toEqual([]);
+    expect(m.idsDoAntes(Array.from({ length: 80 }, (_, i) => `id${i}`).join(","))).toHaveLength(m.MAX_IDS_SAIDA);
+    expect(m.idsDoAntes(" a1,a1,a3,'; drop,,x")).toEqual(["a1", "a3", "x"]);
+    expect(m.idsDoAntes("a1,a1, a3 ,<script>")).toEqual(["a1", "a3"]);
+    expect(m.idsDoAntes(null)).toEqual([]);
+  });
+  it("D9: por que saiu; o que o próprio técnico mudou não é aviso", () => {
+    const base = { status: "AGENDADA", osStatus: "ABERTA", noMeuDia: false, doTecnico: true, diaAgendado: "2027-01-12", hoje: "2027-01-10", mudouPorMim: false };
+    expect(m.motivoDaSaida(base)).toBe("reagendada");
+    expect(m.motivoDaSaida({ ...base, status: "CANCELADA" })).toBe("cancelada");
+    expect(m.motivoDaSaida({ ...base, osStatus: "CANCELADA" })).toBe("cancelada");
+    expect(m.motivoDaSaida({ ...base, doTecnico: false })).toBe("outro-tecnico");
+    expect(m.motivoDaSaida({ ...base, diaAgendado: "2027-01-10" })).toBe("retirada");
+    expect(m.motivoDaSaida({ ...base, mudouPorMim: true })).toBeNull();
+    expect(m.motivoDaSaida({ ...base, noMeuDia: true })).toBeNull();
+    const s = (motivo: any, novaData: string | null = null) => m.textoSaida({ atividadeId: "a", osNumero: "OS-2603", motivo, novaData });
+    expect(s("cancelada")).toBe("Saiu do seu dia: OS-2603 (cancelada pelo escritório)");
+    expect(s("reagendada", "2027-01-12")).toBe("Saiu do seu dia: OS-2603 (reagendada pelo escritório para 12/01)");
+    expect(s("reagendada")).toBe("Saiu do seu dia: OS-2603 (reagendada pelo escritório, ainda sem data)");
+    expect(s("outro-tecnico")).toBe("Saiu do seu dia: OS-2603 (passou para outro técnico)");
+    expect(s("retirada")).toBe("Saiu do seu dia: OS-2603 (retirada do seu dia pelo escritório)");
+  });
+  it("D9: as faixas guardadas: junta sem repetir; outro dia zera; Entendi tira só aquela", () => {
+    const s1 = { atividadeId: "a1", osNumero: "OS-1", motivo: "cancelada" as const, novaData: null };
+    const s2 = { ...s1, atividadeId: "a2", osNumero: "OS-2" };
+    const g1 = m.juntarSaidas(null, "2027-01-10", [s1]);
+    const g2 = m.juntarSaidas(g1, "2027-01-10", [s1, s2]);
+    expect(g2.itens.map((x) => x.atividadeId)).toEqual(["a1", "a2"]);
+    expect(m.juntarSaidas(g2, "2027-01-11", []).itens).toEqual([]);
+    expect(m.dispensarSaida(g2, "a1").itens.map((x) => x.atividadeId)).toEqual(["a2"]);
+  });
+  it("D11: a notícia do aparelho: só id e número válidos; guarda os 5 mais recentes; o outro com gravação, nos últimos 14 dias", () => {
+    expect(m.lerNoticia("abcd-1234-efgh", "3")).toEqual({ aparelho: "abcd-1234-efgh", pendentes: 3 });
+    for (const [a, f] of [["curto", "3"], ["abcd-1234-efgh", "-1"], ["abcd-1234-efgh", "x"], [null, "1"], ["abcd-1234-efgh", null]] as const) expect(m.lerNoticia(a, f)).toBeNull();
+    const t = (h: number) => new Date(Date.parse("2027-01-10T12:00:00Z") + h * 3_600_000);
+    let mapa = m.comNoticia(null, "aparelho-AAAA", 4, t(0));
+    mapa = m.comNoticia(mapa, "aparelho-BBBB", 0, t(1));
+    expect(m.pendenciaNoOutro(mapa, "aparelho-BBBB", t(2))).toEqual({ pendentes: 4, em: t(0).toISOString() });
+    expect(m.pendenciaNoOutro(mapa, "aparelho-AAAA", t(2))).toBeNull(); // o outro (B) não tem nada
+    expect(m.pendenciaNoOutro(mapa, "aparelho-BBBB", t(24 * 15))).toBeNull(); // notícia velha
+    expect(m.pendenciaNoOutro(m.comNoticia(mapa, "aparelho-AAAA", 0, t(3)), "aparelho-BBBB", t(4))).toBeNull(); // o antigo enviou
+    for (let i = 0; i < 7; i++) mapa = m.comNoticia(mapa, `aparelho-${i}000`, 1, t(10 + i));
+    expect(Object.keys(mapa)).toHaveLength(5);
+    expect(m.comNoticia({ lixo: 1, "aparelho-CCCC": { n: "x" } }, "aparelho-DDDD", 2, t(0))).toEqual({ "aparelho-DDDD": { n: 2, em: t(0).toISOString() } });
+  });
+  it("D11: o texto, com e sem 'um aparelho só'", () => {
+    const h = () => "hoje às 10:42";
+    expect(m.textoOutroAparelho({ pendentes: 1, em: "x", umAparelho: true }, h)).toBe("O outro aparelho tem 1 gravação que ainda não subiu (última notícia dele: hoje às 10:42). Para não perder: abra o app nele com sinal e entre de novo; ele envia sozinho (ao entrar lá, este aparelho sai).");
+    expect(m.textoOutroAparelho({ pendentes: 3, em: "x", umAparelho: false }, h)).toBe("O outro aparelho tem 3 gravações que ainda não subiram (última notícia dele: hoje às 10:42). Para não perder: abra o app nele com sinal; ele envia sozinho.");
+  });
+});

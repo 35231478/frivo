@@ -4,6 +4,8 @@ import { atorDaSessao } from "@/lib/execucao/contexto";
 import { limparOperacoesAntigas, loteSchema, processarLote } from "@/lib/tecnico/sync";
 import { ipDaRequisicao } from "@/lib/orcamentos/ciclo";
 import { pode, type Permissoes } from "@/lib/permissoes";
+import { CABECALHO_APARELHO, CABECALHO_FILA, lerNoticia } from "@/lib/tecnico/saiu-do-dia";
+import { registrarNoticia } from "@/lib/tecnico/saiu-do-dia-server";
 
 /**
  * Recebe a fila de gravações do app do técnico (feitas com ou sem sinal) e aplica em ordem, cada uma
@@ -23,5 +25,8 @@ export async function POST(req: NextRequest) {
     podeEditarOs: pode(permissoes as Permissoes, "ordens", "editar", role),
   });
   await limparOperacoesAntigas(ator).catch(() => undefined);
+  // D11: o que este aparelho ainda tem na fila depois deste envio (o que subiu agora sai da conta)
+  const noticia = lerNoticia(req.headers.get(CABECALHO_APARELHO), req.headers.get(CABECALHO_FILA));
+  if (noticia) await registrarNoticia(ator.usuarioId, { ...noticia, pendentes: Math.max(0, noticia.pendentes - resultados.filter((r) => r.ok).length) }).catch(() => undefined);
   return NextResponse.json({ resultados }, { headers: { "Cache-Control": "private, no-store" } });
 }

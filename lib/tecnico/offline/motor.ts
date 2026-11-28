@@ -14,6 +14,7 @@
 import { BancoTecnico } from "@/lib/tecnico/offline/banco";
 import type { NovaOperacao, OperacaoFila, RetratoAtividade } from "@/lib/tecnico/offline/tipos";
 import { SEM_OS } from "@/lib/tecnico/despesas";
+import { CABECALHO_APARELHO, CABECALHO_FILA } from "@/lib/tecnico/saiu-do-dia";
 
 export type Situacao = "offline" | "sincronizando" | "pendente" | "sincronizado" | "erro" | "sessao";
 export interface EstadoSync {
@@ -133,7 +134,29 @@ export class MotorSync {
    * `fetch` com PRAZO: aborta a requisição e, mesmo que a rede não responda ao abort, desiste dela.
    * Sem isto, um envio pendurado deixava o app em "Sincronizando…" indefinidamente, sem tentar de novo.
    */
-  private async pedir(url: string, init: RequestInit, prazoMs: number): Promise<Response> {
+  /** D11 — o id deste aparelho (criado na 1ª vez, guardado no banco do aparelho) */
+  private idAparelho: Promise<string | null> | null = null;
+  private aparelho(): Promise<string | null> {
+    this.idAparelho ??= (async () => {
+      const ja = await this.banco.ler<string>("aparelhoId").catch(() => null);
+      if (ja) return ja;
+      const novo = novoId();
+      await this.banco.gravar("aparelhoId", novo).catch(() => {});
+      return novo;
+    })().catch(() => null);
+    return this.idAparelho;
+  }
+  /** D11 — no Meu dia e no envio, o aparelho conta ao servidor quantas gravações ainda tem na fila */
+  private async comNoticia(url: string, init: RequestInit): Promise<RequestInit> {
+    if (!url.startsWith("/api/tecnico/meu-dia") && url !== "/api/tecnico/sync") return init;
+    const id = await this.aparelho();
+    if (!id) return init;
+    const pendentes = (await this.banco.fila().catch(() => [])).filter((o) => o.estado !== "enviada").length;
+    return { ...init, headers: { ...(init.headers as Record<string, string> | undefined), [CABECALHO_APARELHO]: id, [CABECALHO_FILA]: String(pendentes) } };
+  }
+
+  private async pedir(url: string, init0: RequestInit, prazoMs: number): Promise<Response> {
+    const init = await this.comNoticia(url, init0);
     const controle = typeof AbortController !== "undefined" ? new AbortController() : null;
     let relogio: ReturnType<typeof setTimeout> | null = null;
     const prazo = new Promise<never>((_, falha) => { relogio = setTimeout(() => { controle?.abort(); falha(new PrazoEsgotado()); }, prazoMs); });
@@ -229,12 +252,12 @@ export class MotorSync {
   }
 
   /** Baixa uma lista (Meu dia / Agenda / Chat), guarda no aparelho e devolve; sem sinal, devolve a guardada. */
-  async baixarLista<T>(chave: "meuDia" | "agenda" | "catalogo" | "despesas" | "conversas", url: string): Promise<{ dados: T | null; baixadoEm: number | null; doAparelho: boolean }> {
+  async baixarLista<T>(chave: "meuDia" | "agenda" | "catalogo" | "despesas" | "conversas", url: string, cabecalhos?: Record<string, string>): Promise<{ dados: T | null; baixadoEm: number | null; doAparelho: boolean }> {
     const guardada = await this.banco.ler<{ dados: T; baixadoEm: number }>(chave);
     if (!this.online()) this.publicar(); // o indicador já mostra "Offline"
     else {
       try {
-        const r = await this.pedir(url, { cache: "no-store" }, this.prazoLeituraMs);
+        const r = await this.pedir(url, { cache: "no-store", ...(cabecalhos && { headers: cabecalhos }) }, this.prazoLeituraMs);
         if (sessaoAcabou(r)) { this.sessaoExpirada = true; this.publicar(); }
         else if (r.ok) {
           const dados: T = await r.json();
