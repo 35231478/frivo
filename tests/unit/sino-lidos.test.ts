@@ -62,12 +62,12 @@ describe("os avisos do número", () => {
   it("só campos conhecidos; as contas do dia e a revisão chegando ficam fora", () => {
     expect(ehAvisoDoNumero("osSemTecnico")).toBe(true);
     for (const c of ["contasPagarHoje", "contasReceberHoje", "revisaoChegando", "total", "toString", "__proto__"]) expect(ehAvisoDoNumero(c)).toBe(false);
-    expect(Object.keys(AVISOS_DO_NUMERO)).toHaveLength(37); // PC-2: pedidosConferir
+    expect(Object.keys(AVISOS_DO_NUMERO)).toHaveLength(39); // PC-2: pedidosConferir; D1: impedimentosAbertos e visitasNaoConcluidas
   });
   it("cada item do painel que está no número tem o seu aviso (OS atrasadas = atendimentosAtraso); as contas do dia não", () => {
     const m = Object.fromEntries((Object.keys(PENDENCIAS) as IdPendencia[]).map((id) => [id, avisoDoItem(id)]));
     expect(m).toEqual({
-      osSemTecnico: "osSemTecnico", osAtrasadas: "atendimentosAtraso", atividadesEsquecidas: "atividadesEsquecidas", comentariosCampo: "comentariosCampo",
+      osSemTecnico: "osSemTecnico", osAtrasadas: "atendimentosAtraso", atividadesEsquecidas: "atividadesEsquecidas", impedimentosAbertos: "impedimentosAbertos", visitasNaoConcluidas: "visitasNaoConcluidas", comentariosCampo: "comentariosCampo",
       pmocsVencendo: "pmocsVencendo", orcamentosVencendo: "orcamentosVencendo", despesasCampo: "despesasCampo",
       contasPagarHoje: null, contasReceberHoje: null, estoqueNegativoCampo: "estoqueNegativoCampo",
       // PC-1: o painel conta todas as OS que esperam o pedido (fora do número); o sino conta só as atrasadas (pedidosAtrasados)

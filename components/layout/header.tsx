@@ -327,6 +327,8 @@ export function Header({ session, avatarUrl }: HeaderProps) {
                   {doPainel("pedidosConferir")}
                   {doPainel("comentariosCampo")}
                   {doPainel("atividadesEsquecidas")}
+                  {doPainel("impedimentosAbertos")}
+                  {doPainel("visitasNaoConcluidas")}
                   {doPainel("estoqueNegativoCampo")}
                   {(alertas?.nfPedidos ?? 0) > 0 && <AlertaItem href={umOuLista(alertas?.nfPedidos, alertas?.nfPedidoId, (id) => `/compras/pedidos/${id}`, "/compras/pedidos?periodo=todos")} icone={PackageCheck} cor="text-ok" label="NF chegou nos seus pedidos" valor={alertas?.nfPedidos ?? 0} {...toque("nfPedidos")} />}
                   {podeVer("ordens") && <AlertaItem href="/ordens/etapas?status=ATRASADO" icone={AlertTriangle} cor="text-atrasado" label="Etapas com prazo vencidas" valor={alertas?.prazosVencidos ?? 0} {...toque("prazosVencidos")} />}

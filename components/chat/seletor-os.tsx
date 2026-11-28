@@ -5,6 +5,8 @@ import { Search, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ROTULO_SEM_OS, type OsDoDia } from "@/lib/chat/regras";
 
+const ROTULO_EM_ANDAMENTO = "Atividade em andamento";
+
 /**
  * CHAT-1 — a OS da mensagem, em 1 toque, acima do campo de texto (escritório e app): as OS da pessoa no dia (a em
  * andamento marcada), "Sem OS" e, quando a tela oferece, "Outra OS" (busca). Começa já na OS padrão; a pessoa troca.
@@ -35,7 +37,8 @@ export function SeletorOs({ opcoes, valor, onValor, buscar }: {
       <div className="flex gap-1.5 overflow-x-auto pb-0.5" role="radiogroup" aria-label="OS da mensagem">
         {lista.map((o) => (
           <button key={o.osId} type="button" role="radio" aria-checked={valor === o.osId} onClick={() => onValor(o.osId, o)} className={chip(valor === o.osId)}
-            title={o.emAndamento ? "Atividade em andamento" : undefined} data-os-opcao={o.osId}>
+            title={o.emAndamento ? ROTULO_EM_ANDAMENTO : undefined} data-os-opcao={o.osId} data-em-andamento={o.emAndamento || undefined}
+            aria-label={`${o.numero}${o.cliente ? ` · ${o.cliente}` : ""}${o.emAndamento ? ` (${ROTULO_EM_ANDAMENTO.toLowerCase()})` : ""}`}>
             {o.emAndamento && <span className="inline-block w-1.5 h-1.5 rounded-full bg-acento mr-1 align-middle" aria-hidden />}
             {o.numero}{o.cliente ? ` · ${o.cliente}` : ""}
           </button>
@@ -49,6 +52,12 @@ export function SeletorOs({ opcoes, valor, onValor, buscar }: {
           </button>
         )}
       </div>
+      {/* O ponto: a atividade EM ANDAMENTO (uma OS só tem o ponto — a iniciada por último) */}
+      {lista.some((o) => o.emAndamento) && (
+        <p className="flex items-center gap-1 px-1 text-[11px] text-ink-subtle" data-legenda-em-andamento>
+          <span className="inline-block w-1.5 h-1.5 rounded-full bg-acento" aria-hidden /> {ROTULO_EM_ANDAMENTO}
+        </p>
+      )}
       {buscando && (
         <div className="space-y-1" data-busca-os>
           <label className="relative block">

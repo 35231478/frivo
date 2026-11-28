@@ -7,8 +7,7 @@
  * busca, quem escreve em OS cancelada, os limites da foto e o ritmo do tempo real.
  */
 import { partesBR } from "@/lib/fuso";
-import type { ComentarioTela } from "@/lib/tecnico/comentarios";
-
+import type { CitacaoTela, ComentarioTela, RefCitacao } from "@/lib/tecnico/comentarios";
 export { FOTO_TAMANHO_MAX, MINIATURA_TAMANHO_MAX, MSG_FOTO_GRANDE, MSG_MENSAGEM_VAZIA, TEXTO_MAX } from "@/lib/tecnico/comentarios";
 
 // ── A conversa (um item da lista) ───────────────────────────────────────────────────────────
@@ -116,6 +115,84 @@ export function mostraEtiquetaOs(m: Pick<ComentarioTela, "os" | "criadoEm">, ant
 
 export const ROTULO_SEM_OS = "Sem OS";
 
+// ── Responder uma mensagem (a citação, como no WhatsApp) ──────────────────────────────────────────────
+
+/** Arrastar o balão para a direita por esta distância responde (app) */
+export const ARRASTE_RESPONDER_PX = 64;
+/** Toque longo abre o menu "Responder" (app) */
+export const TOQUE_LONGO_MS = 450;
+/** Quanto tempo a original fica destacada depois de tocar na citação */
+export const DESTAQUE_MS = 1_600;
+/** O trecho da citação: uma linha */
+export const TRECHO_CITACAO_MAX = 90;
+export const ROTULO_CITACAO_INDISPONIVEL = "Mensagem indisponível";
+export const MSG_CITADA_NAO_ENCONTRADA = "A mensagem respondida não está nesta conversa.";
+
+/** Uma linha só: quebras viram espaço; longo termina em reticências. Foto sem texto = "Foto". */
+export function trechoDaCitacao(texto: string, temFoto = false, max = TRECHO_CITACAO_MAX): string {
+  const t = texto.replace(/\s+/g, " ").trim();
+  if (!t) return temFoto ? "Foto" : "";
+  return t.length > max ? `${t.slice(0, max - 1).trimEnd()}…` : t;
+}
+
+/** Dá para responder esta mensagem? A recusada ("Não enviada") não: nunca chegou e pode ser descartada. */
+export const podeResponder = (m: Pick<ComentarioTela, "id" | "clientId" | "falhou">) => !m.falhou && !!(m.id || m.clientId);
+
+/** Como a resposta aponta para a citada: pelo id (já no servidor) ou, ainda "Enviando…", pelo clientId. */
+export function refDaCitada(m: Pick<ComentarioTela, "id" | "clientId">): RefCitacao | null {
+  if (m.id) return { id: m.id };
+  return m.clientId ? { clientId: m.clientId } : null;
+}
+
+/** A citação que vai no topo do balão (quem falou e uma linha; foto: a miniatura). */
+export function citacaoDe(m: ComentarioTela): CitacaoTela {
+  return { id: m.id, clientId: m.clientId, autor: m.autor, meu: m.meu, texto: trechoDaCitacao(m.texto, !!m.foto), miniatura: m.foto?.miniatura ?? null };
+}
+
+/** A citada na lista carregada (pelo id ou pelo clientId — a "Enviando…" ainda não tem id). */
+export function acharCitada<T extends Pick<ComentarioTela, "id" | "clientId">>(lista: readonly T[], c: Pick<CitacaoTela, "id" | "clientId">): T | undefined {
+  return lista.find((m) => (!!c.id && m.id === c.id) || (!!c.clientId && m.clientId === c.clientId));
+}
+
+/**
+ * A resposta HERDA a OS da citada (a etiqueta vem dela, não da atividade em andamento): a OS da citada, ou "Sem OS".
+ * A pessoa ainda troca no seletor.
+ */
+export const osDaResposta = (citada: Pick<ComentarioTela, "os">): string | null => citada.os?.id ?? null;
+
+/**
+ * A fila do aparelho guarda só a referência da citada: a citação (quem falou e o trecho) vem da própria conversa. A
+ * citada que não está carregada aparece sem conteúdo até a conversa trazê-la.
+ */
+export function preencherCitacoes(lista: ComentarioTela[]): ComentarioTela[] {
+  return lista.map((m) => {
+    const c = m.respostaA;
+    if (!c || c.autor || c.indisponivel) return m;
+    const achada = acharCitada(lista, c);
+    return { ...m, respostaA: achada ? citacaoDe(achada) : { ...c, indisponivel: true } };
+  });
+}
+
+/**
+ * Responder é ler — também para trás: a mensagem de um lado (app ou escritório) que ninguém marcou como lida e que o
+ * OUTRO lado respondeu depois foi lida por quem respondeu, na hora da resposta. Devolve os grupos a marcar (cada um com
+ * quem leu e quando). Serve as mensagens antigas, de antes de "responder é ler" existir, sem SQL de carga: marca ao abrir.
+ */
+export function lidasPelaResposta<T extends { id: string; origem: string; usuarioId: string; criadoEm: Date; lidaEm: Date | null }>(mensagens: readonly T[]):
+  { ids: string[]; lidaEm: Date; lidaPorId: string }[] {
+  const grupos: { ids: string[]; lidaEm: Date; lidaPorId: string }[] = [];
+  const pendentes: Record<string, string[]> = { APP: [], ESCRITORIO: [] };
+  for (const m of [...mensagens].sort((a, b) => a.criadoEm.getTime() - b.criadoEm.getTime())) {
+    const outro = m.origem === "APP" ? "ESCRITORIO" : "APP";
+    if (pendentes[outro].length) {
+      grupos.push({ ids: pendentes[outro], lidaEm: m.criadoEm, lidaPorId: m.usuarioId });
+      pendentes[outro] = [];
+    }
+    if (!m.lidaEm) (pendentes[m.origem] ??= []).push(m.id);
+  }
+  return grupos;
+}
+
 /** Mensagens do mesmo autor mais próximas que isto formam uma SEQUÊNCIA (o nome só na 1ª) */
 export const SEQUENCIA_MS = 5 * 60_000;
 
@@ -179,11 +256,16 @@ export function horaDaLista(iso: string, agora: Date = new Date()): string {
 
 // ── A foto ──────────────────────────────────────────────────────────────────────────────────
 
-/** O aparelho reduz a foto antes de enviar: o lado maior até FOTO_LADO_MAX, JPEG; a miniatura do balão, MINIATURA_LADO. */
-export const FOTO_LADO_MAX = 1600;
-export const FOTO_QUALIDADE = 0.8;
-export const MINIATURA_LADO = 320;
-export const MINIATURA_QUALIDADE = 0.7;
+/**
+ * O aparelho reduz a foto antes de enviar, em DEGRAUS (lado maior, qualidade JPEG), até caber no ALVO. A foto vai como
+ * texto (data URL) no banco: em produção elas chegavam com 520–556 KB cada (1600 px, 80%). O alvo agora é ≤ 200 KB
+ * (a miniatura do balão, ≤ 15 KB); o limite que o servidor aceita (FOTO_TAMANHO_MAX) não muda — fila antiga continua
+ * subindo. JPEG, e não WebP: o Safari do iPhone não gera WebP pelo canvas.
+ */
+export const ALVO_FOTO_BYTES = 200_000;
+export const ALVO_MINIATURA_BYTES = 15_000;
+export const DEGRAUS_FOTO: readonly (readonly [lado: number, qualidade: number])[] = [[1280, 0.7], [1024, 0.6], [800, 0.55]];
+export const DEGRAUS_MINIATURA: readonly (readonly [lado: number, qualidade: number])[] = [[256, 0.6], [192, 0.5]];
 
 // ── Tempo real ──────────────────────────────────────────────────────────────────────────────
 

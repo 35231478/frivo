@@ -97,6 +97,8 @@ export interface RelatorioOsDados {
    */
   fotosServico: FotoRelatorio[];
   tempos: { atividade: string; status: string; inicio: Date | null; duracaoMin: number | null }[];
+  /** D1: as pausas do técnico — SÓ a versão interna mostra (o cliente nunca vê almoço nem impedimento) */
+  pausas: { atividade: string; motivo: string; impedimento: boolean; inicio: Date; fim: Date | null; naoConcluida: boolean; observacao: string | null }[];
   observacoes: string[];
   assinaturas: { coletadas: AssinaturaColetada[]; responsavel: { nome: string; crea: string | null } | null; clienteNome: string };
   /** O aceite do cliente, quando ele já confirmou (null = sem aceite ou ainda pendente) */
@@ -114,6 +116,8 @@ type Equip = {
 };
 export type AtividadeParaBlocos = Atividade;
 type Atividade = {
+  /** D1: pausas do técnico (opcional: chamadas antigas/testes sem o include) */
+  pausas?: { motivo: string; impedimento: boolean; inicio: Date; fim: Date | null; naoConcluida: boolean; observacao: string | null }[];
   id: string; titulo: string; status: string; criadoEm: Date; dataAgendada: Date | null; duracaoMin: number | null;
   observacao: string | null; resumo: string | null;
   tipoOs?: { nome: string } | null; tecnico?: { nome: string; especialidades?: string[] } | null; equipe?: { nome: string } | null;
@@ -131,6 +135,8 @@ type Atividade = {
   servicosAdicionais?: AdicionalEntrada[];
   /** "Fotos do serviço" tiradas no app NESTA atividade (galeria da OS, com legenda); do escritório não vem */
   anexosOs?: FotoServicoEntrada[];
+  /** CHAT-1.1: as fotos do chat que o escritório pôs no relatório (por referência), escritas NESTA atividade */
+  comentarios?: { texto: string; foto: { conteudo: string; equipamentoId: string | null; equipamento?: Equip | null } | null }[];
 };
 type FotoServicoEntrada = { conteudo: string; legenda: string | null; equipamentoId: string | null; equipamento?: Equip | null };
 type AdicionalEntrada = {
@@ -236,7 +242,8 @@ export function fotosServicoDe(ativs: Atividade[], atendidos: Set<string>) {
   const gerais: FotoRelatorio[] = [];
   for (const a of ativs) {
     if (a.status === "CANCELADA") continue;
-    for (const f of a.anexosOs ?? []) {
+    const doChat = (a.comentarios ?? []).flatMap((c) => (c.foto ? [{ conteudo: c.foto.conteudo, legenda: c.texto || null, equipamentoId: c.foto.equipamentoId, equipamento: c.foto.equipamento }] : []));
+    for (const f of [...(a.anexosOs ?? []), ...doChat]) {
       if (!ehImagem(f.conteudo)) continue;
       const legenda = (f.legenda ?? "").trim() || LEGENDA_FOTO_SERVICO;
       if (f.equipamentoId && atendidos.has(f.equipamentoId)) {
@@ -385,6 +392,7 @@ export function montarRelatorioOs(os: OsParaRelatorio, relatorio: RelatorioRef |
     },
     fotosServico,
     tempos: ativs.map((a) => ({ atividade: a.titulo, status: a.status, inicio: a.dataAgendada ?? a.criadoEm, duracaoMin: a.duracaoMin })),
+    pausas: ativs.flatMap((a) => (a.pausas ?? []).map((p) => ({ atividade: a.titulo, motivo: p.motivo, impedimento: p.impedimento, inicio: p.inicio, fim: p.fim, naoConcluida: p.naoConcluida, observacao: p.observacao }))),
     observacoes: [os.observacoes, relatorio?.observacao].map((x) => (x ?? "").trim()).filter((x, i, arr) => x && arr.indexOf(x) === i),
     // Só o aceite CONFIRMADO entra no relatório (o pendente não é prova de nada)
     aceite: os.aceite?.situacao === "CONFIRMADO" ? {
@@ -430,6 +438,17 @@ export const SELECT_FOTOS_SERVICO = {
   select: { conteudo: true, legenda: true, equipamentoId: true, equipamento: { select: SELECT_EQUIP } },
 } as const;
 
+/**
+ * CHAT-1.1: as fotos do chat que o escritório pôs no relatório, escritas na atividade (o técnico pelo app). Por
+ * REFERÊNCIA: o relatório lê a foto da própria mensagem — nada é copiado. Entram como as "Fotos do serviço" (no bloco do
+ * equipamento atendido; senão, gerais com o nome dele).
+ */
+export const SELECT_FOTOS_CHAT = {
+  where: { foto: { is: { noRelatorio: true, tipo: { startsWith: "image/" } } } },
+  orderBy: { criadoEm: "asc" },
+  select: { texto: true, foto: { select: { conteudo: true, equipamentoId: true, equipamento: { select: SELECT_EQUIP } } } },
+} as const;
+
 /** Marca as respostas que têm áudio (sem carregar o áudio: ele é servido à parte). */
 export async function marcarAudios<T extends { checklistRespostas?: { id?: string; audio?: boolean }[] }>(atividades: T[]): Promise<T[]> {
   const ids = atividades.flatMap((a) => (a.checklistRespostas ?? []).map((r) => r.id).filter((x): x is string => !!x));
@@ -453,6 +472,8 @@ export async function carregarOsParaRelatorio(osId: string, empresaId: string): 
       atividades: {
         orderBy: { criadoEm: "asc" },
         include: {
+          // D1: as pausas (só a versão interna mostra)
+          pausas: { orderBy: { inicio: "asc" }, select: { motivo: true, impedimento: true, inicio: true, fim: true, naoConcluida: true, observacao: true } },
           tipoOs: { select: { nome: true } },
           tecnico: { select: { nome: true, especialidades: true } },
           equipe: { select: { nome: true } },
@@ -465,6 +486,7 @@ export async function carregarOsParaRelatorio(osId: string, empresaId: string): 
           fotosAtendimento: SELECT_FOTOS,
           servicosAdicionais: SELECT_ADICIONAIS,
           anexosOs: SELECT_FOTOS_SERVICO,
+          comentarios: SELECT_FOTOS_CHAT,
         },
       },
     },

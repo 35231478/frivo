@@ -31,6 +31,12 @@ export async function guardaTecnico(): Promise<{ empresaId: string; usuarioId: s
   return { empresaId: guard.session.user.empresaId, usuarioId: guard.session.user.id, tecnicoId: tecnico.id };
 }
 
+/** O `ate` da conversa: o id da mensagem antiga (a citada) até onde carregar */
+export const lerAte = (url: string) => {
+  const a = new URL(url).searchParams.get("ate");
+  return a && /^[A-Za-z0-9_-]{1,64}$/.test(a) ? a : null;
+};
+
 /** O `desde` do long-polling (a marca que o aparelho já tem) */
 export const lerDesde = (url: string) => {
   const d = new URL(url).searchParams.get("desde");

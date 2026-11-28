@@ -1,4 +1,5 @@
 import { comissaoParaRetrato, sincronizarExecutor } from "@/lib/comissoes/executor-server";
+import { motivosDaEmpresa, pausaParaRetrato } from "@/lib/pausas/servidor";
 import { NextRequest, NextResponse } from "next/server";
 import { exigirPermissao } from "@/lib/permissoes-server";
 import { prisma } from "@/lib/prisma";
@@ -12,7 +13,7 @@ import { cadastroParaRetrato } from "@/lib/execucao/cadastro-campo";
 import { avisoParaRetrato, avisosDeHoje, whatsappDoCliente } from "@/lib/execucao/aviso-cliente";
 import { relatorioParaRetrato } from "@/lib/execucao/relatorio-envio";
 import { andamentoParaRetrato } from "@/lib/execucao/andamento-server";
-import { comentariosDaOs } from "@/lib/execucao/comentarios";
+import { comentariosDaOs, ondeTecnicoVe } from "@/lib/execucao/comentarios";
 import { aceiteParaRetrato } from "@/lib/os/aceite-server";
 import { pode, type Permissoes } from "@/lib/permissoes";
 import { comMateriaisPrevistos } from "@/lib/tecnico/o-que-levar-server";
@@ -77,7 +78,8 @@ export async function GET(_: NextRequest, { params }: Params) {
   const [materiais, andamento, whatsapp, comentarios] = await Promise.all([
     materiaisDaAtividade(empresaId, atividadeId, guard.session.user.id), andamentoParaRetrato(empresaId, atividadeId), whatsappDoCliente(empresaId, config, cartao.osId),
     // Comentários da OS (conversa interna com o escritório; o cliente nunca vê)
-    comentariosDaOs(empresaId, cartao.osId, guard.session.user.id),
+    // (a citação de outra conversa só aparece se o técnico pode ver a original)
+    comentariosDaOs(empresaId, cartao.osId, guard.session.user.id, { visivel: ondeTecnicoVe(guard.session.user.id, escopo.tecnicoId) }),
   ]);
   return NextResponse.json({
     cartao: aplicarPrivacidade(comMateriais, config),
@@ -90,7 +92,11 @@ export async function GET(_: NextRequest, { params }: Params) {
       avisos,
       materiais,
       comentarios,
+      // D1: a pausa aberta (o app mostra "Pausada — motivo" e Retomar)
+      pausa: await pausaParaRetrato(atividadeId),
     },
+    // D1: os motivos de pausa da empresa (o técnico pausa sem sinal também)
+    motivosPausa: await motivosDaEmpresa(empresaId).then((ms) => ms.map(({ id, nome, tipo, pedeTexto }) => ({ id, nome, tipo, pedeTexto }))),
     equipamentosUnidade: daUnidade.map(({ qrcode, ...e }) => ({ ...semUnidade(apresentarEquipamento(e)), tipoEquipamentoId: e.tipoEquipamentoId, qr: qrcode })),
     checklistsPorTipo,
     cadastro,

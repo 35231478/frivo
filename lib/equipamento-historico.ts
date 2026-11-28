@@ -127,6 +127,19 @@ export async function carregarHistoricoEquipamento(empresaId: string, equipament
   const ordem = { ANTES: 0, DEPOIS: 2 } as const;
   for (const f of [...fotos].map((f, i) => ({ f, i })).sort((a, b) => (a.f.momento ? ordem[a.f.momento] : 1) - (b.f.momento ? ordem[b.f.momento] : 1) || a.i - b.i).map((x) => x.f))
     fotosPorAtividade.set(f.atividadeId, [...(fotosPorAtividade.get(f.atividadeId) ?? []), `/api/fotos-atendimento/${f.id}`]);
+  // CHAT-1.1: as fotos do chat vinculadas a ESTE equipamento, por referência (a rota da foto confere quem vê). Vão para a
+  // atividade de onde o técnico escreveu; a do escritório (sem atividade), para a 1ª atividade da mesma OS na linha do tempo
+  const fotosChat = await prisma.osComentarioFoto.findMany({
+    where: { empresaId, equipamentoId, comentario: { ordemServicoId: { not: null }, ...(Object.keys(escopoOs).length ? { ordemServico: { is: escopoOs } } : {}) } },
+    orderBy: { criadoEm: "asc" },
+    select: { id: true, comentario: { select: { atividadeId: true, ordemServicoId: true } } },
+  });
+  for (const f of fotosChat) {
+    const atividadeId = f.comentario.atividadeId && atividades.some((a) => a.id === f.comentario.atividadeId)
+      ? f.comentario.atividadeId
+      : atividades.find((a) => a.ordemServico.id === f.comentario.ordemServicoId)?.id;
+    if (atividadeId) fotosPorAtividade.set(atividadeId, [...(fotosPorAtividade.get(atividadeId) ?? []), `/api/conversas/fotos/${f.id}`]);
+  }
   const audiosPorAtividade = new Map<string, { texto: string; url: string }[]>();
   for (const a of audios) audiosPorAtividade.set(a.atividadeId, [...(audiosPorAtividade.get(a.atividadeId) ?? []), { texto: a.textoItem, url: `/api/checklist-respostas/${a.id}/audio` }]);
   const adicionaisPorAtividade = new Map<string, AdicionalHistorico[]>();

@@ -119,7 +119,7 @@ describe("indicador de estado: o técnico sempre sabe onde está o que ele gravo
     expect(rotuloSync(e("sincronizando", 2))).toMatchObject({ texto: "Sincronizando…", detalhe: "Enviando 2 gravações" });
     expect(rotuloSync(e("pendente", 1))).toMatchObject({ texto: "1 a enviar", detalhe: "Envia sozinho em instantes" });
     expect(rotuloSync(e("sincronizado"))).toMatchObject({ texto: "Sincronizado", detalhe: "Tudo enviado ao escritório" });
-    expect(rotuloSync(e("erro", 2, 1))).toMatchObject({ texto: "1 recusada", detalhe: "Toque para ver o motivo" });
+    expect(rotuloSync(e("erro", 2, 1))).toMatchObject({ texto: "1 não enviada", detalhe: "Toque para ver o motivo" });
     expect(rotuloSync(e("sessao", 4))).toMatchObject({ texto: "Entre de novo", detalhe: "Sua sessão expirou — nada foi perdido" });
     // nenhum estado divide o visual com outro (a cor também informa)
     const classes = (["offline", "sincronizando", "pendente", "sincronizado", "erro"] as Situacao[]).map((x) => rotuloSync(e(x, 1, 1)).classe);
@@ -230,7 +230,7 @@ describe("conflito de sincronização não apaga dado do técnico", () => {
     for (let i = 0; i < 3; i++) await motor.sincronizar(true); // várias rodadas: continua lá
     const [recusada] = await banco.fila();
     expect(recusada).toMatchObject({ estado: "erro", erro: "Atividade concluída: reabra a atividade para alterar a execução.", dados: { status: "OK" } });
-    expect(rotuloSync(motor.atual).texto).toBe("1 recusada");
+    expect(rotuloSync(motor.atual).texto).toBe("1 não enviada");
     expect(await motor.descartar(999)).toBe(false); // descartar outra coisa não tira nada
     expect((await banco.fila()).length).toBe(1);
     expect(await motor.descartar(recusada.seq!)).toBe(true);

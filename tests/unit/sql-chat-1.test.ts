@@ -50,6 +50,8 @@ describe.skipIf(!URL)("SQL de produção: CHAT-1 (PostgreSQL real)", () => {
         VALUES ('c1', 'e1', 'os1', 'u1', 'Técnico', 'APP', 'Cheguei.', 'k1');`);
     psql(["-f", ARQUIVO]);
     psql(["-f", ARQUIVO]); // 2ª vez: idempotente
+    // A produção roda em seguida o da CHAT-1.1 (responder e a foto no equipamento), que o Prisma de hoje já espera
+    psql(["-f", path.join(RAIZ, "prisma/sql/2027-02-27_chat_1_1.sql")]);
   }, 240_000);
   afterAll(() => { execFileSync("psql", [URL!, "-q", "-c", `DROP SCHEMA IF EXISTS ${SCHEMA} CASCADE; DROP SCHEMA IF EXISTS ${PRISMA} CASCADE;`]); });
 

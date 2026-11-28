@@ -1,9 +1,9 @@
 /** O ícone e a cor de cada pendência (lib/alertas/pendencias): o mesmo no painel e no sino. */
-import { CalendarClock, FileSignature, HandCoins, MessageSquareReply, PackageMinus, Receipt, ShieldAlert, Timer, UserX, Wallet, type LucideIcon } from "lucide-react";
+import { CalendarClock, PauseCircle, FileSignature, HandCoins, MessageSquareReply, PackageMinus, Receipt, ShieldAlert, Timer, UserX, Wallet, type LucideIcon } from "lucide-react";
 import type { IconePendencia, TomPendencia } from "@/lib/alertas/pendencias";
 
 export const ICONE_PENDENCIA: Record<IconePendencia, LucideIcon> = {
-  semTecnico: UserX, atrasada: Timer, esquecida: Timer, comentario: MessageSquareReply, pmoc: ShieldAlert,
+  semTecnico: UserX, atrasada: Timer, esquecida: Timer, impedimento: PauseCircle, comentario: MessageSquareReply, pmoc: ShieldAlert,
   orcamento: CalendarClock, despesa: Receipt, pagar: Wallet, receber: HandCoins, estoque: PackageMinus, pedidoCliente: FileSignature,
 };
 

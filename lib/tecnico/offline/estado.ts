@@ -81,7 +81,18 @@ export function aplicar(r: RetratoAtividade, x: ExecucaoTela, op: OperacaoFila):
       return x.atividade.status === "AGENDADA" ? { ...x, atividade: { ...x.atividade, status: "EM_ANDAMENTO" } } : x;
 
     case "concluir":
-      return { ...x, atividade: { ...x.atividade, status: "CONCLUIDA" }, bloqueada: true };
+      return { ...x, atividade: { ...x.atividade, status: "CONCLUIDA" }, bloqueada: true, pausa: null };
+
+    // D1: a pausa vale já na tela (sem sinal também); o servidor confere o motivo ao sincronizar
+    case "pausar":
+      return x.atividade.status !== "EM_ANDAMENTO" || x.pausa ? x
+        : { ...x, pausa: { clientId: op.dados.clientId, motivo: op.dados.motivo, impedimento: op.dados.impedimento, inicio: op.em ?? op.criadoEm, observacao: op.dados.observacao ?? null, pendente: true } };
+    case "retomar":
+      return x.pausa?.clientId === op.dados.pausaClientId ? { ...x, pausa: null } : x;
+    case "naoConcluida":
+      return x.pausa?.clientId === op.dados.pausaClientId
+        ? { ...x, pausa: null, atividade: { ...x.atividade, status: "AGENDADA" }, bloqueada: true, naoConcluida: { motivo: x.pausa.motivo, em: op.em ?? op.criadoEm } }
+        : x;
 
     case "aceite":
       // O cliente assinou no aparelho: vale já na tela (sem sinal também); a assinatura sobe pela fila
@@ -242,6 +253,10 @@ export function aplicar(r: RetratoAtividade, x: ExecucaoTela, op: OperacaoFila):
 
     case "despesa":
       // A despesa não muda a execução: aparece em "Minhas despesas" (lida da fila e do servidor)
+      return x;
+
+    case "fotoChatEquipamento":
+      // O equipamento de uma foto do chat: a tela Chat mostra a correção pela fila; a execução da OS não muda
       return x;
 
     case "fotoOsRemover":

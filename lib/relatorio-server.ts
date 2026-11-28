@@ -5,7 +5,7 @@ const SELECT_EQUIP_RELATORIO = {
   id: true, tipo: true, marca: true, modelo: true, numeroSerie: true, localizacao: true,
   setor: true, capacidade: true, patrimonio: true, nome: true, tipoEquipamento: { select: { nome: true } },
 } as const;
-import { adicionaisDe, blocosAtendidos, SELECT_ADICIONAIS, SELECT_CHECKLIST, SELECT_FOTOS, SELECT_FOTOS_SERVICO } from "@/lib/relatorio-os/dados";
+import { adicionaisDe, blocosAtendidos, SELECT_ADICIONAIS, SELECT_CHECKLIST, SELECT_FOTOS, SELECT_FOTOS_CHAT, SELECT_FOTOS_SERVICO } from "@/lib/relatorio-os/dados";
 import { tokenRelatorioNoFormato } from "@/lib/relatorio-atividade-link";
 import { partesBR } from "@/lib/fuso";
 import { comNumero } from "@/lib/numeracao-server";
@@ -19,6 +19,8 @@ const INCLUDE_ATENDIMENTO = {
   servicosAdicionais: SELECT_ADICIONAIS,
   // "Fotos do serviço" tiradas no app (as do escritório não têm atividade: não entram)
   anexosOs: SELECT_FOTOS_SERVICO,
+  // CHAT-1.1: as fotos do chat que o escritório pôs no relatório (por referência)
+  comentarios: SELECT_FOTOS_CHAT,
 } as const;
 
 /** Resumo automático de uma atividade: descrição/observação ou 1ª resposta do questionário. */

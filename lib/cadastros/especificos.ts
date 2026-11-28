@@ -656,7 +656,13 @@ const centrosCusto: RegrasCadastro = {
   },
 };
 
+/** D1: os motivos de pausa padrão nascem antes da 1ª lista (o escritório vê e edita antes de o técnico pausar) */
+const motivosPausa: RegrasCadastro = {
+  antesDeListar: async (empresaId) => { const { motivosDaEmpresa } = await import("@/lib/pausas/servidor"); await motivosDaEmpresa(empresaId); },
+};
+
 export const REGRAS: Partial<Record<EntidadeCadastro, RegrasCadastro>> = {
+  "motivos-pausa": motivosPausa,
   produtos,
   servicos,
   "perfis-acesso": perfis,

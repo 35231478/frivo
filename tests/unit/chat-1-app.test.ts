@@ -75,7 +75,7 @@ describe("mensagensDaFila", () => {
     expect(m[4].falhou).toBe("Recusada pelo servidor.");
   });
   it("a foto vai no balão pela miniatura (a inteira ainda não tem id)", () => {
-    expect(m[5].foto).toEqual({ id: null, miniatura: "data:image/jpeg;base64,MIN" });
+    expect(m[5].foto).toEqual({ id: null, miniatura: "data:image/jpeg;base64,MIN", equipamento: null, origemEquipamento: null });
     expect(m[0].foto).toBeUndefined();
   });
   it("com juntarComFila: a que o servidor já tem (mesmo clientId) não aparece duas vezes", () => {

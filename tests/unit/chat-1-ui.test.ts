@@ -128,7 +128,7 @@ describe("a conversa (o mesmo componente no escritório e no app)", () => {
     expect(onEnviar).not.toHaveBeenCalled();
     await act(async () => { $("[data-texto-mensagem]")!.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true })); });
     await esperar();
-    expect(onEnviar).toHaveBeenCalledWith({ texto: "Pode desobstruir" });
+    expect(onEnviar).toHaveBeenCalledWith({ texto: "Pode desobstruir" }, undefined);
     // foto
     const input = $("[data-input-foto]") as HTMLInputElement;
     Object.defineProperty(input, "files", { configurable: true, value: [new File(["x"], "f.jpg", { type: "image/jpeg" })] });
@@ -136,7 +136,7 @@ describe("a conversa (o mesmo componente no escritório e no app)", () => {
     await esperar();
     expect($("[data-foto-escolhida] img")!.getAttribute("src")).toBe(foto.resultado.miniatura);
     await clicar($("[data-enviar-mensagem]"));
-    expect(onEnviar).toHaveBeenLastCalledWith({ texto: "", foto: foto.resultado.foto, miniatura: foto.resultado.miniatura });
+    expect(onEnviar).toHaveBeenLastCalledWith({ texto: "", foto: foto.resultado.foto, miniatura: foto.resultado.miniatura }, undefined);
     expect($("[data-foto-escolhida]")).toBeNull();
   });
 
