@@ -47,7 +47,7 @@ export async function regrasAtivas(empresaId: string, db: Db = prisma): Promise<
   }));
 }
 
-const travarEmpresa = (tx: Prisma.TransactionClient, empresaId: string) => tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${`comissoes:${empresaId}`}))`;
+const travarEmpresa = (tx: Prisma.TransactionClient, empresaId: string) => tx.$queryRaw`SELECT 1 AS ok FROM pg_advisory_xact_lock(hashtext(${`comissoes:${empresaId}`}))`;
 
 /**
  * GERA as comissões de um orçamento recém-aprovado: uma por item que tenha regra, para o vendedor, CONGELADAS
@@ -104,7 +104,7 @@ export async function gerarComissoesDoOrcamento(empresaId: string, orcamentoId: 
   const nome = (lista: { id: string; nome: string }[], id?: string | null) => lista.find((x) => x.id === id)?.nome ?? null;
 
   const criadas = await prisma.$transaction(async (tx) => {
-    await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${`comissao-orc:${orcamentoId}`}))`;
+    await tx.$queryRaw`SELECT 1 AS ok FROM pg_advisory_xact_lock(hashtext(${`comissao-orc:${orcamentoId}`}))`;
     if (await tx.comissao.count({ where: { orcamentoId } })) return 0;
     await tx.comissao.createMany({
       data: calculadas.map((c) => ({
