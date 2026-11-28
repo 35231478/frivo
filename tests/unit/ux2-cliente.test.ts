@@ -193,7 +193,8 @@ describe("E5: ficha do cliente com 'Nova OS'/'Novo orçamento' e pós-salvar na 
   it("salvar um cliente NOVO aterrissa na ficha dele (?criado=1), onde está o “Novo ▾”", { timeout: 40000 }, async () => {
     rotas["POST /api/clientes"] = { id: "c-novo" };
     await montarCliente();
-    await digitar($('input[name="cpfCnpj"]'), "12.345.678/0001-90");
+    // CNPJ fictício com o dígito verificador certo: o salvar confere o formato do que foi digitado (Erro no campo)
+    await digitar($('input[name="cpfCnpj"]'), "11.222.333/0001-81");
     await digitar($('input[name="nome"]'), "Clínica Vida Nova");
     await clicar($$("button").find((b) => b.textContent!.trim() === "Salvar"));
     expect(chamadas.some((c) => c.metodo === "POST" && c.url === "/api/clientes")).toBe(true);
