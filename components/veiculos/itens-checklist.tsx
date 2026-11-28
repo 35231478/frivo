@@ -5,7 +5,7 @@ import { Camera, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
-import { itemDeOpcao, itemGeraAlerta, porCategoria, type ItemDoModelo, type RespostaDoItem } from "@/lib/veiculos/checklist";
+import { itemDeOpcao, itemGeraAlerta, opcoesDoItem, porCategoria, type ItemDoModelo, type RespostaDoItem } from "@/lib/veiculos/checklist";
 
 const FOTO_MAXIMA = 3 * 1024 * 1024;
 
@@ -64,11 +64,11 @@ export function ItensChecklist({ itens, respostas, onResposta, onErro, somenteLe
                     <p className={cn("text-sm", r.valor ? (alerta ? "text-atencao-texto font-semibold" : "text-ink") : "text-ink-subtle")} data-valor-item>{r.valor ?? "Sem resposta"}</p>
                   ) : (
                     <div className="flex flex-wrap gap-2">
-                      {it.opcoes.map((op, idx) => {
+                      {opcoesDoItem(it).map((op, idx) => {
                         const sel = r.valor === op;
                         return (
                           <button key={op} type="button" onClick={() => mudar(it.id, { valor: op })} aria-pressed={sel} data-opcao={op}
-                            className={cn("px-3 py-2 rounded-lg text-sm font-medium border transition-colors",
+                            className={cn("px-4 py-2 min-h-[44px] min-w-[44px] rounded-lg text-sm font-medium border transition-colors",
                               sel ? (idx === 0 ? "bg-success-500 border-success-500 text-white" : "bg-atencao border-atencao text-white")
                                 : "bg-white border-surface-border text-ink-muted hover:border-primary-300")}>
                             {op}

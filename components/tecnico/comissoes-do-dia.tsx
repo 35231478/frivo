@@ -61,7 +61,7 @@ export function ComissoesDoDia() {
 
   if (!totais?.ativo) return null;
   return (
-    <button type="button" onClick={() => irPara({ ver: "perfil" })} data-comissoes-dia
+    <button type="button" onClick={() => irPara({ ver: "perfil", sec: "comissoes" })} data-comissoes-dia
       className="w-full text-left rounded-card bg-white border border-surface-border p-3 space-y-2 active:bg-surface-alt">
       <span className="flex items-center justify-between gap-2">
         <span className="flex items-center gap-2 text-sm font-bold text-ink"><Percent className="w-4 h-4 text-ink-muted" aria-hidden /> Minhas comissões</span>

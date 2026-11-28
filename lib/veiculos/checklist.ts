@@ -26,10 +26,22 @@ export const ROTULO_STATUS_CHECKLIST: Record<string, string> = { CONCLUIDO: "Con
 const TIPOS_DE_OPCAO = ["OK_NOK", "NIVEL"];
 export const itemDeOpcao = (tipo: string) => TIPOS_DE_OPCAO.includes(tipo);
 
+/**
+ * As opções que o técnico vê num item de opção. Modelo salvo sem opções (o editor deixava apagar; a API aceita a
+ * lista vazia) não pode deixar o item obrigatório SEM BOTÃO — o técnico ficava preso no checklist do dia. Vale
+ * "OK / NOK" (a primeira, a saudável).
+ */
+export const OPCOES_PADRAO = ["OK", "NOK"] as const;
+export function opcoesDoItem(item: Pick<ItemDoModelo, "tipo" | "opcoes">): string[] {
+  if (!itemDeOpcao(item.tipo)) return [];
+  const limpas = (item.opcoes ?? []).map((o) => o.trim()).filter(Boolean);
+  return limpas.length ? limpas : [...OPCOES_PADRAO];
+}
+
 /** O item gera alerta? Só item de opção, respondido, e fora da primeira opção. */
 export function itemGeraAlerta(item: Pick<ItemDoModelo, "tipo" | "opcoes">, valor: string | null | undefined): boolean {
   if (!valor || !itemDeOpcao(item.tipo)) return false;
-  return item.opcoes.length > 0 && valor !== item.opcoes[0];
+  return valor !== opcoesDoItem(item)[0];
 }
 
 /** Situação do checklist a partir dos alertas dos itens */

@@ -56,8 +56,8 @@ describe("Y10: miniatura de foto", () => {
     const botao = $('button[aria-label="Excluir foto 1"]');
     expect(botao).not.toBeNull();
     expect(botao!.className).toContain("before:-inset"); // hitbox ampliada para o dedo
-    await act(async () => { botao!.click(); });
-    expect(removeu).toHaveBeenCalledTimes(1);
+    // Janeiro: o toque no X pergunta antes de excluir (o clique e a pergunta: tests/unit/janeiro-app-ui.test.ts)
+    expect(removeu).not.toHaveBeenCalled();
   });
 });
 

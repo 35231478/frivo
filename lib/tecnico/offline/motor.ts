@@ -63,6 +63,23 @@ export function emLotes<T>(ops: T[], tamanho: (o: T) => number = (o) => JSON.str
 
 interface ResultadoServidor { id: string; ok: boolean; status: number; erro?: string; adiada?: boolean; repetida?: boolean; dados?: unknown }
 
+/**
+ * Uma recusa trava as próximas gravações da mesma atividade (não se conclui por cima de uma resposta que não entrou)
+ * — menos a leitura de QR: QR recusado (ex.: equipamento de outro cliente) não muda nada do que veio depois, e
+ * travava o resto do serviço até o técnico achar a recusa no Perfil.
+ */
+export const travaAtividade = (o: Pick<OperacaoFila, "estado" | "tipo">) => o.estado === "erro" && o.tipo !== "scan";
+
+/**
+ * A sessão acabou? 401 do servidor ou — sessão vencida num servidor que ainda redireciona — a resposta que veio do
+ * /login (HTML 200): tratar como "Entre de novo", e não como dado (o JSON quebraria) nem como falta de sinal.
+ */
+export const sessaoAcabou = (r: Pick<Response, "status" | "redirected" | "url">) => {
+  if (r.status === 401) return true;
+  if (!r.redirected) return false;
+  try { return new URL(r.url, "http://x").pathname === "/login"; } catch { return false; }
+};
+
 /** Recusa definitiva (fica com erro até o técnico tentar de novo ou descartar)? 4xx menos sessão/limite. */
 const definitiva = (status: number) => status >= 400 && status < 500 && ![401, 408, 429].includes(status);
 
@@ -180,13 +197,25 @@ export class MotorSync {
     return true;
   }
 
+  /**
+   * Descarta a recusada E as que esperam por ela na mesma atividade (ex.: OS cancelada pelo escritório depois do
+   * trabalho feito sem sinal) — antes, uma a uma, cada uma voltando recusada. O que já subiu (enviada) fica.
+   */
+  async descartarDaAtividade(atividadeId: string) {
+    const seqs = (await this.banco.fila()).filter((o) => o.atividadeId === atividadeId && o.estado !== "enviada").map((o) => o.seq!);
+    if (!seqs.length) return 0;
+    await this.banco.remover(seqs);
+    await this.recontar(true);
+    return seqs.length;
+  }
+
   /* ── baixar ── */
   async baixarRetrato(atividadeId: string): Promise<RetratoAtividade | null> {
     if (!this.online()) { this.publicar(); return null; }
     const pedidoEm = this.agora();
     try {
       const r = await this.pedir(`/api/tecnico/atividades/${encodeURIComponent(atividadeId)}`, { cache: "no-store" }, this.prazoLeituraMs);
-      if (r.status === 401) { this.sessaoExpirada = true; this.publicar(); return null; }
+      if (sessaoAcabou(r)) { this.sessaoExpirada = true; this.publicar(); return null; }
       if (!r.ok) return null;
       const retrato: RetratoAtividade = await r.json();
       await this.banco.guardarRetrato(retrato, pedidoEm);
@@ -206,7 +235,7 @@ export class MotorSync {
     else {
       try {
         const r = await this.pedir(url, { cache: "no-store" }, this.prazoLeituraMs);
-        if (r.status === 401) { this.sessaoExpirada = true; this.publicar(); }
+        if (sessaoAcabou(r)) { this.sessaoExpirada = true; this.publicar(); }
         else if (r.ok) {
           const dados: T = await r.json();
           const baixadoEm = this.agora();
@@ -253,7 +282,7 @@ export class MotorSync {
     // Em ordem POR ATIVIDADE: depois de uma recusada, as seguintes da mesma atividade esperam o técnico
     // resolver (tentar de novo ou descartar) — não se conclui por cima de uma resposta que não entrou
     const travada = new Map<string, number>();
-    for (const o of toda) if (o.estado === "erro" && !travada.has(o.atividadeId)) travada.set(o.atividadeId, o.seq!);
+    for (const o of toda) if (travaAtividade(o) && !travada.has(o.atividadeId)) travada.set(o.atividadeId, o.seq!);
     const fila = toda.filter((o) => o.estado === "pendente" && !(travada.has(o.atividadeId) && o.seq! > travada.get(o.atividadeId)!));
     const enviadas = new Set<string>();
     let falhouRede = false;
@@ -263,9 +292,11 @@ export class MotorSync {
       try {
         res = await this.pedir("/api/tecnico/sync", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ operacoes: lote, agora: new Date(this.agora()).toISOString() }), cache: "no-store" }, this.prazoEnvioMs);
       } catch { falhouRede = true; break; }
-      if (res.status === 401) { this.sessaoExpirada = true; break; }
+      if (sessaoAcabou(res)) { this.sessaoExpirada = true; break; }
       if (!res.ok) { falhouRede = true; break; }
-      const { resultados } = (await res.json()) as { resultados: ResultadoServidor[] };
+      // Resposta que não é a do sync (proxy, portal de Wi-Fi): tenta de novo mais tarde, sem estourar
+      let resultados: ResultadoServidor[];
+      try { ({ resultados } = (await res.json()) as { resultados: ResultadoServidor[] }); } catch { falhouRede = true; break; }
       const porId = new Map(resultados.map((r) => [r.id, r]));
       const mudadas: OperacaoFila[] = [];
       for (const op of fila.filter((o) => lote.some((l) => l.id === o.id))) {

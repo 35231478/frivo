@@ -16,6 +16,7 @@ import { TabelaPro, type ColunaPro } from "@/components/listagem/tabela-pro";
 import { PLANILHA } from "@/lib/planilha";
 import { Plus, Pencil, Trash2, Check, ArrowUp, ListChecks } from "lucide-react";
 import { InativarRegistro } from "@/components/ui/inativar-registro";
+import { opcoesDoItem } from "@/lib/veiculos/checklist";
 
 const FREQUENCIAS = [{ v: "DIARIO", l: "Diário" }, { v: "SEMANAL", l: "Semanal" }, { v: "MENSAL", l: "Mensal" }];
 const TIPOS_ITEM = [
@@ -39,6 +40,8 @@ const COLUNAS: ColunaPro[] = [
 interface ItemForm { id?: string; categoria: string; descricao: string; tipo: string; opcoesStr: string; obrigatorio: boolean }
 interface Modelo { id: string; nome: string; descricao?: string | null; frequencia: string; ativo?: boolean; itens?: any[]; _count?: { itens?: number; preenchidos?: number } }
 
+/** A regra do alerta (lib/veiculos/checklist › itemGeraAlerta), dita para quem monta o modelo */
+export const DICA_OPCOES = "A 1ª opção é a resposta esperada; as outras geram alerta para o gestor. Ex.: “Cheio, Médio, Baixo”. Vazio vale “OK, NOK”.";
 const ITEM_VAZIO: ItemForm = { categoria: "", descricao: "", tipo: "OK_NOK", opcoesStr: "OK, NOK", obrigatorio: true };
 const rotuloFrequencia = (f: string) => FREQUENCIAS.find((x) => x.v === f)?.l ?? f;
 const nItens = (t: Modelo) => t._count?.itens ?? t.itens?.length ?? 0;
@@ -102,7 +105,7 @@ export function ChecklistTemplatesClient() {
       // id dos itens existentes: o servidor atualiza no lugar (removido vira inativo, não é apagado)
       itens: itens.map((i, idx) => ({
         id: i.id, categoria: i.categoria, descricao: i.descricao, tipo: i.tipo,
-        opcoes: (i.tipo === "OK_NOK" || i.tipo === "NIVEL") ? i.opcoesStr.split(",").map((s) => s.trim()).filter(Boolean) : [],
+        opcoes: (i.tipo === "OK_NOK" || i.tipo === "NIVEL") ? opcoesDoItem({ tipo: i.tipo, opcoes: i.opcoesStr.split(",") }) : [],
         obrigatorio: i.obrigatorio, ordem: idx,
       })),
     };
@@ -242,7 +245,10 @@ export function ChecklistTemplatesClient() {
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 sm:pl-6">
                     <Select value={it.tipo} onChange={(e) => updItem(i, "tipo", e.target.value)} aria-label={`Tipo do item ${i + 1}`}>{TIPOS_ITEM.map((t) => <option key={t.v} value={t.v}>{t.l}</option>)}</Select>
                     {(it.tipo === "OK_NOK" || it.tipo === "NIVEL") && (
-                      <Input value={it.opcoesStr} onChange={(e) => updItem(i, "opcoesStr", e.target.value)} placeholder="Opções separadas por vírgula" aria-label={`Opções do item ${i + 1}`} className="sm:col-span-2" />
+                      <div className="sm:col-span-2 space-y-1">
+                        <Input value={it.opcoesStr} onChange={(e) => updItem(i, "opcoesStr", e.target.value)} placeholder="Opções separadas por vírgula" aria-label={`Opções do item ${i + 1}`} />
+                        <p className="text-xs text-ink-muted" data-dica-opcoes>{DICA_OPCOES}</p>
+                      </div>
                     )}
                     <label className="flex items-center gap-2 text-sm text-ink-muted">
                       <input type="checkbox" checked={it.obrigatorio} onChange={(e) => updItem(i, "obrigatorio", e.target.checked)} className="rounded border-surface-border text-primary-600 focus:ring-primary-500" />

@@ -148,3 +148,25 @@ export const MSG_SEM_COLABORADOR = "Seu usuário não está ligado a um colabora
 export const MSG_JA_DECIDIDA = "Esta despesa já foi decidida.";
 /** Despesa lançada fora de uma OS: a fila agrupa por este id no lugar da atividade */
 export const SEM_OS = "sem-os";
+
+/**
+ * O que falta para lançar a despesa, na ordem da tela. Com o "Lançar" cinza, o técnico lê o que falta embaixo
+ * (antes, o botão só ficava apagado, sem dizer por quê — ex.: faltava escolher a forma de pagamento).
+ */
+export function faltaNaDespesa(d: { categoria: boolean; valorOk: boolean; dataOk: boolean; pagamento: boolean; descricaoOk: boolean; foto: boolean }): string[] {
+  const falta: string[] = [];
+  if (!d.categoria) falta.push("o tipo");
+  if (!d.valorOk) falta.push("o valor");
+  if (!d.dataOk) falta.push("um dia válido");
+  if (!d.pagamento) falta.push("quem pagou");
+  if (!d.descricaoOk) falta.push("a descrição");
+  if (!d.foto) falta.push("a foto do cupom");
+  return falta;
+}
+
+/** "Falta: o valor e a foto do cupom." (null = pronta) */
+export function textoFaltaDespesa(falta: readonly string[]): string | null {
+  if (!falta.length) return null;
+  const lista = falta.length === 1 ? falta[0] : `${falta.slice(0, -1).join(", ")} e ${falta[falta.length - 1]}`;
+  return `Falta: ${lista}.`;
+}
