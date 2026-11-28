@@ -15,6 +15,7 @@ import { BancoTecnico } from "@/lib/tecnico/offline/banco";
 import type { NovaOperacao, OperacaoFila, RetratoAtividade } from "@/lib/tecnico/offline/tipos";
 import { SEM_OS } from "@/lib/tecnico/despesas";
 import { CABECALHO_APARELHO, CABECALHO_FILA } from "@/lib/tecnico/saiu-do-dia";
+import { NAO_TRAVAM } from "@/lib/tecnico/offline/trava";
 
 export type Situacao = "offline" | "sincronizando" | "pendente" | "sincronizado" | "erro" | "sessao";
 export interface EstadoSync {
@@ -66,10 +67,9 @@ interface ResultadoServidor { id: string; ok: boolean; status: number; erro?: st
 
 /**
  * Uma recusa trava as próximas gravações da mesma atividade (não se conclui por cima de uma resposta que não entrou)
- * — menos a leitura de QR: QR recusado (ex.: equipamento de outro cliente) não muda nada do que veio depois, e
- * travava o resto do serviço até o técnico achar a recusa no Perfil.
+ * — menos o que está em NAO_TRAVAM (lib/tecnico/offline/trava): a leitura de QR e a mensagem do chat.
  */
-export const travaAtividade = (o: Pick<OperacaoFila, "estado" | "tipo">) => o.estado === "erro" && o.tipo !== "scan";
+export const travaAtividade = (o: Pick<OperacaoFila, "estado" | "tipo">) => o.estado === "erro" && !NAO_TRAVAM.has(o.tipo);
 
 /**
  * A sessão acabou? 401 do servidor ou — sessão vencida num servidor que ainda redireciona — a resposta que veio do
@@ -311,7 +311,7 @@ export class MotorSync {
     /** Os tipos que subiram sem OS (SEM_OS): despesa fora de OS e, no CHAT-1, a mensagem sem OS */
     const semOs = new Set<string>();
     let falhouRede = false;
-    const paraEnviar = fila.map(({ seq: _s, criadoEm: _c, estado: _e, tentativas: _t, erro: _er, status: _st, enviadaEm: _en, ...op }) => op);
+    const paraEnviar = fila.map(({ seq: _s, criadoEm: _c, estado: _e, tentativas: _t, erro: _er, status: _st, enviadaEm: _en, osNumero: _os, ...op }) => op);
     for (const lote of emLotes(paraEnviar, undefined, this.umPorVez ? 1 : MAX_LOTE)) {
       let res: Response;
       try {

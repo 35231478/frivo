@@ -25,6 +25,7 @@ import { numerarVisitas } from "@/lib/os/visitas";
 import { observacaoCurta, ordenarParaPainel } from "@/lib/os/painel-atividades";
 import { StatusPill, type TomStatus } from "@/components/ui/status-pill";
 import { ROTULO_ESTADO_ATIVIDADE, TOM_ESTADO_ATIVIDADE, estadoVisivelDaAtividade } from "@/lib/os/estado-atividade";
+import { pausaAberta, resumoTempo, textoPausada } from "@/lib/pausas/regras";
 
 /**
  * O estado da atividade: o mesmo rótulo e o mesmo tom em toda a OS (lista, plano de visitas, calendário).
@@ -275,7 +276,19 @@ export function OsAtividades({ osId, atividades: iniciais, clienteId, unidadeId,
                   <div className="flex items-center gap-2 flex-wrap">
                     <span className="text-sm font-medium text-ink">{a.titulo}</span>
                     {a.tipoOs && <span className="inline-flex items-center gap-1 text-[10px] font-medium text-ink-muted bg-surface-page border border-surface-border px-1.5 py-0.5 rounded-full"><span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: a.tipoOs.cor }} aria-hidden />{a.tipoOs.nome}</span>}
-                    <StatusPill tom={TOM_STATUS[estado] ?? "previsto"} tamanho="sm" data-selo-atividade={estado}>{ROTULO_ESTADO_ATIVIDADE[estado] ?? STATUS_LABELS[a.status]}</StatusPill>
+                    {/* D1: pausada pelo técnico — o motivo e há quanto tempo, no lugar do "Em andamento" */}
+                    {(() => {
+                      const p = a.status === "EM_ANDAMENTO" ? pausaAberta<{ motivo: string; inicio: string; fim: string | null; impedimento: boolean }>(a.pausas ?? []) : null;
+                      return p
+                        ? <StatusPill tom={p.impedimento ? "atrasado" : "atencao"} tamanho="sm" data-selo-atividade="PAUSADA" data-pausa-atividade={p.impedimento ? "impedimento" : "intervalo"}>{textoPausada(p, new Date())}</StatusPill>
+                        : <StatusPill tom={TOM_STATUS[estado] ?? "previsto"} tamanho="sm" data-selo-atividade={estado}>{ROTULO_ESTADO_ATIVIDADE[estado] ?? STATUS_LABELS[a.status]}</StatusPill>;
+                    })()}
+                    {/* D1: o tempo de execução sem as pausas (só o escritório vê) */}
+                    {a.iniciadaEm && (a.pausas?.length ?? 0) > 0 && (
+                      <span className="text-[10px] font-medium text-ink-muted" data-tempo-execucao>
+                        {resumoTempo(a.iniciadaEm, a.status === "CONCLUIDA" && a.concluidaEm ? a.concluidaEm : new Date().toISOString(), a.pausas)}
+                      </span>
+                    )}
                     {visitas.get(a.id) && (
                       <span data-chip-visita className="text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-surface-page border border-surface-border text-ink-muted">
                         Visita {visitas.get(a.id)!.numero} de {visitas.get(a.id)!.total}

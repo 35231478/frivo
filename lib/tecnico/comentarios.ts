@@ -46,6 +46,11 @@ export interface ComentarioTela {
   lida?: { por: string; em: string } | null;
   /** CHAT-1: a fila do aparelho recusou o envio (fica com o motivo até tentar de novo) */
   falhou?: string | null;
+  /**
+   * App: a fila do aparelho RECUSOU de vez (regra, não rede) — o motivo vai em `falhou`; em vez de "Tentar de novo"
+   * sem fim, a tela oferece "Enviar sem OS", "Trocar a OS" e "Descartar" (só o que nunca chegou ao servidor).
+   */
+  recusa?: { seq: number; status: number | null; comOs: boolean } | null;
   /** CHAT-1 (conversa por pessoa): a OS da mensagem (vazio = sem OS) — a etiqueta discreta que abre a OS */
   os?: { id: string; numero: string; cliente: string } | null;
   /** CHAT-1: o escritório escreveu para UMA pessoa (o nome); vazio = para todos os técnicos da OS */

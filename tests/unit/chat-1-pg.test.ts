@@ -278,7 +278,7 @@ describe.skipIf(!URL_PG)("CHAT-1 (PostgreSQL real)", () => {
     expect(app.usuarios).toEqual(["uT"]);
     expect(app.mensagem({ restrito: true }).url).toBe("/tecnico?ver=chat");
     expect(app.mensagem({ restrito: false }).url).toBe("/conversas?os=os1");
-    expect(app.mensagem({ restrito: true })).toMatchObject({ titulo: "Mensagem nova na OS OS-0001", acao: "Abrir conversa" });
+    expect(app.mensagem({ restrito: true })).toMatchObject({ titulo: "Mensagem nova · OS-0001 · Hospital Fictício", acao: "Abrir conversa" });
     expect(escritorio.usuarios).toEqual(["uA"]); // ligado à OS (abriu e conversou); o autor (uL) não
     expect(escritorio.mensagem.url).toBe("/conversas?os=os1");
   });
@@ -399,7 +399,7 @@ describe.skipIf(!URL_PG)("CHAT-1 (PostgreSQL real)", () => {
     push.envios = []; push.comAparelho = ["uA", "uT", "uT2", "uL"];
     await notificarMensagem({ empresaId: "e1", comentarioId: "x1", osId: null, autorId: "uA", paraUsuarioId: "uT", origem: "ESCRITORIO", texto: "Passa aqui" });
     expect(push.envios[0].usuarios).toEqual(["uT"]);
-    expect(push.envios[0].mensagem({ restrito: true })).toMatchObject({ url: "/tecnico?ver=chat", titulo: "Mensagem nova de Ana Escritório" });
+    expect(push.envios[0].mensagem({ restrito: true })).toMatchObject({ url: "/tecnico?ver=chat", titulo: "Mensagem nova · Ana Escritório" });
     push.envios = [];
     await notificarMensagem({ empresaId: "e1", comentarioId: "x2", osId: null, autorId: "uT", paraUsuarioId: null, origem: "APP", texto: "Chego em 10" });
     // quem conversa com ele (escreveu para ele ou leu a conversa dele); nunca o próprio autor nem o outro técnico

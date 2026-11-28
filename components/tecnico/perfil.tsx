@@ -14,6 +14,17 @@ import { PreferenciaRota } from "@/components/tecnico/rota";
 import { NotificacoesAparelho } from "@/components/push/notificacoes-aparelho";
 import type { OperacaoFila } from "@/lib/tecnico/offline/tipos";
 import { horaBR } from "@/lib/fuso";
+import { NAO_TRAVAM } from "@/lib/tecnico/offline/trava";
+import { motivoDaRecusa, rotuloMensagemDaFila } from "@/lib/tecnico/chat";
+import { SEM_OS } from "@/lib/tecnico/despesas";
+
+/** Como a gravação recusada aparece: o que é (a mensagem do chat diz qual) e o porquê. */
+export function gravacaoRecusada(o: OperacaoFila, osDe: Record<string, string>): { titulo: string; motivo: string } {
+  if (o.tipo === "comentario") {
+    return { titulo: rotuloMensagemDaFila(o, osDe[o.atividadeId]), motivo: motivoDaRecusa(o.status ?? null, o.erro ?? null, o.atividadeId !== SEM_OS) };
+  }
+  return { titulo: `${ROTULO_OPERACAO[o.tipo] ?? o.tipo}${osDe[o.atividadeId] ? ` — ${osDe[o.atividadeId]}` : ""}`, motivo: o.erro ?? "" };
+}
 
 const ROTULO_OPERACAO: Record<string, string> = {
   iniciar: "Início do atendimento", avisoCliente: "A caminho / Cheguei", cadastrarEquipamento: "Equipamento cadastrado", resposta: "Resposta do checklist", audio: "Observação em áudio", tudoOk: "TUDO OK",
@@ -21,8 +32,9 @@ const ROTULO_OPERACAO: Record<string, string> = {
   vincular: "Equipamento vinculado", scan: "QR Code lido", adicional: "Serviço extra", adicionalRemover: "Serviço extra retirado",
   adicionalFoto: "Foto do serviço extra", adicionalFotoRemover: "Foto do serviço extra retirada",
   fotoOs: "Foto do serviço", fotoOsRemover: "Foto do serviço retirada", fotoOsLegenda: "Legenda da foto do serviço", concluir: "Conclusão da atividade",
-  material: "Material usado", materialRemover: "Material excluído", comentario: "Comentário", despesa: "Despesa de campo",
+  material: "Material usado", materialRemover: "Material excluído", comentario: "Mensagem do chat", despesa: "Despesa de campo",
   despesaEditar: "Despesa corrigida", despesaExcluir: "Despesa excluída", fotoLegenda: "Legenda da foto", aceite: "Aceite do cliente",
+  pausar: "Pausa da atividade", retomar: "Atividade retomada", naoConcluida: "Visita não concluída",
 };
 
 /**
@@ -95,13 +107,22 @@ export function PerfilTecnico({ perfilInicial, abrirComissoes = false }: {
         </button>
         {recusadas.length > 0 && (
           <div className="space-y-2" data-recusadas>
-            <p className="text-sm font-semibold text-atrasado-texto inline-flex items-center gap-1.5"><AlertTriangle className="w-4 h-4" /> Recusadas pelo escritório (continuam guardadas)</p>
+            <div>
+              <p className="text-sm font-semibold text-atrasado-texto inline-flex items-center gap-1.5" data-titulo-recusadas><AlertTriangle className="w-4 h-4" /> Não enviadas</p>
+              <p className="text-xs text-ink-muted">O sistema não aceitou estas gravações. Continuam guardadas no aparelho.</p>
+            </div>
             <ul className="space-y-2">
-              {recusadas.map((o) => (
-                <li key={o.seq} className="rounded-card border border-atrasado/20 bg-atrasado-claro p-3 text-sm space-y-1">
-                  <p className="font-semibold text-ink">{ROTULO_OPERACAO[o.tipo] ?? o.tipo}{osDe[o.atividadeId] ? ` — ${osDe[o.atividadeId]}` : ""}</p>
-                  <p className="text-atrasado-texto">{o.erro}</p>
-                  {o.tipo === "scan"
+              {recusadas.map((o) => {
+                const g = gravacaoRecusada(o, osDe);
+                return (
+                <li key={o.seq} className="rounded-card border border-atrasado/20 bg-atrasado-claro p-3 text-sm space-y-1" data-recusada={o.tipo}>
+                  <p className="font-semibold text-ink" data-rotulo-recusada>{g.titulo}</p>
+                  <p className="text-atrasado-texto" data-motivo-recusada>{g.motivo}</p>
+                  {o.tipo === "comentario" ? (
+                    <p className="text-xs text-ink-muted">O serviço desta OS sobe normalmente. No Chat: Enviar sem OS, Trocar a OS ou Descartar.{" "}
+                      <button type="button" className="font-semibold text-primary-700 underline" data-abrir-chat onClick={() => irPara({ ver: "chat" })}>Abrir o chat</button>
+                    </p>
+                  ) : NAO_TRAVAM.has(o.tipo)
                     ? <p className="text-xs text-ink-muted">O resto do serviço desta OS sobe normalmente.</p>
                     : <p className="text-xs text-ink-muted">As próximas gravações desta OS esperam esta. Reaberta pelo escritório? Toque em “Sincronizar agora”.</p>}
                   <button type="button" className="inline-flex items-center gap-1 text-xs font-semibold text-atrasado-texto py-1"
@@ -110,7 +131,7 @@ export function PerfilTecnico({ perfilInicial, abrirComissoes = false }: {
                   </button>
                   {(() => {
                     // OS cancelada (ou que saiu dele) com trabalho feito sem sinal: as que esperam esta não têm mais para onde ir
-                    const esperam = o.tipo === "scan" ? 0 : aEnviar.filter((q) => q.atividadeId === o.atividadeId && q.seq! > o.seq!).length;
+                    const esperam = NAO_TRAVAM.has(o.tipo) ? 0 : aEnviar.filter((q) => q.atividadeId === o.atividadeId && q.seq! > o.seq!).length;
                     if (!esperam) return null;
                     return (
                       <button type="button" className="ml-3 inline-flex items-center gap-1 text-xs font-semibold text-atrasado-texto py-1" data-descartar-da-os
@@ -120,7 +141,8 @@ export function PerfilTecnico({ perfilInicial, abrirComissoes = false }: {
                     );
                   })()}
                 </li>
-              ))}
+                );
+              })}
             </ul>
           </div>
         )}

@@ -25,15 +25,15 @@ describe("quem pode receber cada tipo", () => {
     expect(ids(TECNICO)).toEqual(["OS_NOVA", "OS_REAGENDADA", "OS_CANCELADA", "ATIVIDADE_ESQUECIDA", "OS_COMENTARIO", "ACEITE", "DESPESA"]);
   });
   it("administrador (sem técnico ligado): os do escritório, sem os 'para você'", () => {
-    expect(ids(ADMIN)).toEqual(["ATIVIDADE_ESQUECIDA", "OS_COMENTARIO", "ACEITE", "DESPESA", "SOLICITACAO_PORTAL", "ORCAMENTO_RESPOSTA", "PEDIDO_CLIENTE", "ESTOQUE_NEGATIVO"]);
+    expect(ids(ADMIN)).toEqual(["IMPEDIMENTO", "ATIVIDADE_ESQUECIDA", "OS_COMENTARIO", "ACEITE", "DESPESA", "SOLICITACAO_PORTAL", "ORCAMENTO_RESPOSTA", "PEDIDO_CLIENTE", "ESTOQUE_NEGATIVO"]);
   });
   it("financeiro: pela permissão de cada um (vê OS, orçamentos, estoque e fluxo de caixa)", () => {
-    expect(ids(FINANCEIRO)).toEqual(["ATIVIDADE_ESQUECIDA", "OS_COMENTARIO", "ACEITE", "DESPESA", "SOLICITACAO_PORTAL", "ORCAMENTO_RESPOSTA", "PEDIDO_CLIENTE", "ESTOQUE_NEGATIVO"]);
+    expect(ids(FINANCEIRO)).toEqual(["IMPEDIMENTO", "ATIVIDADE_ESQUECIDA", "OS_COMENTARIO", "ACEITE", "DESPESA", "SOLICITACAO_PORTAL", "ORCAMENTO_RESPOSTA", "PEDIDO_CLIENTE", "ESTOQUE_NEGATIVO"]);
     const soOrcamento: QuemRecebe = { permissoes: montarPermissoes({ orcamentos: ["visualizar"] }), role: "OPERADOR", restrito: false };
     expect(ids(soOrcamento)).toEqual(["ORCAMENTO_RESPOSTA"]);
     // só OS: nada de estoque nem de despesa (que pede Financeiro › Fluxo de caixa)
     const soOs: QuemRecebe = { permissoes: montarPermissoes({ ordens: ["visualizar"] }), role: "OPERADOR", restrito: false };
-    expect(ids(soOs)).toEqual(["ATIVIDADE_ESQUECIDA", "OS_COMENTARIO", "ACEITE", "SOLICITACAO_PORTAL", "PEDIDO_CLIENTE"]);
+    expect(ids(soOs)).toEqual(["IMPEDIMENTO", "ATIVIDADE_ESQUECIDA", "OS_COMENTARIO", "ACEITE", "SOLICITACAO_PORTAL", "PEDIDO_CLIENTE"]);
     const soEstoque: QuemRecebe = { permissoes: montarPermissoes({ estoque: ["visualizar"] }), role: "OPERADOR", restrito: false };
     expect(ids(soEstoque)).toEqual(["ESTOQUE_NEGATIVO"]);
   });
@@ -98,7 +98,12 @@ describe("os textos", () => {
     expect(msgAceite({ osNumero: "OS-1", comentario: "Ótimo atendimento", avaliacao: 5 }, "/u")).toMatchObject({ titulo: "Aceite com comentário: OS-1", corpo: "Ótimo atendimento" });
   });
   it("comentário, despesa, portal, orçamento e estoque", () => {
-    expect(msgComentario({ osNumero: "OS-1", autor: "Ana", texto: "Levar escada" }, "/x")).toMatchObject({ titulo: "Mensagem nova na OS OS-1", corpo: "Ana · Levar escada", acao: "Abrir conversa" } /* CHAT-1 */);
+    // Hotfix 2: o número já traz "OS" (nada de "na OS OS-1"); o cliente curto; "Autor: texto"; a tag é da CONVERSA
+    expect(msgComentario({ osNumero: "OS-1", cliente: "Mercado Exemplo", autor: "Ana", texto: "Levar escada" }, "/x", "uT"))
+      .toEqual({ titulo: "Mensagem nova · OS-1 · Mercado Exemplo", corpo: "Ana: Levar escada", url: "/x", tag: "conversa-uT", acao: "Abrir conversa" });
+    expect(msgComentario({ osNumero: "OS-1", cliente: "Supermercado Exemplo de Bairro Ltda", autor: "Ana", texto: "" }, "/x", "uT"))
+      .toMatchObject({ titulo: "Mensagem nova · OS-1 · Supermercado Exemplo de…", corpo: "Ana: Foto" });
+    expect(msgComentario({ osNumero: null, autor: "João Silva", texto: "Opa" }, "/x", "uT")).toMatchObject({ titulo: "Mensagem nova · João Silva", corpo: "João Silva: Opa" });
     expect(sp(msgDespesa({ situacao: "ENVIADA", autor: "Carlos", descricao: "Pedágio", valor: 12.5 }, "/d").corpo)).toBe("Carlos · Pedágio · R$ 12,50");
     expect(msgDespesa({ situacao: "RECUSADA", descricao: "Almoço", motivo: "Sem nota", autor: "Carlos" }, "/d")).toMatchObject({ titulo: "Despesa recusada", corpo: "Almoço · Motivo: Sem nota" });
     expect(msgDespesa({ situacao: "APROVADA" }, "/d").titulo).toBe("Despesa aprovada");
@@ -107,7 +112,7 @@ describe("os textos", () => {
     expect(msgEstoqueNegativo({ produto: "Gás R-410A", saldo: -1.5, unidade: "kg", osNumero: "OS-1" }).corpo).toBe("Gás R-410A · saldo -1,5 kg · OS OS-1");
   });
   it("texto longo é cortado; sem data, 'sem data marcada'", () => {
-    expect(msgComentario({ osNumero: "1", texto: "a".repeat(300) }, "/x").corpo).toHaveLength(110);
+    expect(msgComentario({ osNumero: "1", texto: "a".repeat(300) }, "/x", "c").corpo).toHaveLength(110);
     expect(quandoBR(null)).toBe("sem data marcada");
     // data só de dia (meia-noite UTC): o próprio dia e SEM hora, mesmo pedindo a hora
     expect(quandoBR(new Date("2026-12-10T00:00:00Z"))).toBe("qui. 10/12");

@@ -1,4 +1,5 @@
 import { comissaoParaRetrato, sincronizarExecutor } from "@/lib/comissoes/executor-server";
+import { motivosDaEmpresa, pausaParaRetrato } from "@/lib/pausas/servidor";
 import { NextRequest, NextResponse } from "next/server";
 import { exigirPermissao } from "@/lib/permissoes-server";
 import { prisma } from "@/lib/prisma";
@@ -93,7 +94,11 @@ export async function GET(_: NextRequest, { params }: Params) {
       materiais,
       separado,
       comentarios,
+      // D1: a pausa aberta (o app mostra "Pausada — motivo" e Retomar)
+      pausa: await pausaParaRetrato(atividadeId),
     },
+    // D1: os motivos de pausa da empresa (o técnico pausa sem sinal também)
+    motivosPausa: await motivosDaEmpresa(empresaId).then((ms) => ms.map(({ id, nome, tipo, pedeTexto }) => ({ id, nome, tipo, pedeTexto }))),
     equipamentosUnidade: daUnidade.map(({ qrcode, ...e }) => ({ ...semUnidade(apresentarEquipamento(e)), tipoEquipamentoId: e.tipoEquipamentoId, qr: qrcode })),
     checklistsPorTipo,
     cadastro,

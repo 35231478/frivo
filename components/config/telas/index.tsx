@@ -21,6 +21,7 @@ import { TelaEmpresa } from "./empresa";
 import { TelaUsuarios } from "./usuarios";
 import { TelaPerfis } from "./perfis";
 import { TelaCargos } from "./cargos";
+import { TelaMotivosPausa } from "./motivos-pausa";
 import { TelaAdmissao } from "./admissao";
 import { TelaModelosDocumento } from "./modelos-documento";
 import { TelaEmail } from "./email";
@@ -61,6 +62,7 @@ const TELAS: Record<string, () => ReactNode> = {
   usuarios: () => <TelaUsuarios />,
   perfis: () => <TelaPerfis />,
   cargos: () => <TelaCargos />,
+  "motivos-pausa": () => <TelaMotivosPausa />,
   admissao: () => <TelaAdmissao />,
   "modelos-documento": () => <TelaModelosDocumento />,
   email: () => <TelaEmail />,

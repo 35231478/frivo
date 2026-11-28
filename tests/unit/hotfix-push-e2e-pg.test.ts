@@ -227,7 +227,7 @@ describe.skipIf(!URL_PG)("hotfix push + comentários — web-push de verdade, Po
     const pc = async () => { await depoisDaResposta(); return servico.pedidos.map((p) => [p.caminho.replace("/push/", ""), decifrar(p).titulo]).sort(); };
     // o responsável da OS (uResp) e o admin que abriu a OS (criadoPor) estão ligados; o uOutro, não
     await ev.notificarComentarioOS("os1", "uCarlos", { comentarioId: "cm-1", texto: "Falta a peça" });
-    expect(await pc()).toEqual([["adm-cel", "Mensagem nova na OS OS-4442"], ["resp-pc", "Mensagem nova na OS OS-4442"]]);
+    expect(await pc()).toEqual([["adm-cel", "Mensagem nova · OS-4442 · Mercado Fictício"], ["resp-pc", "Mensagem nova · OS-4442 · Mercado Fictício"]]);
     // sem ninguém ligado com aparelho: o escritório todo que vê OS (o aviso não se perde)
     servico.pedidos = [];
     await prisma.pushSubscription.deleteMany({ where: { id: { in: ["resp-pc", "adm-cel"] } } });

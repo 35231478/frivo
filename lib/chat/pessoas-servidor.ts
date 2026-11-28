@@ -17,8 +17,8 @@ import { prisma } from "@/lib/prisma";
 import { pode } from "@/lib/permissoes";
 import { filtroOrdens } from "@/lib/escopo/proprios";
 import { atividadesDoTecnico } from "@/lib/tecnico/escopo";
-import { inicioHojeBR } from "@/lib/fuso";
-import { apresentar, marcarConversaLida, marcarLeituraDaPessoa, nomesDeQuemLeu, SELECT_MENSAGEM } from "@/lib/execucao/comentarios";
+import { ondeMeuDia } from "@/lib/tecnico/dia";
+import { apresentar, marcarConversaLida, marcarLeituraDaPessoa, marcarRespondidas, nomesDeQuemLeu, SELECT_MENSAGEM } from "@/lib/execucao/comentarios";
 import { ordenarPessoas, osPadraoDaMensagem, type OsDoDia, type PessoaResumo } from "@/lib/chat/regras";
 import type { QuemEscritorio } from "@/lib/chat/servidor";
 import type { ComentarioTela } from "@/lib/tecnico/comentarios";
@@ -65,23 +65,38 @@ export function visivelAoEscritorio(u: QuemEscritorio): Prisma.OsComentarioWhere
   return { OR: [{ ordemServicoId: null }, { AND: [{ ordemServicoId: { not: null } }, { ordemServico: { is: filtroOrdens(u) } }] }] };
 }
 
-/** As OS do técnico no dia: as atividades de hoje (Brasília) e as em andamento; a em andamento primeiro. */
+/**
+ * As atividades do seletor de OS do chat do app: EXATAMENTE as do "Meu dia" do técnico (`ondeMeuDia`: as dele, como
+ * responsável ou na equipe, de hoje ou começadas antes e não terminadas), menos as de OS cancelada (que não recebem
+ * mensagem). A regra: se o técnico VÊ a OS no dia dele, conversa sobre ela; se não vê, o chip não aparece. A gravação
+ * confere a mesma atribuição (`filtroEscopo`): o que o seletor oferece, o servidor aceita.
+ */
+export const ondeAtividadesDoDia = (empresaId: string, tecnicoId: string, agora: Date = new Date()): Prisma.AtividadeOsWhereInput => ({
+  // Antes: um 2º OR na mesma chave apagava o filtro do técnico, e o seletor mostrava as OS dos outros (recusadas)
+  AND: [ondeMeuDia(empresaId, tecnicoId, agora), { ordemServico: { status: { not: "CANCELADA" } } }],
+});
+
+/**
+ * As OS do técnico no dia (uma por OS; a atividade em andamento dela, se houver). O ponto "em andamento" do seletor vai
+ * em UMA OS só — a da atividade iniciada por último —, que também é a OS padrão da mensagem; ela vem primeiro.
+ */
 export async function osDoDiaDoTecnico(empresaId: string, tecnicoId: string, agora: Date = new Date()): Promise<OsDoDia[]> {
   const as = await prisma.atividadeOs.findMany({
-    where: {
-      ...atividadesDoTecnico(tecnicoId), ordemServico: { empresaId, status: { not: "CANCELADA" } },
-      OR: [{ status: "EM_ANDAMENTO" }, { dataAgendada: { gte: inicioHojeBR(agora), lt: inicioHojeBR(agora, 1) } }],
-    },
-    orderBy: [{ dataAgendada: "asc" }],
-    select: { id: true, status: true, ordemServico: { select: { id: true, numero: true, cliente: { select: { nome: true, nomeFantasia: true } } } } },
+    where: ondeAtividadesDoDia(empresaId, tecnicoId, agora),
+    orderBy: [{ dataAgendada: "asc" }, { criadoEm: "asc" }],
+    select: { id: true, status: true, iniciadaEm: true, ordemServico: { select: { id: true, numero: true, cliente: { select: { nome: true, nomeFantasia: true } } } } },
   });
-  const porOs = new Map<string, OsDoDia>();
+  // A atividade em andamento iniciada por último: a única com o ponto
+  const atual = as.filter((a) => a.status === "EM_ANDAMENTO").sort((x, y) => (y.iniciadaEm?.getTime() ?? 0) - (x.iniciadaEm?.getTime() ?? 0))[0]?.id ?? null;
+  const porOs = new Map<string, OsDoDia & { status: string }>();
   for (const a of as) {
     const ja = porOs.get(a.ordemServico.id);
-    const emAndamento = a.status === "EM_ANDAMENTO";
-    if (!ja || (emAndamento && !ja.emAndamento)) porOs.set(a.ordemServico.id, { osId: a.ordemServico.id, numero: a.ordemServico.numero, cliente: nomeCliente(a.ordemServico.cliente), emAndamento, atividadeId: a.id });
+    const emAndamento = a.id === atual;
+    // Na mesma OS, a atividade em andamento vale mais que a agendada (é por ela que a mensagem sobe)
+    const melhor = !ja || emAndamento || (a.status === "EM_ANDAMENTO" && !ja.emAndamento && ja.status !== "EM_ANDAMENTO");
+    if (melhor) porOs.set(a.ordemServico.id, { osId: a.ordemServico.id, numero: a.ordemServico.numero, cliente: nomeCliente(a.ordemServico.cliente), emAndamento, atividadeId: a.id, status: a.status });
   }
-  return [...porOs.values()].sort((x, y) => Number(y.emAndamento) - Number(x.emAndamento));
+  return [...porOs.values()].sort((x, y) => Number(y.emAndamento) - Number(x.emAndamento)).map(({ status: _s, ...o }) => o);
 }
 
 async function mensagensDe(empresaId: string, onde: Prisma.OsComentarioWhereInput, usuarioId: string): Promise<ComentarioTela[]> {
@@ -96,6 +111,8 @@ async function mensagensDe(empresaId: string, onde: Prisma.OsComentarioWhereInpu
  * sino e a visão por OS) e marca o ✓✓ das mensagens dos outros que ainda não tinham sido lidas.
  */
 async function lerConversa(empresaId: string, quemLe: string, conversaUsuarioId: string, onde: Prisma.OsComentarioWhereInput, agora: Date) {
+  // O que o outro lado já respondeu (também as de antes de "responder é ler") fica lido por quem respondeu
+  await marcarRespondidas(empresaId, onde);
   // Só avança a leitura quando chegou mensagem desde a última (reler sem novidade não muda a marca do tempo real)
   const antes = (await prisma.conversaLeitura.findUnique({ where: { usuarioId_conversaUsuarioId: { usuarioId: quemLe, conversaUsuarioId } }, select: { lidoEm: true } }))?.lidoEm;
   const novidade = !antes || !!(await prisma.osComentario.findFirst({ where: { AND: [{ empresaId }, onde, { criadoEm: { gt: antes, lte: agora } }] }, select: { id: true } }));

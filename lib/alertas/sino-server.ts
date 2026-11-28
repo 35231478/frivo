@@ -12,6 +12,7 @@ import { comEscopo, filtroOrcamentos, filtroOrdens, type QuemVe } from "@/lib/es
 import { DIAS_USO_CAMPO_SINO, type EscopoDoSino } from "@/lib/alertas/sino";
 import { totalDoSino } from "@/lib/alertas/lidos";
 import { contarAtividadesEsquecidas } from "@/lib/execucao/andamento-server";
+import { contarPausasDoSino, SEM_PAUSAS_NO_SINO } from "@/lib/pausas/servidor";
 import { contarComentariosNovos } from "@/lib/execucao/comentarios";
 import { contarDespesasPendentes } from "@/lib/execucao/despesas";
 import { contarAlertasPrazos } from "@/lib/prazo-server";
@@ -88,7 +89,7 @@ export async function contarSino({ empresaId, usuarioId, escopo: e, filtroTecnic
   const whereLeads = comEscopo({ empresaId, nome: { startsWith: "Lead do site" }, criadoEm: { gte: desde24h } } as Prisma.OrcamentoWhereInput, ec);
   const whereRespondidos = comEscopo({ empresaId, status: { in: ["APROVADO" as const, "REPROVADO" as const] }, respostaVistaEm: null } as Prisma.OrcamentoWhereInput, ec);
 
-  const [prazosBrutos, veiculosBrutos, boletosPagos, respondidos, leads, nfsDoPedido, nfse, faturamentoContratos, reajustesContrato, separacoesPendentes, devolucoesPendentes, pmoc, aceites, admissoes, estoqueNegativoCampo, esquecidas, comentarios, despesasCampo, semTecnico, vencendo, contasPagarHoje, contasReceberHoje, pedidos] = await Promise.all([
+  const [prazosBrutos, veiculosBrutos, boletosPagos, respondidos, leads, nfsDoPedido, nfse, faturamentoContratos, reajustesContrato, separacoesPendentes, devolucoesPendentes, pmoc, aceites, admissoes, estoqueNegativoCampo, esquecidas, comentarios, despesasCampo, semTecnico, vencendo, contasPagarHoje, contasReceberHoje, pedidos, pausasSino] = await Promise.all([
     e.prazos || e.comprasPendentes ? contarAlertasPrazos(empresaId, eo) : Promise.resolve(null),
     e.veiculos && temFrota ? contarAlertasVeiculos(empresaId) : Promise.resolve(null),
     e.boletos
@@ -153,6 +154,8 @@ export async function contarSino({ empresaId, usuarioId, escopo: e, filtroTecnic
     e.contasPagarHoje && temFinanceiro ? prisma.contaPagar.count({ where: whereListaPagar(empresaId, SP_CONTAS_HOJE, periodoHoje, agora) }) : Promise.resolve(0),
     e.contasReceberHoje && temFinanceiro ? prisma.contaReceber.count({ where: whereListaReceber(empresaId, SP_CONTAS_HOJE, periodoHoje, agora) }) : Promise.resolve(0),
     contarPedidos(),
+    // D1: impedimentos em aberto (pausa por impedimento no app) e visitas não concluídas esperando nova data
+    e.impedimentos ? contarPausasDoSino(empresaId) : Promise.resolve(SEM_PAUSAS_NO_SINO),
   ]);
   const [pedidosAguardando, pedidosAtrasados, pedidosConferir] = pedidos;
 
@@ -192,6 +195,7 @@ export async function contarSino({ empresaId, usuarioId, escopo: e, filtroTecnic
     ...admissoes,
     estoqueNegativoCampo,
     ...esquecidas,
+    ...pausasSino,
     ...comentarios,
     despesasCampo,
     osSemTecnico,

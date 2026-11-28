@@ -24,7 +24,7 @@ import { aplicarComentario, type ComentarioTela } from "@/lib/tecnico/comentario
 import { SEM_OS } from "@/lib/tecnico/despesas";
 import { MSG_CONVERSA_SEM_SINAL } from "@/lib/tecnico/chat";
 import type { OsDoDia } from "@/lib/chat/regras";
-import type { CartaoTela, RetratoAtividade } from "@/lib/tecnico/offline/tipos";
+import type { CartaoTela, NovaOperacao, RetratoAtividade } from "@/lib/tecnico/offline/tipos";
 import { CONFIG_APP_PADRAO } from "@/lib/tecnico/config-app";
 
 (globalThis as any).IS_REACT_ACT_ENVIRONMENT = true;
@@ -37,6 +37,7 @@ const HOJE = "2026-11-12";
 /* ───────── servidor simulado ───────── */
 let online = true;
 let recusar: string | null = null;
+let recusarStatus = 422;
 // A marca do tempo real: mensagens · 1ª leitura · a leitura do próprio técnico (não reinicia entre os testes: o laço
 // de novidades da aba é um só e lembra a última marca)
 let marca = 0;
@@ -119,7 +120,7 @@ const fetchFalso = vi.fn(async (url: string, init?: RequestInit): Promise<Respon
     let mudou = false;
     const resultados = corpo.operacoes.map((o: any) => {
       if (o.tipo !== "comentario") return { id: o.id, ok: true, status: 200 };
-      if (recusar) return { id: o.id, ok: false, status: 422, erro: recusar };
+      if (recusar) return { id: o.id, ok: false, status: recusarStatus, erro: recusar };
       const os = o.atividadeId === SEM_OS ? null : o.atividadeId === "aB" ? OS_B : OS_A;
       mensagens = aplicarComentario(mensagens, o.dados, "2026-11-12T18:00:00.000Z", "João Silva")
         .map((c) => (c.clientId === o.dados.clientId ? { ...c, pendente: undefined, id: c.id ?? `s-${c.clientId}`, os: c.os === undefined ? os : c.os } : c));
@@ -141,7 +142,7 @@ beforeEach(async () => {
   vi.useFakeTimers({ toFake: ["Date"] });
   vi.setSystemTime(MEIO_DIA);
   (globalThis as any).indexedDB = new IDBFactory();
-  online = true; recusar = null; pedidos = []; enviadas = []; esperas = new Set(); fetchFalso.mockClear();
+  online = true; recusar = null; recusarStatus = 422; pedidos = []; enviadas = []; esperas = new Set(); fetchFalso.mockClear();
   cenario();
   marca += 1; // o laço da aba lembra a marca do teste anterior: a 1ª pergunta deste já traz o estado novo
   vi.stubGlobal("fetch", fetchFalso);
@@ -178,11 +179,13 @@ async function abrirVistas(endereco: string, config = CONFIG_APP_PADRAO) {
   const { ProvedorTecnico, useVista } = await import("@/components/tecnico/contexto");
   const { VistaChat } = await import("@/components/tecnico/chat");
   const { VistaOs } = await import("@/components/tecnico/execucao");
+  const { PerfilTecnico } = await import("@/components/tecnico/perfil");
   function Vistas() {
     const v = useVista();
     if (!v) return null;
     if (v.ver === "chat") return createElement(VistaChat);
     if (v.ver === "os") return createElement(VistaOs, { key: v.a, atividadeId: v.a, equipamentoId: v.e });
+    if (v.ver === "perfil") return createElement(PerfilTecnico, { perfilInicial: {} as never });
     return createElement("div", { "data-vista": v.ver });
   }
   window.history.replaceState(null, "", endereco);
@@ -307,7 +310,7 @@ describe("enviar", () => {
     expect($$("[data-mensagem]").filter((m) => texto(m).includes("uniforme novo"))).toHaveLength(1);
   });
 
-  it("recusada pelo servidor: 'Não enviada' com o motivo e 'Tentar de novo', que chama o motor e reenvia (mesmo clientId)", async () => {
+  it("recusada pelo servidor (regra): o MOTIVO à vista e, em vez de \"Tentar de novo\", Enviar sem OS / Trocar a OS / Descartar", async () => {
     await abrirVistas("/tecnico?ver=chat");
     await esperarAte(() => marcada().length === 1, "seletor");
     recusar = "Atividade bloqueada pelo escritório.";
@@ -316,17 +319,89 @@ describe("enviar", () => {
     await esperarAte(() => balao("Preciso da senha")?.getAttribute("data-estado") === "falhou", "falhou");
     const b = balao("Preciso da senha")!;
     expect(texto(b.querySelector("[data-falhou]"))).toBe("Não enviada");
-    expect(b.querySelector("[data-estado-icone]")!.getAttribute("aria-label")).toBe("Atividade bloqueada pelo escritório.");
-    expect(texto(b.querySelector("[data-tentar-de-novo]"))).toBe("Tentar de novo");
+    // o porquê no balão (antes ficava só na dica, que o celular não mostra)
+    expect(texto(b.querySelector("[data-motivo-recusa]"))).toBe("Atividade bloqueada pelo escritório.");
+    expect(b.querySelector("[data-tentar-de-novo]")).toBeNull();
+    expect(texto(b.querySelector("[data-enviar-sem-os]"))).toBe("Enviar sem OS");
+    expect(texto(b.querySelector("[data-descartar]"))).toBe("Descartar");
+    // Enviar sem OS: a MESMA mensagem (o mesmo clientId) sobe sem OS; a recusada sai da fila
     recusar = null;
-    const tentar = vi.spyOn(motor, "tentarDeNovo");
-    await clicar(b.querySelector("[data-tentar-de-novo]"));
-    expect(tentar).toHaveBeenCalledTimes(1);
+    await clicar(b.querySelector("[data-enviar-sem-os]"));
     await act(async () => { await motor.aguardar(); });
-    await esperarAte(() => balao("Preciso da senha")?.getAttribute("data-estado") === "enviada", "reenviada");
+    await esperarAte(() => balao("Preciso da senha")?.getAttribute("data-estado") === "enviada", "reenviada sem OS");
     const env = enviadas.filter((o) => o.tipo === "comentario");
-    expect(env.map((o) => o.atividadeId)).toEqual(["aA", "aA"]); // a recusada e a reenviada
+    expect(env.map((o) => o.atividadeId)).toEqual(["aA", SEM_OS]);
     expect(new Set(env.map((o) => o.dados.clientId)).size).toBe(1);
+    expect((await comentariosNaFila()).filter((o) => o.estado === "erro")).toEqual([]);
+  });
+
+  it("recusada: \"Trocar a OS\" mostra as outras OS do dia e reenvia na escolhida; \"Descartar\" tira do aparelho (nunca subiu)", async () => {
+    await abrirVistas("/tecnico?ver=chat");
+    await esperarAte(() => marcada().length === 1, "seletor");
+    recusar = "Esta atividade não está atribuída.";
+    await escrever("Chego em dez minutos.");
+    await escrever("Mensagem errada.");
+    await act(async () => { await motor.aguardar(); });
+    await esperarAte(() => balao("Mensagem errada")?.getAttribute("data-estado") === "falhou" && balao("Chego em dez")?.getAttribute("data-estado") === "falhou", "as duas recusadas");
+    recusar = null;
+    const b = balao("Chego em dez")!;
+    await clicar(b.querySelector("[data-trocar-os]"));
+    expect([...b.querySelectorAll("[data-trocar-para]")].map((e) => e.getAttribute("data-trocar-para"))).toEqual(["osB"]); // sem a OS que recusou
+    await clicar(b.querySelector("[data-trocar-para='osB']"));
+    await act(async () => { await motor.aguardar(); });
+    await esperarAte(() => balao("Chego em dez")?.getAttribute("data-estado") === "enviada", "reenviada na OS-2");
+    expect(enviadas.filter((o) => o.tipo === "comentario" && o.dados.texto === "Chego em dez minutos.").map((o) => o.atividadeId)).toEqual(["aA", "aB"]);
+    await clicar(balao("Mensagem errada")!.querySelector("[data-descartar]"));
+    await esperarAte(() => !balao("Mensagem errada"), "descartada");
+    expect((await comentariosNaFila()).some((o) => o.dados.texto === "Mensagem errada.")).toBe(false);
+  });
+});
+
+describe("a recusa da OS que não é dele (o print do Zé em Perfil › Sincronização)", () => {
+  it("o porquê no balão; a mensagem recusada NÃO segura o serviço da OS; Perfil: \"Não enviadas\", \"Mensagem do chat · OS · começo\"", async () => {
+    await abrirVistas("/tecnico?ver=chat");
+    await esperarAte(() => marcada().length === 1, "seletor");
+    recusar = "Esta atividade não está atribuída a você. Fale com o escritório."; recusarStatus = 403;
+    await escrever("Opa, chego às dez com a escada.");
+    await act(async () => { await motor.aguardar(); });
+    await esperarAte(() => balao("Opa, chego")?.getAttribute("data-estado") === "falhou", "falhou");
+    const b = balao("Opa, chego")!;
+    // (d) o motivo ali mesmo, sem "você", e as três saídas
+    expect(texto(b.querySelector("[data-motivo-recusa]"))).toBe("Esta OS não está atribuída a este técnico. Envie sem OS ou troque a OS.");
+    expect(["[data-enviar-sem-os]", "[data-trocar-os]", "[data-descartar]"].map((s) => !!b.querySelector(s))).toEqual([true, true, true]);
+    // a OS da mensagem fica guardada no aparelho (para dizer qual é), mas NÃO sobe (o servidor recusa campo a mais)
+    expect((await comentariosNaFila())[0]).toMatchObject({ osNumero: "OS-1", estado: "erro" });
+    expect(enviadas.filter((o) => o.tipo === "comentario").every((o) => !("osNumero" in o))).toBe(true);
+    // (c) o serviço da MESMA OS segue: checklist e conclusão sobem com a mensagem recusada na fila
+    recusar = null;
+    await motor.registrar([
+      { tipo: "resposta", atividadeId: "aA", equipamentoId: "eqA", itemId: "i1", dados: { status: "OK" } },
+      { tipo: "concluir", atividadeId: "aA", dados: {} },
+    ] as NovaOperacao[]);
+    await act(async () => { await motor.aguardar(); });
+    expect(enviadas.filter((o) => o.atividadeId === "aA" && o.tipo !== "comentario").map((o) => o.tipo)).toEqual(["resposta", "concluir"]);
+    // e uma gravação esperando (sem sinal) na mesma OS não vira "as que esperam esta"
+    online = false;
+    await motor.registrar([{ tipo: "resposta", atividadeId: "aA", equipamentoId: "eqA", itemId: "i2", dados: { status: "OK" } }] as NovaOperacao[]);
+    const { irPara } = await import("@/components/tecnico/contexto");
+    await act(async () => { irPara({ ver: "perfil" }); });
+    await esperarAte(() => !!$("[data-recusadas]"), "Perfil › Sincronização");
+    const painel = $("[data-recusadas]")!;
+    // (a) ninguém do escritório recusou: foi regra do sistema
+    expect(texto(painel.querySelector("[data-titulo-recusadas]"))).toBe("Não enviadas");
+    expect(texto(painel)).toContain("O sistema não aceitou estas gravações.");
+    expect(texto(painel)).not.toMatch(/pelo escritório/i);
+    // (b) qual mensagem é
+    const item = painel.querySelector("[data-recusada='comentario']")!;
+    expect(texto(item.querySelector("[data-rotulo-recusada]"))).toBe("Mensagem do chat · OS-1 · “Opa, chego às dez com a escada.”");
+    expect(texto(item.querySelector("[data-motivo-recusada]"))).toBe("Esta OS não está atribuída a este técnico. Envie sem OS ou troque a OS.");
+    // (c) nada de "as próximas esperam esta", nem "Descartar todas desta OS"
+    expect(texto(item)).not.toContain("esperam esta");
+    expect(item.querySelector("[data-descartar-da-os]")).toBeNull();
+    expect(texto(painel)).not.toMatch(/\bvocê\b/i);
+    // e leva ao Chat, onde se resolve
+    await clicar(item.querySelector("[data-abrir-chat]"));
+    await esperarAte(() => !!$("[data-vista='chat']") || !!balao("Opa, chego"), "de volta ao Chat");
   });
 });
 
@@ -367,7 +442,7 @@ describe("tempo real e contador", () => {
     await esperarAte(() => chat.querySelector("[data-nao-lidas]")?.textContent === "5", "contador em tempo real");
     expect($("[data-vista]")!.getAttribute("data-vista")).toBe("dia");
     expect(pedidos).not.toContain("GET /api/tecnico/conversas");
-    // Abrir o Chat lê (marca como lidas): o contador apaga
+    // Abrir o chat lê (marca como lidas): o contador apaga
     await clicar(chat);
     expect(window.location.search).toBe("?ver=chat");
     expect(chat.getAttribute("aria-current")).toBe("page");

@@ -1,4 +1,5 @@
 import { BadgeCheck, CalendarClock, Camera, ClipboardCheck, Lock, MapPin, Mic, Sparkles, Truck, Users } from "lucide-react";
+import { duracaoCurta } from "@/lib/pausas/regras";
 import { cn, formatarCpfCnpj, formatarData, formatarDataHora, formatarTelefone } from "@/lib/utils";
 import { textoFaixa } from "@/lib/checklist/faixas";
 import { enderecoStr } from "@/components/relatorio/cabecalho-relatorio";
@@ -160,6 +161,26 @@ export function RelatorioOsDocumento({ dados: d, config, versao }: { dados: Rela
                   <td className="py-1 pr-2">{t.atividade}</td>
                   <td className="py-1 pr-2 whitespace-nowrap">{t.inicio ? formatarDataHora(t.inicio) : "—"}</td>
                   <td className="py-1 text-right whitespace-nowrap">{duracao(t.duracaoMin)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </section>
+      )}
+
+      {/* ── D1: Pausas do técnico — SÓ na versão interna (o cliente nunca vê almoço nem impedimento) ── */}
+      {versao === "interna" && d.pausas.length > 0 && (
+        <section className="mt-5" data-secao="pausas">
+          <Titulo icone={<CalendarClock className="w-3.5 h-3.5" />}>Pausas (só o escritório vê)</Titulo>
+          <table className="w-full text-xs">
+            <thead><tr className="text-left text-ink-muted border-b border-surface-border"><th className="py-1 pr-2 font-semibold">Atividade</th><th className="py-1 pr-2 font-semibold">Motivo</th><th className="py-1 pr-2 font-semibold">Início</th><th className="py-1 text-right font-semibold">Duração</th></tr></thead>
+            <tbody>
+              {d.pausas.map((p, i) => (
+                <tr key={i} className="border-b border-surface-border/60" data-pausa-relatorio>
+                  <td className="py-1 pr-2">{p.atividade}</td>
+                  <td className="py-1 pr-2">{p.motivo}{p.naoConcluida ? " — visita não concluída" : ""}{p.observacao ? <span className="text-ink-muted"> ({p.observacao})</span> : null}</td>
+                  <td className="py-1 pr-2 whitespace-nowrap">{formatarDataHora(p.inicio)}</td>
+                  <td className="py-1 text-right whitespace-nowrap">{p.fim ? duracaoCurta(new Date(p.fim).getTime() - new Date(p.inicio).getTime()) : "em aberto"}</td>
                 </tr>
               ))}
             </tbody>

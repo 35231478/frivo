@@ -20,13 +20,16 @@ import { FILTRO_VENCENDO } from "@/lib/orcamentos/ciclo";
 export type TomPendencia = "atrasado" | "atencao" | "acento";
 export type AreaPendencia = "operacao" | "comercial" | "financeiro" | "estoque";
 /** A chave do ícone (a tela traduz para o componente: components/alertas/icones-pendencia) */
-export type IconePendencia = "semTecnico" | "atrasada" | "esquecida" | "comentario" | "pmoc" | "orcamento" | "despesa" | "pagar" | "receber" | "estoque" | "pedidoCliente";
+export type IconePendencia = "semTecnico" | "atrasada" | "esquecida" | "impedimento" | "comentario" | "pmoc" | "orcamento" | "despesa" | "pagar" | "receber" | "estoque" | "pedidoCliente";
 
 /** Os números que o catálogo usa (o retorno de contarSino tem todos) */
 export interface DadosPendencias {
   osSemTecnico: number; osSemTecnicoId: string | null;
   atendimentosAtraso: number;
   atividadesEsquecidas: number; atividadeEsquecidaOsId: string | null;
+  /** D1: pausa por impedimento em aberto; visita encerrada como "Não concluída" esperando nova data */
+  impedimentosAbertos?: number; impedimentoOsId?: string | null;
+  visitasNaoConcluidas?: number; naoConcluidaOsId?: string | null;
   comentariosCampo: number; comentarioCampoOsId: string | null;
   pmocsVencendo: number;
   orcamentosVencendo: number; orcamentoVencendoId: string | null;
@@ -86,6 +89,14 @@ export const PENDENCIAS = {
   atividadesEsquecidas: {
     area: "operacao", rotulo: "Atividades esquecidas em andamento", tom: "atencao", icone: "esquecida", escopo: "atividadesEsquecidas",
     valor: (d) => d.atividadesEsquecidas, href: (d) => hrefOs(d.atividadeEsquecidaOsId),
+  },
+  impedimentosAbertos: {
+    area: "operacao", rotulo: "Atividades pausadas por impedimento", tom: "atrasado", icone: "impedimento", escopo: "impedimentos",
+    valor: (d) => d.impedimentosAbertos ?? 0, href: (d) => hrefOs(d.impedimentoOsId ?? null),
+  },
+  visitasNaoConcluidas: {
+    area: "operacao", rotulo: "Visitas não concluídas (reagendar)", tom: "atencao", icone: "impedimento", escopo: "impedimentos",
+    valor: (d) => d.visitasNaoConcluidas ?? 0, href: (d) => hrefOs(d.naoConcluidaOsId ?? null),
   },
   comentariosCampo: {
     // CHAT-1: a mensagem do campo abre a conversa da OS (uma só: ela; várias: a lista de Conversas)

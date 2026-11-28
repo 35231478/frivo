@@ -4,6 +4,7 @@ import { ROTULO_SITUACAO_APP, comissoesDaTela, type ComissaoRetrato } from "@/li
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AlertTriangle, ArrowLeft, ArrowRight, Camera, Check, CheckCheck, ChevronLeft, ChevronRight, CircleSlash, ClipboardList, Ruler } from "lucide-react";
 import { faixaSomenteLeitura } from "@/lib/tecnico/somente-leitura";
+import { FaixaPausa } from "@/components/tecnico/pausa";
 import { cn, formatarMoeda } from "@/lib/utils";
 import { Modal } from "@/components/ui/modal";
 import { toast } from "@/components/ui/avisos";
@@ -175,6 +176,8 @@ export function TelaEquipamento({ x, e, registrar, endereco, qr, comissao }: Pro
 
   return (
     <div className="space-y-4 pb-32" data-vista="equipamento" data-equipamento={equipamentoId}>
+      {/* D1: pausada — a faixa (Retomar) aparece também no equipamento */}
+      <FaixaPausa x={x} registrar={registrar} />
       {/* Uma linha só para voltar, a posição e as setas: a tela fica curta e o TUDO OK sobe para o dedão */}
       <div ref={topo} className="flex items-center justify-between gap-2 -mt-1">
         <button type="button" onClick={() => irPara({ ver: "os", a: atividadeId })} className="inline-flex items-center gap-1.5 text-sm font-semibold text-primary-700 py-1 touch-target">
