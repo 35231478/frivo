@@ -174,11 +174,8 @@ describe("OS cancelada com trabalho feito sem sinal", () => {
     s.online = false;
     await motor.registrar([resposta("aA", "i2"), resposta("aB", "i1")]);
     await motor.aguardar();
-    const antes = await banco.fila();
-    expect(antes.some((o) => o.estado === "enviada")).toBe(antes.length === 3);
-    await motor.descartarDaAtividade("aA");
-    const depois = await banco.fila();
-    expect(depois.map((o) => [o.atividadeId, o.estado]).filter(([, e]) => e !== "enviada")).toEqual([["aB", "pendente"]]);
-    expect(depois.filter((o) => o.estado === "enviada").every((o) => o.atividadeId === "aA")).toBe(true);
+    expect((await banco.fila()).map((o) => [o.atividadeId, o.estado])).toEqual([["aA", "enviada"], ["aA", "pendente"], ["aB", "pendente"]]);
+    expect(await motor.descartarDaAtividade("aA")).toBe(1); // só a que não subiu
+    expect((await banco.fila()).map((o) => [o.atividadeId, o.estado])).toEqual([["aA", "enviada"], ["aB", "pendente"]]);
   });
 });

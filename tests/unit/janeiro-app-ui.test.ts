@@ -83,6 +83,12 @@ describe("login depois de a sessão do app vencer", () => {
     await montar(createElement(LoginForm));
     expect($("[data-sessao-expirou]")).toBeNull();
     expect(caixa!.textContent).toContain("Sua sessão foi encerrada porque esta conta entrou em outro aparelho.");
+    // encerrada pelo servidor E vinda do app: um aviso só (o da sessão encerrada), não dois
+    await act(async () => root?.unmount()); caixa?.remove();
+    nav.sp = new URLSearchParams("sessao=encerrada&motivo=expirou");
+    await montar(createElement(LoginForm));
+    expect($("[data-sessao-expirou]")).toBeNull();
+    expect(caixa!.textContent).toContain("Sua sessão foi encerrada. Entre novamente para continuar.");
   });
 
   it("campos com 44 px e letra de 16 px (o iPhone não dá zoom); olho e 'Esqueci minha senha' com alvo de dedo", async () => {
