@@ -191,3 +191,25 @@ describe("o que a tela manda", () => {
     expect(decisaoRevisaoSchema.safeParse({ decisao: "MANTER", motivo: "  outro defeito  " }).success).toBe(true);
   });
 });
+
+describe("PJ4 — a divisão não perde nem cria centavo", () => {
+  const LINHA: LinhaOs = { id: "lx", tipo: "SERVICO", descricao: "Instalação VRF", quantidade: 1, valorTotal: 30_000, custo: null };
+  const [u] = unidadesDaOs([LINHA], 0, []);
+  const soma = (xs: { valor: number }[]) => Math.round(xs.reduce((s, x) => s + x.valor, 0) * 100) / 100;
+  it("3 técnicos em R$ 3.000 (10% de 30.000): 1.000 cada, total R$ 3.000,00 (antes 2.999,70)", () => {
+    const r = comissoesDaUnidade(u, [P("a"), P("b"), P("c")], [regra({})], false);
+    expect(r.map((x) => x.valor)).toEqual([1000, 1000, 1000]);
+    expect(soma(r)).toBe(3000);
+    expect(r.map((x) => x.parte)).toEqual([0.3333, 0.3333, 0.3333]); // a parte mostrada continua a de 4 casas
+  });
+  it("6 técnicos: total R$ 3.000,00 (antes pagava 3.000,60)", () => {
+    const r = comissoesDaUnidade(u, ["a", "b", "c", "d", "e", "f"].map((x) => P(x)), [regra({})], false);
+    expect(soma(r)).toBe(3000);
+    expect(Math.max(...r.map((x) => x.valor)) - Math.min(...r.map((x) => x.valor))).toBeLessThanOrEqual(0.01);
+  });
+  it("7 técnicos em R$ 100 (10% de 1.000): o centavo que sobra vai para alguém, total R$ 100,00", () => {
+    const [u2] = unidadesDaOs([{ ...LINHA, valorTotal: 1000 }], 0, []);
+    const r = comissoesDaUnidade(u2, ["a", "b", "c", "d", "e", "f", "g"].map((x) => P(x)), [regra({})], false);
+    expect(soma(r)).toBe(100);
+  });
+});
