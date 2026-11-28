@@ -36,6 +36,8 @@ export interface FotoGaleria {
   enviadoEm: string;
   /** Anexo antigo, enviado antes de existir a referência (sem equipamento e sem legenda) */
   semReferencia?: boolean;
+  /** A legenda automática da foto (legendaDoSistema), para "Restaurar legenda do sistema"; null/ausente: não tem */
+  legendaSistema?: string | null;
 }
 export interface DocumentoGaleria {
   id: string; nome: string; tipo: string; tamanho: number; legenda: string | null;
@@ -62,6 +64,22 @@ export function legendaExecucao(f: { momento: "ANTES" | "DEPOIS" | null; item: s
   if (f.momento === "DEPOIS") return "Depois do serviço";
   return "Foto do atendimento";
 }
+
+/**
+ * A LEGENDA DO SISTEMA de uma foto: a automática, que vale enquanto ninguém escreve outra — a da
+ * execução que diz de onde a foto é (item do checklist, antes/depois) e a do serviço adicional (a
+ * descrição do serviço). Foto da execução sem momento nem item ("Foto do atendimento") e foto
+ * enviada (anexo: a legenda é a que foi escrita no envio) não têm: null.
+ */
+export function legendaDoSistema(f: { origem: OrigemFoto; momento?: "ANTES" | "DEPOIS" | null; item?: string | null; servico?: string | null }): string | null {
+  if (f.origem === "EXECUCAO") return f.item || f.momento ? legendaExecucao({ momento: f.momento ?? null, item: f.item ?? null }) : null;
+  if (f.origem === "ADICIONAL") return f.servico ? legendaAdicional(f.servico) : null;
+  return null;
+}
+
+/** O botão "Restaurar legenda do sistema" aparece só quando há uma legenda do sistema para voltar. */
+export const podeRestaurarLegenda = (f: Pick<FotoGaleria, "legenda" | "legendaSistema">) => !!f.legendaSistema && f.legenda !== f.legendaSistema;
+export const MSG_SEM_LEGENDA_SISTEMA = "Esta foto não tem legenda do sistema para restaurar.";
 
 /** Foto enviada à OS sem legenda (anexo antigo) */
 export const LEGENDA_ANEXO_SEM = "Foto enviada (sem legenda)";

@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { conferirBloqueio, registrarTentativa, limparTentativas } from "@/lib/acesso/limite";
 import { z } from "zod";
 import { MSG_EMAIL_DO_TECNICO, emModoTecnico } from "@/lib/tecnico/modo";
+import { emailDeLoginEmUso, MSG_EMAIL_LOGIN_EM_USO } from "@/lib/acesso/email-unico";
 
 const schema = z.object({
   nome: z.string().trim().min(1, "Nome é obrigatório").optional(),
@@ -55,12 +56,10 @@ export async function PATCH(req: NextRequest) {
     }
     await limparTentativas("TROCA_SENHA", { usuarioId: userId });
 
-    const emUso = await prisma.usuario.findFirst({
-      where: { email: { equals: email, mode: "insensitive" }, id: { not: userId } },
-      select: { id: true },
-    });
-    // Resposta genérica: o 409 antigo confirmava e-mails de outras empresas (S9)
-    if (emUso) return NextResponse.json({ erro: "Não foi possível usar este e-mail. Escolha outro endereço." }, { status: 409 });
+    // Único no Frivo inteiro (o login procura em todas as empresas) — lib/acesso/email-unico. A mensagem é a
+    // mesma de todos os lugares que criam login (decisão da Leva I.2); só chega aqui quem já provou a senha
+    // atual, com limite de tentativas, então não serve para varrer e-mails.
+    if (await emailDeLoginEmUso(email, userId)) return NextResponse.json({ erro: MSG_EMAIL_LOGIN_EM_USO }, { status: 409 });
     data.email = email;
   }
 

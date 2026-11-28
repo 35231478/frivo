@@ -4,6 +4,7 @@ import { useNomesDaTrilha } from "@/components/layout/nome-na-trilha";
 import { signOut } from "next-auth/react";
 import { Bell, ShieldX, ChevronRight, LogOut, Search, AlertTriangle, Clock, ShoppingCart, Headset, ClipboardCheck, FileWarning, Wrench, Menu, Barcode, MessageSquareReply, PackageCheck, FileCheck2, FileX2, Hourglass, CalendarX2, TrendingUp, PackageOpen, PackageMinus, Globe, BadgeCheck, MessageSquareWarning, StarOff, UserPlus, FileSignature } from "lucide-react";
 import Link from "next/link";
+import { hrefChecklistsComAlertas, hrefDocumentosVencendo, hrefLeadsSite, umOuLista } from "@/lib/alertas/destinos-sino";
 import { usePathname } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { Session } from "next-auth";
@@ -295,7 +296,7 @@ export function Header({ session, avatarUrl }: HeaderProps) {
                 <p className="text-sm text-ink-muted text-center py-6">Nenhum alerta no momento.</p>
               ) : (
                 <div className="divide-y divide-surface-linha">
-                  {podeVer("orcamentos") && (alertas?.leadsSite ?? 0) > 0 && <AlertaItem href="/leads-site" icone={Globe} cor="text-primary-600" label="Novos leads do site" valor={alertas?.leadsSite ?? 0} {...toque("leadsSite")} />}
+                  {podeVer("orcamentos") && (alertas?.leadsSite ?? 0) > 0 && <AlertaItem href={hrefLeadsSite(alertas?.leadsSite, alertas?.leadSiteId)} icone={Globe} cor="text-primary-600" label="Novos leads do site" valor={alertas?.leadsSite ?? 0} {...toque("leadsSite")} />}
                   {podeVer("orcamentos") && <AlertaItem href={umOuLista(alertas?.orcamentosRespondidos, alertas?.orcamentoRespondidoId, (id) => `/orcamentos/${id}`, "/orcamentos?resposta=nova&periodo=todos")} icone={MessageSquareReply} cor="text-acento" label="Respostas de orçamentos" valor={alertas?.orcamentosRespondidos ?? 0} {...toque("orcamentosRespondidos")} />}
                   {doPainel("orcamentosVencendo")}
                   {/* Aceite do cliente: confirmou pelo link (ou assinou com o técnico) e ninguém abriu a OS ainda; a ressalva primeiro */}
@@ -334,9 +335,9 @@ export function Header({ session, avatarUrl }: HeaderProps) {
                   {podeVer("ordens") && (alertas?.atendimentoEstourado ?? 0) > 0 && <AlertaItem href="/ordens?atendimento=estourado&periodo=todos" icone={Headset} cor="text-atrasado" label="Prazo de atendimento estourado" valor={alertas?.atendimentoEstourado ?? 0} {...toque("atendimentoEstourado")} />}
                   {podeVer("ordens") && (alertas?.atendimentoVencendo ?? 0) > 0 && <AlertaItem href="/ordens?atendimento=vencendo&periodo=todos" icone={Headset} cor="text-atencao" label="Prazo de atendimento vencendo" valor={alertas?.atendimentoVencendo ?? 0} {...toque("atendimentoVencendo")} />}
                   {podeVer("veiculos") && <AlertaItem href="/veiculos/checklist" icone={ClipboardCheck} cor="text-acento" label="Checklists pendentes" valor={alertas?.checklistPendente ?? 0} {...toque("checklistPendente")} />}
-                  {podeVer("veiculos") && <AlertaItem href="/veiculos" icone={AlertTriangle} cor="text-atencao" label="Checklists com alertas" valor={alertas?.checklistsComAlertas ?? 0} {...toque("checklistsComAlertas")} />}
+                  {podeVer("veiculos") && <AlertaItem href={hrefChecklistsComAlertas(alertas?.checklistsComAlertas, alertas?.checklistAlertaVeiculoId)} icone={AlertTriangle} cor="text-atencao" label="Checklists com alertas" valor={alertas?.checklistsComAlertas ?? 0} {...toque("checklistsComAlertas")} />}
                   {podeVer("veiculos") && (alertas?.checklistNaoVaiUsar ?? 0) > 0 && <AlertaItem href="/veiculos/checklist?aba=diario" icone={ClipboardCheck} cor="text-atencao" label="Não vão usar o veículo hoje" valor={alertas?.checklistNaoVaiUsar ?? 0} {...toque("checklistNaoVaiUsar")} />}
-                  {podeVer("veiculos") && <AlertaItem href="/veiculos" icone={FileWarning} cor="text-atencao" label="Documentos de veículo vencendo" valor={alertas?.documentosVencendo ?? 0} {...toque("documentosVencendo")} />}
+                  {podeVer("veiculos") && <AlertaItem href={hrefDocumentosVencendo(alertas?.documentosVencendo, alertas?.documentoVencendoVeiculoId)} icone={FileWarning} cor="text-atencao" label="Documentos de veículo vencendo" valor={alertas?.documentosVencendo ?? 0} {...toque("documentosVencendo")} />}
                   {podeVer("veiculos") && <AlertaItem href="/veiculos?status=manutencao" icone={Wrench} cor="text-acento" label="Veículos em manutenção" valor={alertas?.veiculosManutencao ?? 0} {...toque("veiculosManutencao")} />}
                   {podeVer("financeiro", "contasReceber") && <AlertaItem href="/financeiro/contas-receber?card=RECEBIDO&periodo=todos" icone={Barcode} cor="text-ok" label="Boletos pagos hoje" valor={alertas?.boletosPagos ?? 0} {...toque("boletosPagos")} />}
                 </div>
@@ -379,9 +380,6 @@ const hrefMedicao = (id: string | null | undefined) => (id ? `/financeiro/medico
 /** A OS do aviso mais recente: abrir a OS é o que dá o aviso por visto */
 const hrefOs = (id: string | null | undefined) => (id ? `/ordens/${id}` : "/ordens");
 
-/** Um registro só e o id dele: abre o registro; senão, a lista (a mesma regra do painel de pendências) */
-const umOuLista = (valor: number | undefined, id: string | null | undefined, registro: (id: string) => string, lista: string) =>
-  valor === 1 && id ? registro(id) : lista;
 
 function AlertaItem({
   href, icone: Icone, cor, label, valor, onClick, lido = false,

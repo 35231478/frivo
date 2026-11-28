@@ -16,7 +16,9 @@ import { validarDataUrl } from "@/lib/anexos-server";
 import { FATURAS_EMITIDAS, whereMedicaoAguardando, whereOrcamentoAguardando, whereOsAguardando } from "@/lib/pedido-cliente/where";
 export { whereOrcamentoAguardando, whereOsAguardando };
 import { chaveHojeBR } from "@/lib/fuso";
-import { MSG_MOTIVO_RECUSA } from "@/lib/pedido-cliente/lembretes";
+import { MSG_FORA_DO_ESCOPO } from "@/lib/escopo/proprios-server";
+import { MSG_MOTIVO_RECUSA, MSG_PEDIDO_RESOLVIDO } from "@/lib/pedido-cliente/lembretes";
+import { avisarRecusaPorEmail } from "@/lib/pedido-cliente/recusa-email-server";
 import {
   aguardandoPedido, alertaValorPedido, inicioDaEspera, limparMotivo, limparNumeroPedido, modoEfetivo, MSG_MOTIVO, textoPedidoNaNota,
   travaFaturar, travaIniciar, DIAS_ALERTA_PEDIDO_PADRAO, reais, diasEsperando, type ModoPedido, type SituacaoPedido,
@@ -172,7 +174,12 @@ async function avancarFaturas(tx: Prisma.TransactionClient, osIds: string[], orc
 }
 
 export async function registrarPedido(
-  quem: Quem, dados: DadosPedido, ligar: { osIds?: string[]; orcamentoIds?: string[]; medicaoId?: string | null },
+  quem: Quem, dados: DadosPedido,
+  ligar: {
+    osIds?: string[]; orcamentoIds?: string[]; medicaoId?: string | null;
+    /** COM-1.1: "Ver só os próprios" — o que vem da fatura passa por aqui (só as OS/orçamentos da pessoa) */
+    soDaPessoa?: { os: (ids: string[]) => Promise<string[]>; orcamentos: (ids: string[]) => Promise<string[]> };
+  },
 ): Promise<Falha | { ok: true; pedidoId: string; alerta: string | null; ligadas: { os: number; orcamentos: number } }> {
   const lido = lerDadosPedido(dados);
   if ("ok" in lido) return lido;
@@ -184,7 +191,17 @@ export async function registrarPedido(
     const m = await prisma.medicao.findFirst({ where: { id: ligar.medicaoId, empresaId: quem.empresaId }, select: { clienteId: true, itens: { select: { ordemServicoId: true, orcamentoId: true } } } });
     if (!m) return falha(404, "Fatura não encontrada.");
     clienteDaFatura = m.clienteId;
-    for (const i of m.itens) { if (i.ordemServicoId) osIds.push(i.ordemServicoId); if (i.orcamentoId) orcamentoIds.push(i.orcamentoId); }
+    let daFaturaOs = m.itens.map((i) => i.ordemServicoId).filter(Boolean) as string[];
+    let daFaturaOrc = m.itens.map((i) => i.orcamentoId).filter(Boolean) as string[];
+    if (ligar.soDaPessoa) {
+      const [os, orc] = await Promise.all([ligar.soDaPessoa.os(daFaturaOs), ligar.soDaPessoa.orcamentos(daFaturaOrc)]);
+      const compartilhada = os.length < daFaturaOs.length || orc.length < daFaturaOrc.length;
+      // Nada da fatura é da pessoa: a fatura não existe para ela. Parte é: o pedido vale só nas OS dela (a fatura
+      // segue "Aguardando PC" enquanto a OS do outro esperar o pedido dele, e mostra os números dos dois)
+      if (compartilhada && !os.length && !orc.length) return falha(404, MSG_FORA_DO_ESCOPO);
+      [daFaturaOs, daFaturaOrc] = [os, orc];
+    }
+    osIds.push(...daFaturaOs); orcamentoIds.push(...daFaturaOrc);
   }
   if (!osIds.length && !orcamentoIds.length && !ligar.medicaoId) return falha(400, "Escolha ao menos uma OS ou orçamento.");
   const { oss, orcs } = await alvos(quem.empresaId, [...new Set(osIds)], [...new Set(orcamentoIds)]);
@@ -253,6 +270,7 @@ export async function confirmarPedidoDoPortal(quem: Quem, pedidoId: string) {
     select: { id: true, numero: true, valor: true, situacao: true, clienteId: true, osPropostas: true, orcamentosPropostos: true },
   });
   if (!p) return falha(404, "Pedido do cliente não encontrado.");
+  if (p.situacao === "RESOLVIDO") return falha(409, MSG_PEDIDO_RESOLVIDO);
   if (p.situacao !== "CONFERIR") return falha(409, "Este pedido já foi conferido.");
   const { oss, orcs } = await alvos(quem.empresaId, p.osPropostas, p.orcamentosPropostos);
   // Só os do mesmo cliente que ainda não têm pedido (outro cliente nunca entra, mesmo que o id venha errado)
@@ -272,12 +290,13 @@ export async function confirmarPedidoDoPortal(quem: Quem, pedidoId: string) {
   return { ok: true as const, alerta: alertaValorPedido(valor, total), ligadas: { os: todasOs.length, orcamentos: orcFinais.length } };
 }
 
-/** PC-2 — o escritório RECUSA o pedido do portal, com o motivo (o cliente vê no portal). Nada é ligado. */
+/** PC-2 — o escritório RECUSA o pedido do portal, com o motivo (o cliente vê no portal e recebe por e-mail). Nada é ligado. */
 export async function recusarPedidoDoPortal(quem: Quem, pedidoId: string, motivoBruto: unknown) {
   const motivo = limparMotivo(motivoBruto);
   if (!motivo) return falha(400, MSG_MOTIVO_RECUSA);
   const p = await prisma.pedidoCliente.findFirst({ where: { id: pedidoId, empresaId: quem.empresaId }, select: { id: true, numero: true, situacao: true, clienteId: true, osPropostas: true, orcamentosPropostos: true } });
   if (!p) return falha(404, "Pedido do cliente não encontrado.");
+  if (p.situacao === "RESOLVIDO") return falha(409, MSG_PEDIDO_RESOLVIDO);
   if (p.situacao !== "CONFERIR") return falha(409, "Este pedido já foi conferido.");
   const { oss, orcs } = await alvos(quem.empresaId, p.osPropostas, p.orcamentosPropostos);
   const recusou = await prisma.$transaction(async (tx) => {
@@ -290,7 +309,10 @@ export async function recusarPedidoDoPortal(quem: Quem, pedidoId: string, motivo
     return true;
   });
   if (!recusou) return falha(409, "Este pedido já foi conferido.");
-  return { ok: true as const };
+  // Leva I.2: o cliente recebe a recusa e o motivo por e-mail; a falha do envio não desfaz a recusa
+  const email = await avisarRecusaPorEmail(quem.empresaId, p.id, quem.usuarioId)
+    .catch((e: unknown) => ({ ok: false, erro: (e as Error)?.message ?? "erro no envio" }));
+  return { ok: true as const, email };
 }
 
 /** O total das OS e orçamentos ligados (o orçamento que gerou uma das OS não conta duas vezes) */

@@ -3,6 +3,7 @@ import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/prisma";
 import { exigirPermissao } from "@/lib/permissoes-server";
 import { problemaSenha } from "@/lib/acesso/senha";
+import { emailDeLoginEmUso, MSG_EMAIL_LOGIN_EM_USO } from "@/lib/acesso/email-unico";
 
 /**
  * Acesso ao app do colaborador (Equipes › Colaboradores › Acesso ao app).
@@ -75,6 +76,10 @@ export async function PUT(req: NextRequest, { params }: Params) {
     select: { id: true },
   });
   if (outro) return NextResponse.json({ erro: "Outro colaborador ativo já usa este e-mail. Use um e-mail único por colaborador." }, { status: 409 });
+
+  // O login procura o e-mail em TODAS as empresas: o deste acesso não pode ser login de outro usuário do
+  // Frivo (o próprio login ligado, se já existe, não conflita consigo) — lib/acesso/email-unico
+  if (await emailDeLoginEmUso(email, usuario?.id)) return NextResponse.json({ erro: MSG_EMAIL_LOGIN_EM_USO }, { status: 409 });
 
   if (senha) {
     const prob = problemaSenha(senha);

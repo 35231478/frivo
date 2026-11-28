@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { ProtegerSaida } from "@/components/ui/proteger-saida";
 import { notFound } from "next/navigation";
 import { auth } from "@/lib/auth";
 import { exigirModuloNaPagina } from "@/lib/modulos/pagina";
@@ -10,8 +11,10 @@ import { VeiculoForm } from "@/components/forms/veiculo-form";
 
 export const metadata: Metadata = { title: "Editar veículo" };
 
-export default async function EditarVeiculoPage({ params }: { params: Promise<{ id: string }> }) {
+export default async function EditarVeiculoPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ aba?: string }> }) {
   const { id } = await params;
+  // `?aba=documentos|checklists`: o sino abre a ficha direto no aviso (Leva I.2)
+  const { aba } = await searchParams;
   // Módulo da empresa (entitlement): desligado, a rota redireciona — acima do RBAC do usuário
   const session = await exigirModuloNaPagina("veiculos");
   const empresaId = session!.user!.empresaId;
@@ -78,10 +81,10 @@ export default async function EditarVeiculoPage({ params }: { params: Promise<{ 
           Este veículo está <strong>inativo</strong>: não aparece na lista padrão nem no checklist. Use “Reativar” para voltar a usá-lo.
         </div>
       )}
-      <VeiculoForm
+      <ProtegerSaida><VeiculoForm abaInicial={aba}
         key={veiculo.status} initialData={initialData} ocorrencias={ocorrencias}
         somenteLeitura={!pode(session!.user!.permissoes, "veiculos", "gerenciar", session!.user!.role)}
-      />
+      /></ProtegerSaida>
     </div>
   );
 }

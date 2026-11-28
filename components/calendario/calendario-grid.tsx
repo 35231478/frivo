@@ -670,7 +670,7 @@ function ModalDia({
     return () => window.removeEventListener("keydown", aoTeclar);
   }, [onClose]);
   return (
-    <div role="dialog" aria-modal="true" className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40" onClick={onClose}>
+    <div role="dialog" aria-modal="true" className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-black/40" onClick={onClose}>
       <div className="bg-white rounded-card shadow-2xl w-full max-w-md max-h-[80vh] flex flex-col anim-tooltip" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between gap-3 p-4 border-b border-surface-border">
           <div>
@@ -795,7 +795,7 @@ function CriarOsModal({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40" onClick={onClose}>
+    <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-black/40" onClick={onClose}>
       <div className="bg-white rounded-card shadow-2xl w-full max-w-lg max-h-[90vh] flex flex-col anim-tooltip" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between gap-3 p-4 border-b border-surface-border">
           <div>

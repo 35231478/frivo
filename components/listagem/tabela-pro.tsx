@@ -1,9 +1,12 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent as PointerEventReact, type ReactNode } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type PointerEvent as PointerEventReact, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import { ArrowDown, ArrowUp, ArrowUpDown, Check, GripVertical, RotateCcw, Settings2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
+import { CAMADA } from "@/lib/ui/camadas";
+import { posicaoFlutuante, type PosicaoFlutuante } from "@/lib/ui/flutuante";
 import { cliqueAbreLinha, destinoDoClique, teclaAbreLinha } from "@/lib/listagem/abrir-linha";
 import { PLANILHA } from "@/lib/planilha";
 import { useLinhasSelecionadas } from "@/components/listagem/selecao-linhas";
@@ -193,10 +196,31 @@ export function TabelaPro({ tela, colunas, linhas, ordenacao, cartoes, barra, qu
   const [arrastando, setArrastando] = useState<{ id: string; px: number } | null>(null);
   const [menu, setMenu] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
+  // O menu "Colunas" abre em portal, fixo na tela (lib/ui/flutuante): nunca recortado pela altura da tabela
+  const listaMenuRef = useRef<HTMLDivElement>(null);
+  const botaoMenuRef = useRef<HTMLButtonElement>(null);
+  const [posMenu, setPosMenu] = useState<PosicaoFlutuante | null>(null);
+  const reposicionar = useCallback(() => {
+    const r = botaoMenuRef.current?.getBoundingClientRect();
+    if (r) setPosMenu(posicaoFlutuante(r, { largura: window.innerWidth, altura: window.innerHeight }, 420));
+  }, []);
+  useLayoutEffect(() => { if (menu) reposicionar(); else setPosMenu(null); }, [menu, reposicionar]);
+  useEffect(() => {
+    if (!menu) return;
+    // A página rolou (não o próprio menu) ou a janela mudou: o menu acompanha o botão
+    const onScroll = (e: Event) => { if (!listaMenuRef.current?.contains(e.target as Node)) reposicionar(); };
+    window.addEventListener("scroll", onScroll, true);
+    window.addEventListener("resize", reposicionar);
+    return () => { window.removeEventListener("scroll", onScroll, true); window.removeEventListener("resize", reposicionar); };
+  }, [menu, reposicionar]);
 
   useEffect(() => {
     if (!menu) return;
-    const onDoc = (e: MouseEvent) => { if (menuRef.current && !menuRef.current.contains(e.target as Node)) setMenu(false); };
+    const onDoc = (e: MouseEvent) => {
+      const alvo = e.target as Node;
+      if (menuRef.current?.contains(alvo) || listaMenuRef.current?.contains(alvo)) return;
+      setMenu(false);
+    };
     const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setMenu(false); };
     document.addEventListener("mousedown", onDoc);
     document.addEventListener("keydown", onKey);
@@ -319,15 +343,16 @@ export function TabelaPro({ tela, colunas, linhas, ordenacao, cartoes, barra, qu
           <div className="min-w-0 text-xs text-ink-muted">{barra}</div>
           <div ref={menuRef} className="relative shrink-0">
             <button
-              type="button" onClick={() => setMenu((v) => !v)} aria-haspopup="menu" aria-expanded={menu} data-colunas-menu
+              ref={botaoMenuRef} type="button" onClick={() => setMenu((v) => !v)} aria-haspopup="menu" aria-expanded={menu} data-colunas-menu
               className={cn("inline-flex items-center gap-1.5 h-7 px-2 rounded-md text-xs font-semibold border transition-colors",
                 menu || personalizada ? "bg-primary-50 border-primary-200 text-primary-700" : "bg-white border-surface-border text-ink-muted hover:text-primary-700 hover:bg-primary-50")}
               title="Escolher as colunas e restaurar o padrão"
             >
               <Settings2 className="w-3.5 h-3.5" aria-hidden /> Colunas
             </button>
-            {menu && (
-              <div role="menu" aria-label="Colunas" className="absolute z-40 right-0 mt-1 w-60 max-h-[70vh] overflow-y-auto bg-white border border-surface-border rounded-lg shadow-elevated py-1" data-menu-colunas>
+            {menu && posMenu && createPortal(
+              <div ref={listaMenuRef} role="menu" aria-label="Colunas" style={posMenu}
+                className={cn("fixed w-60 overflow-y-auto overscroll-contain bg-white border border-surface-border rounded-lg shadow-elevated py-1", CAMADA.flutuante)} data-menu-colunas>
                 {noMenu.map((c) => {
                   const visivel = !ocultas.has(c.id);
                   const travada = !!c.obrigatoria;
@@ -365,7 +390,8 @@ export function TabelaPro({ tela, colunas, linhas, ordenacao, cartoes, barra, qu
                     <RotateCcw className="w-3.5 h-3.5" aria-hidden /> Restaurar padrão
                   </button>
                 </div>
-              </div>
+              </div>,
+              document.body,
             )}
             {/* O que mudou na ordem, para o leitor de tela */}
             <span className="sr-only" aria-live="polite" data-aviso-colunas>{aviso}</span>

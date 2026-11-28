@@ -104,7 +104,7 @@ describe.skipIf(!URL_PG)("COM-1 — Ver só os próprios: nada vaza entre vended
     logar("uAna");
     expect(ids((await chamar("ordens", "GET")).json)).toEqual(["osCriadaAna", "osDaVendaAna", "osVendaAna"]);
     expect((await chamar("ordens", "GET", {}, undefined, "?busca=OS-osBeto")).json).toEqual([]);
-    const csv = (await chamar("ordens/export", "GET", {}, undefined, "?status=")).texto;
+    const csv = (await chamar("ordens/export", "GET", {}, undefined, "?status=&periodo=todos") /* Leva I: OS sem agendamento */).texto;
     expect(csv).toContain("OS-osVendaAna");
     expect(csv).not.toMatch(/OS-osBeto|OS-osSemDono/);
     logar("uBeto"); expect(ids((await chamar("ordens", "GET")).json)).toEqual(["osBeto"]);
@@ -114,7 +114,7 @@ describe.skipIf(!URL_PG)("COM-1 — Ver só os próprios: nada vaza entre vended
 
   it("seleção em massa: 'ids do filtro' só conta os próprios; exportar/alterar ids do outro não passa", async () => {
     logar("uAna");
-    const filtro = await chamar("acoes-massa", "POST", {}, { entidade: "ordens", acao: "ids-do-filtro", filtro: "" });
+    const filtro = await chamar("acoes-massa", "POST", {}, { entidade: "ordens", acao: "ids-do-filtro", filtro: "periodo=todos" } /* Leva I: OS sem agendamento */);
     expect(filtro.json.total).toBe(3);
     expect(filtro.json.ids).not.toContain("osBeto");
     const exp = await chamar("acoes-massa", "POST", {}, { entidade: "orcamentos", acao: "exportar", ids: ["oAna", "oBeto"] });
@@ -225,6 +225,81 @@ describe.skipIf(!URL_PG)("COM-1 — Ver só os próprios: nada vaza entre vended
     expect((await chamar("pedidos-cliente/[id]", "GET", { id: ped.id })).status).toBe(200);
     // (o anexo existe: o 404 de cima é do escopo, não de "anexo não encontrado")
     expect((await chamar("pedidos-cliente/[id]/anexo", "GET", { id: ped.id })).status).toBe(200);
+  });
+
+  it("COM-1.1 (item 9) — pedido COMPARTILHADO (OS de dois vendedores): cada um vê o pedido com as OS dele; corrigir e conferir só sem a marca", async () => {
+    const comp = await prisma.pedidoCliente.create({ data: {
+      empresaId: "e1", clienteId: "c1", numero: "PC-COMP-1", data: new Date("2026-11-21"),
+      anexo: Buffer.from("%PDF-1.4 pedido ficticio").toString("base64"), anexoNome: "pedido.pdf", ordens: { connect: [{ id: "osBeto" }, { id: "osVendaAna" }] },
+    } });
+    logar("uAna");
+    const daAna = await chamar("pedidos-cliente/[id]", "GET", { id: comp.id });
+    expect(daAna.status).toBe(200);
+    expect(daAna.json.ordens.map((o: any) => o.id)).toEqual(["osVendaAna"]); // as do Beto não aparecem
+    expect([daAna.json.podeEditar, daAna.json.podeConferir]).toEqual([false, false]);
+    expect((await chamar("pedidos-cliente/[id]/anexo", "GET", { id: comp.id })).status).toBe(200);
+    // Corrigir ou conferir o compartilhado: não passa (nem com todas as permissões)
+    logar("uTudo");
+    expect((await chamar("pedidos-cliente/[id]", "GET", { id: comp.id })).status).toBe(404); // a Tina não tem nenhuma OS nele
+    sessao.atual = { user: { ...sessao.atual.user, id: "uAna", name: "Ana Vendas" } }; // Ana com todas as permissões + a marca
+    expect((await chamar("pedidos-cliente/[id]", "PATCH", { id: comp.id }, { numero: "PC-X" })).status).toBe(404);
+    expect((await chamar("pedidos-cliente/[id]/conferir", "POST", { id: comp.id }, { acao: "recusar", motivo: "Não confere" })).status).toBe(404);
+    expect((await prisma.pedidoCliente.findUnique({ where: { id: comp.id } })).numero).toBe("PC-COMP-1");
+    // Sem a marca: vê as duas OS e pode corrigir
+    logar("uGestor");
+    const doGestor = await chamar("pedidos-cliente/[id]", "GET", { id: comp.id });
+    expect([doGestor.json.ordens.map((o: any) => o.id), doGestor.json.podeEditar]).toEqual([["osBeto", "osVendaAna"], true]);
+    // O pedido só da Ana: ela corrige (e confere) como antes
+    const soDela = await prisma.pedidoCliente.create({ data: { empresaId: "e1", clienteId: "c1", numero: "PC-ANA-1", data: new Date("2026-11-21"), ordens: { connect: [{ id: "osCriadaAna" }] } } });
+    logar("uAna");
+    expect((await chamar("pedidos-cliente/[id]", "GET", { id: soDela.id })).json.podeEditar).toBe(true);
+    await prisma.ordemServico.updateMany({ where: { id: { in: ["osBeto", "osVendaAna", "osCriadaAna"] } }, data: { pedidoClienteId: null } });
+  });
+
+  it("COM-1.1 (item 9) — pela FATURA que cobre OS dos dois: a Ana informa o pedido só nas OS dela (a fatura espera o do Beto); fatura só do Beto não existe para ela", async () => {
+    await prisma.cliente.update({ where: { id: "c1" }, data: { exigePcAntesNf: true } }); // o cliente exige o pedido para faturar
+    const fatura = (id: string, oss: string[]) => prisma.medicao.create({ data: {
+      id, empresaId: "e1", clienteId: "c1", numero: `FAT-${id}`, tokenPublico: `tok-${id}`, status: "AGUARDANDO_PC",
+      itens: { create: oss.map((os) => ({ descricao: `Serviço ${os}`, valorUnitario: 100, valorTotal: 100, ordemServicoId: os })) },
+    } });
+    await fatura("fComp", ["osBeto", "osVendaAna"]);
+    await fatura("fBeto", ["osBeto"]);
+    // A Ana com todas as permissões (lançar faturas) e a marca
+    logar("uTudo"); sessao.atual = { user: { ...sessao.atual.user, id: "uAna", name: "Ana Vendas" } };
+    const r = await chamar("pedidos-cliente", "POST", {}, { numero: "PC-FAT-ANA", medicaoId: "fComp" });
+    expect(r.status).toBe(201);
+    expect(r.json.ligadas).toEqual({ os: 1, orcamentos: 0 });
+    const ped = await prisma.pedidoCliente.findUnique({ where: { id: r.json.pedidoId }, select: { ordens: { select: { id: true } } } });
+    expect(ped.ordens.map((o: any) => o.id)).toEqual(["osVendaAna"]);
+    expect((await prisma.ordemServico.findUnique({ where: { id: "osBeto" } })).pedidoClienteId).toBeNull();
+    // A fatura compartilhada mostra o número da Ana e continua aguardando o pedido do Beto (a OS dele ainda espera)
+    const f = await prisma.medicao.findUnique({ where: { id: "fComp" } });
+    expect([f.status, f.pcNumero]).toEqual(["AGUARDANDO_PC", "PC-FAT-ANA"]);
+    // A fatura só do Beto: não existe para a Ana
+    expect((await chamar("pedidos-cliente", "POST", {}, { numero: "PC-FAT-X", medicaoId: "fBeto" })).status).toBe(404);
+    expect(await prisma.pedidoCliente.count({ where: { numero: "PC-FAT-X" } })).toBe(0);
+    // Sem a marca: liga tudo da fatura, como antes
+    logar("uTudo"); sessao.atual = { user: { ...sessao.atual.user, permissoes: permissoesTotais() } };
+    const g = await chamar("pedidos-cliente", "POST", {}, { numero: "PC-FAT-GERAL", medicaoId: "fBeto" });
+    expect([g.status, g.json.ligadas]).toEqual([201, { os: 1, orcamentos: 1 }]); // a OS do Beto leva o orçamento de origem dela
+    // Com o pedido do Beto, a fatura compartilhada não espera mais nada
+    expect((await prisma.medicao.findUnique({ where: { id: "fComp" } })).status).toBe("PC_RECEBIDO");
+    await prisma.ordemServico.updateMany({ where: { id: { in: ["osBeto", "osVendaAna"] } }, data: { pedidoClienteId: null } });
+    await prisma.orcamento.updateMany({ where: { id: "oBeto" }, data: { pedidoClienteId: null } });
+    await prisma.cliente.update({ where: { id: "c1" }, data: { exigePcAntesNf: false } });
+  });
+
+  it("COM-1.1 (item 8) — lista de clientes: a contagem de OS respeita o escopo e ordenar por ela volta ao padrão para quem tem a marca", async () => {
+    const { filtroOrdens, ordemSemVolumeDosOutros } = await import("@/lib/escopo/proprios");
+    const contar = async (id: string) => (await prisma.cliente.findUnique({ where: { id: "c1" }, include: { _count: { select: { ordensServico: { where: filtroOrdens(usuario(id)) } } } } }))._count.ordensServico;
+    expect([await contar("uAna"), await contar("uBeto"), await contar("uGestor"), await contar("uAdm")]).toEqual([3, 1, 5, 5]);
+    const porOs = { campo: "os" as string | null, dir: "desc" as const };
+    expect([ordemSemVolumeDosOutros(usuario("uAna"), porOs).campo, ordemSemVolumeDosOutros(usuario("uGestor"), porOs).campo, ordemSemVolumeDosOutros(usuario("uAdm"), porOs).campo]).toEqual([null, "os", "os"]);
+    expect(ordemSemVolumeDosOutros(usuario("uAna"), { campo: "nome", dir: "asc" as const }).campo).toBe("nome");
+    // A página usa os dois (a contagem e a ordem): trava contra voltar ao _count sem filtro
+    const pagina = fs.readFileSync(path.join(RAIZ, "app/(dashboard)/clientes/page.tsx"), "utf8");
+    expect(pagina).toContain("ordensServico: { where: filtroOrdens(session!.user) }");
+    expect(pagina).toContain("ordemSemVolumeDosOutros(session!.user, lerOrdem(sp, ORDEM_CLIENTES))");
   });
 
   it("os prazos da OS (rota pelo id do prazo) também respeitam o escopo", async () => {

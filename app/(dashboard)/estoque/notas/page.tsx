@@ -3,13 +3,12 @@ import Link from "next/link";
 import { ArrowLeft, FileText } from "lucide-react";
 import { exigirModuloNaPagina } from "@/lib/modulos/pagina";
 import { pode } from "@/lib/permissoes";
-import { cn, formatarDataHora, formatarMoeda } from "@/lib/utils";
-import { PLANILHA } from "@/lib/planilha";
 import { lerPaginacao, paginaValida } from "@/lib/listagem";
 import { descartesRecentes, listarNotas } from "@/lib/compras/notas";
 import { ImportarNota } from "@/components/compras/importar-nota";
 import { LimparBuscaUrl, ListaUrl, PaginacaoUrl } from "@/components/listagem/lista-url";
 import { NotasLista } from "@/components/compras/notas-lista";
+import { NotasDescartadas } from "@/components/compras/notas-descartadas";
 import { periodoNotas } from "@/lib/listas/filtros";
 import { periodoTela } from "@/lib/periodo";
 import { ListaVazia } from "@/components/listagem/listagem-ui";
@@ -17,7 +16,7 @@ import { Dica } from "@/components/ui/dica";
 
 export const metadata: Metadata = { title: "Notas de compra" };
 
-const AJUDA = "O XML da NF-e do fornecedor entra aqui. Ao conciliar, cada item da nota é ligado a um produto do cadastro e, ao lançar, a nota vira entrada no estoque e conta a pagar de uma vez — nos dois lugares com a mesma nota como referência. Nota importada por engano e ainda não lançada pode ser descartada na própria nota (fica registrado quem descartou e quando). Nota já lançada não se apaga: o estorno é pela conta a pagar e pelo ajuste de estoque.";
+const AJUDA = "O XML da NF-e do fornecedor entra aqui. Ao conciliar, cada item da nota é ligado a um produto do cadastro e, ao lançar, a nota vira entrada no estoque e conta a pagar de uma vez — nos dois lugares com a mesma nota como referência. Nota importada por engano e ainda não lançada pode ser descartada na própria nota (fica registrado quem descartou e quando) e restaurada depois, em “Notas descartadas”. Nota já lançada não se apaga: o estorno é pela conta a pagar e pelo ajuste de estoque.";
 
 /**
  * Estoque › Notas de compra: importar o XML da NF-e e acompanhar as notas (rota: Estoque › visualizar).
@@ -66,23 +65,8 @@ export default async function NotasCompraPage({ searchParams }: { searchParams: 
           paginacao={<PaginacaoUrl total={total} pagina={pagina} porPagina={porPagina} rotulo="notas" />}
         />
 
-        {/* O registro dos descartes (a nota apagada não volta; fica quem descartou, quando e por quê) */}
-        {descartes.length > 0 && (
-          <details className="card px-4 py-3 text-sm" data-descartes>
-            <summary className="cursor-pointer text-ink-muted font-medium">Notas descartadas ({descartes.length}{descartes.length === 20 ? " mais recentes" : ""})</summary>
-            <p className="mt-1 text-xs text-ink-muted" data-descartes-recuperar>Para recuperar uma nota descartada, importe o XML dela de novo.</p>
-            <ul className="mt-2 divide-y divide-surface-border">
-              {descartes.map((d) => (
-                <li key={d.id} className="py-2 flex flex-wrap items-baseline gap-x-3 gap-y-0.5" data-descarte={d.id}>
-                  <span className={cn(PLANILHA.codigo, "text-ink")}>NF {d.numero}/{d.serie}</span>
-                  <span className="text-ink-muted truncate">{d.emitenteNome}</span>
-                  <span className="tabular-nums text-ink-muted">{formatarMoeda(Number(d.valorTotal))}</span>
-                  <span className="text-xs text-ink-subtle">Descartada em {formatarDataHora(d.descartadoEm)}{d.usuario && ` por ${d.usuario.nome}`}{d.motivo && ` · ${d.motivo}`}</span>
-                </li>
-              ))}
-            </ul>
-          </details>
-        )}
+        {/* O registro dos descartes: quem descartou, quando e por quê; "Restaurar" reimporta pelo XML guardado */}
+        <NotasDescartadas descartes={descartes} podeRestaurar={podeImportar} />
       </div>
     </ListaUrl>
   );

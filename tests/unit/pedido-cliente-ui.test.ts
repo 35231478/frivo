@@ -148,6 +148,22 @@ describe("a gaveta do pedido do cliente", () => {
     expect(avisos.toast).toHaveBeenCalledWith("Pedido do cliente corrigido.");
   });
 
+  it("COM-1.1 — pedido compartilhado com OS de outro vendedor (com 'Ver só os próprios'): abre para ver, sem corrigir", async () => {
+    respostas["GET /api/pedidos-cliente/p7"] = { status: 200, corpo: { numero: "PO-7", data: "2026-11-20", valor: 900, observacao: "", temAnexo: true, podeEditar: false } };
+    await gaveta({ pedidoId: "p7" });
+    expect($("[data-pedido-compartilhado]")!.textContent!.replace(/\s+/g, " ").trim()).toBe("Este pedido também cobre OS de outro vendedor. Só quem vê todas as OS corrige o pedido.");
+    expect($<HTMLInputElement>("[data-pedido-numero]")!.value).toBe("PO-7");
+    expect($<HTMLInputElement>("[data-pedido-numero]")!.closest("fieldset")!.disabled).toBe(true);
+    expect($("[data-salvar-pedido]")).toBeNull();
+    expect($("[data-pedido-anexo]")).toBeNull(); // sem "Escolher arquivo" no modo leitura
+    expect($("[data-pedido-anexo-atual]")!.getAttribute("href")).toBe("/api/pedidos-cliente/p7/anexo?inline=1"); // o anexo abre
+    // O pedido só da pessoa (podeEditar) segue editável
+    respostas["GET /api/pedidos-cliente/p8"] = { status: 200, corpo: { numero: "PO-8", data: "2026-11-20", valor: null, observacao: "", temAnexo: false, podeEditar: true } };
+    await gaveta({ pedidoId: "p8" });
+    expect($("[data-pedido-compartilhado]")).toBeNull();
+    expect($("[data-salvar-pedido]")).not.toBeNull();
+  });
+
   it("a fatura como alvo: a consulta leva a fatura (as OS e orçamentos dela vêm do servidor)", async () => {
     respostas["GET /api/pedidos-cliente/alvos?med=m1"] = { status: 200, corpo: ALVOS() };
     const { GavetaPedido } = await import("@/components/pedido-cliente/gaveta-pedido");

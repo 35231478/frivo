@@ -18,6 +18,7 @@
  */
 import type { Celula, Tabela } from "@/lib/folha/planilha";
 import type { Acao } from "@/lib/permissoes";
+import { desprotegerFormula } from "@/lib/exportacao/formula";
 
 export const MAX_LINHAS_IMPORTACAO = 5000;
 export const MAX_BYTES_IMPORTACAO = 5 * 1024 * 1024;
@@ -269,7 +270,8 @@ export function analisar(tabela: Tabela, def: DefImportacao, ctx: ContextoImport
     const valores: Record<string, string> = {};
     for (const c of def.colunas) {
       const i = mapa.get(c.chave);
-      v[c.chave] = i === undefined ? null : l[i] ?? null;
+      // A exportação protege o texto que começa com = + - @ com um apóstrofo: na volta ele sai (lib/exportacao/formula)
+      v[c.chave] = i === undefined ? null : desprotegerFormula(l[i] ?? null);
       valores[c.titulo] = v[c.chave] == null ? "" : String(v[c.chave]);
     }
     let r: ResultadoLinha;

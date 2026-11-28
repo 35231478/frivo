@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { usePermissoes } from "@/components/providers/permissoes-provider";
 import { ChecklistPreenchimento } from "@/components/veiculos/checklist-preenchimento";
@@ -29,7 +30,19 @@ export function ChecklistTela({ veiculos, templates, colaboradores, veiculoInici
   const podeVer = pode(PERMISSAO_CHECKLIST.ver.modulo, PERMISSAO_CHECKLIST.ver.acao);
   // "Diário": o histórico do checklist obrigatório no app (o porteiro) — para quem vê a frota
   const abas: Aba[] = [...(podePreencher ? ["preencher" as const] : []), ...(podeVer ? ["preenchidos" as const, "diario" as const] : [])];
-  const [aba, setAba] = useState<Aba>((abaInicial === "preenchidos" || abaInicial === "diario") && podeVer ? abaInicial : abas[0] ?? "preencher");
+  const [aba, setAbaEstado] = useState<Aba>((abaInicial === "preenchidos" || abaInicial === "diario") && podeVer ? abaInicial : abas[0] ?? "preencher");
+  // A aba vai para a URL (`?aba=`): cada aba tem os seus filtros lembrados (Preenchidos, Diário) e trocar de aba
+  // começa da URL limpa da outra; um link com `?aba=` (o sino) com a tela aberta troca a aba
+  const router = useRouter();
+  const pathname = usePathname();
+  const abaUrl = useSearchParams().get("aba");
+  useEffect(() => {
+    if (abaUrl && (abas as string[]).includes(abaUrl) && abaUrl !== aba) setAbaEstado(abaUrl as Aba);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [abaUrl]);
+  const setAba = (a: Aba) => { setAbaEstado(a); if (a !== aba) router.replace(`${pathname}?aba=${a}`, { scroll: false }); };
+  // A lista da aba só monta quando a URL já não é a da outra aba (os filtros de uma não vazam para a outra)
+  const pronta = !abaUrl || abaUrl === aba;
 
   return (
     <div className="space-y-4" data-checklist-tela>
@@ -52,8 +65,8 @@ export function ChecklistTela({ veiculos, templates, colaboradores, veiculoInici
           />
         </div>
       )}
-      {aba === "preenchidos" && podeVer && <ChecklistsPreenchidos colaboradores={colaboradores} />}
-      {aba === "diario" && podeVer && <ChecklistDiario colaboradores={colaboradores} />}
+      {aba === "preenchidos" && podeVer && pronta && <ChecklistsPreenchidos colaboradores={colaboradores} />}
+      {aba === "diario" && podeVer && pronta && <ChecklistDiario colaboradores={colaboradores} />}
       {abas.length === 0 && <p className="text-sm text-ink-muted" data-somente-leitura>Somente leitura: requer a permissão Veículos › checklist.</p>}
     </div>
   );

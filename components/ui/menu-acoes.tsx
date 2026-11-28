@@ -1,11 +1,13 @@
 "use client";
 
+import { CAMADA } from "@/lib/ui/camadas";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import Link from "next/link";
 import { Loader2, MoreVertical } from "lucide-react";
 import { Dica } from "@/components/ui/dica";
 import { cn } from "@/lib/utils";
+import { posicaoFlutuante, type PosicaoFlutuante } from "@/lib/ui/flutuante";
 
 const ALTURA_MENU = 300;
 
@@ -26,14 +28,14 @@ export function MenuAcoes({ children, ocupado, largura = "w-60", rotulo = "Mais 
   rotulo?: string;
 }) {
   const [aberto, setAberto] = useState(false);
-  const [pos, setPos] = useState<{ top?: number; bottom?: number; right?: number; left?: number } | null>(null);
+  // lib/ui/flutuante dá a posição; perto da borda esquerda (celular) o menu troca o `right` por `left`
+  const [pos, setPos] = useState<(Omit<PosicaoFlutuante, "right"> & { right?: number; left?: number }) | null>(null);
   const botao = useRef<HTMLButtonElement>(null);
   const menu = useRef<HTMLDivElement>(null);
   useLayoutEffect(() => {
     if (!aberto || !botao.current) return;
-    const r = botao.current.getBoundingClientRect();
-    const right = Math.max(8, window.innerWidth - r.right);
-    setPos(window.innerHeight - r.bottom < ALTURA_MENU ? { bottom: window.innerHeight - r.top + 4, right } : { top: r.bottom + 4, right });
+    // O mesmo cálculo do menu "Colunas" (lib/ui/flutuante): para baixo se couber, senão para cima; rola por dentro
+    setPos(posicaoFlutuante(botao.current.getBoundingClientRect(), { largura: window.innerWidth, altura: window.innerHeight }, ALTURA_MENU));
   }, [aberto]);
   // Botão perto da borda esquerda (celular): o menu, alinhado pela direita, sairia da tela — encosta à esquerda
   useLayoutEffect(() => {
@@ -56,8 +58,8 @@ export function MenuAcoes({ children, ocupado, largura = "w-60", rotulo = "Mais 
       </button>
       {aberto && pos && createPortal(
         <>
-          <div className="fixed inset-0 z-40" onClick={fechar} />
-          <div ref={menu} role="menu" style={pos} className={cn("fixed z-50 bg-white border border-surface-border rounded-lg shadow-card-hover py-1 text-left", largura)} data-menu-acoes
+          <div className={cn("fixed inset-0", CAMADA.flutuante)} onClick={fechar} />
+          <div ref={menu} role="menu" style={pos} className={cn("fixed overflow-y-auto bg-white border border-surface-border rounded-lg shadow-card-hover py-1 text-left", CAMADA.flutuante, largura)} data-menu-acoes
             onKeyDown={(e) => { if (e.key === "Escape") fechar(); }}>
             {children(fechar)}
           </div>

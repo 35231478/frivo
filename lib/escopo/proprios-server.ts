@@ -56,6 +56,27 @@ export async function pedidoForaDoEscopo(u: QuemVe & { empresaId?: string | null
   return algumForaDoEscopo(u, [...p.ordens.map((o) => o.id), ...p.osPropostas], [...p.orcamentos.map((o) => o.id), ...p.orcamentosPropostos]);
 }
 
+/**
+ * COM-1.1 — o pedido do cliente COMPARTILHADO (cobre OS de dois vendedores): com a marca, a pessoa VÊ o pedido se ele
+ * cobre (ou propõe) ao menos uma OS/orçamento dela — e só os dela aparecem. Editar, conferir ou desfazer continua com
+ * `pedidoForaDoEscopo` (tudo tem de ser dela). Devolve null quando a pessoa não vê nada dele (a rota responde 404);
+ * sem a marca, devolve "tudo" (sem filtro).
+ */
+export async function pedidoVisivel(u: QuemVe & { empresaId?: string | null }, pedidoId: string):
+  Promise<{ tudo: true } | { tudo: false; osIds: Set<string>; orcamentoIds: Set<string> } | null> {
+  if (!soProprios(u, "ordens") && !soProprios(u, "orcamentos")) return { tudo: true };
+  const p = await prisma.pedidoCliente.findFirst({
+    where: { id: pedidoId, empresaId: u.empresaId ?? "" },
+    select: { osPropostas: true, orcamentosPropostos: true, ordens: { select: { id: true } }, orcamentos: { select: { id: true } } },
+  });
+  if (!p) return { tudo: true }; // a rota responde o 404 dela
+  const [os, orc] = await Promise.all([
+    idsNoEscopo(u, "ordens", [...p.ordens.map((o) => o.id), ...p.osPropostas]),
+    idsNoEscopo(u, "orcamentos", [...p.orcamentos.map((o) => o.id), ...p.orcamentosPropostos]),
+  ]);
+  return os.length || orc.length ? { tudo: false, osIds: new Set(os), orcamentoIds: new Set(orc) } : null;
+}
+
 /** Os ids (de uma seleção em massa) que estão no escopo da pessoa; entidade fora de orçamento/OS volta inteira. */
 export async function idsNoEscopo(u: QuemVe & { empresaId?: string | null }, entidade: string, ids: string[]): Promise<string[]> {
   if (!ids.length) return ids;

@@ -53,7 +53,10 @@ export interface EntradaSino {
 export const SP_CONTAS_HOJE = { card: "VENCE_HOJE", periodo: "hoje" } as const;
 
 const SEM_NFSE = { nfseAutorizadas: 0, nfseAutorizadaMedicaoId: null, nfseRejeitadas: 0, nfseRejeitadaMedicaoId: null, nfseAguardando: 0, nfseAguardandoMedicaoId: null };
-const SEM_VEICULOS = { checklistPendente: 0, checklistsComAlertas: 0, checklistNaoVaiUsar: 0, documentosVencendo: 0, veiculosManutencao: 0, revisaoChegando: 0 };
+const SEM_VEICULOS = {
+  checklistPendente: 0, checklistsComAlertas: 0, checklistAlertaId: null, checklistAlertaVeiculoId: null, checklistNaoVaiUsar: 0,
+  documentosVencendo: 0, documentoVencendoVeiculoId: null, veiculosManutencao: 0, revisaoChegando: 0,
+} satisfies Awaited<ReturnType<typeof contarAlertasVeiculos>>;
 
 export async function contarSino({ empresaId, usuarioId, escopo: e, filtroTecnico, quem, agora = new Date() }: EntradaSino) {
   const eo = filtroOrdens(quem), ec = filtroOrcamentos(quem);
@@ -82,9 +85,10 @@ export async function contarSino({ empresaId, usuarioId, escopo: e, filtroTecnic
   const contarPedidos = async () => (e.pedidosCliente && await usaPedidoCliente(empresaId)
     ? Promise.all([resumoAguardandoEmpresa(empresaId, eo), contarPedidosAtrasados(empresaId, agora, eo), contarPedidosConferir(empresaId)])
     : [{ quantidade: 0, total: 0 }, { pedidosAtrasados: 0, pedidoAtrasadoOsId: null, diasAlertaPedido: 0 }, { pedidosConferir: 0, pedidoConferirId: null, pedidoConferirOsId: null, pedidoConferirOrcamentoId: null }] as const);
+  const whereLeads = comEscopo({ empresaId, nome: { startsWith: "Lead do site" }, criadoEm: { gte: desde24h } } as Prisma.OrcamentoWhereInput, ec);
   const whereRespondidos = comEscopo({ empresaId, status: { in: ["APROVADO" as const, "REPROVADO" as const] }, respostaVistaEm: null } as Prisma.OrcamentoWhereInput, ec);
 
-  const [prazosBrutos, veiculosBrutos, boletosPagos, respondidos, leadsSite, nfsDoPedido, nfse, faturamentoContratos, reajustesContrato, separacoesPendentes, devolucoesPendentes, pmoc, aceites, admissoes, estoqueNegativoCampo, esquecidas, comentarios, despesasCampo, semTecnico, vencendo, contasPagarHoje, contasReceberHoje, pedidos] = await Promise.all([
+  const [prazosBrutos, veiculosBrutos, boletosPagos, respondidos, leads, nfsDoPedido, nfse, faturamentoContratos, reajustesContrato, separacoesPendentes, devolucoesPendentes, pmoc, aceites, admissoes, estoqueNegativoCampo, esquecidas, comentarios, despesasCampo, semTecnico, vencendo, contasPagarHoje, contasReceberHoje, pedidos] = await Promise.all([
     e.prazos || e.comprasPendentes ? contarAlertasPrazos(empresaId, eo) : Promise.resolve(null),
     e.veiculos && temFrota ? contarAlertasVeiculos(empresaId) : Promise.resolve(null),
     e.boletos
@@ -96,10 +100,13 @@ export async function contarSino({ empresaId, usuarioId, escopo: e, filtroTecnic
       ? Promise.all([prisma.orcamento.count({ where: whereRespondidos }), prisma.orcamento.findFirst({ where: whereRespondidos, orderBy: { atualizadoEm: "desc" }, select: { id: true } })])
       : Promise.resolve([0, null] as const),
     // Novos leads do site (calculadora de BTU) nas últimas 24h — o sino não deixa o lead passar
-    // despercebido (destino: /leads-site). Mesma permissão de ver orçamentos.
+    // despercebido (um só: o orçamento dele; mais: /leads-site?status=novos). Mesma permissão de ver orçamentos.
     e.orcamentos
-      ? prisma.orcamento.count({ where: comEscopo({ empresaId, nome: { startsWith: "Lead do site" }, criadoEm: { gte: desde24h } } as Prisma.OrcamentoWhereInput, ec) })
-      : Promise.resolve(0),
+      ? Promise.all([
+        prisma.orcamento.count({ where: whereLeads }),
+        prisma.orcamento.findFirst({ where: whereLeads, orderBy: { criadoEm: "desc" }, select: { id: true } }),
+      ])
+      : Promise.resolve([0, null] as const),
     // Chegou NF num pedido de compra que ESTE usuário pediu e ele ainda não abriu (Compras 2/2).
     // Não depende de permissão: quem pediu sempre vê o próprio pedido (lib/compras/pedido podeVerPedido).
     prisma.pedidoCompraInterno.findMany({
@@ -163,6 +170,7 @@ export async function contarSino({ empresaId, usuarioId, escopo: e, filtroTecnic
   const [osSemTecnico, osSemTecnicoMaisAntiga] = semTecnico;
   const [orcamentosVencendo, orcamentoVencendoPrimeiro] = vencendo;
   const [orcamentosRespondidos, orcamentoRespondidoMaisRecente] = respondidos;
+  const [leadsSite, leadSiteMaisRecente] = leads;
 
   const contagem = {
     ...prazos,
@@ -171,6 +179,7 @@ export async function contarSino({ empresaId, usuarioId, escopo: e, filtroTecnic
     orcamentosRespondidos,
     orcamentoRespondidoId: orcamentoRespondidoMaisRecente?.id ?? null,
     leadsSite,
+    leadSiteId: leadSiteMaisRecente?.id ?? null,
     nfPedidos: nfsDoPedido.length,
     nfPedidoId: nfsDoPedido[0]?.id ?? null,
     ...nfse,

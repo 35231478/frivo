@@ -162,8 +162,9 @@ describe.skipIf(!URL_PG)("lista de OS e sessão: o mesmo resultado, menos idas a
       const novo = await lista.carregarListaOs("e1", sp, AGORA);
       const antigo = await listaAntiga("e1", sp);
       // O pedido do cliente (PC-1) chegou depois: esta empresa não exige pedido, então nada disso aparece
-      const { opcoes, resumoPedido, ...semOpcoes } = novo;
+      const { opcoes, resumoPedido, semAgendamento, ...semOpcoes } = novo;
       expect(resumoPedido).toBeNull();
+      expect(typeof semAgendamento).toBe("number"); // Leva I: a contagem do filtro rápido "Sem agendamento" (à parte)
       expect(semOpcoes.linhas.every((l) => l.pedidoCliente === null), JSON.stringify(sp)).toBe(true);
       // COM-1 acrescentou a coluna "Vendedor" (campo novo de cada linha, fora do carregamento antigo): compara sem
       // ele e confere à parte que existe (neste cenário nenhuma OS tem vendedor)

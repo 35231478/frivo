@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { ProtegerSaida } from "@/components/ui/proteger-saida";
 import { Suspense } from "react";
 import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
@@ -20,7 +21,7 @@ export default async function NovoContratoPage() {
   const horarioComercial = rotuloDaJornada(await jornadaDaEmpresa(prisma, session!.user!.empresaId));
   return (
     <Suspense>
-      <ContratoForm horarioComercial={horarioComercial} />
+      <ProtegerSaida><ContratoForm horarioComercial={horarioComercial} /></ProtegerSaida>
     </Suspense>
   );
 }

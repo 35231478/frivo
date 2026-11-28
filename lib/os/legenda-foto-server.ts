@@ -6,12 +6,17 @@
  * adicional) e ANEXO (enviada à OS, pelo escritório ou pelo app). Quem pode: lib/os/galeria ›
  * motivoSemEditarLegenda. No modo técnico, a foto tem de ser de uma atividade dele.
  * Fica no histórico da OS: quem mudou, a legenda de antes e a nova.
+ *
+ * RESTAURAR A LEGENDA DO SISTEMA (restaurarLegendaFoto): apaga a legenda escrita e a foto volta à
+ * automática (lib/os/galeria › legendaDoSistema). Mesmas permissões e a mesma trilha da edição.
  */
 import { prisma } from "@/lib/prisma";
 import { carregarContexto, type Ator } from "@/lib/execucao/contexto";
 import type { ResultadoAcao } from "@/lib/execucao/acoes";
 import { osEncerrada } from "@/lib/os/prazo-execucao";
-import { LEGENDA_ANEXO_SEM, MSG_LEGENDA, legendaAdicional, legendaExecucao, limparLegenda, motivoSemEditarLegenda, type OrigemFoto } from "@/lib/os/galeria";
+import {
+  LEGENDA_ANEXO_SEM, MSG_LEGENDA, MSG_SEM_LEGENDA_SISTEMA, legendaDoSistema, limparLegenda, motivoSemEditarLegenda, type OrigemFoto,
+} from "@/lib/os/galeria";
 
 export interface PedidoLegenda {
   origem: OrigemFoto;
@@ -27,7 +32,15 @@ export interface PedidoLegenda {
 type Resultado = ResultadoAcao<{ legenda: string; mudou: boolean }>;
 const falha = (status: number, erro: string): Resultado => ({ ok: false, status, erro });
 
-interface FotoAchada { atividadeId: string | null; legendaAtual: string; atualizar: (legenda: string) => Promise<unknown> }
+interface FotoAchada {
+  atividadeId: string | null;
+  legendaAtual: string;
+  /** A automática (null: não tem — anexo, ou execução sem momento nem item) */
+  legendaSistema: string | null;
+  /** A escrita (null: está na automática) */
+  gravada: string | null;
+  atualizar: (legenda: string | null) => Promise<unknown>;
+}
 
 async function acharFoto(empresaId: string, osId: string, p: PedidoLegenda): Promise<FotoAchada | null> {
   const qual = p.fotoId ? { id: p.fotoId } : { clientId: p.clientId };
@@ -37,8 +50,10 @@ async function acharFoto(empresaId: string, osId: string, p: PedidoLegenda): Pro
       where: { ...qual, ...daAtividade, empresaId, atividade: { ordemServicoId: osId } },
       select: { id: true, atividadeId: true, legenda: true, momento: true, item: { select: { texto: true } } },
     });
-    return f && {
-      atividadeId: f.atividadeId, legendaAtual: f.legenda ?? legendaExecucao({ momento: f.momento ?? null, item: f.item?.texto ?? null }),
+    if (!f) return null;
+    const sistema = legendaDoSistema({ origem: "EXECUCAO", momento: f.momento ?? null, item: f.item?.texto ?? null });
+    return {
+      atividadeId: f.atividadeId, legendaAtual: f.legenda ?? sistema ?? "Foto do atendimento", legendaSistema: sistema, gravada: f.legenda,
       atualizar: (legenda) => prisma.fotoAtendimento.update({ where: { id: f.id }, data: { legenda } }),
     };
   }
@@ -47,8 +62,10 @@ async function acharFoto(empresaId: string, osId: string, p: PedidoLegenda): Pro
       where: { ...qual, empresaId, servico: { ordemServicoId: osId, ...daAtividade } },
       select: { id: true, legenda: true, servico: { select: { atividadeId: true, descricao: true } } },
     });
-    return f && {
-      atividadeId: f.servico.atividadeId, legendaAtual: f.legenda ?? legendaAdicional(f.servico.descricao),
+    if (!f) return null;
+    const sistema = legendaDoSistema({ origem: "ADICIONAL", servico: f.servico.descricao });
+    return {
+      atividadeId: f.servico.atividadeId, legendaAtual: f.legenda ?? sistema ?? "", legendaSistema: sistema, gravada: f.legenda,
       atualizar: (legenda) => prisma.servicoAdicionalFoto.update({ where: { id: f.id }, data: { legenda } }),
     };
   }
@@ -57,15 +74,13 @@ async function acharFoto(empresaId: string, osId: string, p: PedidoLegenda): Pro
     select: { id: true, atividadeId: true, legenda: true, nome: true },
   });
   return a && {
-    atividadeId: a.atividadeId, legendaAtual: a.legenda ?? LEGENDA_ANEXO_SEM,
+    atividadeId: a.atividadeId, legendaAtual: a.legenda ?? LEGENDA_ANEXO_SEM, legendaSistema: null, gravada: a.legenda,
     atualizar: (legenda) => prisma.osAnexo.update({ where: { id: a.id }, data: { legenda } }),
   };
 }
 
-export async function editarLegendaFoto(ator: Ator & { podeEditarOs: boolean }, osId: string, p: PedidoLegenda): Promise<Resultado> {
-  if (!p.fotoId && !p.clientId) return falha(400, "Diga qual foto.");
-  const legenda = limparLegenda(p.legenda);
-  if (!legenda) return falha(400, MSG_LEGENDA);
+/** Quem pode, a OS e a foto: as mesmas conferências para editar e para restaurar. */
+async function conferir(ator: Ator & { podeEditarOs: boolean }, osId: string, p: PedidoLegenda): Promise<{ ok: true; foto: FotoAchada } | Resultado> {
   const os = await prisma.ordemServico.findFirst({ where: { id: osId, empresaId: ator.empresaId }, select: { status: true } });
   if (!os) return falha(404, "OS não encontrada");
   const motivo = motivoSemEditarLegenda({ restrito: ator.escopo.restrito, podeEditarOs: ator.podeEditarOs, osEncerrada: osEncerrada(os.status) });
@@ -79,14 +94,38 @@ export async function editarLegendaFoto(ator: Ator & { podeEditarOs: boolean }, 
     const ctx = await carregarContexto(ator, foto.atividadeId, { osId, permitirBloqueada: true });
     if (!ctx.ok) return falha(ctx.status, ctx.erro);
   }
+  return { ok: true, foto };
+}
+
+const registrar = (ator: Ator, osId: string, acao: string, detalhes: string) =>
+  prisma.osHistorico.create({
+    data: { ordemServicoId: osId, usuarioId: ator.usuarioId, acao, detalhes: `${detalhes}${ator.escopo.restrito ? " (app do técnico)" : ""}` },
+  });
+
+export async function editarLegendaFoto(ator: Ator & { podeEditarOs: boolean }, osId: string, p: PedidoLegenda): Promise<Resultado> {
+  if (!p.fotoId && !p.clientId) return falha(400, "Diga qual foto.");
+  const legenda = limparLegenda(p.legenda);
+  if (!legenda) return falha(400, MSG_LEGENDA);
+  const c = await conferir(ator, osId, p);
+  if (!("foto" in c)) return c;
+  const { foto } = c;
   if (legenda === foto.legendaAtual) return { ok: true, status: 200, dados: { legenda, mudou: false } };
 
   await foto.atualizar(legenda);
-  await prisma.osHistorico.create({
-    data: {
-      ordemServicoId: osId, usuarioId: ator.usuarioId, acao: "Legenda da foto alterada",
-      detalhes: `“${foto.legendaAtual}” → “${legenda}”${ator.escopo.restrito ? " (app do técnico)" : ""}`,
-    },
-  });
+  await registrar(ator, osId, "Legenda da foto alterada", `“${foto.legendaAtual}” → “${legenda}”`);
   return { ok: true, status: 200, dados: { legenda, mudou: true } };
+}
+
+/** Volta a foto à legenda do sistema (apaga a escrita). Já na automática: nada muda e nada vai para o histórico. */
+export async function restaurarLegendaFoto(ator: Ator & { podeEditarOs: boolean }, osId: string, p: Omit<PedidoLegenda, "legenda">): Promise<Resultado> {
+  if (!p.fotoId && !p.clientId) return falha(400, "Diga qual foto.");
+  const c = await conferir(ator, osId, { ...p, legenda: null });
+  if (!("foto" in c)) return c;
+  const { foto } = c;
+  if (!foto.legendaSistema) return falha(400, MSG_SEM_LEGENDA_SISTEMA);
+  if (foto.gravada === null) return { ok: true, status: 200, dados: { legenda: foto.legendaSistema, mudou: false } };
+
+  await foto.atualizar(null);
+  await registrar(ator, osId, "Legenda do sistema restaurada", `“${foto.legendaAtual}” → “${foto.legendaSistema}”`);
+  return { ok: true, status: 200, dados: { legenda: foto.legendaSistema, mudou: true } };
 }

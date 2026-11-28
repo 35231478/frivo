@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { ProtegerSaida } from "@/components/ui/proteger-saida";
 import { notFound, redirect } from "next/navigation";
 import { pode } from "@/lib/permissoes";
 import { auth } from "@/lib/auth";
@@ -33,7 +34,7 @@ export default async function EditarEquipePage({ params }: { params: Promise<{ i
           Esta equipe está <strong>inativa</strong> e não aparece na lista padrão. Use “Reativar” para voltar a usá-la.
         </div>
       )}
-      <EquipeForm key={equipe.status} initialData={equipe} />
+      <ProtegerSaida><EquipeForm key={equipe.status} initialData={equipe} /></ProtegerSaida>
     </div>
   );
 }

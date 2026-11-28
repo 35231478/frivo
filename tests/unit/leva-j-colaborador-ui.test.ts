@@ -217,7 +217,7 @@ describe("ficha do colaborador: CEP e competências", () => {
     respostas["GET https://viacep.com.br/ws/99999999/json/"] = { status: 200, corpo: { erro: true } };
     await ficha();
     await digitar($("[data-campo-cep]"), "99999999");
-    expect(document.body.textContent).toContain("CEP não encontrado: preencha à mão.");
+    expect(document.body.textContent).toContain("CEP não encontrado: preencha o endereço à mão."); // a dica do CampoCep (Leva I: um campo de CEP só)
     expect($("input[name='endereco']")).toHaveProperty("value", "");
   });
 

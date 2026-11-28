@@ -592,6 +592,8 @@ model Empresa {
   anotacoesInternas  AnotacaoInterna[]
   importacaoLotes    ImportacaoLote[]
   exportacoesDados   ExportacaoDados[]
+  eventosEmpresa     EmpresaEvento[]
+  reajustesTabela    TabelaPrecoReajuste[]
 
   @@map("empresas")
 }
@@ -757,6 +759,10 @@ model Configuracao {
   comissaoExecutorQuando  String  @default("CONCLUSAO_OS") @map("comissao_executor_quando")
   /// COM-2: retorno no mesmo equipamento até N dias depois do serviço põe a comissão do técnico em revisão (0 = desligado)
   comissaoRetornoDias     Int     @default(30) @map("comissao_retorno_dias")
+  /// COM-1.1 — o vencimento da conta a pagar do fechamento (bônus + comissão): DIA_UTIL (o N-º dia útil, seg–sex,
+  /// do mês seguinte; padrão 5) | DIA_FIXO (o dia N do mês seguinte; além do fim do mês = o último dia)
+  comissaoVencimentoTipo  String  @default("DIA_UTIL") @map("comissao_vencimento_tipo")
+  comissaoVencimentoDia   Int     @default(5) @map("comissao_vencimento_dia")
 
   /// Impressão do relatório da OS: seções ligadas/desligadas e quem vê (cliente × só interno).
   /// JSON { [secao]: { ativo, cliente } }; ausente = padrões de lib/relatorio-os/config.ts
@@ -2772,6 +2778,8 @@ model AtividadeMaterial {
   equipamento  Equipamento? @relation(fields: [equipamentoId], references: [id], onDelete: SetNull)
   produto      Produto?     @relation(fields: [produtoId], references: [id], onDelete: SetNull)
   osMaterial   OsMaterial?  @relation(fields: [osMaterialId], references: [id], onDelete: SetNull)
+  /// Leva I.2 — o item cobrado na OS que nasceu deste material (modo "Cobrado à parte")
+  itemCobrado  OsItemOrcamento? @relation("OsItemMaterialCampo")
 
   @@unique([empresaId, clientId])
   @@index([atividadeId])
@@ -2931,6 +2939,12 @@ model OsItemOrcamento {
   /// Peça (venda à parte) derivada de um material de serviço desta OS: linha só de leitura
   materialId         String?    @unique @map("material_id")
   ordem              Int        @default(0)
+  /// Leva I.2 — material lançado em campo (app) que virou item cobrado no modo "Cobrado à parte"
+  materialCampoId     String?   @unique @map("material_campo_id")
+  /// Leva I.2 — o escritório ainda precisa conferir este item de campo antes de faturar
+  conferirCampo       Boolean   @default(false) @map("conferir_campo")
+  conferidoCampoEm    DateTime? @map("conferido_campo_em")
+  conferidoCampoPorId String?   @map("conferido_campo_por_id")
 
   ordemServico     OrdemServico      @relation(fields: [ordemServicoId], references: [id], onDelete: Cascade)
   orcamentoServico OrcamentoServico? @relation(fields: [orcamentoServicoId], references: [id], onDelete: SetNull)
@@ -2938,6 +2952,7 @@ model OsItemOrcamento {
   produto          Produto?          @relation(fields: [produtoId], references: [id], onDelete: SetNull)
   material         OsMaterial?       @relation("OsPecaDerivada", fields: [materialId], references: [id], onDelete: Cascade)
   materiais        OsMaterial[]      @relation("OsItemMateriais")
+  materialCampo    AtividadeMaterial? @relation("OsItemMaterialCampo", fields: [materialCampoId], references: [id], onDelete: SetNull)
 
   @@index([ordemServicoId])
   @@index([orcamentoServicoId])
@@ -4217,6 +4232,7 @@ model TabelaPreco {
   empresa  Empresa           @relation(fields: [empresaId], references: [id], onDelete: Cascade)
   itens    TabelaPrecoItem[]
   clientes Cliente[]
+  reajustes TabelaPrecoReajuste[]
 
   @@map("tabelas_preco")
 }
@@ -4895,6 +4911,11 @@ model NotaCompraDescarte {
   motivo       String?
   usuarioId    String?  @map("usuario_id")
   descartadoEm DateTime @default(now()) @map("descartado_em")
+  /// Leva I.2 — o XML da nota (para restaurar) e quem restaurou
+  xml              String?   @db.Text
+  restauradaEm     DateTime? @map("restaurada_em")
+  restauradaPorId  String?   @map("restaurada_por_id")
+  notaRestauradaId String?   @map("nota_restaurada_id")
 
   empresa Empresa  @relation(fields: [empresaId], references: [id], onDelete: Cascade)
   usuario Usuario? @relation(fields: [usuarioId], references: [id], onDelete: SetNull)
@@ -6372,4 +6393,42 @@ model PedidoClienteLembrete {
   @@index([empresaId, ordemServicoId])
   @@index([empresaId, orcamentoId])
   @@map("pedidos_cliente_lembretes")
+}
+
+/// Leva I.2 — a trilha da empresa na área do dono do Frivo (dados editados, nova senha do 1º administrador)
+model EmpresaEvento {
+  id        String   @id @default(cuid())
+  empresaId String   @map("empresa_id")
+  usuarioId String?  @map("usuario_id")
+  tipo      String
+  detalhe   String?
+  criadoEm  DateTime @default(now()) @map("criado_em")
+
+  empresa Empresa @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+
+  @@index([empresaId, criadoEm])
+  @@map("empresa_eventos")
+}
+
+/// Leva I.2 — o reajuste em massa da tabela de preço: o lote (o antes e o depois de cada item) para "Desfazer"
+model TabelaPrecoReajuste {
+  id            String    @id @default(cuid())
+  empresaId     String    @map("empresa_id")
+  tabelaPrecoId String    @map("tabela_preco_id")
+  usuarioId     String?   @map("usuario_id")
+  /// PERCENTUAL ou VALOR
+  tipo          String
+  valor         Decimal   @db.Decimal(12, 4)
+  motivo        String
+  /// [{ itemId, antes: { tipoPreco, valorFixo, descontoPercent }, depois: {…} }]
+  itens         Json
+  criadoEm      DateTime  @default(now()) @map("criado_em")
+  desfeitoEm    DateTime? @map("desfeito_em")
+  desfeitoPorId String?   @map("desfeito_por_id")
+
+  empresa     Empresa     @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  tabelaPreco TabelaPreco @relation(fields: [tabelaPrecoId], references: [id], onDelete: Cascade)
+
+  @@index([empresaId, tabelaPrecoId, criadoEm])
+  @@map("tabela_preco_reajustes")
 }

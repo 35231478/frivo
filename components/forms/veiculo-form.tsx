@@ -21,6 +21,7 @@ import { COMBUSTIVEIS } from "@/lib/veiculo-campos";
 import { organizarFotosVeiculo, type RotuloFotoVeiculo } from "@/lib/veiculo-fotos";
 import {
   Truck, UserCog, FileText, Wrench, ClipboardCheck, AlertCircle, Plus, Trash2, Upload, X, ChevronLeft, CheckCircle2, Circle, ChevronDown, Lock,
+  ExternalLink,
 } from "lucide-react";
 import { InputData } from "@/components/ui/input-data";
 import { usePermissoes } from "@/components/providers/permissoes-provider";
@@ -54,8 +55,12 @@ function formatarPlaca(v: string): string {
   return s;
 }
 
-export function VeiculoForm({ initialData, ocorrencias, somenteLeitura = false }: {
+const ABAS_VEICULO: Aba[] = ["identificacao", "responsavel", "documentos", "manutencoes", "checklists"];
+
+export function VeiculoForm({ initialData, ocorrencias, somenteLeitura = false, abaInicial }: {
   initialData?: any;
+  /** A aba que abre (`?aba=` da ficha: o sino leva a Documentos ou Checklists) */
+  abaInicial?: string;
   ocorrencias?: { descricao: string; count: number }[];
   /** Sem "veiculos.gerenciar": a ficha abre para consulta, sem salvar nem ler documento por IA. */
   somenteLeitura?: boolean;
@@ -66,7 +71,7 @@ export function VeiculoForm({ initialData, ocorrencias, somenteLeitura = false }
   const isEditing = !!initialData;
   const veiculoId = initialData?.id as string | undefined;
 
-  const [aba, setAba] = useState<Aba>("identificacao");
+  const [aba, setAba] = useState<Aba>(() => (initialData && ABAS_VEICULO.includes(abaInicial as Aba) ? (abaInicial as Aba) : "identificacao"));
   const [erro, setErro] = useState("");
   const [salvando, setSalvando] = useState(false);
   // Enquanto a conferência do CRLV está aberta, o formulário manual fica escondido (evita salvar sem conferir)
@@ -194,7 +199,8 @@ export function VeiculoForm({ initialData, ocorrencias, somenteLeitura = false }
     } catch { setErro("Sem conexão. Tente de novo."); } finally { setSalvando(false); }
   }
 
-  // Responsável e equipe: escolher, cadastrar na hora ou corrigir o escolhido sem sair do veículo
+  // Responsável e equipe: escolher ou cadastrar na hora; para corrigir o cadastro, o nome abre o cadastro dele em
+  // outra aba (Leva I: sem o "editar no contexto" aqui — o veículo não perde o que está sendo preenchido)
   const porNome = (a: Opt, b: Opt) => a.nome.localeCompare(b.nome, "pt-BR");
   const seletorResponsavel = (
     <div data-responsavel-veiculo={form.responsavelId}>
@@ -209,8 +215,8 @@ export function VeiculoForm({ initialData, ocorrencias, somenteLeitura = false }
           toast("Colaborador cadastrado.");
           return { value: c.id, label: c.nome };
         }}
-        edicao={form.responsavelId ? COLABORADOR.edicao((c) => setColaboradores((l) => l.map((x) => (x.id === c.id ? { ...x, nome: c.nome } : x)))) : undefined}
       />
+      {form.responsavelId && <LinkDoCadastro href={`/colaboradores/${form.responsavelId}/editar`} nome={colaboradores.find((c) => c.id === form.responsavelId)?.nome} tipo="colaborador" />}
     </div>
   );
   const seletorEquipe = (
@@ -226,8 +232,8 @@ export function VeiculoForm({ initialData, ocorrencias, somenteLeitura = false }
           toast("Equipe cadastrada.");
           return { value: e.id, label: e.nome };
         }}
-        edicao={form.equipeId ? EQUIPE.edicao((e) => setEquipes((l) => l.map((x) => (x.id === e.id ? { ...x, nome: e.nome } : x)))) : undefined}
       />
+      {form.equipeId && <LinkDoCadastro href={`/equipes/${form.equipeId}/editar`} nome={equipes.find((e) => e.id === form.equipeId)?.nome} tipo="equipe" />}
     </div>
   );
 
@@ -659,5 +665,16 @@ function ManutencoesPanel({ veiculoId, manutencoes, setManutencoes, somenteLeitu
         </Button>
       )}
     </FormSection>
+  );
+}
+
+/** O nome do escolhido como link para o cadastro dele, em outra aba (o formulário do veículo continua aberto) */
+function LinkDoCadastro({ href, nome, tipo }: { href: string; nome?: string; tipo: "colaborador" | "equipe" }) {
+  if (!nome) return null;
+  return (
+    <a href={href} target="_blank" rel="noopener" className="mt-1 inline-flex items-center gap-1 text-xs text-primary-700 hover:underline" data-link-cadastro={tipo}
+      title={`Abrir o cadastro ${tipo === "equipe" ? "da equipe" : "do colaborador"} em outra aba`}>
+      {nome} <ExternalLink className="w-3 h-3" aria-hidden />
+    </a>
   );
 }

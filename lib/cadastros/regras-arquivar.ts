@@ -280,3 +280,23 @@ export function motivoNaoDescartarNota(n: NotaDescarte): string | null {
   }
   return null;
 }
+
+/* ───────── Nota de compra descartada: restaurar (Leva I.2) ───────── */
+
+export const MSG_DESCARTE_SEM_XML = "Este descarte é de antes de guardar o XML da nota: importe o XML de novo.";
+export const MSG_DESCARTE_JA_RESTAURADO = "Esta nota já foi restaurada.";
+
+/**
+ * Restaurar reimporta a nota pelo XML guardado no descarte (o mesmo caminho da importação). Não dá
+ * quando o descarte é antigo (sem o XML) ou já foi restaurado. A chave já importada de novo é conferida
+ * no servidor (precisa do banco): restaurarNotaDescartada.
+ */
+export function motivoNaoRestaurarNota(d: { temXml: boolean; restauradaEm: Date | string | null }): string | null {
+  if (d.restauradaEm) return MSG_DESCARTE_JA_RESTAURADO;
+  if (!d.temXml) return MSG_DESCARTE_SEM_XML;
+  return null;
+}
+
+/** A nota já foi importada de novo (alguém subiu o XML depois do descarte): restaurar duplicaria. */
+export const msgNotaJaImportadaDeNovo = (n: { numero: string; serie: string; em: string }) =>
+  `A NF ${n.numero}/${n.serie} já foi importada de novo em ${n.em}. Abra a nota importada.`;

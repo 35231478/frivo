@@ -6,7 +6,7 @@ import { Download, ExternalLink, FileCode2, Loader2 } from "lucide-react";
 import { Drawer } from "@/components/ui/drawer";
 import { toast } from "@/components/ui/avisos";
 import { baixarArquivo } from "@/lib/baixar-cliente";
-import { CopiarCodigo } from "@/components/financeiro/copiar-codigo";
+import { ChaveCopiavel } from "@/components/compras/chave-copiavel";
 import { cn, formatarCpfCnpj, formatarData, formatarDataHora, formatarMoeda } from "@/lib/utils";
 import { chaveEmBlocos, COR_STATUS_NOTA, LABEL_STATUS_NOTA } from "@/lib/compras/rotulos";
 import { enderecoEmLinha, type DanfeJson, type Json } from "@/lib/compras/danfe-texto";
@@ -127,8 +127,7 @@ function Danfe({ d }: { d: DanfeJson }) {
 
       <Quadro titulo="Chave de acesso">
         <div className="flex items-center justify-between gap-3">
-          <p className="font-mono text-xs sm:text-sm text-ink break-all" data-danfe-chave>{d.chave ? chaveEmBlocos(d.chave) : "—"}</p>
-          {d.chave && <CopiarCodigo texto={d.chave} rotulo="Copiar chave" />}
+          <p className="text-xs sm:text-sm" data-danfe-chave>{d.chave ? <ChaveCopiavel chave={d.chave} /> : "—"}</p>
         </div>
         <p className="text-xs text-ink-muted mt-1">
           {d.protocolo ? `Protocolo ${d.protocolo.numero}${d.protocolo.data ? ` · ${formatarDataHora(d.protocolo.data)}` : ""}` : "Sem protocolo de autorização no XML"}
@@ -229,8 +228,7 @@ function SemXml({ n }: { n: Dados["nota"] }) {
         </div>
         {n.chave && (
           <div className="mt-2 flex items-center justify-between gap-3">
-            <p className="font-mono text-xs text-ink break-all">{chaveEmBlocos(n.chave)}</p>
-            <CopiarCodigo texto={n.chave} rotulo="Copiar chave" />
+            <p className="text-xs"><ChaveCopiavel chave={n.chave} /></p>
           </div>
         )}
       </Quadro>

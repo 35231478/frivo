@@ -1,5 +1,6 @@
 "use client";
 
+import { CAMADA } from "@/lib/ui/camadas";
 import { useEffect, useState } from "react";
 import { AlertTriangle, CheckCircle2, Info, X, XCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -99,7 +100,7 @@ export function Avisos() {
   return (
     <>
       {/* Toasts */}
-      <div className="fixed top-5 right-5 z-[90] flex flex-col gap-2 items-end pointer-events-none" aria-live="polite" data-toasts>
+      <div className={`fixed top-5 right-5 ${CAMADA.toast} flex flex-col gap-2 items-end pointer-events-none`} aria-live="polite" data-toasts>
         {estado.toasts.map((t) => {
           const Icone = ICONE[t.tipo];
           return (
@@ -118,7 +119,7 @@ export function Avisos() {
 
       {/* Confirmação */}
       {c && (
-        <div className="fixed inset-0 z-[95] flex items-center justify-center p-4" role="dialog" aria-modal="true" data-confirmacao>
+        <div className={`fixed inset-0 ${CAMADA.confirmacao} flex items-center justify-center p-4`} role="dialog" aria-modal="true" data-confirmacao>
           <div className="absolute inset-0 bg-black/50" onClick={() => responder(false)} />
           <div className="relative bg-white rounded-card shadow-card-hover w-full max-w-md p-5 space-y-4 text-left whitespace-normal">
             <div className="flex items-start gap-3">

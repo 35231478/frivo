@@ -7,6 +7,8 @@ import { medicaoSchema } from "@/lib/validations";
 import { calcularTotaisMedicao } from "@/lib/medicao-helpers";
 import { periodoInstanteBR } from "@/lib/fuso";
 import { proximoNumero } from "@/lib/numeracao-server";
+import { registrarPrecoDeTabelaNaFatura, verificarPrecoDeTabela } from "@/lib/precos/trava-tabela-server";
+import { itensDaMedicaoParaTrava } from "@/lib/precos/trava-tabela";
 
 export async function GET(req: NextRequest) {
   const guard = await exigirPermissao("financeiro", "medicoes");
@@ -80,6 +82,11 @@ export async function POST(req: NextRequest) {
     ]);
   } catch (e) { const r = respostaRefEmpresa(e); if (r) return r; throw e; }
 
+  // Preço de tabela travado: a mesma regra do orçamento e da OS (lib/precos/trava-tabela)
+  const trava = await verificarPrecoDeTabela({ user: session.user!, empresaId, clienteId: data.clienteId, itens: itensDaMedicaoParaTrava(data.itens), motivo: data.motivoPrecoTabela });
+  if (!trava.veredito.ok) return NextResponse.json({ erro: trava.veredito.erro, precoTabela: true }, { status: trava.veredito.status });
+  const motivoPrecoTabela = trava.veredito.motivo;
+
   const tokenPublico = crypto.randomUUID();
 
   const totais = calcularTotaisMedicao(data.itens, data.descontoValor, data.descontoPercent);
@@ -150,6 +157,9 @@ export async function POST(req: NextRequest) {
         },
       },
     });
+    if (motivoPrecoTabela) {
+      await registrarPrecoDeTabelaNaFatura(tx, { empresaId, usuarioId: session.user!.id, numero, avulsa: medicao.avulsa, alteracoes: trava.alteracoes, motivo: motivoPrecoTabela });
+    }
     return { medicao };
   }, { timeout: 20_000 });
   if ("conflito" in r) return NextResponse.json({ erro: r.conflito }, { status: 409 });

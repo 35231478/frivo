@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { ProtegerSaida } from "@/components/ui/proteger-saida";
 import { notFound } from "next/navigation";
 import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
@@ -36,7 +37,7 @@ export default async function EditarContaPagarPage({ params }: { params: Promise
   return (
     <div className="max-w-3xl mx-auto">
       <PageHeader title={`Editar ${conta.numero}`} description={conta.fornecedor} dica={AJUDA} backHref="/financeiro/contas-pagar" />
-      <ContaPagarForm initialData={initialData} />
+      <ProtegerSaida><ContaPagarForm initialData={initialData} /></ProtegerSaida>
     </div>
   );
 }

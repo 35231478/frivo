@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { ProtegerSaida } from "@/components/ui/proteger-saida";
 import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
 import { exigirModuloNaPagina } from "@/lib/modulos/pagina";
@@ -14,7 +15,7 @@ export default async function NovoVeiculoPage() {
   if (!pode(session?.user?.permissoes, "veiculos", "gerenciar", session?.user?.role)) redirect("/veiculos");
   return (
     <div className="max-w-5xl mx-auto">
-      <VeiculoForm />
+      <ProtegerSaida><VeiculoForm /></ProtegerSaida>
     </div>
   );
 }

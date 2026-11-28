@@ -50,6 +50,8 @@ beforeEach(() => {
   resposta = () => ({ status: 200, dados: {} });
   (globalThis as any).fetch = vi.fn(async (url: string, op: any = {}) => {
     const corpo = op.body ? JSON.parse(op.body) : undefined;
+    // A preferência da planilha (TabelaPro, Leva I.2) não é chamada da tela
+    if (String(url).startsWith("/api/preferencias/")) return { ok: true, status: 200, json: async () => ({ valor: null }) } as never;
     chamadas.push({ url: String(url), metodo: op.method ?? "GET", corpo });
     const r = resposta(String(url), op.method ?? "GET", corpo);
     return { ok: r.status < 400, status: r.status, json: async () => r.dados } as never;

@@ -208,7 +208,7 @@ describe("lista de notas: a visualização rápida", () => {
     expect($$("[data-danfe-item]").length).toBe(3);
     expect(txt($("[data-danfe-totais]"))).toContain("Total da notaR$ 1.749,30");
     expect(txt($("[data-danfe-totais]"))).toContain("ICMSR$ 314,87");
-    expect($("[data-copiar='Copiar chave']")).not.toBeNull();
+    expect($("[data-chave-copiavel]")).not.toBeNull();  // Leva I: clicar na chave copia (sem botão Copiar)
     // Baixar PDF/XML vão por fetch (pronto-janeiro-3): a recusa da rota aparece na tela, não como "download falhou"
     expect($("[data-baixar-pdf]")!.tagName).toBe("BUTTON");
     expect($("[data-baixar-xml]")!.tagName).toBe("BUTTON");
@@ -276,7 +276,7 @@ describe("lista de notas: a visualização rápida", () => {
     expect(txt(cel("n1", "cnpj"))).toBe("11.222.333/0001-81");
     expect(txt(cel("n2", "icms"))).toBe("—");
     expect(txt(cel("n2", "pedido"))).toBe("—");
-    expect(cel("n1", "chave")!.querySelector("[data-copiar]")).not.toBeNull();
+    expect(cel("n1", "chave")!.querySelector("[data-chave-copiavel]")).not.toBeNull();  // Leva I
   });
 
   it("o período diz qual data: Emissão (padrão) ou Entrada (?data=entrada)", async () => {

@@ -10,7 +10,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { buscarCep, cepCompleto, formatarCep } from "@/lib/cep";
+import { enderecoDoCep } from "@/lib/cep";
+import { CampoCep } from "@/components/ui/campo-cep";
 import { enderecoDaConsulta, temEndereco, CAMPOS_ENDERECO } from "@/lib/clientes/endereco-principal";
 import { itensDoNovo, sinaisDoCliente } from "@/lib/clientes/cabecalho";
 import { CabecalhoCliente, subtituloDoCliente } from "@/components/clientes/cabecalho-cliente";
@@ -128,9 +129,7 @@ export function ClienteForm({ initialData, totalProximos30Dias, valorEmAtraso, p
   // Abas
   const abaPedida = abaInicial ? ABA_ANTIGA[abaInicial] ?? abaInicial : "";
   const [aba, setAba] = useState(IDS_ABAS.includes(abaPedida) && (isEditing || !["historico", "atendimento", "comunicacao"].includes(abaPedida)) ? abaPedida : "geral");
-  const [buscandoCepPrincipal, setBuscandoCepPrincipal] = useState(false);
   // O CEP que já veio (ou já foi buscado) não busca de novo ao digitar
-  const ultimoCepBuscado = useRef((initialData?.cep ?? "").replace(/\D/g, ""));
   const [abasErro, setAbasErro] = useState<Set<string>>(new Set());
   const [cnpjInfo, setCnpjInfo] = useState<{ nome: string; cidade?: string; estado?: string } | null>(null);
 
@@ -238,27 +237,6 @@ export function ClienteForm({ initialData, totalProximos30Dias, valorEmAtraso, p
         setConsultaNonce((n) => n + 1);
       }
     } catch { setErroGlobal("Falha na consulta do CNPJ. Tente novamente."); } finally { setBuscandoCnpj(false); }
-  }
-
-  // CEP do endereço principal: formata ao digitar e, ao completar, busca rua, bairro, cidade e UF
-  async function buscarCepPrincipal(cep: string) {
-    if (!cepCompleto(cep)) return;
-    setBuscandoCepPrincipal(true);
-    try {
-      const d = await buscarCep(cep);
-      if (!d) return; // sem rede ou CEP que não existe: a pessoa digita
-      if (d.logradouro) setValue("endereco", d.logradouro, { shouldDirty: true });
-      if (d.bairro) setValue("bairro", d.bairro, { shouldDirty: true });
-      if (d.cidade) setValue("cidade", d.cidade, { shouldDirty: true });
-      if (d.estado) setValue("estado", d.estado, { shouldDirty: true });
-      if (d.complemento && !watch("complemento")) setValue("complemento", d.complemento, { shouldDirty: true });
-    } finally { setBuscandoCepPrincipal(false); }
-  }
-  function aoDigitarCep(valor: string) {
-    const v = formatarCep(valor);
-    if (v !== valor) setValue("cep", v);
-    const digitos = v.replace(/\D/g, "");
-    if (cepCompleto(v) && digitos !== ultimoCepBuscado.current) { ultimoCepBuscado.current = digitos; void buscarCepPrincipal(v); }
   }
 
   // Valida regras dinâmicas da empresa; retorna { aba, msg } do primeiro erro
@@ -499,14 +477,12 @@ export function ClienteForm({ initialData, totalProximos30Dias, valorEmAtraso, p
         <FormSection title="Endereço principal" icon={<MapPin className="w-3.5 h-3.5" />} dica={DICA_ENDERECO_PRINCIPAL}>
           <div className="space-y-4" data-endereco-principal>
             <FormGrid cols={3}>
-              <FormField label="CEP">
-                <div className="flex gap-2">
-                  <Input {...register("cep", { onChange: (e) => aoDigitarCep(e.target.value) })} placeholder="00000-000" maxLength={9} inputMode="numeric" />
-                  <Button type="button" variant="secondary" loading={buscandoCepPrincipal} onClick={() => buscarCepPrincipal(watch("cep") ?? "")} className="shrink-0 px-3" aria-label="Consultar o CEP">
-                    {!buscandoCepPrincipal && <Search className="w-4 h-4" />}
-                  </Button>
-                </div>
-              </FormField>
+              {/* O campo de CEP de todo formulário (lib/cep pelo CampoCep): completou, preenche rua, bairro, cidade e UF */}
+              <CampoCep valor={watch("cep") ?? ""} onValor={(v) => setValue("cep", v, { shouldDirty: true })}
+                onEndereco={(d) => {
+                  const novo = enderecoDoCep({ endereco: watch("endereco"), bairro: watch("bairro"), cidade: watch("cidade"), estado: watch("estado") }, d, { logradouro: "endereco", bairro: "bairro", cidade: "cidade", estado: "estado" });
+                  for (const [k, v] of Object.entries(novo)) setValue(k as "endereco", (v as string) ?? "", { shouldDirty: true });
+                }} />
               <FormField label="Logradouro" className="sm:col-span-2">
                 <Input {...register("endereco")} caixa="endereco" placeholder="Rua, avenida…" />
               </FormField>

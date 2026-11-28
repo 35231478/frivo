@@ -15,9 +15,10 @@ export async function GET() {
 }
 
 /**
- * Grava a configuração da empresa (quando fica devida, base líquida de impostos) e, da COM-2, opcionais: quando a
- * comissão do técnico fica devida, os dias do retorno e os tipos de OS que contam como retorno (a mesma lista do
- * Desempenho). Vale para as comissões que nascerem daqui em diante.
+ * Grava a configuração da empresa (quando fica devida, base líquida de impostos — vale para as comissões que
+ * nascerem daqui em diante — e o vencimento da conta a pagar do fechamento, que vale para o próximo fechamento) e, da
+ * COM-2, opcionais: quando a comissão do técnico fica devida, os dias do retorno e os tipos de OS que contam como
+ * retorno (a mesma lista do Desempenho).
  */
 export async function PUT(req: NextRequest) {
   const guard = await exigirPermissao("desempenho", "gerenciar");
@@ -31,6 +32,9 @@ export async function PUT(req: NextRequest) {
   }
   const data = {
     comissaoQuando: d.quando, comissaoLiquidaImpostos: d.liquidaImpostos,
+    // COM-1.1: o vencimento da conta a pagar do fechamento
+    ...(d.vencimentoTipo ? { comissaoVencimentoTipo: d.vencimentoTipo, comissaoVencimentoDia: d.vencimentoDia } : {}),
+    // COM-2: o técnico
     ...(d.executorQuando ? { comissaoExecutorQuando: d.executorQuando } : {}),
     ...(d.retornoDias !== undefined ? { comissaoRetornoDias: d.retornoDias } : {}),
   };

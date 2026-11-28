@@ -128,7 +128,7 @@ export function ContratoDocumentos({ contratoId, anexosIniciais }: ContratoDocum
       )}
 
       {preview && (
-        <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4" onClick={() => setPreview(null)}>
+        <div className="fixed inset-0 z-[70] bg-black/60 flex items-center justify-center p-4" onClick={() => setPreview(null)}>
           <div className="relative bg-white rounded-card max-w-4xl max-h-[90vh] overflow-auto shadow-2xl" onClick={(e) => e.stopPropagation()}>
             <button type="button" onClick={() => setPreview(null)} className="absolute top-3 right-3 bg-white/90 rounded-full p-1.5 shadow hover:bg-surface-linha z-10">
               <X className="w-4 h-4" />

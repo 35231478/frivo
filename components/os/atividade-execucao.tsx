@@ -339,7 +339,7 @@ function ListaEquipamentos({ clienteId, unidadeId, jaVinculados, onFechar, onVin
   const [marcados, setMarcados] = useState<Set<string>>(new Set());
   const [salvando, setSalvando] = useState(false);
   return (
-    <div className="fixed inset-0 z-50 bg-black/50 flex items-end sm:items-center justify-center p-0 sm:p-4" data-lista-equipamentos>
+    <div className="fixed inset-0 z-[70] bg-black/50 flex items-end sm:items-center justify-center p-0 sm:p-4" data-lista-equipamentos>
       <div className="bg-white w-full sm:max-w-md sm:rounded-card rounded-t-card overflow-hidden max-h-[85vh] flex flex-col">
         <div className="flex items-center justify-between px-4 py-3 border-b border-surface-linha">
           <span className="text-sm font-semibold text-ink">Equipamentos {unidadeId ? "da unidade" : "do cliente"}</span>

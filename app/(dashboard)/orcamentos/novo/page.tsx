@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { ProtegerSaida } from "@/components/ui/proteger-saida";
 import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
 import { pode } from "@/lib/permissoes";
@@ -18,5 +19,5 @@ export default async function NovoOrcamentoPage({
   if (!pode(session?.user?.permissoes, "orcamentos", "criar", session?.user?.role)) redirect("/orcamentos");
   const empresaId = session!.user!.empresaId;
 
-  return <OrcamentoForm mode="novo" {...await dadosNovoOrcamento(empresaId, { clienteId, osId })} />;
+  return <ProtegerSaida><OrcamentoForm mode="novo" {...await dadosNovoOrcamento(empresaId, { clienteId, osId })} /></ProtegerSaida>;
 }

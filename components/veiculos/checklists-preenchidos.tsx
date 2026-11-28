@@ -12,6 +12,8 @@ import { confirmar, toast } from "@/components/ui/avisos";
 import { CampoBusca, ListaVazia, SkeletonLista } from "@/components/listagem/listagem-ui";
 import { TabelaPro, type ColunaPro } from "@/components/listagem/tabela-pro";
 import { AbasSituacao } from "@/components/listagem/abas-situacao";
+import { useFiltroUrl, useListagemUrl } from "@/components/listagem/use-listagem-url";
+import { useSearchParams } from "next/navigation";
 import { usePermissoes } from "@/components/providers/permissoes-provider";
 import { ItensChecklist } from "@/components/veiculos/itens-checklist";
 import { PLANILHA } from "@/lib/planilha";
@@ -31,6 +33,16 @@ interface Detalhe extends Omit<Linha, "totalItens" | "alertas"> {
 }
 type Aba = "ativos" | "inativos";
 const ABAS: readonly { id: Aba; label: string }[] = [{ id: "ativos", label: "Ativos" }, { id: "inativos", label: "Inativos" }];
+
+const NAVEGACAO = ["aba"] as const;
+/** Os checklists que a lista mostra: a busca e "Só com alertas" (o filtro do sino) — regra pura */
+export function filtrarChecklists<T extends { status: string; veiculo: { placa: string; modelo: string }; colaborador: { nome: string } | null; template: { nome: string } }>(
+  lista: T[], busca: string, soAlertas: boolean,
+): T[] {
+  const q = busca.trim().toLowerCase();
+  return lista.filter((c) => (!soAlertas || c.status === "COM_ALERTAS")
+    && (!q || `${c.veiculo.placa} ${c.veiculo.modelo} ${c.colaborador?.nome ?? ""} ${c.template.nome}`.toLowerCase().includes(q)));
+}
 
 const AJUDA = "Checklists já enviados. Excluir é reversível: o checklist inativado sai da lista e das contagens, e pode ser reativado na aba Inativos.";
 
@@ -65,10 +77,21 @@ export function ChecklistsPreenchidos({ veiculoId, colaboradores, onMudou }: {
   const podeInativar = pode(PERMISSAO_CHECKLIST.inativar.modulo, PERMISSAO_CHECKLIST.inativar.acao);
   const podeReativar = pode(PERMISSAO_CHECKLIST.reativar.modulo, PERMISSAO_CHECKLIST.reativar.acao);
 
-  const [aba, setAba] = useState<Aba>("ativos");
+  // Os filtros (situação, "Só com alertas", busca) vão para a URL e voltam pelos filtros lembrados — na tela da
+  // frota. Na ficha do veículo (veiculoId), a lista é parte do cadastro: os filtros ficam só na tela.
+  const naUrl = !veiculoId;
+  const sp = useSearchParams();
+  const url = useListagemUrl({ chave: "checklists-preenchidos", qAtual: naUrl ? sp.get("q") ?? "" : "", lembrarFiltros: naUrl, navegacao: NAVEGACAO });
+  const extra = { aba: "preenchidos" };
+  const [situacao, setSituacao] = useFiltroUrl("situacao", url.navegar, { vazio: "ativos", extra, ativo: naUrl });
+  const aba: Aba = situacao === "inativos" ? "inativos" : "ativos";
+  const setAba = (a: Aba) => setSituacao(a);
+  const [alertas, setAlertas] = useFiltroUrl("alertas", url.navegar, { extra, ativo: naUrl });
+  const [buscaLocal, setBuscaLocal] = useState("");
+  const busca = naUrl ? url.busca : buscaLocal;
+  const setBusca = naUrl ? url.setBusca : setBuscaLocal;
   const [lista, setLista] = useState<Linha[] | null>(null);
   const [erroLista, setErroLista] = useState("");
-  const [busca, setBusca] = useState("");
   const [ocupado, setOcupado] = useState<string | null>(null);
   const [aberto, setAberto] = useState<{ id: string; modo: "ver" | "editar" } | null>(null);
 
@@ -87,8 +110,8 @@ export function ChecklistsPreenchidos({ veiculoId, colaboradores, onMudou }: {
   useEffect(() => { setLista(null); void carregar(aba); }, [aba, carregar]);
 
   const q = busca.trim().toLowerCase();
-  const filtrada = useMemo(() => (lista ?? []).filter((c) => !q
-    || `${c.veiculo.placa} ${c.veiculo.modelo} ${c.colaborador?.nome ?? ""} ${c.template.nome}`.toLowerCase().includes(q)), [lista, q]);
+  const soAlertas = alertas === "1";
+  const filtrada = useMemo(() => filtrarChecklists(lista ?? [], busca, soAlertas), [lista, busca, soAlertas]);
 
   const nome = (c: Linha) => `o checklist de ${c.veiculo.placa} de ${formatarDataHora(c.criadoEm)}`;
 
@@ -155,12 +178,16 @@ export function ChecklistsPreenchidos({ veiculoId, colaboradores, onMudou }: {
         <div className="basis-full sm:basis-0 sm:flex-1 sm:min-w-[12rem]">
           <CampoBusca valor={busca} onChange={setBusca} placeholder={veiculoId ? "Pesquisar por colaborador ou modelo" : "Pesquisar por placa, colaborador ou modelo"} rotulo="Pesquisar checklists" atalho={false} />
         </div>
+        <label className="inline-flex items-center gap-2 px-3 py-1.5 text-sm text-ink-muted bg-white border border-surface-border rounded-lg cursor-pointer select-none" data-filtro-alertas>
+          <input type="checkbox" checked={soAlertas} onChange={(e) => setAlertas(e.target.checked ? "1" : "")} className="accent-primary-600" />
+          Só com alertas
+        </label>
       </div>
 
       <div className="bg-white border border-surface-border rounded-card overflow-hidden">
         {erroLista && <p role="alert" className="px-4 py-3 text-sm text-atrasado-texto bg-atrasado-claro border-b border-atrasado/20" data-erro-checklists>{erroLista}</p>}
         {lista === null ? <SkeletonLista linhas={4} /> : filtrada.length === 0 ? (
-          <ListaVazia mensagem={q ? "Nenhum checklist encontrado" : aba === "inativos" ? "Nenhum checklist inativo" : "Nenhum checklist preenchido"} busca={q ? busca.trim() : undefined} onLimpar={() => setBusca("")} />
+          <ListaVazia mensagem={q || soAlertas ? "Nenhum checklist encontrado" : aba === "inativos" ? "Nenhum checklist inativo" : "Nenhum checklist preenchido"} busca={q ? busca.trim() : undefined} onLimpar={() => setBusca("")} />
         ) : (
           <>
             <ul className="sm:hidden divide-y divide-surface-border" data-cartoes>

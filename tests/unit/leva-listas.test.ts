@@ -92,12 +92,12 @@ function semear() {
   const agora = Date.now();
   for (let i = 1; i <= 130; i++) {
     const criadoEm = new Date(agora - i * 3600e3);
-    db.t.ordemServico.push({ id: `os${i}`, empresaId: "e1", numero: `OS-${String(i).padStart(4, "0")}`, clienteId: "c01", status: "ABERTA", prioridade: "MEDIA", origem: "INTERNA", descricao: "x", criadoEm, previsaoConclusao: null, chamadoNumero: null });
+    db.t.ordemServico.push({ id: `os${i}`, empresaId: "e1", numero: `OS-${String(i).padStart(4, "0")}`, clienteId: "c01", status: "ABERTA", prioridade: "MEDIA", origem: "INTERNA", descricao: "x", criadoEm, previsaoConclusao: criadoEm, chamadoNumero: null }); // Leva I: o período olha a data prevista/agendada
     db.t.orcamento.push({ id: `or${i}`, empresaId: "e1", codigo: `ORC-${String(i).padStart(4, "0")}`, nome: `Orçamento ${i}`, clienteId: "c01", tipo: "COMUM", status: "RASCUNHO", totalGeral: i, criadoEm });
     db.t.contrato.push({ id: `ct${i}`, empresaId: "e1", numero: `CT-${String(i).padStart(4, "0")}`, clienteId: "c01", tipo: "MANUTENCAO", status: "ATIVO", periodicidade: "MENSAL", valorMensal: i, dataInicio: criadoEm, dataFim: null, criadoEm });
   }
   for (let i = 1; i <= 3; i++) {
-    db.t.ordemServico.push({ id: `osB${i}`, empresaId: "e2", numero: `OS-B${i}`, clienteId: "cB", status: "ABERTA", prioridade: "MEDIA", descricao: "x", criadoEm: new Date() });
+    db.t.ordemServico.push({ id: `osB${i}`, empresaId: "e2", numero: `OS-B${i}`, clienteId: "cB", status: "ABERTA", prioridade: "MEDIA", descricao: "x", criadoEm: new Date(), previsaoConclusao: new Date() });
   }
   for (let i = 1; i <= 30; i++) db.t.equipe.push({ id: `eq${i}`, empresaId: "e1", nome: `Equipe ${doisDig(i)}`, cor: "#000", status: i === 30 ? "INATIVA" : "ATIVA" });
   db.t.equipe.push({ id: "eqB", empresaId: "e2", nome: "Equipe da outra", cor: "#000", status: "ATIVA" });
