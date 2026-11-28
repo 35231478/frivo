@@ -11,6 +11,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import type { ComentarioTela } from "@/lib/tecnico/comentarios";
+import type { EnvioMensagem } from "@/components/chat/conversa";
 import { MOTIVO_EQUIPAMENTO } from "@/lib/chat/equipamento-foto";
 
 (globalThis as any).IS_REACT_ACT_ENVIRONMENT = true;
@@ -121,7 +122,7 @@ describe("o balão: a etiqueta do equipamento e a correção", () => {
 describe("a caixa de escrever: o equipamento da foto antes de enviar", () => {
   async function caixa(props: Record<string, unknown>) {
     const { ConversaChat } = await import("@/components/chat/conversa");
-    const onEnviar = vi.fn(async (_envio: Record<string, unknown>) => null);
+    const onEnviar = vi.fn(async (_envio: EnvioMensagem) => null as string | null);
     await montar(createElement(ConversaChat, { mensagens: [], onEnviar, urlFoto: () => "", osDaMensagem: "os1", ...props }));
     return onEnviar;
   }
