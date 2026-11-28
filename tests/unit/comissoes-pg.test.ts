@@ -381,6 +381,12 @@ describe.skipIf(!URL_PG)("COM-1 — comissões (PostgreSQL real)", () => {
     expect((await chamar("comissoes", "GET")).status).toBe(403);
     expect((await chamar("comissoes/regras", "POST", {}, { quemTipo: "TODOS", sobreTipo: "PECAS", base: "FIXO_ITEM", valor: 1 })).status).toBe(403);
     expect((await chamar("comissoes", "PUT", {}, { quando: "APROVACAO", liquidaImpostos: true })).status).toBe(403);
+    // Quem só REVISA o Desempenho (sem "Gerenciar") também não mexe em regras nem na configuração
+    logar("uP", montarPermissoes({ desempenho: ["visualizar", "revisar"] }));
+    expect((await chamar("comissoes", "GET")).status).toBe(403);
+    expect((await chamar("comissoes", "PUT", {}, { quando: "APROVACAO", liquidaImpostos: true })).status).toBe(403);
+    expect((await chamar("comissoes/regras", "POST", {}, { quemTipo: "TODOS", sobreTipo: "PECAS", base: "FIXO_ITEM", valor: 1 })).status).toBe(403);
+    expect((await prisma.configuracao.findUnique({ where: { empresaId: "e1" } })).comissaoQuando).toBe("RECEBIMENTO");
     // Regra repetida (mesmo quem + mesmo alvo) é recusada; percentual acima de 100, também
     logar("uAdm");
     expect((await chamar("comissoes/regras", "POST", {}, { quemTipo: "TODOS", sobreTipo: "PECAS", base: "PERC_VENDA", valor: 3 })).status).toBe(409);
