@@ -33,7 +33,20 @@ export const ROTULO_QUEM: Record<Quem, string> = { PESSOA: "Pessoa", CARGO: "Car
 export const ROTULO_PAPEL: Record<Papel, string> = { VENDEDOR: "Vendedor", EXECUTOR: "Executor", RESPONSAVEL: "Responsável" };
 export const ROTULO_SOBRE: Record<Sobre, string> = { TODOS_SERVICOS: "Todos os serviços", CATEGORIA: "Categoria de serviço", SERVICO: "Um serviço", PECAS: "Peças" };
 export const ROTULO_BASE: Record<Base, string> = { PERC_VENDA: "% da venda", PERC_LUCRO: "% do lucro", FIXO_ITEM: "Valor fixo por item" };
-export const ROTULO_QUANDO: Record<Quando, string> = { RECEBIMENTO: "No recebimento", APROVACAO: "Na aprovação do orçamento", CONCLUSAO_OS: "Na conclusão da OS" };
+export const ROTULO_QUANDO: Record<Quando, string> = {
+  RECEBIMENTO: "Por data de recebimento", APROVACAO: "Por data de emissão (aprovação do orçamento)", CONCLUSAO_OS: "Na conclusão da OS",
+};
+
+/**
+ * O relatório do mês visto por uma das duas datas (o mesmo conceito do "quando é devida"): EMISSÃO = vendas
+ * emitidas (orçamento aprovado) no mês, com a comissão inteira; RECEBIMENTO = a parte da comissão coberta pelo
+ * dinheiro que entrou no mês. É só a VISTA: o que o fechamento paga segue a configuração da empresa.
+ */
+export const VISTAS = ["EMISSAO", "RECEBIMENTO"] as const;
+export type Vista = (typeof VISTAS)[number];
+export const ROTULO_VISTA: Record<Vista, string> = { EMISSAO: "Por data de emissão", RECEBIMENTO: "Por data de recebimento" };
+/** A vista que abre: a do "quando é devida" (aprovação e conclusão da OS contam a partir da emissão da venda) */
+export const vistaPadrao = (quando: Quando): Vista => (quando === "RECEBIMENTO" ? "RECEBIMENTO" : "EMISSAO");
 
 export const round2 = (v: number) => Math.round((v + Number.EPSILON) * 100) / 100;
 const num = (v: unknown) => { const n = Number(v); return Number.isFinite(n) ? n : 0; };
@@ -237,6 +250,37 @@ export function fracaoRecebida(faturas: readonly FaturaRecebida[], totalVenda: n
   return Math.min(1, Math.max(0, entrou / num(totalVenda)));
 }
 
+/** Uma entrada de dinheiro em reais desta venda, com a data */
+export interface EntradaDaVenda { data: Date; valor: number }
+
+/**
+ * As entradas de uma fatura em reais DESTA venda: cada recebimento × (a parte da venda ÷ o que a fatura cobra),
+ * na ordem das datas, sem passar do que a fatura tem desta venda (a soma bate com `fracaoRecebida`).
+ */
+export function entradasDaFatura(f: FaturaRecebida, brutas: readonly EntradaDaVenda[]): EntradaDaVenda[] {
+  if (num(f.aCobrar) <= 0 || num(f.daVenda) <= 0) return [];
+  const fator = num(f.daVenda) / num(f.aCobrar);
+  let resta = num(f.daVenda);
+  const r: EntradaDaVenda[] = [];
+  for (const b of [...brutas].sort((x, y) => x.data.getTime() - y.data.getTime())) {
+    const v = Math.min(resta, num(b.valor) * fator);
+    if (v <= 0) break;
+    r.push({ data: b.data, valor: v });
+    resta -= v;
+  }
+  return r;
+}
+
+/** Quanto da venda (0 a 1) entrou ENTRE as datas [ini, fim): o relatório "por data de recebimento" */
+export function fracaoRecebidaNoPeriodo(entradas: readonly EntradaDaVenda[], totalVenda: number, ini: Date, fim: Date): number {
+  if (num(totalVenda) <= 0) return 0;
+  const antes = entradas.filter((e) => e.data < ini).reduce((s, e) => s + num(e.valor), 0);
+  const ate = entradas.filter((e) => e.data < fim).reduce((s, e) => s + num(e.valor), 0);
+  // O que passa do total da venda (recebido a mais) não gera comissão a mais
+  const cap = (v: number) => Math.min(1, Math.max(0, v / num(totalVenda)));
+  return Math.max(0, cap(ate) - cap(antes));
+}
+
 export interface EstadoDaVenda {
   statusOrcamento: string;
   /** A OS gerada do orçamento está concluída (e não cancelada) */
@@ -275,6 +319,11 @@ export function situacaoDaComissao(valor: number, movimentos: readonly Movimento
 /* ───────── o fechamento do mês ───────── */
 
 /** O mês da competência ("AAAA-MM") → o primeiro dia do mês seguinte (UTC): entra tudo antes disso. */
+export const inicioDaCompetencia = (competencia: string): Date => {
+  const [a, m] = competencia.split("-").map(Number);
+  return new Date(Date.UTC(a, m - 1, 1));
+};
+
 export function fimDaCompetencia(competencia: string): Date {
   const [a, m] = competencia.split("-").map(Number);
   return new Date(Date.UTC(m === 12 ? a + 1 : a, m === 12 ? 0 : m, 1));

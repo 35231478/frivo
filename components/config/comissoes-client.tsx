@@ -26,8 +26,8 @@ export interface TelaComissoesDados {
 const DICA_PRECEDENCIA = "O item manda, a pessoa desempata: a regra de um serviço vence a da categoria, que vence a de todos os "
   + "serviços. No mesmo item, pessoa vence cargo, que vence todos. Peças só valem para as linhas de peça.";
 const EXEMPLO_PRECEDENCIA = "Ana tem 7% fixo (pessoa + todos os serviços). No item Instalação VRF vale a regra do serviço (3%).";
-const DICA_QUANDO = "No recebimento: cada parcela paga libera a parte proporcional da comissão. Na aprovação ou na conclusão da OS: "
-  + "libera tudo de uma vez. A comissão nasce na aprovação e guarda a regra daquele dia: mudar aqui não mexe no passado.";
+const DICA_QUANDO = "Por data de recebimento: cada parcela paga libera a parte proporcional da comissão. Por data de emissão "
+  + "(aprovação do orçamento) ou na conclusão da OS: libera tudo de uma vez. No fechamento do mês dá para ver pelas duas datas. A comissão nasce na aprovação e guarda a regra daquele dia: mudar aqui não mexe no passado.";
 
 type Form = { id?: string; quemTipo: Quem; usuarioId: string; cargoId: string; papel: Papel; sobreTipo: Sobre; categoria: string; servicoId: string; base: Base; valor: string };
 const VAZIO: Form = { quemTipo: "TODOS", usuarioId: "", cargoId: "", papel: "VENDEDOR", sobreTipo: "TODOS_SERVICOS", categoria: "", servicoId: "", base: "PERC_VENDA", valor: "" };

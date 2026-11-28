@@ -6,7 +6,7 @@
 import { describe, expect, it } from "vitest";
 import {
   alvoLiberado, chaveDaRegra, comissoesDaVenda, comissoesPorPessoa, descricaoDaRegra, fimDaCompetencia, fracaoRecebida, itensDaVenda,
-  movimentoNecessario, normalizarRegra, ORDEM_PRECEDENCIA, pesoDaRegra, regraSchema, regraVencedora, situacaoDaComissao, trocarVendedorSchema, valorDaComissao,
+  entradasDaFatura, fracaoRecebidaNoPeriodo, inicioDaCompetencia, movimentoNecessario, normalizarRegra, ORDEM_PRECEDENCIA, ROTULO_VISTA, vistaPadrao, pesoDaRegra, regraSchema, regraVencedora, situacaoDaComissao, trocarVendedorSchema, valorDaComissao,
   type RegraComissao,
 } from "@/lib/comissoes/regras";
 import { folhaComComissoes, linhasDoCsv, totalDaLinha } from "@/lib/desempenho/fechamento";
@@ -216,5 +216,33 @@ describe("o que a tela manda", () => {
     expect(trocarVendedorSchema.safeParse({ vendedorId: "u" }).success).toBe(false);
     expect(trocarVendedorSchema.safeParse({ vendedorId: "u", motivo: "abc" }).success).toBe(false);
     expect(trocarVendedorSchema.safeParse({ vendedorId: "u", motivo: "Carteira nova" }).success).toBe(true);
+  });
+});
+
+describe("por data de emissão ou de recebimento (o relatório do mês)", () => {
+  const d = (s: string) => new Date(`${s}T12:00:00Z`);
+  it("as entradas de uma fatura em reais da venda: recebido × (parte da venda ÷ a cobrar), em ordem, sem passar da parte da venda", () => {
+    // Fatura de R$ 1.000, R$ 600 desta venda: R$ 500 recebidos = R$ 300 da venda
+    const f = { daVenda: 600, aCobrar: 1000, recebido: 1200 };
+    const e = entradasDaFatura(f, [{ data: d("2026-11-20"), valor: 700 }, { data: d("2026-10-05"), valor: 500 }]);
+    expect(e.map((x) => [x.data.toISOString().slice(0, 10), Math.round(x.valor * 100) / 100])).toEqual([["2026-10-05", 300], ["2026-11-20", 300]]);
+    expect(entradasDaFatura({ daVenda: 0, aCobrar: 100, recebido: 100 }, [{ data: d("2026-10-01"), valor: 100 }])).toEqual([]);
+  });
+
+  it("a fração recebida só no período; recebido antes não conta de novo; acima do total não passa de 100%", () => {
+    const entradas = [{ data: d("2026-10-05"), valor: 400 }, { data: d("2026-11-03"), valor: 300 }, { data: d("2026-11-28"), valor: 500 }];
+    const out = [inicioDaCompetencia("2026-10"), fimDaCompetencia("2026-10")] as const;
+    const nov = [inicioDaCompetencia("2026-11"), fimDaCompetencia("2026-11")] as const;
+    expect(fracaoRecebidaNoPeriodo(entradas, 1000, ...out)).toBeCloseTo(0.4);
+    expect(fracaoRecebidaNoPeriodo(entradas, 1000, ...nov)).toBeCloseTo(0.6); // 300 + 500, cortado no total (1.200 > 1.000)
+    expect(fracaoRecebidaNoPeriodo(entradas, 0, ...nov)).toBe(0);
+    expect(inicioDaCompetencia("2026-01").toISOString()).toBe("2026-01-01T00:00:00.000Z");
+  });
+
+  it("a vista que abre segue o 'quando é devida': recebimento → por recebimento; aprovação e conclusão → por emissão", () => {
+    expect(vistaPadrao("RECEBIMENTO")).toBe("RECEBIMENTO");
+    expect(vistaPadrao("APROVACAO")).toBe("EMISSAO");
+    expect(vistaPadrao("CONCLUSAO_OS")).toBe("EMISSAO");
+    expect(ROTULO_VISTA).toEqual({ EMISSAO: "Por data de emissão", RECEBIMENTO: "Por data de recebimento" });
   });
 });

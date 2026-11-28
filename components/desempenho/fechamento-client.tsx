@@ -16,6 +16,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { MOTIVO_REABERTURA_MIN, MSG_MOTIVO_REABERTURA, TEXTO_CRITERIO, type Folha, type PremioFechado } from "@/lib/desempenho/fechamento";
 import type { FechamentoResumo, FolhaDoFechamento, PreviaDoFechamento } from "@/lib/desempenho/fechamento-server";
 import { competenciaCurta, formatarEscore, rotuloCompetencia } from "@/lib/desempenho/regras";
+import { RelatorioDeComissoes } from "@/components/comissoes/relatorio-comissoes";
 import { CabecalhoDesempenho, Erro, JSON_HEADERS, SeletorDeMes, posicaoTexto, type PodeDesempenho } from "./comum";
 
 interface Dados { mes: PreviaDoFechamento; historico: FechamentoResumo[] }
@@ -89,6 +90,7 @@ export function FechamentoDesempenho({ mesInicial, mesAtual, pode }: { mesInicia
           </section>
 
           <TabelaDaFolha folha={previa.folha} definitiva={!!fechado} comissoes={previa.comissoes} />
+          {previa.comissoes && <RelatorioDeComissoes key={mes} mes={mes} />}
           <Premiados premios={previa.premios} definitivo={!!fechado} />
           <Historico historico={dados.historico} aoVer={setVendo} />
         </>
@@ -111,7 +113,7 @@ function TabelaDaFolha({ folha, definitiva, comissoes = false }: { folha: Folha;
     <section className="bg-white border border-surface-border rounded-xl overflow-hidden" data-folha data-folha-definitiva={definitiva ? "sim" : "nao"}>
       <div className="px-4 py-3 border-b border-surface-border">
         <h2 className="font-semibold text-ink flex items-center gap-1.5">
-          {comissoes ? "Folha de bônus e comissões" : "Folha de bônus"} <Dica texto={comissoes ? AJUDA_FOLHA_COMISSAO : AJUDA_FOLHA} rotulo="Folha do mês" />
+          {comissoes ? "Folha de bônus e comissões" : "Folha de bônus"} <Dica texto={comissoes ? AJUDA_FOLHA_COMISSAO : AJUDA_FOLHA} rotulo={comissoes ? "Folha de bônus e comissões" : "Folha de bônus"} />
         </h2>
       </div>
       {folha.linhas.length === 0 ? <ListaVazia mensagem="Nenhum colaborador nesta folha." /> : (

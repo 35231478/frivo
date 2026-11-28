@@ -62,11 +62,26 @@ Duas regras ativas para a mesma pessoa/cargo e o mesmo alvo são recusadas (409)
 
 | Gatilho | Liberada quando |
 |---|---|
-| **No recebimento** (padrão) | Proporcional ao que entrou: parcela paga → comissão proporcional |
-| Na aprovação do orçamento | Na aprovação |
+| **Por data de recebimento** (padrão) | Proporcional ao que entrou: parcela paga → comissão proporcional |
+| Por data de emissão (aprovação do orçamento) | Na aprovação |
 | Na conclusão da OS | A OS gerada do orçamento fica concluída |
 
 O gatilho e o valor ficam **congelados** em cada comissão: trocar a regra ou o gatilho não mexe no passado.
+
+### Ver o mês por data de emissão ou por data de recebimento
+
+No fechamento do mês, a seção **Comissões do mês** mostra o mesmo mês pelas duas datas (abas). Abre na data da
+configuração acima. É só a vista: o que o fechamento paga segue o "quando é devida".
+
+- **Por data de emissão:** as vendas emitidas (orçamento aprovado) no mês, ainda vivas, com a comissão inteira.
+- **Por data de recebimento:** a parte de cada comissão coberta pelo dinheiro que entrou no mês, recebimento a
+  recebimento (o recebido de cada fatura × a parte da venda nela). Recebido antes não conta de novo; o que passar
+  do total da venda não gera comissão a mais.
+
+Por pessoa, com as vendas de cada uma ao abrir. Rota: `GET /api/comissoes/relatorio?mes=AAAA-MM&vista=EMISSAO|RECEBIMENTO`
+(Desempenho › Gerenciar, como o fechamento).
+
+**Um vendedor por orçamento/OS** (como no OMIE). Dividir a venda entre dois vendedores fica para depois.
 
 ## Os estados
 

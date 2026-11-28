@@ -36,9 +36,9 @@ const logar = (id: string, permissoes: Permissoes = permissoesTotais(), role = "
   sessao.atual = { user: { id, name: u.nome, email: `${id}@ficticio.test`, empresaId: u.empresaId, role, permissoes, tecnicoId: null } };
 };
 
-async function chamar(rota: string, metodo: string, params: Record<string, string> = {}, corpo?: unknown) {
+async function chamar(rota: string, metodo: string, params: Record<string, string> = {}, corpo?: unknown, query = "") {
   const mod = await import(/* @vite-ignore */ `@/app/api/${rota}/route`);
-  const req = new NextRequest("http://localhost/api/x", { method: metodo, headers: { "Content-Type": "application/json" }, body: corpo === undefined ? undefined : JSON.stringify(corpo) });
+  const req = new NextRequest(`http://localhost/api/x${query}`, { method: metodo, headers: { "Content-Type": "application/json" }, body: corpo === undefined ? undefined : JSON.stringify(corpo) });
   const res: Response = metodo === "GET" && mod.GET.length === 0 ? await mod.GET() : await mod[metodo](req, { params: Promise.resolve(params) });
   return { status: res.status, json: await res.json().catch(() => null) };
 }
@@ -184,6 +184,42 @@ describe.skipIf(!URL_PG)("COM-1 — comissões (PostgreSQL real)", () => {
     expect([venda.prevista, venda.liberada, venda.paga]).toEqual([0, 50, 0]);
     // O extrato nunca leva custo, base em reais nem margem
     expect(JSON.stringify(ext.json)).not.toMatch(/baseValor|custo|margem|lucro\b/i);
+  });
+
+  it("relatório do mês por data de EMISSÃO (venda aprovada no mês, comissão inteira) ou de RECEBIMENTO (só o que entrou no mês); abre na vista da configuração; só Desempenho › Gerenciar", async () => {
+    const o = await novoOrcamento({ servicos: [{ servicoId: "sInst", descricao: "Instalação split", v: 1000 }] });
+    logar("uAdm");
+    await aprovar(o.id);
+    expect((await faturar(o.id)).status).toBe(201);
+    const med = await prisma.medicao.findFirst({ where: { itens: { some: { orcamentoId: o.id } } } });
+    const conta = await contaDaFatura(med.id);
+    // Entrou R$ 300 no mês passado e R$ 100 neste: por recebimento, este mês vale só 10% (R$ 5 de R$ 50)
+    const d = new Date(); const passado = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() - 1, 15)).toISOString().slice(0, 10);
+    expect((await chamar("contas-receber/[id]/recebimentos", "POST", { id: conta.id }, { valor: 300, data: passado })).status).toBe(201);
+    expect((await chamar("contas-receber/[id]/recebimentos", "POST", { id: conta.id }, { valor: 100, data: hoje() })).status).toBe(201);
+    const daVenda = (r: any) => r.json.pessoas.flatMap((p: any) => p.vendas.map((v: any) => ({ ...v, pessoa: p.nome }))).find((v: any) => v.orcamentoId === o.id);
+    const mes = competencia();
+    const rec = await chamar("comissoes/relatorio", "GET", {}, undefined, `?mes=${mes}`);
+    expect(rec.status).toBe(200);
+    expect([rec.json.vista, rec.json.quando]).toEqual(["RECEBIMENTO", "RECEBIMENTO"]); // abre na vista da configuração
+    expect([daVenda(rec).valor, daVenda(rec).pessoa]).toEqual([5, "Vitor Vendas"]);
+    const mesPassado = passado.slice(0, 7);
+    const recPassado = await chamar("comissoes/relatorio", "GET", {}, undefined, `?mes=${mesPassado}&vista=RECEBIMENTO`);
+    expect(daVenda(recPassado).valor).toBe(15); // os 30% que entraram no mês passado
+    const emi = await chamar("comissoes/relatorio", "GET", {}, undefined, `?mes=${mes}&vista=EMISSAO`);
+    expect(emi.json.vista).toBe("EMISSAO");
+    expect(daVenda(emi).valor).toBe(50); // aprovada neste mês: a comissão inteira
+    expect(daVenda(await chamar("comissoes/relatorio", "GET", {}, undefined, `?mes=${mesPassado}&vista=EMISSAO`))).toBeUndefined();
+    // A vista não muda o que o fechamento paga (segue a configuração): o liberado continua sendo os 40% que entraram
+    await srv.sincronizarComissoes("e1");
+    expect(await liberado(o.id)).toBe(20);
+    // Só quem fecha o mês vê; o vendedor não
+    logar("uV", montarPermissoes({ orcamentos: ["visualizar"] }));
+    expect((await chamar("comissoes/relatorio", "GET", {}, undefined, `?mes=${mes}`)).status).toBe(403);
+    // Outra empresa: nada desta
+    logar("uB");
+    const outra = await chamar("comissoes/relatorio", "GET", {}, undefined, `?mes=${mes}&vista=EMISSAO`);
+    expect(outra.json.pessoas).toEqual([]);
   });
 
   it("fatura CANCELADA não libera nada; orçamento cancelado depois da aprovação (gatilho 'na aprovação') estorna", async () => {

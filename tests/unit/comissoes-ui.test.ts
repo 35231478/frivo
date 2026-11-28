@@ -220,6 +220,25 @@ describe("folha do mês com comissões", () => {
     expect(texto($("[data-fechar-contas]"))).toMatch(/conta a pagar/);
   });
 
+  it("comissões do mês por data de emissão ou de recebimento: abre na vista da configuração; trocar pede a outra; diz o que o fechamento paga", async () => {
+    const relatorio = (vista: string, valor: number) => ({
+      competencia: "2026-10", vista, quando: "RECEBIMENTO", total: valor,
+      pessoas: [{ usuarioId: "uA", nome: "Ana Dias", valor, vendas: [{ orcamentoId: "o1", codigo: "ORC-1", nome: "Venda fictícia", cliente: "Cliente Fictício", data: "2026-10-12T12:00:00.000Z", valor }] }],
+    });
+    respostas["GET /api/comissoes/relatorio?mes=2026-10"] = { status: 200, corpo: relatorio("RECEBIMENTO", 5) };
+    respostas["GET /api/comissoes/relatorio?mes=2026-10&vista=EMISSAO"] = { status: 200, corpo: relatorio("EMISSAO", 50) };
+    await abrir(true);
+    const sec = () => $("[data-relatorio-comissoes]")!;
+    expect(sec().querySelector("[data-aba='RECEBIMENTO']")!.getAttribute("aria-current")).toBe("page");
+    expect(texto(sec().querySelector("[data-paga-por]"))).toBe("O fechamento paga por data de recebimento.");
+    expect(texto(sec().querySelector("[data-relatorio-total]")).replace(/\s/g, " ")).toBe("R$ 5,00");
+    await clicar(sec().querySelector("[data-aba='EMISSAO']"));
+    expect(chamadas.some((c) => c.url === "/api/comissoes/relatorio?mes=2026-10&vista=EMISSAO")).toBe(true);
+    expect(texto(sec().querySelector("[data-relatorio-total]")).replace(/\s/g, " ")).toBe("R$ 50,00");
+    await clicar(sec().querySelector("[data-relatorio-pessoa='uA'] button"));
+    expect(texto(sec().querySelector("[data-relatorio-vendas]"))).toContain("ORC-1 · Venda fictícia");
+  });
+
   it("sem comissão na empresa: a folha de bônus como sempre foi (sem as colunas novas)", async () => {
     await abrir(false);
     expect(texto($("[data-folha] h2"))).toBe("Folha de bônus");

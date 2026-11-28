@@ -12,8 +12,8 @@ import { medicoesDaOrigem } from "@/lib/faturamento-os";
 import { ultimosCustos } from "@/lib/estoque/custo";
 import { valorDesconto } from "@/lib/orcamentos/calculo";
 import {
-  VENDA_VIVA, alvoLiberado, chaveDaRegra, comissoesDaVenda, comissoesPorPessoa, descricaoDaRegra, fimDaCompetencia, fracaoRecebida, itensDaVenda,
-  movimentoNecessario, round2, situacaoDaComissao, type FaturaRecebida, type Quando, type RegraComissao, type normalizarRegra,
+  VENDA_VIVA, alvoLiberado, chaveDaRegra, comissoesDaVenda, entradasDaFatura, fracaoRecebidaNoPeriodo, inicioDaCompetencia, vistaPadrao, comissoesPorPessoa, descricaoDaRegra, fimDaCompetencia, fracaoRecebida, itensDaVenda,
+  movimentoNecessario, round2, situacaoDaComissao, type EntradaDaVenda, type FaturaRecebida, type Quando, type Vista, type RegraComissao, type normalizarRegra,
 } from "./regras";
 
 type Db = Prisma.TransactionClient | typeof prisma;
@@ -127,9 +127,16 @@ export async function gerarComissoesDoOrcamento(empresaId: string, orcamentoId: 
  * a receber da fatura (e as parcelas dela), os recebimentos não estornados e, na conta renegociada, a parte dela
  * no que já entrou da renegociação. Conta RECEBIDA antiga (sem recebimentos registrados) vale o valor dela.
  */
-export async function recebimentoDaVenda(db: Db, empresaId: string, orcamentoId: string): Promise<{ faturas: FaturaRecebida[]; ultimaData: Date | null }> {
+export interface RecebimentoDaVenda {
+  faturas: FaturaRecebida[];
+  ultimaData: Date | null;
+  /** Cada entrada de dinheiro, em reais DESTA venda (o recebido × a parte dela na fatura), com a data: o relatório "por data de recebimento" */
+  entradas: EntradaDaVenda[];
+}
+
+export async function recebimentoDaVenda(db: Db, empresaId: string, orcamentoId: string): Promise<RecebimentoDaVenda> {
   const meds = await medicoesDaOrigem(db, { orcamentoId });
-  if (!meds.length) return { faturas: [], ultimaData: null };
+  if (!meds.length) return { faturas: [], ultimaData: null, entradas: [] };
   const ids = meds.map((m) => m.id);
   const os = await db.ordemServico.findFirst({ where: { orcamentoOrigemId: orcamentoId, empresaId }, select: { id: true } });
   const [itens, contas] = await Promise.all([
@@ -153,27 +160,39 @@ export async function recebimentoDaVenda(db: Db, empresaId: string, orcamentoId:
   let ultimaData: Date | null = null;
   const marcar = (d: Date | null | undefined) => { if (d && (!ultimaData || d > ultimaData)) ultimaData = d; };
   const porMed = new Map<string, { aCobrar: number; recebido: number }>();
+  /** As entradas cruas de cada fatura (valor recebido nela, com a data), antes de virar a parte desta venda */
+  const brutas = new Map<string, { data: Date; valor: number }[]>();
+  const entrar = (med: string, data: Date | null | undefined, valor: number) => {
+    if (!data || valor <= 0) return;
+    brutas.set(med, [...(brutas.get(med) ?? []), { data, valor }]);
+  };
   for (const c of contas) {
     const med = c.medicaoId ?? c.lancamento?.medicaoId;
     if (!med) continue;
     const a = porMed.get(med) ?? { aCobrar: 0, recebido: 0 };
     a.aCobrar += num(c.valor);
     let recebido = c.recebimentos.reduce((s, r) => s + num(r.valor), 0);
-    c.recebimentos.forEach((r) => marcar(r.data));
-    if (c.status === "RECEBIDO" && !c.recebimentos.length) { recebido = num(c.valor); marcar(c.dataRecebimento); }
+    c.recebimentos.forEach((r) => { marcar(r.data); entrar(med, r.data, num(r.valor)); });
+    if (c.status === "RECEBIDO" && !c.recebimentos.length) { recebido = num(c.valor); marcar(c.dataRecebimento); entrar(med, c.dataRecebimento, num(c.valor)); }
     if (c.status === "RENEGOCIADO" && c.renegociadaEmId) {
       const nova = novas.find((n) => n.id === c.renegociadaEmId);
       if (nova) {
         const meu = saldo(c);
         const todos = nova.renegociadas.reduce((s, r) => s + saldo(r), 0);
         const entrou = nova.recebimentos.reduce((s, r) => s + num(r.valor), 0);
-        if (todos > 0) recebido += Math.min(meu, entrou * meu / todos);
+        if (todos > 0) {
+          recebido += Math.min(meu, entrou * meu / todos);
+          // Cada entrada da conta nova vale para esta na mesma proporção (sem passar do saldo dela)
+          const fator = entrou > 0 ? Math.min(meu, entrou * meu / todos) / entrou : 0;
+          nova.recebimentos.forEach((r) => entrar(med, r.data, num(r.valor) * fator));
+        }
         nova.recebimentos.forEach((r) => marcar(r.data));
       }
     }
     a.recebido += recebido;
     porMed.set(med, a);
   }
+  const entradas: EntradaDaVenda[] = [];
   const faturas: FaturaRecebida[] = meds.map((m) => {
     const doMed = itens.filter((i) => i.medicaoId === m.id);
     const total = doMed.reduce((s, i) => s + num(i.valorTotal), 0);
@@ -181,9 +200,11 @@ export async function recebimentoDaVenda(db: Db, empresaId: string, orcamentoId:
     // Fatura avulsa (desta venda) ou sem linha que aponte para a venda (achada pelo relatório da OS): é toda desta venda
     const parte = m.avulsa || total <= 0 || daVenda <= 0 ? 1 : Math.min(1, daVenda / total);
     const r = porMed.get(m.id) ?? { aCobrar: 0, recebido: 0 };
-    return { daVenda: round2(num(m.valorLiquido) * parte), aCobrar: round2(r.aCobrar), recebido: round2(r.recebido) };
+    const f = { daVenda: round2(num(m.valorLiquido) * parte), aCobrar: round2(r.aCobrar), recebido: round2(r.recebido) };
+    entradas.push(...entradasDaFatura(f, brutas.get(m.id) ?? []));
+    return f;
   });
-  return { faturas, ultimaData };
+  return { faturas, ultimaData, entradas };
 }
 
 /* ───────── sincronizar: liberar e estornar ───────── */
@@ -214,7 +235,7 @@ export async function sincronizarComissoes(empresaId: string, filtro: { orcament
     for (const o of orcs) {
       const desta = comissoes.filter((c) => c.orcamentoId === o.id);
       const precisaRecebido = desta.some((c) => c.quando === "RECEBIMENTO");
-      const rec = precisaRecebido ? await recebimentoDaVenda(tx, empresaId, o.id) : { faturas: [], ultimaData: null };
+      const rec = precisaRecebido ? await recebimentoDaVenda(tx, empresaId, o.id) : { faturas: [], ultimaData: null, entradas: [] };
       const estado = {
         statusOrcamento: o.status,
         osConcluida: o.osGerada?.status === "CONCLUIDA",
@@ -318,6 +339,64 @@ export async function extratoDoUsuario(empresaId: string, usuarioId: string, ago
       prevista: round2(lista.reduce((s, v) => s + v.prevista, 0)), liberada: round2(lista.reduce((s, v) => s + v.liberada, 0)), paga: round2(lista.reduce((s, v) => s + v.paga, 0)),
     },
   };
+}
+
+/* ───────── o relatório do mês: por data de emissão ou por data de recebimento ───────── */
+
+export interface VendaNoRelatorio { orcamentoId: string; codigo: string; nome: string; cliente: string; data: string; valor: number }
+export interface PessoaNoRelatorio { usuarioId: string | null; nome: string; valor: number; vendas: VendaNoRelatorio[] }
+export interface RelatorioComissoes { competencia: string; vista: Vista; quando: Quando; pessoas: PessoaNoRelatorio[]; total: number }
+
+/**
+ * As comissões do mês vistas por uma das datas — só LEITURA (o que o fechamento paga segue o "quando é devida"):
+ *  - EMISSÃO: as vendas emitidas (orçamento aprovado = a comissão nasceu) no mês e ainda vivas, com a comissão inteira;
+ *  - RECEBIMENTO: a parte de cada comissão coberta pelo dinheiro que entrou no mês (recebimento a recebimento).
+ * Sem `vista`, abre na do "quando é devida" da empresa.
+ */
+export async function relatorioDeComissoes(empresaId: string, competencia: string, vista?: Vista): Promise<RelatorioComissoes> {
+  const cfg = await prisma.configuracao.findUnique({ where: { empresaId }, select: { comissaoQuando: true } });
+  const quando = ((cfg?.comissaoQuando as Quando | undefined) ?? "RECEBIMENTO");
+  const v: Vista = vista ?? vistaPadrao(quando);
+  const ini = inicioDaCompetencia(competencia), fim = fimDaCompetencia(competencia);
+  const cs = await prisma.comissao.findMany({
+    where: { empresaId, ...(v === "EMISSAO" ? { criadoEm: { gte: ini, lt: fim }, orcamento: { status: { in: [...VENDA_VIVA] } } } : {}) },
+    select: {
+      orcamentoId: true, usuarioId: true, beneficiarioNome: true, valor: true, criadoEm: true,
+      orcamento: { select: { codigo: true, nome: true, totalGeral: true, cliente: { select: { nome: true } } } },
+    },
+    orderBy: { criadoEm: "asc" },
+  });
+  const porVenda = new Map<string, { o: (typeof cs)[number]["orcamento"]; data: Date; porPessoa: Map<string, { nome: string; usuarioId: string | null; valor: number }> }>();
+  for (const c of cs) {
+    const ven = porVenda.get(c.orcamentoId) ?? { o: c.orcamento, data: c.criadoEm, porPessoa: new Map() };
+    const k = c.usuarioId ?? `nome:${c.beneficiarioNome}`;
+    const p = ven.porPessoa.get(k) ?? { nome: c.beneficiarioNome, usuarioId: c.usuarioId, valor: 0 };
+    p.valor += num(c.valor);
+    ven.porPessoa.set(k, p);
+    porVenda.set(c.orcamentoId, ven);
+  }
+  const pessoas = new Map<string, PessoaNoRelatorio>();
+  for (const [orcamentoId, ven] of porVenda) {
+    let fator = 1;
+    let data = ven.data;
+    if (v === "RECEBIMENTO") {
+      const rec = await recebimentoDaVenda(prisma, empresaId, orcamentoId);
+      fator = fracaoRecebidaNoPeriodo(rec.entradas, num(ven.o.totalGeral), ini, fim);
+      if (fator <= 0) continue;
+      const noMes = rec.entradas.filter((e) => e.data >= ini && e.data < fim);
+      data = noMes[noMes.length - 1]?.data ?? data;
+    }
+    for (const [k, p] of ven.porPessoa) {
+      const valor = round2(p.valor * fator);
+      if (valor <= 0) continue;
+      const linha = pessoas.get(k) ?? { usuarioId: p.usuarioId, nome: p.nome, valor: 0, vendas: [] };
+      linha.valor = round2(linha.valor + valor);
+      linha.vendas.push({ orcamentoId, codigo: ven.o.codigo, nome: ven.o.nome, cliente: ven.o.cliente.nome, data: data.toISOString(), valor });
+      pessoas.set(k, linha);
+    }
+  }
+  const lista = [...pessoas.values()].sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR"));
+  return { competencia, vista: v, quando, pessoas: lista, total: round2(lista.reduce((s, p) => s + p.valor, 0)) };
 }
 
 /**
