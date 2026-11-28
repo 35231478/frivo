@@ -56,3 +56,12 @@ describe("PJ4 — a liberação por recebimento vai para o mês em que o dinheir
     expect(r.map((x) => x.valor)).toEqual([33.33, 33.34, 33.33]);
   });
 });
+
+describe("PJ4 — o já liberado que passa de um mês inteiro", () => {
+  const d = (s: string) => new Date(`${s}T12:00:00Z`);
+  it("60 já liberados de 50 + 50: outubro fica pago e novembro leva só os 40 que faltam", () => {
+    const entradas = [{ data: d("2026-10-20"), valor: 500 }, { data: d("2026-11-02"), valor: 500 }];
+    expect(liberacaoPorMes({ valorComissao: 100, totalVenda: 1000, jaLiberado: 60, valor: 40, entradas, reserva: d("2026-11-05") }))
+      .toEqual([{ data: d("2026-11-02"), valor: 40 }]);
+  });
+});

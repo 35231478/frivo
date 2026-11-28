@@ -25,7 +25,7 @@ Antes de importar os dados reais da Termofrio, percorri tudo o que entrou de #28
 4. **Comissões com os números à mão**: seis cenários e o fechamento, no PostgreSQL real, pelas mesmas rotas que as telas usam (veja abaixo).
 
 **Resultado.**
-- **Navegação:** NAVEGACAO_RESUMO.
+- **Navegação:** **sem defeito de tela**: 30 telas × 3 tamanhos, antes (no master intocado) e depois, sem tela de erro, sem 5xx, sem estouro de largura e sem texto cortado.
 - **Lógica:** as pontas soltas estavam **na lógica**, não na navegação. São 77 pontos na tabela; **51 corrigidos nesta leva**, cada um com teste. Os demais são decisão de produto (lista no fim), zona proibida ou baixo impacto.
 - **Banco:** nenhum SQL.
 
@@ -149,7 +149,28 @@ Seis cenários e o fechamento passam pelas rotas que alimentam **Minhas comissõ
 
 ## Navegação (1366, 1920 e celular)
 
-NAVEGACAO_TABELA
+| Tamanho | Telas | Antes (master) | Depois |
+|---|---|---|---|
+| 1366×768 | 30 | 29 abertas sem achado; 1 caiu por tempo esgotado (servidor de desenvolvimento recompilando sob a carga da suíte rodando ao lado) | 30 sem achado |
+| 1920×1080 | 30 | 29 sem achado; 1 por tempo esgotado (idem) | 30 sem achado |
+| celular 390×844 | 30 | 29 sem achado; 1 por tempo esgotado (idem) | 30 sem achado |
+
+As telas são estas:
+- Painel, Pendências e Meu perfil;
+- Colaboradores (lista e novo), Admissões, Configurações › Admissão, Cargos e Equipes;
+- Clientes (lista e novo), Ordens, Orçamentos e Contratos (lista e novo);
+- Configurações: Tabelas de preço, Produtos, Serviços, Usuários, Perfis, Operacionais, Orçamento, Comissões e Portal;
+- Desempenho (painel, fechamento e configuração) e Minhas comissões;
+- Contas a pagar e Contas a receber.
+
+O 1º acesso (empresa criada pela tela, e-mail repetido recusado, troca de senha obrigatória) também passou.
+
+Prints em `docs/prints/pj4/`, com o mesmo nome antes e depois:
+- `b-<tela>-antes|depois-<tamanho>`, para Painel, Novo colaborador, Admissões, Novo cliente, Configurações › Comissões, Desempenho › Fechamento e Minhas comissões;
+- `c-cliente-cnpj-incompleto-depois-*`: o "Consultar" com o CNPJ incompleto agora diz "Informe os 14 dígitos do CNPJ." (antes, o botão não fazia nada);
+- `a02-empresa-criada-antes-d1366`: a empresa demo criada pelo super admin.
+
+A empresa demo está vazia de propósito (cliente novo). As correções de lógica aparecem nos testes, não nos prints.
 
 ## Para o Zé decidir (com a minha recomendação)
 
@@ -195,6 +216,6 @@ NAVEGACAO_TABELA
   - `leva4-acesso`: e-mail de quem tem login;
   - `leva-relatorio-os`: a chave das especialidades na leitura;
   - `despoluicao-baseline`: o arquivo morto saiu.
-- **Mutação:** MUTACAO_RESUMO
-- **Suíte inteira:** SUITE_RESUMO
-- **Typecheck** limpo; **build** BUILD_RESUMO.
+- **Mutação:** 30 mutantes nas correções de dinheiro, permissão e cadastro; todos mortos. Na 1ª rodada, dois mutantes da liberação por mês sobreviveram (o servidor não tinha teste com o dinheiro entrando em dois meses e uma conta só, nem o caso do liberado que passa de um mês inteiro). Os dois testes foram acrescentados e os mutantes morreram.
+- **Suíte inteira:** 674 arquivos, 9.562 testes; todos passaram (mais os 2 casos que a mutação pediu, rodados à parte: 17/17).
+- **Typecheck** limpo; **build** ok (só os avisos que já existiam).

@@ -290,4 +290,19 @@ describe.skipIf(!URL_PG)("PJ4 — comissões: 6 cenários com os números confer
     logar("uOutra", montarPermissoes({ orcamentos: ["visualizar"] }));
     expect((await chamar("perfil/comissoes", "GET")).json.vendas).toEqual([]);
   });
+
+  it("C7 — recebimentos em dois meses pegos numa conta só: cada mês leva a sua parte (o fechamento do mês passado não perde nada)", async () => {
+    // Venda de R$ 1.000 a 5% = 50; entram 500 no dia 15 do mês passado e 500 hoje, e só depois alguém olha o extrato
+    expect((await config("RECEBIMENTO")).status).toBe(200);
+    const o = await novoOrcamento({ vendedorId: "uBruno", servicos: [{ descricao: "Revisão de chiller", v: 1000 }] });
+    expect((await aprovar(o.id)).status).toBe(200);
+    const { conta } = await faturar(o.id);
+    const passado = new Date(Date.UTC(agora.getUTCFullYear(), agora.getUTCMonth() - 1, 15)).toISOString().slice(0, 10);
+    logar("uAdm");
+    expect((await chamar("contas-receber/[id]/recebimentos", "POST", { id: conta.id }, { valor: 500, data: passado })).status).toBe(201);
+    expect((await receber(conta.id, 500)).status).toBe(201);
+    expect(await daVenda("uBruno", o.id)).toMatchObject({ liberada: 50, prevista: 0 });
+    const lanc = await prisma.comissaoLancamento.findMany({ where: { comissao: { orcamentoId: o.id } }, orderBy: { data: "asc" } });
+    expect(lanc.map((l: any) => [l.data.toISOString().slice(0, 7), r2(l.valor)])).toEqual([[COMP(-1), 25], [COMP(0), 25]]);
+  });
 });

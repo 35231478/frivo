@@ -345,3 +345,19 @@ COM-1.2: `prisma/sql/2027-02-15_comissao_contrato.sql`, aditivo e idempotente, *
     renovação, o vendedor travado e a troca no histórico.
 
 Prints: `docs/prints/com1` e, da COM-1.2, `docs/prints/com12` (antes e depois, desktop e celular, dados fictícios).
+
+## Ajustes da varredura PJ4 (docs/pronto-pra-janeiro-4.md)
+
+- **Comissão do técnico congelada de verdade.** A trava de qualidade olha a unidade (serviço feito e relatório completo) e se a pessoa ainda está na atividade. Desativar a regra, inativar o login ou mudar o cargo não estorna o que já foi liberado ou pago. Tirar a pessoa da atividade estorna, como antes.
+- **Liberação por recebimento no mês do dinheiro.** Quando o recálculo pega recebimentos de meses diferentes, cada mês recebe a sua parte, na data da última entrada dele. O que já foi liberado consome os meses mais antigos primeiro.
+- **Contrato sem comissão em dobro.**
+  - Voltar de "Aguardando assinatura" para "Ativo" depois de já ter comissão não é fechamento novo.
+  - Na renovação, a janela aberta do ciclo antigo fecha onde o novo começa. O mês já liberado continua no ciclo antigo, e os só previstos passam ao novo (o antigo fica "substituído").
+  - O % da mensalidade nunca passa do valor congelado.
+- **Extrato.**
+  - Venda cancelada ou recusada, OS cancelada e contrato cancelado ou encerrado não têm mais Prevista.
+  - Os totais contam todas as comissões; a lista mostra as 600 mais recentes.
+- **Divisão entre técnicos pelo maior resto.** A soma bate com o valor da regra, sem centavo a mais nem a menos. A parte mostrada continua com 4 casas.
+- **Regras.**
+  - Editar uma regra desativada não a reativa.
+  - A categoria compara sem acento também na trava de regra repetida.
