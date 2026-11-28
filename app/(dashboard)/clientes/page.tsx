@@ -13,6 +13,7 @@ import {
 } from "@/lib/status-financeiro";
 import { Prisma } from "@prisma/client";
 import Link from "next/link";
+import { filtroOrdens, soProprios } from "@/lib/escopo/proprios";
 import { Users, Plus, FileCheck, Star } from "lucide-react";
 import { ClienteAcoes } from "@/components/clientes/cliente-acoes";
 import { ImportarClientes } from "@/components/clientes/importar-clientes";
@@ -38,13 +39,17 @@ export default async function ClientesPage({
   const podeCriar = pode(session!.user!.permissoes, "clientes", "criar", session!.user!.role);
   const massa = temAcaoMassa(session!.user!.permissoes, session!.user!.role, "clientes");
   const { pagina: paginaPedida, porPagina } = lerPaginacao(sp);
-  const orderBy = ordemPrisma(lerOrdem(sp, ORDEM_CLIENTES), ORDEM_CLIENTES, ORDEM_PADRAO_CLIENTES) as Prisma.ClienteOrderByWithRelationInput[];
+  // COM-1.1: com "Ver só os próprios" em OS, ordenar pela contagem de OS revelaria o volume dos outros: vale o padrão
+  const ordem = lerOrdem(sp, ORDEM_CLIENTES);
+  const ordemSegura = ordem.campo === "os" && soProprios(session!.user, "ordens") ? { ...ordem, campo: null } : ordem;
+  const orderBy = ordemPrisma(ordemSegura, ORDEM_CLIENTES, ORDEM_PADRAO_CLIENTES) as Prisma.ClienteOrderByWithRelationInput[];
 
   // O status financeiro é calculado (não é mais coluna filtrável no banco): vem à parte.
   const { where, statusFiltro } = whereClientes(empresaId, { busca, status, segmento, inativos });
 
   const incluir = {
-    _count: { select: { unidades: true, ordensServico: true, contratos: { where: { status: "ATIVO" } } } },
+    // COM-1.1: com "Ver só os próprios", a contagem de OS é só a das OS da pessoa (nada que revele o volume dos outros)
+    _count: { select: { unidades: true, ordensServico: { where: filtroOrdens(session!.user) }, contratos: { where: { status: "ATIVO" } } } },
     responsavelTecnico: { select: { nome: true } },
   } satisfies Prisma.ClienteInclude;
 

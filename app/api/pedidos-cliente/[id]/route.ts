@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { MSG_FORA_DO_ESCOPO, pedidoForaDoEscopo } from "@/lib/escopo/proprios-server";
+import { MSG_FORA_DO_ESCOPO, pedidoForaDoEscopo, pedidoVisivel } from "@/lib/escopo/proprios-server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { editarPedido, totalLigado } from "@/lib/pedido-cliente/server";
@@ -13,8 +13,10 @@ export async function GET(_: NextRequest, { params }: Params) {
   const session = await auth();
   if (!session) return NextResponse.json({ erro: "Não autorizado" }, { status: 401 });
   const { id } = await params;
-  // COM-1: "Ver só os próprios" — pedido que cobre OS/orçamento de outro vendedor não existe para a pessoa
-  if (await pedidoForaDoEscopo(session.user, id)) return NextResponse.json({ erro: MSG_FORA_DO_ESCOPO }, { status: 404 });
+  // COM-1.1: "Ver só os próprios" — o pedido compartilhado (OS de dois vendedores) aparece para cada um com as OS/
+  // orçamentos DELE; o pedido que não cobre nada da pessoa não existe para ela
+  const visivel = await pedidoVisivel(session.user, id);
+  if (!visivel) return NextResponse.json({ erro: MSG_FORA_DO_ESCOPO }, { status: 404 });
   const p = await prisma.pedidoCliente.findFirst({
     where: { id, empresaId: session.user.empresaId },
     select: {
@@ -35,16 +37,19 @@ export async function GET(_: NextRequest, { params }: Params) {
     conferindo && p.orcamentosPropostos.length ? prisma.orcamento.findMany({ where: { id: { in: p.orcamentosPropostos }, empresaId: session.user.empresaId, clienteId: p.cliente.id }, select: { id: true, codigo: true }, orderBy: { codigo: "asc" } }) : [],
     p.enviadoPorContatoId ? prisma.contatoCliente.findFirst({ where: { id: p.enviadoPorContatoId, empresaId: session.user.empresaId }, select: { nome: true, email: true } }) : null,
   ]);
-  const ordens = conferindo ? propostasOs : p.ordens;
-  const orcamentos = conferindo ? propostosOrc : p.orcamentos;
+  const daPessoa = <T extends { id: string }>(xs: T[], ids: Set<string> | null) => (ids ? xs.filter((x) => ids.has(x.id)) : xs);
+  const ordens = daPessoa(conferindo ? propostasOs : p.ordens, visivel.tudo ? null : visivel.osIds);
+  const orcamentos = daPessoa(conferindo ? propostosOrc : p.orcamentos, visivel.tudo ? null : visivel.orcamentoIds);
   const total = await totalLigado(ordens.map((o) => o.id), orcamentos.map((o) => o.id));
   const { osPropostas: _o, orcamentosPropostos: _c, enviadoPorContatoId: _e, ...resto } = p;
   return NextResponse.json({
     ...resto, ordens, orcamentos, valor, data: p.data.toISOString().slice(0, 10), temAnexo: !!p.anexoNome, total,
     cliente: p.cliente.nomeFantasia ?? p.cliente.nome, alerta: alertaValorPedido(valor, total),
     enviadoPor: contato ? [contato.nome, contato.email].filter(Boolean).join(" · ") : null,
-    // A mesma regra do POST …/conferir: quem não pode conferir não vê Confirmar/Recusar
-    podeConferir: podeInformarPedido(session, { os: p.osPropostas.length > 0, orcamentos: p.orcamentosPropostos.length > 0 }),
+    // A mesma regra do POST …/conferir: quem não pode conferir não vê Confirmar/Recusar (compartilhado + marca: não pode)
+    podeConferir: visivel.tudo && podeInformarPedido(session, { os: p.osPropostas.length > 0, orcamentos: p.orcamentosPropostos.length > 0 }),
+    // COM-1.1: o pedido compartilhado só é corrigido por quem não tem a marca
+    podeEditar: visivel.tudo || !(await pedidoForaDoEscopo(session.user, id)),
   });
 }
 
