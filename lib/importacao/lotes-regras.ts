@@ -87,6 +87,8 @@ export const NOMES_VINCULO: Record<string, string> = {
   relatorios: "relatórios", reajustes: "reajustes", historicoStatus: "histórico de situação", recorrenciasLocais: "recorrências por local",
   prazosAtendimento: "prazos de atendimento", execucoesFaturamento: "faturamentos do contrato", cronograma: "cronograma do PMOC",
   execucoes: "execuções do PMOC", historico: "histórico", ocorrencias: "ocorrências do PMOC", avisos: "avisos enviados",
+  // COM-1.2: o contrato com comissão (do vendedor) não é apagado pelo desfazer
+  comissoes: "comissões",
 };
 
 export const nomeVinculo = (campo: string) =>

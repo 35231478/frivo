@@ -55,7 +55,7 @@ export async function carregarHistoricoCliente(empresaId: string, clienteId: str
     prisma.pedidoCliente.findMany({ where: comEscopo<Prisma.PedidoClienteWhereInput>(doCliente, pedidoNoEscopo), orderBy: desc, take, select: { id: true, numero: true, criadoEm: true, origem: true, situacao: true, conferidoEm: true, motivoRecusa: true } }),
     prisma.pedidoClienteLembrete.findMany({ where: comEscopo<Prisma.PedidoClienteLembreteWhereInput>(doCliente, lembreteNoEscopo), orderBy: { enviadoEm: "desc" }, take, select: { id: true, para: true, enviadoEm: true, etapa: true } }),
     prisma.contrato.findMany({ where: doCliente, orderBy: desc, take, select: { id: true, numero: true, criadoEm: true } }),
-    prisma.contratoHistoricoStatus.findMany({ where: { empresaId, contrato: { clienteId } }, orderBy: { createdAt: "desc" }, take, select: { id: true, statusNovo: true, createdAt: true, usuario: { select: { nome: true } }, contrato: { select: { id: true, numero: true } } } }),
+    prisma.contratoHistoricoStatus.findMany({ where: { empresaId, contrato: { clienteId } }, orderBy: { createdAt: "desc" }, take, select: { id: true, statusAnterior: true, statusNovo: true, createdAt: true, usuario: { select: { nome: true } }, contrato: { select: { id: true, numero: true } } } }),
     prisma.documentacaoEnvioEvento.findMany({
       where: { envio: { empresaId, clienteId }, OR: [{ tipo: "EMAIL_ENVIADO" }, { tipo: { in: ["ACESSO", "DOWNLOAD", "DOWNLOAD_ZIP"] }, usuarioId: null }] },
       orderBy: desc, take, select: { id: true, tipo: true, criadoEm: true, envioId: true },
@@ -97,7 +97,8 @@ export async function carregarHistoricoCliente(empresaId: string, clienteId: str
   }
   for (const l of lembretes) ev.push({ id: `lembrete-${l.id}`, tipo: "comunicacao", titulo: "Lembrete do pedido de compra enviado", detalhe: l.para, quando: l.enviadoEm });
   for (const c of contratos) ev.push({ id: `contrato-${c.id}`, tipo: "contrato", titulo: `Contrato ${c.numero} cadastrado`, quando: c.criadoEm, href: `/contratos/${c.id}` });
-  for (const h of statusContrato) ev.push({ id: `contrato-st-${h.id}`, tipo: "contrato", titulo: `Contrato ${h.contrato.numero}: ${h.statusNovo.toLowerCase().replace(/_/g, " ")}`, quando: h.createdAt, href: `/contratos/${h.contrato.id}`, autor: h.usuario?.nome });
+  // COM-1.2: a troca de vendedor do contrato fica no mesmo histórico (status igual antes e depois) — não é mudança de status
+  for (const h of statusContrato.filter((x) => x.statusAnterior !== x.statusNovo)) ev.push({ id: `contrato-st-${h.id}`, tipo: "contrato", titulo: `Contrato ${h.contrato.numero}: ${h.statusNovo.toLowerCase().replace(/_/g, " ")}`, quando: h.createdAt, href: `/contratos/${h.contrato.id}`, autor: h.usuario?.nome });
   for (const d of envios) {
     ev.push(d.tipo === "EMAIL_ENVIADO"
       ? { id: `doc-${d.id}`, tipo: "comunicacao", titulo: "Documentação da equipe enviada por e-mail", quando: d.criadoEm }

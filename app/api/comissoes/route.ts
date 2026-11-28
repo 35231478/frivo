@@ -18,7 +18,7 @@ export async function GET() {
  * Grava a configuração da empresa (quando fica devida, base líquida de impostos — vale para as comissões que
  * nascerem daqui em diante — e o vencimento da conta a pagar do fechamento, que vale para o próximo fechamento) e, da
  * COM-2, opcionais: quando a comissão do técnico fica devida, os dias do retorno e os tipos de OS que contam como
- * retorno (a mesma lista do Desempenho).
+ * retorno (a mesma lista do Desempenho); da COM-1.2, se a renovação do contrato também gera comissão.
  */
 export async function PUT(req: NextRequest) {
   const guard = await exigirPermissao("desempenho", "gerenciar");
@@ -37,6 +37,8 @@ export async function PUT(req: NextRequest) {
     // COM-2: o técnico
     ...(d.executorQuando ? { comissaoExecutorQuando: d.executorQuando } : {}),
     ...(d.retornoDias !== undefined ? { comissaoRetornoDias: d.retornoDias } : {}),
+    // COM-1.2: a renovação do contrato também gera?
+    ...(d.renovacaoGera !== undefined ? { comissaoRenovacaoGera: d.renovacaoGera } : {}),
   };
   await prisma.$transaction(async (tx) => {
     await tx.configuracao.upsert({ where: { empresaId }, update: data, create: { empresaId, ...data } });

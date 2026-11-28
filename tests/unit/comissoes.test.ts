@@ -220,7 +220,8 @@ describe("o que a tela manda", () => {
   it("normalizar: o que não vale para o tipo escolhido vai nulo", () => {
     const d = regraSchema.parse({ quemTipo: "TODOS", usuarioId: "u", cargoId: "c", sobreTipo: "TODOS_SERVICOS", categoria: "X", servicoId: "s", base: "PERC_VENDA", valor: "2,5".replace(",", ".") });
     // COM-2: o vendedor não tem divisão (fica "Igual", sem os % por cargo)
-    expect(normalizarRegra(d)).toEqual({ quemTipo: "TODOS", papel: "VENDEDOR", sobreTipo: "TODOS_SERVICOS", base: "PERC_VENDA", valor: 2.5, ativo: true, usuarioId: null, cargoId: null, categoria: null, servicoId: null, divisao: "IGUAL", divisaoCargos: null });
+    // COM-1.2 (mudança intencional): o tipo de contrato e a janela de meses também vão nulos fora de "Sobre: Contratos"
+    expect(normalizarRegra(d)).toEqual({ quemTipo: "TODOS", papel: "VENDEDOR", sobreTipo: "TODOS_SERVICOS", base: "PERC_VENDA", valor: 2.5, ativo: true, usuarioId: null, cargoId: null, categoria: null, servicoId: null, divisao: "IGUAL", divisaoCargos: null, tipoContrato: null, meses: null });
   });
 
   it("trocar vendedor: exige a pessoa e o motivo (mínimo 5 caracteres)", () => {
