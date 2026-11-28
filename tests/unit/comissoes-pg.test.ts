@@ -157,6 +157,12 @@ describe.skipIf(!URL_PG)("COM-1 — comissões (PostgreSQL real)", () => {
     expect((await aprovar(o2.id)).status).toBe(200);
     expect((await comissoes(o2.id)).map((c: any) => [c.descricao, Number(c.valor)])).toEqual([["Instalação split", 50], ["Visita avulsa", 8]]);
     await prisma.comissaoRegra.update({ where: { id: fixo.json.id }, data: { ativo: false } });
+    // PJ4: editar a regra desativada (a tela não manda "ativo") não a reativa; e a categoria sem acento é a mesma regra
+    expect((await chamar("comissoes/regras/[id]", "PATCH", { id: fixo.json.id }, { quemTipo: "PESSOA", usuarioId: "uV", sobreTipo: "TODOS_SERVICOS", base: "PERC_VENDA", valor: 7 })).status).toBe(200);
+    expect(await prisma.comissaoRegra.findUnique({ where: { id: fixo.json.id } })).toMatchObject({ ativo: false });
+    expect(Number((await prisma.comissaoRegra.findUnique({ where: { id: fixo.json.id } })).valor)).toBe(7);
+    const semAcento = await chamar("comissoes/regras", "POST", {}, { quemTipo: "CARGO", cargoId: "cgV", sobreTipo: "CATEGORIA", categoria: "Instalacao", base: "PERC_VENDA", valor: 4 });
+    expect(semAcento.status).toBe(409);
     // Proposta de contrato fica fora nesta leva (pergunta 1 do PR): aprovada e com vendedor, não gera comissão
     const prop = await novoOrcamento({ servicos: [{ servicoId: "sInst", descricao: "Instalação split", v: 1000 }] });
     await prisma.orcamento.update({ where: { id: prop.id }, data: { tipo: "PROPOSTA_CONTRATO", status: "APROVADO" } });
@@ -554,5 +560,27 @@ describe.skipIf(!URL_PG)("COM-1 — comissões (PostgreSQL real)", () => {
     logar("uC");
     expect((await chamar("perfil/comissoes", "GET")).json).toEqual({ ativo: false, vendas: [], totais: { prevista: 0, liberada: 0, paga: 0 } });
     expect((await fech.previaDoFechamento("e3", competencia())).bloqueio).toMatch(/Desempenho/);
+  });
+
+  it("PJ4: no extrato, a venda cancelada não tem mais nada previsto; os totais contam TODAS as comissões (não só as 600 da lista)", async () => {
+    logar("uAdm");
+    const o = await novoOrcamento({ vendedorId: "uP", servicos: [{ descricao: "Instalação fictícia", v: 1000 }] });
+    expect((await aprovar(o.id)).status).toBe(200);
+    const antes = (await srv.extratoDoUsuario("e1", "uP")).vendas.find((v) => v.orcamentoId === o.id)!;
+    expect(antes.prevista).toBeGreaterThan(0);
+    await prisma.orcamento.update({ where: { id: o.id }, data: { status: "CANCELADO" } });
+    const ex = await srv.extratoDoUsuario("e1", "uP");
+    expect(ex.vendas.find((v) => v.orcamentoId === o.id)?.prevista ?? 0).toBe(0);
+    // 650 comissões previstas de R$ 1 numa venda viva: a lista para em 600, o total vê as 650
+    const viva = await novoOrcamento({ vendedorId: "uP", servicos: [{ descricao: "Muitos itens", v: 10 }] });
+    await prisma.orcamento.update({ where: { id: viva.id }, data: { status: "APROVADO" } });
+    await prisma.comissao.createMany({ data: Array.from({ length: 650 }, (_, k) => ({
+      empresaId: "e1", orcamentoId: viva.id, usuarioId: "uP", beneficiarioNome: "Paula Pessoa", papel: "VENDEDOR", itemTipo: "SERVICO", itemId: `x${k}`,
+      descricao: `Item ${k}`, quantidade: 1, regraDescricao: "Fictícia", base: "PERC_VENDA", baseValor: 10, taxa: 10, valor: 1, quando: "APROVACAO", chave: `pj4-${k}`,
+    })) });
+    const depois = await srv.extratoDoUsuario("e1", "uP");
+    const daViva = depois.vendas.find((v) => v.orcamentoId === viva.id)!;
+    expect(depois.totais.prevista + depois.totais.liberada).toBeGreaterThanOrEqual(650);
+    expect(daViva.itens.length).toBeLessThanOrEqual(600);
   });
 });

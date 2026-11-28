@@ -18,6 +18,7 @@
 import { z } from "zod";
 import { round2, regraVencedora, valorDaComissao, type Divisao, type ItemVenda, type QuandoExecutor, type RegraComissao } from "./regras";
 import { origemDoRetorno, type ServicoNoEquipamento } from "@/lib/desempenho/regras";
+import { repartir } from "@/lib/orcamentos/calculo";
 
 const num = (v: unknown) => { const n = Number(v); return Number.isFinite(n) ? n : 0; };
 
@@ -83,16 +84,18 @@ export const chaveDoExecutor = (osId: string, u: Pick<Unidade, "atividadeId" | "
 /** Quem estava na atividade: o usuário (o login, ligado pelo e-mail), o colaborador e o cargo dele */
 export interface Participante { usuarioId: string; tecnicoId: string; cargoId: string | null; nome: string }
 
-const r4 = (v: number) => Math.round(v * 10_000) / 10_000;
+const r4Fixo = (v: number) => Math.round(v * 10_000) / 10_000;
 
 /**
  * A parte (0 a 1) de cada pessoa pela divisão. "Para quem executou" sem saber quem marcou (ou quem marcou não está
  * entre os técnicos) e "% por cargo" sem nenhum cargo com % viram Igual — o dinheiro nunca some.
  */
-export function partesDaDivisao(divisao: Divisao | null | undefined, participantes: readonly Participante[], o: { feitoPorTecnicoId?: string | null; divisaoCargos?: Record<string, number> | null } = {}): Map<string, number> {
+export function partesDaDivisao(divisao: Divisao | null | undefined, participantes: readonly Participante[], o: { feitoPorTecnicoId?: string | null; divisaoCargos?: Record<string, number> | null; exata?: boolean } = {}): Map<string, number> {
   const partes = new Map<string, number>();
   const n = participantes.length;
   if (!n) return partes;
+  // `exata`: sem arredondar a parte (para repartir o dinheiro sem perder centavo); a parte gravada/mostrada é a de 4 casas
+  const r4 = (v: number) => (o.exata ? v : r4Fixo(v));
   const igual = () => { participantes.forEach((p) => partes.set(p.usuarioId, r4(1 / n))); return partes; };
   if (divisao === "POR_EXECUTOR") {
     const quem = participantes.find((p) => !!o.feitoPorTecnicoId && p.tecnicoId === o.feitoPorTecnicoId);
@@ -127,19 +130,29 @@ export interface ComissaoDoExecutor {
  * essa regra e a parte dele pela divisão dessa regra. Quem não tem regra, ou fica com parte zero, não entra.
  */
 export function comissoesDaUnidade(u: Unidade, participantes: readonly Participante[], regras: readonly RegraComissao[], liquidaImpostos: boolean): ComissaoDoExecutor[] {
-  const r: ComissaoDoExecutor[] = [];
+  const cand: (Omit<ComissaoDoExecutor, "valor"> & { exata: number; cheio: number })[] = [];
   for (const p of participantes) {
     const regra = regraVencedora(regras, { usuarioId: p.usuarioId, cargoId: p.cargoId }, u.item, "EXECUTOR");
     if (!regra) continue;
     const divisao: Divisao = regra.divisao ?? "IGUAL";
-    const parte = partesDaDivisao(divisao, participantes, { feitoPorTecnicoId: u.feitoPorTecnicoId, divisaoCargos: regra.divisaoCargos }).get(p.usuarioId) ?? 0;
-    if (parte <= 0) continue;
+    const o = { feitoPorTecnicoId: u.feitoPorTecnicoId, divisaoCargos: regra.divisaoCargos };
+    const exata = partesDaDivisao(divisao, participantes, { ...o, exata: true }).get(p.usuarioId) ?? 0;
+    if (exata <= 0) continue;
+    const parte = partesDaDivisao(divisao, participantes, o).get(p.usuarioId) ?? 0;
     const v = valorDaComissao(regra, u.item, liquidaImpostos);
-    const valor = round2(v.valor * parte);
-    if (valor <= 0) continue;
-    r.push({ participante: p, regra, parte, divisao, baseValor: v.baseValor, taxa: v.taxa, valor });
+    cand.push({ participante: p, regra, parte, divisao, baseValor: v.baseValor, taxa: v.taxa, exata, cheio: v.valor });
   }
-  return r;
+  // PJ4: quem divide a MESMA regra reparte o valor dela pelo maior resto — 3 técnicos em R$ 3.000 somam R$ 3.000,00
+  // (antes, a parte arredondada a 4 casas dava 999,90 × 3 = 2.999,70; com 6, pagava 3.000,60)
+  const valores = new Map<ComissaoDoExecutor["participante"], number>();
+  for (const regraId of new Set(cand.map((c) => c.regra.id))) {
+    const grupo = cand.filter((c) => c.regra.id === regraId);
+    const total = round2(grupo[0].cheio * grupo.reduce((s, c) => s + c.exata, 0));
+    repartir(total, grupo.map((c) => c.exata)).forEach((v, i) => valores.set(grupo[i].participante, v));
+  }
+  return cand
+    .map(({ exata: _e, cheio: _c, ...c }) => ({ ...c, valor: valores.get(c.participante) ?? 0 }))
+    .filter((c) => c.valor > 0);
 }
 
 /* ───────── quando fica devida ───────── */

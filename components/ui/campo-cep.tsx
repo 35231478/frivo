@@ -43,7 +43,11 @@ export function CampoCep({ valor, onValor, onEndereco, required, label = "CEP", 
     const r = await consultarCep(digitos);
     if (digitado.current !== digitos) return; // a pessoa já trocou o CEP
     if (r.ok) { onEndereco(r.endereco); setSituacao("achou"); }
-    else setSituacao(r.motivo === "indisponivel" ? "indisponivel" : "naoEncontrado");
+    else if (r.motivo === "indisponivel") {
+      // A consulta não respondeu: o mesmo CEP pode ser consultado de novo (apagar um dígito e redigitar)
+      consultado.current = null;
+      setSituacao("indisponivel");
+    } else setSituacao("naoEncontrado");
   }
 
   return (

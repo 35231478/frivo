@@ -5,15 +5,18 @@ import { toast } from "@/components/ui/avisos";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useRouter, useSearchParams } from "next/navigation";
+import Link from "next/link";
+import { marcarFormularioSalvo } from "@/lib/ui/sair-sem-salvar";
 import { clienteSchema, type ClienteInput } from "@/lib/validations";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { enderecoDoCep } from "@/lib/cep";
+import { cnpjValido } from "@/lib/documento";
 import { CampoCep } from "@/components/ui/campo-cep";
 import { enderecoDaConsulta, temEndereco, CAMPOS_ENDERECO } from "@/lib/clientes/endereco-principal";
-import { itensDoNovo, sinaisDoCliente } from "@/lib/clientes/cabecalho";
+import { itensDoNovo, sinaisDoCliente, veFinanceiroDoCliente } from "@/lib/clientes/cabecalho";
 import { CabecalhoCliente, subtituloDoCliente } from "@/components/clientes/cabecalho-cliente";
 import { HistoricoCliente } from "@/components/clientes/historico-cliente";
 import { PhoneInput } from "@/components/ui/phone-input";
@@ -67,6 +70,8 @@ interface ClienteFormProps {
   totalProximos30Dias?: number;
   /** Quanto está em atraso (parcelas vencidas em aberto): "Inadimplente" só aparece com valor */
   valorEmAtraso?: number;
+  /** Há atraso? (quem não vê o financeiro recebe só isto, sem os valores: "Inadimplente" sem o valor) */
+  emAtraso?: boolean;
   /** Perdas (inadimplência) nos últimos 12 meses: alerta informativo, não bloqueia */
   perdas12m?: PerdasCliente | null;
   /** FICHA em modo consulta (/clientes/[id]): o cadastro como texto, "Editar" como ação */
@@ -105,7 +110,7 @@ function Painel({ ativo, children }: { ativo: boolean; children: React.ReactNode
   return <div className={cn("space-y-8", !ativo && "hidden")}>{children}</div>;
 }
 
-export function ClienteForm({ initialData, totalProximos30Dias, valorEmAtraso, perdas12m, consulta: consultaPedida, abaInicial, satisfacaoAceite }: ClienteFormProps) {
+export function ClienteForm({ initialData, totalProximos30Dias, valorEmAtraso, emAtraso, perdas12m, consulta: consultaPedida, abaInicial, satisfacaoAceite }: ClienteFormProps) {
   const router = useRouter();
   const isEditing = !!initialData;
   // Consulta só existe para um cliente que já existe (o "novo" é sempre formulário)
@@ -201,6 +206,8 @@ export function ClienteForm({ initialData, totalProximos30Dias, valorEmAtraso, p
   });
 
   const tipoPessoa = watch("tipoPessoa");
+  // Trocou o tipo de pessoa (ex.: PJ → PF depois de consultar o CNPJ): o nome volta a ser editável
+  useEffect(() => { setRazaoSocialBloqueada(false); }, [tipoPessoa]);
   const telefoneVal = watch("telefone") ?? "";
   const celularVal = watch("celular") ?? "";
   const ativoVal = watch("ativo") ?? true;
@@ -209,8 +216,10 @@ export function ClienteForm({ initialData, totalProximos30Dias, valorEmAtraso, p
   const [fiscalAberto, setFiscalAberto] = useState(false);
 
   async function buscarCnpj() {
-    const cnpj = watch("cpfCnpj")?.replace(/\D/g, "");
-    if (!cnpj || cnpj.length !== 14) return;
+    const cnpj = watch("cpfCnpj")?.replace(/\D/g, "") ?? "";
+    // Sem os 14 dígitos (ou com dígito verificador errado) não consulta, e diz por quê
+    if (cnpj.length !== 14) { setErroGlobal("Informe os 14 dígitos do CNPJ."); return; }
+    if (!cnpjValido(cnpj)) { setErroGlobal("CNPJ inválido: confira os dígitos."); return; }
     setBuscandoCnpj(true); setErroGlobal("");
     try {
       const res = await fetch(`/api/cnpj/${cnpj}`);
@@ -218,10 +227,12 @@ export function ClienteForm({ initialData, totalProximos30Dias, valorEmAtraso, p
       const data = await res.json();
       if (data.nome) { setValue("nome", data.nome); setRazaoSocialBloqueada(true); }
       setCnpjInfo({ nome: data.nome ?? "", cidade: data.cidade, estado: data.estado });
-      if (data.nomeFantasia) setValue("nomeFantasia", data.nomeFantasia);
+      // Cliente que já existe: o fantasia e o Simples só se estiverem vazios (o que já está no cadastro fica)
+      if (data.nomeFantasia && (!isEditing || !(watch("nomeFantasia") ?? "").trim())) setValue("nomeFantasia", data.nomeFantasia);
       // A opção pelo Simples vem na consulta federal (quando disponível); IE/IM/Suframa não vêm (manuais).
-      if (typeof data.optanteSimples === "boolean") { setValue("optanteSimples", data.optanteSimples); setFiscalAberto(true); }
-      // Leva H: o endereço da consulta vai para o ENDEREÇO PRINCIPAL (campos do cadastro), só nos campos vazios
+      if (typeof data.optanteSimples === "boolean" && (!isEditing || initialData!.optanteSimples == null)) { setValue("optanteSimples", data.optanteSimples); setFiscalAberto(true); }
+      // Leva H: o endereço da consulta vai para o ENDEREÇO PRINCIPAL (campos do cadastro), só se ainda não há
+      // rua nem CEP (tudo ou nada: não mistura a rua digitada com o CEP/bairro/cidade da Receita)
       const atual = Object.fromEntries(CAMPOS_ENDERECO.map((c) => [c, watch(c) ?? ""]));
       for (const [c, v] of Object.entries(enderecoDaConsulta(data, atual))) setValue(c as (typeof CAMPOS_ENDERECO)[number], v, { shouldDirty: true });
       const contato: ContatoConsulta = { email: data.email ?? "", telefone: data.telefone ?? "" };
@@ -299,6 +310,8 @@ export function ClienteForm({ initialData, totalProximos30Dias, valorEmAtraso, p
         // Salvar: a ficha (com o "Novo ▾"); Salvar e continuar: segue na edição
         router.push(continuar ? `/clientes/${saved.id}/editar?criado=1` : `/clientes/${saved.id}?criado=1`); router.refresh();
       } else if (continuar) {
+        // Fica na mesma tela: o aviso de sair sem salvar não pergunta mais (até a próxima alteração)
+        marcarFormularioSalvo();
         toast("Cliente salvo.");
         router.refresh();
       } else {
@@ -329,9 +342,13 @@ export function ClienteForm({ initialData, totalProximos30Dias, valorEmAtraso, p
 
   // Cabeçalho: só o que importa (lib/clientes/cabecalho) e o botão único "Novo ▾" (na consulta, cliente ativo)
   const nomeExibido = isEditing ? (initialData!.nomeFantasia || initialData!.nome) : "Novo cliente";
+  // Sem o financeiro, nada de valores (a página nem os manda): só "Inadimplente"
+  const veFinanceiro = veFinanceiroDoCliente(pode);
   const sinais = isEditing ? sinaisDoCliente({
-    clienteId: initialData!.id, ativo: ativoVal, valorEmAtraso: valorEmAtraso ?? 0, totalProximos30Dias: totalProximos30Dias ?? 0,
+    clienteId: initialData!.id, ativo: ativoVal, valorEmAtraso: veFinanceiro ? valorEmAtraso ?? 0 : 0, totalProximos30Dias: veFinanceiro ? totalProximos30Dias ?? 0 : 0,
+    emAtraso: emAtraso ?? (valorEmAtraso ?? 0) > 0,
     contratosAtivos: initialData!._count?.contratos ?? 0, satisfacao: satisfacaoAceite, podeVerReceber: pode("financeiro", "contasReceber"),
+    podeVerContratos: pode("contratos", "visualizar"),
   }) : [];
   const itensNovo = consulta ? itensDoNovo(initialData!.id, ativoVal, pode) : [];
   const editarHref = consulta && podeSalvar ? (aba === "geral" ? `${fichaHref}/editar` : `${fichaHref}/editar?aba=${aba}`) : null;
@@ -341,7 +358,8 @@ export function ClienteForm({ initialData, totalProximos30Dias, valorEmAtraso, p
 
   const acoesEdicao = consulta || !podeSalvar ? null : (
     <>
-      <Button type="button" variant="secondary" className="min-h-[44px]" onClick={() => router.push(voltar.href)}>Cancelar</Button>
+      {/* Um link (não router.push): o aviso de sair sem salvar pergunta antes, como no voltar */}
+      <Link href={voltar.href} className="btn-secondary min-h-[44px]" data-cancelar-cliente>Cancelar</Link>
       <Button type="button" variant="outline" className="min-h-[44px]" loading={isSubmitting} onClick={salvarEContinuar} data-salvar-continuar>
         <span className="hidden sm:inline">Salvar e continuar</span><span className="sm:hidden">Continuar</span>
       </Button>

@@ -111,13 +111,18 @@ export function CamposDados({ form, set }: CamposProps) {
         </FormField>
       </FormGrid>
       <FormField label="Celular (WhatsApp)" required hint="Com DDD." dica="Canal da empresa com o colaborador: WhatsApp, avisos e o app de campo.">
-        <Input value={formatarTelefone(form.telefone)} onChange={(e) => set("telefone", digitos(e.target.value).slice(0, 11))} inputMode="tel" data-campo="telefone" autoComplete="tel" placeholder="(00) 90000-0000" />
+        <Input value={formatarTelefone(form.telefone)} onChange={(e) => set("telefone", semDdi(digitos(e.target.value)).slice(0, 11))} inputMode="tel" data-campo="telefone" autoComplete="tel" placeholder="(00) 90000-0000" />
       </FormField>
     </div>
   );
 }
 
+/** O preenchimento automático traz o celular com o país ("+55 11 98765-4321"): sem tirar o 55, o corte em 11 comia o fim */
+const semDdi = (d: string) => (d.length > 11 && d.startsWith("55") ? d.slice(2) : d);
+
 /* ───────── verificação do e-mail ───────── */
+
+export const MSG_CODIGO_NAO_ENVIADO = "Não foi possível enviar o código agora. Siga sem confirmar o e-mail: isso não trava a admissão.";
 
 export function VerificarEmail({ form, set, token, verificado, onVerificado }: CamposProps & {
   token: string;
@@ -144,7 +149,8 @@ export function VerificarEmail({ form, set, token, verificado, onVerificado }: C
       });
       const d = await res.json().catch(() => ({}));
       if (!res.ok) { setErro(d?.erro ?? "Não foi possível enviar o código."); return; }
-      if (!d.enviado) { setAviso(d.erro ?? "O envio de e-mail não está configurado. Siga sem verificar."); return; }
+      // O motivo de fora (provedor, modelo inativo) não diz nada ao candidato: a tela dá o caminho
+      if (!d.enviado) { setAviso(MSG_CODIGO_NAO_ENVIADO); return; }
       setPedido(true);
       setAviso(`Código enviado para ${d.para}. Vale por alguns minutos.`);
     } catch { setErro("Erro de conexão. Tente de novo."); } finally { setPedindo(false); }

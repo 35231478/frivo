@@ -12,6 +12,8 @@ import { precosDeVendaParaCliente } from "@/lib/orcamentos/materiais-server";
 import { regraDaOs } from "@/lib/os/materiais-server";
 import { situacaoDaOsNoBanco } from "@/lib/os/trava-edicao-server";
 import { formatarMoeda } from "@/lib/utils";
+import { verificarItemDaOs } from "@/lib/precos/trava-tabela-server";
+import { textoDaTrilha } from "@/lib/precos/trava-tabela";
 
 /** Valor no histórico com espaço comum (o Intl usa um que não quebra) */
 const brl = (v: number) => formatarMoeda(v).replace(/\s/g, " ");
@@ -75,17 +77,21 @@ export async function travaFaturarCampoDaOs(osId: string): Promise<string | null
   return travaFaturarCampo(await prisma.osItemOrcamento.count({ where: { ordemServicoId: osId, conferirCampo: true } }));
 }
 
-type Resultado = { ok: true; item: unknown | null } | { ok: false; status: number; erro: string };
+type Resultado = { ok: true; item: unknown | null } | { ok: false; status: number; erro: string; precoTabela?: true };
 
-/** O escritório confere o item de campo: `confirmar` (com ajuste opcional) ou `remover` da cobrança. */
+/**
+ * O escritório confere o item de campo: `confirmar` (com ajuste opcional) ou `remover` da cobrança.
+ * Confirmar com o preço fora da tabela do cliente segue a trava do preço de tabela (a mesma dos itens da OS):
+ * sem a permissão, 403; com ela, pede o motivo (400) e deixa a trilha.
+ */
 export async function conferirItemCampo(
-  p: { empresaId: string; osId: string; itemId: string; usuarioId: string },
-  d: { acao?: unknown; quantidade?: unknown; valorUnitario?: unknown },
+  p: { empresaId: string; osId: string; itemId: string; usuarioId: string; user: { permissoes?: unknown; role?: string } },
+  d: { acao?: unknown; quantidade?: unknown; valorUnitario?: unknown; motivoPrecoTabela?: unknown },
 ): Promise<Resultado> {
   if (d.acao !== "confirmar" && d.acao !== "remover") return { ok: false, status: 400, erro: "Ação inválida." };
   const os = await prisma.ordemServico.findFirst({ where: { id: p.osId, empresaId: p.empresaId }, select: { id: true } });
   if (!os) return { ok: false, status: 404, erro: "OS não encontrada" };
-  const item = await prisma.osItemOrcamento.findFirst({ where: { id: p.itemId, ordemServicoId: p.osId, materialCampoId: { not: null } }, select: { id: true, descricao: true, quantidade: true, valorUnitario: true, conferirCampo: true } });
+  const item = await prisma.osItemOrcamento.findFirst({ where: { id: p.itemId, ordemServicoId: p.osId, materialCampoId: { not: null } }, select: { id: true, produtoId: true, descricao: true, quantidade: true, valorUnitario: true, conferirCampo: true } });
   if (!item) return { ok: false, status: 404, erro: "Material de campo não encontrado nesta OS." };
   if (!item.conferirCampo) return { ok: false, status: 409, erro: MSG_JA_CONFERIDO };
   const trava = travaDoCampo(await situacaoDaOsNoBanco(p.osId));
@@ -103,6 +109,14 @@ export async function conferirItemCampo(
 
   const c = lerConferencia({ quantidade: Number(item.quantidade), valorUnitario: Number(item.valorUnitario) }, d);
   if (!c.ok) return { ok: false, status: 400, erro: c.erro };
+  // O preço que o servidor pôs no item (o da tabela, quando há) não pede nada; mudar para fora da tabela, sim
+  const precoTabela = await verificarItemDaOs({
+    user: p.user, empresaId: p.empresaId, osId: p.osId, anterior: Number(item.valorUnitario),
+    motivo: typeof d.motivoPrecoTabela === "string" ? d.motivoPrecoTabela : null,
+    item: { tipo: "PRODUTO", produtoId: item.produtoId, descricao: item.descricao, quantidade: c.quantidade, valorUnitario: c.valorUnitario },
+  });
+  if (!precoTabela.veredito.ok) return { ok: false, status: precoTabela.veredito.status, erro: precoTabela.veredito.erro, precoTabela: true };
+  const motivoTabela = precoTabela.alteracoes.length ? precoTabela.veredito.motivo : null;
   const r = await prisma.$transaction(async (tx) => {
     const x = await tx.osItemOrcamento.updateMany({
       where: { id: item.id, conferirCampo: true },
@@ -113,6 +127,7 @@ export async function conferirItemCampo(
       ordemServicoId: p.osId, usuarioId: p.usuarioId, acao: "Material de campo conferido",
       detalhes: `${item.descricao}: ${c.quantidade} × ${brl(c.valorUnitario)} = ${brl(c.valorTotal)}`.slice(0, 1000),
     } });
+    if (motivoTabela) await tx.osHistorico.create({ data: { ordemServicoId: p.osId, usuarioId: p.usuarioId, acao: "Preço de tabela alterado", detalhes: textoDaTrilha(precoTabela.alteracoes, motivoTabela).slice(0, 500) } });
     return true;
   });
   if (!r) return { ok: false, status: 409, erro: MSG_JA_CONFERIDO };

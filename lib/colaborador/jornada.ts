@@ -7,7 +7,7 @@
  * Um dia não pode estar em duas faixas. O contador soma as horas de cada dia (saída − entrada − intervalo) e a semana.
  *
  * Compatível com o que já está gravado: quem não tem faixas ganha UMA faixa com os dias e o horário antigos (sem
- * intervalo). Ao salvar, os campos antigos continuam preenchidos (os dias de todas as faixas e o horário da 1ª), para
+ * intervalo); só os dias, sem nenhum horário, conta como sem jornada. Ao salvar, os campos antigos continuam preenchidos (os dias de todas as faixas e o horário da 1ª), para
  * quem ainda os lê.
  */
 
@@ -119,7 +119,9 @@ export function faixasDoColaborador(c: { jornadaFaixas?: unknown; jornadaEntrada
     if (lidas.length) return lidas;
   }
   const dias = ordenarDias(c.jornadaDias ?? []);
-  if (!c.jornadaEntrada && !c.jornadaSaida && !dias.length) return [];
+  // Só os dias, sem horário (a ficha antiga marcava Seg–Sex por padrão e o horário era opcional): não é jornada.
+  // Virar uma faixa sem horário travaria o salvar da ficha inteira (PJ4).
+  if (!c.jornadaEntrada && !c.jornadaSaida) return [];
   return [{ dias, entrada: c.jornadaEntrada ?? "", saida: c.jornadaSaida ?? "", intervaloInicio: null, intervaloFim: null }];
 }
 

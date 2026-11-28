@@ -157,8 +157,9 @@ export function ContatosManager({ clienteId, contatosIniciais, inativosIniciais 
     return comparaNatural(a.nome, b.nome);
   });
 
+  // Grava sozinho (cada contato na hora): não arma o "Sair sem salvar?" do formulário em volta
   return (
-    <div className="space-y-2">
+    <div className="space-y-2" data-sem-aviso>
       {erro && <div className="bg-atrasado-claro border border-atrasado/20 text-atrasado-texto text-sm rounded-lg px-3 py-2">{erro}</div>}
 
       {ordenados.length === 0 && !editando && (

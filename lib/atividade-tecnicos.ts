@@ -1,6 +1,7 @@
 import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { sugerirVeiculo } from "@/lib/veiculo-sugestao";
+import { mostrarEspecialidades } from "@/lib/relatorio-os/dados";
 
 /**
  * Vários técnicos na mesma atividade da OS (escolhidos um a um ou a partir de uma EQUIPE).
@@ -22,13 +23,26 @@ export class ErroTecnicos extends Error {}
 
 export const MSG_SEM_EXECUTOR = "Escolha quem executa: uma equipe ou um ou mais colaboradores.";
 
-/** Include padrão para exibir os técnicos de uma atividade (responsável + equipe). */
+/**
+ * Include padrão para exibir os técnicos de uma atividade (responsável + equipe). Com as especialidades, como a página
+ * da OS: a atividade devolvida por uma rota substitui a da tela, e sem elas a linha "especialista em…" sumia.
+ */
 export const INCLUDE_TECNICOS_ATIVIDADE = {
-  tecnico: { select: { id: true, nome: true } },
+  tecnico: { select: { id: true, nome: true, especialidades: true } },
   equipe: { select: { id: true, nome: true, cor: true } },
-  tecnicosEquipe: { select: { tecnico: { select: { id: true, nome: true } } }, orderBy: { criadoEm: "asc" } },
+  tecnicosEquipe: { select: { tecnico: { select: { id: true, nome: true, especialidades: true } } }, orderBy: { criadoEm: "asc" } },
   veiculo: { select: { id: true, placa: true, modelo: true, marca: true } },
 } satisfies Prisma.AtividadeOsInclude;
+
+type ComEspecialidades = { tecnico: { especialidades: string[] } | null; tecnicosEquipe: { tecnico: { especialidades: string[] } }[] };
+/** "Mostrar especialidades do técnico" desligado (Configurações › Impressão da OS): saem vazias — a regra da página da OS */
+export async function especialidadesConformeEmpresa<T extends ComEspecialidades>(empresaId: string, a: T): Promise<T> {
+  if (await mostrarEspecialidades(empresaId)) return a;
+  return {
+    ...a, tecnico: a.tecnico && { ...a.tecnico, especialidades: [] },
+    tecnicosEquipe: a.tecnicosEquipe.map((t) => ({ ...t, tecnico: { ...t.tecnico, especialidades: [] } })),
+  } as T;
+}
 
 export interface DefinicaoTecnicos {
   /** Todos os técnicos da atividade (com ou sem o responsável). */

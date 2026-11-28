@@ -15,7 +15,7 @@ import { cnpjValido, digitos } from "@/lib/documento";
 import { problemaSenha } from "@/lib/acesso/senha";
 import { emailDeLoginEmUso, MSG_EMAIL_LOGIN_EM_USO } from "@/lib/acesso/email-unico";
 import { perfisPadrao, TIPOS_OS_PADRAO, faltando } from "@/lib/empresa/padroes";
-import { detalheNovaSenhaAdmin, diferencasEmpresa, type DadosEmpresa, type TipoEventoEmpresa } from "@/lib/empresa/eventos";
+import { detalheNovaSenhaAdmin, diferencasEmpresa, TIPOS_EVENTO_EMPRESA, type DadosEmpresa, type TipoEventoEmpresa } from "@/lib/empresa/eventos";
 import { gerarSenhaProvisoria } from "@/lib/portal/gerar-senha";
 import { limparTentativas } from "@/lib/acesso/limite";
 
@@ -213,7 +213,9 @@ export async function editarEmpresa(p: { id: string; dados: DadosEditados; autor
 export async function detalheDaEmpresa(id: string, limite = 20) {
   const empresa = await prisma.empresa.findUnique({ where: { id }, select: SELECT_DADOS });
   if (!empresa) return null;
-  const eventos = await prisma.empresaEvento.findMany({ where: { empresaId: id }, orderBy: [{ criadoEm: "desc" }, { id: "desc" }], take: limite });
+  // Só a trilha do dono do Frivo: a mesma tabela guarda eventos da própria empresa (ex.: PRECO_TABELA_FATURA, o
+  // preço de tabela alterado numa fatura — dado comercial do cliente), que não aparecem aqui
+  const eventos = await prisma.empresaEvento.findMany({ where: { empresaId: id, tipo: { in: [...TIPOS_EVENTO_EMPRESA] } }, orderBy: [{ criadoEm: "desc" }, { id: "desc" }], take: limite });
   const ids = [...new Set(eventos.map((e) => e.usuarioId).filter((x): x is string => !!x))];
   const autores = new Map((ids.length ? await prisma.usuario.findMany({ where: { id: { in: ids } }, select: { id: true, nome: true } }) : []).map((u) => [u.id, u.nome]));
   return {

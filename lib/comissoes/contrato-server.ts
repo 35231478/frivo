@@ -125,6 +125,7 @@ export async function gerarComissoesDoContrato(
   const nomes = await nomesDasRegras(db, empresaId, [perc, fixo]);
 
   const linhas: Prisma.ComissaoCreateManyInput[] = [];
+  let passarAoCicloNovo: string[] = [];
   const base = (r: RegraComissao) => ({
     empresaId, contratoId: c.id, cicloInicio, usuarioId: pessoa.usuarioId, beneficiarioNome: pessoa.nome, papel: "VENDEDOR", quantidade: 1,
     regraId: r.id, regraDescricao: descricaoDaRegra(r, nomes(r)), base: r.base, taxa: r.valor, quando: "RECEBIMENTO", liquidaImpostos: false, criadoEm: agora,
@@ -133,7 +134,16 @@ export async function gerarComissoesDoContrato(
     const meses = mesesDaRegra(perc);
     const janela = competenciasDaJanela({ cicloInicio, meses, passo: passoCobranca(c.periodicidade), ultimaVigente: c.dataFim ? competenciaDe(c.dataFim) : null })
       ?? (await competenciasCobradas(db, empresaId, c.id)).filter((x) => naJanela(x, cicloInicio, 0));
-    for (const comp of janela) {
+    // PJ4: cada mensalidade é comissionada UMA vez por pessoa. A de outro ciclo (a janela "enquanto ativo" de antes da
+    // renovação) que já liberou algo continua dona dela; a que ainda é só prevista passa para o ciclo novo (a antiga
+    // fica "substituída", no histórico — nada se apaga)
+    const outras = await db.comissao.findMany({
+      where: { empresaId, contratoId: c.id, usuarioId: pessoa.usuarioId, base: "PERC_MENSALIDADE", papel: { not: PAPEL_SUBSTITUIDO }, cicloInicio: { not: cicloInicio }, competencia: { in: janela } },
+      select: { id: true, competencia: true, _count: { select: { lancamentos: true } } },
+    });
+    const jaTem = new Set(outras.filter((x) => x._count.lancamentos > 0).map((x) => x.competencia));
+    passarAoCicloNovo = outras.filter((x) => !x._count.lancamentos).map((x) => x.id);
+    for (const comp of janela.filter((x) => !jaTem.has(x))) {
       const m = await mensalidadeDoContrato(db, empresaId, c, comp);
       linhas.push({
         ...base(perc), meses, competencia: comp, chave: chaveDoContrato(c.id, cicloInicio, comp, pessoa.usuarioId),
@@ -150,6 +160,7 @@ export async function gerarComissoesDoContrato(
   if (!linhas.length) return 0;
   const gravar = async (tx: Tx) => {
     await tx.$queryRaw`SELECT 1 AS ok FROM pg_advisory_xact_lock(hashtext(${`comissao-ct:${contratoId}`}))`;
+    if (passarAoCicloNovo.length) await tx.comissao.updateMany({ where: { id: { in: passarAoCicloNovo }, lancamentos: { none: {} } }, data: { papel: PAPEL_SUBSTITUIDO, chave: null } });
     return (await tx.comissao.createMany({ data: linhas, skipDuplicates: true })).count;
   };
   if (o.tx) {
@@ -204,10 +215,13 @@ export async function sincronizarContratosNaTransacao(tx: Tx, empresaId: string,
     const cobradas = await competenciasCobradas(tx, empresaId, ct.id);
     const porCiclo = new Map<string, typeof abertas>();
     abertas.forEach((c) => porCiclo.set(`${c.cicloInicio}|${c.usuarioId}`, [...(porCiclo.get(`${c.cicloInicio}|${c.usuarioId}`) ?? []), c]));
+    // PJ4: a janela aberta de um ciclo fecha onde começa o ciclo seguinte da mesma pessoa (a renovação abre outro)
+    const ciclosDe = (usuarioId: string | null) => [...new Set(comissoes.filter((c) => c.contratoId === ct.id && c.usuarioId === usuarioId && c.base === "PERC_MENSALIDADE" && c.papel !== PAPEL_SUBSTITUIDO).map((c) => c.cicloInicio!))].sort();
     for (const grupo of porCiclo.values()) {
       const modelo = grupo[0];
       const tem = new Set(grupo.map((c) => c.competencia));
-      for (const comp of cobradas.filter((x) => naJanela(x, modelo.cicloInicio!, 0) && !tem.has(x))) {
+      const proximo = ciclosDe(modelo.usuarioId).find((x) => x > modelo.cicloInicio!);
+      for (const comp of cobradas.filter((x) => naJanela(x, modelo.cicloInicio!, 0) && !tem.has(x) && (!proximo || x < proximo))) {
         const m = await mensalidadeDoContrato(tx, empresaId, ct, comp);
         novas.push({
           empresaId, contratoId: ct.id, competencia: comp, cicloInicio: modelo.cicloInicio, meses: 0, usuarioId: modelo.usuarioId, beneficiarioNome: modelo.beneficiarioNome,
@@ -270,7 +284,9 @@ export async function sincronizarContratosNaTransacao(tx: Tx, empresaId: string,
 export async function comissoesDoContratoNoStatus(empresaId: string, contratoId: string, anterior: string | null, novo: string, agora: Date = new Date()): Promise<void> {
   try {
     // Criado agora (qualquer status: a geração só aceita o contrato ATIVO) ou saiu de "Aguardando assinatura"
-    if (anterior === null || ehFechamento(anterior, novo)) {
+    // PJ4: o contrato que volta de "Aguardando assinatura" depois de já ter comissão não é um fechamento novo
+    // (não gera de novo o fixo nem outro ciclo de mensalidades)
+    if (anterior === null || (ehFechamento(anterior, novo) && !(await prisma.comissao.count({ where: { empresaId, contratoId } })))) {
       await gerarComissoesDoContrato(empresaId, contratoId, { agora });
       return;
     }

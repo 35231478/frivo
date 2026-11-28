@@ -5,6 +5,7 @@ import { respostaRefEmpresa, validarRefEmpresa, validarRefsEmpresa } from "@/lib
 import { tecnicoSchema } from "@/lib/validations";
 import { Prisma } from "@prisma/client";
 import { jornadaDoCorpo } from "@/lib/colaborador/jornada";
+import { MSG_RT_SEM_CREA, erroDoCadastro, funcaoDoCorpo } from "@/lib/colaborador/funcao";
 import { exigirAlgumaPermissao, exigirPermissao } from "@/lib/permissoes-server";
 import type { Acao } from "@/lib/permissoes";
 
@@ -57,7 +58,7 @@ export async function POST(req: NextRequest) {
   const parsed = tecnicoSchema.safeParse(body);
 
   if (!parsed.success) {
-    return NextResponse.json({ erro: "Dados inválidos", detalhes: parsed.error.flatten() }, { status: 400 });
+    return NextResponse.json({ erro: erroDoCadastro(parsed.error), detalhes: parsed.error.flatten() }, { status: 400 });
   }
 
   const existente = await prisma.tecnico.findUnique({
@@ -65,7 +66,10 @@ export async function POST(req: NextRequest) {
   });
   if (existente) return NextResponse.json({ erro: "CPF já cadastrado" }, { status: 409 });
 
-  const { competenciaIds, dataNascimento, dataAdmissao, cargoId, perfilAcessoId, email, veiculoId, jornadaFaixas, jornadaEntrada, jornadaSaida, jornadaDias, ...rest } = parsed.data;
+  const { competenciaIds, dataNascimento, dataAdmissao, cargoId, perfilAcessoId, email, veiculoId, jornadaFaixas, jornadaEntrada, jornadaSaida, jornadaDias, tipo: tipoCorpo, tipoEquipe: equipeCorpo, ...rest } = parsed.data;
+  // tipo × tipoEquipe sempre coerentes no banco (sem equipe no corpo, ela sai do tipo); RT não fica sem CREA
+  const funcao = funcaoDoCorpo(tipoCorpo, equipeCorpo);
+  if (funcao.tipo === "RESPONSAVEL_TECNICO" && !rest.crea?.trim()) return NextResponse.json({ erro: MSG_RT_SEM_CREA }, { status: 400 });
   // Leva J: a jornada em faixas (ou, de um cliente antigo, os campos antigos)
   const jornada = jornadaDoCorpo({ jornadaFaixas, jornadaEntrada, jornadaSaida, jornadaDias });
   // Veículo padrão (opcional) precisa ser da mesma empresa
@@ -88,7 +92,7 @@ export async function POST(req: NextRequest) {
   }
   const tecnico = await prisma.tecnico.create({
     data: {
-      ...rest,
+      ...rest, ...funcao,
       ...jornada, jornadaFaixas: jornada.jornadaFaixas ?? Prisma.DbNull,
       empresaId,
       email: email || null,

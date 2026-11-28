@@ -6,7 +6,7 @@ import { prisma } from "@/lib/prisma";
 import { pode } from "@/lib/permissoes";
 import { respostaAcao, travaConclusao } from "@/lib/execucao/acoes";
 import { MSG_FORA_DO_ESCOPO, escopoDaSessao, filtroEscopo } from "@/lib/tecnico/escopo";
-import { ErroTecnicos, INCLUDE_TECNICOS_ATIVIDADE, gravarTecnicos, lerDefinicao, lerVeiculo, resolverTecnicos, resolverVeiculo } from "@/lib/atividade-tecnicos";
+import { ErroTecnicos, INCLUDE_TECNICOS_ATIVIDADE, especialidadesConformeEmpresa, gravarTecnicos, lerDefinicao, lerVeiculo, resolverTecnicos, resolverVeiculo } from "@/lib/atividade-tecnicos";
 import { agendarPush, notificarReagendamento } from "@/lib/push/eventos";
 import { sincronizarStatusOs } from "@/lib/os/sincronizar-status";
 import { chaveDiaCivil } from "@/lib/fuso";
@@ -139,7 +139,7 @@ export async function PUT(req: NextRequest, { params }: Params) {
   }
 
   await sincronizarStatusOs(id, empresaId, session.user!.id);
-  return NextResponse.json(atualizado);
+  return NextResponse.json(await especialidadesConformeEmpresa(empresaId, atualizado));
 }
 
 /**

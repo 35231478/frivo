@@ -3,6 +3,7 @@ import { exigirPermissao } from "@/lib/permissoes-server";
 import { prisma } from "@/lib/prisma";
 import { configRelatorioSchema } from "@/lib/relatorio-os/config";
 import { getConfigRelatorio } from "@/lib/relatorio-os/config-server";
+import { mostrarEspecialidades } from "@/lib/relatorio-os/dados";
 
 /**
  * Configuração de impressão do relatório da OS — da empresa da sessão.
@@ -12,7 +13,10 @@ import { getConfigRelatorio } from "@/lib/relatorio-os/config-server";
 export async function GET() {
   const guard = await exigirPermissao("configuracoes", "visualizar");
   if (guard.erro) return guard.resposta;
-  return NextResponse.json(await getConfigRelatorio(guard.session.user!.empresaId));
+  const empresaId = guard.session.user!.empresaId;
+  // A mesma forma que o PUT devolve: as seções + a chave das especialidades (Leva J; sem a linha, o padrão: ligada)
+  const [secoes, mostrarEspecialidadesTecnico] = await Promise.all([getConfigRelatorio(empresaId), mostrarEspecialidades(empresaId)]);
+  return NextResponse.json({ ...secoes, mostrarEspecialidadesTecnico });
 }
 
 export async function PUT(req: NextRequest) {

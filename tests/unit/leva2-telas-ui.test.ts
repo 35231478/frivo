@@ -171,8 +171,8 @@ describe("4. ficha do cliente: consulta, com Editar como ação", () => {
     await montarCliente({});
     expect($("[data-ficha-cliente]")).toBeNull();
     expect(caixa.querySelectorAll("input").length).toBeGreaterThan(3);
-    await act(async () => { [...caixa.querySelectorAll("button")].find((b) => txt(b) === "Cancelar")!.click(); });
-    expect(nav.push).toHaveBeenCalledWith("/clientes/cl1");
+    // pj4 (H11, mudança intencional): Cancelar virou link (o aviso de sair sem salvar pergunta antes), não router.push
+    expect([...caixa.querySelectorAll("a")].find((a) => txt(a) === "Cancelar")!.getAttribute("href")).toBe("/clientes/cl1");
   });
 
   it("a lista, a busca e o olho de quem só consulta levam à ficha; o lápis leva à edição", () => {

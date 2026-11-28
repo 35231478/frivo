@@ -7,6 +7,7 @@ import { respostaRefEmpresa, validarRefEmpresa, validarRefsEmpresa } from "@/lib
 import { tecnicoSchema } from "@/lib/validations";
 import { Prisma } from "@prisma/client";
 import { jornadaDoCorpo } from "@/lib/colaborador/jornada";
+import { MSG_EMAIL_COM_LOGIN, MSG_RT_SEM_CREA, erroDoCadastro, funcaoDoCorpo } from "@/lib/colaborador/funcao";
 import { caixaNome } from "@/lib/texto/zod";
 import { exigirPermissao } from "@/lib/permissoes-server";
 import { pode, type Permissoes } from "@/lib/permissoes";
@@ -57,7 +58,7 @@ export async function PUT(req: NextRequest, { params }: Params) {
   const body = await req.json();
   const parsed = tecnicoSchema.safeParse(body);
   if (!parsed.success) {
-    return NextResponse.json({ erro: "Dados inválidos", detalhes: parsed.error.flatten() }, { status: 400 });
+    return NextResponse.json({ erro: erroDoCadastro(parsed.error), detalhes: parsed.error.flatten() }, { status: 400 });
   }
 
   if (parsed.data.cpf !== existente.cpf) {
@@ -67,7 +68,10 @@ export async function PUT(req: NextRequest, { params }: Params) {
     if (dup) return NextResponse.json({ erro: "CPF já cadastrado" }, { status: 409 });
   }
 
-  const { competenciaIds, dataNascimento, dataAdmissao, cargoId, perfilAcessoId, email, veiculoId, jornadaFaixas, jornadaEntrada, jornadaSaida, jornadaDias, ...rest } = parsed.data;
+  const { competenciaIds, dataNascimento, dataAdmissao, cargoId, perfilAcessoId, email, veiculoId, jornadaFaixas, jornadaEntrada, jornadaSaida, jornadaDias, tipo: tipoCorpo, tipoEquipe: equipeCorpo, ...rest } = parsed.data;
+  // tipo × tipoEquipe sempre coerentes no banco (sem equipe no corpo, ela sai do tipo); RT não fica sem CREA
+  const funcao = funcaoDoCorpo(tipoCorpo, equipeCorpo);
+  if (funcao.tipo === "RESPONSAVEL_TECNICO" && !rest.crea?.trim()) return NextResponse.json({ erro: MSG_RT_SEM_CREA }, { status: 400 });
   // Leva J: a jornada em faixas (ou, de um cliente antigo, os campos antigos)
   const jornada = jornadaDoCorpo({ jornadaFaixas, jornadaEntrada, jornadaSaida, jornadaDias });
   // Veículo padrão (opcional): só muda quando enviado; precisa ser da mesma empresa
@@ -97,6 +101,9 @@ export async function PUT(req: NextRequest, { params }: Params) {
     ? await prisma.usuario.findFirst({ where: { empresaId, email: { equals: emailAntigo, mode: "insensitive" } }, select: { id: true } })
     : null;
   if (login && await emailDeLoginEmUso(emailNovo, login.id)) return NextResponse.json({ erro: MSG_EMAIL_LOGIN_EM_USO }, { status: 409 });
+  // Apagar o e-mail de quem tem login deixaria o login no e-mail velho, solto do colaborador: recusa
+  if (!emailNovo && emailAntigo && await prisma.usuario.findFirst({ where: { empresaId, email: { equals: emailAntigo, mode: "insensitive" } }, select: { id: true } }))
+    return NextResponse.json({ erro: MSG_EMAIL_COM_LOGIN }, { status: 400 });
 
   // Status "Inativo" no formulário = inativar o colaborador pela MESMA função do botão e da ação em
   // massa (impacto/bloqueio, motivo e anotação nas observações; exige "excluir"). Sair de "Inativo"
@@ -119,7 +126,7 @@ export async function PUT(req: NextRequest, { params }: Params) {
   const atualizado = await prisma.tecnico.update({
     where: { id },
     data: {
-      ...rest,
+      ...rest, ...funcao,
       ...jornada, jornadaFaixas: jornada.jornadaFaixas ?? Prisma.DbNull,
       email: email || null,
       cargoId: cargoId || null,
@@ -217,7 +224,7 @@ export async function PATCH(req: NextRequest, { params }: Params) {
     if (!atual) return NextResponse.json({ erro: "Não encontrado" }, { status: 404 });
     const { crea, ...resto } = parsed.data;
     // Responsável técnico não fica sem CREA (é o que sai impresso no orçamento)
-    if (crea !== undefined && !crea && atual.tipo === "RESPONSAVEL_TECNICO") return NextResponse.json({ erro: "Informe o CREA do responsável técnico." }, { status: 400 });
+    if (crea !== undefined && !crea && atual.tipo === "RESPONSAVEL_TECNICO") return NextResponse.json({ erro: MSG_RT_SEM_CREA }, { status: 400 });
     const t = await prisma.tecnico.update({
       where: { id }, data: { ...resto, ...(crea !== undefined && { crea: crea || null }) },
       select: { id: true, nome: true, telefone: true, crea: true, tipo: true, ativo: true },

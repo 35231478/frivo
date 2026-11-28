@@ -282,17 +282,19 @@ function EditarEmpresa({ empresa, onFechar, onSalvo }: { empresa: EmpresaDaLista
   const [carregando, setCarregando] = useState(true);
   const [salvando, setSalvando] = useState(false);
   const [erro, setErro] = useState("");
+  // Não carregou os dados de agora: nada a salvar (salvar gravaria os campos vazios por cima)
+  const [falhouCarga, setFalhouCarga] = useState(false);
 
   useEffect(() => {
     let vivo = true;
     fetch(`/api/admin/empresas/${empresa.id}`).then(async (r) => {
       const d = await r.json().catch(() => ({}));
       if (!vivo) return;
-      if (!r.ok) { setErro(d.erro ?? "Não foi possível carregar a empresa."); return; }
+      if (!r.ok) { setFalhouCarga(true); setErro(d.erro ?? "Não foi possível carregar a empresa."); return; }
       const e = d.empresa as DadosEmpresa;
       setF({ razaoSocial: e.razaoSocial ?? "", nomeFantasia: e.nomeFantasia ?? "", cnpj: e.cnpj ?? "", email: e.email ?? "", telefone: e.telefone ?? "" });
       setEventos(d.eventos ?? []);
-    }).catch(() => { if (vivo) setErro("Erro de conexão. Tente novamente."); }).finally(() => { if (vivo) setCarregando(false); });
+    }).catch(() => { if (vivo) { setFalhouCarga(true); setErro("Erro de conexão. Tente novamente."); } }).finally(() => { if (vivo) setCarregando(false); });
     return () => { vivo = false; };
   }, [empresa.id]);
 
@@ -302,6 +304,7 @@ function EditarEmpresa({ empresa, onFechar, onSalvo }: { empresa: EmpresaDaLista
 
   async function salvar(e: React.FormEvent) {
     e.preventDefault();
+    if (falhouCarga) return;
     if (!cnpjValido(f.cnpj)) { setErro("CNPJ inválido."); return; }
     setErro(""); setSalvando(true);
     try {
@@ -320,7 +323,7 @@ function EditarEmpresa({ empresa, onFechar, onSalvo }: { empresa: EmpresaDaLista
   return (
     <Modal aberto onFechar={() => { if (!salvando) onFechar(); }} titulo={`Editar ${empresa.nomeFantasia || empresa.nome}`} tamanho="lg">
       <form onSubmit={salvar} className="space-y-5" data-form-editar-empresa>
-        <fieldset className="grid sm:grid-cols-2 gap-3" disabled={salvando || carregando}>
+        <fieldset className="grid sm:grid-cols-2 gap-3" disabled={salvando || carregando || falhouCarga}>
           <FormField label="Razão social" required><Input value={f.razaoSocial} onChange={muda("razaoSocial")} data-editar-campo="razaoSocial" /></FormField>
           <FormField label="Nome fantasia"><Input value={f.nomeFantasia} onChange={muda("nomeFantasia")} data-editar-campo="nomeFantasia" /></FormField>
           <FormField label="CNPJ" required dica="Precisa ser válido e não pode ser o CNPJ de outra empresa do Frivo.">
@@ -336,7 +339,7 @@ function EditarEmpresa({ empresa, onFechar, onSalvo }: { empresa: EmpresaDaLista
         )}
         <div className="flex flex-col-reverse sm:flex-row sm:justify-end gap-2">
           <Button type="button" variant="secondary" onClick={onFechar} disabled={salvando}>Cancelar</Button>
-          <Button type="submit" loading={salvando} disabled={carregando} data-salvar-empresa>Salvar</Button>
+          <Button type="submit" loading={salvando} disabled={carregando || falhouCarga} data-salvar-empresa>Salvar</Button>
         </div>
       </form>
       <section className="mt-6 border-t border-surface-linha pt-4" data-historico-empresa>

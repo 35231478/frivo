@@ -7,6 +7,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { FormField, FormGrid } from "@/components/ui/form-field";
+import { toast } from "@/components/ui/avisos";
+import { numeroDoCampo } from "@/lib/edicao-contexto";
 import { formatarDataHora, formatarMoeda } from "@/lib/utils";
 import { MOTIVO_MAX, MOTIVO_MIN } from "@/lib/precos/trava-tabela";
 import { avisoDosIgnorados, erroDoPedido, textoDoReajuste, type LinhaReajuste, type PlanoDesfazer, type TipoReajuste } from "@/lib/precos/reajuste-tabela";
@@ -16,6 +18,17 @@ import { avisoDosIgnorados, erroDoPedido, textoDoReajuste, type LinhaReajuste, t
  * prévia do servidor com o preço atual → novo → aplicar) e o de desfazer o último reajuste (o plano do servidor:
  * os itens que voltam e o aviso dos que ficam como estão).
  */
+const itens = (n: number) => `${n} ${n === 1 ? "item" : "itens"}`;
+/** O aviso depois de aplicar e de desfazer: o que aconteceu, com a contagem */
+export const textoAplicado = (n: number) => `Reajuste aplicado: ${itens(n)} ${n === 1 ? "reajustado" : "reajustados"}.`;
+export const textoDesfeito = (n: number) => n ? `Reajuste desfeito: ${itens(n)} ${n === 1 ? "voltou" : "voltaram"} ao preço anterior.` : "Reajuste desfeito. Nenhum item voltou ao preço anterior.";
+/** "8,5", "-3", "1.250,00" (pt-BR, com vírgula) → número; o sinal de menos reduz. Inválido: NaN (o pedido recusa) */
+const numeroDoValor = (v: string) => {
+  const t = v.trim();
+  const n = numeroDoCampo(t.startsWith("-") ? t.slice(1) : t);
+  return n == null ? NaN : t.startsWith("-") ? -n : n;
+};
+
 const url = (tabelaId: string, resto = "") => `/api/cadastros/tabelas-preco/${tabelaId}/reajustes${resto}`;
 
 async function postar(u: string, corpo: unknown): Promise<{ ok: boolean; d: any }> {
@@ -60,12 +73,12 @@ export function ModalReajuste({ aberto, tabelaId, itemIds, onFechar, onAplicado 
   const [erro, setErro] = useState("");
   const [ocupado, setOcupado] = useState(false);
 
-  const corpo = (comPrevia: boolean) => ({ tipo, valor: Number(valor.replace(",", ".")), motivo, previa: comPrevia, ...(itemIds.length ? { itemIds } : {}) });
+  const corpo = (comPrevia: boolean) => ({ tipo, valor: numeroDoValor(valor), motivo, previa: comPrevia, ...(itemIds.length ? { itemIds } : {}) });
   // Mexeu no pedido: a prévia mostrada deixa de valer
   const mudar = (f: () => void) => { f(); setPrevia(null); setErro(""); };
 
   async function verPrevia() {
-    const e = erroDoPedido({ tipo, valor: valor === "" ? "" : Number(valor.replace(",", ".")) });
+    const e = erroDoPedido({ tipo, valor: valor.trim() === "" ? "" : numeroDoValor(valor) });
     if (e) { setErro(e); return; }
     setOcupado(true); setErro("");
     const r = await postar(url(tabelaId), corpo(true));
@@ -79,6 +92,7 @@ export function ModalReajuste({ aberto, tabelaId, itemIds, onFechar, onAplicado 
     const r = await postar(url(tabelaId), corpo(false));
     setOcupado(false);
     if (!r.ok) { setErro(r.d?.erro ?? "Não foi possível aplicar o reajuste."); return; }
+    toast(textoAplicado(Array.isArray(r.d?.linhas) ? r.d.linhas.length : previa?.length ?? 0));
     setValor(""); setMotivo(""); setPrevia(null);
     onAplicado();
   }
@@ -99,7 +113,8 @@ export function ModalReajuste({ aberto, tabelaId, itemIds, onFechar, onAplicado 
             </Select>
           </FormField>
           <FormField label={tipo === "PERCENTUAL" ? "Percentual (%)" : "Valor (R$)"} required dica="Positivo aumenta, negativo reduz. Arredonda em centavos.">
-            <Input type="number" step="0.01" value={valor} onChange={(e) => mudar(() => setValor(e.target.value))} placeholder={tipo === "PERCENTUAL" ? "Ex.: 8,5" : "Ex.: 10,00"} data-valor-reajuste />
+            {/* Texto com vírgula (pt-BR), não type=number: "8,5" e o sinal de menos passam */}
+            <Input inputMode="text" autoComplete="off" value={valor} onChange={(e) => { const v = e.target.value.replace(/[^\d.,-]/g, ""); mudar(() => setValor(v)); }} placeholder={tipo === "PERCENTUAL" ? "Ex.: 8,5" : "Ex.: 10,00"} data-valor-reajuste />
           </FormField>
         </FormGrid>
         <FormField label="Motivo" required>
@@ -146,6 +161,7 @@ export function DesfazerReajuste({ tabelaId, lote, disabled, dica, onDesfeito }:
     setOcupado(false);
     if (!r.ok) { setErro(r.d?.erro ?? "Não foi possível desfazer o reajuste."); return; }
     setAberto(false);
+    toast(textoDesfeito(Array.isArray(r.d?.plano?.voltam) ? r.d.plano.voltam.length : 0));
     onDesfeito();
   }
   const aviso = plano && avisoDosIgnorados(plano.ignorados);

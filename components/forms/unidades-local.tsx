@@ -73,7 +73,7 @@ export function UnidadesLocal({ unidades, onChange, principalNoCadastro = false 
     const temPrincipal = unidades.some((u) => u.principal);
     const f = emptyForm();
     f.principal = !principalNoCadastro && !temPrincipal;
-    if (unidades.length === 0 && !principalNoCadastro) f.nome = "Principal";
+    // Sem nome sugerido "Principal": o servidor já cria o "Principal" do endereço principal (não fica repetido)
     setForm(f);
     setEditando("novo");
   }
@@ -119,8 +119,14 @@ export function UnidadesLocal({ unidades, onChange, principalNoCadastro = false 
 
   function remover(id: string) {
     const u = unidades.find((u) => u._tempId === id);
-    if (u?.principal) return;
-    onChange(unidades.filter((u) => u._tempId !== id));
+    const resto = unidades.filter((x) => x._tempId !== id);
+    // Excluiu o principal: o próximo da lista (na ordem da tela) passa a ser o principal
+    if (u?.principal && resto.length > 0 && !resto.some((x) => x.principal)) {
+      const proximo = [...resto].sort((a, b) => comparaNatural(a.nome, b.nome))[0]._tempId;
+      onChange(resto.map((x) => ({ ...x, principal: x._tempId === proximo })));
+      return;
+    }
+    onChange(resto);
   }
 
   const ordenadas = [...unidades].sort((a, b) => {
@@ -224,14 +230,11 @@ export function UnidadesLocal({ unidades, onChange, principalNoCadastro = false 
                   <Button type="button" variant="ghost" onClick={() => abrirEditar(u)} className="min-h-[44px] text-sm">
                     <Pencil className="w-4 h-4" aria-hidden /> Editar
                   </Button>
-                  {(!u.principal || principalNoCadastro) && (
-                    <>
-                      {!principalNoCadastro && <Button type="button" variant="ghost" onClick={() => marcarPrincipal(u._tempId)} className="min-h-[44px] text-sm">Tornar principal</Button>}
-                      <Button type="button" variant="ghost" onClick={() => remover(u._tempId)} className="min-h-[44px] text-sm text-atrasado hover:text-atrasado-texto">
-                        <Trash2 className="w-4 h-4" aria-hidden /> Excluir
-                      </Button>
-                    </>
-                  )}
+                  {!u.principal && !principalNoCadastro && <Button type="button" variant="ghost" onClick={() => marcarPrincipal(u._tempId)} className="min-h-[44px] text-sm">Tornar principal</Button>}
+                  {/* Ainda não foi salvo: excluir sempre vale (o principal passa para o próximo) */}
+                  <Button type="button" variant="ghost" onClick={() => remover(u._tempId)} className="min-h-[44px] text-sm text-atrasado hover:text-atrasado-texto" data-excluir-endereco={u._tempId}>
+                    <Trash2 className="w-4 h-4" aria-hidden /> Excluir
+                  </Button>
                 </div>
               </li>
             );

@@ -1,4 +1,5 @@
 import { inflateRawSync } from "node:zlib";
+import { protegerFormula } from "@/lib/exportacao/formula";
 
 /**
  * Leitura de planilhas (CSV e Excel .xlsx) e geração do modelo — só no servidor, sem dependência
@@ -216,6 +217,10 @@ export function gerarXlsx(abas: { nome: string; linhas: string[][]; larguras?: n
 
 /** CSV para o Excel brasileiro: separador `;` e BOM (acentos certos ao abrir com dois cliques). */
 export function gerarCsv(linhas: string[][]) {
-  const campo = (v: string) => (/[;"\n\r]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v);
+  // Texto que começa com = + - @ sai com apóstrofo (contra fórmula; números não) — lib/exportacao/formula
+  const campo = (c: string) => {
+    const v = String(protegerFormula(c ?? ""));
+    return /[;"\n\r]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v;
+  };
   return "﻿" + linhas.map((l) => l.map(campo).join(";")).join("\r\n") + "\r\n";
 }

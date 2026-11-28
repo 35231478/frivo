@@ -92,8 +92,9 @@ export function AnexosManager({ clienteId, anexosIniciais, somenteLeitura }: Ane
     }
   }
 
+  // Grava sozinho (cada anexo na hora): não arma o "Sair sem salvar?" do formulário em volta
   return (
-    <div className="space-y-3">
+    <div className="space-y-3" data-sem-aviso>
       {erro && (
         <div className="bg-atrasado-claro border border-atrasado/20 text-atrasado-texto text-sm rounded-lg px-3 py-2">{erro}</div>
       )}

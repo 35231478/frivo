@@ -6,6 +6,7 @@ import { chaveHojeBR } from "@/lib/fuso";
 import { whereOrdensDaLista } from "@/lib/listas/filtros-server";
 import { atrasoJustificado, prazoEfetivo, rotuloMotivoAtraso, rotuloResponsabilidadeAtraso, situacaoPrazoExecucao } from "@/lib/os/prazo-execucao";
 import { formatarDiaCivil, textoPrazo } from "@/lib/os/prazos";
+import { protegerFormula } from "@/lib/exportacao/formula";
 
 const SORT_MAP: Record<string, (dir: "asc" | "desc") => any> = {
   numero: (dir) => ({ numero: dir }),
@@ -17,7 +18,8 @@ const SORT_MAP: Record<string, (dir: "asc" | "desc") => any> = {
 };
 
 function csvCampo(v: string | null | undefined): string {
-  const s = (v ?? "").replace(/"/g, '""');
+  // Texto que começa com = + - @ sai com apóstrofo (contra fórmula; números não) — lib/exportacao/formula
+  const s = String(protegerFormula(v ?? "")).replace(/"/g, '""');
   return `"${s}"`;
 }
 
