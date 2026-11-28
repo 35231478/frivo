@@ -47,8 +47,9 @@ export function LinhaSituacao({ estado, agora, aguardando, linkOs = false, class
   const presenca = presencaDoTecnico(estado.contatoEm, agora, aguardando);
   const pausaImpedimento = s.tipo === "PAUSADA" && s.impedimento;
   return (
-    <span className={cn("flex items-center min-w-0 text-xs text-ink-muted", className)} data-situacao={s.tipo}>
-      <span className={cn("truncate", pausaImpedimento && "text-atencao-texto font-medium")} data-situacao-texto>{textoDaSituacao(s)}</span>
+    <span className={cn("flex items-center min-w-0 overflow-hidden whitespace-nowrap text-xs text-ink-muted", className)} data-situacao={s.tipo}>
+      {/* Falta espaço: o "visto por último" encolhe primeiro (bem mais rápido), depois o texto; o nº da OS nunca se corta */}
+      <span className={cn("min-w-0 truncate", pausaImpedimento && "text-atencao-texto font-medium")} title={textoDaSituacao(s)} data-situacao-texto>{textoDaSituacao(s)}</span>
       {os && (
         <>
           <span aria-hidden className="whitespace-pre"> · </span>
@@ -58,10 +59,10 @@ export function LinhaSituacao({ estado, agora, aguardando, linkOs = false, class
         </>
       )}
       {presenca && presenca.tipo !== "ONLINE" && (
-        <>
-          <span aria-hidden className="whitespace-pre"> · </span>
-          <span className="shrink-0" data-presenca={presenca.tipo} title={presenca.tipo === "SEM_SINAL" ? "A mensagem fica esperando e chega quando o sinal voltar." : undefined}>{presenca.texto}</span>
-        </>
+        // O separador vai junto: some com o texto quando falta espaço (shrink 1000: encolhe antes de tudo)
+        <span className="min-w-0 shrink-[1000] truncate whitespace-pre" title={presenca.tipo === "SEM_SINAL" ? "A mensagem fica esperando e chega quando o sinal voltar." : presenca.texto}>
+          <span aria-hidden> · </span><span data-presenca={presenca.tipo}>{presenca.texto}</span>
+        </span>
       )}
     </span>
   );

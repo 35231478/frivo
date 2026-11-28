@@ -161,7 +161,7 @@ describe("a linha e o ponto", () => {
     await montar(createElement("div", null, createElement(PontoPresenca, { estado: imp, agora: QUINTA_1030 }), createElement(LinhaSituacao, { estado: imp, agora: QUINTA_1030, aguardando: true })));
     expect($("[data-ponto-presenca]")).toBeNull();
     expect(txt($("[data-situacao]"))).toBe("Pausada — Falta de peça/material · OS-1 · Sem sinal há 25 min");
-    expect($("[data-presenca='SEM_SINAL']")!.getAttribute("title")).toBe("A mensagem fica esperando e chega quando o sinal voltar.");
+    expect($("[data-presenca='SEM_SINAL']")!.parentElement!.getAttribute("title")).toBe("A mensagem fica esperando e chega quando o sinal voltar.");
     expect($("[data-situacao-texto]")!.className).toContain("text-atencao-texto");
     act(() => root!.unmount()); root = undefined; document.body.innerHTML = "";
     const almoco = estado({ tipo: "PAUSADA", motivo: "Almoço/intervalo", impedimento: false, os: null }, null);
