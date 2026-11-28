@@ -6,7 +6,7 @@ import { atorDaSessao, carregarContexto } from "@/lib/execucao/contexto";
 import { removerFoto, removerFotoAdicional } from "@/lib/execucao/acoes";
 import { nomeEquipamento } from "@/lib/execucao/vinculos";
 import { legendaAdicional, legendaExecucao } from "@/lib/os/galeria";
-import { editarLegendaFoto } from "@/lib/os/legenda-foto-server";
+import { editarLegendaFoto, restaurarLegendaFoto } from "@/lib/os/legenda-foto-server";
 import { escopoBarra } from "@/lib/escopo/proprios-server";
 
 type Params = { params: Promise<{ id: string; fotoId: string }> };
@@ -64,6 +64,7 @@ const ORIGENS = ["EXECUCAO", "ADICIONAL", "ANEXO"] as const;
  * EDITA A LEGENDA da foto, de qualquer origem da galeria (`?origem=EXECUCAO|ADICIONAL|ANEXO`). Exige
  * editar a OS; no modo técnico, só a foto de uma atividade dele e com a OS ainda aberta (a regra é a
  * mesma do app: lib/os/galeria › motivoSemEditarLegenda). Fica no histórico a legenda de antes e a nova.
+ * Com `{ restaurar: true }`: volta à legenda do sistema (as mesmas permissões e a mesma trilha).
  */
 export async function PATCH(req: NextRequest, { params }: Params) {
   const guard = await exigirPermissao("ordens", "editar");
@@ -75,7 +76,10 @@ export async function PATCH(req: NextRequest, { params }: Params) {
   const origem = req.nextUrl.searchParams.get("origem") as (typeof ORIGENS)[number] | null;
   if (!origem || !ORIGENS.includes(origem)) return NextResponse.json({ erro: "Diga de onde é a foto (execução, serviço adicional ou anexo)." }, { status: 400 });
   const corpo = await req.json().catch(() => null);
-  const r = await editarLegendaFoto({ ...atorDaSessao(session), podeEditarOs: true }, id, { origem, fotoId, legenda: corpo?.legenda });
+  const ator = { ...atorDaSessao(session), podeEditarOs: true };
+  const r = corpo?.restaurar === true
+    ? await restaurarLegendaFoto(ator, id, { origem, fotoId })
+    : await editarLegendaFoto(ator, id, { origem, fotoId, legenda: corpo?.legenda });
   if (!r.ok) return NextResponse.json({ erro: r.erro }, { status: r.status });
   return NextResponse.json({ legenda: r.dados.legenda });
 }

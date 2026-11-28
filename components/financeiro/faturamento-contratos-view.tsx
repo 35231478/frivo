@@ -7,7 +7,8 @@ import { AlertTriangle, CalendarClock, CheckCircle2, FileSignature, Hourglass, R
 import { cn, formatarMoeda, LABELS_STATUS_MEDICAO } from "@/lib/utils";
 import { useListagemUrl } from "@/components/listagem/use-listagem-url";
 import { BarraPeriodo, CardResumo, GradeCards, type PeriodoTela } from "@/components/listagem/periodo-cards";
-import { PLANILHA, valorSemMoeda } from "@/lib/planilha";
+import { valorSemMoeda } from "@/lib/planilha";
+import { TabelaPro, type ColunaPro } from "@/components/listagem/tabela-pro";
 import { Dica } from "@/components/ui/dica";
 import { StatusPill, type TomStatus } from "@/components/ui/status-pill";
 import { toast } from "@/components/ui/avisos";
@@ -49,6 +50,17 @@ function Boletos({ e }: { e: Exec }) {
   );
 }
 const retentavel = (s: string) => ["FALHA", "PENDENCIA"].includes(s);
+
+/** As colunas da planilha (TabelaPro: largura, mostrar/esconder e ordem por usuário) */
+const COLUNAS: ColunaPro[] = [
+  { id: "cliente", titulo: "Cliente · contrato", obrigatoria: true, minimo: 200, classe: "truncate" },
+  { id: "valor", titulo: "Cobrança (R$)", largura: 124, alinhar: "direita" },
+  { id: "situacao", titulo: "Situação", largura: 180 },
+  { id: "medicao", titulo: "Medição", largura: 150, classe: "truncate" },
+  { id: "nf", titulo: "NF", largura: 120 },
+  { id: "boleto", titulo: "Boleto", largura: 110 },
+  { id: "erro", titulo: "Erro", largura: 240 },
+];
 
 /** "Medição · Aguardando" / "Na fila"… e o que esperar quando ainda não há execução */
 function Situacao({ l }: { l: LinhaFaturamentoContrato }) {
@@ -126,83 +138,73 @@ export function FaturamentoContratosView({ periodo, linhas, resumo, soAtencao }:
         </div>
       ) : (
         <section className="card overflow-hidden" data-faturamento-lista>
-          {/* Celular: cartões */}
-          <ul className="md:hidden divide-y divide-surface-border">
-            {visiveis.map((l) => {
-              const e = l.execucao;
-              return (
-                <li key={l.contratoId} className="px-4 py-3 space-y-1" data-linha-contrato={l.contratoId}>
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="min-w-0">
-                      <p className="font-medium text-ink truncate">{l.cliente}</p>
-                      <p className="text-xs text-ink-muted truncate">{l.contratoNumero} · {l.frequencia}</p>
-                    </div>
-                    <p className="font-bold text-ink tabular-nums shrink-0">{formatarMoeda(l.valor)}</p>
-                  </div>
-                  <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
-                    <Situacao l={l} />
-                    {e?.medicao && <Link href={`/financeiro/medicoes/${e.medicao.id}`} className="text-acento hover:underline">{e.medicao.numero}</Link>}
-                    {e?.nf && <span className="text-ink-muted" data-nf-cartao>NF <Nf e={e} /></span>}
-                    {e && e.cobrancas.some((c) => c.boleto) && (
-                      <span className="inline-flex flex-wrap gap-x-1 text-ink-muted" data-boleto-cartao>Boleto {e.cobrancas.filter((c) => c.boleto).map((c) => (
-                        <Link key={c.id} href={hrefConta(c.id)} className="text-acento hover:underline">{BOLETO[c.boleto!] ?? c.boleto}</Link>
-                      ))}</span>
-                    )}
-                  </div>
-                  {e?.erro && <p className="text-xs text-atrasado-texto" data-erro>{e.erro}</p>}
-                  {e && retentavel(e.situacao) && <BotaoTentar id={e.id} ocupado={ocupado === e.id} onTentar={tentar} />}
-                </li>
-              );
-            })}
-          </ul>
-          {/* Desktop: planilha */}
-          <div className="hidden md:block overflow-x-auto">
-            <table className={cn(PLANILHA.tabela, "table-fixed")}>
-              <thead>
-                <tr className={PLANILHA.cabecalho}>
-                  <th scope="col" className={cn(PLANILHA.th, "text-left w-[22%]")}>Cliente · contrato</th>
-                  <th scope="col" className={cn(PLANILHA.th, "text-right w-[7.5rem]")}>Cobrança (R$)</th>
-                  <th scope="col" className={cn(PLANILHA.th, "text-left w-[11rem]")}>Situação</th>
-                  <th scope="col" className={cn(PLANILHA.th, "text-left w-[9rem]")}>Medição</th>
-                  <th scope="col" className={cn(PLANILHA.th, "text-left w-[7.5rem] hidden lg:table-cell")}>NF</th>
-                  <th scope="col" className={cn(PLANILHA.th, "text-left w-[6rem] hidden lg:table-cell")}>Boleto</th>
-                  <th scope="col" className={cn(PLANILHA.th, "text-left")}>Erro</th>
-                </tr>
-              </thead>
-              <tbody>
+          <TabelaPro
+            tela="faturamento-contratos" colunas={COLUNAS}
+            barra={<span data-contagem-faturamento>{visiveis.length === 1 ? "1 contrato" : `${visiveis.length} contratos`}</span>}
+            cartoes={(
+              <ul className="divide-y divide-surface-border">
                 {visiveis.map((l) => {
                   const e = l.execucao;
                   return (
-                    <tr key={l.contratoId} className={PLANILHA.linha} data-linha-contrato={l.contratoId}>
-                      <td className={cn(PLANILHA.td, "truncate")}>
-                        <p className="font-medium text-ink truncate" title={l.cliente}>{l.cliente}</p>
-                        <p className="text-[11px] text-ink-subtle truncate">
-                          <Link href={`/contratos/${l.contratoId}`} className="hover:underline">{l.contratoNumero}</Link> · {l.frequencia}{l.aprovacaoAutomatica ? " · aprova sozinho" : ""}
-                        </p>
-                      </td>
-                      <td className={cn(PLANILHA.td, PLANILHA.numero, "font-semibold text-ink")} data-valor>{valorSemMoeda(l.valor)}</td>
-                      <td className={PLANILHA.td}><Situacao l={l} /></td>
-                      <td className={cn(PLANILHA.td, "truncate")}>
-                        {e?.medicao ? (
-                          <>
-                            <Link href={`/financeiro/medicoes/${e.medicao.id}`} className="font-mono text-[11px] text-acento hover:underline" data-medicao={e.medicao.id}>{e.medicao.numero}</Link>
-                            <p className="text-[11px] text-ink-subtle truncate">{LABELS_STATUS_MEDICAO[e.medicao.status] ?? e.medicao.status}</p>
-                          </>
-                        ) : "—"}
-                      </td>
-                      <td className={cn(PLANILHA.td, "hidden lg:table-cell")} data-nf>{e ? <Nf e={e} /> : "—"}</td>
-                      <td className={cn(PLANILHA.td, "hidden lg:table-cell")} data-boleto>{e ? <Boletos e={e} /> : "—"}</td>
-                      <td className={PLANILHA.td}>
-                        {e?.erro ? <p className="text-atrasado-texto line-clamp-2" title={e.erro} data-erro>{e.erro}</p> : <span className="text-ink-subtle">—</span>}
-                        {e && e.tentativas > 0 && !retentavel(e.situacao) && <p className="text-[11px] text-ink-subtle">{e.tentativas} de 3 tentativas</p>}
-                        {e && retentavel(e.situacao) && <BotaoTentar id={e.id} ocupado={ocupado === e.id} onTentar={tentar} />}
-                      </td>
-                    </tr>
+                    <li key={l.contratoId} className="px-4 py-3 space-y-1" data-linha-contrato={l.contratoId}>
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0">
+                          <p className="font-medium text-ink truncate">{l.cliente}</p>
+                          <p className="text-xs text-ink-muted truncate">{l.contratoNumero} · {l.frequencia}</p>
+                        </div>
+                        <p className="font-bold text-ink tabular-nums shrink-0">{formatarMoeda(l.valor)}</p>
+                      </div>
+                      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
+                        <Situacao l={l} />
+                        {e?.medicao && <Link href={`/financeiro/medicoes/${e.medicao.id}`} className="text-acento hover:underline">{e.medicao.numero}</Link>}
+                        {e?.nf && <span className="text-ink-muted" data-nf-cartao>NF <Nf e={e} /></span>}
+                        {e && e.cobrancas.some((c) => c.boleto) && (
+                          <span className="inline-flex flex-wrap gap-x-1 text-ink-muted" data-boleto-cartao>Boleto {e.cobrancas.filter((c) => c.boleto).map((c) => (
+                            <Link key={c.id} href={hrefConta(c.id)} className="text-acento hover:underline">{BOLETO[c.boleto!] ?? c.boleto}</Link>
+                          ))}</span>
+                        )}
+                      </div>
+                      {e?.erro && <p className="text-xs text-atrasado-texto" data-erro>{e.erro}</p>}
+                      {e && retentavel(e.situacao) && <BotaoTentar id={e.id} ocupado={ocupado === e.id} onTentar={tentar} />}
+                    </li>
                   );
                 })}
-              </tbody>
-            </table>
-          </div>
+              </ul>
+            )}
+            linhas={visiveis.map((l) => {
+              const e = l.execucao;
+              return {
+                id: l.contratoId, atributos: { "data-linha-contrato": l.contratoId }, titulos: { cliente: l.cliente, erro: e?.erro ?? undefined },
+                celulas: {
+                  cliente: (
+                    <span className="block min-w-0">
+                      <span className="block font-medium text-ink truncate">{l.cliente}</span>
+                      <span className="block text-[11px] text-ink-subtle truncate">
+                        <Link href={`/contratos/${l.contratoId}`} className="hover:underline">{l.contratoNumero}</Link> · {l.frequencia}{l.aprovacaoAutomatica ? " · aprova sozinho" : ""}
+                      </span>
+                    </span>
+                  ),
+                  valor: <span className="font-semibold text-ink" data-valor>{valorSemMoeda(l.valor)}</span>,
+                  situacao: <Situacao l={l} />,
+                  medicao: e?.medicao ? (
+                    <span className="block min-w-0">
+                      <Link href={`/financeiro/medicoes/${e.medicao.id}`} className="font-mono text-[11px] text-acento hover:underline" data-medicao={e.medicao.id}>{e.medicao.numero}</Link>
+                      <span className="block text-[11px] text-ink-subtle truncate">{LABELS_STATUS_MEDICAO[e.medicao.status] ?? e.medicao.status}</span>
+                    </span>
+                  ) : "—",
+                  nf: <span data-nf>{e ? <Nf e={e} /> : "—"}</span>,
+                  boleto: <span data-boleto>{e ? <Boletos e={e} /> : "—"}</span>,
+                  erro: (
+                    <span className="block">
+                      {e?.erro ? <span className="block text-atrasado-texto line-clamp-2" data-erro>{e.erro}</span> : <span className="text-ink-subtle">—</span>}
+                      {e && e.tentativas > 0 && !retentavel(e.situacao) && <span className="block text-[11px] text-ink-subtle">{e.tentativas} de 3 tentativas</span>}
+                      {e && retentavel(e.situacao) && <BotaoTentar id={e.id} ocupado={ocupado === e.id} onTentar={tentar} />}
+                    </span>
+                  ),
+                },
+              };
+            })}
+          />
         </section>
       )}
     </div>

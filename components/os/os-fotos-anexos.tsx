@@ -15,7 +15,7 @@ import { usePermissoes } from "@/components/providers/permissoes-provider";
 import { cn, formatarDataHora } from "@/lib/utils";
 import { podeVisualizarInline } from "@/lib/anexos";
 import {
-  agruparGaleria, LEGENDA_MAX, limparLegenda, MSG_LEGENDA, MSG_REFERENCIA, nomeArquivoFoto, REFERENCIA_GERAL,
+  agruparGaleria, LEGENDA_MAX, limparLegenda, MSG_LEGENDA, MSG_REFERENCIA, nomeArquivoFoto, podeRestaurarLegenda, REFERENCIA_GERAL,
   type DocumentoGaleria, type FotoGaleria, type Galeria, type SecaoGaleria,
 } from "@/lib/os/galeria";
 
@@ -404,27 +404,34 @@ function ModalEnviarFoto({ osId, equipamentos, referenciaInicial, onFechar, onEn
   );
 }
 
-/** Editar a legenda de uma foto da galeria (qualquer origem). O servidor confere a permissão e grava no histórico. */
+/**
+ * Editar a legenda de uma foto da galeria (qualquer origem). O servidor confere a permissão e grava no histórico.
+ * Foto com legenda do sistema (execução com momento/item, serviço adicional): "Restaurar legenda do sistema".
+ */
 function ModalLegenda({ osId, foto, onFechar, onSalva }: { osId: string; foto: FotoGaleria; onFechar: () => void; onSalva: (legenda: string) => void }) {
   const [legenda, setLegenda] = useState(foto.semReferencia ? "" : foto.legenda);
   const [tentou, setTentou] = useState(false);
-  const [salvando, setSalvando] = useState(false);
+  const [salvando, setSalvando] = useState<"salvar" | "restaurar" | null>(null);
   const [erro, setErro] = useState<string | null>(null);
   const valida = limparLegenda(legenda);
+
+  async function enviar(qual: "salvar" | "restaurar", corpo: Record<string, unknown>) {
+    setSalvando(qual); setErro(null);
+    const res = await fetch(`/api/ordens/${osId}/fotos/${foto.id}?origem=${foto.origem}`, {
+      method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(corpo),
+    }).catch(() => null);
+    const data = await res?.json().catch(() => ({}));
+    setSalvando(null);
+    if (!res?.ok) { setErro(data?.erro ?? "Não foi possível salvar a legenda."); return; }
+    onSalva(data.legenda);
+    toast(qual === "restaurar" ? "Legenda do sistema restaurada." : "Legenda atualizada.");
+  }
 
   async function salvar() {
     setTentou(true);
     if (!valida) return;
     if (valida === foto.legenda) { onFechar(); return; }
-    setSalvando(true); setErro(null);
-    const res = await fetch(`/api/ordens/${osId}/fotos/${foto.id}?origem=${foto.origem}`, {
-      method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ legenda: valida }),
-    }).catch(() => null);
-    const data = await res?.json().catch(() => ({}));
-    setSalvando(false);
-    if (!res?.ok) { setErro(data?.erro ?? "Não foi possível salvar a legenda."); return; }
-    onSalva(data.legenda);
-    toast("Legenda atualizada.");
+    await enviar("salvar", { legenda: valida });
   }
 
   return (
@@ -445,8 +452,14 @@ function ModalLegenda({ osId, foto, onFechar, onSalva }: { osId: string; foto: F
           </div>
         )}
         <div className="flex flex-col-reverse sm:flex-row sm:justify-end gap-2">
+          {podeRestaurarLegenda(foto) && (
+            <Button variant="ghost" className="sm:mr-auto" onClick={() => enviar("restaurar", { restaurar: true })} loading={salvando === "restaurar"}
+              disabled={salvando === "salvar"} title={`Volta para a legenda automática: “${foto.legendaSistema}”. Fica no histórico da OS.`} data-restaurar-legenda>
+              Restaurar legenda do sistema
+            </Button>
+          )}
           <Button variant="secondary" onClick={onFechar}>Cancelar</Button>
-          <Button onClick={salvar} loading={salvando} data-salvar-legenda>Salvar legenda</Button>
+          <Button onClick={salvar} loading={salvando === "salvar"} disabled={salvando === "restaurar"} data-salvar-legenda>Salvar legenda</Button>
         </div>
       </div>
     </Modal>

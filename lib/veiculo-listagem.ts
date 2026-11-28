@@ -15,9 +15,12 @@ export const TIPOS_VEICULO: Record<string, string> = { CARRO: "Carro", VAN: "Van
 export type OrdemVeiculos = "placa" | "modelo" | "ano" | "revisao";
 const ORDENS: OrdemVeiculos[] = ["placa", "modelo", "ano", "revisao"];
 
-/** Avisos da frota (um por vez, como o filtro de garantia dos equipamentos). */
-export type AvisoVeiculo = "" | "doc_vencido" | "doc_vencendo" | "revisao_vencida" | "revisao_proxima" | "sem_checklist";
-const AVISOS: AvisoVeiculo[] = ["doc_vencido", "doc_vencendo", "revisao_vencida", "revisao_proxima", "sem_checklist"];
+/**
+ * Avisos da frota (um por vez, como o filtro de garantia dos equipamentos). `documentos` = vencido OU vencendo
+ * nos próximos 30 dias: o que o sino conta em "Documentos de veículo vencendo" (o link do sino abre com ele).
+ */
+export type AvisoVeiculo = "" | "doc_vencido" | "doc_vencendo" | "documentos" | "revisao_vencida" | "revisao_proxima" | "sem_checklist";
+const AVISOS: AvisoVeiculo[] = ["doc_vencido", "doc_vencendo", "documentos", "revisao_vencida", "revisao_proxima", "sem_checklist"];
 
 export interface FiltrosVeiculos {
   q: string;
@@ -66,6 +69,8 @@ export function whereAviso(aviso: AvisoVeiculo, agora = new Date()): Prisma.Veic
       return { OR: [{ documentos: { some: { dataVencimento: { lt: inicioHoje } } } }, { seguroVencimento: { lt: inicioHoje } }] };
     case "doc_vencendo":
       return { OR: [{ documentos: { some: { dataVencimento: { gte: inicioHoje, lt: limite } } } }, { seguroVencimento: { gte: inicioHoje, lt: limite } }] };
+    case "documentos":
+      return { OR: [{ documentos: { some: { dataVencimento: { lt: limite } } } }, { seguroVencimento: { lt: limite } }] };
     case "revisao_vencida":
       // Pela data OU pela quilometragem já alcançada
       return { OR: [{ proximaRevisaoData: { lt: inicioHoje } }, { quilometragemAtual: { gte: prisma.veiculo.fields.proximaRevisaoKm } }] };

@@ -43,7 +43,7 @@ import { sugestoesDaNota, vincularNota } from "@/lib/compras/conciliacao-server"
 import { reservarNumeros } from "@/lib/numeracao-server";
 import { whereNotasCompra } from "@/lib/listas/filtros";
 import { lerDanfe, valoresDaNota, type ValoresNota } from "@/lib/compras/danfe";
-import { motivoNaoDescartarNota } from "@/lib/cadastros/regras-arquivar";
+import { motivoNaoDescartarNota, motivoNaoRestaurarNota, msgNotaJaImportadaDeNovo } from "@/lib/cadastros/regras-arquivar";
 
 /** Recusa com status HTTP e dados extras (ex.: a nota que já existe). */
 export { LABEL_STATUS_NOTA };
@@ -271,6 +271,8 @@ export async function descartarNota({ empresaId, usuarioId, id, motivo }: { empr
       empresaId, notaId: n.id, chaveAcesso: n.chaveAcesso, numero: n.numero, serie: n.serie, emitenteNome: n.emitenteNome,
       emitenteCnpj: n.emitenteCnpj, valorTotal: n.valorTotal, dataEmissao: n.dataEmissao, statusNaHora: n.status,
       motivo: motivo || null, usuarioId,
+      // O XML como foi importado: é com ele que a nota se restaura (restaurarNotaDescartada)
+      xml: n.xml || null,
     } });
     const apagadas = await tx.notaCompra.deleteMany({ where: { id, empresaId, status: { not: "LANCADA" } } });
     if (!apagadas.count) throw new ErroNota("Nota já lançada não se descarta: o estorno é pela conta a pagar e pelo ajuste de estoque.", 409);
@@ -278,12 +280,62 @@ export async function descartarNota({ empresaId, usuarioId, id, motivo }: { empr
   });
 }
 
-/** Os descartes recentes (a lista de notas mostra quem descartou o quê e quando). */
-export function descartesRecentes(empresaId: string, take = 20) {
-  return prisma.notaCompraDescarte.findMany({
+/**
+ * Os descartes recentes (a lista de notas mostra quem descartou o quê e quando, e quem restaurou). O XML
+ * não vem (pesado): só se o descarte tem XML (`temXml` — o botão "Restaurar" depende dele).
+ */
+export async function descartesRecentes(empresaId: string, take = 20) {
+  const descartes = await prisma.notaCompraDescarte.findMany({
     where: { empresaId }, orderBy: { descartadoEm: "desc" }, take,
-    select: { id: true, numero: true, serie: true, emitenteNome: true, valorTotal: true, motivo: true, descartadoEm: true, usuario: { select: { nome: true } } },
+    select: {
+      id: true, numero: true, serie: true, emitenteNome: true, valorTotal: true, motivo: true, descartadoEm: true, usuario: { select: { nome: true } },
+      restauradaEm: true, restauradaPorId: true, notaRestauradaId: true,
+    },
   });
+  const ids = descartes.map((d) => d.id);
+  const quem = [...new Set(descartes.map((d) => d.restauradaPorId).filter((x): x is string => !!x))];
+  const [comXml, usuarios] = await Promise.all([
+    ids.length ? prisma.notaCompraDescarte.findMany({ where: { empresaId, id: { in: ids }, xml: { not: null } }, select: { id: true } }) : [],
+    quem.length ? prisma.usuario.findMany({ where: { id: { in: quem }, empresaId }, select: { id: true, nome: true } }) : [],
+  ]);
+  const temXml = new Set(comXml.map((d) => d.id));
+  const nomes = new Map(usuarios.map((u) => [u.id, u.nome]));
+  return descartes.map(({ restauradaPorId, ...d }) => ({
+    ...d, temXml: temXml.has(d.id), restauradaPor: restauradaPorId ? nomes.get(restauradaPorId) ?? null : null,
+  }));
+}
+
+/**
+ * RESTAURAR a nota descartada: reimporta pelo XML guardado no descarte — o MESMO caminho da importação
+ * (importarNota: fornecedor, de-para, rascunho financeiro) — e marca no descarte quem restaurou, quando e
+ * qual nota voltou (a trilha). Recusa: descarte de outra empresa (404), antigo sem XML ou já restaurado
+ * (409), e a nota que já foi importada de novo por alguém (409, com o link dela).
+ */
+export async function restaurarNotaDescartada({ empresaId, usuarioId, descarteId }: { empresaId: string; usuarioId: string | null; descarteId: string }) {
+  const d = await prisma.notaCompraDescarte.findFirst({
+    where: { id: descarteId, empresaId }, select: { id: true, xml: true, restauradaEm: true, chaveAcesso: true, numero: true, serie: true },
+  });
+  if (!d) throw new ErroNota("Nota descartada não encontrada.", 404);
+  const motivo = motivoNaoRestaurarNota({ temXml: !!d.xml, restauradaEm: d.restauradaEm });
+  if (motivo) throw new ErroNota(motivo, 409);
+  const deNovo = await prisma.notaCompra.findFirst({ where: { empresaId, chaveAcesso: d.chaveAcesso }, select: { id: true, numero: true, serie: true, criadoEm: true } });
+  if (deNovo) throw new ErroNota(msgNotaJaImportadaDeNovo({ numero: deNovo.numero, serie: deNovo.serie, em: dataBr(deNovo.criadoEm) }), 409, { notaId: deNovo.id });
+
+  let r: Awaited<ReturnType<typeof importarNota>>;
+  try {
+    r = await importarNota({ empresaId, usuarioId, xml: d.xml! });
+  } catch (e) {
+    // Importada no meio do caminho (corrida): a mesma mensagem clara
+    if (e instanceof ErroNota && e.status === 409 && typeof e.extra.notaId === "string") {
+      const n = await prisma.notaCompra.findFirst({ where: { id: e.extra.notaId, empresaId }, select: { numero: true, serie: true, criadoEm: true } });
+      if (n) throw new ErroNota(msgNotaJaImportadaDeNovo({ numero: n.numero, serie: n.serie, em: dataBr(n.criadoEm) }), 409, e.extra);
+    }
+    throw e;
+  }
+  await prisma.notaCompraDescarte.update({
+    where: { id: d.id }, data: { restauradaEm: new Date(), restauradaPorId: usuarioId, notaRestauradaId: r.nota.id },
+  });
+  return r;
 }
 
 /* ───────── Conciliar (de-para) ───────── */

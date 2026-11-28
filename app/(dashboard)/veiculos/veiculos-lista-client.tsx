@@ -102,9 +102,9 @@ export function VeiculosListaClient({ itens, total, filtros: f, tipos, resumo }:
           icone={Wrench} cor="text-atencao-texto" rotulo="Em manutenção" valor={resumo.manutencao} />
         <ChipResumo id="inativos" ativo={f.status === "inativo"} onClick={() => navegar({ status: f.status === "inativo" ? null : "inativo", aviso: null })}
           icone={Ban} cor="text-ink-muted" rotulo="Inativos" valor={resumo.inativos} />
-        <ChipResumo id="doc_vencido" ativo={f.aviso === "doc_vencido"} onClick={() => alternarAviso("doc_vencido")}
+        <ChipResumo id="doc_vencido" ativo={f.aviso === "doc_vencido" || f.aviso === "documentos"} onClick={() => alternarAviso("doc_vencido")}
           icone={FileX} cor="text-atrasado" rotulo="Documento vencido" valor={resumo.docVencido} />
-        <ChipResumo id="doc_vencendo" ativo={f.aviso === "doc_vencendo"} onClick={() => alternarAviso("doc_vencendo")}
+        <ChipResumo id="doc_vencendo" ativo={f.aviso === "doc_vencendo" || f.aviso === "documentos"} onClick={() => alternarAviso("doc_vencendo")}
           icone={FileWarning} cor="text-atencao-texto" rotulo="Documento vencendo" valor={resumo.docVencendo} />
         <ChipResumo id="revisao_vencida" ativo={f.aviso === "revisao_vencida"} onClick={() => alternarAviso("revisao_vencida")}
           icone={Wrench} cor="text-atrasado" rotulo="Revisão vencida" valor={resumo.revisaoVencida} />

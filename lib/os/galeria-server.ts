@@ -5,7 +5,7 @@
 import { prisma } from "@/lib/prisma";
 import { apresentarEquipamento, SELECT_EQUIP_EXECUCAO, STATUS_BLOQUEADOS } from "@/lib/execucao/dados";
 import {
-  ehImagem, LEGENDA_ANEXO_SEM, legendaAdicional, legendaExecucao,
+  ehImagem, LEGENDA_ANEXO_SEM, legendaAdicional, legendaDoSistema, legendaExecucao,
   type DocumentoGaleria, type EquipamentoGaleria, type FotoGaleria, type Galeria,
 } from "@/lib/os/galeria";
 
@@ -106,6 +106,7 @@ export async function carregarGaleria(empresaId: string, osId: string): Promise<
       return {
         chave: `EXECUCAO:${f.id}`, origem: "EXECUCAO", id: f.id, src, baixar: src, legenda, equipamentoId: f.equipamentoId,
         atividade: atividadeInfo(f.atividade), item, momento, enviadoPor: f.criadoPor?.nome ?? null, enviadoEm: f.criadoEm.toISOString(),
+        legendaSistema: legendaDoSistema({ origem: "EXECUCAO", momento, item }),
       };
     }),
     ...adicionais.map((f): FotoGaleria => {
@@ -114,6 +115,7 @@ export async function carregarGaleria(empresaId: string, osId: string): Promise<
         chave: `ADICIONAL:${f.id}`, origem: "ADICIONAL", id: f.id, src, baixar: src, legenda: f.legenda ?? legendaAdicional(f.servico.descricao),
         equipamentoId: f.servico.equipamentoId, atividade: atividadeInfo(f.servico.atividade), item: null, momento: null,
         enviadoPor: f.criadoPor?.nome ?? null, enviadoEm: f.criadoEm.toISOString(),
+        legendaSistema: legendaDoSistema({ origem: "ADICIONAL", servico: f.servico.descricao }),
       };
     }),
     ...anexos.filter((a) => ehImagem(a.tipo)).map((a) => fotoDeAnexo(osId, a)),

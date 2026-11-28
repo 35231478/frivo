@@ -55,8 +55,12 @@ function formatarPlaca(v: string): string {
   return s;
 }
 
-export function VeiculoForm({ initialData, ocorrencias, somenteLeitura = false }: {
+const ABAS_VEICULO: Aba[] = ["identificacao", "responsavel", "documentos", "manutencoes", "checklists"];
+
+export function VeiculoForm({ initialData, ocorrencias, somenteLeitura = false, abaInicial }: {
   initialData?: any;
+  /** A aba que abre (`?aba=` da ficha: o sino leva a Documentos ou Checklists) */
+  abaInicial?: string;
   ocorrencias?: { descricao: string; count: number }[];
   /** Sem "veiculos.gerenciar": a ficha abre para consulta, sem salvar nem ler documento por IA. */
   somenteLeitura?: boolean;
@@ -67,7 +71,7 @@ export function VeiculoForm({ initialData, ocorrencias, somenteLeitura = false }
   const isEditing = !!initialData;
   const veiculoId = initialData?.id as string | undefined;
 
-  const [aba, setAba] = useState<Aba>("identificacao");
+  const [aba, setAba] = useState<Aba>(() => (initialData && ABAS_VEICULO.includes(abaInicial as Aba) ? (abaInicial as Aba) : "identificacao"));
   const [erro, setErro] = useState("");
   const [salvando, setSalvando] = useState(false);
   // Enquanto a conferência do CRLV está aberta, o formulário manual fica escondido (evita salvar sem conferir)

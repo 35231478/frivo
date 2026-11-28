@@ -12,6 +12,7 @@ import { ItemMenu, MenuAcoes, SeparadorMenu } from "@/components/ui/menu-acoes";
 import { StatusPill } from "@/components/ui/status-pill";
 import { toast, confirmar } from "@/components/ui/avisos";
 import { PLANILHA } from "@/lib/planilha";
+import { TabelaPro, type ColunaPro, type LinhaPro } from "@/components/listagem/tabela-pro";
 import { cn, formatarData } from "@/lib/utils";
 import {
   CATEGORIA_PADRAO, NOME_MAX, ROTULO_ORIGEM, TOM_VALIDADE,
@@ -31,6 +32,15 @@ export interface ContratoAssinado {
 }
 
 const TAMANHO_MAX_MB = 8;
+
+/** A planilha dos documentos (TabelaPro: largura, mostrar/esconder e ordem por usuário); no celular, cartões */
+const COLUNAS_DOCUMENTOS: ColunaPro[] = [
+  { id: "documento", titulo: "Documento", obrigatoria: true, minimo: 200, classe: "truncate" },
+  { id: "categoria", titulo: "Categoria", largura: 170, classe: "truncate" },
+  { id: "validade", titulo: "Validade", largura: 160 },
+  { id: "enviado", titulo: "Enviado", largura: 170 },
+  { id: "acoes", titulo: "Ações", fixa: true, semTitulo: true, largura: 120, alinhar: "direita", classe: "py-0.5" },
+];
 
 export const AJUDA_DOCUMENTOS =
   "Os papéis desta pessoa num lugar só: o que o RH anexa aqui e o que o próprio colaborador mandou "
@@ -209,40 +219,37 @@ export function DocumentosColaborador({
           Nenhum documento nesta ficha. Anexe o contrato, o ASO e os certificados de NR.
         </p>
       ) : (
-        <>
-          {/* Desktop: planilha */}
-          <div className="hidden sm:block overflow-x-auto">
-            <table className={PLANILHA.tabela} data-tabela-documentos>
-              <thead>
-                <tr className={PLANILHA.cabecalho}>
-                  <th className={cn(PLANILHA.th, "text-left")}>Documento</th>
-                  <th className={cn(PLANILHA.th, "text-left")}>Categoria</th>
-                  <th className={cn(PLANILHA.th, "text-left")}>Validade</th>
-                  <th className={cn(PLANILHA.th, "text-left")}>Enviado</th>
-                  <th className={cn(PLANILHA.th, "w-10")}><span className="sr-only">Ações</span></th>
-                </tr>
-              </thead>
-              <tbody>
-                {mostrarTextoDoContrato && contratoAssinado && <LinhaContrato contrato={contratoAssinado} onVer={() => setVerContrato(true)} />}
+          <TabelaPro
+            tela="documentos-colaborador" quebra="sm" colunas={COLUNAS_DOCUMENTOS} atributos={{ "data-tabela-documentos": true }}
+            cartoes={(
+              <div className="space-y-2" data-cartoes-documentos>
+                {mostrarTextoDoContrato && contratoAssinado && (
+                  <div className="border border-surface-border rounded-lg p-3 space-y-1" data-cartao-contrato>
+                    <div className="flex items-start justify-between gap-2">
+                      <span className="font-medium text-ink flex items-center gap-1.5"><ScrollText className="w-4 h-4 text-acento" /> Contrato assinado</span>
+                      <Button type="button" variant="secondary" onClick={() => setVerContrato(true)} className="text-xs py-1 px-2.5 h-auto">Ver o contrato</Button>
+                    </div>
+                    <p className="text-xs text-ink-muted">
+                      {ROTULO_ORIGEM.ADMISSAO} · {formatarData(contratoAssinado.assinadoEm)}
+                      {contratoAssinado.assinadoPor ? ` · ${contratoAssinado.assinadoPor}` : ""}
+                    </p>
+                  </div>
+                )}
                 {pendentes.map((e) => (
-                  <LinhaPendente
-                    key={e.id} emitido={e} somenteLeitura={somenteLeitura}
-                    onAssinar={() => setAssinando(e)} onCancelar={() => setCancelando(e)}
-                  />
+                  <div key={e.id} className="border border-atencao/30 bg-atencao-claro/40 rounded-lg p-3 space-y-1.5" data-cartao-pendente={e.id}>
+                    <div className="flex items-start justify-between gap-2">
+                      <span className="font-medium text-ink">{e.titulo}</span>
+                      <AcoesPendente emitido={e} somenteLeitura={somenteLeitura}
+                        onAssinar={() => setAssinando(e)} onCancelar={() => setCancelando(e)} />
+                    </div>
+                    <p className="text-xs text-ink-muted">{e.tipoRotulo} · {formatarData(e.criadoEm)}</p>
+                    <StatusPill tom="atencao">Aguardando assinatura</StatusPill>
+                  </div>
                 ))}
                 {docs.map((d) => (
-                  <tr key={d.id} className={cn(PLANILHA.linha, PLANILHA.linhaHover)} data-documento={d.id}>
-                    <td className={PLANILHA.td}>
-                      <span className={PLANILHA.nome}>{d.nome}</span>
-                      {detalheArquivo(d) && <span className={cn(PLANILHA.apagado, "ml-2 text-[11px]")}>{detalheArquivo(d)}</span>}
-                    </td>
-                    <td className={cn(PLANILHA.td, PLANILHA.apagado)}>{rotuloCategoria(d)}</td>
-                    <td className={PLANILHA.td}><SeloValidade data={d.dataVencimento} /></td>
-                    <td className={cn(PLANILHA.td, PLANILHA.apagado)}>
-                      <span className={PLANILHA.data}>{formatarData(d.criadoEm)}</span>
-                      <span className="block text-[11px]">{quemEnviou(d)}</span>
-                    </td>
-                    <td className={cn(PLANILHA.td, "text-right")}>
+                  <div key={d.id} className="border border-surface-border rounded-lg p-3 space-y-1.5" data-cartao-documento={d.id}>
+                    <div className="flex items-start justify-between gap-2">
+                      <span className="font-medium text-ink">{d.nome}</span>
                       <AcoesDocumento
                         doc={d} colaboradorId={colaboradorId} podeExcluir={podeExcluir}
                         somenteLeitura={somenteLeitura} ocupado={ocupado === d.id}
@@ -250,62 +257,52 @@ export function DocumentosColaborador({
                         emitido={emitidoPorDocumento.get(d.id) ?? null}
                         onCancelarEmitido={() => setCancelando(emitidoPorDocumento.get(d.id) ?? null)}
                       />
-                    </td>
-                  </tr>
+                    </div>
+                    <p className="text-xs text-ink-muted">
+                      {rotuloCategoria(d)}
+                      {detalheArquivo(d) ? ` · ${detalheArquivo(d)}` : ""}
+                    </p>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      {d.dataVencimento && <SeloValidade data={d.dataVencimento} />}
+                      <span className="text-xs text-ink-subtle">{formatarData(d.criadoEm)} · {quemEnviou(d)}</span>
+                    </div>
+                  </div>
                 ))}
-              </tbody>
-            </table>
-          </div>
-
-          {/* Celular: cartões */}
-          <div className="sm:hidden space-y-2" data-cartoes-documentos>
-            {mostrarTextoDoContrato && contratoAssinado && (
-              <div className="border border-surface-border rounded-lg p-3 space-y-1" data-cartao-contrato>
-                <div className="flex items-start justify-between gap-2">
-                  <span className="font-medium text-ink flex items-center gap-1.5"><ScrollText className="w-4 h-4 text-acento" /> Contrato assinado</span>
-                  <Button type="button" variant="secondary" onClick={() => setVerContrato(true)} className="text-xs py-1 px-2.5 h-auto">Ver o contrato</Button>
-                </div>
-                <p className="text-xs text-ink-muted">
-                  {ROTULO_ORIGEM.ADMISSAO} · {formatarData(contratoAssinado.assinadoEm)}
-                  {contratoAssinado.assinadoPor ? ` · ${contratoAssinado.assinadoPor}` : ""}
-                </p>
               </div>
             )}
-            {pendentes.map((e) => (
-              <div key={e.id} className="border border-atencao/30 bg-atencao-claro/40 rounded-lg p-3 space-y-1.5" data-cartao-pendente={e.id}>
-                <div className="flex items-start justify-between gap-2">
-                  <span className="font-medium text-ink">{e.titulo}</span>
-                  <AcoesPendente emitido={e} somenteLeitura={somenteLeitura}
-                    onAssinar={() => setAssinando(e)} onCancelar={() => setCancelando(e)} />
-                </div>
-                <p className="text-xs text-ink-muted">{e.tipoRotulo} · {formatarData(e.criadoEm)}</p>
-                <StatusPill tom="atencao">Aguardando assinatura</StatusPill>
-              </div>
-            ))}
-            {docs.map((d) => (
-              <div key={d.id} className="border border-surface-border rounded-lg p-3 space-y-1.5" data-cartao-documento={d.id}>
-                <div className="flex items-start justify-between gap-2">
-                  <span className="font-medium text-ink">{d.nome}</span>
-                  <AcoesDocumento
-                    doc={d} colaboradorId={colaboradorId} podeExcluir={podeExcluir}
-                    somenteLeitura={somenteLeitura} ocupado={ocupado === d.id}
-                    onEditar={() => setEditando(d)} onExcluir={() => excluir(d)}
-                    emitido={emitidoPorDocumento.get(d.id) ?? null}
-                    onCancelarEmitido={() => setCancelando(emitidoPorDocumento.get(d.id) ?? null)}
-                  />
-                </div>
-                <p className="text-xs text-ink-muted">
-                  {rotuloCategoria(d)}
-                  {detalheArquivo(d) ? ` · ${detalheArquivo(d)}` : ""}
-                </p>
-                <div className="flex items-center gap-2 flex-wrap">
-                  {d.dataVencimento && <SeloValidade data={d.dataVencimento} />}
-                  <span className="text-xs text-ink-subtle">{formatarData(d.criadoEm)} · {quemEnviou(d)}</span>
-                </div>
-              </div>
-            ))}
-          </div>
-        </>
+            linhas={[
+              ...(mostrarTextoDoContrato && contratoAssinado ? [linhaContrato(contratoAssinado, () => setVerContrato(true))] : []),
+              ...pendentes.map((e) => linhaPendente(e, somenteLeitura, () => setAssinando(e), () => setCancelando(e))),
+              ...docs.map((d): LinhaPro => ({
+                id: d.id, atributos: { "data-documento": d.id }, titulos: { documento: d.nome },
+                celulas: {
+                  documento: (
+                    <span className="block truncate">
+                      <span className={PLANILHA.nome}>{d.nome}</span>
+                      {detalheArquivo(d) && <span className={cn(PLANILHA.apagado, "ml-2 text-[11px]")}>{detalheArquivo(d)}</span>}
+                    </span>
+                  ),
+                  categoria: <span className={PLANILHA.apagado}>{rotuloCategoria(d)}</span>,
+                  validade: <SeloValidade data={d.dataVencimento} />,
+                  enviado: (
+                    <span className={cn("block", PLANILHA.apagado)}>
+                      <span className={PLANILHA.data}>{formatarData(d.criadoEm)}</span>
+                      <span className="block text-[11px] truncate">{quemEnviou(d)}</span>
+                    </span>
+                  ),
+                  acoes: (
+                    <AcoesDocumento
+                      doc={d} colaboradorId={colaboradorId} podeExcluir={podeExcluir}
+                      somenteLeitura={somenteLeitura} ocupado={ocupado === d.id}
+                      onEditar={() => setEditando(d)} onExcluir={() => excluir(d)}
+                      emitido={emitidoPorDocumento.get(d.id) ?? null}
+                      onCancelarEmitido={() => setCancelando(emitidoPorDocumento.get(d.id) ?? null)}
+                    />
+                  ),
+                },
+              })),
+            ]}
+          />
       )}
 
       {anexando && (
@@ -362,56 +359,56 @@ function quemEnviou(d: DocumentoLinha): string {
   return d.criadoPorNome ? `${rotulo}: ${d.criadoPorNome}` : rotulo;
 }
 
-function LinhaContrato({ contrato, onVer }: { contrato: ContratoAssinado; onVer: () => void }) {
-  return (
-    <tr className={cn(PLANILHA.linha, PLANILHA.linhaHover)} data-linha-contrato>
-      <td className={PLANILHA.td}>
+function linhaContrato(contrato: ContratoAssinado, onVer: () => void): LinhaPro {
+  return {
+    id: "contrato-assinado", atributos: { "data-linha-contrato": "" },
+    celulas: {
+      documento: (
         <span className={cn(PLANILHA.nome, "inline-flex items-center gap-1.5")}>
           <ScrollText className="w-3.5 h-3.5 text-acento" /> Contrato assinado
         </span>
-      </td>
-      <td className={cn(PLANILHA.td, PLANILHA.apagado)}>Contrato de trabalho</td>
-      <td className={cn(PLANILHA.td, "text-ink-subtle")}>—</td>
-      <td className={cn(PLANILHA.td, PLANILHA.apagado)}>
-        <span className={PLANILHA.data}>{formatarData(contrato.assinadoEm)}</span>
-        <span className="block text-[11px]">{ROTULO_ORIGEM.ADMISSAO}</span>
-      </td>
-      <td className={cn(PLANILHA.td, "text-right")}>
+      ),
+      categoria: <span className={PLANILHA.apagado}>Contrato de trabalho</span>,
+      validade: <span className="text-ink-subtle">—</span>,
+      enviado: (
+        <span className={cn("block", PLANILHA.apagado)}>
+          <span className={PLANILHA.data}>{formatarData(contrato.assinadoEm)}</span>
+          <span className="block text-[11px]">{ROTULO_ORIGEM.ADMISSAO}</span>
+        </span>
+      ),
+      acoes: (
         <Button type="button" variant="secondary" onClick={onVer} className="text-xs py-1 px-2.5 h-auto" data-ver-contrato>
           Ver o contrato
         </Button>
-      </td>
-    </tr>
-  );
+      ),
+    },
+  };
 }
 
 /**
  * O papel gerado que AINDA NÃO FOI ASSINADO: existe no histórico, não é anexo. Fica na mesma
  * tabela, marcado, porque é exatamente isso que o RH precisa ver — falta a assinatura de alguém.
  */
-function LinhaPendente({ emitido, somenteLeitura, onAssinar, onCancelar }: {
-  emitido: EmitidoDaTela; somenteLeitura: boolean; onAssinar: () => void; onCancelar: () => void;
-}) {
-  return (
-    <tr className={cn(PLANILHA.linha, PLANILHA.linhaHover)} data-linha-pendente={emitido.id}>
-      <td className={PLANILHA.td}>
+function linhaPendente(emitido: EmitidoDaTela, somenteLeitura: boolean, onAssinar: () => void, onCancelar: () => void): LinhaPro {
+  return {
+    id: `pendente-${emitido.id}`, atributos: { "data-linha-pendente": emitido.id }, titulos: { documento: emitido.titulo },
+    celulas: {
+      documento: (
         <span className={cn(PLANILHA.nome, "inline-flex items-center gap-1.5")}>
           <FileSignature className="w-3.5 h-3.5 text-acento" /> {emitido.titulo}
         </span>
-      </td>
-      <td className={cn(PLANILHA.td, PLANILHA.apagado)}>{emitido.tipoRotulo}</td>
-      <td className={PLANILHA.td}>
-        <StatusPill tom="atencao">Aguardando assinatura</StatusPill>
-      </td>
-      <td className={cn(PLANILHA.td, PLANILHA.apagado)}>
-        <span className={PLANILHA.data}>{formatarData(emitido.criadoEm)}</span>
-        <span className="block text-[11px]">{emitido.criadoPor ? `Gerado por ${emitido.criadoPor}` : "Gerado por modelo"}</span>
-      </td>
-      <td className={cn(PLANILHA.td, "text-right")}>
-        <AcoesPendente emitido={emitido} somenteLeitura={somenteLeitura} onAssinar={onAssinar} onCancelar={onCancelar} />
-      </td>
-    </tr>
-  );
+      ),
+      categoria: <span className={PLANILHA.apagado}>{emitido.tipoRotulo}</span>,
+      validade: <StatusPill tom="atencao">Aguardando assinatura</StatusPill>,
+      enviado: (
+        <span className={cn("block", PLANILHA.apagado)}>
+          <span className={PLANILHA.data}>{formatarData(emitido.criadoEm)}</span>
+          <span className="block text-[11px]">{emitido.criadoPor ? `Gerado por ${emitido.criadoPor}` : "Gerado por modelo"}</span>
+        </span>
+      ),
+      acoes: <AcoesPendente emitido={emitido} somenteLeitura={somenteLeitura} onAssinar={onAssinar} onCancelar={onCancelar} />,
+    },
+  };
 }
 
 function AcoesPendente({ emitido, somenteLeitura, onAssinar, onCancelar }: {
