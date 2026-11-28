@@ -119,7 +119,10 @@ describe("Configurações › Comissões", () => {
       "Todos · Todos os serviços · 2% da venda", "Vendedores (cargo) · Instalação (categoria) · 5% da venda", "Todos · Peças · R$ 10,00 por item",
     ]);
     expect(texto($("[data-regra='r3']"))).toContain("Desativada");
-    expect(texto($("[data-exemplo-precedencia]"))).toContain("vence");
+    expect($$("[data-ordem-precedencia] li").map((l) => texto(l))).toEqual([
+      "1. Pessoa + um serviço", "2. Cargo + um serviço", "3. Pessoa + categoria", "4. Cargo + categoria", "5. Pessoa + todos os serviços (o fixo)", "6. Cargo + todos os serviços",
+    ]);
+    expect(texto($("[data-exemplo-precedencia]"))).toContain("Ana tem 7% fixo");
   });
 
   it("empresa sem regra: o aviso de que nada de comissão aparece", async () => {

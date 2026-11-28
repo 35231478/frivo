@@ -3,7 +3,8 @@
  *
  *  - REGRA em linhas: Quem (pessoa, cargo ou todos) · Papel (nesta leva só Vendedor) · Sobre (todos os serviços,
  *    categoria de serviço, um serviço ou peças) · Base (% da venda, % do lucro ou valor fixo por item) · Valor.
- *  - A MAIS ESPECÍFICA VENCE: pessoa > cargo > todos; no mesmo "quem", um serviço > categoria > todos os serviços.
+ *  - O ITEM MANDA, A PESSOA DESEMPATA (como a "comissão diferenciada" do OMIE, que vale sobre a fixa): um serviço >
+ *    categoria > todos os serviços; no mesmo alvo, pessoa > cargo > todos. A primeira que casar vence.
  *    (Peças só valem para as linhas de peça/produto; serviço nunca pega regra de peça e vice-versa.)
  *  - A comissão nasce CONGELADA na aprovação do orçamento, por item: regra, base, taxa e valor daquele dia, e
  *    QUANDO fica devida (configuração da empresa naquele dia). Mudar a regra depois não mexe no passado.
@@ -71,7 +72,9 @@ export interface ItemVenda {
   custo: number | null;
 }
 
-const igualTexto = (a?: string | null, b?: string | null) => !!a && !!b && a.trim().toLocaleLowerCase("pt-BR") === b.trim().toLocaleLowerCase("pt-BR");
+/** Categoria é texto livre: compara sem maiúscula e sem acento ("Instalacao" = "Instalação") */
+const semAcento = (t: string) => t.normalize("NFD").replace(/\p{M}/gu, "").trim().toLocaleLowerCase("pt-BR");
+const igualTexto = (a?: string | null, b?: string | null) => !!a && !!b && semAcento(a) === semAcento(b);
 
 /** A regra vale para esta pessoa, neste papel, neste item? */
 export function regraSeAplica(r: RegraComissao, pessoa: Beneficiario, item: Pick<ItemVenda, "tipo" | "servicoId" | "categoria">, papel: Papel): boolean {
@@ -88,8 +91,17 @@ export function regraSeAplica(r: RegraComissao, pessoa: Beneficiario, item: Pick
 const PESO_QUEM: Record<Quem, number> = { PESSOA: 3, CARGO: 2, TODOS: 1 };
 const PESO_SOBRE: Record<Sobre, number> = { SERVICO: 3, CATEGORIA: 2, TODOS_SERVICOS: 1, PECAS: 1 };
 
-/** O peso da regra: primeiro QUEM (pessoa > cargo > todos), depois SOBRE (serviço > categoria > todos). */
-export const pesoDaRegra = (r: Pick<RegraComissao, "quemTipo" | "sobreTipo">) => PESO_QUEM[r.quemTipo] * 10 + PESO_SOBRE[r.sobreTipo];
+/**
+ * O peso da regra: primeiro SOBRE (o item: serviço > categoria > todos os serviços), depois QUEM (pessoa > cargo >
+ * todos). Dá a ordem: pessoa + serviço, cargo + serviço, pessoa + categoria, cargo + categoria, pessoa + todos (o
+ * "fixo" da pessoa), cargo + todos. "Todos" fecha cada nível. Peça só casa com regra de peça (lá decide o QUEM).
+ */
+export const pesoDaRegra = (r: Pick<RegraComissao, "quemTipo" | "sobreTipo">) => PESO_SOBRE[r.sobreTipo] * 10 + PESO_QUEM[r.quemTipo];
+
+/** A ordem que a tela mostra (a primeira que casar vence) */
+export const ORDEM_PRECEDENCIA = [
+  "Pessoa + um serviço", "Cargo + um serviço", "Pessoa + categoria", "Cargo + categoria", "Pessoa + todos os serviços (o fixo)", "Cargo + todos os serviços",
+] as const;
 
 /** A regra que vale para o item: a mais específica entre as que se aplicam (null = sem comissão neste item). */
 export function regraVencedora(regras: readonly RegraComissao[], pessoa: Beneficiario, item: Pick<ItemVenda, "tipo" | "servicoId" | "categoria">, papel: Papel = "VENDEDOR"): RegraComissao | null {

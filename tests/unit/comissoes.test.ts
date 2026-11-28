@@ -6,7 +6,7 @@
 import { describe, expect, it } from "vitest";
 import {
   alvoLiberado, chaveDaRegra, comissoesDaVenda, comissoesPorPessoa, descricaoDaRegra, fimDaCompetencia, fracaoRecebida, itensDaVenda,
-  movimentoNecessario, normalizarRegra, pesoDaRegra, regraSchema, regraVencedora, situacaoDaComissao, trocarVendedorSchema, valorDaComissao,
+  movimentoNecessario, normalizarRegra, ORDEM_PRECEDENCIA, pesoDaRegra, regraSchema, regraVencedora, situacaoDaComissao, trocarVendedorSchema, valorDaComissao,
   type RegraComissao,
 } from "@/lib/comissoes/regras";
 import { folhaComComissoes, linhasDoCsv, totalDaLinha } from "@/lib/desempenho/fechamento";
@@ -15,27 +15,49 @@ const r = (id: string, x: Partial<RegraComissao>): RegraComissao => ({ id, quemT
 const ana = { usuarioId: "uAna", cargoId: "cgVend" };
 const instalacao = { tipo: "SERVICO" as const, servicoId: "sInst", categoria: "Instalação" };
 
-describe("precedência: a regra mais específica vence", () => {
+describe("precedência: o ITEM manda, a pessoa desempata (como a comissão diferenciada do OMIE)", () => {
   const regras = [
     r("todos", { valor: 2 }),
     r("cargoCat", { quemTipo: "CARGO", cargoId: "cgVend", sobreTipo: "CATEGORIA", categoria: "instalação", valor: 5 }),
     r("cargoServ", { quemTipo: "CARGO", cargoId: "cgVend", sobreTipo: "SERVICO", servicoId: "sInst", valor: 6 }),
-    r("pessoaTodos", { quemTipo: "PESSOA", usuarioId: "uAna", valor: 9 }),
+    r("pessoaTodos", { quemTipo: "PESSOA", usuarioId: "uAna", valor: 7 }),
     r("pecas", { sobreTipo: "PECAS", base: "FIXO_ITEM", valor: 7 }),
   ];
 
-  it("pessoa > cargo > todos (mesmo a pessoa em 'todos os serviços' vence o cargo no serviço exato)", () => {
-    expect(regraVencedora(regras, ana, instalacao)?.id).toBe("pessoaTodos");
-    expect(regraVencedora(regras, { usuarioId: "uOutro", cargoId: "cgVend" }, instalacao)?.id).toBe("cargoServ");
+  it("o fixo da pessoa (pessoa + todos) perde para a regra do serviço, mesmo de cargo; vale nos itens sem regra própria", () => {
+    expect(regraVencedora(regras, ana, instalacao)?.id).toBe("cargoServ");
+    expect(regraVencedora(regras, ana, { tipo: "SERVICO", servicoId: "sOutro", categoria: "Instalação" })?.id).toBe("cargoCat");
+    expect(regraVencedora(regras, ana, { tipo: "SERVICO", servicoId: "sOutro", categoria: "Manutenção" })?.id).toBe("pessoaTodos");
     expect(regraVencedora(regras, { usuarioId: "uOutro", cargoId: null }, instalacao)?.id).toBe("todos");
+    // A "diferenciada" vale para todo mundo: Todos + um serviço vence o fixo da pessoa
+    const omie = [r("fixoAna", { quemTipo: "PESSOA", usuarioId: "uAna", valor: 7 }), r("vrf", { sobreTipo: "SERVICO", servicoId: "sInst", valor: 3 })];
+    expect(regraVencedora(omie, ana, instalacao)?.id).toBe("vrf");
+    expect(regraVencedora(omie, ana, { tipo: "SERVICO", servicoId: "sLimp", categoria: null })?.id).toBe("fixoAna");
   });
 
-  it("no mesmo quem: um serviço > categoria (sem acento/maiúscula importando) > todos os serviços", () => {
-    const semServ = regras.filter((x) => x.id !== "cargoServ" && x.id !== "pessoaTodos");
-    expect(regraVencedora(semServ, ana, instalacao)?.id).toBe("cargoCat");
-    expect(regraVencedora(semServ, ana, { ...instalacao, categoria: "Manutenção" })?.id).toBe("todos");
-    expect(pesoDaRegra({ quemTipo: "PESSOA", sobreTipo: "TODOS_SERVICOS" })).toBeGreaterThan(pesoDaRegra({ quemTipo: "CARGO", sobreTipo: "SERVICO" }));
-    expect(pesoDaRegra({ quemTipo: "TODOS", sobreTipo: "CATEGORIA" })).toBeGreaterThan(pesoDaRegra({ quemTipo: "TODOS", sobreTipo: "TODOS_SERVICOS" }));
+  it("a ordem inteira: pessoa+serviço > cargo+serviço > pessoa+categoria > cargo+categoria > pessoa+todos > cargo+todos (> todos+todos)", () => {
+    const cadeia = [
+      r("1", { quemTipo: "PESSOA", usuarioId: "uAna", sobreTipo: "SERVICO", servicoId: "sInst" }),
+      r("2", { quemTipo: "CARGO", cargoId: "cgVend", sobreTipo: "SERVICO", servicoId: "sInst" }),
+      r("3", { quemTipo: "PESSOA", usuarioId: "uAna", sobreTipo: "CATEGORIA", categoria: "Instalação" }),
+      r("4", { quemTipo: "CARGO", cargoId: "cgVend", sobreTipo: "CATEGORIA", categoria: "Instalação" }),
+      r("5", { quemTipo: "PESSOA", usuarioId: "uAna" }),
+      r("6", { quemTipo: "CARGO", cargoId: "cgVend" }),
+      r("7", {}),
+    ];
+    // Tira a vencedora uma a uma: a próxima é sempre a seguinte na ordem (embaralhado, para a ordem da lista não importar)
+    let resto = [...cadeia].reverse();
+    for (const esperado of ["1", "2", "3", "4", "5", "6", "7"]) {
+      expect(regraVencedora(resto, ana, instalacao)?.id).toBe(esperado);
+      resto = resto.filter((x) => x.id !== esperado);
+    }
+    expect(pesoDaRegra({ quemTipo: "CARGO", sobreTipo: "SERVICO" })).toBeGreaterThan(pesoDaRegra({ quemTipo: "PESSOA", sobreTipo: "CATEGORIA" }));
+    expect(pesoDaRegra({ quemTipo: "TODOS", sobreTipo: "CATEGORIA" })).toBeGreaterThan(pesoDaRegra({ quemTipo: "PESSOA", sobreTipo: "TODOS_SERVICOS" }));
+    expect(ORDEM_PRECEDENCIA).toHaveLength(6);
+  });
+
+  it("categoria sem acento/maiúscula importando", () => {
+    expect(regraVencedora([r("c", { sobreTipo: "CATEGORIA", categoria: "INSTALACAO" })], ana, instalacao)?.id).toBe("c");
   });
 
   it("peças só valem para as linhas de peça; serviço nunca pega regra de peça; regra desativada e outro papel não valem", () => {

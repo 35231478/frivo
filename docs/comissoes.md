@@ -30,10 +30,21 @@ Uma regra por linha: **Quem** · **Papel** · **Sobre** · **Base** · **Valor**
 | Sobre | Todos os serviços · Categoria de serviço · Um serviço · Peças |
 | Base | % da venda · % do lucro · Valor fixo por item |
 
-**A mais específica vence**, item a item: primeiro **Quem** (pessoa > cargo > todos), depois **Sobre**
-(serviço > categoria > todos os serviços). A tela mostra um exemplo curto. Duas regras ativas para a mesma
-pessoa/cargo e o mesmo alvo são recusadas (409). Regra não se apaga: **desativa** (o passado guarda qual regra
-valeu).
+**O item manda, a pessoa desempata** (como a "comissão diferenciada" do OMIE, que tem prioridade sobre a fixa).
+Item a item, a primeira que casar vence:
+
+1. pessoa + um serviço
+2. cargo + um serviço
+3. pessoa + categoria
+4. cargo + categoria
+5. pessoa + todos os serviços (o "fixo" da pessoa)
+6. cargo + todos os serviços
+
+"Todos" fecha cada nível (ex.: "Todos + um serviço" vem logo depois de "cargo + um serviço" e vence o fixo da
+pessoa). Exemplo da tela: Ana tem 7% fixo; no item Instalação VRF vale a regra do serviço (3%).
+
+Duas regras ativas para a mesma pessoa/cargo e o mesmo alvo são recusadas (409). Regra não se apaga: **desativa**
+(o passado guarda qual regra valeu). A categoria compara sem maiúscula e sem acento.
 
 - **Categoria de serviço** é um campo novo no cadastro do serviço (`servicos.categoria`, texto livre).
 - **Cargo**: o cargo do colaborador ligado ao usuário (pelo e-mail de acesso ao app). Usuário sem colaborador

@@ -1,6 +1,6 @@
 /**
  * COM-1 — Comissões do vendedor, com as rotas e o Prisma de verdade no PostgreSQL REAL (schema descartável).
- *  - precedência: pessoa > cargo > todos; serviço > categoria > todos; peças só nas linhas de peça;
+ *  - precedência: o item manda (serviço > categoria > todos), a pessoa desempata (pessoa > cargo > todos); peças só nas linhas de peça;
  *  - CONGELAMENTO: a comissão nasce na aprovação com a regra daquele dia; mudar a regra depois não mexe nela;
  *  - recebimento PARCIAL libera proporcional; recebimento ESTORNADO estorna; fatura cancelada não libera;
  *  - os gatilhos "na aprovação" e "na conclusão da OS"; orçamento cancelado depois da aprovação estorna;
@@ -117,7 +117,7 @@ describe.skipIf(!URL_PG)("COM-1 — comissões (PostgreSQL real)", () => {
     await prisma?.$disconnect();
   });
 
-  it("precedência na aprovação: pessoa > cargo > todos; serviço > categoria > todos; peças só nas linhas de peça — e a regra fica congelada", async () => {
+  it("precedência na aprovação: o item manda (serviço > categoria > todos), a pessoa desempata; peças só nas linhas de peça — e a regra fica congelada", async () => {
     const o = await novoOrcamento({
       servicos: [{ servicoId: "sInst", descricao: "Instalação split", v: 1000 }, { servicoId: "sLimp", descricao: "Limpeza", v: 200 }, { descricao: "Visita avulsa", v: 100 }],
       pecas: [{ produtoId: "pGas", descricao: "Gás R410A", v: 50, q: 2 }],
@@ -141,6 +141,15 @@ describe.skipIf(!URL_PG)("COM-1 — comissões (PostgreSQL real)", () => {
     expect(await srv.gerarComissoesDoOrcamento("e1", o.id)).toBe(0);
     expect((await comissoes(o.id)).map((c: any) => Number(c.valor))).toEqual([50, 20, 2, 14]);
     await prisma.comissaoRegra.update({ where: { id: regra.id }, data: { valor: 5 } });
+    // O ITEM MANDA: o "fixo" do vendedor (pessoa + todos, 8%) perde para a regra da categoria (cargo, 5%) na
+    // instalação e vale no item sem regra própria (a visita avulsa, onde antes valia o "todos" de 2%)
+    const fixo = await chamar("comissoes/regras", "POST", {}, { quemTipo: "PESSOA", usuarioId: "uV", sobreTipo: "TODOS_SERVICOS", base: "PERC_VENDA", valor: 8 });
+    expect(fixo.status).toBe(201);
+    const o2 = await novoOrcamento({ servicos: [{ servicoId: "sInst", descricao: "Instalação split", v: 1000 }, { descricao: "Visita avulsa", v: 100 }] });
+    logar("uAdm");
+    expect((await aprovar(o2.id)).status).toBe(200);
+    expect((await comissoes(o2.id)).map((c: any) => [c.descricao, Number(c.valor)])).toEqual([["Instalação split", 50], ["Visita avulsa", 8]]);
+    await prisma.comissaoRegra.update({ where: { id: fixo.json.id }, data: { ativo: false } });
   });
 
   it("recebimento PARCIAL libera proporcional; recebimento ESTORNADO estorna; quitado libera tudo; o extrato acompanha", async () => {

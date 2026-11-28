@@ -12,7 +12,7 @@ import { Dica } from "@/components/ui/dica";
 import { toast } from "@/components/ui/avisos";
 import { cn } from "@/lib/utils";
 import {
-  BASES, PAPEIS, PAPEIS_ATIVOS, QUANDO, QUEM, ROTULO_BASE, ROTULO_PAPEL, ROTULO_QUANDO, ROTULO_QUEM, ROTULO_SOBRE, SOBRE, descricaoDaRegra,
+  BASES, ORDEM_PRECEDENCIA, PAPEIS, PAPEIS_ATIVOS, QUANDO, QUEM, ROTULO_BASE, ROTULO_PAPEL, ROTULO_QUANDO, ROTULO_QUEM, ROTULO_SOBRE, SOBRE, descricaoDaRegra,
   type Base, type Papel, type Quando, type Quem, type RegraComissao, type Sobre,
 } from "@/lib/comissoes/regras";
 
@@ -23,8 +23,9 @@ export interface TelaComissoesDados {
   opcoes: { pessoas: { id: string; nome: string }[]; cargos: { id: string; nome: string }[]; servicos: { id: string; nome: string }[]; categorias: string[] };
 }
 
-const DICA_PRECEDENCIA = "A regra mais específica vence. Primeiro quem: pessoa vence cargo, que vence todos. "
-  + "Depois, no mesmo quem: um serviço vence a categoria, que vence todos os serviços. Peças só valem para as linhas de peça.";
+const DICA_PRECEDENCIA = "O item manda, a pessoa desempata: a regra de um serviço vence a da categoria, que vence a de todos os "
+  + "serviços. No mesmo item, pessoa vence cargo, que vence todos. Peças só valem para as linhas de peça.";
+const EXEMPLO_PRECEDENCIA = "Ana tem 7% fixo (pessoa + todos os serviços). No item Instalação VRF vale a regra do serviço (3%).";
 const DICA_QUANDO = "No recebimento: cada parcela paga libera a parte proporcional da comissão. Na aprovação ou na conclusão da OS: "
   + "libera tudo de uma vez. A comissão nasce na aprovação e guarda a regra daquele dia: mudar aqui não mexe no passado.";
 
@@ -130,8 +131,12 @@ export function ComissoesClient({ inicial }: { inicial: TelaComissoesDados }) {
         </div>
 
         {/* O exemplo curto da precedência */}
-        <div className="rounded-lg bg-surface-alt px-3 py-2 text-xs text-ink-muted" data-exemplo-precedencia>
-          <span className="font-semibold text-ink">Exemplo:</span> “Ana (pessoa) · Limpeza · 10%” vence “Vendedores (cargo) · Manutenção · 5%”.
+        <div className="rounded-lg bg-surface-alt px-3 py-2 text-xs text-ink-muted space-y-1.5" data-exemplo-precedencia>
+          <p><span className="font-semibold text-ink">Qual vale:</span> a primeira que casar, nesta ordem.</p>
+          <ol className="flex flex-wrap gap-x-3 gap-y-1" data-ordem-precedencia>
+            {ORDEM_PRECEDENCIA.map((o, i) => <li key={o}><span className="font-semibold text-ink tabular-nums">{i + 1}.</span> {o}</li>)}
+          </ol>
+          <p><span className="font-semibold text-ink">Exemplo:</span> {EXEMPLO_PRECEDENCIA}</p>
         </div>
 
         {dados.regras.length === 0 ? (
