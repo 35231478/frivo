@@ -164,6 +164,7 @@ export function ClienteForm({ initialData, statusFinanceiroCalc, perdas12m, cons
   // Pedido do cliente (lib/pedido-cliente/regra): um só campo na tela, gravado nas duas colunas
   const [modoPedido, setModoPedido] = useState<ModoPedido>(modoDoCliente(initialData));
   const [agrupaAdicionais, setAgrupaAdicionais] = useState<boolean>(initialData?.agrupaAdicionais ?? false);
+  const [lembretesPedido, setLembretesPedido] = useState<boolean>(initialData?.pedidoLembretesAtivo !== false);
 
   useEffect(() => {
     fetch("/api/configuracoes").then((r) => r.json()).then(setConfig).catch(() => {});
@@ -268,6 +269,7 @@ export function ClienteForm({ initialData, statusFinanceiroCalc, perdas12m, cons
       emailsFaturamento,
       boletoUnicoMensal,
       ...camposDoModo(modoPedido),
+      pedidoLembretesAtivo: lembretesPedido,
       agrupaAdicionais,
     };
     if (!isEditing) {
@@ -660,7 +662,13 @@ export function ClienteForm({ initialData, statusFinanceiroCalc, perdas12m, cons
               <FormField label="Telefone de compras">
                 <PhoneInput {...register("comprasTelefone")} placeholder="(00) 0000-0000" />
               </FormField>
-            </FormGrid></div>
+            </FormGrid>
+            <div className="mt-3" data-lembretes-cliente>
+              <ToggleSwitch
+                label="Lembrar o contato de compras por e-mail" checked={lembretesPedido} onChange={setLembretesPedido}
+                dica="Lembretes do pedido de compra pendente, nos dias definidos em Configurações › Orçamentos e propostas, com o link do portal. O contato de compras vê a seção “Pedido de compra” no portal com este mesmo e-mail."
+              />
+            </div></div>
           )}
           <ToggleGroup title="Preferências de cobrança" description="Como este cliente é cobrado e faturado.">
             <ToggleSwitch

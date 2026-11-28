@@ -1,11 +1,13 @@
 /**
  * O filtro da lista de OS como as telas e as exportações usam, com o que precisa do banco para ser
- * montado. Hoje é um só: o "Prazo de atendimento" (`?atendimento=vencendo|estourado`), cujas OS são
+ * montado: o "Prazo de atendimento" (`?atendimento=vencendo|estourado`), cujas OS são
  * classificadas pela regra única (lib/atendimento/prazo.ts) e entram no filtro como uma lista de ids.
  * Tudo o mais é `whereOrdens`, sem banco.
  */
 import { ALERTAS_ATENDIMENTO, type FiltroAtendimento } from "@/lib/atendimento/prazo";
 import { idsPorAtendimento } from "@/lib/atendimento/prazo-server";
+import { FILTRO_CONFERIR_PEDIDO } from "@/lib/pedido-cliente/where";
+import { osEmConferencia } from "@/lib/pedido-cliente/portal-server";
 import { whereOrdens } from "./filtros";
 
 type SP = Parameters<typeof whereOrdens>[1];
@@ -15,5 +17,7 @@ export const filtroAtendimento = (valor: string | undefined | null): FiltroAtend
 
 export async function whereOrdensDaLista(empresaId: string, sp: SP, agora: Date = new Date()) {
   const filtro = filtroAtendimento(sp.atendimento);
-  return whereOrdens(empresaId, sp, agora, filtro ? await idsPorAtendimento(empresaId, filtro, agora) : null);
+  const where = whereOrdens(empresaId, sp, agora, filtro ? await idsPorAtendimento(empresaId, filtro, agora) : null);
+  // PC-2: "Pedido recebido — conferir" (o sino e o push levam para cá quando há mais de uma OS)
+  return sp.pedido === FILTRO_CONFERIR_PEDIDO ? { AND: [where, { id: { in: await osEmConferencia(empresaId) } }] } : where;
 }

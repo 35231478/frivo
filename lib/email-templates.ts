@@ -24,6 +24,7 @@ export const VARIAVEIS_DISPONIVEIS = [
   "fornecedor_nome", "numero_pedido", "prazo_necessario", "link_pedido",
   "colaborador_nome", "cargo_nome", "link_admissao", "codigo",
   "quantidade_colaboradores",
+  "contato_nome", "quantidade_pendente", "total_pendente", "lista_pendencias", "link_portal",
 ] as const;
 
 export const TEMPLATES_PADRAO: DefTemplate[] = [
@@ -94,6 +95,10 @@ export const TEMPLATES_PADRAO: DefTemplate[] = [
   { tipo: "ADMISSAO_CONVITE", nome: "Convite de admissão", assunto: "Admissão na {{empresa_nome}} — preencha os seus dados",
     corpo: "<p>Olá <strong>{{colaborador_nome}}</strong>,</p><p>Seja bem-vindo(a) à <strong>{{empresa_nome}}</strong>. Para concluir a admissão no cargo de <strong>{{cargo_nome}}</strong>, preencha os seus dados, envie os documentos e assine o contrato pelo botão abaixo. Dá para fazer tudo pelo celular, em poucos minutos, e o preenchimento fica salvo se precisar parar no meio.</p><p style=\"color:#64748b;font-size:13px\">O link é pessoal e vale por {{validade_link}}. Se o prazo passar, peça um link novo a quem enviou este e-mail.</p>",
     botaoLabel: "Preencher a minha admissão", botaoVar: "link_admissao" },
+  // Pedido do cliente (PC-2): o lembrete ao contato de compras, com a lista do que espera o pedido e o link do portal
+  { tipo: "PEDIDO_CLIENTE_LEMBRETE", nome: "Lembrete de pedido de compra pendente", assunto: "Pedido de compra pendente — {{cliente_nome}} — {{empresa_nome}}",
+    corpo: "<p>Prezado(a) <strong>{{contato_nome}}</strong>,</p><p>Os serviços abaixo, prestados à <strong>{{cliente_nome}}</strong>, aguardam o pedido de compra para faturamento ({{quantidade_pendente}} item(ns), total de <strong>{{total_pendente}}</strong>):</p>{{lista_pendencias}}<p>O pedido pode ser anexado pelo portal do cliente, no botão abaixo. Um pedido pode cobrir mais de um serviço.</p><p style=\"color:#64748b;font-size:13px\">Caso o pedido já tenha sido enviado, desconsidere esta mensagem.</p>",
+    botaoLabel: "Enviar o pedido de compra", botaoVar: "link_portal" },
   { tipo: "ADMISSAO_CODIGO", nome: "Código de verificação da admissão", assunto: "Código de verificação: {{codigo}}",
     corpo: "<p>Olá <strong>{{colaborador_nome}}</strong>,</p><p>O código para confirmar este e-mail na admissão da <strong>{{empresa_nome}}</strong> é:</p><p style=\"font-size:28px;font-weight:700;letter-spacing:6px;text-align:center;margin:20px 0\">{{codigo}}</p><p style=\"color:#64748b;font-size:13px\">O código vale por {{validade_link}}. Se não foi pedido por quem está lendo, basta ignorar este e-mail.</p>" },
 ];

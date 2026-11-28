@@ -15,6 +15,7 @@ import { validarDataUrl } from "@/lib/anexos-server";
 import { FATURAS_EMITIDAS, whereMedicaoAguardando, whereOrcamentoAguardando, whereOsAguardando } from "@/lib/pedido-cliente/where";
 export { whereOrcamentoAguardando, whereOsAguardando };
 import { chaveHojeBR } from "@/lib/fuso";
+import { MSG_MOTIVO_RECUSA } from "@/lib/pedido-cliente/lembretes";
 import {
   aguardandoPedido, alertaValorPedido, inicioDaEspera, limparMotivo, limparNumeroPedido, modoEfetivo, MSG_MOTIVO, textoPedidoNaNota,
   travaFaturar, travaIniciar, DIAS_ALERTA_PEDIDO_PADRAO, reais, diasEsperando, type ModoPedido, type SituacaoPedido,
@@ -107,7 +108,7 @@ export interface DadosPedido {
 type Falha = { ok: false; status: number; erro: string };
 const falha = (status: number, erro: string): Falha => ({ ok: false, status, erro });
 
-function lerDados(d: DadosPedido): Falha | { numero: string; data: Date; valor: number | null; observacao: string | null; anexo: { conteudo: string; nome: string; tipo: string } | null } {
+export function lerDadosPedido(d: DadosPedido): Falha | { numero: string; data: Date; valor: number | null; observacao: string | null; anexo: { conteudo: string; nome: string; tipo: string } | null } {
   const numero = limparNumeroPedido(d.numero);
   if (!numero) return falha(400, "Informe o número do pedido do cliente (até 60 caracteres).");
   const dataTxt = typeof d.data === "string" && /^\d{4}-\d{2}-\d{2}$/.test(d.data) ? d.data : null;
@@ -171,7 +172,7 @@ async function avancarFaturas(tx: Prisma.TransactionClient, osIds: string[], orc
 export async function registrarPedido(
   quem: Quem, dados: DadosPedido, ligar: { osIds?: string[]; orcamentoIds?: string[]; medicaoId?: string | null },
 ): Promise<Falha | { ok: true; pedidoId: string; alerta: string | null; ligadas: { os: number; orcamentos: number } }> {
-  const lido = lerDados(dados);
+  const lido = lerDadosPedido(dados);
   if ("ok" in lido) return lido;
   const osIds = [...new Set(ligar.osIds ?? [])].slice(0, 500);
   const orcamentoIds = [...new Set(ligar.orcamentoIds ?? [])].slice(0, 500);
@@ -189,14 +190,7 @@ export async function registrarPedido(
   const clientes = new Set([...oss.map((o) => o.clienteId), ...orcs.map((o) => o.clienteId), ...(clienteDaFatura ? [clienteDaFatura] : [])]);
   if (clientes.size !== 1) return falha(400, "Um pedido do cliente cobre OS e orçamentos de um cliente só. Selecione itens do mesmo cliente.");
   const clienteId = [...clientes][0];
-
-  // A propagação: o orçamento leva a OS gerada dele, e a OS leva o orçamento de origem (os que ainda não têm pedido)
-  const todasOs = new Set(oss.map((o) => o.id));
-  const todosOrc = new Set(orcs.map((o) => o.id));
-  for (const o of orcs) if (o.osGerada && !o.osGerada.pedidoClienteId) todasOs.add(o.osGerada.id);
-  for (const o of oss) if (o.orcamentoOrigemId) todosOrc.add(o.orcamentoOrigemId);
-  const origens = await prisma.orcamento.findMany({ where: { id: { in: [...todosOrc].filter((id) => !orcs.some((o) => o.id === id)) }, empresaId: quem.empresaId, pedidoClienteId: null }, select: { id: true } });
-  const orcFinais = [...orcs.map((o) => o.id), ...origens.map((o) => o.id)];
+  const { todasOs, orcFinais } = await propagacao(quem.empresaId, oss, orcs);
 
   const pedido = await prisma.$transaction(async (tx) => {
     const p = await tx.pedidoCliente.create({
@@ -205,22 +199,96 @@ export async function registrarPedido(
         anexo: lido.anexo?.conteudo ?? null, anexoNome: lido.anexo?.nome ?? null, anexoTipo: lido.anexo?.tipo ?? null, criadoPorId: quem.usuarioId,
       },
     });
-    const osAlvo = [...todasOs];
-    if (osAlvo.length) await tx.ordemServico.updateMany({ where: { id: { in: osAlvo }, empresaId: quem.empresaId }, data: { pedidoClienteId: p.id } });
-    if (orcFinais.length) await tx.orcamento.updateMany({ where: { id: { in: orcFinais }, empresaId: quem.empresaId }, data: { pedidoClienteId: p.id } });
-    const detalhe = `nº ${lido.numero}${lido.valor != null ? ` · ${reais(lido.valor)}` : ""}`;
-    if (osAlvo.length) await tx.osHistorico.createMany({ data: osAlvo.map((id) => ({ ordemServicoId: id, usuarioId: quem.usuarioId, acao: "Pedido do cliente informado", detalhes: detalhe })) });
-    if (orcFinais.length) await tx.orcamentoEvento.createMany({ data: orcFinais.map((id) => ({ empresaId: quem.empresaId, orcamentoId: id, tipo: "PEDIDO_CLIENTE", detalhe: `Pedido do cliente ${detalhe}`, usuarioId: quem.usuarioId })) });
-    await avancarFaturas(tx, osAlvo, orcFinais, ligar.medicaoId ?? null);
-    // A fatura sem OS nem orçamento (contrato): o PC vai direto nela, como antes
-    if (ligar.medicaoId) {
-      await tx.medicao.updateMany({ where: { id: ligar.medicaoId, status: "AGUARDANDO_PC", itens: { none: { OR: [{ ordemServicoId: { not: null } }, { orcamentoId: { not: null } }] } } }, data: { status: "PC_RECEBIDO", pcNumero: lido.numero, pcRecebidoEm: new Date() } });
-    }
+    await ligarAoPedido(tx, quem, { id: p.id, numero: lido.numero, valor: lido.valor }, todasOs, orcFinais, ligar.medicaoId ?? null);
     return p;
   });
 
-  const total = await totalLigado([...todasOs], orcFinais);
-  return { ok: true, pedidoId: pedido.id, alerta: alertaValorPedido(lido.valor, total), ligadas: { os: todasOs.size, orcamentos: orcFinais.length } };
+  const total = await totalLigado(todasOs, orcFinais);
+  return { ok: true, pedidoId: pedido.id, alerta: alertaValorPedido(lido.valor, total), ligadas: { os: todasOs.length, orcamentos: orcFinais.length } };
+}
+
+type Alvos = Awaited<ReturnType<typeof alvos>>;
+
+/** A propagação: o orçamento leva a OS gerada dele, e a OS leva o orçamento de origem (os que ainda não têm pedido) */
+async function propagacao(empresaId: string, oss: Alvos["oss"], orcs: Alvos["orcs"]) {
+  const todasOs = new Set(oss.map((o) => o.id));
+  const todosOrc = new Set(orcs.map((o) => o.id));
+  for (const o of orcs) if (o.osGerada && !o.osGerada.pedidoClienteId) todasOs.add(o.osGerada.id);
+  for (const o of oss) if (o.orcamentoOrigemId) todosOrc.add(o.orcamentoOrigemId);
+  const origens = await prisma.orcamento.findMany({ where: { id: { in: [...todosOrc].filter((id) => !orcs.some((o) => o.id === id)) }, empresaId, pedidoClienteId: null }, select: { id: true } });
+  return { todasOs: [...todasOs], orcFinais: [...orcs.map((o) => o.id), ...origens.map((o) => o.id)] };
+}
+
+/**
+ * Liga as OS e os orçamentos ao pedido, com o histórico, e avança as faturas (o número vai para elas; a que estava
+ * "Aguardando PC" segue). Um caminho só: o pedido informado pelo escritório e o do portal, quando confirmado.
+ */
+async function ligarAoPedido(
+  tx: Prisma.TransactionClient, quem: Quem, pedido: { id: string; numero: string; valor: number | null },
+  osAlvo: string[], orcFinais: string[], medicaoId: string | null,
+  rotulo: { os: string; orcamento: string } = { os: "Pedido do cliente informado", orcamento: "Pedido do cliente" },
+) {
+  if (osAlvo.length) await tx.ordemServico.updateMany({ where: { id: { in: osAlvo }, empresaId: quem.empresaId }, data: { pedidoClienteId: pedido.id } });
+  if (orcFinais.length) await tx.orcamento.updateMany({ where: { id: { in: orcFinais }, empresaId: quem.empresaId }, data: { pedidoClienteId: pedido.id } });
+  const detalhe = `nº ${pedido.numero}${pedido.valor != null ? ` · ${reais(pedido.valor)}` : ""}`;
+  if (osAlvo.length) await tx.osHistorico.createMany({ data: osAlvo.map((id) => ({ ordemServicoId: id, usuarioId: quem.usuarioId, acao: rotulo.os, detalhes: detalhe })) });
+  if (orcFinais.length) await tx.orcamentoEvento.createMany({ data: orcFinais.map((id) => ({ empresaId: quem.empresaId, orcamentoId: id, tipo: "PEDIDO_CLIENTE", detalhe: `${rotulo.orcamento} ${detalhe}`, usuarioId: quem.usuarioId })) });
+  await avancarFaturas(tx, osAlvo, orcFinais, medicaoId);
+  // A fatura sem OS nem orçamento (contrato): o PC vai direto nela, como antes
+  if (medicaoId) {
+    await tx.medicao.updateMany({ where: { id: medicaoId, status: "AGUARDANDO_PC", itens: { none: { OR: [{ ordemServicoId: { not: null } }, { orcamentoId: { not: null } }] } } }, data: { status: "PC_RECEBIDO", pcNumero: pedido.numero, pcRecebidoEm: new Date() } });
+  }
+}
+
+/**
+ * PC-2 — o escritório CONFIRMA o pedido de compra que o comprador anexou no portal: liga as OS e os orçamentos
+ * que ele disse cobrir (os que ainda esperam; o que nesse meio-tempo ganhou outro pedido fica como está) e o
+ * faturamento segue, pelo mesmo caminho do pedido informado pela equipe.
+ */
+export async function confirmarPedidoDoPortal(quem: Quem, pedidoId: string) {
+  const p = await prisma.pedidoCliente.findFirst({
+    where: { id: pedidoId, empresaId: quem.empresaId },
+    select: { id: true, numero: true, valor: true, situacao: true, clienteId: true, osPropostas: true, orcamentosPropostos: true },
+  });
+  if (!p) return falha(404, "Pedido do cliente não encontrado.");
+  if (p.situacao !== "CONFERIR") return falha(409, "Este pedido já foi conferido.");
+  const { oss, orcs } = await alvos(quem.empresaId, p.osPropostas, p.orcamentosPropostos);
+  // Só os do mesmo cliente que ainda não têm pedido (outro cliente nunca entra, mesmo que o id venha errado)
+  const livresOs = oss.filter((o) => o.clienteId === p.clienteId && !o.pedidoClienteId);
+  const livresOrc = orcs.filter((o) => o.clienteId === p.clienteId && !o.pedidoClienteId);
+  const { todasOs, orcFinais } = await propagacao(quem.empresaId, livresOs, livresOrc);
+  const valor = p.valor == null ? null : Number(p.valor);
+  const confirmou = await prisma.$transaction(async (tx) => {
+    // a trava da confirmação: dois cliques (ou duas pessoas) não ligam duas vezes
+    const r = await tx.pedidoCliente.updateMany({ where: { id: p.id, situacao: "CONFERIR" }, data: { situacao: "CONFIRMADO", conferidoEm: new Date(), conferidoPorId: quem.usuarioId, motivoRecusa: null } });
+    if (!r.count) return false;
+    await ligarAoPedido(tx, quem, { id: p.id, numero: p.numero, valor }, todasOs, orcFinais, null, { os: "Pedido do cliente confirmado (enviado pelo portal)", orcamento: "Pedido do cliente confirmado (enviado pelo portal)" });
+    return true;
+  });
+  if (!confirmou) return falha(409, "Este pedido já foi conferido.");
+  const total = await totalLigado(todasOs, orcFinais);
+  return { ok: true as const, alerta: alertaValorPedido(valor, total), ligadas: { os: todasOs.length, orcamentos: orcFinais.length } };
+}
+
+/** PC-2 — o escritório RECUSA o pedido do portal, com o motivo (o cliente vê no portal). Nada é ligado. */
+export async function recusarPedidoDoPortal(quem: Quem, pedidoId: string, motivoBruto: unknown) {
+  const motivo = limparMotivo(motivoBruto);
+  if (!motivo) return falha(400, MSG_MOTIVO_RECUSA);
+  const p = await prisma.pedidoCliente.findFirst({ where: { id: pedidoId, empresaId: quem.empresaId }, select: { id: true, numero: true, situacao: true, clienteId: true, osPropostas: true, orcamentosPropostos: true } });
+  if (!p) return falha(404, "Pedido do cliente não encontrado.");
+  if (p.situacao !== "CONFERIR") return falha(409, "Este pedido já foi conferido.");
+  const { oss, orcs } = await alvos(quem.empresaId, p.osPropostas, p.orcamentosPropostos);
+  const recusou = await prisma.$transaction(async (tx) => {
+    const r = await tx.pedidoCliente.updateMany({ where: { id: p.id, situacao: "CONFERIR" }, data: { situacao: "RECUSADO", conferidoEm: new Date(), conferidoPorId: quem.usuarioId, motivoRecusa: motivo } });
+    if (!r.count) return false;
+    const doCliente = oss.filter((o) => o.clienteId === p.clienteId);
+    if (doCliente.length) await tx.osHistorico.createMany({ data: doCliente.map((o) => ({ ordemServicoId: o.id, usuarioId: quem.usuarioId, acao: "Pedido de compra do portal recusado", detalhes: `nº ${p.numero} · ${motivo}` })) });
+    const orcDoCliente = orcs.filter((o) => o.clienteId === p.clienteId);
+    if (orcDoCliente.length) await tx.orcamentoEvento.createMany({ data: orcDoCliente.map((o) => ({ empresaId: quem.empresaId, orcamentoId: o.id, tipo: "PEDIDO_CLIENTE", detalhe: `Pedido de compra do portal nº ${p.numero} recusado: ${motivo}`, usuarioId: quem.usuarioId })) });
+    return true;
+  });
+  if (!recusou) return falha(409, "Este pedido já foi conferido.");
+  return { ok: true as const };
 }
 
 /** O total das OS e orçamentos ligados (o orçamento que gerou uma das OS não conta duas vezes) */
@@ -238,7 +306,7 @@ export async function totalLigado(osIds: string[], orcamentoIds: string[]) {
 export async function editarPedido(quem: Quem, pedidoId: string, dados: DadosPedido & { manterAnexo?: boolean }) {
   const atual = await prisma.pedidoCliente.findFirst({ where: { id: pedidoId, empresaId: quem.empresaId }, select: { id: true, numero: true, ordens: { select: { id: true } }, orcamentos: { select: { id: true } } } });
   if (!atual) return falha(404, "Pedido do cliente não encontrado.");
-  const lido = lerDados(dados);
+  const lido = lerDadosPedido(dados);
   if ("ok" in lido) return lido;
   await prisma.$transaction(async (tx) => {
     await tx.pedidoCliente.update({
@@ -353,20 +421,52 @@ export async function travaIniciarOs(empresaId: string, osId: string): Promise<s
 }
 
 /** A etiqueta de cada linha (lista de OS, cabeçalho): null = o cliente não exige (nada aparece) */
-export interface PedidoDaLinha { aguardando: boolean; pedido: { id: string; numero: string } | null; liberadoMotivo: string | null }
+export interface PedidoDaLinha {
+  aguardando: boolean; pedido: { id: string; numero: string } | null; liberadoMotivo: string | null;
+  /** PC-2: um pedido de compra do portal cobre este item e espera a conferência do escritório */
+  conferir: { id: string; numero: string } | null;
+  /** PC-2: o último lembrete por e-mail ao contato de compras (ISO) */
+  ultimoLembrete: string | null;
+}
+
+/** PC-2: os pedidos do portal em conferência e o último lembrete de cada item (a etiqueta do escritório) */
+async function conferenciaELembretes(empresaId: string, tipo: "os" | "orcamento", ids: string[]) {
+  const campo = tipo === "os" ? "osPropostas" : "orcamentosPropostos";
+  const [conf, lembretes] = await Promise.all([
+    prisma.pedidoCliente.findMany({ where: { empresaId, situacao: "CONFERIR", [campo]: { hasSome: ids } }, select: { id: true, numero: true, osPropostas: true, orcamentosPropostos: true }, orderBy: { criadoEm: "desc" } }),
+    tipo === "os"
+      ? prisma.pedidoClienteLembrete.groupBy({ by: ["ordemServicoId"], where: { empresaId, ordemServicoId: { in: ids } }, _max: { enviadoEm: true } })
+      : prisma.pedidoClienteLembrete.groupBy({ by: ["orcamentoId"], where: { empresaId, orcamentoId: { in: ids } }, _max: { enviadoEm: true } }),
+  ]);
+  const conferir = new Map<string, { id: string; numero: string }>();
+  for (const p of conf) for (const id of p[campo]) if (!conferir.has(id)) conferir.set(id, { id: p.id, numero: p.numero });
+  const ultimo = new Map<string, string>();
+  for (const l of lembretes as { ordemServicoId?: string | null; orcamentoId?: string | null; _max: { enviadoEm: Date | null } }[]) {
+    const id = (tipo === "os" ? l.ordemServicoId : l.orcamentoId) ?? null;
+    if (id && l._max.enviadoEm) ultimo.set(id, l._max.enviadoEm.toISOString());
+  }
+  return { conferir, ultimo };
+}
 
 /** As etiquetas das OS; vazio quando a empresa não tem nenhum cliente que exige pedido */
 export async function pedidoDasOs(empresaId: string, ids: string[]): Promise<Map<string, PedidoDaLinha>> {
   if (!ids.length || !(await usaPedidoCliente(empresaId))) return new Map();
-  const oss = await prisma.ordemServico.findMany({
-    where: { id: { in: ids }, empresaId },
-    select: { ...SELECT_PEDIDO_OS, pedidoLiberadoMotivo: true, pedidoCliente: { select: { id: true, numero: true } } },
-  });
+  const [oss, extra] = await Promise.all([
+    prisma.ordemServico.findMany({
+      where: { id: { in: ids }, empresaId },
+      select: { ...SELECT_PEDIDO_OS, pedidoLiberadoMotivo: true, pedidoCliente: { select: { id: true, numero: true } } },
+    }),
+    conferenciaELembretes(empresaId, "os", ids),
+  ]);
   const r = new Map<string, PedidoDaLinha>();
   for (const o of oss) {
     const s = situacaoDaOs(o);
     if (s.modo === "NAO" && !o.pedidoCliente) continue;
-    r.set(o.id, { aguardando: aguardandoPedido(s), pedido: o.pedidoCliente, liberadoMotivo: o.pedidoLiberadoEm ? o.pedidoLiberadoMotivo : null });
+    const aguardando = aguardandoPedido(s);
+    r.set(o.id, {
+      aguardando, pedido: o.pedidoCliente, liberadoMotivo: o.pedidoLiberadoEm ? o.pedidoLiberadoMotivo : null,
+      conferir: aguardando ? extra.conferir.get(o.id) ?? null : null, ultimoLembrete: aguardando ? extra.ultimo.get(o.id) ?? null : null,
+    });
   }
   return r;
 }
@@ -374,15 +474,22 @@ export async function pedidoDasOs(empresaId: string, ids: string[]): Promise<Map
 /** As etiquetas dos orçamentos (mesma regra) */
 export async function pedidoDosOrcamentos(empresaId: string, ids: string[]): Promise<Map<string, PedidoDaLinha>> {
   if (!ids.length || !(await usaPedidoCliente(empresaId))) return new Map();
-  const orcs = await prisma.orcamento.findMany({
-    where: { id: { in: ids }, empresaId },
-    select: { ...SELECT_PEDIDO_ORCAMENTO, pedidoLiberadoMotivo: true, pedidoCliente: { select: { id: true, numero: true } } },
-  });
+  const [orcs, extra] = await Promise.all([
+    prisma.orcamento.findMany({
+      where: { id: { in: ids }, empresaId },
+      select: { ...SELECT_PEDIDO_ORCAMENTO, pedidoLiberadoMotivo: true, pedidoCliente: { select: { id: true, numero: true } } },
+    }),
+    conferenciaELembretes(empresaId, "orcamento", ids),
+  ]);
   const r = new Map<string, PedidoDaLinha>();
   for (const o of orcs) {
     const s = situacaoDoOrcamento(o);
     if (s.modo === "NAO" && !o.pedidoCliente) continue;
-    r.set(o.id, { aguardando: aguardandoPedido(s), pedido: o.pedidoCliente, liberadoMotivo: o.pedidoLiberadoEm ? o.pedidoLiberadoMotivo : null });
+    const aguardando = aguardandoPedido(s);
+    r.set(o.id, {
+      aguardando, pedido: o.pedidoCliente, liberadoMotivo: o.pedidoLiberadoEm ? o.pedidoLiberadoMotivo : null,
+      conferir: aguardando ? extra.conferir.get(o.id) ?? null : null, ultimoLembrete: aguardando ? extra.ultimo.get(o.id) ?? null : null,
+    });
   }
   return r;
 }

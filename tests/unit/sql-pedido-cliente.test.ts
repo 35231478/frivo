@@ -51,6 +51,9 @@ describe.skipIf(!URL)("SQL de produção: pedido do cliente (PostgreSQL real)", 
       INSERT INTO "configuracoes" ("id", "empresa_id") VALUES ('cfg1', 'e1');`);
     psql(["-f", ARQUIVO]);
     psql(["-f", ARQUIVO]); // 2ª vez: idempotente
+    // Produção recebe depois o SQL da PC-2 (portal + lembretes), que acrescenta colunas nestas mesmas tabelas: o Prisma
+    // de hoje já as tem. O que a PC-2 muda é provado em sql-pedido-cliente-portal; aqui ela só completa a sequência.
+    psql(["-f", path.join(RAIZ, "prisma/sql/2027-02-12_pedido_cliente_portal_lembretes.sql")]);
   }, 240_000);
   afterAll(() => { execFileSync("psql", [URL!, "-q", "-c", `DROP SCHEMA IF EXISTS ${SCHEMA} CASCADE; DROP SCHEMA IF EXISTS ${PRISMA} CASCADE;`]); });
 

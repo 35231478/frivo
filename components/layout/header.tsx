@@ -318,6 +318,8 @@ export function Header({ session, avatarUrl }: HeaderProps) {
                   {podeVer("ordens") && (alertas?.pedidosAtrasados ?? 0) > 0 && <AlertaItem
                     href={umOuLista(alertas?.pedidosAtrasados, alertas?.pedidoAtrasadoOsId, (id) => `/ordens/${id}`, `/ordens?pedido=${FILTRO_AGUARDANDO_PEDIDO}&periodo=todos&sort=criadoEm&dir=asc`)}
                     icone={FileSignature} cor="text-atencao" label={`Pedido do cliente há mais de ${alertas?.diasAlertaPedido ?? 7} dias`} valor={alertas?.pedidosAtrasados ?? 0} {...toque("pedidosAtrasados")} />}
+                  {/* PC-2: o comprador anexou o pedido de compra no portal; o escritório confere (confirmar libera o faturamento) */}
+                  {doPainel("pedidosConferir")}
                   {doPainel("comentariosCampo")}
                   {doPainel("atividadesEsquecidas")}
                   {doPainel("estoqueNegativoCampo")}

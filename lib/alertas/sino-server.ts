@@ -31,6 +31,7 @@ import { diasOrcamentoVencendo } from "@/lib/orcamentos/ciclo-server";
 import { whereListaPagar, whereListaReceber, whereOrcamentos } from "@/lib/listas/filtros";
 import { lerPeriodo } from "@/lib/periodo";
 import { contarPedidosAtrasados, resumoAguardandoEmpresa, usaPedidoCliente } from "@/lib/pedido-cliente/server";
+import { contarPedidosConferir } from "@/lib/pedido-cliente/portal-server";
 
 export interface EntradaSino {
   empresaId: string;
@@ -74,8 +75,8 @@ export async function contarSino({ empresaId, usuarioId, escopo: e, filtroTecnic
   // Pedido do cliente: o painel conta as OS que esperam (e o R$); o sino, só as que passaram do prazo da empresa.
   // Empresa sem cliente que exige o pedido: nem consulta
   const contarPedidos = async () => (e.pedidosCliente && await usaPedidoCliente(empresaId)
-    ? Promise.all([resumoAguardandoEmpresa(empresaId), contarPedidosAtrasados(empresaId, agora)])
-    : [{ quantidade: 0, total: 0 }, { pedidosAtrasados: 0, pedidoAtrasadoOsId: null, diasAlertaPedido: 0 }] as const);
+    ? Promise.all([resumoAguardandoEmpresa(empresaId), contarPedidosAtrasados(empresaId, agora), contarPedidosConferir(empresaId)])
+    : [{ quantidade: 0, total: 0 }, { pedidosAtrasados: 0, pedidoAtrasadoOsId: null, diasAlertaPedido: 0 }, { pedidosConferir: 0, pedidoConferirId: null, pedidoConferirOsId: null }] as const);
   const whereRespondidos = { empresaId, status: { in: ["APROVADO" as const, "REPROVADO" as const] }, respostaVistaEm: null };
 
   const [prazosBrutos, veiculosBrutos, boletosPagos, respondidos, leadsSite, nfsDoPedido, nfse, faturamentoContratos, reajustesContrato, separacoesPendentes, devolucoesPendentes, pmoc, aceites, admissoes, estoqueNegativoCampo, esquecidas, comentarios, despesasCampo, semTecnico, vencendo, contasPagarHoje, contasReceberHoje, pedidos] = await Promise.all([
@@ -141,7 +142,7 @@ export async function contarSino({ empresaId, usuarioId, escopo: e, filtroTecnic
     e.contasReceberHoje && temFinanceiro ? prisma.contaReceber.count({ where: whereListaReceber(empresaId, SP_CONTAS_HOJE, periodoHoje, agora) }) : Promise.resolve(0),
     contarPedidos(),
   ]);
-  const [pedidosAguardando, pedidosAtrasados] = pedidos;
+  const [pedidosAguardando, pedidosAtrasados, pedidosConferir] = pedidos;
 
   const verOrdens = e.prazos, verCompras = e.comprasPendentes;
   const prazos = {
@@ -187,6 +188,10 @@ export async function contarSino({ empresaId, usuarioId, escopo: e, filtroTecnic
     pedidosAtrasados: pedidosAtrasados.pedidosAtrasados,
     pedidoAtrasadoOsId: pedidosAtrasados.pedidoAtrasadoOsId,
     diasAlertaPedido: pedidosAtrasados.diasAlertaPedido,
+    // PC-2: pedidos de compra anexados pelo comprador no portal, esperando a conferência do escritório
+    pedidosConferir: pedidosConferir.pedidosConferir,
+    pedidoConferirId: pedidosConferir.pedidoConferirId,
+    pedidoConferirOsId: pedidosConferir.pedidoConferirOsId,
   };
   // O total do sino (lidos ou não): os avisos de lib/alertas/lidos › AVISOS_DO_NUMERO; as contas do dia
   // ficam fora (são rotina de todo dia; o painel as mostra)

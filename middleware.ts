@@ -24,6 +24,7 @@ const rotasPublicas = [
   "/api/email/processar-lembretes", // cron (valida CRON_SECRET internamente)
   "/api/fiscal/reconciliar", // cron das NFS-e paradas (valida CRON_SECRET internamente)
   "/api/cron/faturar-contratos", // cron do faturamento automático dos contratos (valida CRON_SECRET internamente)
+  "/api/cron/lembretes-pedido", // cron dos lembretes do pedido do cliente (valida CRON_SECRET internamente)
   "/api/cron/push",  // agendador externo das notificações push (valida CRON_SECRET internamente)
   "/portal",          // inclui /portal/login
   "/api/portal-auth",

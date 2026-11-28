@@ -12,7 +12,7 @@
 import type { EscopoDoSino } from "@/lib/alertas/sino";
 import { ehAvisoDoNumero, type AvisoDoNumero } from "@/lib/alertas/lidos";
 import { FILTRO_SEM_TECNICO } from "@/lib/os/sem-tecnico";
-import { FILTRO_AGUARDANDO_PEDIDO } from "@/lib/pedido-cliente/where";
+import { FILTRO_AGUARDANDO_PEDIDO, FILTRO_CONFERIR_PEDIDO } from "@/lib/pedido-cliente/where";
 import { reais } from "@/lib/pedido-cliente/regra";
 import { FILTRO_VENCENDO } from "@/lib/orcamentos/ciclo";
 
@@ -31,6 +31,8 @@ export interface DadosPendencias {
   orcamentosVencendo: number; orcamentoVencendoId: string | null;
   despesasCampo: number;
   estoqueNegativoCampo: number;
+  /** PC-2: pedidos de compra do portal esperando a conferência */
+  pedidosConferir?: number; pedidoConferirOsId?: string | null;
   foraDoNumero?: { contasPagarHoje: number; contasReceberHoje: number; pedidosAguardando?: number; pedidosAguardandoTotal?: number };
 }
 
@@ -103,6 +105,12 @@ export const PENDENCIAS = {
     // a lista de OS só com as que esperam, as mais antigas primeiro
     href: () => `/ordens?pedido=${FILTRO_AGUARDANDO_PEDIDO}&periodo=todos&sort=criadoEm&dir=asc`,
     detalhe: (d) => (d.foraDoNumero?.pedidosAguardandoTotal ? reais(d.foraDoNumero.pedidosAguardandoTotal) : null),
+  },
+  pedidosConferir: {
+    area: "financeiro", rotulo: "Pedidos do cliente para conferir", tom: "acento", icone: "pedidoCliente", escopo: "pedidosCliente",
+    valor: (d) => d.pedidosConferir ?? 0,
+    // um pedido: a OS dele (a etiqueta abre a conferência); mais: a lista de OS em conferência
+    href: (d) => (d.pedidoConferirOsId ? `/ordens/${d.pedidoConferirOsId}` : `/ordens?pedido=${FILTRO_CONFERIR_PEDIDO}&periodo=todos`),
   },
   despesasCampo: {
     area: "financeiro", rotulo: "Despesas de campo a aprovar", tom: "atencao", icone: "despesa", escopo: "despesasCampo",

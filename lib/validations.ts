@@ -154,6 +154,8 @@ export const clienteSchema = z.object({
   comprasNome: z.string().trim().max(120).nullish().transform((v) => v || null),
   comprasEmail: z.union([z.literal(""), z.string().trim().email("E-mail de compras inválido")]).nullish().transform((v) => v || null),
   comprasTelefone: z.string().trim().max(30).nullish().transform((v) => v || null),
+  // PC-2: os lembretes por e-mail ao contato de compras (desligável por cliente; sem o campo, fica como está)
+  pedidoLembretesAtivo: z.boolean().optional(),
   agrupaAdicionais: z.boolean().default(false),
   // Perfil de faturamento (tipo/dia/condição) saiu da UI do cliente: as colunas continuam no banco e são
   // preservadas na edição porque NÃO entram mais por este schema. A config de faturamento passou a viver

@@ -16,6 +16,8 @@ export async function GET(_: NextRequest, { params }: Params) {
     where: { id, empresaId: session.user.empresaId },
     select: {
       id: true, numero: true, data: true, valor: true, observacao: true, anexoNome: true, anexoTipo: true, criadoEm: true,
+      // PC-2: o pedido de compra que veio do portal (a conferência)
+      origem: true, situacao: true, motivoRecusa: true, conferidoEm: true, osPropostas: true, orcamentosPropostos: true, enviadoPorContatoId: true,
       cliente: { select: { id: true, nome: true, nomeFantasia: true } },
       ordens: { select: { id: true, numero: true }, orderBy: { numero: "asc" } },
       orcamentos: { select: { id: true, codigo: true }, orderBy: { codigo: "asc" } },
@@ -23,10 +25,21 @@ export async function GET(_: NextRequest, { params }: Params) {
   });
   if (!p) return NextResponse.json({ erro: "Pedido do cliente não encontrado." }, { status: 404 });
   const valor = p.valor === null ? null : Number(p.valor);
-  const total = await totalLigado(p.ordens.map((o) => o.id), p.orcamentos.map((o) => o.id));
+  // Em conferência, o que ele "cobre" é o que o comprador propôs (ainda não ligado); do mesmo cliente, sempre
+  const conferindo = p.situacao === "CONFERIR";
+  const [propostasOs, propostosOrc, contato] = await Promise.all([
+    conferindo && p.osPropostas.length ? prisma.ordemServico.findMany({ where: { id: { in: p.osPropostas }, empresaId: session.user.empresaId, clienteId: p.cliente.id }, select: { id: true, numero: true }, orderBy: { numero: "asc" } }) : [],
+    conferindo && p.orcamentosPropostos.length ? prisma.orcamento.findMany({ where: { id: { in: p.orcamentosPropostos }, empresaId: session.user.empresaId, clienteId: p.cliente.id }, select: { id: true, codigo: true }, orderBy: { codigo: "asc" } }) : [],
+    p.enviadoPorContatoId ? prisma.contatoCliente.findFirst({ where: { id: p.enviadoPorContatoId, empresaId: session.user.empresaId }, select: { nome: true, email: true } }) : null,
+  ]);
+  const ordens = conferindo ? propostasOs : p.ordens;
+  const orcamentos = conferindo ? propostosOrc : p.orcamentos;
+  const total = await totalLigado(ordens.map((o) => o.id), orcamentos.map((o) => o.id));
+  const { osPropostas: _o, orcamentosPropostos: _c, enviadoPorContatoId: _e, ...resto } = p;
   return NextResponse.json({
-    ...p, valor, data: p.data.toISOString().slice(0, 10), temAnexo: !!p.anexoNome, total,
+    ...resto, ordens, orcamentos, valor, data: p.data.toISOString().slice(0, 10), temAnexo: !!p.anexoNome, total,
     cliente: p.cliente.nomeFantasia ?? p.cliente.nome, alerta: alertaValorPedido(valor, total),
+    enviadoPor: contato ? [contato.nome, contato.email].filter(Boolean).join(" · ") : null,
   });
 }
 

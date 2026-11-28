@@ -238,6 +238,8 @@ describe("Configurações › Orçamentos e propostas", () => {
       orcamentoCobrancaMateriais: "INCLUSO",
       // PC-1: o prazo do aviso do pedido do cliente (intocado = 7 dias, o padrão)
       pedidoClienteDiasAlerta: "7",
+      // PC-2: os lembretes do pedido do cliente (intocado = ligado, régua 3, 7 e 15)
+      pedidoLembretesAtivo: true, pedidoLembretesDias: [3, 7, 15],
     });
     // Leva 3 da padronização: a confirmação do salvar é o toast (não mais a caixa verde na tela)
     expect([...document.querySelectorAll("[data-toast='sucesso']")].map((t) => t.textContent?.trim())).toEqual(["Padrões salvos. Valem para os próximos orçamentos."]);
