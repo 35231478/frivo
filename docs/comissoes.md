@@ -134,6 +134,45 @@ de comissão.
 
 Tudo filtrado pela empresa da sessão; referências (pessoa, cargo, serviço) de outra empresa são recusadas.
 
+## Ver só os próprios (Orçamentos e OS)
+
+Marca nova nos perfis de acesso, em **Orçamentos** e em **Ordens de serviço**: "Ver só os próprios". Ao contrário
+das outras marcas, ela **limita**:
+
+- **Orçamentos:** só aqueles em que a pessoa é o **vendedor**.
+- **OS:** só as ligadas a eles. Entra a OS cujo vendedor é a pessoa, a OS de um orçamento dela (orçamento de origem)
+  e a OS que ela criou.
+
+O filtro é do **servidor**, em todos estes pontos:
+- listas e contagens de orçamentos, OS, leads e solicitações;
+- busca;
+- exportação de OS;
+- seleção e ações em massa (ids do filtro, exportar, inativar);
+- painel (blocos de OS e comercial);
+- sino e painel de pendências;
+- calendário;
+- relatório de cumprimento de prazos;
+- histórico do equipamento;
+- assistente;
+- **toda rota da API por id** (`/api/orcamentos/[id]/…` e `/api/ordens/[id]/…`, inclusive as que gravam), mais
+  os prazos da OS.
+
+Abrir por link direto um registro de outro vendedor dá **404** (página: "não encontrado").
+
+- **ADMIN nunca é limitado** (nem com a marca ligada).
+- A marca fica fora de "todas as permissões": o perfil Administrador e o "Selecionar tudo" do editor não a ligam.
+- **Nenhum perfil existente foi alterado** (nenhum UPDATE).
+- O perfil "Vendas" das **empresas novas** nasce com a marca em Orçamentos e em OS. Ele continua sem "Visualizar"
+  em OS, ou seja, sem ganhar acesso novo; para o vendedor ver as OS dele, basta ligar "Visualizar" no perfil.
+- A exportação de dados da empresa é só do ADMIN, por isso não muda.
+
+Código: `lib/escopo/proprios.ts` (regra) e `lib/escopo/proprios-server.ts` (guarda por id, ids em massa).
+Testes:
+- `tests/unit/escopo-proprios-pg.test.ts`: vazamento entre vendedores no PostgreSQL real, incluindo a **varredura**
+  de todas as rotas por id. Rota nova sem o guarda quebra o teste.
+- `tests/unit/escopo-proprios.test.ts`: regra e presets.
+- `tests/unit/escopo-proprios-ui.test.ts`: editor de perfil.
+
 ## Banco
 
 SQL aditivo e idempotente: `prisma/sql/2027-02-11_comissoes.sql`.
