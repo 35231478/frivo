@@ -44,6 +44,8 @@ export interface EscopoDoSino {
   comentariosCampo: boolean;
   /** Atividade esquecida em andamento (passou do limite da empresa, ou começou em outro dia): só o escritório */
   atividadesEsquecidas: boolean;
+  /** D1: impedimentos em aberto e visitas não concluídas (pausas do app do técnico): só o escritório */
+  impedimentos: boolean;
   /** Uso em campo deixou produto com saldo negativo (app do técnico): quem vê o Estoque, nunca o técnico */
   estoqueNegativoCampo: boolean;
   /** OS em aberto sem técnico (lib/os/sem-tecnico): quem vê OS; entra no número do sino */
@@ -80,6 +82,7 @@ export function escopoDoSino({ permissoes, role, restrito }: QuemPergunta): Esco
     notaBaixa: daEmpresa && verOrdens,
     estoqueNegativoCampo: daEmpresa && p("estoque", "visualizar"),
     atividadesEsquecidas: daEmpresa && verOrdens,
+    impedimentos: daEmpresa && verOrdens,
     comentariosCampo: daEmpresa && verOrdens,
     despesasCampo: daEmpresa && p("financeiro", "fluxoCaixa"),
     osSemTecnico: daEmpresa && verOrdens,

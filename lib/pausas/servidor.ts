@@ -133,3 +133,20 @@ export async function pausaParaRetrato(atividadeId: string) {
   const p = await prisma.atividadePausa.findFirst({ where: { atividadeId, fim: null }, orderBy: { inicio: "desc" }, select: { clientId: true, motivo: true, impedimento: true, inicio: true, observacao: true } });
   return p ? { clientId: p.clientId, motivo: p.motivo, impedimento: p.impedimento, inicio: p.inicio.toISOString(), observacao: p.observacao } : null;
 }
+
+/**
+ * Sino / Pendências (D1): impedimentos em aberto (pausa de impedimento sem retomar, atividade em andamento) e visitas
+ * encerradas como "Não concluída" esperando nova data. A OS mais antiga vai no link quando é uma só.
+ */
+export async function contarPausasDoSino(empresaId: string) {
+  const whereImp = { empresaId, fim: null, impedimento: true, atividade: { status: "EM_ANDAMENTO" as const } };
+  const whereNc = { empresaId, status: "AGENDADA" as const, dataAgendada: null, pausas: { some: { naoConcluida: true } } };
+  const [impedimentosAbertos, imp, visitasNaoConcluidas, nc] = await Promise.all([
+    prisma.atividadePausa.count({ where: whereImp }),
+    prisma.atividadePausa.findFirst({ where: whereImp, orderBy: { inicio: "asc" }, select: { atividade: { select: { ordemServicoId: true } } } }),
+    prisma.atividadeOs.count({ where: whereNc }),
+    prisma.atividadeOs.findFirst({ where: whereNc, orderBy: { criadoEm: "asc" }, select: { ordemServicoId: true } }),
+  ]);
+  return { impedimentosAbertos, impedimentoOsId: imp?.atividade.ordemServicoId ?? null, visitasNaoConcluidas, naoConcluidaOsId: nc?.ordemServicoId ?? null };
+}
+export const SEM_PAUSAS_NO_SINO = { impedimentosAbertos: 0, impedimentoOsId: null, visitasNaoConcluidas: 0, naoConcluidaOsId: null } as const;

@@ -123,3 +123,9 @@ export function pausaDoCartao(atividadeId: string, doServidor: PausaCartao | nul
   }
   return p;
 }
+
+/** "Execução 1 h 20 min · pausas 45 min" (o escritório, na OS) */
+export function resumoTempo(inicio: Date | string, fim: Date | string, pausas: readonly Intervalo[]): string {
+  const pausado = tempoPausadoMs(inicio, fim, pausas);
+  return `Execução ${duracaoCurta(tempoDeExecucaoMs(inicio, fim, pausas))}${pausado > 0 ? ` · pausas ${duracaoCurta(pausado)}` : ""}`;
+}

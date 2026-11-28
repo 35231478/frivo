@@ -13,6 +13,7 @@
  *     medições.
  * O resultado é o mesmo de antes (o teste no PostgreSQL compara linha a linha).
  */
+import { pausasAbertas } from "@/lib/pausas/servidor";
 import { FILTRO_SEM_AGENDAMENTO } from "@/lib/listas/filtros";
 import { osEmConferencia } from "@/lib/pedido-cliente/portal-server";
 import { prisma } from "@/lib/prisma";
@@ -90,6 +91,11 @@ export async function carregarListaOs(empresaId: string, sp: SPOrdens, agora: Da
     prisma.medicao.findMany({ where: { itens: { some: { ordemServicoId: { in: ids } } } }, select: { id: true, status: true } }),
     pedidoDasOs(empresaId, ids),
   ]) : [[], [], [], [], [], [], [], [], new Map()];
+  // D1: a pausa aberta de cada OS ("Pausada — motivo — há X h" ao lado do status) — a mais antiga em aberto
+  const pausaDa = new Map<string, { motivo: string; inicio: string; impedimento: boolean }>();
+  if (ids.length) for (const p of await pausasAbertas(empresaId, { osIds: ids })) {
+    if (!pausaDa.has(p.atividade.ordemServicoId)) pausaDa.set(p.atividade.ordemServicoId, { motivo: p.motivo, inicio: p.inicio.toISOString(), impedimento: p.impedimento });
+  }
 
   // COM-1: o vendedor da OS (gravado ao gerar do orçamento) ou, na OS antiga, o do orçamento de origem
   const origens = ordens.filter((o) => !o.vendedorId && o.orcamentoOrigemId).map((o) => o.orcamentoOrigemId!);
@@ -144,6 +150,7 @@ export async function carregarListaOs(empresaId: string, sp: SPOrdens, agora: Da
       atrasoJustificado: atrasoJustificado(o) ? rotuloMotivoAtraso(o.atrasoJustificadoMotivo) || "Justificado" : null,
       // A etiqueta do pedido do cliente (null = o cliente não exige)
       pedidoCliente: pedidos.get(o.id) ?? null,
+      pausa: pausaDa.get(o.id) ?? null,
     };
   });
 

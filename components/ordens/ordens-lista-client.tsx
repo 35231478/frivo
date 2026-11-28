@@ -1,5 +1,6 @@
 "use client";
 
+import { textoPausada } from "@/lib/pausas/regras";
 import { DICA_SEM_AGENDAMENTO, FILTRO_SEM_AGENDAMENTO } from "@/lib/listas/filtros";
 import { FILTRO_SEM_TECNICO } from "@/lib/os/sem-tecnico";
 import { ALERTAS_ATENDIMENTO, ROTULO_FILTRO_ATENDIMENTO } from "@/lib/atendimento/prazo";
@@ -35,6 +36,8 @@ interface TecnicoView { id: string; nome: string; avatar: string | null }
 interface OrdemView {
   id: string; numero: string; chamadoNumero: string | null; origem: string;
   cliente: string; clienteLogo: string | null; unidade: string | null; responsavel: string | null; /** COM-1: quem vendeu */ vendedor?: string | null; atividades: number;
+  /** D1: a atividade pausada pelo técnico (motivo e desde quando) */
+  pausa?: { motivo: string; inicio: string; impedimento: boolean } | null;
   tecnicos: TecnicoView[];
   status: string; prioridade: string; criadoEm: string; previsaoConclusao: string | null;
   /** O estágio da OS (o mesmo da barra de andamento): Aberta › Agendada › Em execução › Concluída › Faturada, ou Cancelada */
@@ -73,6 +76,7 @@ function StatusDaOs({ os }: { os: OrdemView }) {
     <span className="inline-flex flex-wrap items-center gap-1" data-status-lista={os.estagio} data-prazo-lista={os.prazoSituacao}>
       <StatusPill tom={TOM_ESTAGIO_OS[os.estagio] ?? "previsto"} tamanho="sm" data-estagio={os.estagio}>{ROTULO_ESTAGIO[os.estagio] ?? os.estagio}</StatusPill>
       {selo && <span className={cn(selo, "text-[11px] px-2")}>{os.prazoTexto}</span>}
+      {os.pausa && <StatusPill tom={os.pausa.impedimento ? "atrasado" : "atencao"} tamanho="sm" data-pausa-lista={os.pausa.impedimento ? "impedimento" : "intervalo"}>{textoPausada(os.pausa, new Date())}</StatusPill>}
       {os.atrasoJustificado && <span className="pill-previsto text-[11px] px-2" data-atraso-justificado title={`Atraso justificado: ${os.atrasoJustificado}`}>Justificado</span>}
       <EtiquetaPedido situacao={os.pedidoCliente} alvo={{ osIds: [os.id] }} />
     </span>

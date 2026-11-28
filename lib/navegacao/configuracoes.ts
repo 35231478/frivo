@@ -1,3 +1,4 @@
+import { PauseCircle } from "lucide-react";
 import {
   Boxes, Building2, CalendarClock, Clock, Cog, FileBadge, FileSignature, FileSpreadsheet, Headset, IdCard, Landmark, ListChecks, Mail, Package, Printer, QrCode, ScrollText, ShieldCheck, Tags,
   Target, Thermometer, UserCog, Wallet, Wrench, type LucideIcon,
@@ -57,6 +58,7 @@ export const SECOES_CONFIGURACOES: SecaoConfig[] = [
           { id: "tipos-os", href: "/configuracoes/tipos-os", icone: ListChecks, label: "Tipos de OS", dica: "Tipos de serviço executados pela empresa" },
           { id: "formularios", href: "/configuracoes/formularios", icone: FileSpreadsheet, label: "Formulários", dica: "Checklists e formulários preenchidos nas atividades" },
           { id: "termos", href: "/configuracoes/termos", icone: ScrollText, label: "Termos de referência", dica: "Modelos de termo usados nas propostas de contrato" },
+          { id: "motivos-pausa", href: "/configuracoes/motivos-pausa", icone: PauseCircle, label: "Motivos de pausa", dica: "O que o técnico escolhe ao pausar uma atividade no app (impedimento ou intervalo)" },
           { id: "prazos", href: "/configuracoes/prazos", icone: Clock, label: "Etapas com prazo", dica: "Modelos de etapas (compra de peça, aprovação…) com responsável e prazo, para usar nas OS" },
           { id: "impressao-os", href: "/configuracoes/impressao-os", icone: Printer, label: "Impressão da OS", dica: "Seções do relatório da OS e o que o cliente vê" },
           { id: "horario-comercial", href: "/configuracoes/horario-comercial", icone: CalendarClock, label: "Horário comercial", dica: "Dias e horas de expediente, usados no prazo de atendimento dos contratos" },
