@@ -44,8 +44,10 @@ Seis pedidos do Zé sobre o cadastro do colaborador e a admissão. Prints antes 
   - um cliente antigo, que manda só os campos antigos, grava esses campos e **limpa as faixas**. Assim uma faixa velha
     não passa por cima do horário que acabou de ser salvo.
 - **Contrato e documentos:** contrato da admissão, entrega da admissão e documentos do colaborador usam o mesmo texto.
-  Exemplo: "segunda a quinta, 07:30 às 17:30, com intervalo de 12:00 às 13:00; sexta, 07:30 às 16:30, com intervalo de
-  12:00 às 13:00 — 44h semanais".
+  - Cada faixa sai no **mesmo formato de antes**, com o intervalo quando há. Exemplo: "07:30 às 17:30, de segunda a
+    quinta, com intervalo de 12:00 às 13:00; 07:30 às 16:30, sexta, com intervalo de 12:00 às 13:00 — 44h semanais".
+  - A jornada antiga (uma faixa sem intervalo) sai **exatamente como saía** ("08:00 às 18:00, de segunda a sexta"),
+    sem as horas da semana. Assim os modelos de contrato das empresas continuam lendo igual.
 
 ## (3) "Tipo" e "Tipo de equipe": auditoria e decisão
 
@@ -99,6 +101,8 @@ Exemplo: "João Silva — especialista em VRF e Chiller".
 - **Configuração:** Configurações › Impressão da OS › **"Mostrar especialidades do técnico"**, ligado por padrão.
   - Desligado, as três saídas mostram só o nome; a OS nem recebe as especialidades.
   - Salvar as seções sem a chave (tela antiga) não muda a chave.
+  - A tela geral de Configurações manda a configuração inteira de volta ao salvar. Ela não sobrescreve a chave, como
+    já acontece com os outros campos de rota própria.
 
 ## (6) A ficha do colaborador
 
@@ -112,16 +116,19 @@ Exemplo: "João Silva — especialista em VRF e Chiller".
 |---|---|
 | `leva-j-colaborador` (27, regra) | as horas da faixa e da semana; os erros de cada faixa e o dia repetido; a leitura da jornada antiga; a gravação dos campos antigos; o texto do contrato; o schema da rota; a função (ida e volta, motorista); as especialidades na atividade e no relatório; a chave padrão ligada; as amarras (competências da empresa, abas sem rolagem, SQL só aditivo) |
 | `leva-j-colaborador-ui` (15, tela) | as abas; o contador ao vivo (intervalo, faixa nova, dia travado, liberar o dia); a jornada errada não salva e marca a aba; remover a faixa; os dois interruptores e o CREA; o motorista; o CEP (achou e não achou); as competências (o inativo só se marcado); a linha de especialidades na OS; o interruptor da configuração |
-| `leva-j-colaborador-pg` (9, PostgreSQL real) | as rotas gravam as faixas e refazem os campos antigos; o cliente antigo limpa as faixas; 400 na sobreposição; competência de outra empresa recusada; o texto da jornada nos documentos; o relatório interno e o do link com e sem especialidades; a chave na configuração (tela antiga não muda, valor inválido 400) |
+| `leva-j-colaborador-pg` (10, PostgreSQL real) | as rotas gravam as faixas e refazem os campos antigos; o cliente antigo limpa as faixas; 400 na sobreposição; competência de outra empresa recusada; o texto da jornada nos documentos; o relatório interno e o do link com e sem especialidades; a chave na configuração (tela antiga não muda, valor inválido 400); a tela geral de Configurações salva sem mexer na chave |
 | `sql-leva-j-colaborador` (3, PostgreSQL real) | o SQL de produção: roda 2×, as linhas antigas ficam como estavam, empresa nova com a chave ligada, `migrate diff` vazio |
 
 **Testes antigos atualizados de propósito:**
 
 - `admissao-regras`, `admissao-pg` e `admissao-ui` passaram a exigir os campos novos.
+- `tema6-datas-hora` (3): a jornada é lida e gravada pela faixa 1. Uma faixa sem entrada não salva e diz o que falta;
+  sem faixa nenhuma, a jornada vai vazia.
+- `impressao-os-ui` (1): salvar leva a chave das especialidades.
 - Antes, `email: ""` servia de atalho para pular a confirmação do e-mail. Agora:
   - o teste confirma pelo código de verdade;
   - um teste novo prova que, sem e-mail configurado, o candidato segue.
 
-**Mutação:** 36 mutantes, 36 mortos.
+**Mutação:** 39 mutantes, 39 mortos.
 - O único sobrevivente da 1ª rodada foi "a tela antiga desliga a chave". O teste partia da chave desligada.
 - Agora ele também confere com a chave ligada, e o mutante morre.
