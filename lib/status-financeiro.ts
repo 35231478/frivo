@@ -59,14 +59,16 @@ export async function calcularStatusFinanceiro(
 export async function calcularStatusFinanceiroDetalhado(
   clienteId: string,
   empresaId?: string,
-): Promise<{ status: StatusFinanceiroCalc; totalProximos30Dias: number }> {
+): Promise<{ status: StatusFinanceiroCalc; totalProximos30Dias: number; valorEmAtraso: number }> {
   const where = { clienteId, ...(empresaId ? { empresaId } : {}) };
   const hoje = inicioDeHoje();
   const em30Dias = new Date(hojeDiaCivil(new Date(), 31).getTime() - 1); // até o fim do 30º dia
 
-  const [total, vencidasEmAberto, proximos] = await Promise.all([
+  const [total, vencidas, proximos] = await Promise.all([
     prisma.contaReceber.count({ where }),
-    prisma.contaReceber.count({
+    // Leva H: além de contar, soma o que falta receber das vencidas (o "Inadimplente" da ficha mostra o valor)
+    prisma.contaReceber.aggregate({
+      _count: { _all: true }, _sum: { valor: true, valorRecebido: true },
       where: { ...where, status: { in: [...STATUS_EM_ABERTO] }, dataVencimento: { lt: hoje } },
     }),
     prisma.contaReceber.aggregate({
@@ -76,10 +78,11 @@ export async function calcularStatusFinanceiroDetalhado(
   ]);
 
   const status: StatusFinanceiroCalc =
-    total === 0 ? "SEM_HISTORICO" : vencidasEmAberto > 0 ? "INADIMPLENTE" : "ADIMPLENTE";
+    total === 0 ? "SEM_HISTORICO" : vencidas._count._all > 0 ? "INADIMPLENTE" : "ADIMPLENTE";
 
   // Pelo que falta receber (a baixa parcial já entrou)
-  return { status, totalProximos30Dias: Math.round((Number(proximos._sum.valor ?? 0) - Number(proximos._sum.valorRecebido ?? 0)) * 100) / 100 };
+  const falta = (s: { valor: unknown; valorRecebido: unknown }) => Math.round((Number(s.valor ?? 0) - Number(s.valorRecebido ?? 0)) * 100) / 100;
+  return { status, totalProximos30Dias: falta(proximos._sum), valorEmAtraso: falta(vencidas._sum) };
 }
 
 /**
