@@ -13,6 +13,7 @@
  *   • Comparecer = o primeiro "Cheguei" do app (reserva: o início da primeira atividade).
  */
 import type { Prisma } from "@prisma/client";
+import { comEscopo } from "@/lib/escopo/proprios";
 import { prisma } from "@/lib/prisma";
 import { STATUS_FINAIS_OS } from "@/lib/os/prazo-execucao";
 import { alertaDoAtendimento, lerJornada, limitesDoAtendimento, regraDaPrioridade, temPrazoDeAtendimento, type FiltroAtendimento, type Jornada, type RegraAtendimento } from "./prazo";
@@ -99,12 +100,12 @@ const SELECT_ALERTA = {
 const TETO_CANDIDATAS = 2000;
 
 /** As OS abertas com algum prazo de atendimento ainda por cumprir, já classificadas (a regra é a de ./prazo). */
-async function emAlerta(empresaId: string, agora: Date): Promise<{ id: string; alerta: "ESTOURADO" | "VENCENDO" }[]> {
+async function emAlerta(empresaId: string, agora: Date, escopoOs: Prisma.OrdemServicoWhereInput = {}): Promise<{ id: string; alerta: "ESTOURADO" | "VENCENDO" }[]> {
   const abertas = await prisma.ordemServico.findMany({
-    where: {
+    where: comEscopo({
       empresaId, status: { notIn: [...STATUS_FINAIS_OS] },
       OR: [{ atendimentoComparecerAte: { not: null }, atendimentoComparecidoEm: null }, { atendimentoResolverAte: { not: null } }],
-    },
+    } as Prisma.OrdemServicoWhereInput, escopoOs),
     select: SELECT_ALERTA,
     orderBy: { chamadoAbertoEm: "asc" },
     take: TETO_CANDIDATAS,
@@ -116,8 +117,9 @@ async function emAlerta(empresaId: string, agora: Date): Promise<{ id: string; a
 }
 
 /** Quantas OS estão com o prazo de atendimento vencendo e quantas já estouraram (para o sino e o Dashboard). */
-export async function contarAtendimento(empresaId: string, agora: Date = new Date()): Promise<{ vencendo: number; estourado: number }> {
-  const lista = await emAlerta(empresaId, agora);
+/** `escopoOs`: COM-1 — com "Ver só os próprios", só as OS do escopo da pessoa. */
+export async function contarAtendimento(empresaId: string, agora: Date = new Date(), escopoOs: Prisma.OrdemServicoWhereInput = {}): Promise<{ vencendo: number; estourado: number }> {
+  const lista = await emAlerta(empresaId, agora, escopoOs);
   return { vencendo: lista.filter((x) => x.alerta === "VENCENDO").length, estourado: lista.filter((x) => x.alerta === "ESTOURADO").length };
 }
 

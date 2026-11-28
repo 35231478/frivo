@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { noEscopo } from "@/lib/escopo/proprios-server";
 import { regraDeCobranca } from "@/lib/orcamentos/materiais";
 import { notFound } from "next/navigation";
 import { auth } from "@/lib/auth";
@@ -23,6 +24,8 @@ export default async function OsDetalhePage({ params, searchParams }: { params: 
   const { id } = await params;
   const { aba } = await searchParams;
   const session = await auth();
+  // COM-1: "Ver só os próprios" — o registro de outro vendedor não existe para esta pessoa
+  if (session?.user && !(await noEscopo(session.user, "ordem", id))) notFound();
   const empresaId = session!.user!.empresaId;
   // Central da OS: o status automático acompanha os fatos — ao abrir, alinha OS antigas que
   // ficaram para trás (idempotente; com ajuste manual não mexe)

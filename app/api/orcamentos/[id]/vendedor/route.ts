@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { exigirPermissao } from "@/lib/permissoes-server";
 import { trocarVendedorSchema } from "@/lib/comissoes/regras";
 import { trocarVendedor } from "@/lib/comissoes/servidor";
+import { escopoBarra } from "@/lib/escopo/proprios-server";
 
 /**
  * COM-1 — TROCAR o vendedor do orçamento: só com Orçamentos › "Trocar vendedor" (o administrador tem sempre),
@@ -11,6 +12,8 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   const guard = await exigirPermissao("orcamentos", "trocarVendedor");
   if (guard.erro) return guard.resposta;
   const { id } = await params;
+  const foraDoEscopo = await escopoBarra("orcamento", id); // COM-1: "Ver só os próprios" → 404
+  if (foraDoEscopo) return foraDoEscopo;
   const parsed = trocarVendedorSchema.safeParse(await req.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ erro: parsed.error.errors[0]?.message ?? "Dados inválidos" }, { status: 400 });
   const u = guard.session.user!;

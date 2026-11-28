@@ -1,4 +1,6 @@
 import { prisma } from "@/lib/prisma";
+import { comEscopo } from "@/lib/escopo/proprios";
+import type { Prisma } from "@prisma/client";
 import { linkRelatorioAtividade } from "@/lib/relatorio-atividade-link";
 
 /**
@@ -58,7 +60,9 @@ export interface EventoHistorico {
 
 const LIMITE = 200;
 
-export async function carregarHistoricoEquipamento(empresaId: string, equipamentoId: string): Promise<EventoHistorico[]> {
+/** `escopoOs`: COM-1 — com "Ver só os próprios" em OS, a linha do tempo só traz as OS do escopo de quem vê. */
+export async function carregarHistoricoEquipamento(empresaId: string, equipamentoId: string, escopoOs: Prisma.OrdemServicoWhereInput = {}): Promise<EventoHistorico[]> {
+  const comOs = Object.keys(escopoOs).length ? { ordemServico: escopoOs } : {};
   const [atividades, osSemAtividade, respostas, checklist, fotos, audios, adicionais] = await Promise.all([
     prisma.atividadeOs.findMany({
       where: {
@@ -68,6 +72,7 @@ export async function carregarHistoricoEquipamento(empresaId: string, equipament
           { equipamentos: { some: { equipamentoId } } },
           { servicosAdicionais: { some: { equipamentoId } } },
         ],
+        ...comOs,
       },
       orderBy: { criadoEm: "desc" },
       take: LIMITE,
@@ -80,7 +85,7 @@ export async function carregarHistoricoEquipamento(empresaId: string, equipament
       },
     }),
     prisma.ordemServico.findMany({
-      where: { empresaId, equipamentoId, atividades: { none: {} } },
+      where: comEscopo({ empresaId, equipamentoId, atividades: { none: {} } }, escopoOs),
       orderBy: { criadoEm: "desc" },
       take: LIMITE,
       select: { id: true, numero: true, status: true, descricao: true, criadoEm: true, dataConclusao: true },

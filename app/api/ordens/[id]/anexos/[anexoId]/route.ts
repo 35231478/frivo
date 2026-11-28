@@ -5,6 +5,7 @@ import { osDaEmpresa } from "@/lib/os-server";
 import { respostaAnexo } from "@/lib/anexos-server";
 import { nomeEquipamento } from "@/lib/execucao/vinculos";
 import { ehImagem } from "@/lib/os/galeria";
+import { escopoBarra } from "@/lib/escopo/proprios-server";
 
 type Params = { params: Promise<{ id: string; anexoId: string }> };
 
@@ -13,6 +14,8 @@ export async function GET(req: NextRequest, { params }: Params) {
   const guard = await exigirPermissao("ordens", "visualizar");
   if (guard.erro) return guard.resposta;
   const { id, anexoId } = await params;
+  const foraDoEscopo = await escopoBarra("ordem", id); // COM-1: "Ver só os próprios" → 404
+  if (foraDoEscopo) return foraDoEscopo;
   if (!(await osDaEmpresa(id, guard.session.user!.empresaId))) return NextResponse.json({ erro: "OS não encontrada" }, { status: 404 });
 
   const anexo = await prisma.osAnexo.findFirst({ where: { id: anexoId, ordemServicoId: id } });
@@ -28,6 +31,8 @@ export async function DELETE(_: NextRequest, { params }: Params) {
   if (guard.erro) return guard.resposta;
   const { session } = guard;
   const { id, anexoId } = await params;
+  const foraDoEscopo = await escopoBarra("ordem", id); // COM-1: "Ver só os próprios" → 404
+  if (foraDoEscopo) return foraDoEscopo;
   if (!(await osDaEmpresa(id, session.user!.empresaId))) return NextResponse.json({ erro: "OS não encontrada" }, { status: 404 });
 
   const anexo = await prisma.osAnexo.findFirst({

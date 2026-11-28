@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { comEscopo, filtroOrcamentos } from "@/lib/escopo/proprios";
 import { registrarEvento } from "@/lib/orcamentos/ciclo-server";
 import { itensDoOrcamentoParaTrava, verificarPrecoDeTabela } from "@/lib/precos/trava-tabela-server";
 import { textoDaTrilha } from "@/lib/precos/trava-tabela";
@@ -45,7 +46,7 @@ export async function GET(req: NextRequest) {
   }
 
   const orcamentos = await prisma.orcamento.findMany({
-    where,
+    where: comEscopo(where, filtroOrcamentos(session.user)), // COM-1: "Ver só os próprios"
     include: {
       cliente: { select: { id: true, nome: true, nomeFantasia: true } },
       _count: { select: { ordensServico: true } },

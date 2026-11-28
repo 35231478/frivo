@@ -8,7 +8,7 @@ import { corDado } from "@/lib/ui/tokens";
 export type Acao =
   | "visualizar" | "criar" | "editar" | "excluir" | "concluir" | "aprovar"
   | "gerenciar" | "medicoes" | "contasReceber" | "fluxoCaixa" | "folha" | "fiscal" | "perdas" | "checklist" | "exportar"
-  | "separar" | "revisar" | "disciplinar" | "enviar" | "verCusto" | "alterarPrecoTabela" | "trocarVendedor";
+  | "separar" | "revisar" | "disciplinar" | "enviar" | "verCusto" | "alterarPrecoTabela" | "trocarVendedor" | "verSoProprios";
 
 export type Permissoes = Record<string, Partial<Record<Acao, boolean>>>;
 
@@ -43,13 +43,22 @@ export const ACOES_LABEL: Record<Acao, string> = {
   verCusto: "Ver custo e margem",
   alterarPrecoTabela: "Alterar preço de tabela",
   trocarVendedor: "Trocar vendedor",
+  verSoProprios: "Ver só os próprios",
 };
+
+/**
+ * COM-1 — marcas que RESTRINGEM em vez de liberar: ligadas, a pessoa vê menos. Ficam fora de "todas as permissões"
+ * (o perfil Administrador, o "Selecionar tudo" do editor de perfil): acesso total nunca nasce limitado.
+ */
+export const ACOES_RESTRITIVAS: readonly Acao[] = ["verSoProprios"];
+export const ehRestritiva = (a: Acao) => ACOES_RESTRITIVAS.includes(a);
 
 /** Matriz de permissões agrupada por seção (fonte da verdade da UI e dos defaults). */
 export const SECOES: SecaoDef[] = [
   {
     id: "operacao", label: "Operação", modulos: [
-      { id: "ordens", label: "Ordens de serviço", icone: "ClipboardList", acoes: ["visualizar", "criar", "editar", "concluir", "excluir"] },
+      // verSoProprios (COM-1, restritiva): vê e busca só as OS ligadas aos orçamentos em que é o vendedor (ou criadas por ele)
+      { id: "ordens", label: "Ordens de serviço", icone: "ClipboardList", acoes: ["visualizar", "criar", "editar", "concluir", "excluir", "verSoProprios"] },
       { id: "clientes", label: "Clientes", icone: "Users", acoes: ["visualizar", "criar", "editar", "excluir"] },
       { id: "equipamentos", label: "Equipamentos", icone: "Thermometer", acoes: ["visualizar", "criar", "editar", "excluir"] },
       { id: "pmoc", label: "PMOC", icone: "FileBadge", acoes: ["visualizar", "criar", "editar", "excluir"] },
@@ -71,7 +80,7 @@ export const SECOES: SecaoDef[] = [
       // (fica travado); o administrador tem sempre (lib/precos/trava-tabela).
       // trocarVendedor (COM-1): o vendedor nasce = quem criou e fica travado; com esta permissão a pessoa troca,
       // informando o motivo (vai para a trilha). Perfil gravado antes não a tem; o administrador tem sempre.
-      { id: "orcamentos", label: "Orçamentos", icone: "Calculator", acoes: ["visualizar", "criar", "editar", "aprovar", "excluir", "verCusto", "alterarPrecoTabela", "trocarVendedor"] },
+      { id: "orcamentos", label: "Orçamentos", icone: "Calculator", acoes: ["visualizar", "criar", "editar", "aprovar", "excluir", "verCusto", "alterarPrecoTabela", "trocarVendedor", "verSoProprios"] },
       // excluir = CANCELAR o contrato (nada é apagado), como em OS e orçamentos. Perfil gravado antes desta
       // permissão não a tem: o administrador marca em Configurações › Perfis de acesso (o SQL opcional está
       // em docs/sql-opcional/contratos-excluir.sql). Administrador e super admin podem tudo, sem nada no banco.
@@ -137,7 +146,7 @@ export function permissoesVazias(): Permissoes {
 
 export function permissoesTotais(): Permissoes {
   const p: Permissoes = {};
-  for (const m of MODULOS) { p[m.id] = {}; for (const a of m.acoes) p[m.id][a] = true; }
+  for (const m of MODULOS) { p[m.id] = {}; for (const a of m.acoes) p[m.id][a] = !ehRestritiva(a); }
   return p;
 }
 

@@ -21,7 +21,7 @@ export default async function PendenciasPage() {
   const u = session!.user!;
   const escopoTecnico = escopoDaSessao(session!);
   const escopo = escopoDoSino({ permissoes: u.permissoes, role: u.role, restrito: escopoTecnico.restrito });
-  const contagem = await contarSino({ empresaId: u.empresaId, usuarioId: u.id!, escopo, filtroTecnico: filtroEscopo(escopoTecnico) });
+  const contagem = await contarSino({ empresaId: u.empresaId, usuarioId: u.id!, escopo, filtroTecnico: filtroEscopo(escopoTecnico), quem: u });
   const areas = painelDePendencias(contagem, escopo);
   const total = totalDoPainel(areas);
 

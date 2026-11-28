@@ -1,0 +1,47 @@
+/**
+ * COM-1 — o guarda das rotas POR ID de orçamento e de OS: com "Ver só os próprios", um registro fora do escopo
+ * responde 404 (como se não existisse), em leitura e em escrita. Sem a marca (ou ADMIN), não consulta nada.
+ */
+import { NextResponse } from "next/server";
+import { auth } from "@/lib/auth";
+import { prisma } from "@/lib/prisma";
+import { filtroOrcamentos, filtroOrdens, soProprios, type QuemVe } from "./proprios";
+
+export const MSG_FORA_DO_ESCOPO = "Não encontrado";
+
+/** O registro está no escopo da pessoa? (sem a marca: sempre) */
+export async function noEscopo(u: QuemVe & { empresaId?: string | null }, tipo: "orcamento" | "ordem", id: string): Promise<boolean> {
+  if (tipo === "orcamento") {
+    if (!soProprios(u, "orcamentos")) return true;
+    return !!(await prisma.orcamento.findFirst({ where: { id, empresaId: u.empresaId ?? "", ...filtroOrcamentos(u) }, select: { id: true } }));
+  }
+  if (!soProprios(u, "ordens")) return true;
+  return !!(await prisma.ordemServico.findFirst({ where: { id, empresaId: u.empresaId ?? "", ...filtroOrdens(u) }, select: { id: true } }));
+}
+
+/**
+ * Para o topo de cada rota `/api/orcamentos/[id]/…` e `/api/ordens/[id]/…`: devolve a resposta 404 quando o registro
+ * está fora do escopo da pessoa logada, ou null para seguir. Sem sessão devolve null (o guarda de permissão responde).
+ */
+export async function escopoBarra(tipo: "orcamento" | "ordem", id: string): Promise<NextResponse | null> {
+  const session = await auth();
+  const u = session?.user as (QuemVe & { empresaId?: string }) | undefined;
+  if (!u) return null;
+  return (await noEscopo(u, tipo, id)) ? null : NextResponse.json({ erro: MSG_FORA_DO_ESCOPO }, { status: 404 });
+}
+
+/** Os ids (de uma seleção em massa) que estão no escopo da pessoa; entidade fora de orçamento/OS volta inteira. */
+export async function idsNoEscopo(u: QuemVe & { empresaId?: string | null }, entidade: string, ids: string[]): Promise<string[]> {
+  if (!ids.length) return ids;
+  if (entidade === "orcamentos" && soProprios(u, "orcamentos")) {
+    const ok = await prisma.orcamento.findMany({ where: { id: { in: ids }, empresaId: u.empresaId ?? "", ...filtroOrcamentos(u) }, select: { id: true } });
+    const set = new Set(ok.map((o) => o.id));
+    return ids.filter((i) => set.has(i));
+  }
+  if (entidade === "ordens" && soProprios(u, "ordens")) {
+    const ok = await prisma.ordemServico.findMany({ where: { id: { in: ids }, empresaId: u.empresaId ?? "", ...filtroOrdens(u) }, select: { id: true } });
+    const set = new Set(ok.map((o) => o.id));
+    return ids.filter((i) => set.has(i));
+  }
+  return ids;
+}

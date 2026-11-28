@@ -10,6 +10,7 @@ import { ErroTecnicos, INCLUDE_TECNICOS_ATIVIDADE, gravarTecnicos, lerDefinicao,
 import { agendarPush, notificarReagendamento } from "@/lib/push/eventos";
 import { sincronizarStatusOs } from "@/lib/os/sincronizar-status";
 import { chaveDiaCivil } from "@/lib/fuso";
+import { escopoBarra } from "@/lib/escopo/proprios-server";
 
 type Params = { params: Promise<{ id: string; atividadeId: string }> };
 
@@ -18,6 +19,8 @@ export async function PUT(req: NextRequest, { params }: Params) {
   if (guard.erro) return guard.resposta;
   const { session } = guard;
   const { id, atividadeId } = await params;
+  const foraDoEscopo = await escopoBarra("ordem", id); // COM-1: "Ver só os próprios" → 404
+  if (foraDoEscopo) return foraDoEscopo;
   const empresaId = session.user!.empresaId;
   const body = await req.json();
 
@@ -143,6 +146,8 @@ export async function DELETE(_: NextRequest, { params }: Params) {
   if (guard.erro) return guard.resposta;
   const { session } = guard;
   const { id, atividadeId } = await params;
+  const foraDoEscopo = await escopoBarra("ordem", id); // COM-1: "Ver só os próprios" → 404
+  if (foraDoEscopo) return foraDoEscopo;
   const empresaId = session.user!.empresaId;
 
   const atividade = await prisma.atividadeOs.findFirst({

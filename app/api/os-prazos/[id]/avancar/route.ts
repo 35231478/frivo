@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { comEscopo, filtroOrdens } from "@/lib/escopo/proprios";
 import { prisma } from "@/lib/prisma";
 import { exigirPermissao } from "@/lib/permissoes-server";
 import { aplicarVariaveis, whatsappLink } from "@/lib/utils";
@@ -14,7 +15,7 @@ export async function POST(req: NextRequest, { params }: Params) {
   const usuarioNome = session.user!.name ?? "Sistema";
 
   const prazo = await prisma.osPrazo.findFirst({
-    where: { id, ordemServico: { empresaId } },
+    where: { id, ordemServico: comEscopo({ empresaId }, filtroOrdens(session.user)) }, // COM-1: escopo
     include: {
       etapas: { orderBy: { ordem: "asc" } },
       ordemServico: {

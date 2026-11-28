@@ -18,6 +18,7 @@ import { agendarPush, notificarOsCancelada, notificarReagendamento } from "@/lib
 import { estagioAutomatico, statusCorresponde } from "@/lib/os/status";
 import { lerPrazoDigitado } from "@/lib/os/prazo-execucao";
 import { diaCivilUTC, ehDiaCivil, instanteBR, partesBR } from "@/lib/fuso";
+import { escopoBarra } from "@/lib/escopo/proprios-server";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -28,6 +29,8 @@ export async function GET(_: NextRequest, { params }: Params) {
   const bloqueio = bloqueioPainelTecnico(session);
   if (bloqueio) return bloqueio;
   const { id } = await params;
+  const foraDoEscopo = await escopoBarra("ordem", id); // COM-1: "Ver só os próprios" → 404
+  if (foraDoEscopo) return foraDoEscopo;
   const empresaId = session.user!.empresaId;
 
   const os = await prisma.ordemServico.findFirst({
@@ -86,6 +89,8 @@ export async function PATCH(req: NextRequest, { params }: Params) {
   const bloqueio = bloqueioPainelTecnico(session);
   if (bloqueio) return bloqueio;
   const { id } = await params;
+  const foraDoEscopo = await escopoBarra("ordem", id); // COM-1: "Ver só os próprios" → 404
+  if (foraDoEscopo) return foraDoEscopo;
   const empresaId = session.user!.empresaId;
   const usuarioId = session.user!.id;
 
@@ -144,6 +149,8 @@ export async function PUT(req: NextRequest, { params }: Params) {
   const bloqueio = bloqueioPainelTecnico(session);
   if (bloqueio) return bloqueio;
   const { id } = await params;
+  const foraDoEscopo = await escopoBarra("ordem", id); // COM-1: "Ver só os próprios" → 404
+  if (foraDoEscopo) return foraDoEscopo;
   const empresaId = session.user!.empresaId;
   const usuarioId = session.user!.id;
 
@@ -283,6 +290,8 @@ export async function DELETE(req: NextRequest, { params }: Params) {
   const bloqueio = bloqueioPainelTecnico(session);
   if (bloqueio) return bloqueio;
   const { id } = await params;
+  const foraDoEscopo = await escopoBarra("ordem", id); // COM-1: "Ver só os próprios" → 404
+  if (foraDoEscopo) return foraDoEscopo;
   const empresaId = session.user!.empresaId;
 
   const os = await prisma.ordemServico.findFirst({ where: { id, empresaId }, select: { id: true, status: true, numero: true, origem: true } });

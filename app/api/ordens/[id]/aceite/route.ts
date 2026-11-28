@@ -4,12 +4,15 @@ import { ipDaRequisicao } from "@/lib/orcamentos/ciclo";
 import { aceiteLocalSchema, caminhoPublicoAceite, estadoDoAceite } from "@/lib/os/aceite";
 import { aceiteDaOs, pedeAvaliacao, registrarAceiteLocal } from "@/lib/os/aceite-server";
 import { guardaDoAceite, responderAceite } from "@/lib/os/aceite-rotas";
+import { escopoBarra } from "@/lib/escopo/proprios-server";
 
 type Params = { params: Promise<{ id: string }> };
 
 /** O aceite do cliente desta OS: o estado, quem confirmou e como, e o link de confirmação. Exige "OS › Visualizar". */
 export async function GET(_: NextRequest, { params }: Params) {
   const { id } = await params;
+  const foraDoEscopo = await escopoBarra("ordem", id); // COM-1: "Ver só os próprios" → 404
+  if (foraDoEscopo) return foraDoEscopo;
   const { ator, resposta } = await guardaDoAceite(id, "visualizar");
   if (!ator) return resposta;
   const os = await prisma.ordemServico.findFirst({ where: { id, empresaId: ator.empresaId }, select: { status: true } });
@@ -27,6 +30,8 @@ export async function GET(_: NextRequest, { params }: Params) {
  */
 export async function POST(req: NextRequest, { params }: Params) {
   const { id } = await params;
+  const foraDoEscopo = await escopoBarra("ordem", id); // COM-1: "Ver só os próprios" → 404
+  if (foraDoEscopo) return foraDoEscopo;
   const { ator, resposta } = await guardaDoAceite(id, "editar");
   if (!ator) return resposta;
   const parsed = aceiteLocalSchema.safeParse(await req.json().catch(() => ({})));

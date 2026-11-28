@@ -1,4 +1,5 @@
 import { NomeNaTrilha } from "@/components/layout/nome-na-trilha";
+import { noEscopo } from "@/lib/escopo/proprios-server";
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import Link from "next/link";
@@ -38,6 +39,8 @@ export default async function OrcamentoDetalhePage({
 }) {
   const { id } = await params;
   const session = await auth();
+  // COM-1: "Ver só os próprios" — o registro de outro vendedor não existe para esta pessoa
+  if (session?.user && !(await noEscopo(session.user, "orcamento", id))) notFound();
   const empresaId = session!.user!.empresaId;
 
   const [orcamento, empresa] = await Promise.all([

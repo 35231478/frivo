@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { comEscopo, filtroOrdens } from "@/lib/escopo/proprios";
 import Link from "next/link";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
@@ -75,7 +76,7 @@ export default async function CalendarioPage({
 
   const [ordens, tecnicos, tiposOs, clientes, unidades, solicitacoesPendentes] = await Promise.all([
     prisma.ordemServico.findMany({
-      where,
+      where: comEscopo(where, filtroOrdens(session!.user)), // COM-1: "Ver só os próprios"
       select: {
         id: true, numero: true, status: true, prioridade: true, origem: true, previsaoConclusao: true, prazoExecucao: true,
         cliente: { select: { id: true, nome: true, nomeFantasia: true } },
@@ -107,7 +108,7 @@ export default async function CalendarioPage({
     // As unidades/locais JÁ CADASTRADOS (model Unidade, a mesma que a OS aponta): o filtro
     // "Localização / unidade" virou seletor delas, em vez de texto solto que ninguém acertava.
     prisma.unidade.findMany({ where: { empresaId, ativo: true }, select: { id: true, nome: true, clienteId: true }, orderBy: [{ cliente: { nome: "asc" } }, { nome: "asc" }] }),
-    veSolicitacoes ? prisma.ordemServico.count({ where: { empresaId, ...SOLICITACAO_PENDENTE } }) : Promise.resolve(0),
+    veSolicitacoes ? prisma.ordemServico.count({ where: comEscopo({ empresaId, ...SOLICITACAO_PENDENTE }, filtroOrdens(session!.user)) }) : Promise.resolve(0),
   ]);
 
   // OS em campanha: cada dia mostra qual visita é ("Visita 3 de 12")

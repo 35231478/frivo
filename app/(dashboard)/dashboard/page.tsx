@@ -63,7 +63,7 @@ export default async function DashboardPage() {
   const temQr = empresaTemModulo(desligados, "qrcodes");
 
   // Só consulta o que vai aparecer; um bloco com erro não derruba a página
-  const dados = await carregarBlocos(visiveis.map((b) => b.id), { empresaId: user.empresaId, podeVer });
+  const dados = await carregarBlocos(visiveis.map((b) => b.id), { empresaId: user.empresaId, podeVer, quem: user });
   // Implantação em destaque até 100% — só para quem configura a empresa (a mesma permissão do cartão em
   // Configurações). Se a contagem falhar, o painel segue sem o destaque.
   const podeConfigurar = podeVer("configuracoes", "gerenciar");

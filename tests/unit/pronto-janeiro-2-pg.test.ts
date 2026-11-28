@@ -114,7 +114,8 @@ describe.skipIf(!URL_PG)("Pronto pra janeiro 2 (PostgreSQL real)", () => {
       // Gestor = preset Supervisor; Vendas = exatamente o combinado (sem financeiro, sem configurações)
       expect(por("Gestor").permissoes).toEqual(JSON.parse(JSON.stringify(PRESETS.SUPERVISOR)));
       expect(por("Vendas").permissoes).toEqual(JSON.parse(JSON.stringify(montarPermissoes({
-        dashboard: ["visualizar"], clientes: ["visualizar", "criar", "editar"], orcamentos: ["visualizar", "criar", "editar"], contratos: ["visualizar"],
+        // COM-1: nasce com "Ver só os próprios" em Orçamentos e OS (marca que LIMITA; empresas novas)
+        dashboard: ["visualizar"], clientes: ["visualizar", "criar", "editar"], orcamentos: ["visualizar", "criar", "editar", "verSoProprios"], ordens: ["verSoProprios"], contratos: ["visualizar"],
       }))));
       expect(perfis.some((p: any) => p.nome === "Auxiliar")).toBe(false);
 

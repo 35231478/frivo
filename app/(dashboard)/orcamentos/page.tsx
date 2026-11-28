@@ -1,4 +1,5 @@
 import { SelecaoMassaProvider, CheckboxLinha, CheckboxPagina } from "@/components/acoes-massa/selecao";
+import { comEscopo, filtroOrcamentos } from "@/lib/escopo/proprios";
 import { BarraAcoesMassa } from "@/components/acoes-massa/barra";
 import { temAcaoMassa } from "@/lib/acoes-massa/acoes";
 import type { Metadata } from "next";
@@ -51,11 +52,13 @@ export default async function OrcamentosPage({
   const periodo = lerPeriodo(sp, agora, { permitirTodos: true });
   // "Vencendo" (painel de pendências): o prazo do aviso "vence em X dias" da empresa
   const diasVencendo = sp.validade === FILTRO_VENCENDO ? await diasOrcamentoVencendo(empresaId) : null;
-  const where = whereListaOrcamentos(empresaId, sp, periodo, agora, diasVencendo ?? undefined);
+  // COM-1: "Ver só os próprios" — a lista, a contagem e os cards do funil só com os orçamentos em que a pessoa é o vendedor
+  const escopo = filtroOrcamentos(session!.user);
+  const where = comEscopo(whereListaOrcamentos(empresaId, sp, periodo, agora, diasVencendo ?? undefined), escopo);
   // Cards de funil: só o período (busca e demais filtros mexem só na lista)
   const noPeriodo = condPeriodoCriacao(periodo);
   const soma = (c: string) => prisma.orcamento.aggregate({
-    where: { empresaId, AND: [noPeriodo ?? {}, condCardPeriodoOrcamentos(c, agora) ?? {}] as object[] },
+    where: { empresaId, AND: [noPeriodo ?? {}, condCardPeriodoOrcamentos(c, agora) ?? {}, escopo] as object[] },
     _sum: { totalGeral: true }, _count: true,
   });
 

@@ -9,7 +9,7 @@ import { Select } from "@/components/ui/select";
 import { FormField, FormGrid } from "@/components/ui/form-field";
 import { Drawer } from "@/components/ui/drawer";
 import { salvarCadastro, type EditorCadastroProps } from "@/components/cadastros/cadastro-padrao";
-import { SECOES, ACOES_LABEL, PRESETS, TIPOS_PERFIL_LABEL, permissoesVazias, podeEntrarNoModulo, type Permissoes, type Acao, type IconeModulo } from "@/lib/permissoes";
+import { SECOES, ACOES_LABEL, PRESETS, ehRestritiva, TIPOS_PERFIL_LABEL, permissoesVazias, podeEntrarNoModulo, type Permissoes, type Acao, type IconeModulo } from "@/lib/permissoes";
 import { corDado } from "@/lib/ui/tokens";
 
 /** Ícone de cada módulo (lib/permissoes.ts guarda só o nome: é um arquivo puro, sem a biblioteca). */
@@ -38,6 +38,9 @@ function MiniToggle({ checked, onChange, rotulo }: { checked: boolean; onChange:
 // Cor que um registro novo recebe (dado salvo no cadastro; o usuário troca no seletor)
 const COR_PADRAO = corDado.roxo;
 
+/** COM-1: "Ver só os próprios" LIMITA (ao contrário das outras marcas): fica de fora do "Selecionar tudo" */
+const DICA_SO_PROPRIOS = "Limita: vê só os orçamentos em que é o vendedor e as OS ligadas a eles (ou criadas pela pessoa).";
+
 export function EditorPerfil({ item, aberto, onFechar, onSalvo }: EditorCadastroProps) {
   const [nome, setNome] = useState("");
   const [tipo, setTipo] = useState("PERSONALIZADO");
@@ -64,7 +67,7 @@ export function EditorPerfil({ item, aberto, onFechar, onSalvo }: EditorCadastro
     if (!secao) return;
     setPermissoes((p) => {
       const n = { ...p };
-      for (const m of secao.modulos) { n[m.id] = { ...n[m.id] }; for (const a of m.acoes) n[m.id][a] = v; }
+      for (const m of secao.modulos) { n[m.id] = { ...n[m.id] }; for (const a of m.acoes) n[m.id][a] = v && !ehRestritiva(a); }
       return n;
     });
   }
@@ -131,7 +134,7 @@ export function EditorPerfil({ item, aberto, onFechar, onSalvo }: EditorCadastro
                     </div>
                     <div className="flex items-center gap-x-5 gap-y-2 flex-wrap justify-end">
                       {m.acoes.map((acao) => (
-                        <label key={acao} className="flex items-center gap-1.5 cursor-pointer">
+                        <label key={acao} className="flex items-center gap-1.5 cursor-pointer" title={ehRestritiva(acao) ? DICA_SO_PROPRIOS : undefined} data-acao-restritiva={ehRestritiva(acao) ? "" : undefined}>
                           <MiniToggle checked={!!permissoes[m.id]?.[acao]} onChange={(v) => setAcao(m.id, acao, v)} rotulo={`${m.label}: ${ACOES_LABEL[acao]}`} />
                           <span className="text-xs text-ink-muted">{ACOES_LABEL[acao]}</span>
                         </label>
