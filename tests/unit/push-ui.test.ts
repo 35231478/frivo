@@ -42,7 +42,7 @@ function navegador({ suporte = true, ua = "Mozilla/5.0 (Windows NT 10.0) Chrome/
     getSubscription: vi.fn(async () => nav.inscricao),
     subscribe: vi.fn(async (o: any) => {
       nav.inscrever(o);
-      nav.inscricao = { endpoint: "https://push.exemplo/este-aparelho-123456789", toJSON: () => ({ keys: { p256dh: "p", auth: "a" } }), unsubscribe: async () => { nav.cancelar(); nav.inscricao = null; return true; } };
+      nav.inscricao = { endpoint: "https://push.exemplo/este-aparelho-123456789", options: { applicationServerKey: o.applicationServerKey }, toJSON: () => ({ keys: { p256dh: "p", auth: "a" } }), unsubscribe: async () => { nav.cancelar(); nav.inscricao = null; return true; } };
       return nav.inscricao;
     }),
   };
@@ -72,7 +72,7 @@ beforeEach(async () => {
   try { localStorage.clear(); } catch { /* */ }
   vi.mocked((await import("@/components/ui/avisos")).toast).mockClear();
   respostas = {
-    "GET /api/push/chave": { status: 200, corpo: { ligado: true, chave: "BChaveFicticia" } },
+    "GET /api/push/chave": { status: 200, corpo: { ligado: true, chave: "BChaveFicticiaAB" } },
     "GET /api/push/preferencias": { status: 200, corpo: TIPOS },
     "GET /api/push/aparelhos": { status: 200, corpo: APARELHOS },
     "POST /api/push/subscribe": { status: 201, corpo: { ok: true } },
@@ -108,8 +108,8 @@ describe("ativar e desativar", () => {
     expect((window as any).Notification.requestPermission).toHaveBeenCalled();
     const chave = nav.inscrever.mock.calls[0][0].applicationServerKey as Uint8Array;
     expect(nav.inscrever.mock.calls[0][0].userVisibleOnly).toBe(true);
-    expect([...chave]).toEqual([...Uint8Array.from(atob("BChaveFicticia=="), (c) => c.charCodeAt(0))]);
-    expect(gravacoes()).toEqual([{ url: "/api/push/subscribe", metodo: "POST", corpo: { endpoint: "https://push.exemplo/este-aparelho-123456789", keys: { p256dh: "p", auth: "a" }, userAgent: navigator.userAgent } }]);
+    expect([...chave]).toEqual([...Uint8Array.from(atob("BChaveFicticiaAB"), (c) => c.charCodeAt(0))]);
+    expect(gravacoes()).toEqual([{ url: "/api/push/subscribe", metodo: "POST", corpo: { endpoint: "https://push.exemplo/este-aparelho-123456789", keys: { p256dh: "p", auth: "a" }, userAgent: navigator.userAgent, chave: "BChaveFicticiaAB" } }]);
     expect(await toasts()).toEqual([["Notificações ativadas neste aparelho.", "sucesso"]]);
     expect($("[data-push-ativo]")).toBeTruthy();
     // a lista marca este aparelho
@@ -135,7 +135,8 @@ describe("ativar e desativar", () => {
 
   it("ativo: Enviar teste chama a rota; Desativar cancela no navegador e apaga no servidor", async () => {
     nav.permissao = "granted";
-    nav.inscricao = { endpoint: "https://push.exemplo/este-aparelho-123456789", toJSON: () => ({}), unsubscribe: async () => { nav.cancelar(); return true; } };
+    // a inscrição foi feita com a chave ATUAL do servidor (hotfix push: com outra chave ela não conta como ativa)
+    nav.inscricao = { endpoint: "https://push.exemplo/este-aparelho-123456789", options: { applicationServerKey: Uint8Array.from(atob("BChaveFicticiaAB"), (c) => c.charCodeAt(0)).buffer }, toJSON: () => ({}), unsubscribe: async () => { nav.cancelar(); return true; } };
     await montar("app");
     expect($("[data-ativar-push]")).toBeNull();
     await clicar($("[data-testar-push]"));

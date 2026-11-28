@@ -14,6 +14,7 @@ import { problemaSenha } from "@/lib/acesso/senha";
 import { RequisitosSenha } from "@/components/auth/requisitos-senha";
 import { AlertCircle, Camera, MonitorSmartphone } from "lucide-react";
 import { NotificacoesAparelho } from "@/components/push/notificacoes-aparelho";
+import { MinhasComissoes } from "@/components/perfil/minhas-comissoes";
 import { abaInicialDoPerfil, abasDoPerfil, alteracoesDoPerfil, linhaDaConta, type AbaPerfil } from "@/lib/perfil/abas";
 
 interface Initial {
@@ -76,7 +77,7 @@ function Bloco({ titulo, descricao, children, rodape, ...dados }: {
  * Preferências (as notificações deste aparelho; só existe quando o push está ligado). As regras moram em
  * lib/perfil/abas.
  */
-export function PerfilClient({ initial, onAvatar, emailSomenteLeitura = false, notificacoes = false, abaNaUrl = false, abaPedida }: {
+export function PerfilClient({ initial, onAvatar, emailSomenteLeitura = false, notificacoes = false, abaNaUrl = false, abaPedida, semComissoes = false }: {
   initial: Initial;
   /** Foto nova salva (o app do técnico atualiza o topo na hora) */
   onAvatar?: (avatar: string) => void;
@@ -90,12 +91,26 @@ export function PerfilClient({ initial, onAvatar, emailSomenteLeitura = false, n
   /** Painel: a aba acompanha a URL (?aba=), para o refresh e os links voltarem na mesma aba */
   abaNaUrl?: boolean;
   abaPedida?: string | null;
+  /** App do técnico: as comissões têm a seção própria no Perfil do app (aqui, dentro de "Meus dados", não repete) */
+  semComissoes?: boolean;
 }) {
   const router = useRouter();
   const { update } = useSession();
-  const abas = abasDoPerfil({ notificacoes });
+  // COM-1: a aba "Comissões" só aparece quando a empresa usa comissão (o servidor diz; nada de comissão sem regra)
+  const [comissoes, setComissoes] = useState(false);
+  const abas = abasDoPerfil({ notificacoes, comissoes });
   const [aba, setAba] = useState<AbaPerfil>(() => abaInicialDoPerfil(abaPedida, abas));
   const [erro, setErro] = useState("");
+  useEffect(() => {
+    if (semComissoes) return;
+    let vivo = true;
+    fetch("/api/perfil/comissoes?so=ativo").then((r) => (r.ok ? r.json() : null)).then((d) => {
+      if (!vivo || !d?.ativo) return;
+      setComissoes(true);
+      if (abaPedida === "comissoes") setAba("comissoes");
+    }).catch(() => {});
+    return () => { vivo = false; };
+  }, [abaPedida, semComissoes]);
 
   function trocarAba(id: string) {
     const nova = abaInicialDoPerfil(id, abas);
@@ -115,6 +130,8 @@ export function PerfilClient({ initial, onAvatar, emailSomenteLeitura = false, n
     setErro("");
     if (!["image/jpeg", "image/png", "image/webp"].includes(file.type)) { setErro("Use uma imagem JPG ou PNG."); return; }
     if (file.size > 2 * 1024 * 1024) { setErro("Imagem muito grande. Máximo 2 MB."); return; }
+    // A foto se salva na aba Dados (o "Salvar" é dela): escolhida de outra aba, a tela vai para Dados
+    if (aba !== "dados") trocarAba("dados");
     try { setPreview(await redimensionar(file)); }
     catch { setErro("Não foi possível processar a imagem."); }
   }
@@ -333,6 +350,8 @@ export function PerfilClient({ initial, onAvatar, emailSomenteLeitura = false, n
                 </Bloco>
               </>
             )}
+
+            {ativa === "comissoes" && comissoes && <MinhasComissoes />}
 
             {ativa === "preferencias" && notificacoes && (
               <Bloco titulo="Notificações" descricao="Avisos deste aparelho, mesmo com o Frivo fechado." data-bloco="notificacoes">

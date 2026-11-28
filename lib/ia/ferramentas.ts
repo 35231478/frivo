@@ -10,6 +10,7 @@
  * 4. O que volta do banco é dado, não instrução: textos são cortados e enviados como JSON.
  */
 import { z } from "zod";
+import { comEscopo, filtroOrdens } from "@/lib/escopo/proprios";
 import { prisma } from "@/lib/prisma";
 import { pode, type Acao, type Permissoes } from "@/lib/permissoes";
 import { chaveDiaBR, horaBR, inicioHojeBR, inicioMesBR } from "@/lib/fuso";
@@ -25,6 +26,9 @@ export interface ContextoIA {
 }
 
 type Requisito = [modulo: string, acao: Acao];
+
+/** COM-1: "Ver só os próprios" em OS — o assistente só conta e mostra as OS do escopo de quem pergunta */
+const escopoOs = (ctx: ContextoIA) => filtroOrdens({ id: ctx.usuarioId, role: ctx.role, permissoes: ctx.permissoes });
 
 interface Ferramenta<S extends z.ZodTypeAny = z.ZodTypeAny> {
   nome: string;
@@ -66,7 +70,7 @@ function filtroNumero(numero: string, empresaId: string) {
 
 async function carregarOs(numero: string, ctx: ContextoIA, detalhado: boolean) {
   const os = await prisma.ordemServico.findFirst({
-    where: filtroNumero(numero, ctx.empresaId),
+    where: comEscopo(filtroNumero(numero, ctx.empresaId), escopoOs(ctx)),
     orderBy: { criadoEm: "desc" },
     select: {
       id: true, numero: true, chamadoNumero: true, status: true, prioridade: true, origem: true, descricao: true, observacoes: true,
@@ -213,9 +217,9 @@ export const FERRAMENTAS: Ferramenta[] = [
       if (Object.keys(atividade).length) where.atividades = { some: atividade };
       if (i.cliente) where.cliente = { OR: [{ nome: { contains: i.cliente, mode: "insensitive" } }, { nomeFantasia: { contains: i.cliente, mode: "insensitive" } }] };
       const [total, lista] = await Promise.all([
-        prisma.ordemServico.count({ where }),
+        prisma.ordemServico.count({ where: comEscopo(where, escopoOs(ctx)) }),
         prisma.ordemServico.findMany({
-          where, take: i.limite ?? 10, orderBy: { criadoEm: "desc" },
+          where: comEscopo(where, escopoOs(ctx)), take: i.limite ?? 10, orderBy: { criadoEm: "desc" },
           select: {
             numero: true, status: true, prioridade: true, descricao: true, previsaoConclusao: true,
             cliente: { select: { nome: true, nomeFantasia: true } },
@@ -244,9 +248,9 @@ export const FERRAMENTAS: Ferramenta[] = [
       const fim = i.periodo === "hoje" ? inicioHojeBR(agora, 1) : i.periodo === "semana" ? inicioHojeBR(agora, 7) : inicioMesBR(agora, 1);
       const E = ctx.empresaId;
       const [abertas, atrasadas, concluidas, agendadas, porTecnico] = await Promise.all([
-        prisma.ordemServico.count({ where: { empresaId: E, status: { in: [...ABERTAS] } } }),
-        prisma.ordemServico.count({ where: { empresaId: E, status: { in: [...ABERTAS] }, OR: whereOsAtrasada(agora).OR } }),
-        prisma.ordemServico.count({ where: { empresaId: E, status: "CONCLUIDA", dataConclusao: { gte: ini, lt: fim } } }),
+        prisma.ordemServico.count({ where: comEscopo({ empresaId: E, status: { in: [...ABERTAS] } }, escopoOs(ctx)) }),
+        prisma.ordemServico.count({ where: comEscopo({ empresaId: E, status: { in: [...ABERTAS] }, OR: whereOsAtrasada(agora).OR }, escopoOs(ctx)) }),
+        prisma.ordemServico.count({ where: comEscopo({ empresaId: E, status: "CONCLUIDA", dataConclusao: { gte: ini, lt: fim } }, escopoOs(ctx)) }),
         prisma.atividadeOs.count({ where: { empresaId: E, dataAgendada: { gte: ini, lt: fim }, status: { not: "CANCELADA" } } }),
         prisma.atividadeOs.groupBy({ by: ["tecnicoId", "status"], where: { empresaId: E, dataAgendada: { gte: ini, lt: fim }, status: { not: "CANCELADA" } }, _count: { _all: true } }),
       ]);

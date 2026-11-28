@@ -709,7 +709,7 @@ export function ClienteForm({ initialData, totalProximos30Dias, valorEmAtraso, p
             checked={portalAtivo}
             onChange={setPortalAtivo}
           />
-          {isEditing && <PortalContatos clienteId={initialData!.id} ativo={aba === "portal"} onGerenciar={() => setAba("geral")} />}
+          {isEditing && <PortalContatos clienteId={initialData!.id} ativo={aba === "portal"} onGerenciar={() => setAba("geral")} onAcessoLiberado={() => setPortalAtivo(true)} />}
           </fieldset>
         </FormSection>
       </Painel>

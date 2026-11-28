@@ -175,7 +175,8 @@ export interface OrcamentoDocumentoProps {
    * Detalhe do orçamento (tela do escritório): cada linha ganha o lápis de "Editando este item do orçamento"
    * — ou o cadeado com o motivo, quando o orçamento não se edita mais. Some na impressão.
    */
-  edicaoLinhas?: { orcamentoId: string; faturado: boolean };
+  /** `naTabela`: as chaves do catálogo (lib/precos/trava-tabela › chaveCatalogo) que estão na tabela do cliente */
+  edicaoLinhas?: { orcamentoId: string; faturado: boolean; naTabela?: string[] };
 }
 
 function n(v: unknown): number {
@@ -313,12 +314,12 @@ export function OrcamentoDocumento({ orcamento, empresa, cliente, anexos = [], v
       </section>
 
       {orcamento.servicos.length > 0 && (
-        <TabelaGrupo titulo="Serviços" rotulo="serviços" itens={orcamento.servicos} grupo={grupoServicos} edicao={edicao} opcoes={opcoes} regraMateriais={orcamento.cobrancaMateriais} />
+        <TabelaGrupo titulo="Serviços" rotulo="serviços" tipoCatalogo="servico" itens={orcamento.servicos} grupo={grupoServicos} edicao={edicao} opcoes={opcoes} regraMateriais={orcamento.cobrancaMateriais} />
       )}
 
       {orcamento.produtos.length > 0 && (
         <div className="border-t border-surface-border">
-          <TabelaGrupo titulo="Produtos" rotulo="produtos" itens={orcamento.produtos} grupo={grupoProdutos} edicao={edicao} />
+          <TabelaGrupo titulo="Produtos" rotulo="produtos" tipoCatalogo="produto" itens={orcamento.produtos} grupo={grupoProdutos} edicao={edicao} />
         </div>
       )}
 
@@ -565,8 +566,8 @@ interface GrupoDoc {
  * é cortada ao meio; os subtotais ficam FORA da tabela (num tfoot o navegador repetiria o
  * "Subtotal" em toda página) e não se separam da última linha.
  */
-function TabelaGrupo({ titulo, rotulo, itens, grupo, edicao, opcoes, regraMateriais }: {
-  titulo: string; rotulo: string; itens: ItemDoc[]; grupo: GrupoDoc; edicao?: { orcamentoId: string; faturado: boolean; status: string };
+function TabelaGrupo({ titulo, rotulo, tipoCatalogo, itens, grupo, edicao, opcoes, regraMateriais }: {
+  titulo: string; rotulo: string; tipoCatalogo: "servico" | "produto"; itens: ItemDoc[]; grupo: GrupoDoc; edicao?: { orcamentoId: string; faturado: boolean; status: string; naTabela?: string[] };
   /** Só nos serviços: os materiais de cada um, conforme as opções do documento */
   opcoes?: OpcoesDocumentoOrcamento;
   /** "Orçamento E2": a regra de cobrança dos materiais do orçamento ("A_PARTE" = já são linhas com valor) */
@@ -615,6 +616,7 @@ function TabelaGrupo({ titulo, rotulo, itens, grupo, edicao, opcoes, regraMateri
                       // Serviço com materiais: o preço que se edita é o BASE (antes do ajuste dos inclusos)
                       comMateriais: it.valorBase != null, valorManual: !!it.valorManual,
                       valorUnitario: it.valorBase != null ? n(it.valorBase) / (n(it.quantidade) || 1) : n(it.valorUnitario),
+                      naTabela: !!edicao.naTabela?.includes(`${tipoCatalogo}:${(tipoCatalogo === "servico" ? it.servicoId : it.produtoId) ?? ""}`),
                     }} />}
                   </td>
                 )}

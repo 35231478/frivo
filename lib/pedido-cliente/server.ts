@@ -8,6 +8,7 @@
  * Um jeito só: o "Registrar PC recebido" da fatura (medição) também passa por `registrarPedido`, e a fatura
  * que estava "Aguardando PC" avança sozinha quando todas as OS e orçamentos dela têm pedido (ou foram liberados).
  */
+import { TAMANHO_MAX_PEDIDO } from "@/lib/pedido-cliente/arquivo";
 import { cache } from "react";
 import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
@@ -126,6 +127,7 @@ export function lerDadosPedido(d: DadosPedido): Falha | { numero: string; data: 
   if (d.anexo?.conteudo) {
     const v = validarDataUrl(d.anexo.conteudo, d.anexo.nome || "pedido", {
       tipos: ["application/pdf", "image/png", "image/jpeg", "image/webp"], mensagemTipo: "Envie o pedido em PDF ou foto (JPG, PNG, WEBP).",
+      tamanhoMax: TAMANHO_MAX_PEDIDO,
     });
     if (!v.ok) return falha(400, v.erro);
     anexo = { conteudo: v.arquivo.conteudo, nome: v.arquivo.nome, tipo: v.arquivo.tipo };
@@ -370,16 +372,17 @@ export async function travaIniciarAtividade(empresaId: string, atividadeId: stri
 /* ───────── painel e sino ───────── */
 
 /** As OS aguardando da empresa (o painel de pendências): quantas e o total, para a lista filtrada */
-export async function resumoAguardandoEmpresa(empresaId: string) {
-  return resumoOsAguardando({ empresaId });
+/** `escopoOs` (COM-1, "Ver só os próprios"): vazio = sem limite */
+export async function resumoAguardandoEmpresa(empresaId: string, escopoOs: Prisma.OrdemServicoWhereInput = {}) {
+  return resumoOsAguardando(Object.keys(escopoOs).length ? { AND: [{ empresaId }, escopoOs] } : { empresaId });
 }
 
 /** O sino: OS aguardando há mais que os dias da empresa (desde a conclusão; no "para executar", desde a aprovação) */
-export async function contarPedidosAtrasados(empresaId: string, agora: Date = new Date()) {
+export async function contarPedidosAtrasados(empresaId: string, agora: Date = new Date(), escopoOs: Prisma.OrdemServicoWhereInput = {}) {
   const [cfg, oss] = await Promise.all([
     prisma.configuracao.findUnique({ where: { empresaId }, select: { pedidoClienteDiasAlerta: true } }),
     prisma.ordemServico.findMany({
-      where: { empresaId, ...whereOsAguardando() },
+      where: Object.keys(escopoOs).length ? { AND: [{ empresaId, ...whereOsAguardando() }, escopoOs] } : { empresaId, ...whereOsAguardando() },
       select: { id: true, criadoEm: true, dataConclusao: true, ...SELECT_MODO, orcamentoOrigem: { select: { assinadoEm: true } } },
       orderBy: { criadoEm: "asc" }, take: 2000,
     }),

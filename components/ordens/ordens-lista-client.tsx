@@ -26,14 +26,14 @@ import { FILTROS_PRAZO, ROTULO_FILTRO_PRAZO } from "@/lib/os/prazo-execucao";
 import { ClipboardList, Plus, Download, Headset } from "lucide-react";
 import { TabelaPro } from "@/components/listagem/tabela-pro";
 import { EtiquetaPedido, type PedidoDaLinha } from "@/components/pedido-cliente/etiqueta-pedido";
-import { FILTRO_AGUARDANDO_PEDIDO } from "@/lib/pedido-cliente/where";
-import { DICA_FILTRO_AGUARDANDO } from "@/lib/pedido-cliente/regra";
+import { FILTRO_AGUARDANDO_PEDIDO, FILTRO_CONFERIR_PEDIDO } from "@/lib/pedido-cliente/where";
+import { DICA_FILTRO_AGUARDANDO, DICA_FILTRO_CONFERIR } from "@/lib/pedido-cliente/regra";
 import { PLANILHA } from "@/lib/planilha";
 
 interface TecnicoView { id: string; nome: string; avatar: string | null }
 interface OrdemView {
   id: string; numero: string; chamadoNumero: string | null; origem: string;
-  cliente: string; clienteLogo: string | null; unidade: string | null; responsavel: string | null; atividades: number;
+  cliente: string; clienteLogo: string | null; unidade: string | null; responsavel: string | null; /** COM-1: quem vendeu */ vendedor?: string | null; atividades: number;
   tecnicos: TecnicoView[];
   status: string; prioridade: string; criadoEm: string; previsaoConclusao: string | null;
   /** O estágio da OS (o mesmo da barra de andamento): Aberta › Agendada › Em execução › Concluída › Faturada, ou Cancelada */
@@ -94,7 +94,7 @@ function PrazoDaOs({ os, compacto }: { os: OrdemView; compacto?: boolean }) {
 export function OrdensListaClient({ ordens, total, pagina, porPagina, opcoes, periodo, resumoPedido = null }: {
   ordens: OrdemView[]; total: number; pagina: number; porPagina: number; opcoes: Opcoes; periodo: PeriodoTela;
   /** O filtro rápido "Aguardando pedido" (contagem e R$); null = a empresa não tem cliente que exige pedido */
-  resumoPedido?: { quantidade: number; total: number } | null;
+  resumoPedido?: { quantidade: number; total: number; conferir?: number } | null;
 }) {
   const router = useRouter();
   const { pode } = usePermissoes();
@@ -193,7 +193,11 @@ export function OrdensListaClient({ ordens, total, pagina, porPagina, opcoes, pe
           />
         }
         paramBusca="busca" navegar={(m) => setParams(m)}
-        rapidos={resumoPedido ? [{ param: "pedido", valor: FILTRO_AGUARDANDO_PEDIDO, rotulo: "Aguardando pedido", quantidade: resumoPedido.quantidade, total: resumoPedido.total, dica: DICA_FILTRO_AGUARDANDO }] : []}
+        rapidos={resumoPedido ? [
+          { param: "pedido", valor: FILTRO_AGUARDANDO_PEDIDO, rotulo: "Aguardando pedido", quantidade: resumoPedido.quantidade, total: resumoPedido.total, dica: DICA_FILTRO_AGUARDANDO },
+          // PC-2: o sino leva para cá; o filtro aparece, conta e sai pelo "Limpar filtros" como qualquer outro
+          { param: "pedido", valor: FILTRO_CONFERIR_PEDIDO, rotulo: "Pedido recebido — conferir", quantidade: resumoPedido.conferir ?? 0, dica: DICA_FILTRO_CONFERIR },
+        ] : []}
         extras={
           <>
             <a href={exportUrl} className="btn-secondary px-3 py-2 font-medium text-ink-muted">
@@ -316,6 +320,8 @@ export function OrdensListaClient({ ordens, total, pagina, porPagina, opcoes, pe
               // O estágio (e o aviso de prazo) logo depois do cliente: é o que se olha primeiro
               { id: "status", titulo: "Status", largura: 232, ordenar: "status" },
               { id: "tecnico", titulo: "Técnico", largura: 140, classe: "truncate" },
+              // COM-1: quem vendeu (escondida por padrão; liga em "Colunas")
+              { id: "vendedor", titulo: "Vendedor", largura: 140, oculta: true, classe: "truncate" },
               { id: "abertura", titulo: "Abertura", largura: 96, ordenar: "criadoEm" },
               { id: "previsao", titulo: "Prevista", largura: 96, ordenar: "previsaoConclusao" },
               // Escondida por padrão: quase sempre é a própria data prevista (quem liga em Colunas vê a diferença explicada)
@@ -343,6 +349,7 @@ export function OrdensListaClient({ ordens, total, pagina, porPagina, opcoes, pe
                   </div>
                 ),
                 tecnico: <span className={PLANILHA.apagado}>{os.responsavel ?? "—"}</span>,
+                vendedor: <span className={PLANILHA.apagado} data-vendedor-os>{os.vendedor ?? "—"}</span>,
                 abertura: <span className={cn(PLANILHA.data, PLANILHA.apagado)}>{formatarData(os.criadoEm)}</span>,
                 previsao: <span className={cn(PLANILHA.data, PLANILHA.apagado)}>{formatarDiaCivil(os.previsaoConclusao)}</span>,
                 prazo: <PrazoDaOs os={os} />,

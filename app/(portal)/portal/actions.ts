@@ -2,6 +2,7 @@
 
 import { AuthError } from "next-auth";
 import { portalSignIn, portalSignOut } from "@/lib/auth-portal";
+import { destinoSeguroDoPortal } from "@/lib/portal/senha-provisoria";
 
 export interface LoginState { erro?: string; email?: string }
 
@@ -17,7 +18,8 @@ export async function portalLogin(_prev: LoginState, formData: FormData): Promis
   const email = String(formData.get("email") ?? "");
   const senha = String(formData.get("senha") ?? "");
   try {
-    await portalSignIn("credentials", { email, senha, redirectTo: "/portal/dashboard" });
+    // O link do e-mail (lembrete do pedido) volta para onde ia; só rota interna do portal (lib/portal/senha-provisoria)
+    await portalSignIn("credentials", { email, senha, redirectTo: destinoSeguroDoPortal(formData.get("destino")) ?? "/portal/dashboard" });
     return {};
   } catch (e) {
     if (e instanceof AuthError) {

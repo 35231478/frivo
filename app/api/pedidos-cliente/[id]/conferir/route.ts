@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { MSG_FORA_DO_ESCOPO, pedidoForaDoEscopo } from "@/lib/escopo/proprios-server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { confirmarPedidoDoPortal, recusarPedidoDoPortal } from "@/lib/pedido-cliente/server";
@@ -14,6 +15,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const session = await auth();
   if (!session) return NextResponse.json({ erro: "Não autorizado" }, { status: 401 });
   const { id } = await params;
+  // COM-1: "Ver só os próprios" — pedido que cobre OS/orçamento de outro vendedor não existe para a pessoa
+  if (await pedidoForaDoEscopo(session.user, id)) return NextResponse.json({ erro: MSG_FORA_DO_ESCOPO }, { status: 404 });
   const corpo = await req.json().catch(() => null);
   const acao = corpo && typeof corpo === "object" ? corpo.acao : null;
   if (acao !== "confirmar" && acao !== "recusar") return NextResponse.json({ erro: "Ação inválida." }, { status: 400 });

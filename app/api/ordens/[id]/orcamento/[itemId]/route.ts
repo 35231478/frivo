@@ -14,6 +14,7 @@ import { formatarMoeda } from "@/lib/utils";
 import { ERRO_ITEM_SEPARADO, itemTemMaterialSeparado } from "@/lib/estoque/separacao-server";
 import { precoComparavelDoServico, verificarItemDaOs } from "@/lib/precos/trava-tabela-server";
 import { textoDaTrilha } from "@/lib/precos/trava-tabela";
+import { escopoBarra } from "@/lib/escopo/proprios-server";
 
 /** O preço comparável já gravado no item (a edição não pede de novo o que já estava) */
 const anteriorDoItem = (it: { quantidade: unknown; valorUnitario: unknown; valorBase: unknown; valorManual: boolean }) =>
@@ -33,6 +34,8 @@ export async function PUT(req: NextRequest, { params }: Params) {
   const { session } = guard;
   const empresaId = session.user!.empresaId;
   const { id, itemId } = await params;
+  const foraDoEscopo = await escopoBarra("ordem", id); // COM-1: "Ver só os próprios" → 404
+  if (foraDoEscopo) return foraDoEscopo;
   if (!(await osDaEmpresa(id, empresaId))) return NextResponse.json({ erro: "OS não encontrada" }, { status: 404 });
   const body = await req.json();
 
@@ -110,6 +113,8 @@ export async function PATCH(req: NextRequest, { params }: Params) {
   if (guard.erro) return guard.resposta;
   const { session } = guard;
   const { id, itemId } = await params;
+  const foraDoEscopo = await escopoBarra("ordem", id); // COM-1: "Ver só os próprios" → 404
+  if (foraDoEscopo) return foraDoEscopo;
   if (!(await osDaEmpresa(id, session.user!.empresaId))) return NextResponse.json({ erro: "OS não encontrada" }, { status: 404 });
 
   const item = await prisma.osItemOrcamento.findFirst({ where: { id: itemId, ordemServicoId: id }, include: { materiais: { orderBy: { ordem: "asc" } } } });
@@ -163,6 +168,8 @@ export async function DELETE(_: NextRequest, { params }: Params) {
   if (guard.erro) return guard.resposta;
   const { session } = guard;
   const { id, itemId } = await params;
+  const foraDoEscopo = await escopoBarra("ordem", id); // COM-1: "Ver só os próprios" → 404
+  if (foraDoEscopo) return foraDoEscopo;
   if (!(await osDaEmpresa(id, session.user!.empresaId))) return NextResponse.json({ erro: "OS não encontrada" }, { status: 404 });
 
   // Só apaga item desta OS (antes apagava qualquer item pelo id, de qualquer OS/empresa)

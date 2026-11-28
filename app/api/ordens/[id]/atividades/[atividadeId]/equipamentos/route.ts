@@ -5,6 +5,7 @@ import { z } from "zod";
 import { atorDaSessao, contextoExecucao } from "@/lib/execucao/contexto";
 import { vincularEquipamentos } from "@/lib/execucao/acoes";
 import { filtroEscopo } from "@/lib/tecnico/escopo";
+import { escopoBarra } from "@/lib/escopo/proprios-server";
 
 type Params = { params: Promise<{ id: string; atividadeId: string }> };
 
@@ -33,6 +34,8 @@ export async function GET(_: NextRequest, { params }: Params) {
   if (guard.erro) return guard.resposta;
   const { session } = guard;
   const { id, atividadeId } = await params;
+  const foraDoEscopo = await escopoBarra("ordem", id); // COM-1: "Ver só os próprios" → 404
+  if (foraDoEscopo) return foraDoEscopo;
   const empresaId = session.user!.empresaId;
 
   if (!(await getAtividade(empresaId, id, atividadeId, atorDaSessao(session).escopo))) {
@@ -55,6 +58,8 @@ const postSchema = z.object({ equipamentoIds: z.array(z.string().min(1)).min(1).
  */
 export async function POST(req: NextRequest, { params }: Params) {
   const { id, atividadeId } = await params;
+  const foraDoEscopo = await escopoBarra("ordem", id); // COM-1: "Ver só os próprios" → 404
+  if (foraDoEscopo) return foraDoEscopo;
   const ctx = await contextoExecucao(id, atividadeId);
   if (!ctx.ok) return ctx.resposta;
 

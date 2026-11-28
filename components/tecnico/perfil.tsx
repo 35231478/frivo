@@ -3,10 +3,11 @@
 import { confirmar } from "@/components/ui/avisos";
 import { useEffect, useState } from "react";
 import { signOut } from "next-auth/react";
-import { AlertTriangle, Car, ChevronDown, LogOut, Receipt, RefreshCw, Trash2 } from "lucide-react";
+import { AlertTriangle, Car, ChevronDown, LogOut, Percent, Receipt, RefreshCw, Trash2 } from "lucide-react";
 import { AvatarTecnico } from "@/components/ui/avatar-tecnico";
 import { cn } from "@/lib/utils";
 import { PerfilClient } from "@/components/perfil/perfil-client";
+import { MinhasComissoes } from "@/components/perfil/minhas-comissoes";
 import { rotuloSync } from "@/components/tecnico/indicador-sync";
 import { irPara, useTecnico } from "@/components/tecnico/contexto";
 import { PreferenciaRota } from "@/components/tecnico/rota";
@@ -26,7 +27,8 @@ const ROTULO_OPERACAO: Record<string, string> = {
 /**
  * Perfil do técnico, enxuto: sincronização (com o motivo das recusadas), checklist do veículo, Meus
  * dados e sair. Dentro de "Meus dados": dados pessoais, foto, SEGURANÇA (trocar a senha — o único
- * lugar do app) e as preferências do aparelho (app de rota).
+ * lugar do app) e as preferências do aparelho (app de rota). COM-1: "Minhas comissões" só quando a
+ * empresa usa comissão (o mesmo extrato do Meu perfil do painel).
  */
 export function PerfilTecnico({ perfilInicial }: { perfilInicial: React.ComponentProps<typeof PerfilClient>["initial"] }) {
   const { motor, estado, usuario, config, armazenamento, avatar, definirAvatar } = useTecnico();
@@ -34,6 +36,13 @@ export function PerfilTecnico({ perfilInicial }: { perfilInicial: React.Componen
   const [osDe, setOsDe] = useState<Record<string, string>>({});
   const [dados, setDados] = useState(false);
   const [sincronizando, setSincronizando] = useState(false);
+  const [usaComissao, setUsaComissao] = useState(false);
+  const [comissoesAbertas, setComissoesAbertas] = useState(false);
+  useEffect(() => {
+    let vivo = true;
+    fetch("/api/perfil/comissoes?so=ativo").then((r) => (r.ok ? r.json() : null)).then((d) => { if (vivo && d?.ativo) setUsaComissao(true); }).catch(() => {});
+    return () => { vivo = false; };
+  }, []);
   useEffect(() => {
     if (!motor) return;
     motor.banco.fila().then(setFila);
@@ -109,6 +118,17 @@ export function PerfilTecnico({ perfilInicial }: { perfilInicial: React.Componen
         </button>
       )}
 
+      {usaComissao && (
+        <section className="bg-white rounded-card border border-surface-border" data-comissoes-app>
+          <button type="button" onClick={() => setComissoesAbertas((v) => !v)} aria-expanded={comissoesAbertas}
+            className="w-full flex items-center justify-between p-4 font-semibold text-ink touch-target">
+            <span className="flex items-center gap-3"><Percent className="w-5 h-5 text-ink-muted" /> Minhas comissões</span>
+            <ChevronDown className={cn("w-5 h-5 transition-transform", comissoesAbertas && "rotate-180")} />
+          </button>
+          {comissoesAbertas && <div className="border-t border-surface-border p-3"><MinhasComissoes /></div>}
+        </section>
+      )}
+
       <a href="/veiculos/checklist" className="flex items-center gap-3 bg-white rounded-card border border-surface-border p-4 font-semibold text-ink touch-target">
         <Car className="w-5 h-5 text-ink-muted" /> Checklist do veículo
       </a>
@@ -121,7 +141,7 @@ export function PerfilTecnico({ perfilInicial }: { perfilInicial: React.Componen
           // No app, tudo o que se toca em "Meus dados" tem pelo menos 44 px (a tela do painel é mais compacta)
           <div className="border-t border-surface-border p-2 [&_button]:min-h-[44px] [&_input]:min-h-[44px]" data-meus-dados-app>
             {/* emailSomenteLeitura: o técnico não troca o próprio e-mail de login (perderia as OS dele) */}
-            <PerfilClient initial={{ ...perfilInicial, avatar }} onAvatar={definirAvatar} emailSomenteLeitura />
+            <PerfilClient initial={{ ...perfilInicial, avatar }} onAvatar={definirAvatar} emailSomenteLeitura semComissoes />
             {/* Preferência do aparelho (não é ação do dia a dia): fica aqui, fora da frente do Perfil */}
             <PreferenciaRota />
           </div>

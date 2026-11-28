@@ -1,5 +1,6 @@
 "use client";
 
+import { erroDoEnvio, lerArquivoComoDataUrl, lerValorPedido, MSG_ARQUIVO_ILEGIVEL, MSG_ARQUIVO_PEDIDO_GRANDE, TAMANHO_MAX_PEDIDO } from "@/lib/pedido-cliente/arquivo";
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { AlertTriangle, FileText, Loader2, Paperclip, Unlock } from "lucide-react";
@@ -20,20 +21,7 @@ interface Alvos {
   cliente: { nome: string; comprasNome: string | null; comprasEmail: string | null; comprasTelefone: string | null } | null;
 }
 
-const TAMANHO_MAX = 5 * 1024 * 1024;
 const hoje = () => new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo" }).format(new Date());
-const lerValor = (v: string) => {
-  const t = v.trim().replace(/\s|R\$/g, "");
-  if (!t) return null;
-  const n = Number(t.includes(",") ? t.replace(/\./g, "").replace(",", ".") : t);
-  return Number.isFinite(n) ? n : NaN;
-};
-const lerArquivo = (f: File) => new Promise<string>((ok, falha) => {
-  const r = new FileReader();
-  r.onload = () => ok(String(r.result));
-  r.onerror = () => falha(r.error);
-  r.readAsDataURL(f);
-});
 
 /**
  * A GAVETA DO PEDIDO DO CLIENTE (nenhuma tela nova): abre pela etiqueta "Aguardando pedido" (OS, orçamento, listas)
@@ -80,7 +68,7 @@ export function GavetaPedido({ aberto, onFechar, alvo, pedidoId = null, onConclu
     return () => { vivo = false; };
   }, [aberto, chaveAlvo, pedidoId]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const valorNum = lerValor(valor);
+  const valorNum = lerValorPedido(valor);
   const alerta = useMemo(() => (alvos && typeof valorNum === "number" && !Number.isNaN(valorNum) ? alertaValorPedido(valorNum, alvos.total) : null), [alvos, valorNum]);
   const numeroOk = limparNumeroPedido(numero);
   const valorOk = valorNum === null || (!Number.isNaN(valorNum) && valorNum >= 0);
@@ -91,9 +79,9 @@ export function GavetaPedido({ aberto, onFechar, alvo, pedidoId = null, onConclu
     const f = e.target.files?.[0];
     e.target.value = "";
     if (!f) return;
-    if (f.size > TAMANHO_MAX) { setErro("Arquivo muito grande. Tamanho máximo: 5 MB."); return; }
+    if (f.size > TAMANHO_MAX_PEDIDO) { setErro(MSG_ARQUIVO_PEDIDO_GRANDE); return; }
     setErro(null);
-    setAnexo({ conteudo: await lerArquivo(f), nome: f.name });
+    try { setAnexo({ conteudo: await lerArquivoComoDataUrl(f), nome: f.name }); } catch { setErro(MSG_ARQUIVO_ILEGIVEL); }
   }
 
   function concluir(mensagem: string, aviso?: string | null) {
@@ -114,7 +102,7 @@ export function GavetaPedido({ aberto, onFechar, alvo, pedidoId = null, onConclu
     }).catch(() => null);
     const j = await res?.json().catch(() => ({}));
     setEnviando(false);
-    if (!res?.ok) { setErro(j?.erro ?? "Não foi possível salvar o pedido."); return; }
+    if (!res?.ok) { setErro(erroDoEnvio(res?.status, j, "Não foi possível salvar o pedido.")); return; }
     concluir(editando ? "Pedido do cliente corrigido." : "Pedido do cliente informado.", j?.alerta);
   }
 

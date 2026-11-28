@@ -4,6 +4,7 @@ import { exigirPermissao } from "@/lib/permissoes-server";
 import { prisma } from "@/lib/prisma";
 import { ROTULO_COBRANCA } from "@/lib/execucao/adicional";
 import { ehTecnicoPuro } from "@/lib/tecnico/modo";
+import { escopoBarra } from "@/lib/escopo/proprios-server";
 
 type Params = { params: Promise<{ id: string; servicoId: string }> };
 
@@ -24,6 +25,8 @@ export async function PATCH(req: NextRequest, { params }: Params) {
   if (ehTecnicoPuro(guard.session.user.role, guard.session.user.permissoes))
     return NextResponse.json({ erro: "A cobrança do serviço adicional é decidida pelo escritório." }, { status: 403 });
   const { id, servicoId } = await params;
+  const foraDoEscopo = await escopoBarra("ordem", id); // COM-1: "Ver só os próprios" → 404
+  if (foraDoEscopo) return foraDoEscopo;
   const parsed = schema.safeParse(await req.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ erro: "Situação de cobrança inválida." }, { status: 400 });
   const s = await prisma.servicoAdicional.findFirst({ where: { id: servicoId, ordemServicoId: id, empresaId: guard.session.user.empresaId }, select: { id: true, descricao: true, statusCobranca: true, valor: true } });

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { exigirPermissao } from "@/lib/permissoes-server";
 import { prisma } from "@/lib/prisma";
 import { linkRelatorioAtividade, novoTokenRelatorio } from "@/lib/relatorio-atividade-link";
+import { escopoBarra } from "@/lib/escopo/proprios-server";
 
 type Params = { params: Promise<{ id: string; atividadeId: string }> };
 
@@ -10,6 +11,8 @@ export async function POST(_: NextRequest, { params }: Params) {
   const guard = await exigirPermissao("ordens", "editar");
   if (guard.erro) return guard.resposta;
   const { id, atividadeId } = await params;
+  const foraDoEscopo = await escopoBarra("ordem", id); // COM-1: "Ver só os próprios" → 404
+  if (foraDoEscopo) return foraDoEscopo;
   const empresaId = guard.session.user!.empresaId;
 
   const tokenRelatorio = novoTokenRelatorio();

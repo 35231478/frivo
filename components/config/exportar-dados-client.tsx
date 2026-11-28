@@ -29,6 +29,10 @@ const SITUACAO: Record<SituacaoExportacao, { tom: TomStatus; texto: string }> = 
 /** De quanto em quanto tempo a tela confere se a exportação terminou, e por quanto tempo no máximo */
 const INTERVALO_MS = 4000;
 const LIMITE_MS = 6 * 60_000;
+/** Sem registro novo neste tempo, a exportação não começou (sessão vencida, sem permissão, erro do servidor) */
+const NAO_COMECOU_MS = 20_000;
+export const MSG_NAO_COMECOU = "A exportação não começou. Recarregue a página e tente de novo.";
+export const MSG_DEMOROU = "A exportação está demorando. Confira o resultado em Últimas exportações.";
 
 export const hrefExportar = (parte: Parte) => (parte === "tudo" ? URL_BAIXAR : `${URL_BAIXAR}?parte=${parte}`);
 
@@ -65,13 +69,17 @@ export function ExportarDadosClient({ inicial }: { inicial: ExportacaoLinha[] })
       const atual = await carregar();
       const nova = atual?.find((e) => !conhecidos.has(e.id));
       const situacao = nova ? situacaoExportacao(nova) : null;
-      const esgotou = Date.now() - inicio > LIMITE_MS;
-      if ((situacao && situacao !== "andamento") || esgotou) {
+      const passou = Date.now() - inicio;
+      const naoComecou = !nova && passou > NAO_COMECOU_MS;
+      const esgotou = passou > LIMITE_MS;
+      if ((situacao && situacao !== "andamento") || esgotou || naoComecou) {
         clearInterval(vigia.current!);
         vigia.current = null;
         setGerando(null);
         if (situacao === "concluida") toast("Exportação concluída. O arquivo está na pasta de downloads.");
         else if (situacao === "falhou") toast(nova?.erro || "A exportação não terminou. Tente de novo ou baixe por parte.", "erro");
+        else if (naoComecou) toast(MSG_NAO_COMECOU, "erro");
+        else toast(MSG_DEMOROU, "erro");
       }
     }, INTERVALO_MS);
   }
@@ -137,6 +145,7 @@ export function ExportarDadosClient({ inicial }: { inicial: ExportacaoLinha[] })
                       {ehParte(e.parte) ? ROTULO_PARTE[e.parte] : e.parte}
                       {e.linhas != null ? ` · ${e.linhas.toLocaleString("pt-BR")} linhas` : ""}
                     </p>
+                    {situacaoExportacao(e) === "falhou" && e.erro && <p className="text-xs text-atrasado-texto mt-0.5" data-exportacao-erro>{e.erro}</p>}
                   </div>
                   <StatusPill tom={s.tom} tamanho="sm" data-situacao-exportacao={situacaoExportacao(e)}>{s.texto}</StatusPill>
                 </li>

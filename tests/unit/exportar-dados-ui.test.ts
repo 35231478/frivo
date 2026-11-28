@@ -126,18 +126,39 @@ describe("Exportar dados — tela", () => {
     expect(toast).toHaveBeenCalledWith("Download interrompido antes do fim.", "erro");
   });
 
-  it("sem resposta por mais de 6 minutos: para de conferir, sem aviso falso", async () => {
+  it("pronto-janeiro-3: a exportação não começou (nenhum registro novo em 20 s): para de conferir e DIZ (antes: silêncio)", async () => {
     const { toast } = await import("@/components/ui/avisos");
+    const { MSG_NAO_COMECOU } = await import("@/components/config/exportar-dados-client");
     (toast as any).mockClear();
     await montar([]);
     const a = $('a[data-exportar="financeiro"]')!;
     a.addEventListener("click", (e) => e.preventDefault());
     await act(async () => { a.click(); });
-    await passar(6 * 60_000 + 8000);
+    await passar(16_000);
+    expect(toast).not.toHaveBeenCalled();
+    await passar(8000);
     expect($("[data-exportar-estado]")?.textContent).toBe("");
+    expect(toast).toHaveBeenCalledWith(MSG_NAO_COMECOU, "erro");
     const n = pedidos.length;
     await passar(20_000);
     expect(pedidos.length).toBe(n);
-    expect(toast).not.toHaveBeenCalled();
+  });
+
+  it("pronto-janeiro-3: começou mas passou de 6 minutos sem terminar: para de conferir e avisa onde ver o resultado", async () => {
+    const { toast } = await import("@/components/ui/avisos");
+    const { MSG_DEMOROU } = await import("@/components/config/exportar-dados-client");
+    (toast as any).mockClear();
+    await montar([]);
+    const a = $('a[data-exportar="tudo"]')!;
+    a.addEventListener("click", (e) => e.preventDefault());
+    await act(async () => { a.click(); });
+    historico = [linha("y", { concluidaEm: null, erro: null, criadoEm: "2026-11-27T15:00:01.000Z" })];
+    await passar(6 * 60_000 + 8000);
+    expect(toast).toHaveBeenCalledWith(MSG_DEMOROU, "erro");
+  });
+
+  it("pronto-janeiro-3: a linha \"Não concluída\" mostra o motivo gravado", async () => {
+    await montar([linha("z", { concluidaEm: null, erro: "Tempo esgotado no servidor." })]);
+    expect($('[data-exportacao="z"] [data-exportacao-erro]')?.textContent).toBe("Tempo esgotado no servidor.");
   });
 });

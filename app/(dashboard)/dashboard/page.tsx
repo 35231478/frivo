@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { ConviteNotificacoes } from "@/components/push/convite-notificacoes";
 import { cookies } from "next/headers";
 import { auth } from "@/lib/auth";
 import { pode, type Permissoes } from "@/lib/permissoes";
@@ -63,7 +64,7 @@ export default async function DashboardPage() {
   const temQr = empresaTemModulo(desligados, "qrcodes");
 
   // Só consulta o que vai aparecer; um bloco com erro não derruba a página
-  const dados = await carregarBlocos(visiveis.map((b) => b.id), { empresaId: user.empresaId, podeVer });
+  const dados = await carregarBlocos(visiveis.map((b) => b.id), { empresaId: user.empresaId, podeVer, quem: user });
   // Implantação em destaque até 100% — só para quem configura a empresa (a mesma permissão do cartão em
   // Configurações). Se a contagem falhar, o painel segue sem o destaque.
   const podeConfigurar = podeVer("configuracoes", "gerenciar");
@@ -76,6 +77,8 @@ export default async function DashboardPage() {
 
   return (
     <div className="space-y-5">
+      {/* Hotfix push: o convite para ativar os avisos neste computador (some depois de ativar) */}
+      <ConviteNotificacoes />
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="page-title">{primeiroNome ? `${saudacao}, ${primeiroNome}` : "Dashboard"}</h1>

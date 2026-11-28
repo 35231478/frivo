@@ -3,15 +3,19 @@
  * (o corpo do PATCH /api/perfil). A tela (components/perfil/perfil-client) só desenha.
  */
 
-export type AbaPerfil = "dados" | "seguranca" | "preferencias";
+export type AbaPerfil = "dados" | "seguranca" | "comissoes" | "preferencias";
 
 export interface DefAbaPerfil { id: AbaPerfil; label: string }
 
-/** Dados e Segurança sempre; Preferências só quando há o que preferir (hoje: as notificações deste aparelho). */
-export function abasDoPerfil(o: { notificacoes: boolean }): DefAbaPerfil[] {
+/**
+ * Dados e Segurança sempre; Comissões só quando a empresa usa comissão (COM-1: o extrato da própria pessoa);
+ * Preferências só quando há o que preferir (hoje: as notificações deste aparelho).
+ */
+export function abasDoPerfil(o: { notificacoes: boolean; comissoes?: boolean }): DefAbaPerfil[] {
   return [
     { id: "dados", label: "Dados" },
     { id: "seguranca", label: "Segurança" },
+    ...(o.comissoes ? [{ id: "comissoes" as const, label: "Comissões" }] : []),
     ...(o.notificacoes ? [{ id: "preferencias" as const, label: "Preferências" }] : []),
   ];
 }

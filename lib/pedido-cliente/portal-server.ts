@@ -46,13 +46,28 @@ export async function acessoPedidoNoPortal(user: { empresaId: string; clienteId:
   return { pode: exige && podePedidoNoPortal(user, cliente.comprasEmail), cliente };
 }
 
-/** Os pedidos do portal em conferência deste cliente (ou da empresa toda): item → pedido */
+/**
+ * Os pedidos do portal em conferência deste cliente (ou da empresa toda): item → pedido. Só contam os itens que AINDA
+ * esperam o pedido: se a OS/orçamento se resolveu por outro caminho (pedido informado em massa ou na fatura, liberado,
+ * cancelado, faturado), o pedido do portal não fica "em conferência" para sempre no sino, no filtro e na etiqueta.
+ */
 async function emConferencia(empresaId: string, clienteId?: string) {
-  const ps = await prisma.pedidoCliente.findMany({
+  const todos = await prisma.pedidoCliente.findMany({
     where: { empresaId, ...(clienteId ? { clienteId } : {}), situacao: "CONFERIR" },
     select: { id: true, numero: true, clienteId: true, osPropostas: true, orcamentosPropostos: true, criadoEm: true },
     orderBy: { criadoEm: "desc" }, take: 500,
   });
+  const idsOs = [...new Set(todos.flatMap((p) => p.osPropostas))];
+  const idsOrc = [...new Set(todos.flatMap((p) => p.orcamentosPropostos))];
+  const [osVivas, orcVivos] = await Promise.all([
+    idsOs.length ? prisma.ordemServico.findMany({ where: { AND: [{ id: { in: idsOs }, empresaId }, whereOsAguardando()] }, select: { id: true } }) : [],
+    idsOrc.length ? prisma.orcamento.findMany({ where: { AND: [{ id: { in: idsOrc }, empresaId }, whereOrcamentoAguardando()] }, select: { id: true } }) : [],
+  ]);
+  const vivaOs = new Set(osVivas.map((o) => o.id));
+  const vivoOrc = new Set(orcVivos.map((o) => o.id));
+  const ps = todos
+    .map((p) => ({ ...p, osPropostas: p.osPropostas.filter((id) => vivaOs.has(id)), orcamentosPropostos: p.orcamentosPropostos.filter((id) => vivoOrc.has(id)) }))
+    .filter((p) => p.osPropostas.length || p.orcamentosPropostos.length);
   const os = new Map<string, { pedidoId: string; numero: string }>();
   const orc = new Map<string, { pedidoId: string; numero: string }>();
   for (const p of ps) {
@@ -150,6 +165,8 @@ export async function pedidosEnviadosPeloPortal(empresaId: string, clienteId: st
     id: p.id, numero: p.numero, data: p.data, valor: p.valor == null ? null : Number(p.valor), situacao: p.situacao,
     motivoRecusa: p.situacao === "RECUSADO" ? p.motivoRecusa : null, enviadoEm: p.criadoEm, conferidoEm: p.conferidoEm, anexoNome: p.anexoNome,
     itens: [...p.osPropostas, ...p.orcamentosPropostos].map((id) => nome.get(id)).filter((n): n is string => !!n),
+    // As chaves "os:id" / "orcamento:id" (o portal só repete o aviso da recusa enquanto algum item ainda espera)
+    chaves: [...p.osPropostas.map((id) => `os:${id}`), ...p.orcamentosPropostos.map((id) => `orcamento:${id}`)],
   }));
 }
 
@@ -207,13 +224,19 @@ export async function enviarPedidoPeloPortal(
 
 /* ───────── o escritório: o que está em conferência ───────── */
 
-/** O sino: quantos pedidos do portal esperam a conferência e o mais recente */
+/**
+ * O sino: quantos pedidos do portal esperam a conferência (com algum item ainda esperando) e o mais recente. Um só:
+ * o link vai direto à OS dele — ou ao orçamento, quando o pedido cobre só orçamentos (a lista de OS não o mostraria).
+ */
 export async function contarPedidosConferir(empresaId: string) {
-  const [n, ultimo] = await Promise.all([
-    prisma.pedidoCliente.count({ where: { empresaId, situacao: "CONFERIR" } }),
-    prisma.pedidoCliente.findFirst({ where: { empresaId, situacao: "CONFERIR" }, select: { id: true, osPropostas: true }, orderBy: { criadoEm: "desc" } }),
-  ]);
-  return { pedidosConferir: n, pedidoConferirId: ultimo?.id ?? null, pedidoConferirOsId: n === 1 ? ultimo?.osPropostas[0] ?? null : null };
+  const { pedidos } = await emConferencia(empresaId);
+  const ultimo = pedidos[0];
+  const um = pedidos.length === 1 ? ultimo : null;
+  return {
+    pedidosConferir: pedidos.length, pedidoConferirId: ultimo?.id ?? null,
+    pedidoConferirOsId: um?.osPropostas[0] ?? null,
+    pedidoConferirOrcamentoId: um && !um.osPropostas.length ? um.orcamentosPropostos[0] ?? null : null,
+  };
 }
 
 /** As OS cobertas por pedidos em conferência (o filtro `?pedido=conferir` da lista de OS) */

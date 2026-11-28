@@ -1,4 +1,6 @@
 import { NomeNaTrilha } from "@/components/layout/nome-na-trilha";
+import { precosDaTabelaDoCliente } from "@/lib/precos/trava-tabela-server";
+import { noEscopo } from "@/lib/escopo/proprios-server";
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import Link from "next/link";
@@ -23,6 +25,7 @@ import { contasVinculadas } from "@/lib/financeiro/conta-receber-server";
 import { etapaCiclo } from "@/lib/orcamentos/ciclo";
 import { marcarRespostaVista } from "@/lib/orcamentos/ciclo-server";
 import { pode } from "@/lib/permissoes";
+import { VendedorDoOrcamento } from "@/components/orcamento/vendedor-orcamento";
 import { PageHeader } from "@/components/ui/page-header";
 import { InativarRegistro } from "@/components/ui/inativar-registro";
 import { LABELS_STATUS_OS, formatarData, cn } from "@/lib/utils";
@@ -39,6 +42,8 @@ export default async function OrcamentoDetalhePage({
 }) {
   const { id } = await params;
   const session = await auth();
+  // COM-1: "Ver só os próprios" — o registro de outro vendedor não existe para esta pessoa
+  if (session?.user && !(await noEscopo(session.user, "orcamento", id))) notFound();
   const empresaId = session!.user!.empresaId;
 
   const [orcamento, empresa] = await Promise.all([
@@ -47,6 +52,7 @@ export default async function OrcamentoDetalhePage({
       include: {
         ...INCLUDE_DOCUMENTO_ORCAMENTO,
         criadoPor: { select: { id: true, nome: true } },
+        vendedor: { select: { id: true, nome: true } },
         contratoGerado: { select: { id: true, numero: true } },
         osGerada: { select: { id: true, numero: true } },
         ordensServico: {
@@ -71,7 +77,11 @@ export default async function OrcamentoDetalhePage({
   });
 
   const podeEditar = orcamento.status === "RASCUNHO";
-  const pedidos = await pedidoDosOrcamentos(empresaId, [orcamento.id]);
+  const [pedidos, precosTabela] = await Promise.all([
+    pedidoDosOrcamentos(empresaId, [orcamento.id]),
+    // O lápis da linha: sem "Alterar preço de tabela", o item da tabela do cliente não mostra o campo de preço
+    precosDaTabelaDoCliente(empresaId, orcamento.clienteId),
+  ]);
   const u = session!.user!;
   // Conta a receber do orçamento aprovado (o outro lado do vínculo): só para quem vê o financeiro
   const contasReceber = pode(u.permissoes, "financeiro", "visualizar", u.role) ? await contasVinculadas(empresaId, { orcamentoId: orcamento.id }) : [];
@@ -83,6 +93,7 @@ export default async function OrcamentoDetalhePage({
   const ehProposta = orcamento.tipo === "PROPOSTA_CONTRATO";
   // Faturar: quem fatura medições; já faturado (direto ou pela OS gerada) → mostra a fatura
   const podeFaturar = pode(u.permissoes, "financeiro", "medicoes", u.role);
+  const podeTrocarVendedor = pode(u.permissoes, "orcamentos", "trocarVendedor", u.role);
   // P5: total, faturado, saldo e as faturas (parciais ou não) do orçamento — para quem fatura ou vê o financeiro
   const faturamento = orcamento.tipo === "COMUM" && (podeFaturar || pode(u.permissoes, "financeiro", "visualizar", u.role))
     ? await faturamentoDoOrcamento(orcamento.id, empresaId) : null;
@@ -123,6 +134,13 @@ export default async function OrcamentoDetalhePage({
       )}
 
       <div className="card-padded">
+        {/* COM-1: o vendedor (travado; "Trocar" só com a permissão) */}
+        <div className="mb-3 pb-3 border-b border-surface-border">
+          <VendedorDoOrcamento
+            orcamentoId={orcamento.id} vendedor={orcamento.vendedor} podeTrocar={podeTrocarVendedor}
+            opcoes={podeTrocarVendedor ? await prisma.usuario.findMany({ where: { empresaId, ativo: true }, orderBy: { nome: "asc" }, select: { id: true, nome: true } }) : []}
+          />
+        </div>
         <AcoesEnvio
           orcamentoId={orcamento.id}
           codigo={orcamento.codigo}
@@ -207,7 +225,7 @@ export default async function OrcamentoDetalhePage({
             equipamentos={equipamentos}
           />
         ) : (
-          <OrcamentoDocumento orcamento={orcamento} empresa={empresa} cliente={orcamento.cliente} versao="interna" edicaoLinhas={{ orcamentoId: orcamento.id, faturado: temFaturas }} anexos={anexosDoDocumento(orcamento.anexos, `/api/orcamentos/${orcamento.id}/anexos`)} />
+          <OrcamentoDocumento orcamento={orcamento} empresa={empresa} cliente={orcamento.cliente} versao="interna" edicaoLinhas={{ orcamentoId: orcamento.id, faturado: temFaturas, naTabela: [...precosTabela.keys()] }} anexos={anexosDoDocumento(orcamento.anexos, `/api/orcamentos/${orcamento.id}/anexos`)} />
         )}
       </div>
 

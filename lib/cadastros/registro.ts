@@ -349,13 +349,13 @@ export const CADASTROS: Record<EntidadeCadastro, DefCadastro> = {
       { key: "estoqueMinimo", label: "Estoque mínimo", tipo: "inteiro", placeholder: "0" },
       {
         key: "categoriaProdutoId", label: "Categoria", tipo: "cadastro", cadastro: "categorias-produto", relacao: "categoriaProduto",
-        ajuda: "Diz como o produto entra na cobrança (venda à parte ou incluso no serviço). Sem categoria, é tratado como incluso no serviço — defina para não deixar de cobrar uma peça.",
+        ajuda: "Agrupa os produtos e sugere o Uso do produto novo (Peças de reposição = Peça; o resto = Material). Quem decide a cobrança é o campo Uso.",
       },
       { key: "controlaEstoque", label: "Controla estoque", tipo: "booleano", ajuda: "Desmarcado, o produto sai da tela Estoque e dos alertas (item sob encomenda, serviço embalado…). O histórico de movimentações fica." },
       {
         // 1ª opção vazia: produto NOVO segue a categoria (Peças de reposição = Peça; o resto = Material) se ninguém escolher
         key: "uso", label: "Uso", tipo: "select", opcoes: [{ value: "", label: "Pela categoria (sugestão)" }, ...OPCOES_USO],
-        ajuda: "Material vai dentro do serviço, sem valor para o cliente. Peça é vendida à parte, em linha própria. No orçamento dá para trocar só naquele orçamento.",
+        ajuda: "Material é consumo do serviço: entra no valor do serviço ou é cobrado à parte, conforme Configurações › Orçamento. Peça é vendida à parte, em linha própria. No orçamento dá para trocar só naquele orçamento.",
       },
     ],
     colunas: [
@@ -387,6 +387,8 @@ export const CADASTROS: Record<EntidadeCadastro, DefCadastro> = {
       { key: "descricao", label: "Descrição", tipo: "textarea" },
       { key: "unidade", label: "Unidade", tipo: "select", opcoes: UNIDADES_SERVICO },
       { key: "valorPadrao", label: "Valor padrão (R$)", tipo: "moeda", placeholder: "0,00" },
+      // COM-1: categoria livre (ex.: "Instalação") — as regras de comissão podem valer para uma categoria inteira
+      { key: "categoria", label: "Categoria", placeholder: "Ex.: Instalação, Manutenção", ajuda: "Agrupa serviços parecidos. As regras de comissão podem valer para uma categoria inteira." },
       // E3.2: composição (produto solto ou kit + quantidade; override opcional). Viaja como JSON; serviço sem composição = como sempre
       { key: "materiais", label: "Materiais padrão", tipo: "estruturado", grupo: GRUPO_MATERIAIS,
         ajuda: "Produtos e kits que este serviço costuma consumir. No orçamento/OS eles entram pré-preenchidos (e editáveis). Peça (venda à parte) é cobrada do cliente; material (incluso) só baixa o estoque." },
@@ -407,7 +409,7 @@ export const CADASTROS: Record<EntidadeCadastro, DefCadastro> = {
     },
     ...schemas({
       // Código: normalizado e conferido (único na empresa) pela regra do cadastro (especificos.ts)
-      nome, codigo: textoOpcional(40), descricao: textoOpcional(), unidade, valorPadrao: numero(), materiais: materiaisSchema,
+      nome, codigo: textoOpcional(40), descricao: textoOpcional(), unidade, valorPadrao: numero(), categoria: textoOpcional(60), materiais: materiaisSchema,
       codigoMunicipal: textoOpcional(50), codigoLc116: lc116,
       aliquotaISS: aliquotaIss, aliquotaPIS: aliquota("PIS"), aliquotaCOFINS: aliquota("COFINS"), aliquotaCSLL: aliquota("CSLL"),
       aliquotaIR: aliquota("IR"), aliquotaINSS: aliquota("INSS"),
@@ -415,7 +417,7 @@ export const CADASTROS: Record<EntidadeCadastro, DefCadastro> = {
       observacaoFiscal: textoOpcional(),
       nfseTributacao, issRetido: booleano, cnae, discriminacaoPadrao: textoOpcional(),
     }, {
-      codigo: null, descricao: null, unidade: "un", valorPadrao: null, materiais: [], codigoMunicipal: null, codigoLc116: null,
+      codigo: null, descricao: null, unidade: "un", valorPadrao: null, categoria: null, materiais: [], codigoMunicipal: null, codigoLc116: null,
       aliquotaISS: null, aliquotaPIS: null, aliquotaCOFINS: null, aliquotaCSLL: null, aliquotaIR: null, aliquotaINSS: null, observacaoFiscal: null,
       nfseTributacao: null, cnae: null, discriminacaoPadrao: null,
     }),

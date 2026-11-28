@@ -147,7 +147,8 @@ describe("Produtos", () => {
     expect(opcoes).toEqual(["Peças de reposição", "Materiais de instalação/consumo"]); // a inativa não é escolha nova
     // cadastro rápido inline (Princípio 1): é o pé da lista, com o ícone de mais
     expect(txt(raiz.querySelector("[data-acao-busca]"))).toBe("Nova categoria de produto…");
-    expect(document.body.textContent).toContain("Sem categoria, é tratado como incluso no serviço");
+    // pronto-janeiro-3: a categoria só sugere o Uso do produto novo; quem decide a cobrança é o Uso
+    expect(document.body.textContent).toContain("Quem decide a cobrança é o campo Uso");
     await digitar($('input[id]:not([type=checkbox])'), "Válvula de expansão");
     await escolher(sel, "cMat");
     await clicar([...document.querySelectorAll("button")].find((b) => txt(b) === "Salvar") ?? null);

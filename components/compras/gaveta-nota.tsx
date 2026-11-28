@@ -4,6 +4,8 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Download, ExternalLink, FileCode2, Loader2 } from "lucide-react";
 import { Drawer } from "@/components/ui/drawer";
+import { toast } from "@/components/ui/avisos";
+import { baixarArquivo } from "@/lib/baixar-cliente";
 import { CopiarCodigo } from "@/components/financeiro/copiar-codigo";
 import { cn, formatarCpfCnpj, formatarData, formatarDataHora, formatarMoeda } from "@/lib/utils";
 import { chaveEmBlocos, COR_STATUS_NOTA, LABEL_STATUS_NOTA } from "@/lib/compras/rotulos";
@@ -43,12 +45,23 @@ export function GavetaNota({ notaId, hrefNota, onFechar }: { notaId: string | nu
   const n = dados?.nota;
   const titulo = n ? `NF ${n.numero}/${n.serie}` : "Nota de compra";
   const base = notaId ? `/api/compras/notas/${notaId}` : "";
+  const [baixando, setBaixando] = useState<"pdf" | "xml" | null>(null);
+  async function baixar(url: string, nome: string, qual: "pdf" | "xml") {
+    setBaixando(qual);
+    const r = await baixarArquivo(url, nome, qual === "pdf" ? "Não foi possível gerar o PDF da nota." : "Não foi possível baixar o XML da nota.");
+    setBaixando(null);
+    if (!r.ok) toast(r.erro, "erro");
+  }
   const rodape = notaId ? (
     <div className="flex flex-wrap items-center justify-end gap-2" data-acoes-nota>
       {dados?.danfe && (
         <>
-          <a href={`${base}/danfe`} download className="btn-secondary inline-flex items-center gap-1.5" data-baixar-pdf><Download className="w-4 h-4" aria-hidden /> Baixar PDF</a>
-          <a href={`${base}/xml`} download className="btn-secondary inline-flex items-center gap-1.5" data-baixar-xml><FileCode2 className="w-4 h-4" aria-hidden /> Baixar XML</a>
+          <button type="button" onClick={() => baixar(`${base}/danfe`, `nf-${n?.numero ?? "nota"}.pdf`, "pdf")} disabled={baixando === "pdf"} className="btn-secondary inline-flex items-center gap-1.5" data-baixar-pdf>
+            {baixando === "pdf" ? <Loader2 className="w-4 h-4 animate-spin" aria-hidden /> : <Download className="w-4 h-4" aria-hidden />} Baixar PDF
+          </button>
+          <button type="button" onClick={() => baixar(`${base}/xml`, `nf-${n?.numero ?? "nota"}.xml`, "xml")} disabled={baixando === "xml"} className="btn-secondary inline-flex items-center gap-1.5" data-baixar-xml>
+            {baixando === "xml" ? <Loader2 className="w-4 h-4 animate-spin" aria-hidden /> : <FileCode2 className="w-4 h-4" aria-hidden />} Baixar XML
+          </button>
         </>
       )}
       <Link href={hrefNota(notaId)} className="btn-primary inline-flex items-center gap-1.5" data-abrir-nota><ExternalLink className="w-4 h-4" aria-hidden /> Abrir a nota</Link>

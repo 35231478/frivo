@@ -11,7 +11,7 @@ import { toast } from "@/components/ui/avisos";
 import { cn } from "@/lib/utils";
 import { ancorarElemento, pontoDoPin, reencontrar } from "@/lib/anotacoes/ancora";
 import { ROTULO_PRECISAO, TEXTO_MAX, telaDaRota, type Ancora, type Precisao } from "@/lib/anotacoes/regras";
-import { chavePosicaoBotao, ehArraste, lerPosicao, limitarPosicao, posicaoArrastada, type Ponto } from "@/lib/anotacoes/posicao-botao";
+import { chavePosicaoBotao, ehArraste, lerPosicao, limitarPosicao, posicaoArrastada, posicaoDoVoltar, type Ponto } from "@/lib/anotacoes/posicao-botao";
 
 /**
  * ANOTAÇÕES INTERNAS — a ferramenta na tela. Só o dono do Frivo chega aqui (o layout do painel só
@@ -290,7 +290,7 @@ export function AnotacoesFerramenta({ usuarioId = "" }: { usuarioId?: string }) 
         <button
           type="button" onClick={voltarAoPadrao} {...CLASSE_FORA_DO_PRINT} data-anotacoes-voltar
           title="Voltar o botão à posição padrão" aria-label="Voltar o botão de anotações à posição padrão"
-          style={{ left: Math.max(8, posicao.x - 40), top: posicao.y + 2 }}
+          style={posicaoDoVoltar(posicao, botaoRef.current?.offsetWidth ?? 96)}
           className="fixed z-[47] hidden lg:inline-flex items-center justify-center w-8 h-8 rounded-full border border-surface-border bg-white text-ink-muted shadow-sm hover:text-ink hover:border-acento/40"
         >
           <RotateCcw className="w-3.5 h-3.5" aria-hidden />

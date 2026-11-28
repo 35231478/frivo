@@ -97,16 +97,39 @@ export interface ItemDaTela {
 }
 
 /**
- * Marca os itens que estão na tabela do cliente (ao abrir um documento salvo ou trocar de cliente): origem
- * "contrato", o valor da tabela e — sem a permissão — o campo travado. Sem tabela, nada muda.
+ * Um item na tabela do cliente: origem "contrato", o valor da tabela e — sem a permissão — o campo travado.
+ * Item NOVO (sem `valorGravado`: ainda não foi salvo) recebe o preço da tabela; item já gravado mantém o preço salvo
+ * (a edição não muda o que o documento já tinha).
+ */
+export function aplicarTabelaAoItem<T extends ItemDaTela>(it: T, t: { valorFinal: number }, podeAlterar: boolean): T {
+  const novo = it.valorGravado == null;
+  const valorUnitario = novo ? t.valorFinal : it.valorUnitario;
+  const r = { ...it, valorUnitario, origemPreco: "contrato" as const, valorTabela: t.valorFinal, bloqueado: !podeAlterar, valorGravado: novo ? undefined : it.valorGravado };
+  // Linha com quantidade e total (ItemTabela): o total acompanha o unitário novo
+  const q = (it as { quantidade?: unknown }).quantidade;
+  if (novo && "valorTotal" in it && q != null) (r as { valorTotal?: number }).valorTotal = Math.round(Number(q) * valorUnitario * 100) / 100;
+  return r;
+}
+
+/** Tira a marca da tabela (o cliente mudou para um sem tabela, ou o item não está na tabela nova): o preço fica, destravado */
+function desmarcar<T extends ItemDaTela>(it: T): T {
+  return { ...it, origemPreco: undefined, valorTabela: undefined, bloqueado: false };
+}
+
+/**
+ * Marca os itens que estão na tabela do cliente (ao abrir um documento salvo ou trocar de cliente; ver
+ * `aplicarTabelaAoItem`). Os que vieram da tabela de OUTRO cliente e não estão nesta (ou o cliente não tem tabela)
+ * perdem a marca e destravam. Nada a mudar: devolve a mesma lista.
  */
 export function marcarItensDaTabela<T extends ItemDaTela>(itens: T[], tabela: Record<string, { valorFinal: number }> | null | undefined, podeAlterar: boolean): T[] {
-  if (!tabela) return itens;
-  return itens.map((it) => {
-    const t = it.catalogoId ? tabela[it.catalogoId] : undefined;
-    if (!t) return it;
-    return { ...it, origemPreco: "contrato" as const, valorTabela: t.valorFinal, bloqueado: !podeAlterar, valorGravado: it.valorGravado ?? it.valorUnitario };
+  let mudou = false;
+  const r = itens.map((it) => {
+    const t = tabela && it.catalogoId ? tabela[it.catalogoId] : undefined;
+    if (t) { mudou = true; return aplicarTabelaAoItem(it, t, podeAlterar); }
+    if (it.origemPreco === "contrato") { mudou = true; return desmarcar(it); }
+    return it;
   });
+  return mudou ? r : itens;
 }
 
 /** Os itens da tabela com o preço mudado (nem o da tabela, nem o já gravado): pedem o motivo ao salvar. */

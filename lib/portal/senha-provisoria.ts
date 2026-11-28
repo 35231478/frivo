@@ -23,9 +23,23 @@ export const trocaPendentePortal = (user: unknown): boolean =>
   !!user && typeof user === "object" && (user as { trocarSenha?: unknown }).trocarSenha === true;
 
 /** Para onde vai quem JÁ está logado e abre o login (ou a tela de troca): uma decisão só, sem ciclo. */
-export function destinoDoPortal(user: unknown): string {
-  return trocaPendentePortal(user) ? ROTA_TROCA_PORTAL : ROTA_INICIO_PORTAL;
+export function destinoDoPortal(user: unknown, pedido?: string | null): string {
+  return trocaPendentePortal(user) ? ROTA_TROCA_PORTAL : destinoSeguroDoPortal(pedido) ?? ROTA_INICIO_PORTAL;
 }
+
+/**
+ * O "voltar para onde ia" depois do login do portal (ex.: o link do e-mail de lembrete): só uma rota interna do
+ * portal — nada de outro site ("//", "\\", "http"), nem as telas de entrar/trocar. Fora disso, null.
+ */
+export function destinoSeguroDoPortal(v: unknown): string | null {
+  if (typeof v !== "string" || v.length > 200) return null;
+  if (!/^\/portal\/[a-z0-9\-/]*$/i.test(v) || v.includes("//")) return null;
+  if (/^\/portal\/(login|trocar-senha|esqueci-senha|definir-senha)/.test(v)) return null;
+  return v;
+}
+
+/** O link que leva ao login do portal e, depois de entrar, à rota pedida */
+export const linkDoPortal = (base: string, rota: string) => `${base}/portal/login?destino=${encodeURIComponent(rota)}`;
 
 /** A mensagem que vai junto da senha (e-mail e WhatsApp): o contato sabe que vai trocar no 1º acesso. */
 export function mensagemDoAcesso(d: { contatoNome: string; link: string; email: string; senha: string | null }): string {

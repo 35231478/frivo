@@ -359,8 +359,9 @@ describe("Prazo de execução — a regra de \"atrasada\" mora num lugar só", (
     // sem atividade no período a OS fica na data prevista ou, sem ela, no dia do prazo — e a consulta traz as duas
     expect(calendario).toContain("const semAtividade = os.previsaoConclusao ?? os.prazoExecucao;");
     expect(calendario).toContain("{ previsaoConclusao: null, prazoExecucao: periodoDia }");
-    expect(fonte("lib/dashboard/dados.ts")).toContain("where: { empresaId, ...whereOsAtrasada(agora) }");
-    expect(fonte("lib/prazo-server.ts")).toContain("where: { empresaId, ...whereOsAtrasada(agora) }");
+    // COM-1: a mesma regra, agora junta ao escopo "Ver só os próprios" (comEscopo faz o AND)
+    expect(fonte("lib/dashboard/dados.ts")).toContain("where: comEscopo({ empresaId, ...whereOsAtrasada(agora) }, eo)");
+    expect(fonte("lib/prazo-server.ts")).toContain("where: comEscopo({ empresaId, ...whereOsAtrasada(agora) } as Prisma.OrdemServicoWhereInput, escopoOs)");
     expect(fonte("lib/ia/ferramentas.ts").match(/whereOsAtrasada\(agora\)\.OR/g)).toHaveLength(2);
     expect(fonte("app/(dashboard)/contratos/relatorio/page.tsx")).toContain("diaCivilPassou(prazoEfetivo(os), agora)");
     expect(fonte("lib/os/central.ts")).toContain("situacaoPrazo(prazoEfetivo(os), encerrada, agora)");

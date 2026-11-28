@@ -4,6 +4,7 @@
 import { prisma } from "@/lib/prisma";
 import { diaCivilPassou } from "@/lib/fuso";
 import { registrarEvento } from "@/lib/orcamentos/ciclo-server";
+import { comissoesNaAprovacao } from "@/lib/comissoes/servidor";
 import { detalheAprovacaoEquipe, PODE_APROVAR_PELA_EQUIPE, type AprovacaoEquipe } from "@/lib/orcamentos/aprovacao-equipe";
 
 export type ResultadoAprovacaoEquipe = { ok: true } | { ok: false; status: number; erro: string };
@@ -31,5 +32,7 @@ export async function registrarAprovacaoDaEquipe(
   });
   if (r.count !== 1) return { ok: false, status: 409, erro: "O orçamento mudou enquanto você registrava. Recarregue a página." };
   await registrarEvento({ empresaId, orcamentoId: o.id, tipo: "APROVADO", usuarioId: quem.id, detalhe: detalheAprovacaoEquipe(d, quem.nome) });
+  // COM-1: a comissão do vendedor nasce na aprovação, congelada (regra e valor de hoje)
+  await comissoesNaAprovacao(empresaId, o.id);
   return { ok: true };
 }

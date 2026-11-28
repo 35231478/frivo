@@ -32,7 +32,7 @@ export interface DadosPendencias {
   despesasCampo: number;
   estoqueNegativoCampo: number;
   /** PC-2: pedidos de compra do portal esperando a conferência */
-  pedidosConferir?: number; pedidoConferirOsId?: string | null;
+  pedidosConferir?: number; pedidoConferirOsId?: string | null; pedidoConferirOrcamentoId?: string | null;
   foraDoNumero?: { contasPagarHoje: number; contasReceberHoje: number; pedidosAguardando?: number; pedidosAguardandoTotal?: number };
 }
 
@@ -109,8 +109,10 @@ export const PENDENCIAS = {
   pedidosConferir: {
     area: "financeiro", rotulo: "Pedidos do cliente para conferir", tom: "acento", icone: "pedidoCliente", escopo: "pedidosCliente",
     valor: (d) => d.pedidosConferir ?? 0,
-    // um pedido: a OS dele (a etiqueta abre a conferência); mais: a lista de OS em conferência
-    href: (d) => (d.pedidoConferirOsId ? `/ordens/${d.pedidoConferirOsId}` : `/ordens?pedido=${FILTRO_CONFERIR_PEDIDO}&periodo=todos`),
+    // um pedido: a OS dele (a etiqueta abre a conferência) — ou o orçamento, se ele só cobre orçamentos; mais: a lista de OS em conferência
+    href: (d) => (d.pedidoConferirOsId ? `/ordens/${d.pedidoConferirOsId}`
+      : d.pedidoConferirOrcamentoId ? `/orcamentos/${d.pedidoConferirOrcamentoId}`
+      : `/ordens?pedido=${FILTRO_CONFERIR_PEDIDO}&periodo=todos`),
   },
   despesasCampo: {
     area: "financeiro", rotulo: "Despesas de campo a aprovar", tom: "atencao", icone: "despesa", escopo: "despesasCampo",

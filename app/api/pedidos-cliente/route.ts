@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { algumForaDoEscopo, MSG_FORA_DO_ESCOPO } from "@/lib/escopo/proprios-server";
 import { auth } from "@/lib/auth";
 import { registrarPedido } from "@/lib/pedido-cliente/server";
 import { pode } from "@/lib/permissoes";
@@ -20,6 +21,8 @@ export async function POST(req: NextRequest) {
   const permitido = medicaoId ? podeInformarPedido(session, { os: true, orcamentos: true }) && pode(session.user.permissoes, "financeiro", "medicoes", session.user.role)
     : podeInformarPedido(session, { os: osIds.length > 0, orcamentos: orcamentoIds.length > 0 });
   if (!permitido) return NextResponse.json({ erro: MSG_SEM_PERMISSAO_PEDIDO }, { status: 403 });
+  // COM-1: "Ver só os próprios" — OS/orçamento de outro vendedor não existe para a pessoa
+  if (await algumForaDoEscopo(session.user, osIds, orcamentoIds)) return NextResponse.json({ erro: MSG_FORA_DO_ESCOPO }, { status: 404 });
   const r = await registrarPedido({ empresaId: session.user.empresaId, usuarioId: session.user.id }, corpo, { osIds, orcamentoIds, medicaoId });
   if (!r.ok) return NextResponse.json({ erro: r.erro }, { status: r.status });
   return NextResponse.json(r, { status: 201 });

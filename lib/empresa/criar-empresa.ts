@@ -103,3 +103,17 @@ export async function listarEmpresas() {
   });
   return empresas.map((e) => ({ id: e.id, nome: e.nome, nomeFantasia: e.nomeFantasia, cnpj: e.cnpj, ativo: e.ativo, criadoEm: e.criadoEm.toISOString(), usuarios: e._count.usuarios }));
 }
+
+export const MSG_NAO_INATIVA_PROPRIA = "A empresa do administrador do Frivo não pode ser inativada por aqui.";
+
+/**
+ * Inativar / reativar uma empresa (área do dono do Frivo). Inativa: ninguém dela entra, e as sessões abertas caem na
+ * próxima requisição (lib/sessao-ativa confere `empresa.ativo`). Nada é apagado: reativar devolve tudo como estava.
+ */
+export async function alterarSituacaoEmpresa(p: { id: string; ativo: boolean; empresaDoDono: string }):
+  Promise<{ ok: true; ativo: boolean } | { ok: false; status: number; erro: string }> {
+  if (!p.ativo && p.id === p.empresaDoDono) return { ok: false, status: 409, erro: MSG_NAO_INATIVA_PROPRIA };
+  const r = await prisma.empresa.updateMany({ where: { id: p.id }, data: { ativo: p.ativo } });
+  if (!r.count) return { ok: false, status: 404, erro: "Empresa não encontrada." };
+  return { ok: true, ativo: p.ativo };
+}

@@ -13,6 +13,7 @@
  * já gravou (rodou de novo, ou duas ao mesmo tempo), nada sai. Se o envio falha, as chaves gravadas são apagadas
  * e a próxima rodada tenta de novo.
  */
+import { linkDoPortal } from "@/lib/portal/senha-provisoria";
 import { randomUUID } from "node:crypto";
 import { prisma } from "@/lib/prisma";
 import { enviarEmail } from "@/lib/email";
@@ -56,7 +57,7 @@ export async function lembrarCliente(
   const listados = plano.listados.map((l) => l.item);
   const r = await enviar(cliente.empresaId, {
     tipo: TIPO_EMAIL_LEMBRETE, para,
-    variaveis: variaveisLembrete({ contatoNome: cliente.comprasNome, clienteNome: cliente.nome, itens: listados, link: `${baseUrl()}${ROTA_PORTAL_PEDIDO}` }),
+    variaveis: variaveisLembrete({ contatoNome: cliente.comprasNome, clienteNome: cliente.nome, itens: listados, link: linkDoPortal(baseUrl(), ROTA_PORTAL_PEDIDO) }),
     referenciaId: cliente.id, referenciaTipo: "PEDIDO_CLIENTE_LEMBRETE",
   }).catch((e: unknown) => ({ ok: false, erro: (e as Error)?.message ?? "erro no envio" }));
   if (!r.ok) {

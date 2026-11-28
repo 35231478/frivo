@@ -32,6 +32,7 @@ export const DICA_MODO_PEDIDO: Record<ModoPedido, string> = {
 
 export const ETIQUETA_AGUARDANDO = "Aguardando pedido";
 export const DICA_FILTRO_AGUARDANDO = "OS e orçamentos de clientes que exigem o pedido deles e ainda não o enviaram. A fatura e a NFS-e esperam o pedido; o total é o valor que está parado.";
+export const DICA_FILTRO_CONFERIR = "OS com pedido de compra enviado pelo cliente no portal, esperando a conferência do escritório.";
 /** Na unidade: "Como o cliente" (null) ou um dos modos */
 export const ROTULO_HERDA = "Como o cliente";
 
