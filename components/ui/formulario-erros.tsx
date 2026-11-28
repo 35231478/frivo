@@ -28,6 +28,12 @@ export interface ErrosFormulario {
   /** O erro que não é de campo nenhum */
   geral: string | null;
   temErros: boolean;
+  /**
+   * A faixa do topo aparece quando a pessoa TENTOU algo (salvar, consultar) ou o servidor recusou. O formato que acusa
+   * ao sair de um campo fica só no campo: a faixa surgindo no topo empurraria a tela entre o apertar e o soltar do
+   * mouse, e o clique seguinte (ex.: "Consultar", logo ao lado do CNPJ) se perderia.
+   */
+  resumoVisivel: boolean;
   erroDe: (nome: string) => string | undefined;
   /** Troca todos os erros (campos + geral) */
   definir: (campos: ErrosDeCampo, geral?: string | null) => void;
@@ -135,7 +141,11 @@ export function useErrosDoFormulario(opcoes: OpcoesErros = {}): ErrosFormulario 
     setAbaDom((a) => (JSON.stringify(a) === JSON.stringify(novo) ? a : novo));
   }, [campos]);
 
-  const focar = useCallback((alvo?: string) => setPedido((p) => ({ n: p.n + 1, alvo })), []);
+  const [resumoVisivel, setResumoVisivel] = useState(false);
+  // Tudo corrigido: a faixa volta a esperar a próxima tentativa
+  const semErro = !geral && !Object.keys(campos).length;
+  useEffect(() => { if (semErro && resumoVisivel) setResumoVisivel(false); }, [semErro, resumoVisivel]);
+  const focar = useCallback((alvo?: string) => { setResumoVisivel(true); setPedido((p) => ({ n: p.n + 1, alvo })); }, []);
 
   // O foco acontece depois de a tela mostrar os erros; abrir aba/seção pede mais uma volta
   useEffect(() => {
@@ -177,7 +187,7 @@ export function useErrosDoFormulario(opcoes: OpcoesErros = {}): ErrosFormulario 
     return () => { cancelado = true; if (timer) clearTimeout(timer); };
   }, [pedido, abaDoMapa]);
 
-  const definir = useCallback((c: ErrosDeCampo, g: string | null = null) => { setProprios(limparCampos(c)); setGeral(g?.trim() || null); }, []);
+  const definir = useCallback((c: ErrosDeCampo, g: string | null = null) => { setProprios(limparCampos(c)); setGeral(g?.trim() || null); setResumoVisivel(true); }, []);
   const definirCampo = useCallback((nome: string, m: string | null) => {
     setProprios((p) => {
       if (m) return p[nome] === m ? p : { ...p, [nome]: m };
@@ -187,8 +197,8 @@ export function useErrosDoFormulario(opcoes: OpcoesErros = {}): ErrosFormulario 
     });
   }, []);
   const limpar = useCallback((nome: string) => definirCampo(nome, null), [definirCampo]);
-  const limparTudo = useCallback(() => { setProprios({}); setGeral(null); }, []);
-  const definirGeral = useCallback((m: string | null) => setGeral(m?.trim() || null), []);
+  const limparTudo = useCallback(() => { setProprios({}); setGeral(null); setResumoVisivel(false); }, []);
+  const definirGeral = useCallback((m: string | null) => { setGeral(m?.trim() || null); if (m?.trim()) setResumoVisivel(true); }, []);
   const validar = useCallback((c: ErrosDeCampo, g: string | null = null) => {
     // Ao salvar, o formato de todo campo que a pessoa digitou também conta (ex.: CNPJ incompleto sem ter saído do campo)
     const doRhfAgora = camposDoRhf(op.current.rhf);
@@ -218,9 +228,9 @@ export function useErrosDoFormulario(opcoes: OpcoesErros = {}): ErrosFormulario 
   const erroDe = useCallback((nome: string) => campos[nome], [campos]);
 
   return useMemo(() => ({
-    campos, geral, temErros: !!geral || Object.keys(campos).length > 0, erroDe, definir, definirCampo, limpar, limparTudo, definirGeral,
+    campos, geral, temErros: !!geral || Object.keys(campos).length > 0, resumoVisivel, erroDe, definir, definirCampo, limpar, limparTudo, definirGeral,
     validar, erroDaApi, focar, porAba, ref, rotuloDe, registrarRotulo, registrarFormato, ordem,
-  }), [campos, geral, erroDe, definir, definirCampo, limpar, limparTudo, definirGeral, validar, erroDaApi, focar, porAba, ref, rotuloDe, registrarRotulo, registrarFormato, ordem]);
+  }), [campos, geral, resumoVisivel, erroDe, definir, definirCampo, limpar, limparTudo, definirGeral, validar, erroDaApi, focar, porAba, ref, rotuloDe, registrarRotulo, registrarFormato, ordem]);
 }
 
 /**
@@ -230,7 +240,7 @@ export function useErrosDoFormulario(opcoes: OpcoesErros = {}): ErrosFormulario 
 export function ResumoDeErros({ erros, className }: { erros?: ErrosFormulario | null; className?: string }) {
   const ctx = useErrosCtx();
   const f = erros ?? ctx;
-  if (!f) return null;
+  if (!f || !f.resumoVisivel) return null;
   const r = resumoDosErros({ geral: f.geral, campos: f.campos }, f.ordem());
   if (!r) return null;
   const lista = r.itens.length > 1 || (r.quantos && r.itens.length);

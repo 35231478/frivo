@@ -206,6 +206,30 @@ describe("formato ao sair do campo", () => {
     expect(cep.getAttribute("aria-invalid")).toBeNull();
   });
 
+  it("o formato que acusa ao sair fica só no campo: a faixa do topo não aparece (não empurra a tela sob o clique)", async () => {
+    act(() => root.render(h(Exemplo)));
+    const cnpj = $<HTMLInputElement>('[data-t="cnpj"]')!;
+    digitar(cnpj, "11.222.333/0001");
+    sair(cnpj);
+    expect(cnpj.getAttribute("aria-invalid")).toBe("true");
+    expect($("[data-resumo-erros]")).toBeNull();
+    // tentou salvar: aí a faixa aparece com o resumo
+    act(() => $("[data-salvar]")!.click());
+    await flush();
+    expect($("[data-resumo-erros]")).not.toBeNull();
+    // corrigiu tudo: a faixa some e só volta na próxima tentativa (não num formato acusado ao sair)
+    digitar(cnpj, "11.222.333/0001-81");
+    digitar($<HTMLInputElement>('[data-t="nome"]')!, "Polar Demo");
+    digitar($<HTMLInputElement>('[data-t="cep"]')!, "13010-000");
+    await flush();
+    expect($("[data-resumo-erros]")).toBeNull();
+    digitar($<HTMLInputElement>('[data-t="cep"]')!, "1301");
+    sair($<HTMLInputElement>('[data-t="cep"]')!);
+    await flush();
+    expect($('[data-t="cep"]')!.getAttribute("aria-invalid")).toBe("true");
+    expect($("[data-resumo-erros]")).toBeNull();
+  });
+
   it("sem formulário em volta (FormField solto), o formato também marca o campo", () => {
     act(() => root.render(h(FormField, { label: "E-mail", formato: "email" }, h(Input, { defaultValue: "", "data-t": "email" }))));
     const el = $<HTMLInputElement>('[data-t="email"]')!;
