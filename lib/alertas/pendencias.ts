@@ -9,6 +9,7 @@
  * O toque leva para onde o item se resolve: com um registro só (e o id dele), abre o registro; com vários,
  * a lista já filtrada. As contas do dia não entram no número do sino (são rotina de todo dia).
  */
+import { urlConversaEscritorio } from "@/lib/chat/regras";
 import type { EscopoDoSino } from "@/lib/alertas/sino";
 import { ehAvisoDoNumero, type AvisoDoNumero } from "@/lib/alertas/lidos";
 import { FILTRO_SEM_TECNICO } from "@/lib/os/sem-tecnico";
@@ -87,8 +88,9 @@ export const PENDENCIAS = {
     valor: (d) => d.atividadesEsquecidas, href: (d) => hrefOs(d.atividadeEsquecidaOsId),
   },
   comentariosCampo: {
-    area: "operacao", rotulo: "Comentários novos do campo", tom: "acento", icone: "comentario", escopo: "comentariosCampo",
-    valor: (d) => d.comentariosCampo, href: (d) => `${hrefOs(d.comentarioCampoOsId)}#comentarios`,
+    // CHAT-1: a mensagem do campo abre a conversa da OS (uma só: ela; várias: a lista de Conversas)
+    area: "operacao", rotulo: "Mensagens novas do campo", tom: "acento", icone: "comentario", escopo: "comentariosCampo",
+    valor: (d) => d.comentariosCampo, href: (d) => urlConversaEscritorio(d.comentariosCampo === 1 ? d.comentarioCampoOsId : null),
   },
   pmocsVencendo: {
     area: "operacao", rotulo: "PMOC perto de expirar", tom: "atencao", icone: "pmoc", escopo: "pmoc",

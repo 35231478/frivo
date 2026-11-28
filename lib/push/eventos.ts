@@ -10,6 +10,7 @@
  * ressalva/comentário/nota baixa, chamado do portal, resposta de orçamento, saldo negativo em campo, comentário
  * na OS e despesa de campo (enviada, aprovada, recusada).
  */
+import { urlConversaApp, urlConversaEscritorio } from "@/lib/chat/regras";
 import { after } from "next/server";
 import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
@@ -174,13 +175,14 @@ export async function notificarComentarioOS(osId: string, autorId: string, opts:
   const base = { osNumero: os.numero, cliente: nomeCliente(os.cliente), autor: autor?.nome ?? null, texto: opts.texto };
   const chave = `comentario:${opts.comentarioId ?? `${os.id}:${autorId}:${Date.now()}`}`;
   await enviarPush({ empresaId: os.empresaId, tipo: "OS_COMENTARIO", alcance: "pessoal", usuarios: tecnicos, chave,
-    mensagem: (q) => msgComentario(base, urlPara(q, daOs.urlApp, os.id)) });
+    // CHAT-1: o toque abre a conversa da OS (no app, a tela Chat; quem não está no modo técnico, a de Conversas)
+    mensagem: (q) => msgComentario(base, q.restrito ? urlConversaApp(os.id) : urlConversaEscritorio(os.id)) });
   // Hotfix: no escritório, QUEM ESTÁ LIGADO À OS (responsável, quem abriu, quem já conversou ou leu a conversa); se
   // nenhum deles tem aparelho, o escritório todo que vê OS (como antes), para o aviso não se perder
   const comAparelho = sem(await usuariosComAparelho(os.empresaId)).filter((u) => !tecnicos.includes(u));
   const ligados = new Set(await usuariosLigadosAOs(os.empresaId, os.id));
   const alvo = comAparelho.filter((u) => ligados.has(u));
-  return enviarPush({ empresaId: os.empresaId, tipo: "OS_COMENTARIO", alcance: "escritorio", usuarios: alvo.length ? alvo : comAparelho, chave, mensagem: msgComentario(base, urlOs(os.id)) });
+  return enviarPush({ empresaId: os.empresaId, tipo: "OS_COMENTARIO", alcance: "escritorio", usuarios: alvo.length ? alvo : comAparelho, chave, mensagem: msgComentario(base, urlConversaEscritorio(os.id)) });
 }
 
 /** As pessoas do escritório ligadas à OS: o responsável, quem abriu, quem comentou pelo escritório e quem leu a conversa */

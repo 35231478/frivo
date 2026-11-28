@@ -47,7 +47,7 @@ export const TIPOS_PUSH: DefTipo[] = [
   { id: "OS_REAGENDADA", rotulo: "OS reagendada", dica: "A data ou a hora de uma atividade sua mudou.", podeReceber: tecnico },
   { id: "OS_CANCELADA", rotulo: "OS cancelada", dica: "Uma OS em que você tem atividade foi cancelada.", podeReceber: tecnico },
   { id: "ATIVIDADE_ESQUECIDA", rotulo: "Atividade esquecida em andamento", dica: "Atividade em andamento além do limite da empresa ou desde outro dia. O técnico recebe a dele; o escritório, todas.", podeReceber: (q) => tecnico(q) || veOrdens(q) },
-  { id: "OS_COMENTARIO", rotulo: "Comentário novo na OS", dica: "Alguém comentou numa OS sua (técnico) ou da empresa (escritório).", podeReceber: (q) => tecnico(q) || veOrdens(q) },
+  { id: "OS_COMENTARIO", rotulo: "Mensagem nova na conversa da OS", dica: "Alguém escreveu na conversa (chat) de uma OS sua (técnico) ou ligada a esta pessoa (escritório).", podeReceber: (q) => tecnico(q) || veOrdens(q) },
   { id: "ACEITE", rotulo: "Ressalva, comentário ou nota baixa no aceite", dica: "O cliente confirmou o serviço com ressalva, comentário ou nota de 1 ou 2 estrelas. O técnico recebe só o da OS dele.", podeReceber: (q) => tecnico(q) || veOrdens(q) },
   { id: "DESPESA", rotulo: "Despesas de campo", dica: "Despesa enviada (escritório, para aprovar) e aprovada ou recusada (quem enviou).", podeReceber: (q) => tecnico(q) || p(q, "financeiro", "fluxoCaixa") },
   { id: "SOLICITACAO_PORTAL", rotulo: "Chamado novo do portal", dica: "O cliente abriu um chamado pelo Portal do Cliente.", podeReceber: (q) => escritorio(q) && veOrdens(q) },
@@ -187,9 +187,10 @@ export function msgAceite(a: AceiteResumo, url: string): MensagemPush {
 
 export function msgComentario(a: { osNumero: string; cliente?: string | null; autor?: string | null; texto?: string | null }, url: string): MensagemPush {
   return {
-    titulo: `Comentário novo na OS ${a.osNumero}`,
+    titulo: `Mensagem nova na OS ${a.osNumero}`,
     corpo: juntar(a.autor, curto(a.texto, 110) || a.cliente),
-    url, tag: `comentario-${a.osNumero}`, acao: "Abrir OS",
+    // CHAT-1: o toque abre a conversa da OS; a mesma conversa substitui o aviso anterior (tag por OS)
+    url, tag: `comentario-${a.osNumero}`, acao: "Abrir conversa",
   };
 }
 

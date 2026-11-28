@@ -2805,14 +2805,38 @@ model OsComentario {
   texto          String
   clientId       String?  @map("client_id")
   criadoEm       DateTime @default(now()) @map("criado_em")
+  /// CHAT-1: quando alguém que não o autor leu a mensagem pela 1ª vez (o ✓✓), e quem foi
+  lidaEm         DateTime? @map("lida_em")
+  lidaPorId      String?   @map("lida_por_id")
 
   ordemServico OrdemServico @relation(fields: [ordemServicoId], references: [id], onDelete: Cascade)
   atividade    AtividadeOs? @relation(fields: [atividadeId], references: [id], onDelete: SetNull)
+  foto         OsComentarioFoto?
 
   @@unique([empresaId, clientId])
   @@index([ordemServicoId, criadoEm])
   @@index([empresaId, origem, criadoEm])
+  @@index([empresaId, criadoEm])
+  @@index([empresaId, lidaEm])
   @@map("os_comentarios")
+}
+
+/// CHAT-1: a foto de uma mensagem da conversa da OS. Guardada como os anexos da OS (data URL no banco, mesma validação),
+/// mas em tabela PRÓPRIA: a conversa é interna e esta foto nunca entra na galeria, no relatório nem no portal do cliente.
+/// A miniatura vem pronta do aparelho (a tela mostra ela no balão; a foto inteira só ao ampliar).
+model OsComentarioFoto {
+  id           String   @id @default(cuid())
+  comentarioId String   @unique @map("comentario_id")
+  empresaId    String   @map("empresa_id")
+  tipo         String
+  tamanho      Int
+  conteudo     String   @db.Text
+  miniatura    String   @db.Text
+  criadoEm     DateTime @default(now()) @map("criado_em")
+
+  comentario OsComentario @relation(fields: [comentarioId], references: [id], onDelete: Cascade)
+
+  @@map("os_comentarios_fotos")
 }
 
 /// Até quando cada pessoa do ESCRITÓRIO leu os comentários de uma OS (o sino conta os do campo depois disso).
