@@ -29,6 +29,14 @@ import { materialRemoverSchema, materialSchema } from "@/lib/tecnico/materiais";
 import { gravarMaterial, removerMaterial } from "@/lib/execucao/materiais-campo";
 import { comentarioSchema } from "@/lib/tecnico/comentarios";
 import { comentarDoApp, comentarSemOsDoApp } from "@/lib/execucao/comentarios";
+import { lerAoResponderTecnico } from "@/lib/chat/pessoas-servidor";
+
+/** O técnico escreveu: leu a conversa dele até aqui (o ✓✓ das mensagens do escritório) — responder é ler. */
+async function comentarELer<T extends { ok: boolean }>(ator: { empresaId: string; usuarioId: string; escopo: { tecnicoId: string | null } }, r: Promise<T>): Promise<T> {
+  const res = await r;
+  if (res.ok) await lerAoResponderTecnico(ator.empresaId, ator.usuarioId, ator.escopo.tecnicoId);
+  return res;
+}
 import { despesaSchema, SEM_OS } from "@/lib/tecnico/despesas";
 import { editarLegendaFoto } from "@/lib/os/legenda-foto-server";
 import { LEGENDA_MAX } from "@/lib/os/galeria";
@@ -112,7 +120,7 @@ async function executar(ator: Ator, op: Operacao, lote: OpcoesLote): Promise<Res
   // Despesa fora de OS: não há atividade a conferir (o servidor só aceita a do próprio colaborador)
   if (op.tipo === "despesa" && op.atividadeId === SEM_OS) return lancarDespesa(ator, op.dados, null);
   // CHAT-1: mensagem SEM OS ("chego em 10 minutos"): só na conversa do técnico com o escritório
-  if (op.tipo === "comentario" && op.atividadeId === SEM_OS) return comentarSemOsDoApp(ator, op.dados);
+  if (op.tipo === "comentario" && op.atividadeId === SEM_OS) return comentarELer(ator, comentarSemOsDoApp(ator, op.dados));
   const equipamentoId = "equipamentoId" in op ? op.equipamentoId : undefined;
   const ctx = await carregarContexto(ator, op.atividadeId, { equipamentoId, permitirBloqueada: op.tipo === "concluir" || op.tipo === "aceite" || op.tipo === "comentario" || op.tipo === "despesa" || op.tipo === "fotoOsLegenda" });
   if (!ctx.ok) return { ok: false, status: ctx.status, erro: ctx.erro };
@@ -140,7 +148,7 @@ async function executar(ator: Ator, op: Operacao, lote: OpcoesLote): Promise<Res
     });
     case "material": return gravarMaterial(ctx, op.dados);
     case "materialRemover": return removerMaterial(ctx, op.dados);
-    case "comentario": return comentarDoApp(ctx, op.dados);
+    case "comentario": return comentarELer(ctx, comentarDoApp(ctx, op.dados));
     case "despesa": return lancarDespesa(ator, op.dados, ctx);
     case "concluir": {
       // "Campo de conclusão obrigatório" (Configuracao.appConclusaoObrigatoria): sem resumo, não conclui.
