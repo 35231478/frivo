@@ -149,6 +149,9 @@ describe.skipIf(!URL_PG)("COM-1 — Ver só os próprios: nada vaza entre vended
     expect(await noEscopo(ana, "ordem", "osDaVendaAna")).toBe(true);
     expect(await noEscopo(usuario("uAdm"), "orcamento", "oBeto")).toBe(true);
     expect(await noEscopo(usuario("uGestor"), "ordem", "osSemDono")).toBe(true);
+    // O guarda amarra a empresa da sessão: o mesmo id de vendedor noutra empresa não abre o registro desta
+    expect(await noEscopo({ ...ana, empresaId: "e2" }, "orcamento", "oAna")).toBe(false);
+    expect(await noEscopo({ ...ana, empresaId: "e2" }, "ordem", "osVendaAna")).toBe(false);
   });
 
   it("relatório de cumprimento de prazos: só as OS do escopo", async () => {
