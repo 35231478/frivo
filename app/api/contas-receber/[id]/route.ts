@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { erroDeValidacao } from "@/lib/forms/erros-server";
 import { ehRenegociacao } from "@/lib/financeiro/renegociacao-server";
 import { exigirPermissao } from "@/lib/permissoes-server";
 import { prisma } from "@/lib/prisma";
@@ -50,7 +51,7 @@ export async function PUT(req: NextRequest, { params }: Params) {
 
   const parsed = contaReceberUpdateSchema.safeParse(await req.json());
   if (!parsed.success) {
-    return NextResponse.json({ erro: "Dados inválidos", detalhes: parsed.error.flatten() }, { status: 400 });
+    return erroDeValidacao(parsed.error);
   }
   const d = parsed.data;
   const regra = { ...existente, notas: existente.notasFiscais, renegociacao: await ehRenegociacao(prisma, existente) };

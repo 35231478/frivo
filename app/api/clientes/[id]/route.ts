@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { erroDeValidacao, erroNoCampo } from "@/lib/forms/erros-server";
 import { auth } from "@/lib/auth";
 import { pode } from "@/lib/permissoes";
 import { prisma } from "@/lib/prisma";
@@ -51,7 +52,7 @@ export async function PUT(req: NextRequest, { params }: Params) {
   const body = await req.json();
   const parsed = clienteSchema.safeParse(body);
   if (!parsed.success) {
-    return NextResponse.json({ erro: "Dados inválidos", detalhes: parsed.error.flatten() }, { status: 400 });
+    return erroDeValidacao(parsed.error);
   }
 
   // Inativar pela edição completa exige "excluir", como no DELETE e no PATCH.
@@ -62,9 +63,9 @@ export async function PUT(req: NextRequest, { params }: Params) {
   // Documento trocado (os dígitos mudaram): válido de verdade e sem outro cliente com os mesmos dígitos
   if (!mesmoDocumento(parsed.data.cpfCnpj, existente.cpfCnpj)) {
     const erroDoc = erroDocumentoCliente(parsed.data.tipoPessoa, parsed.data.cpfCnpj);
-    if (erroDoc) return NextResponse.json({ erro: erroDoc }, { status: 400 });
+    if (erroDoc) return erroNoCampo("cpfCnpj", erroDoc);
     const dup = await clienteComMesmoDocumento(empresaId, parsed.data.cpfCnpj, id);
-    if (dup) return NextResponse.json({ erro: "CPF/CNPJ já cadastrado" }, { status: 409 });
+    if (dup) return erroNoCampo("cpfCnpj", "CPF/CNPJ já cadastrado", 409);
   }
 
   const { responsavelTecnicoId, segmento, origem, satisfacao, ...resto } = parsed.data;

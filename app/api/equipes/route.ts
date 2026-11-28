@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { erroDeValidacao } from "@/lib/forms/erros-server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { equipeSchema } from "@/lib/validations";
@@ -42,7 +43,7 @@ export async function POST(req: NextRequest) {
 
   const body = await req.json();
   const parsed = equipeSchema.safeParse(body);
-  if (!parsed.success) return NextResponse.json({ erro: "Dados inválidos", detalhes: parsed.error.flatten() }, { status: 400 });
+  if (!parsed.success) return erroDeValidacao(parsed.error);
 
   const { membroIds, veiculoId, veiculoIds, confirmarDesvinculo: _c, liderId, ...rest } = parsed.data;
   if (!(await validarPessoasEquipe(empresaId, membroIds, liderId)))

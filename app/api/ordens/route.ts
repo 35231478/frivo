@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { erroDeValidacao, erroNoCampo } from "@/lib/forms/erros-server";
 import { comEscopo, filtroOrdens } from "@/lib/escopo/proprios";
 import { exigirPermissao } from "@/lib/permissoes-server";
 import { bloqueioPainelTecnico } from "@/lib/tecnico/painel";
@@ -89,18 +90,18 @@ export async function POST(req: NextRequest) {
 
   const body = await req.json();
   const parsed = osCreateSchema.safeParse(body);
-  if (!parsed.success) return NextResponse.json({ erro: "Dados inválidos", detalhes: parsed.error.flatten() }, { status: 400 });
+  if (!parsed.success) return erroDeValidacao(parsed.error);
   const prazoDigitado = lerPrazoDigitado(parsed.data.prazoExecucao);
   // Chamado do cliente: a abertura é AGORA, pelo relógio do servidor (não se digita nem se edita)
   const chamadoAbertoEm = parsed.data.chamadoDoCliente ? new Date() : null;
-  if (prazoDigitado === undefined) return NextResponse.json({ erro: "Prazo para finalizar inválido." }, { status: 400 });
+  if (prazoDigitado === undefined) return erroNoCampo("prazoExecucao", "Prazo para finalizar inválido.");
 
   // Quem executa é obrigatório ao abrir a OS: equipe OU colaboradores (+ veículo puxado/escolhido)
   const prep = await prepararExecucao(empresaId, body?.execucao);
-  if ("erro" in prep) return NextResponse.json({ erro: prep.erro }, { status: 400 });
+  if ("erro" in prep) return erroNoCampo("execucao", prep.erro);
   // Cliente/endereço/contrato da mesma empresa
   if (!(await prisma.cliente.findFirst({ where: { id: parsed.data.clienteId, empresaId }, select: { id: true } })))
-    return NextResponse.json({ erro: "Cliente inválido." }, { status: 400 });
+    return erroNoCampo("clienteId", "Cliente inválido.");
   // Equipamentos atendidos (opcional): só do cliente da OS e ativos
   let equipamentoIds: string[] = [];
   if (parsed.data.equipamentoIds?.length) {

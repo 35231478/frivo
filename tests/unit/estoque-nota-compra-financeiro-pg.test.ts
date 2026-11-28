@@ -121,7 +121,8 @@ describe.skipIf(!URL_PG)("central de lançamento no PostgreSQL real", () => {
     const { criarCadastro, editarCadastro } = await import("@/lib/cadastros/servidor");
     const ator = { id: "u1", nome: "Ana", empresaId: "e1", role: "ADMIN", permissoes: {} as any };
     const dup = await criarCadastro(CADASTROS["centros-custo"], ator, { nome: "OBRA shopping NORTE" });
-    expect(dup).toEqual({ ok: false, status: 409, erro: "Já existe o centro de custo “Obra Shopping Norte”." });
+    // ERRO NO CAMPO: o repetido diz o campo (`nome`) para a gaveta marcar; a mensagem é a mesma
+    expect(dup).toEqual({ ok: false, status: 409, erro: "Já existe o centro de custo “Obra Shopping Norte”.", campos: { nome: "Já existe o centro de custo “Obra Shopping Norte”." } });
     const novo = await criarCadastro(CADASTROS["centros-custo"], ator, { nome: "Administrativo" });
     expect(novo.ok && novo.item).toMatchObject({ nome: "Administrativo", empresaId: "e1", ativo: true });
     expect(await editarCadastro(CADASTROS["centros-custo"], ator, (novo as any).item.id, { nome: "frota" })).toMatchObject({ ok: false, status: 409 });

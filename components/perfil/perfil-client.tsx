@@ -11,10 +11,12 @@ import { Input } from "@/components/ui/input";
 import { PhoneInput } from "@/components/ui/phone-input";
 import { FormField, FormGrid } from "@/components/ui/form-field";
 import { Tabs } from "@/components/ui/tabs";
+import { ErrosDoFormulario, ResumoDeErros, useErrosDoFormulario } from "@/components/ui/formulario-erros";
+import { validarFormato } from "@/lib/forms/erros";
 import { formatarDataHora } from "@/lib/utils";
 import { problemaSenha } from "@/lib/acesso/senha";
 import { RequisitosSenha } from "@/components/auth/requisitos-senha";
-import { AlertCircle, Camera, MonitorSmartphone } from "lucide-react";
+import { Camera, MonitorSmartphone } from "lucide-react";
 import { NotificacoesAparelho } from "@/components/push/notificacoes-aparelho";
 import { MinhasComissoes } from "@/components/perfil/minhas-comissoes";
 import { abaInicialDoPerfil, abasDoPerfil, alteracoesDoPerfil, linhaDaConta, type AbaPerfil } from "@/lib/perfil/abas";
@@ -102,7 +104,8 @@ export function PerfilClient({ initial, onAvatar, emailSomenteLeitura = false, n
   const [comissoes, setComissoes] = useState(false);
   const abas = abasDoPerfil({ notificacoes, comissoes });
   const [aba, setAba] = useState<AbaPerfil>(() => abaInicialDoPerfil(abaPedida, abas));
-  const [erro, setErro] = useState("");
+  // ERRO NO CAMPO: cada recusa no campo dela; a da foto (não é campo) na faixa. Cada aba valida só o que é dela.
+  const erros = useErrosDoFormulario();
   useEffect(() => {
     if (semComissoes) return;
     let vivo = true;
@@ -116,7 +119,7 @@ export function PerfilClient({ initial, onAvatar, emailSomenteLeitura = false, n
 
   function trocarAba(id: string) {
     const nova = abaInicialDoPerfil(id, abas);
-    setAba(nova); setErro("");
+    setAba(nova); erros.limparTudo();
     if (abaNaUrl) window.history.replaceState(null, "", nova === "dados" ? window.location.pathname : `?aba=${nova}`);
   }
 
@@ -129,13 +132,14 @@ export function PerfilClient({ initial, onAvatar, emailSomenteLeitura = false, n
     const file = e.target.files?.[0];
     if (fotoRef.current) fotoRef.current.value = "";
     if (!file) return;
-    setErro("");
-    if (!["image/jpeg", "image/png", "image/webp"].includes(file.type)) { setErro("Use uma imagem JPG ou PNG."); return; }
-    if (file.size > 2 * 1024 * 1024) { setErro("Imagem muito grande. Máximo 2 MB."); return; }
+    erros.limparTudo();
+    const falhaFoto = (m: string) => { erros.definirGeral(m); erros.focar(); };
+    if (!["image/jpeg", "image/png", "image/webp"].includes(file.type)) { falhaFoto("Use uma imagem JPG ou PNG."); return; }
+    if (file.size > 2 * 1024 * 1024) { falhaFoto("Imagem muito grande. Máximo 2 MB."); return; }
     // A foto se salva na aba Dados (o "Salvar" é dela): escolhida de outra aba, a tela vai para Dados
     if (aba !== "dados") trocarAba("dados");
     try { setPreview(await redimensionar(file)); }
-    catch { setErro("Não foi possível processar a imagem."); }
+    catch { falhaFoto("Não foi possível processar a imagem."); }
   }
 
   async function enviarFoto(): Promise<boolean> {
@@ -143,7 +147,7 @@ export function PerfilClient({ initial, onAvatar, emailSomenteLeitura = false, n
       method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ imagem: preview }),
     });
     const data = await res.json().catch(() => null);
-    if (!res.ok) { setErro(data?.erro ?? "Erro ao enviar foto."); return false; }
+    if (!res.ok) { erros.definirGeral(data?.erro ?? "Erro ao enviar foto."); erros.focar(); return false; }
     setAvatar(data.avatar);
     onAvatar?.(data.avatar);
     setPreview(null);
@@ -163,12 +167,15 @@ export function PerfilClient({ initial, onAvatar, emailSomenteLeitura = false, n
   const temAlteracao = !!corpo || !!preview;
 
   async function salvarDados() {
-    setErro("");
-    if (!nome.trim()) { setErro("Informe o nome completo."); return; }
-    if (emailMudou && confirmacaoEmail.trim().toLowerCase() !== email.trim().toLowerCase()) {
-      setErro("A confirmação de e-mail não coincide."); return;
-    }
-    if (emailMudou && !senhaAtualEmail) { setErro("Informe a senha atual para trocar o e-mail de login."); return; }
+    // Todos os campos de uma vez (cada um com a sua mensagem); o formato que já acusou ao sair continua valendo
+    const campos: Record<string, string | null> = {
+      nome: nome.trim() ? null : "Informe o nome completo.",
+      telefone: validarFormato("telefone", telefone),
+      email: emailMudou ? validarFormato("email", email) : null,
+      confirmacaoEmail: emailMudou && confirmacaoEmail.trim().toLowerCase() !== email.trim().toLowerCase() ? "A confirmação de e-mail não coincide." : null,
+      senhaAtualEmail: emailMudou && !senhaAtualEmail ? "Informe a senha atual para trocar o e-mail de login." : null,
+    };
+    if (!erros.validar(Object.fromEntries(Object.entries(campos).filter(([, v]) => v)) as Record<string, string>)) return;
     setSalvandoDados(true);
     try {
       // A foto e os dados no mesmo "Salvar": primeiro a foto (se houver), depois o que mudou nos campos
@@ -176,7 +183,12 @@ export function PerfilClient({ initial, onAvatar, emailSomenteLeitura = false, n
       if (corpo) {
         const res = await fetch("/api/perfil", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(corpo) });
         const data = await res.json().catch(() => null);
-        if (!res.ok) { setErro(data?.erro ?? "Erro ao salvar."); return; }
+        // Na aba Dados, a "senha atual" da API é o campo da troca de e-mail
+        if (!res.ok) {
+          const { senhaAtual: s, ...outros } = (data?.campos ?? {}) as Record<string, string>;
+          erros.erroDaApi({ ...data, campos: s ? { ...outros, senhaAtualEmail: s } : outros }, "Erro ao salvar.");
+          return;
+        }
         setBase({ nome: data.nome, email: data.email, telefone: data.telefone ?? "" });
         setEmail(data.email);
         setConfirmacaoEmail(""); setSenhaAtualEmail("");
@@ -185,13 +197,13 @@ export function PerfilClient({ initial, onAvatar, emailSomenteLeitura = false, n
       toast("Dados salvos.");
       marcarFormularioSalvo();
       router.refresh(); // reflete no menu e no topo (a foto vem do banco no layout)
-    } catch { setErro("Erro de conexão."); }
+    } catch { erros.definirGeral("Erro de conexão."); erros.focar(); }
     finally { setSalvandoDados(false); }
   }
 
   function descartarDados() {
     setNome(base.nome); setEmail(base.email); setTelefone(base.telefone);
-    setConfirmacaoEmail(""); setSenhaAtualEmail(""); setPreview(null); setErro("");
+    setConfirmacaoEmail(""); setSenhaAtualEmail(""); setPreview(null); erros.limparTudo();
     // Descartou: nada a salvar, sair não pergunta mais
     marcarFormularioSalvo();
   }
@@ -203,33 +215,31 @@ export function PerfilClient({ initial, onAvatar, emailSomenteLeitura = false, n
   const [salvandoSenha, setSalvandoSenha] = useState(false);
 
   async function salvarSenha() {
-    setErro("");
-    if (!senhaAtual) { setErro("Informe a senha atual."); return; }
     const problema = problemaSenha(novaSenha);
-    if (problema) { setErro(problema); return; }
-    if (novaSenha !== confirmar) { setErro("A confirmação da nova senha não coincide."); return; }
-    // A mesma regra do servidor, dita antes de enviar
-    if (novaSenha === senhaAtual) { setErro("A nova senha precisa ser diferente da atual."); return; }
+    // A mesma regra do servidor, dita antes de enviar — cada recusa no campo dela
+    if (!erros.validar(!senhaAtual ? { senhaAtual: "Informe a senha atual." }
+      : problema ? { novaSenha: problema }
+      : novaSenha !== confirmar ? { confirmar: "A confirmação da nova senha não coincide." }
+      : novaSenha === senhaAtual ? { novaSenha: "A nova senha precisa ser diferente da atual." } : {})) return;
     setSalvandoSenha(true);
     try {
       const res = await fetch("/api/perfil/senha", {
         method: "PATCH", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ senhaAtual, novaSenha, confirmar }),
       });
-      const data = await res.json();
-      if (!res.ok) { setErro(data?.erro ?? "Erro ao alterar senha."); return; }
+      const data = await res.json().catch(() => null);
+      if (!res.ok) { erros.erroDaApi(data, "Erro ao alterar senha."); return; }
       setSenhaAtual(""); setNovaSenha(""); setConfirmar("");
       toast("Senha alterada. As outras sessões com a senha antiga foram encerradas.");
       marcarFormularioSalvo();
-    } catch { setErro("Erro de conexão."); }
+    } catch { erros.definirGeral("Erro de conexão."); erros.focar(); }
     finally { setSalvandoSenha(false); }
   }
 
   // Sair sem salvar (lib/ui/sair-sem-salvar): o aviso de toda tela de edição
   const raizRef = useRef<HTMLDivElement>(null);
   useAvisoSairSemSalvar(raizRef);
-  // O erro é de uma aba: trocar de aba limpa (já feito em trocarAba); sair da tela também
-  useEffect(() => () => setErro(""), []);
+  // O erro é de uma aba: trocar de aba limpa (já feito em trocarAba)
 
   const iniciais = nome?.split(" ").map((n) => n[0]).slice(0, 2).join("").toUpperCase() || "??";
   const foto = preview ?? avatar;
@@ -261,14 +271,13 @@ export function PerfilClient({ initial, onAvatar, emailSomenteLeitura = false, n
         </div>
       </header>
 
+      <ErrosDoFormulario valor={erros}>
+      <div ref={erros.ref}>
       <Tabs tabs={abas} active={aba} onChange={trocarAba}>
         {(ativa) => (
           <div className="space-y-5">
-            {erro && (
-              <div className="bg-atrasado-claro border border-atrasado/20 text-atrasado-texto text-sm rounded-lg px-4 py-3 flex items-center gap-2" role="alert" data-erro-perfil>
-                <AlertCircle className="w-4 h-4 shrink-0" /> {erro}
-              </div>
-            )}
+            {/* A faixa do topo é o resumo; o erro mora no campo (ERRO NO CAMPO) */}
+            {erros.temErros && <div data-erro-perfil><ResumoDeErros /></div>}
 
             {ativa === "dados" && (
               <Bloco
@@ -295,10 +304,10 @@ export function PerfilClient({ initial, onAvatar, emailSomenteLeitura = false, n
                   <span className="text-xs text-ink-muted">{preview ? "Foto nova: salve para confirmar." : "JPG ou PNG, até 2 MB."}</span>
                 </div>
                 <FormGrid>
-                  <FormField label="Nome completo" required>
+                  <FormField label="Nome completo" required name="nome">
                     <Input value={nome} onChange={(e) => setNome(e.target.value)} autoComplete="name" />
                   </FormField>
-                  <FormField label="Telefone">
+                  <FormField label="Telefone" name="telefone" formato="telefone">
                     <PhoneInput value={telefone} onChange={(e) => setTelefone(e.target.value)} data-telefone />
                   </FormField>
                 </FormGrid>
@@ -308,17 +317,17 @@ export function PerfilClient({ initial, onAvatar, emailSomenteLeitura = false, n
                       <Input type="email" value={initial.email} readOnly aria-readonly="true" data-email-somente-leitura className="bg-surface-linha text-ink-muted" />
                     </FormField>
                   ) : (
-                    <FormField label="E-mail de login" required>
+                    <FormField label="E-mail de login" required name="email" formato="email">
                       <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="email" />
                     </FormField>
                   )}
                 </FormGrid>
                 {emailMudou && (
                   <FormGrid>
-                    <FormField label="Confirmar e-mail" required hint="Repita o novo e-mail">
+                    <FormField label="Confirmar e-mail" required hint="Repita o novo e-mail" name="confirmacaoEmail" formato="email">
                       <Input type="email" value={confirmacaoEmail} onChange={(e) => setConfirmacaoEmail(e.target.value)} />
                     </FormField>
-                    <FormField label="Senha atual" required hint="Trocar o e-mail de login pede a senha">
+                    <FormField label="Senha atual" required hint="Trocar o e-mail de login pede a senha" name="senhaAtualEmail">
                       <Input type="password" value={senhaAtualEmail} onChange={(e) => setSenhaAtualEmail(e.target.value)} autoComplete="current-password" />
                     </FormField>
                   </FormGrid>
@@ -333,16 +342,16 @@ export function PerfilClient({ initial, onAvatar, emailSomenteLeitura = false, n
                   rodape={<Button type="button" variant="primary" loading={salvandoSenha} onClick={salvarSenha} data-trocar-senha>Trocar senha</Button>}
                 >
                   <FormGrid>
-                    <FormField label="Senha atual" required>
+                    <FormField label="Senha atual" required name="senhaAtual">
                       <Input type="password" value={senhaAtual} onChange={(e) => setSenhaAtual(e.target.value)} autoComplete="current-password" />
                     </FormField>
                   </FormGrid>
                   <FormGrid>
-                    <FormField label="Nova senha" required>
+                    <FormField label="Nova senha" required name="novaSenha">
                       <Input type="password" value={novaSenha} onChange={(e) => setNovaSenha(e.target.value)} autoComplete="new-password" />
                       <RequisitosSenha senha={novaSenha} className="pt-1.5" />
                     </FormField>
-                    <FormField label="Confirmar nova senha" required>
+                    <FormField label="Confirmar nova senha" required name="confirmar">
                       <Input type="password" value={confirmar} onChange={(e) => setConfirmar(e.target.value)} autoComplete="new-password" />
                     </FormField>
                   </FormGrid>
@@ -370,6 +379,8 @@ export function PerfilClient({ initial, onAvatar, emailSomenteLeitura = false, n
           </div>
         )}
       </Tabs>
+      </div>
+      </ErrosDoFormulario>
     </div>
   );
 }

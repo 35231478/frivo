@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { erroDeValidacao } from "@/lib/forms/erros-server";
 import { prisma } from "@/lib/prisma";
 import { exigirAlgumaPermissao } from "@/lib/permissoes-server";
 import { checklistTemplateEditarSchema } from "@/lib/validations";
@@ -34,7 +35,7 @@ export async function PUT(req: NextRequest, { params }: Params) {
 
   // Edição parcial: só muda o que veio no corpo
   const parsed = checklistTemplateEditarSchema.safeParse(await req.json().catch(() => null));
-  if (!parsed.success) return NextResponse.json({ erro: "Dados inválidos", detalhes: parsed.error.flatten() }, { status: 400 });
+  if (!parsed.success) return erroDeValidacao(parsed.error);
   const { itens, ...rest } = parsed.data;
 
   // Itens: atualiza os existentes, cria os novos e INATIVA os removidos (nunca apaga — checklists

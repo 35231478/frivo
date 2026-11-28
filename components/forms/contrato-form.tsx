@@ -16,6 +16,7 @@ import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { FormField, FormSection, FormGrid } from "@/components/ui/form-field";
+import { ErrosDoFormulario, IndicadorErroAba, ResumoDeErros, useErrosDoFormulario } from "@/components/ui/formulario-erros";
 import { ToggleSwitch } from "@/components/ui/toggle-switch";
 import { toast } from "@/components/ui/avisos";
 import { ContratoDocumentos } from "@/components/forms/contrato-documentos";
@@ -28,7 +29,7 @@ import {
 import type { Contrato, Tecnico, Unidade } from "@prisma/client";
 import {
   FileText, ClipboardList, HardHat, MapPin, TrendingUp, BellRing, Settings2,
-  Paperclip, Repeat, StickyNote, Building2, FileCheck, AlertCircle, Wand2, DollarSign,
+  Paperclip, Repeat, StickyNote, Building2, FileCheck, Wand2, DollarSign,
   Plus, CalendarDays, ChevronDown, CheckCircle2, PauseCircle, RefreshCw, XCircle, History, User, Trash2, SlidersHorizontal, Timer,
   Loader2,
 } from "lucide-react";
@@ -100,7 +101,7 @@ interface ContratoFormProps {
 }
 
 function Painel({ ativo, id, children }: { ativo: boolean; id: string; children: React.ReactNode }) {
-  return <div className={cn("space-y-8", !ativo && "hidden")} data-painel-contrato={id} role="tabpanel" hidden={!ativo}>{children}</div>;
+  return <div className={cn("space-y-8", !ativo && "hidden")} data-painel-contrato={id} data-aba-painel={id} role="tabpanel" hidden={!ativo}>{children}</div>;
 }
 
 /**
@@ -118,12 +119,12 @@ export const ABAS_CONTRATO = [
 ] as const;
 type AbaContrato = (typeof ABAS_CONTRATO)[number]["id"];
 
-// Campo → aba (para destacar abas com erro de validação)
+// Campo → aba: o ponto vermelho da aba e o "abre a aba sozinha" (ERRO NO CAMPO)
 const CAMPO_ABA: Record<string, AbaContrato> = {
   clienteId: "contrato", numero: "contrato", tipo: "contrato", status: "contrato", periodicidade: "contrato",
   valorMensal: "contrato", valorTotal: "contrato", dataInicio: "contrato", dataFim: "contrato",
   diaFaturamento: "contrato", servicoId: "contrato", diasAposVencimento: "contrato", diaFixoMes: "contrato", ajusteFinsDeSemana: "contrato",
-  descricaoServicos: "escopo", unidadeIds: "escopo",
+  descricaoServicos: "escopo", unidadeIds: "escopo", prazosAtendimento: "escopo", recorrenciasLocais: "recorrencia",
   artNumero: "rt", artVencimento: "rt", responsavelTecnicoId: "rt",
   reajusteIndice: "gestao", reajustePercentual: "gestao", reajusteMesAniversario: "gestao", reajusteNotificarDias: "gestao",
   alertaDias: "gestao", renovacaoMeses: "gestao", notificarClienteDias: "gestao", observacoes: "gestao",
@@ -140,10 +141,8 @@ export function ContratoForm({ initialData, somenteLeitura = false, horarioComer
   const searchParams = useSearchParams();
   const isEditing = !!initialData;
   const clienteIdParam = searchParams.get("clienteId") ?? "";
-  const [erroGlobal, setErroGlobal] = useState("");
   const [aba, setAba] = useState<AbaContrato>("contrato");
   const [maisOpcoes, setMaisOpcoes] = useState(false);
-  const [abasErro, setAbasErro] = useState<Set<string>>(new Set());
 
   const [clientes, setClientes] = useState<ClienteItem[]>([]);
   const [unidades, setUnidades] = useState<Unidade[]>([]);
@@ -204,6 +203,8 @@ export function ContratoForm({ initialData, somenteLeitura = false, horarioComer
     formState: { errors, isSubmitting },
   } = useForm<ContratoInput>({
     resolver: zodResolver(contratoSchema),
+    // O foco no 1º erro é do padrão do formulário (abre a aba certa antes de focar)
+    shouldFocusError: false,
     defaultValues: initialData
       ? {
           clienteId: initialData.clienteId,
@@ -287,6 +288,11 @@ export function ContratoForm({ initialData, somenteLeitura = false, horarioComer
           alertaEmailCliente: false,
         },
   });
+  // ERRO NO CAMPO: os erros do zod + os da tela/servidor no mesmo lugar; o 1º erro abre a aba (e o "Mais opções") e recebe o foco
+  const erros = useErrosDoFormulario({
+    rhf: errors, abaDoCampo: CAMPO_ABA, abrirAba: (a) => setAba(a as AbaContrato),
+    abrirSecao: (c) => { if (CAMPOS_MAIS_OPCOES.includes(c)) setMaisOpcoes(true); },
+  });
 
   const recorrenciaAtiva = watch("recorrencia");
   const reajusteAtivo = watch("reajusteAtivo");
@@ -364,13 +370,13 @@ export function ContratoForm({ initialData, somenteLeitura = false, horarioComer
         method: "PATCH", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ status: statusAlvo, motivo: motivoStatus || undefined }),
       });
-      if (!res.ok) { const e = await res.json().catch(() => ({})); setErroGlobal(e.erro ?? "Erro ao alterar status."); setStatusAlvo(null); return; }
+      if (!res.ok) { erros.erroDaApi(await res.json().catch(() => ({})), "Erro ao alterar status."); setStatusAlvo(null); return; }
       const data = await res.json();
       setValue("status", statusAlvo as any);
       if (data.historico) setHistoricoStatus((prev) => [data.historico, ...prev]);
       toast(`Status alterado para “${LABELS_STATUS_CONTRATO[statusAlvo] ?? statusAlvo}”.`);
       setStatusAlvo(null);
-    } catch { setErroGlobal("Erro de conexão."); } finally { setSalvandoStatus(false); }
+    } catch { erros.definirGeral("Erro de conexão."); erros.focar(); } finally { setSalvandoStatus(false); }
   }
 
   // Meses COBRADOS na vigência (CO4): fim no aniversário do início conta até o mês anterior
@@ -400,22 +406,21 @@ export function ContratoForm({ initialData, somenteLeitura = false, horarioComer
   const duracaoTexto = mesesVigencia != null ? `${mesesVigencia} ${mesesVigencia === 1 ? "mês" : "meses"}` : "Indeterminado";
 
 
+  // Zod recusou: os erros já estão nos campos (rhf); rola e foca o primeiro, abrindo a aba (e o "Mais opções") dele
   function onError(errs: typeof errors) {
-    const abas = new Set<string>();
-    Object.keys(errs).forEach((c) => { const a = CAMPO_ABA[c]; if (a) abas.add(a); });
     if (Object.keys(errs).some((c) => CAMPOS_MAIS_OPCOES.includes(c))) setMaisOpcoes(true);
-    setAbasErro(abas);
-    const primeira = ABAS_CONTRATO.find((t) => abas.has(t.id));
-    if (primeira) { setAba(primeira.id); setErroGlobal(`Verifique os campos obrigatórios na aba "${primeira.label}".`); }
+    erros.definir({});
+    erros.focar();
   }
 
   async function onSubmit(data: ContratoInput, continuar = false) {
-    setErroGlobal(""); setAbasErro(new Set()); setErroPrazos("");
+    erros.limparTudo(); setErroPrazos("");
     // Prazo de atendimento: confere antes de enviar (a mesma regra que o servidor aplica)
     const prazos = regrasAtendimentoSchema.safeParse(prazosDoFormulario(prazosAtendimento));
     if (!prazos.success) {
-      setErroPrazos(prazos.error.issues[0]?.message ?? "Prazo de atendimento inválido.");
-      setAba("escopo"); setAbasErro(new Set(["escopo"])); setErroGlobal('Verifique o prazo de atendimento na aba "Escopo e locais".');
+      const msg = prazos.error.issues[0]?.message ?? "Prazo de atendimento inválido.";
+      setErroPrazos(msg);
+      erros.validar({ prazosAtendimento: msg });
       return;
     }
     // 1º local vindo do cadastro do cliente: cria o local agora (só se ainda não existir um igual)
@@ -427,7 +432,7 @@ export function ContratoForm({ initialData, somenteLeitura = false, horarioComer
         if (!unidadeIds.includes(id)) unidadeIds = [id, ...unidadeIds];
         setLocalPendente(null);
         setValue("unidadeIds", unidadeIds);
-      } catch (e) { setErroGlobal(e instanceof Error ? e.message : "Não foi possível cadastrar o local do cliente."); setAba("escopo"); return; }
+      } catch (e) { erros.validar({ unidadeIds: e instanceof Error ? e.message : "Não foi possível cadastrar o local do cliente." }); return; }
     }
     const recPayload = unidadeIds.map((unidadeId) => {
       const c = recLocais[unidadeId];
@@ -452,7 +457,13 @@ export function ContratoForm({ initialData, somenteLeitura = false, horarioComer
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
-      if (!res.ok) { const err = await res.json(); setErroGlobal(err.erro ?? "Erro ao salvar contrato."); return; }
+      // O erro do servidor cai no campo certo ({ erro, campos }: número repetido, cliente, prazos…)
+      if (!res.ok) {
+        const e = erros.erroDaApi(await res.json().catch(() => ({})), "Erro ao salvar contrato.");
+        const doPrazo = Object.entries(e.campos).find(([k]) => k === "prazosAtendimento" || k.startsWith("prazosAtendimento."));
+        if (doPrazo) setErroPrazos(doPrazo[1]);
+        return;
+      }
       const saved = await res.json().catch(() => ({}));
       if (continuar) {
         toast(isEditing ? "Contrato salvo." : "Contrato criado.");
@@ -461,7 +472,7 @@ export function ContratoForm({ initialData, somenteLeitura = false, horarioComer
       } else {
         router.push("/contratos"); router.refresh();
       }
-    } catch { setErroGlobal("Erro de conexão. Tente novamente."); }
+    } catch { erros.definirGeral("Erro de conexão. Tente novamente."); erros.focar(); }
   }
 
 
@@ -538,7 +549,8 @@ export function ContratoForm({ initialData, somenteLeitura = false, horarioComer
   })();
 
   return (
-    <form onSubmit={salvar} className="min-h-full -m-6 bg-surface-page p-4 sm:p-6">
+    <ErrosDoFormulario valor={erros}>
+    <form ref={erros.ref} onSubmit={salvar} className="min-h-full -m-6 bg-surface-page p-4 sm:p-6" noValidate>
       {/* Modal de confirmação de mudança de status */}
       {statusAlvo && (
         <div className="fixed inset-0 z-[70] bg-black/40 flex items-center justify-center p-4" onClick={() => !salvandoStatus && setStatusAlvo(null)}>
@@ -613,29 +625,25 @@ export function ContratoForm({ initialData, somenteLeitura = false, horarioComer
           </div>
         </div>
 
-        {erroGlobal && (
-          <div className="bg-atrasado-claro border border-atrasado/20 text-atrasado-texto text-sm rounded-lg px-4 py-3 flex items-center gap-2">
-            <AlertCircle className="w-4 h-4 shrink-0" /> {erroGlobal}
-          </div>
-        )}
+        {/* A faixa do topo é só o resumo: o erro mora no campo (ERRO NO CAMPO) */}
+        <ResumoDeErros />
 
         <div className="bg-white rounded-card shadow-card border border-surface-border overflow-hidden">
           <nav className="flex gap-1.5 overflow-x-auto px-4 pt-4 pb-4 border-b border-surface-border" role="tablist">
             {ABAS_CONTRATO.map((t) => {
               const ativa = aba === t.id;
-              const comErro = abasErro.has(t.id);
+              const nErros = erros.porAba[t.id] ?? 0;
               return (
                 <button
                   key={t.id} type="button" role="tab" onClick={() => setAba(t.id)} data-aba-contrato={t.id} aria-selected={ativa}
                   className={cn(
                     "flex items-center gap-2 px-4 py-2.5 text-sm font-medium rounded-card whitespace-nowrap transition-all",
                     ativa ? "bg-primary-500 text-white shadow-sm" : "text-ink-muted hover:text-ink hover:bg-surface-alt",
-                    comErro && !ativa && "text-atrasado bg-atrasado-claro",
                   )}
                 >
                   <t.icone className="w-4 h-4" />
                   {t.label}
-                  {comErro && <AlertCircle className={cn("w-3.5 h-3.5", ativa ? "text-white" : "text-atrasado")} />}
+                  <IndicadorErroAba n={nErros} />
                 </button>
               );
             })}
@@ -647,7 +655,7 @@ export function ContratoForm({ initialData, somenteLeitura = false, horarioComer
       <Painel ativo={aba === "contrato"} id="contrato">
         <FormSection title="Contrato" icon={<FileText className="w-3.5 h-3.5" />}>
           <FormGrid>
-            <FormField label="Cliente" required error={errors.clienteId?.message}>
+            <FormField label="Cliente" required name="clienteId" valor={watch("clienteId") ?? ""}>
               <Controller
                 name="clienteId"
                 control={control}
@@ -658,7 +666,6 @@ export function ContratoForm({ initialData, somenteLeitura = false, horarioComer
                     opcoes={clientes.map(CLIENTE.opcao)}
                     entidade={CLIENTE.entidade}
                     placeholder="Selecione o cliente"
-                    erro={!!errors.clienteId}
                     campos={CLIENTE.campos}
                     valoresIniciais={CLIENTE.valoresIniciais}
                     campoBusca="nome"
@@ -674,9 +681,9 @@ export function ContratoForm({ initialData, somenteLeitura = false, horarioComer
                 )}
               />
             </FormField>
-            <FormField label="Número do contrato" required error={errors.numero?.message} hint="Ex: CT-18">
+            <FormField label="Número do contrato" required name="numero" hint="Ex: CT-18">
               <div className="flex gap-2">
-                <Input {...register("numero")} error={!!errors.numero} placeholder="CT-18" className="flex-1" />
+                <Input {...register("numero")} placeholder="CT-18" className="flex-1" />
                 <Button type="button" variant="secondary" loading={gerandoNumero} onClick={gerarNumero} className="shrink-0">
                   <Wand2 className="w-4 h-4" /> <span className="hidden sm:inline">Gerar automático</span>
                 </Button>
@@ -684,7 +691,7 @@ export function ContratoForm({ initialData, somenteLeitura = false, horarioComer
             </FormField>
           </FormGrid>
           <FormGrid cols={3}>
-            <FormField label="Status" required hint={isEditing ? "Altere pelo botão de status no cabeçalho" : undefined}>
+            <FormField label="Status" required name="status" hint={isEditing ? "Altere pelo botão de status no cabeçalho" : undefined}>
               {isEditing ? (
                 <div className="flex h-10 items-center">
                   <span className={cn("inline-flex items-center text-xs font-semibold px-2.5 py-1 rounded-full", COR_STATUS_CONTRATO[statusVal] ?? "bg-surface-linha text-ink-muted")}>
@@ -697,10 +704,10 @@ export function ContratoForm({ initialData, somenteLeitura = false, horarioComer
                 </Select>
               )}
             </FormField>
-            <FormField label="Início da vigência" required error={errors.dataInicio?.message}>
+            <FormField label="Início da vigência" required name="dataInicio" formato="data">
               <Controller name="dataInicio" control={control} render={({ field }) => <InputData value={(field.value as string) ?? ""} onChange={field.onChange} aria-label="Início da vigência" />} />
             </FormField>
-            <FormField label="Fim da vigência" hint="Em branco = indeterminado">
+            <FormField label="Fim da vigência" hint="Em branco = indeterminado" name="dataFim" formato="data">
               <Controller name="dataFim" control={control} render={({ field }) => <InputData value={(field.value as string) ?? ""} onChange={field.onChange} aria-label="Fim da vigência" />} />
             </FormField>
           </FormGrid>
@@ -715,21 +722,21 @@ export function ContratoForm({ initialData, somenteLeitura = false, horarioComer
               label="Cobrança"
               required
               dica="De quanto em quanto tempo o contrato cobra. Sai uma previsão no Contas a Receber e uma medição por período, sempre pelo valor ao lado (o valor de cada cobrança, sem multiplicar)."
-              error={errors.periodicidade?.message}
+              name="periodicidade"
             >
               <Select {...register("periodicidade")} data-periodicidade>
                 {PERIODICIDADES_COBRANCA.map((v) => (<option key={v} value={v}>{LABELS_PERIODICIDADE[v] ?? v}</option>))}
               </Select>
             </FormField>
-            <FormField label="Dia de faturamento" hint="1 a 28" dica="Dia do mês em que a cobrança sai. Em branco, vale o dia de faturamento do cliente." error={errors.diaFaturamento?.message}>
+            <FormField label="Dia de faturamento" hint="1 a 28" dica="Dia do mês em que a cobrança sai. Em branco, vale o dia de faturamento do cliente." name="diaFaturamento">
               <Input {...register("diaFaturamento")} type="number" min={1} max={28} placeholder="1" />
             </FormField>
             <FormField
               label={passo > 1 ? "Valor da cobrança (R$)" : "Valor mensal (R$)"}
               hint={passo > 1 ? (valorMensalNum ? `${formatarMoeda(valorMensalNum)} · ${textoFrequencia(passo)}` : `Cobrado ${textoFrequencia(passo)}`) : "Gera previsão de contas a receber"}
-              error={errors.valorMensal?.message}
+              name="valorMensal"
             >
-              <Input {...register("valorMensal", { valueAsNumber: true })} type="number" step="0.01" min="0" placeholder="0,00" error={!!errors.valorMensal} data-valor-cobranca />
+              <Input {...register("valorMensal", { valueAsNumber: true })} type="number" step="0.01" min="0" placeholder="0,00" data-valor-cobranca />
             </FormField>
             <FormField label="Valor total (R$)" hint={passo > 1 ? "Calculado: valor da cobrança × cobranças na vigência" : "Calculado: valor mensal × meses de vigência"}>
               <div className="flex h-10 items-center rounded-lg border border-surface-border bg-surface-alt/60 px-3 text-sm font-medium text-ink" data-valor-total>
@@ -744,7 +751,7 @@ export function ContratoForm({ initialData, somenteLeitura = false, horarioComer
               label="Serviço da nota"
               hint="Recomendado"
               dica="O serviço do catálogo que vai na NFS-e da mensalidade. Dele vêm o código fiscal e as retenções (ISS retido, IR, PIS, COFINS, CSLL, INSS)."
-              error={errors.servicoId?.message}
+              name="servicoId" valor={servicoIdVal ?? ""}
             >
               <Controller
                 control={control}
@@ -862,14 +869,14 @@ export function ContratoForm({ initialData, somenteLeitura = false, horarioComer
             </button>
             {maisOpcoes && (
               <div className="px-3 pb-3 pt-1 space-y-4 border-t border-surface-border" data-mais-opcoes-conteudo>
-                <FormField label="Sábados, domingos e feriados nacionais" hint="Ajuste do vencimento que cai em dia não útil">
+                <FormField label="Sábados, domingos e feriados nacionais" hint="Ajuste do vencimento que cai em dia não útil" name="ajusteFinsDeSemana">
                   <Select {...register("ajusteFinsDeSemana")}>
                     {Object.entries(LABELS_AJUSTE_FIM_SEMANA).map(([v, l]) => (<option key={v} value={v}>{l}</option>))}
                   </Select>
                 </FormField>
                 <FormGrid>
-                  <FormField label="Tipo" required error={errors.tipo?.message}>
-                    <Select {...register("tipo")} error={!!errors.tipo} placeholder="Selecione o tipo">
+                  <FormField label="Tipo" required name="tipo">
+                    <Select {...register("tipo")} placeholder="Selecione o tipo">
                       {Object.entries(LABELS_TIPO_CONTRATO).map(([v, l]) => (<option key={v} value={v}>{l}</option>))}
                     </Select>
                   </FormField>
@@ -889,7 +896,7 @@ export function ContratoForm({ initialData, somenteLeitura = false, horarioComer
       {/* ABA 2 — Escopo e locais */}
       <Painel ativo={aba === "escopo"} id="escopo">
         <FormSection title="Escopo dos serviços" icon={<ClipboardList className="w-3.5 h-3.5" />}>
-          <FormField label="Descrição dos serviços" hint="O que está incluso no contrato" error={errors.descricaoServicos?.message}>
+          <FormField label="Descrição dos serviços" hint="O que está incluso no contrato" name="descricaoServicos">
             <Textarea {...register("descricaoServicos")} rows={5} maxLength={MAX_DESCRICAO_SERVICOS} placeholder="Descreva os serviços contratados…" data-descricao-servicos />
             <p className={cn("text-xs text-right mt-1 tabular-nums", descricaoVal.length > MAX_DESCRICAO_SERVICOS ? "text-atrasado font-semibold" : descricaoVal.length > MAX_DESCRICAO_SERVICOS * 0.9 ? "text-atencao-texto" : "text-ink-subtle")} data-contador-descricao>
               {descricaoVal.length}/{MAX_DESCRICAO_SERVICOS}
@@ -898,9 +905,13 @@ export function ContratoForm({ initialData, somenteLeitura = false, horarioComer
         </FormSection>
 
         <FormSection title="Prazo de atendimento" icon={<Timer className="w-3.5 h-3.5" />} dica={DICA_PRAZO_ATENDIMENTO}>
-          <PrazosAtendimento value={prazosAtendimento} onChange={(v) => { setPrazosAtendimento(v); setErroPrazos(""); }} horario={horarioComercial} erro={erroPrazos} />
+          {/* Os prazos são um campo do formulário (prazosAtendimento): o erro leva até aqui; a tabela mostra a mensagem */}
+          <div data-campo-nome="prazosAtendimento" data-campo-com-erro={erroPrazos ? "" : undefined}>
+            <PrazosAtendimento value={prazosAtendimento} onChange={(v) => { setPrazosAtendimento(v); setErroPrazos(""); erros.limpar("prazosAtendimento"); }} horario={horarioComercial} erro={erroPrazos} />
+          </div>
         </FormSection>
 
+        <div data-campo-nome="unidadeIds" data-campo-com-erro={erros.erroDe("unidadeIds") ? "" : undefined}>
         <FormSection title="Locais cobertos pelo contrato" icon={<MapPin className="w-3.5 h-3.5" />}>
           {!clienteIdSelecionado ? (
             <p className="text-sm text-ink-muted py-3">Selecione um cliente primeiro (aba &quot;Contrato&quot;).</p>
@@ -987,6 +998,7 @@ export function ContratoForm({ initialData, somenteLeitura = false, horarioComer
             </div>
           )}
         </FormSection>
+        </div>
       </Painel>
 
       {/* ABA 3 — Recorrência de OS por local (como estava) */}
@@ -1013,7 +1025,7 @@ export function ContratoForm({ initialData, somenteLeitura = false, horarioComer
       <Painel ativo={aba === "rt"} id="rt">
         <FormSection title="Responsável técnico" icon={<HardHat className="w-3.5 h-3.5" />}>
           <FormGrid>
-            <FormField label="Responsável técnico" hint="Colaborador responsável por este contrato"
+            <FormField label="Responsável técnico" hint="Colaborador responsável por este contrato" name="responsavelTecnicoId" valor={watch("responsavelTecnicoId") ?? ""}
               dica="Cadastrar ou editar aqui mexe no cadastro do colaborador, valendo em todo o sistema.">
               <Controller
                 name="responsavelTecnicoId"
@@ -1042,12 +1054,12 @@ export function ContratoForm({ initialData, somenteLeitura = false, horarioComer
                 )}
               />
             </FormField>
-            <FormField label="Número ART" hint="Anotação de Responsabilidade Técnica">
+            <FormField label="Número ART" hint="Anotação de Responsabilidade Técnica" name="artNumero">
               <Input {...register("artNumero")} placeholder="Ex: ART-2024-005678" />
             </FormField>
           </FormGrid>
           <FormGrid>
-            <FormField label="Vencimento da ART" hint="Se vazio, assume o fim da vigência do contrato">
+            <FormField label="Vencimento da ART" hint="Se vazio, assume o fim da vigência do contrato" name="artVencimento" formato="data">
               <Controller name="artVencimento" control={control} render={({ field }) => <InputData value={(field.value as string) ?? ""} onChange={field.onChange} aria-label="Vencimento da ART" />} />
             </FormField>
           </FormGrid>
@@ -1221,5 +1233,6 @@ export function ContratoForm({ initialData, somenteLeitura = false, horarioComer
         </div>
       </div>
     </form>
+    </ErrosDoFormulario>
   );
 }

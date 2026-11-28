@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { erroDeValidacao, erroNoCampo } from "@/lib/forms/erros-server";
 import { prisma } from "@/lib/prisma";
 import { validarFoto } from "@/lib/anexos-server";
 import { respostaRefEmpresa, validarRefEmpresa, validarRefsEmpresa } from "@/lib/ref-empresa";
@@ -58,23 +59,23 @@ export async function POST(req: NextRequest) {
   const parsed = tecnicoSchema.safeParse(body);
 
   if (!parsed.success) {
-    return NextResponse.json({ erro: erroDoCadastro(parsed.error), detalhes: parsed.error.flatten() }, { status: 400 });
+    return erroDeValidacao(parsed.error, erroDoCadastro(parsed.error));
   }
 
   const existente = await prisma.tecnico.findUnique({
     where: { cpf_empresaId: { cpf: parsed.data.cpf, empresaId } },
   });
-  if (existente) return NextResponse.json({ erro: "CPF já cadastrado" }, { status: 409 });
+  if (existente) return erroNoCampo("cpf", "CPF já cadastrado", 409);
 
   const { competenciaIds, dataNascimento, dataAdmissao, cargoId, perfilAcessoId, email, veiculoId, jornadaFaixas, jornadaEntrada, jornadaSaida, jornadaDias, tipo: tipoCorpo, tipoEquipe: equipeCorpo, ...rest } = parsed.data;
   // tipo × tipoEquipe sempre coerentes no banco (sem equipe no corpo, ela sai do tipo); RT não fica sem CREA
   const funcao = funcaoDoCorpo(tipoCorpo, equipeCorpo);
-  if (funcao.tipo === "RESPONSAVEL_TECNICO" && !rest.crea?.trim()) return NextResponse.json({ erro: MSG_RT_SEM_CREA }, { status: 400 });
+  if (funcao.tipo === "RESPONSAVEL_TECNICO" && !rest.crea?.trim()) return erroNoCampo("crea", MSG_RT_SEM_CREA);
   // Leva J: a jornada em faixas (ou, de um cliente antigo, os campos antigos)
   const jornada = jornadaDoCorpo({ jornadaFaixas, jornadaEntrada, jornadaSaida, jornadaDias });
   // Veículo padrão (opcional) precisa ser da mesma empresa
   if (veiculoId && !(await prisma.veiculo.findFirst({ where: { id: veiculoId, empresaId }, select: { id: true } })))
-    return NextResponse.json({ erro: "Veículo inválido." }, { status: 400 });
+    return erroNoCampo("veiculoId", "Veículo inválido.");
   // Cargo, perfil de acesso e competências (tipos de OS) precisam ser da mesma empresa
   try {
     await Promise.all([

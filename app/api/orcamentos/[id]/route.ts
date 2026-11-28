@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { erroDeValidacao } from "@/lib/forms/erros-server";
 import { prisma } from "@/lib/prisma";
 import { respostaRefEmpresa, validarRefEmpresa, validarRefsEmpresa } from "@/lib/ref-empresa";
 import { orcamentoSchema } from "@/lib/validations";
@@ -120,10 +121,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
 
   const parsed = orcamentoSchema.safeParse(body);
   if (!parsed.success) {
-    return NextResponse.json(
-      { erro: "Dados inválidos", detalhes: parsed.error.flatten() },
-      { status: 400 }
-    );
+    return erroDeValidacao(parsed.error);
   }
   const data = parsed.data;
 
@@ -170,7 +168,8 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     user: session.user!, empresaId, clienteId: data.clienteId, itens: itensDoOrcamentoParaTrava(valores),
     anteriores: await precosAnterioresDoOrcamento(id), motivo: data.motivoPrecoTabela,
   });
-  if (!trava.veredito.ok) return NextResponse.json({ erro: trava.veredito.erro, precoTabela: true }, { status: trava.veredito.status });
+  // Falta (ou é curto) o motivo: o erro mora no campo do motivo; sem a permissão, vai para a faixa
+  if (!trava.veredito.ok) return NextResponse.json({ erro: trava.veredito.erro, precoTabela: true, ...(trava.veredito.status === 400 ? { campos: { motivoPrecoTabela: trava.veredito.erro } } : {}) }, { status: trava.veredito.status });
   // RT/ART que não vieram: mantém os do orçamento (como garantias, normas e destinatário)
   const proposta = montarCamposProposta({
     ...data,

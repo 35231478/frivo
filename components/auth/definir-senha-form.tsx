@@ -6,6 +6,9 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { AlertCircle, Check, Eye, EyeOff, Loader2 } from "lucide-react";
 import { SENHA_MINIMA, problemaSenha } from "@/lib/acesso/senha";
 import { RequisitosSenha } from "@/components/auth/requisitos-senha";
+import { FormField } from "@/components/ui/form-field";
+import { Input } from "@/components/ui/input";
+import { ErrosDoFormulario, ResumoDeErros, useErrosDoFormulario } from "@/components/ui/formulario-erros";
 
 type Finalidade = "convite" | "recuperacao";
 
@@ -20,7 +23,8 @@ export function DefinirSenhaForm() {
   const [senha, setSenha] = useState("");
   const [confirmar, setConfirmar] = useState("");
   const [mostrar, setMostrar] = useState(false);
-  const [erro, setErro] = useState("");
+  // ERRO NO CAMPO: senha fraca na senha, confirmação diferente na confirmação; link vencido/conexão na faixa
+  const erros = useErrosDoFormulario();
   const [salvando, setSalvando] = useState(false);
 
   useEffect(() => {
@@ -37,17 +41,15 @@ export function DefinirSenhaForm() {
 
   async function salvar(e: React.FormEvent) {
     e.preventDefault();
-    setErro("");
     const problema = problemaSenha(senha);
-    if (problema) { setErro(problema); return; }
-    if (senha !== confirmar) { setErro("A confirmação não confere com a senha."); return; }
+    if (!erros.validar(problema ? { senha: problema } : senha !== confirmar ? { confirmar: "A confirmação não confere com a senha." } : {})) return;
     setSalvando(true);
     try {
       const r = await fetch("/api/publico/definir-senha", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ token, senha, confirmar }) });
       const d = await r.json().catch(() => ({}));
-      if (!r.ok) { setErro(d.erro ?? "Não foi possível definir a senha."); return; }
+      if (!r.ok) { erros.erroDaApi(d, "Não foi possível definir a senha."); return; }
       router.push(`/login?senha=definida&email=${encodeURIComponent(d.email ?? "")}`);
-    } catch { setErro("Erro de conexão."); } finally { setSalvando(false); }
+    } catch { erros.definirGeral("Erro de conexão."); erros.focar(); } finally { setSalvando(false); }
   }
 
   if (conferindo) return <p className="flex items-center gap-2 text-sm text-ink-muted"><Loader2 className="w-4 h-4 animate-spin" /> Conferindo o link…</p>;
@@ -63,9 +65,9 @@ export function DefinirSenhaForm() {
 
   const recuperacao = usuario?.finalidade === "recuperacao";
 
-  const cls = "w-full bg-white border border-surface-border rounded-lg px-3 py-2.5 text-sm text-ink focus:outline-none focus:border-primary-500 focus:ring-4 focus:ring-primary-500/10";
   return (
-    <form onSubmit={salvar} className="space-y-5">
+    <ErrosDoFormulario valor={erros}>
+    <form ref={erros.ref} onSubmit={salvar} className="space-y-5" noValidate>
       <div>
         <h2 className="text-xl font-bold text-ink">{recuperacao ? "Criar nova senha" : `Defina sua senha, ${usuario?.nome?.split(" ")[0]}`}</h2>
         <p className="text-sm text-ink-muted mt-1">
@@ -73,24 +75,23 @@ export function DefinirSenhaForm() {
             : <>Defina a senha de acesso para <strong>{usuario?.email}</strong>.</>}
         </p>
       </div>
-      {erro && <p role="alert" className="bg-atrasado-claro border border-atrasado/20 text-atrasado-texto text-sm rounded-lg px-3 py-2.5 flex items-center gap-2"><AlertCircle className="w-4 h-4 shrink-0" /> {erro}</p>}
-      <label className="block space-y-1.5">
-        <span className="text-sm font-semibold text-ink">Nova senha</span>
+      <ResumoDeErros className="py-2.5 px-3" />
+      <FormField label="Nova senha" name="senha">
         <div className="relative">
-          <input type={mostrar ? "text" : "password"} value={senha} onChange={(e) => setSenha(e.target.value)} autoComplete="new-password" className={cls} placeholder={`Pelo menos ${SENHA_MINIMA} caracteres, com letra e número`} />
-          <button type="button" onClick={() => setMostrar((v) => !v)} className="absolute right-3 top-1/2 -translate-y-1/2 text-ink-subtle" aria-label={mostrar ? "Ocultar senha" : "Mostrar senha"}>
+          <Input type={mostrar ? "text" : "password"} value={senha} onChange={(e) => setSenha(e.target.value)} autoComplete="new-password" className="pr-12 min-h-[44px]" placeholder={`Pelo menos ${SENHA_MINIMA} caracteres, com letra e número`} />
+          <button type="button" onClick={() => setMostrar((v) => !v)} className="absolute right-1 top-1/2 -translate-y-1/2 w-11 h-11 inline-flex items-center justify-center text-ink-subtle" aria-label={mostrar ? "Ocultar senha" : "Mostrar senha"}>
             {mostrar ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
           </button>
         </div>
         <RequisitosSenha senha={senha} className="pt-1" />
-      </label>
-      <label className="block space-y-1.5">
-        <span className="text-sm font-semibold text-ink">Confirme a senha</span>
-        <input type={mostrar ? "text" : "password"} value={confirmar} onChange={(e) => setConfirmar(e.target.value)} autoComplete="new-password" className={cls} />
-      </label>
+      </FormField>
+      <FormField label="Confirme a senha" name="confirmar">
+        <Input type={mostrar ? "text" : "password"} value={confirmar} onChange={(e) => setConfirmar(e.target.value)} autoComplete="new-password" className="min-h-[44px]" />
+      </FormField>
       <button type="submit" disabled={salvando} className="w-full inline-flex items-center justify-center gap-2 bg-acento hover:bg-acento-hover text-white font-semibold rounded-lg py-2.5 disabled:opacity-60">
         {salvando ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />} {recuperacao ? "Salvar nova senha" : "Definir senha e entrar"}
       </button>
     </form>
+    </ErrosDoFormulario>
   );
 }

@@ -6,6 +6,8 @@ import { Drawer } from "@/components/ui/drawer";
 import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { FormField, FormGrid } from "@/components/ui/form-field";
+import { ErrosDoFormulario, ResumoDeErros, useErrosDoFormulario } from "@/components/ui/formulario-erros";
+import type { ErrosDeCampo } from "@/lib/forms/erros";
 import { InputData } from "@/components/ui/input-data";
 import { InputHora } from "@/components/ui/input-hora";
 import { MSG_HORA_INVALIDA } from "@/components/ui/input-data-hora";
@@ -72,7 +74,8 @@ export function EditarOs({
 }) {
   const [usuarios, setUsuarios] = useState<{ id: string; nome: string }[]>([]);
   const [salvando, setSalvando] = useState(false);
-  const [erro, setErro] = useState("");
+  // ERRO NO CAMPO: cada erro no campo dele (dia/hora da visita, descrição); a faixa no alto da gaveta é o resumo
+  const erros = useErrosDoFormulario();
   const inicial = (): Record<Campo, string> => ({
     responsavelId: os.responsavelId ?? "",
     previsaoConclusao: soData(os.previsaoConclusao),
@@ -89,7 +92,7 @@ export function EditarOs({
 
   // Reabrir a gaveta começa do que está gravado (descarta o rascunho de uma edição cancelada)
   useEffect(() => {
-    if (aberto) { setForm(inicial()); setVisitaData(visita?.data ?? ""); setVisitaHora(visita?.hora ?? ""); setErro(""); }
+    if (aberto) { setForm(inicial()); setVisitaData(visita?.data ?? ""); setVisitaHora(visita?.hora ?? ""); erros.limparTudo(); }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [aberto, os, visita?.atividadeId]);
   useEffect(() => {
@@ -101,11 +104,14 @@ export function EditarOs({
 
   // Em leitura não há botão Salvar (e o servidor recusa de qualquer jeito): salvar() só roda editando.
   async function salvar() {
-    if (!form.descricao.trim()) { setErro("Descreva o serviço da OS."); return; }
-    if (visitaMudou && (!visitaData || !visitaHora)) { setErro(!visitaData ? "Informe o dia da visita." : MSG_HORA_INVALIDA); return; }
+    const faltando: ErrosDeCampo = {};
+    if (visitaMudou && !visitaData) faltando.visitaData = "Informe o dia da visita.";
+    else if (visitaMudou && !visitaHora) faltando.visitaHora = MSG_HORA_INVALIDA;
+    if (!form.descricao.trim()) faltando.descricao = "Descreva o serviço da OS.";
+    if (!erros.validar(faltando)) return;
     const alterados = camposAlterados(inicial(), form, CAMPOS);
     if (!alterados.length && !visitaMudou) { onFechar(); return; }
-    setErro(""); setSalvando(true);
+    setSalvando(true);
     try {
       let atualizada = os;
       if (alterados.length) {
@@ -113,7 +119,7 @@ export function EditarOs({
         const res = await fetch(`/api/ordens/${os.id}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(corpo) });
         const d = await res.json().catch(() => null);
         // Recusado (sem permissão, registro fechado): a gaveta fica aberta com o que foi digitado
-        if (!res.ok) { setErro((d && typeof d.erro === "string" && d.erro) || "Não foi possível salvar a OS."); return; }
+        if (!res.ok) { erros.erroDaApi(d, "Não foi possível salvar a OS."); return; }
         atualizada = d;
       }
       if (visita && visitaMudou) {
@@ -125,7 +131,8 @@ export function EditarOs({
         const d = await res.json().catch(() => null);
         if (!res.ok) {
           const motivo = (d && typeof d.erro === "string" && d.erro) || "Não foi possível reagendar a visita.";
-          setErro(alterados.length ? `Os campos da OS foram salvos, mas a visita não: ${motivo}` : motivo);
+          // O erro vai para o campo da visita (dia/hora) quando o servidor diz qual; senão, para a faixa
+          erros.erroDaApi({ ...(d ?? {}), erro: alterados.length ? `Os campos da OS foram salvos, mas a visita não: ${motivo}` : motivo }, motivo);
           if (alterados.length) onAtualizado(atualizada);
           return;
         }
@@ -136,10 +143,11 @@ export function EditarOs({
       }
       onAtualizado(atualizada);
       onFechar();
-    } catch { setErro("Sem conexão. Tente de novo."); } finally { setSalvando(false); }
+    } catch { erros.definirGeral("Sem conexão. Tente de novo."); erros.focar(); } finally { setSalvando(false); }
   }
 
   return (
+    <ErrosDoFormulario valor={erros}>
     <Drawer
       aberto={aberto} onFechar={onFechar} titulo={`${somenteLeitura ? "OS" : "Editar a OS"} ${os.chamadoNumero ?? os.numero}`}
       rodape={
@@ -158,21 +166,22 @@ export function EditarOs({
         </div>
       }
     >
-      <div className="space-y-4" data-editar-os data-somente-leitura={somenteLeitura || undefined}>
+      <div ref={erros.ref} className="space-y-4" data-editar-os data-somente-leitura={somenteLeitura || undefined}>
         {somenteLeitura && motivoLeitura && (
           <p role="note" className="text-sm text-ink-muted bg-surface-alt border border-surface-border rounded-lg px-3 py-2" data-motivo-leitura>{motivoLeitura}</p>
         )}
-        {erro && <p role="alert" className="text-sm text-atrasado-texto bg-atrasado-claro border border-atrasado/20 rounded-lg px-3 py-2" data-erro-os>{erro}</p>}
+        {/* A faixa no alto da gaveta é só o resumo: o erro mora no campo (ERRO NO CAMPO) */}
+        {erros.temErros && <div data-erro-os><ResumoDeErros /></div>}
 
         {visita && (
           <fieldset className="rounded-lg border border-surface-border bg-surface-alt/40 p-3 space-y-3" data-visita-gaveta>
             <legend className="px-1 text-xs font-semibold text-ink-muted uppercase tracking-wider">Agendamento desta visita</legend>
             <FormGrid>
-              <FormField label="Dia da visita" dica="O dia desta atividade no calendário. Mudar aqui é o mesmo que arrastar o cartão.">
+              <FormField label="Dia da visita" name="visitaData" valor={visitaData} dica="O dia desta atividade no calendário. Mudar aqui é o mesmo que arrastar o cartão.">
                 <InputData aria-label="Dia da visita" value={visitaData} onChange={setVisitaData} disabled={travado} />
               </FormField>
-              <FormField label="Hora da visita" dica="O horário combinado com o cliente. Técnico e equipe se mudam no painel de Atividades da OS.">
-                <InputHora aria-label="Hora da visita" value={visitaHora} onChange={setVisitaHora} disabled={travado} invalido={!!erro && visitaMudou && !visitaHora} />
+              <FormField label="Hora da visita" name="visitaHora" valor={visitaHora} dica="O horário combinado com o cliente. Técnico e equipe se mudam no painel de Atividades da OS.">
+                <InputHora aria-label="Hora da visita" value={visitaHora} onChange={setVisitaHora} disabled={travado} />
               </FormField>
             </FormGrid>
           </fieldset>
@@ -185,10 +194,10 @@ export function EditarOs({
                 .map((u) => <option key={u.id} value={u.id}>{u.nome}</option>)}
             </Select>
           </FormField>
-          <FormField label="Data prevista" dica="O dia em que o serviço está marcado, quando a OS ainda não tem atividade agendada. É a agenda, não o prazo.">
+          <FormField label="Data prevista" name="previsaoConclusao" valor={form.previsaoConclusao} dica="O dia em que o serviço está marcado, quando a OS ainda não tem atividade agendada. É a agenda, não o prazo.">
             <InputData aria-label="Data prevista" value={form.previsaoConclusao} onChange={(v) => upd("previsaoConclusao", v)} disabled={travado} />
           </FormField>
-          <FormField label="Prazo para finalizar" dica="Até que dia a OS precisa estar concluída. Depois dele, a OS é sinalizada como atrasada. Vazio: vale a data prevista.">
+          <FormField label="Prazo para finalizar" name="prazoExecucao" valor={form.prazoExecucao} dica="Até que dia a OS precisa estar concluída. Depois dele, a OS é sinalizada como atrasada. Vazio: vale a data prevista.">
             <InputData aria-label="Prazo para finalizar" value={form.prazoExecucao} onChange={(v) => upd("prazoExecucao", v)} disabled={travado} />
           </FormField>
         </FormGrid>
@@ -197,7 +206,7 @@ export function EditarOs({
             {Object.entries(LABELS_PRIORIDADE).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
           </Select>
         </FormField>
-        <FormField label="Descrição" required={!somenteLeitura}>
+        <FormField label="Descrição" required={!somenteLeitura} name="descricao">
           <Textarea value={form.descricao} onChange={(e) => upd("descricao", e.target.value)} rows={3} disabled={travado} data-descricao-os />
         </FormField>
         <FormField label="Observações">
@@ -205,5 +214,6 @@ export function EditarOs({
         </FormField>
       </div>
     </Drawer>
+    </ErrosDoFormulario>
   );
 }

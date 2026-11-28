@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { erroDeValidacao } from "@/lib/forms/erros-server";
 import { prisma } from "@/lib/prisma";
 import { exigirAlgumaPermissao } from "@/lib/permissoes-server";
 import { checklistTemplateSchema } from "@/lib/validations";
@@ -27,7 +28,7 @@ export async function POST(req: NextRequest) {
 
   const body = await req.json();
   const parsed = checklistTemplateSchema.safeParse(body);
-  if (!parsed.success) return NextResponse.json({ erro: "Dados inválidos", detalhes: parsed.error.flatten() }, { status: 400 });
+  if (!parsed.success) return erroDeValidacao(parsed.error);
 
   const { itens, ...rest } = parsed.data;
   const template = await prisma.checklistTemplate.create({

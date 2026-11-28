@@ -23,6 +23,8 @@ import { PhoneInput } from "@/components/ui/phone-input";
 import { WhatsAppInput } from "@/components/ui/whatsapp-input";
 import { EmailsInput } from "@/components/ui/emails-input";
 import { FormField, FormSection, FormGrid } from "@/components/ui/form-field";
+import { ErrosDoFormulario, IndicadorErroAba, ResumoDeErros, useErrosDoFormulario } from "@/components/ui/formulario-erros";
+import { formatoDoDocumento, MSG_FORMATO } from "@/lib/forms/erros";
 import { UnidadesManager } from "@/components/forms/unidades-manager";
 import { UnidadesLocal, type UnidadeLocal } from "@/components/forms/unidades-local";
 import { mesclarContato, type ContatoConsulta } from "@/lib/cadastros/autofill-cnpj";
@@ -43,7 +45,7 @@ import { SeletorCadastro, useCadastro } from "@/components/cadastros/seletor-cad
 import type { Cliente, Tecnico, Unidade, Configuracao, ContatoCliente } from "@prisma/client";
 import type { ContatoSeguro } from "@/lib/contato-cliente";
 import {
-  Search, FileCheck, Lock, Pencil, AlertCircle, FileText, MapPin, Headset, History,
+  Search, FileCheck, Lock, Pencil, FileText, MapPin, Headset, History,
   Building2, DollarSign, Users, Paperclip, Globe, Send, ClipboardList, Receipt, ChevronDown, Wallet,
 } from "lucide-react";
 import { AlertaPerdasCliente, type PerdasCliente } from "@/components/financeiro/alerta-perdas-cliente";
@@ -93,7 +95,7 @@ const ESTADOS_BR = [
 const DICA_ENDERECO_PRINCIPAL = "O endereço de cobrança, que vai na nota fiscal. A consulta do CNPJ preenche os campos vazios; o CEP completa a rua, o bairro e a cidade.";
 const DICA_LOCAIS = "Onde o serviço acontece: cada local tem seus equipamentos, OS, contratos e PMOC. O Principal é o padrão das telas.";
 
-// Mapeia cada campo (RHF) à aba onde ele está, para destacar abas com erro
+// Mapeia cada campo à aba onde ele está: o ponto vermelho da aba e o "abre a aba sozinha" (ERRO NO CAMPO)
 const CAMPO_ABA: Record<string, string> = {
   tipoPessoa: "geral", cpfCnpj: "geral", nome: "geral", nomeFantasia: "geral", inscricaoEstadual: "geral",
   optanteSimples: "geral", indicadorInscricaoEstadual: "geral", inscricaoMunicipal: "geral", inscricaoSuframa: "geral",
@@ -106,8 +108,8 @@ const CAMPO_ABA: Record<string, string> = {
 
 // Painel de aba (componente estável no escopo do módulo para não remontar
 // os campos a cada render — abas inativas ficam apenas ocultas via CSS).
-function Painel({ ativo, children }: { ativo: boolean; children: React.ReactNode }) {
-  return <div className={cn("space-y-8", !ativo && "hidden")}>{children}</div>;
+function Painel({ ativo, id, children }: { ativo: boolean; id: string; children: React.ReactNode }) {
+  return <div className={cn("space-y-8", !ativo && "hidden")} data-aba-painel={id}>{children}</div>;
 }
 
 export function ClienteForm({ initialData, totalProximos30Dias, valorEmAtraso, emAtraso, perdas12m, consulta: consultaPedida, abaInicial, satisfacaoAceite }: ClienteFormProps) {
@@ -119,7 +121,6 @@ export function ClienteForm({ initialData, totalProximos30Dias, valorEmAtraso, e
   // RBAC (o servidor também valida): sem permissão de salvar, a ficha abre somente leitura.
   const { pode } = usePermissoes();
   const podeSalvar = pode("clientes", isEditing ? "editar" : "criar");
-  const [erroGlobal, setErroGlobal] = useState("");
   const [buscandoCnpj, setBuscandoCnpj] = useState(false);
   const [unidadesNovas, setUnidadesNovas] = useState<UnidadeLocal[]>([]);
   const [anexosNovos, setAnexosNovos] = useState<AnexoLocal[]>([]);
@@ -134,8 +135,6 @@ export function ClienteForm({ initialData, totalProximos30Dias, valorEmAtraso, e
   // Abas
   const abaPedida = abaInicial ? ABA_ANTIGA[abaInicial] ?? abaInicial : "";
   const [aba, setAba] = useState(IDS_ABAS.includes(abaPedida) && (isEditing || !["historico", "atendimento", "comunicacao"].includes(abaPedida)) ? abaPedida : "geral");
-  // O CEP que já veio (ou já foi buscado) não busca de novo ao digitar
-  const [abasErro, setAbasErro] = useState<Set<string>>(new Set());
   const [cnpjInfo, setCnpjInfo] = useState<{ nome: string; cidade?: string; estado?: string } | null>(null);
 
   // UX-2/E5: salvar um cliente novo aterrissa NESTA ficha (?criado=1) — confirma e já oferece as ações (o "Novo ▾")
@@ -182,6 +181,8 @@ export function ClienteForm({ initialData, totalProximos30Dias, valorEmAtraso, e
     formState: { errors, isSubmitting },
   } = useForm<ClienteInput>({
     resolver: zodResolver(clienteSchema),
+    // O foco no 1º erro é do padrão do formulário (abre a aba certa antes de focar)
+    shouldFocusError: false,
     defaultValues: initialData
       ? {
           tipoPessoa: initialData.tipoPessoa, nome: initialData.nome,
@@ -206,6 +207,11 @@ export function ClienteForm({ initialData, totalProximos30Dias, valorEmAtraso, e
   });
 
   const tipoPessoa = watch("tipoPessoa");
+  // ERRO NO CAMPO: os erros do zod + os da tela/servidor no mesmo lugar; o 1º erro abre a aba e recebe o foco
+  const erros = useErrosDoFormulario({
+    rhf: errors, abaDoCampo: CAMPO_ABA, abrirAba: setAba,
+    abrirSecao: (s) => { if (["optanteSimples", "indicadorInscricaoEstadual", "inscricaoEstadual", "inscricaoMunicipal", "inscricaoSuframa"].includes(s)) setFiscalAberto(true); },
+  });
   // Trocou o tipo de pessoa (ex.: PJ → PF depois de consultar o CNPJ): o nome volta a ser editável
   useEffect(() => { setRazaoSocialBloqueada(false); }, [tipoPessoa]);
   const telefoneVal = watch("telefone") ?? "";
@@ -218,12 +224,14 @@ export function ClienteForm({ initialData, totalProximos30Dias, valorEmAtraso, e
   async function buscarCnpj() {
     const cnpj = watch("cpfCnpj")?.replace(/\D/g, "") ?? "";
     // Sem os 14 dígitos (ou com dígito verificador errado) não consulta, e diz por quê
-    if (cnpj.length !== 14) { setErroGlobal("Informe os 14 dígitos do CNPJ."); return; }
-    if (!cnpjValido(cnpj)) { setErroGlobal("CNPJ inválido: confira os dígitos."); return; }
-    setBuscandoCnpj(true); setErroGlobal("");
+    // O erro fica no CAMPO do CNPJ (borda vermelha + mensagem abaixo), com foco nele
+    const noCnpj = (m: string) => { erros.definirCampo("cpfCnpj", m); erros.focar("cpfCnpj"); };
+    if (cnpj.length !== 14) { noCnpj(MSG_FORMATO.cnpjIncompleto); return; }
+    if (!cnpjValido(cnpj)) { noCnpj(MSG_FORMATO.cnpjInvalido); return; }
+    setBuscandoCnpj(true); erros.limpar("cpfCnpj");
     try {
       const res = await fetch(`/api/cnpj/${cnpj}`);
-      if (!res.ok) { const err = await res.json().catch(() => ({})); setErroGlobal(err.erro ?? "Erro ao consultar CNPJ."); return; }
+      if (!res.ok) { const err = await res.json().catch(() => ({})); noCnpj(err.erro ?? "Erro ao consultar CNPJ."); return; }
       const data = await res.json();
       if (data.nome) { setValue("nome", data.nome); setRazaoSocialBloqueada(true); }
       setCnpjInfo({ nome: data.nome ?? "", cidade: data.cidade, estado: data.estado });
@@ -247,30 +255,30 @@ export function ClienteForm({ initialData, totalProximos30Dias, valorEmAtraso, e
         setSugestaoContato(contato.email || contato.telefone ? contato : null);
         setConsultaNonce((n) => n + 1);
       }
-    } catch { setErroGlobal("Falha na consulta do CNPJ. Tente novamente."); } finally { setBuscandoCnpj(false); }
+    } catch { noCnpj("Falha na consulta do CNPJ. Tente novamente."); } finally { setBuscandoCnpj(false); }
   }
 
-  // Valida regras dinâmicas da empresa; retorna { aba, msg } do primeiro erro
-  function validarConfigDinamica(): { aba: string; msg: string } | null {
+  // Valida regras dinâmicas da empresa; retorna { campo, msg } do primeiro erro
+  function validarConfigDinamica(): { campo: string; msg: string } | null {
     // O endereço principal vira o local "Principal" ao salvar: ele já atende a exigência de um local
     if (config.clienteExigirUnidade && !isEditing && unidadesNovas.length === 0 && !temEndereco({ endereco: watch("endereco"), cidade: watch("cidade"), cep: watch("cep") }))
-      return { aba: "geral", msg: "Preencha o endereço principal ou adicione um local de atendimento (configuração da empresa)." };
+      return { campo: "endereco", msg: "Preencha o endereço principal ou adicione um local de atendimento (configuração da empresa)." };
     return null;
   }
 
-  function onError(errs: typeof errors) {
-    const abas = new Set<string>();
-    Object.keys(errs).forEach((c) => { const a = CAMPO_ABA[c]; if (a) abas.add(a); });
-    setAbasErro(abas);
-    const primeira = ABAS.find((t) => abas.has(t.id));
-    if (primeira) { setAba(primeira.id); setErroGlobal(`Existem campos obrigatórios na aba "${primeira.label}".`); }
+  // Zod recusou: os erros já estão nos campos (rhf); rola e foca o primeiro, abrindo a aba dele
+  function onError() {
+    // Junta o formato dos campos digitados (ex.: CNPJ incompleto) e foca o 1º. O foco é chamado sempre: aqui o
+    // react-hook-form acabou de achar os erros dele e o `validar` ainda pode não enxergá-los
+    erros.validar({});
+    erros.focar();
   }
 
   async function onSubmit(data: ClienteInput, continuar = false) {
     if (!podeSalvar) return;
-    setErroGlobal(""); setAbasErro(new Set());
+    erros.limparTudo();
     const erroCfg = validarConfigDinamica();
-    if (erroCfg) { setAbasErro(new Set([erroCfg.aba])); setAba(erroCfg.aba); setErroGlobal(erroCfg.msg); return; }
+    if (!erros.validar(erroCfg ? { [erroCfg.campo]: erroCfg.msg } : {})) return;
 
     const payload: any = {
       ...data,
@@ -302,7 +310,8 @@ export function ClienteForm({ initialData, totalProximos30Dias, valorEmAtraso, e
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
-      if (!res.ok) { const err = await res.json(); setErroGlobal(err.erro ?? "Erro ao salvar cliente."); return; }
+      // O erro do servidor cai no campo certo ({ erro, campos }: CNPJ já cadastrado, inválido…)
+      if (!res.ok) { erros.erroDaApi(await res.json().catch(() => ({})), "Erro ao salvar cliente."); return; }
       const saved = await res.json().catch(() => ({}));
       // Cliente NOVO: qualquer salvar aterrissa na ficha do criado (UX-2/E5) —
       // o fluxo do balcão continua dali ("Nova OS", contatos, endereços…)
@@ -318,7 +327,7 @@ export function ClienteForm({ initialData, totalProximos30Dias, valorEmAtraso, e
         // Salvou a edição: volta para a ficha do cliente, em consulta, na aba em que estava
         router.push(aba === "geral" ? fichaHref : `${fichaHref}?aba=${aba}`); router.refresh();
       }
-    } catch { setErroGlobal("Erro de conexão."); }
+    } catch { erros.definirGeral("Erro de conexão."); erros.focar(); }
   }
 
   const qtdAnexos = isEditing ? (initialData!.anexos?.length ?? 0) : anexosNovos.length;
@@ -383,7 +392,8 @@ export function ClienteForm({ initialData, totalProximos30Dias, valorEmAtraso, e
   const enderecoAtual = { endereco: watch("endereco"), cidade: watch("cidade"), cep: watch("cep") };
 
   return (
-    <form onSubmit={salvar} className="min-h-full -m-6 bg-surface-page p-4 sm:p-6">
+    <ErrosDoFormulario valor={erros}>
+    <form ref={erros.ref} onSubmit={salvar} className="min-h-full -m-6 bg-surface-page p-4 sm:p-6" noValidate>
       {isEditing && <NomeNaTrilha id={initialData!.id} nome={initialData!.nomeFantasia || initialData!.nome} />}
       <div className="max-w-[1600px] mx-auto space-y-5">
         <CabecalhoCliente
@@ -402,25 +412,21 @@ export function ClienteForm({ initialData, totalProximos30Dias, valorEmAtraso, e
 
         {isEditing && <AlertaPerdasCliente clienteId={initialData!.id} perdas={perdas12m} />}
 
-        {erroGlobal && (
-          <div className="bg-atrasado-claro border border-atrasado/20 text-atrasado-texto text-sm rounded-lg px-4 py-3 flex items-center gap-2" role="alert">
-            <AlertCircle className="w-4 h-4 shrink-0" /> {erroGlobal}
-          </div>
-        )}
+        {/* A faixa do topo é só o resumo: o erro mora no campo (ERRO NO CAMPO) */}
+        <ResumoDeErros />
 
         <div className="bg-white rounded-card shadow-card border border-surface-border overflow-hidden">
           {/* Abas: no celular rolam de lado (uma linha), sem quebrar em três */}
           <nav className="flex gap-1 px-3 sm:px-4 pt-3 border-b border-surface-border overflow-x-auto" role="tablist" data-abas-cliente>
             {ABAS.map((t) => {
               const ativa = aba === t.id;
-              const comErro = abasErro.has(t.id);
+              const nErros = erros.porAba[t.id] ?? 0;
               return (
                 <button
                   key={t.id} type="button" role="tab" aria-selected={ativa} onClick={() => setAba(t.id)} data-aba={t.id}
                   className={cn(
                     "flex items-center gap-2 px-3.5 min-h-[44px] text-sm font-medium whitespace-nowrap border-b-2 -mb-px transition-colors",
                     ativa ? "border-acento text-acento" : "border-transparent text-ink-muted hover:text-ink",
-                    comErro && !ativa && "text-atrasado",
                   )}
                 >
                   <t.icone className="w-4 h-4" aria-hidden />
@@ -428,7 +434,7 @@ export function ClienteForm({ initialData, totalProximos30Dias, valorEmAtraso, e
                   {t.badge != null && t.badge > 0 && (
                     <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-surface-alt text-ink-muted">{t.badge}</span>
                   )}
-                  {comErro && <AlertCircle className="w-3.5 h-3.5 text-atrasado" />}
+                  <IndicadorErroAba n={nErros} />
                 </button>
               );
             })}
@@ -444,7 +450,7 @@ export function ClienteForm({ initialData, totalProximos30Dias, valorEmAtraso, e
 
       {/* DADOS — na consulta é a ficha (acima): o formulário nem é montado */}
       {!consulta && (
-      <Painel ativo={aba === "geral"}>
+      <Painel ativo={aba === "geral"} id="geral">
         <FormSection title="Identificação" icon={<Building2 className="w-3.5 h-3.5" />}>
           {isEditing && (
             <div className="flex items-center gap-3 pb-1">
@@ -452,15 +458,15 @@ export function ClienteForm({ initialData, totalProximos30Dias, valorEmAtraso, e
             </div>
           )}
           <FormGrid>
-            <FormField label="Tipo de pessoa" required>
-              <Select {...register("tipoPessoa")} error={!!errors.tipoPessoa}>
+            <FormField label="Tipo de pessoa" required name="tipoPessoa">
+              <Select {...register("tipoPessoa")}>
                 <option value="JURIDICA">Pessoa jurídica</option>
                 <option value="FISICA">Pessoa física</option>
               </Select>
             </FormField>
-            <FormField label={tipoPessoa === "FISICA" ? "CPF" : "CNPJ"} required error={errors.cpfCnpj?.message}>
+            <FormField label={tipoPessoa === "FISICA" ? "CPF" : "CNPJ"} required name="cpfCnpj" formato={formatoDoDocumento(tipoPessoa)}>
               <div className="flex gap-2">
-                <Input {...register("cpfCnpj")} placeholder={tipoPessoa === "FISICA" ? "000.000.000-00" : "00.000.000/0001-00"} error={!!errors.cpfCnpj} valido={!errors.cpfCnpj && !!cnpjInfo} className="flex-1" />
+                <Input {...register("cpfCnpj")} placeholder={tipoPessoa === "FISICA" ? "000.000.000-00" : "00.000.000/0001-00"} valido={!erros.erroDe("cpfCnpj") && !!cnpjInfo} className="flex-1" />
                 {tipoPessoa === "JURIDICA" && (
                   <Button type="button" variant="secondary" loading={buscandoCnpj} onClick={buscarCnpj} className="shrink-0" data-consultar-cnpj>
                     {!buscandoCnpj && <Search className="w-4 h-4" />}
@@ -471,9 +477,9 @@ export function ClienteForm({ initialData, totalProximos30Dias, valorEmAtraso, e
             </FormField>
           </FormGrid>
           <FormGrid>
-            <FormField label={tipoPessoa === "FISICA" ? "Nome completo" : "Razão social"} required error={errors.nome?.message}>
+            <FormField label={tipoPessoa === "FISICA" ? "Nome completo" : "Razão social"} required name="nome">
               <div className="relative">
-                <Input {...register("nome")} caixa="nome" error={!!errors.nome} valido={!errors.nome && razaoSocialBloqueada} readOnly={razaoSocialBloqueada} className={razaoSocialBloqueada ? "bg-surface-linha text-ink-muted pr-20" : ""} />
+                <Input {...register("nome")} caixa="nome" valido={!erros.erroDe("nome") && razaoSocialBloqueada} readOnly={razaoSocialBloqueada} className={razaoSocialBloqueada ? "bg-surface-linha text-ink-muted pr-20" : ""} />
                 {razaoSocialBloqueada && (
                   <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1">
                     <Lock className="w-3.5 h-3.5 text-ink-muted" />
@@ -484,7 +490,7 @@ export function ClienteForm({ initialData, totalProximos30Dias, valorEmAtraso, e
                 )}
               </div>
             </FormField>
-            <FormField label={tipoPessoa === "FISICA" ? "Apelido" : "Nome fantasia"}>
+            <FormField label={tipoPessoa === "FISICA" ? "Apelido" : "Nome fantasia"} name="nomeFantasia">
               <Input {...register("nomeFantasia")} caixa="nome" />
             </FormField>
           </FormGrid>
@@ -496,22 +502,22 @@ export function ClienteForm({ initialData, totalProximos30Dias, valorEmAtraso, e
           <div className="space-y-4" data-endereco-principal>
             <FormGrid cols={3}>
               {/* O campo de CEP de todo formulário (lib/cep pelo CampoCep): completou, preenche rua, bairro, cidade e UF */}
-              <CampoCep valor={watch("cep") ?? ""} onValor={(v) => setValue("cep", v, { shouldDirty: true })}
+              <CampoCep nome="cep" valor={watch("cep") ?? ""} onValor={(v) => setValue("cep", v, { shouldDirty: true })}
                 onEndereco={(d) => {
                   const novo = enderecoDoCep({ endereco: watch("endereco"), bairro: watch("bairro"), cidade: watch("cidade"), estado: watch("estado") }, d, { logradouro: "endereco", bairro: "bairro", cidade: "cidade", estado: "estado" });
                   for (const [k, v] of Object.entries(novo)) setValue(k as "endereco", (v as string) ?? "", { shouldDirty: true });
                 }} />
-              <FormField label="Logradouro" className="sm:col-span-2">
+              <FormField label="Logradouro" className="sm:col-span-2" name="endereco">
                 <Input {...register("endereco")} caixa="endereco" placeholder="Rua, avenida…" />
               </FormField>
             </FormGrid>
             <FormGrid cols={3}>
-              <FormField label="Número"><Input {...register("numero")} /></FormField>
+              <FormField label="Número" name="numero"><Input {...register("numero")} /></FormField>
               <FormField label="Complemento"><Input {...register("complemento")} caixa="endereco" /></FormField>
               <FormField label="Bairro"><Input {...register("bairro")} caixa="endereco" /></FormField>
             </FormGrid>
             <FormGrid cols={3}>
-              <FormField label="Cidade" className="sm:col-span-2"><Input {...register("cidade")} caixa="cidade" /></FormField>
+              <FormField label="Cidade" className="sm:col-span-2" name="cidade"><Input {...register("cidade")} caixa="cidade" /></FormField>
               <FormField label="UF">
                 <Select {...register("estado")} placeholder="UF">
                   {ESTADOS_BR.map((uf) => (<option key={uf} value={uf}>{uf}</option>))}
@@ -588,10 +594,10 @@ export function ClienteForm({ initialData, totalProximos30Dias, valorEmAtraso, e
         {/* Cobrança e faturamento: para onde vão as faturas/cobranças (sem e-mail/WhatsApp, vai ao contato principal) */}
         <FormSection title="Cobrança e faturamento" icon={<Wallet className="w-3.5 h-3.5" />}>
           <FormGrid>
-            <FormField label="E-mails de cobrança" dica="Pode informar mais de um e-mail. Sem nenhum, a cobrança vai para o e-mail do contato principal do cliente.">
+            <FormField label="E-mails de cobrança" name="emailsFaturamento" dica="Pode informar mais de um e-mail. Sem nenhum, a cobrança vai para o e-mail do contato principal do cliente.">
               <EmailsInput value={emailsFaturamento} onChange={setEmailsFaturamento} />
             </FormField>
-            <FormField label="WhatsApp de cobrança" dica="Sem este número, a cobrança por WhatsApp vai para o WhatsApp do contato principal do cliente.">
+            <FormField label="WhatsApp de cobrança" name="whatsappFaturamento" formato="telefone" dica="Sem este número, a cobrança por WhatsApp vai para o WhatsApp do contato principal do cliente.">
               <WhatsAppInput {...register("whatsappFaturamento")} placeholder="(00) 00000-0000" />
             </FormField>
           </FormGrid>
@@ -608,10 +614,10 @@ export function ClienteForm({ initialData, totalProximos30Dias, valorEmAtraso, e
               <FormField label="Contato de compras" dica="Quem emite o pedido do cliente: aparece na gaveta do pedido para cobrar quem precisa.">
                 <Input {...register("comprasNome")} placeholder="Nome" aria-label="Nome do contato de compras" />
               </FormField>
-              <FormField label="E-mail de compras" error={errors.comprasEmail?.message as string | undefined}>
-                <Input {...register("comprasEmail")} type="email" placeholder="compras@cliente.com.br" error={!!errors.comprasEmail} />
+              <FormField label="E-mail de compras" name="comprasEmail" formato="email">
+                <Input {...register("comprasEmail")} type="email" placeholder="compras@cliente.com.br" />
               </FormField>
-              <FormField label="Telefone de compras">
+              <FormField label="Telefone de compras" name="comprasTelefone" formato="telefone">
                 <PhoneInput {...register("comprasTelefone")} placeholder="(00) 0000-0000" />
               </FormField>
             </FormGrid>
@@ -644,7 +650,7 @@ export function ClienteForm({ initialData, totalProximos30Dias, valorEmAtraso, e
 
       {/* ENDEREÇOS — os locais de atendimento (unidades): ligados às OS, aos equipamentos, aos contratos e ao PMOC.
           Na consulta também: a lista é a mesma, e quem pode editar o cliente adiciona, edita e inativa daqui. */}
-      <Painel ativo={aba === "enderecos"}>
+      <Painel ativo={aba === "enderecos"} id="enderecos">
         <FormSection title="Locais de atendimento" icon={<MapPin className="w-3.5 h-3.5" />} dica={DICA_LOCAIS}>
           {isEditing ? (
             <UnidadesManager clienteId={initialData!.id} unidadesIniciais={initialData!.unidades ?? []} inativosIniciais={initialData!.unidadesInativas ?? []}
@@ -663,7 +669,7 @@ export function ClienteForm({ initialData, totalProximos30Dias, valorEmAtraso, e
 
       {/* HISTÓRICO — automático (OS, orçamentos, faturas e pagamentos, pedidos, portal, e-mails, contratos e notas) */}
       {isEditing && (
-        <Painel ativo={aba === "historico"}>
+        <Painel ativo={aba === "historico"} id="historico">
           <FormSection title="Histórico do cliente" icon={<History className="w-3.5 h-3.5" />}>
             <HistoricoCliente clienteId={initialData!.id} ativo={aba === "historico"} />
           </FormSection>
@@ -671,7 +677,7 @@ export function ClienteForm({ initialData, totalProximos30Dias, valorEmAtraso, e
       )}
 
       {isEditing && (
-        <Painel ativo={aba === "atendimento"}>
+        <Painel ativo={aba === "atendimento"} id="atendimento">
           <FormSection title="Atendimento" icon={<ClipboardList className="w-3.5 h-3.5" />}>
             <AtendimentoCliente clienteId={initialData!.id} ativo={aba === "atendimento"} />
           </FormSection>
@@ -679,14 +685,14 @@ export function ClienteForm({ initialData, totalProximos30Dias, valorEmAtraso, e
       )}
 
       {isEditing && (
-        <Painel ativo={aba === "comunicacao"}>
+        <Painel ativo={aba === "comunicacao"} id="comunicacao">
           <FormSection title="Preferências de comunicação" icon={<Send className="w-3.5 h-3.5" />} dica="Quais contatos recebem cada tipo de comunicação e por qual canal. Os contatos ficam na aba Dados.">
             <fieldset disabled={consulta} className="min-w-0"><ComunicacaoPreferencias clienteId={initialData!.id} ativo={aba === "comunicacao"} onGerenciar={() => setAba("geral")} /></fieldset>
           </FormSection>
         </Painel>
       )}
 
-      <Painel ativo={aba === "documentos"}>
+      <Painel ativo={aba === "documentos"} id="documentos">
         <FormSection title="Anexos" icon={<Paperclip className="w-3.5 h-3.5" />}>
           {isEditing
             ? <AnexosManager clienteId={initialData!.id} anexosIniciais={initialData!.anexos ?? []} somenteLeitura={consulta} />
@@ -694,7 +700,7 @@ export function ClienteForm({ initialData, totalProximos30Dias, valorEmAtraso, e
         </FormSection>
       </Painel>
 
-      <Painel ativo={aba === "portal"}>
+      <Painel ativo={aba === "portal"} id="portal">
         <FormSection title="Portal do cliente" icon={<Globe className="w-3.5 h-3.5" />} dica="Acesso individual por contato: senha provisória, redefinição e revogação.">
           <fieldset disabled={consulta} className="min-w-0 space-y-4">
           <ToggleSwitch
@@ -712,5 +718,6 @@ export function ClienteForm({ initialData, totalProximos30Dias, valorEmAtraso, e
         </div>{/* fim do card */}
       </div>{/* fim do container */}
     </form>
+    </ErrosDoFormulario>
   );
 }

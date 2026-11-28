@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { erroDeValidacao, erroNoCampo } from "@/lib/forms/erros-server";
 import bcrypt from "bcryptjs";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
@@ -23,7 +24,7 @@ export async function PATCH(req: NextRequest) {
 
   const parsed = schema.safeParse(await req.json());
   if (!parsed.success) {
-    return NextResponse.json({ erro: parsed.error.errors[0]?.message ?? "Dados inválidos" }, { status: 400 });
+    return erroDeValidacao(parsed.error, parsed.error.errors[0]?.message ?? "Dados inválidos");
   }
   const { nome, confirmacaoEmail, senhaAtual } = parsed.data;
   // Login compara o texto exato: grava sempre em minúsculas para a pessoa não ficar sem entrar (S9)
@@ -42,7 +43,7 @@ export async function PATCH(req: NextRequest) {
     // leva o login junto). Vale no servidor: a tela do app só mostra o e-mail, mas a rota também recusa.
     if (emModoTecnico(session.user)) return NextResponse.json({ erro: MSG_EMAIL_DO_TECNICO }, { status: 403 });
     if (confirmacaoEmail?.toLowerCase() !== email) {
-      return NextResponse.json({ erro: "A confirmação de e-mail não coincide." }, { status: 400 });
+      return erroNoCampo("confirmacaoEmail", "A confirmação de e-mail não coincide.");
     }
     // Trocar o e-mail de LOGIN exige a senha atual: sessão roubada não troca a conta de dono (S9)
     const bloqueio = await conferirBloqueio("TROCA_SENHA", { usuarioId: userId });
@@ -52,14 +53,14 @@ export async function PATCH(req: NextRequest) {
     const senhaOk = senhaAtual ? await bcrypt.compare(senhaAtual, atual.senha ?? "") : false;
     if (!senhaOk) {
       await registrarTentativa("TROCA_SENHA", { usuarioId: userId });
-      return NextResponse.json({ erro: "Informe a senha atual para trocar o e-mail de login." }, { status: 400 });
+      return erroNoCampo("senhaAtual", "Informe a senha atual para trocar o e-mail de login.");
     }
     await limparTentativas("TROCA_SENHA", { usuarioId: userId });
 
     // Único no Frivo inteiro (o login procura em todas as empresas) — lib/acesso/email-unico. A mensagem é a
     // mesma de todos os lugares que criam login (decisão da Leva I.2); só chega aqui quem já provou a senha
     // atual, com limite de tentativas, então não serve para varrer e-mails.
-    if (await emailDeLoginEmUso(email, userId)) return NextResponse.json({ erro: MSG_EMAIL_LOGIN_EM_USO }, { status: 409 });
+    if (await emailDeLoginEmUso(email, userId)) return erroNoCampo("email", MSG_EMAIL_LOGIN_EM_USO, 409);
     data.email = email;
   }
 

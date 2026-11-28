@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { erroDeValidacao, erroNoCampo } from "@/lib/forms/erros-server";
 import { agendarPush, notificarSolicitacaoPortal } from "@/lib/push/eventos";
 import { prisma } from "@/lib/prisma";
 import { proximoNumeroOs } from "@/lib/os-server";
@@ -37,7 +38,7 @@ export async function POST(req: NextRequest) {
 
   const parsed = chamadoPortalSchema.safeParse(await req.json());
   if (!parsed.success) {
-    return NextResponse.json({ erro: "Dados inválidos", detalhes: parsed.error.flatten() }, { status: 400 });
+    return erroDeValidacao(parsed.error);
   }
   const d = parsed.data;
 
@@ -51,11 +52,11 @@ export async function POST(req: NextRequest) {
   // Validações de tenant: unidade/equipamento precisam ser do próprio cliente
   if (d.unidadeId) {
     const u = await prisma.unidade.findFirst({ where: { id: d.unidadeId, clienteId, empresaId }, select: { id: true } });
-    if (!u) return NextResponse.json({ erro: "Unidade inválida" }, { status: 400 });
+    if (!u) return erroNoCampo("unidadeId", "Unidade inválida");
   }
   if (d.equipamentoId) {
     const e = await prisma.equipamento.findFirst({ where: { id: d.equipamentoId, empresaId, unidade: { clienteId } }, select: { id: true, unidadeId: true } });
-    if (!e) return NextResponse.json({ erro: "Equipamento inválido" }, { status: 400 });
+    if (!e) return erroNoCampo("equipamentoId", "Equipamento inválido");
   }
 
   // Fotos chegam como data URL do navegador do cliente: só imagens, conferidas pelo conteúdo
@@ -65,7 +66,7 @@ export async function POST(req: NextRequest) {
       tipos: TIPOS_IMAGEM,
       mensagemTipo: "Envie apenas fotos (JPG, PNG ou WEBP).",
     });
-    if (!v.ok) return NextResponse.json({ erro: `Foto "${f.nome}": ${v.erro}` }, { status: 400 });
+    if (!v.ok) return erroNoCampo("fotos", `Foto "${f.nome}": ${v.erro}`);
     fotos.push(v.arquivo);
   }
 

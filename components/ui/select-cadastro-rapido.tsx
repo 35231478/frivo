@@ -4,6 +4,7 @@ import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { corDado } from "@/lib/ui/tokens";
 import { Check, ChevronDown, ExternalLink, Layers, Loader2, Lock, MapPin, Pencil, Plus, Search, X } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useCampo } from "@/components/ui/campo-contexto";
 import { cepCompleto, consultarCep, enderecoDoCep, formatarCep } from "@/lib/cep";
 import { Modal } from "@/components/ui/modal";
 import { Dica } from "@/components/ui/dica";
@@ -148,6 +149,8 @@ interface Props {
   /** Mensagem quando desabilitado (ex.: "Selecione um cliente primeiro"). */
   textoDesabilitado?: string;
   carregando?: boolean;
+  /** O id do gatilho (o rótulo do FormField aponta para ele) */
+  id?: string;
   erro?: boolean;
   /** Nome do campo que recebe o texto digitado na busca ao clicar em "+ Criar 'x'". */
   campoBusca?: string;
@@ -167,7 +170,7 @@ const inputCls =
 
 export function SelectCadastroRapido({
   value, onChange, opcoes, entidade, campos, criar, permissao, linkCadastroCompleto, contexto,
-  placeholder, disabled, textoDesabilitado, carregando, erro, campoBusca, className, valoresIniciais, icone, edicao, textoVazio,
+  placeholder, disabled, textoDesabilitado, carregando, erro: erroProp, campoBusca, id, className, valoresIniciais, icone, edicao, textoVazio,
 }: Props) {
   const podeCriar = usePodeCriar(permissao);
   const podeEditar = usePodeCriar(edicao?.permissao) && !!edicao;
@@ -194,6 +197,10 @@ export function SelectCadastroRapido({
     return q ? opcoes.filter((o) => `${o.label} ${o.descricao ?? ""}`.toLowerCase().includes(q)) : opcoes;
   }, [opcoes, busca]);
 
+  // Dentro de um FormField com erro: borda vermelha + aria (o `erro` explícito ganha)
+  const campo = useCampo();
+  const erro = erroProp ?? !!campo?.invalido;
+
   function abrirCadastro() {
     setAberto(false);
     setModal(true);
@@ -206,7 +213,7 @@ export function SelectCadastroRapido({
         erro ? "border-atrasado/40 bg-atrasado-claro/60" : "border-surface-border bg-surface-page", className)}>
         <span className="text-ink-muted" data-vazio-seletor>{textoVazio ?? `${nenhum} ${entidade.singular} ${cadastrado}${contexto ? ` ${contexto}` : ""}`}</span>
         {podeCriar && (
-          <button type="button" onClick={abrirCadastro} className="inline-flex items-center gap-1 font-semibold text-primary-600 hover:text-primary-700">
+          <button type="button" id={id} onClick={abrirCadastro} aria-invalid={erro || undefined} aria-describedby={campo?.descricaoId} className="inline-flex items-center gap-1 font-semibold text-primary-600 hover:text-primary-700">
             <Plus className="w-4 h-4" /> Cadastrar agora
           </button>
         )}
@@ -224,13 +231,14 @@ export function SelectCadastroRapido({
   const seletor = (
     <div ref={ref} className={cn("relative", edicao ? "flex-1 min-w-0" : className)}>
       <button
-        type="button"
+        type="button" id={id}
         disabled={disabled}
+        aria-invalid={erro || undefined} aria-describedby={campo?.descricaoId}
         onClick={() => setAberto((v) => !v)}
         className={cn(
           "w-full flex items-center justify-between gap-2 bg-white border rounded-lg px-3 py-2.5 text-sm text-left transition-all",
           "focus:outline-none focus:border-primary-500 focus:ring-4 focus:ring-primary-500/10",
-          erro ? "border-atrasado/40" : "border-surface-campo",
+          erro ? "border-atrasado focus:border-atrasado focus:ring-atrasado/15" : "border-surface-campo",
           disabled && "bg-surface-alt cursor-not-allowed",
         )}
       >
@@ -311,6 +319,7 @@ export function SelectCadastroRapido({
     </div>
   );
 }
+(SelectCadastroRapido as unknown as { campoDeFormulario: boolean }).campoDeFormulario = true;
 
 /** O painel de edição de um item, a partir da definição (`EdicaoDoSelecionado`): resolve valores, extra e ação. */
 function PainelDaEdicao({ id, edicao, camposPadrao, aberto, onFechar, link }: {

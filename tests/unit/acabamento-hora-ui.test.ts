@@ -292,7 +292,9 @@ describe("trava: todo campo de data e hora avisa o formulário", () => {
         usos++;
         if (!/onProblema=/.test(m[0])) semAviso.push(rel);
       }
-      if (/<InputDataHora\b/.test(fonte)) expect(fonte, rel).toMatch(/if \(horaRuim\w*\) \{ set\w+\(horaRuim\w*\); return; \}/);
+      // A hora ruim bloqueia o salvar: na faixa (setErro + return) ou, no padrão ERRO NO CAMPO, no próprio campo
+      // (faltando.x = horaRuim → erros.validar(faltando) devolve false e o salvar para)
+      if (/<InputDataHora\b/.test(fonte)) expect(fonte, rel).toMatch(/if \(horaRuim\w*\) (\{ set\w+\(horaRuim\w*\); return; \}|faltando\.\w+ = horaRuim\w*;[\s\S]*if \(!erros\.validar\(faltando\)\) return;)/);
     }
     expect(usos).toBeGreaterThanOrEqual(5);
     expect(semAviso).toEqual([]);

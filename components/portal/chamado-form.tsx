@@ -4,7 +4,11 @@ import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { BuscaSelect } from "@/components/ui/busca-select";
 import { reduzirImagem, FOTO_GALERIA } from "@/lib/imagem-cliente";
-import { AlertCircle, Siren, Upload, X, Send } from "lucide-react";
+import { Siren, Upload, X, Send } from "lucide-react";
+import { FormField } from "@/components/ui/form-field";
+import { Select } from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
+import { ErrosDoFormulario, ResumoDeErros, useErrosDoFormulario } from "@/components/ui/formulario-erros";
 
 interface Unidade { id: string; nome: string }
 interface Equip { id: string; nome: string; unidadeId: string }
@@ -24,7 +28,8 @@ export function ChamadoForm({ unidades, equipamentos, tiposProblema, confirmacoe
   const [descricao, setDescricao] = useState("");
   const [urgencia, setUrgencia] = useState("NORMAL");
   const [fotos, setFotos] = useState<Foto[]>([]);
-  const [erro, setErro] = useState("");
+  // ERRO NO CAMPO: descrição curta, foto ilegível, unidade/equipamento recusados pelo servidor: cada um no seu campo
+  const erros = useErrosDoFormulario();
   const [enviando, setEnviando] = useState(false);
 
   const equipsDaUnidade = useMemo(
@@ -34,7 +39,7 @@ export function ChamadoForm({ unidades, equipamentos, tiposProblema, confirmacoe
 
   async function addFotos(files: FileList | null) {
     if (!files) return;
-    setErro("");
+    erros.limpar("fotos");
     const novas: Foto[] = [];
     for (const f of Array.from(files).slice(0, 6)) {
       try {
@@ -42,7 +47,7 @@ export function ChamadoForm({ unidades, equipamentos, tiposProblema, confirmacoe
         const { imagem } = await reduzirImagem(f, FOTO_GALERIA.ladoMax, FOTO_GALERIA.qualidade);
         novas.push({ nome: f.name, tipo: "image/jpeg", tamanho: imagem.bytes, conteudo: imagem.dataUrl });
       } catch {
-        setErro(`Não foi possível ler a imagem "${f.name}". Envie fotos JPG, PNG ou WEBP.`);
+        erros.definirCampo("fotos", `Não foi possível ler a imagem "${f.name}". Envie fotos JPG, PNG ou WEBP.`);
       }
     }
     setFotos((p) => [...p, ...novas].slice(0, 6));
@@ -50,8 +55,7 @@ export function ChamadoForm({ unidades, equipamentos, tiposProblema, confirmacoe
 
   async function enviar(e: React.FormEvent) {
     e.preventDefault();
-    setErro("");
-    if (descricao.trim().length < 5) return setErro("Descreva o problema com mais detalhes.");
+    if (!erros.validar(descricao.trim().length < 5 ? { descricao: "Descreva o problema com mais detalhes." } : {})) return;
     setEnviando(true);
     try {
       const res = await fetch("/api/portal/chamados", {
@@ -59,14 +63,13 @@ export function ChamadoForm({ unidades, equipamentos, tiposProblema, confirmacoe
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ unidadeId: unidadeId || null, equipamentoId: equipamentoId || null, tipoProblema: tipoProblema || null, descricao: descricao.trim(), urgencia, fotos, ...(emergencia ? { emergencia: true } : {}) }),
       });
-      if (!res.ok) { const er = await res.json().catch(() => ({})); setErro(er.erro ?? "Erro ao abrir chamado."); return; }
+      if (!res.ok) { erros.erroDaApi(await res.json().catch(() => ({})), "Erro ao abrir chamado."); return; }
       const data = await res.json();
       router.push(`/portal/chamados/${data.id}`);
       router.refresh();
-    } catch { setErro("Erro de conexão."); } finally { setEnviando(false); }
+    } catch { erros.definirGeral("Erro de conexão."); erros.focar(); } finally { setEnviando(false); }
   }
 
-  const inputCls = "mt-1 w-full bg-white border border-surface-border rounded-lg px-3 py-2.5 text-sm text-ink focus:outline-none focus:border-primary-500 focus:ring-4 focus:ring-primary-500/10 transition-all";
 
   if (confirmacoesPendentes > 0 && !emergencia) {
     return (
@@ -87,60 +90,55 @@ export function ChamadoForm({ unidades, equipamentos, tiposProblema, confirmacoe
   }
 
   return (
-    <form onSubmit={enviar} className="space-y-4 bg-white rounded-card border border-surface-border p-5">
+    <ErrosDoFormulario valor={erros}>
+    <form ref={erros.ref} onSubmit={enviar} className="space-y-4 bg-white rounded-card border border-surface-border p-5" noValidate>
       {emergencia && (
         <p className="bg-atrasado-claro border border-atrasado/20 text-atrasado-texto text-sm rounded-lg px-3 py-2 flex items-center gap-2" data-chamado-emergencia>
           <Siren className="w-4 h-4 shrink-0" aria-hidden /> Chamado de emergência. As confirmações continuam pendentes para depois.
         </p>
       )}
-      {erro && <div className="bg-atrasado-claro border border-atrasado/20 text-atrasado-texto text-sm rounded-lg px-3 py-2 flex items-center gap-2"><AlertCircle className="w-4 h-4" />{erro}</div>}
+      <ResumoDeErros className="py-2 px-3" />
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <div>
-          <label className="text-sm font-semibold text-ink">Endereço / unidade</label>
+        <FormField label="Endereço / unidade" name="unidadeId" valor={unidadeId}>
           {/* Um cliente pode ter muitas unidades e muitos equipamentos: campo com busca */}
           <BuscaSelect
             rotulo="Endereço / unidade" atributos={{ "data-unidade": "" }} placeholder="Selecione"
             value={unidadeId} onChange={(v) => { setUnidadeId(v); setEquipamentoId(""); }}
             options={unidades.map((u) => ({ value: u.id, label: u.nome }))}
           />
-        </div>
-        <div>
-          <label className="text-sm font-semibold text-ink">Equipamento</label>
+        </FormField>
+        <FormField label="Equipamento" name="equipamentoId" valor={equipamentoId}>
           <BuscaSelect
             rotulo="Equipamento" atributos={{ "data-equipamento": "" }} placeholder="Selecione (opcional)"
             value={equipamentoId} onChange={setEquipamentoId}
             options={equipsDaUnidade.map((e) => ({ value: e.id, label: e.nome }))}
           />
-        </div>
+        </FormField>
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <div>
-          <label className="text-sm font-semibold text-ink">Tipo do problema</label>
-          <select value={tipoProblema} onChange={(e) => setTipoProblema(e.target.value)} className={inputCls}>
+        <FormField label="Tipo do problema" name="tipoProblema">
+          <Select value={tipoProblema} onChange={(e) => setTipoProblema(e.target.value)} className="min-h-[44px]">
             <option value="">Selecione</option>
             {tiposProblema.map((t) => <option key={t} value={t}>{t}</option>)}
-          </select>
-        </div>
-        <div>
-          <label className="text-sm font-semibold text-ink">Urgência</label>
-          <select value={urgencia} onChange={(e) => setUrgencia(e.target.value)} className={inputCls}>
+          </Select>
+        </FormField>
+        <FormField label="Urgência" name="urgencia">
+          <Select value={urgencia} onChange={(e) => setUrgencia(e.target.value)} className="min-h-[44px]">
             <option value="NORMAL">Normal</option>
             <option value="URGENTE">Urgente</option>
             <option value="CRITICO">Crítico</option>
-          </select>
-        </div>
+          </Select>
+        </FormField>
       </div>
 
-      <div>
-        <label className="text-sm font-semibold text-ink">Descrição do problema</label>
-        <textarea value={descricao} onChange={(e) => setDescricao(e.target.value)} rows={4} placeholder="Descreva o que está acontecendo…" className={inputCls} />
-      </div>
+      <FormField label="Descrição do problema" name="descricao" required>
+        <Textarea value={descricao} onChange={(e) => setDescricao(e.target.value)} rows={4} placeholder="Descreva o que está acontecendo…" />
+      </FormField>
 
-      <div>
-        <label className="text-sm font-semibold text-ink">Fotos (opcional)</label>
-        <div className="mt-1 flex flex-wrap gap-2">
+      <FormField label="Fotos (opcional)" name="fotos">
+        <div className="flex flex-wrap gap-2">
           {fotos.map((f, i) => (
             <div key={i} className="relative w-20 h-20 rounded-lg overflow-hidden border border-surface-border">
               {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -152,11 +150,11 @@ export function ChamadoForm({ unidades, equipamentos, tiposProblema, confirmacoe
             <label className="w-20 h-20 rounded-lg border-2 border-dashed border-surface-border flex flex-col items-center justify-center text-ink-subtle cursor-pointer hover:border-primary-300">
               <Upload className="w-5 h-5" />
               <span className="text-[10px]">Adicionar</span>
-              <input type="file" accept="image/*" multiple className="hidden" onChange={(e) => addFotos(e.target.files)} />
+              <input type="file" accept="image/*" multiple className="hidden" onChange={(e) => addFotos(e.target.files)} aria-label="Adicionar fotos" />
             </label>
           )}
         </div>
-      </div>
+      </FormField>
 
       <div className="flex justify-end">
         <button type="submit" disabled={enviando} className="inline-flex items-center gap-2 bg-primary-500 hover:bg-primary-600 text-white font-semibold px-5 py-2.5 rounded-lg transition-all disabled:opacity-60">
@@ -164,5 +162,6 @@ export function ChamadoForm({ unidades, equipamentos, tiposProblema, confirmacoe
         </button>
       </div>
     </form>
+    </ErrosDoFormulario>
   );
 }

@@ -3,6 +3,7 @@
 import { useState, useId, type KeyboardEvent, type ClipboardEvent } from "react";
 import { X } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { juntarIds, useCampo } from "@/components/ui/campo-contexto";
 
 interface EmailsInputProps {
   value: string[];
@@ -24,6 +25,10 @@ export function EmailsInput({ value, onChange, placeholder, id, disabled }: Emai
   const inputId = id ?? gerado;
   const [rascunho, setRascunho] = useState("");
   const [erro, setErro] = useState(false);
+  // Dentro de um FormField com erro (ex.: o servidor recusou um e-mail): borda vermelha + aria
+  const campo = useCampo();
+  const erroId = `${inputId}-erro-email`;
+  const comErro = erro || !!campo?.invalido;
 
   function adicionar(bruto: string): boolean {
     const candidatos = bruto.split(/[\s,;]+/).map((e) => e.trim().toLowerCase()).filter(Boolean);
@@ -70,7 +75,7 @@ export function EmailsInput({ value, onChange, placeholder, id, disabled }: Emai
           "flex flex-wrap items-center gap-1.5 w-full min-h-[42px] border rounded-lg px-2 py-1.5 bg-white transition-colors",
           "focus-within:ring-2 focus-within:ring-acento focus-within:border-acento",
           disabled && "opacity-50 bg-surface-page",
-          erro ? "border-atrasado" : "border-surface-campo",
+          comErro ? "border-atrasado" : "border-surface-campo",
         )}
         onClick={() => document.getElementById(inputId)?.focus()}
         data-emails-input
@@ -100,11 +105,13 @@ export function EmailsInput({ value, onChange, placeholder, id, disabled }: Emai
           onKeyDown={aoTeclar}
           onPaste={aoColar}
           onBlur={confirmar}
+          aria-invalid={comErro || undefined} aria-describedby={juntarIds(erro && erroId, campo?.descricaoId)}
           placeholder={value.length === 0 ? (placeholder ?? "exemplo@empresa.com.br") : ""}
           className="flex-1 min-w-[8rem] border-0 outline-none text-sm bg-transparent py-1 placeholder:text-ink-muted"
         />
       </div>
-      {erro && <p className="text-xs text-atrasado font-medium mt-1">E-mail inválido. Confira o endereço digitado.</p>}
+      {erro && <p id={erroId} className="text-xs text-atrasado-texto font-medium mt-1" data-erro-campo>E-mail inválido. Confira o endereço digitado.</p>}
     </div>
   );
 }
+(EmailsInput as unknown as { campoDeFormulario: boolean }).campoDeFormulario = true;

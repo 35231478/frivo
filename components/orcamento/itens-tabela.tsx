@@ -11,6 +11,7 @@ import {
 } from "@/components/ui/select-cadastro-rapido";
 import { round2, totalDoItem, totalDoUnitario, unitarioDoTotal } from "@/lib/orcamentos/calculo";
 import { valorDaLinha, type CobrancaMateriais, type MaterialOrcamento } from "@/lib/orcamentos/materiais";
+import { useErrosCtx } from "@/components/ui/formulario-erros";
 
 export interface ItemTabela {
   id: string;            // uuid local
@@ -97,6 +98,12 @@ interface ItensTabelaProps {
   onAdicionadoDoCatalogo?: (it: ItemTabela, c: CatalogoItem) => void;
   /** "Orçamento E2": regra de cobrança dos materiais do orçamento (o total da linha de serviço depende dela) */
   regraMateriais?: CobrancaMateriais | null;
+  /**
+   * ERRO NO CAMPO: o nome da lista no formulário (ex.: "servicos"). Dentro de <ErrosDoFormulario>, a célula
+   * "servicos.2.quantidade" com erro fica marcada (borda vermelha, aria-invalid, mensagem embaixo da linha) e o erro
+   * da lista inteira ("servicos": nenhum item) fica embaixo da tabela, junto da busca.
+   */
+  nome?: string;
 }
 
 function novoId() {
@@ -207,8 +214,37 @@ function ObservacaoItem({ valor, onChange, descricao }: { valor: string; onChang
 const COLUNAS = "grid grid-cols-3 sm:grid-cols-[minmax(0,1fr)_4.5rem_7.25rem_7.25rem_2rem] gap-x-2 sm:gap-x-3";
 const rotuloCelular = "block sm:sr-only text-[11px] font-semibold uppercase tracking-wider text-ink-muted mb-0.5";
 
-export function ItensTabela({ titulo, dica, labelAdicionar, catalogo, itens, onChange, tabela, podeAlterarPrecoTabela = false, cadastro, totalEditavel = false, extraLinha, infoLinha, onAdicionadoDoCatalogo, regraMateriais }: ItensTabelaProps) {
+export function ItensTabela({ titulo, dica, labelAdicionar, catalogo, itens, onChange, tabela, podeAlterarPrecoTabela = false, cadastro, totalEditavel = false, extraLinha, infoLinha, onAdicionadoDoCatalogo, regraMateriais, nome }: ItensTabelaProps) {
+  // ERRO NO CAMPO: os erros das células ("servicos.2.quantidade") e o da lista ("servicos") vêm do formulário
+  const form = useErrosCtx();
+  const idErro = useId();
+  const chave = (i: number, campo: string) => `${nome}.${i}.${campo}`;
+  const erroDe = (k: string) => (nome && form ? form.erroDe(k) : undefined);
+  const erroLista = nome ? erroDe(nome) : undefined;
+  useEffect(() => { if (nome && form) form.registrarRotulo(nome, titulo); }, [nome, titulo, form]);
+  // Entrou um item: o "adicione ao menos um" some
+  useEffect(() => { if (erroLista && itens.length) form?.limpar(nome!); }, [itens.length]); // eslint-disable-line react-hooks/exhaustive-deps
+  /** A célula com erro: borda vermelha + aria-invalid + aria-describedby (a mensagem fica embaixo da linha) */
+  const celula = (i: number, campo: string) => {
+    const k = chave(i, campo);
+    const erro = erroDe(k);
+    return {
+      erro,
+      wrapper: { "data-campo-nome": nome ? k : undefined, "data-campo-com-erro": erro ? "" : undefined },
+      input: erro ? { "aria-invalid": true as const, "aria-describedby": `${idErro}-${i}-${campo}` } : {},
+      classe: erro ? "!border-atrasado ring-1 ring-atrasado/30" : "",
+    };
+  };
+  const limparCelula = (id: string, ...campos: string[]) => {
+    if (!nome || !form) return;
+    const i = itens.findIndex((x) => x.id === id);
+    if (i >= 0) for (const c of campos) if (form.erroDe(chave(i, c))) form.limpar(chave(i, c));
+  };
   function atualizar(id: string, patch: Partial<ItemTabela>) {
+    if ("descricao" in patch) limparCelula(id, "descricao");
+    if ("quantidade" in patch) limparCelula(id, "quantidade");
+    if ("valorUnitario" in patch) limparCelula(id, "valorUnitario");
+    if ("valorTotal" in patch) limparCelula(id, "valorTotal");
     onChange(itens.map((it) => (it.id === id ? { ...it, ...patch } : it)));
   }
   const comMateriais = (it: ItemTabela) => !!it.materiais?.length;
@@ -290,8 +326,10 @@ export function ItensTabela({ titulo, dica, labelAdicionar, catalogo, itens, onC
           <p className="text-center text-sm text-ink-subtle py-6 italic">Nenhum item adicionado.</p>
         )}
 
-        {itens.map((it) => {
+        {itens.map((it, i) => {
           const total = totalLinha(it);
+          const cDesc = celula(i, "descricao"), cQtd = celula(i, "quantidade"), cUnit = celula(i, "valorUnitario"), cTot = celula(i, "valorTotal");
+          const errosDaLinha = ([["descricao", "Descrição", cDesc], ["quantidade", "Qtd", cQtd], ["valorUnitario", "Unitário", cUnit], ["valorTotal", "Total", cTot]] as const).filter(([, , c]) => c.erro);
           const precoTitulo = it.origemPreco === "contrato" && it.valorPadraoCadastro != null && it.valorPadraoCadastro !== Number(it.valorUnitario)
             ? `Padrão ${formatarMoeda(it.valorPadraoCadastro)} · aplicado ${formatarMoeda(Number(it.valorUnitario) || 0)}`
             : undefined;
@@ -300,7 +338,7 @@ export function ItensTabela({ titulo, dica, labelAdicionar, catalogo, itens, onC
           return (
             <div key={it.id} className="border-b border-surface-border last:border-b-0">
             <div role="row" data-item-linha data-linha-derivada={derivada ? "true" : undefined} data-valor-manual={it.valorManual && comMateriais(it) ? "true" : undefined} className={cn(COLUNAS, "group/linha gap-y-2 sm:items-center px-3 py-2.5 sm:py-1 hover:bg-surface-alt/40", derivada && "bg-surface-page/60")}>
-              <div role="cell" className="col-span-3 sm:col-span-1 min-w-0">
+              <div role="cell" className="col-span-3 sm:col-span-1 min-w-0" {...cDesc.wrapper}>
               <div className="flex items-start sm:items-center gap-2 min-w-0">
                 <div className="flex-1 min-w-0 flex flex-wrap sm:flex-nowrap items-center gap-x-1.5">
                   <input
@@ -309,7 +347,8 @@ export function ItensTabela({ titulo, dica, labelAdicionar, catalogo, itens, onC
                     placeholder="Descrição do item"
                     aria-label="Descrição do item"
                     readOnly={derivada}
-                    className="basis-full sm:basis-auto flex-1 min-w-0 w-full bg-transparent text-ink font-medium sm:font-normal focus:outline-none focus:bg-primary-50/30 rounded px-1 py-1 sm:py-0.5"
+                    {...cDesc.input}
+                    className={cn("basis-full sm:basis-auto flex-1 min-w-0 w-full bg-transparent text-ink font-medium sm:font-normal focus:outline-none focus:bg-primary-50/30 rounded px-1 py-1 sm:py-0.5 border border-transparent", cDesc.classe)}
                   />
                   {derivada && (
                     <span className="inline-flex items-center shrink-0 whitespace-nowrap text-[10px] leading-none font-semibold px-1.5 py-1 rounded bg-acento-claro text-acento" title={`${it.derivada!.material ? "Material" : "Peça"} dos materiais do serviço “${it.derivada!.deServico}”: edite lá`} data-peca-de={it.derivada!.deServico} data-derivada-uso={it.derivada!.material ? "MATERIAL" : "PECA"}>
@@ -350,16 +389,16 @@ export function ItensTabela({ titulo, dica, labelAdicionar, catalogo, itens, onC
               {!derivada && <div className="pl-0.5"><ObservacaoItem valor={it.observacao ?? ""} onChange={(v) => atualizar(it.id, { observacao: v })} descricao={it.descricao} /></div>}
               </div>
 
-              <label role="cell" className="block">
+              <label role="cell" className="block" {...cQtd.wrapper}>
                 <span className={rotuloCelular}>Qtd</span>
                 {derivada ? (
                   <div className="text-right text-ink px-2 py-1.5 sm:py-0.5 tabular-nums" data-campo="quantidade">{String(round2(Number(it.quantidade) || 0)).replace(".", ",")}</div>
                 ) : (
-                  <CampoNumero valor={Number(it.quantidade) || 0} onValor={(v) => mudarQuantidade(it, v)} aria-label="Quantidade" data-campo="quantidade" />
+                  <CampoNumero valor={Number(it.quantidade) || 0} onValor={(v) => mudarQuantidade(it, v)} aria-label="Quantidade" data-campo="quantidade" {...cQtd.input} className={cQtd.classe} />
                 )}
               </label>
 
-              <label role="cell" className="block">
+              <label role="cell" className="block" {...cUnit.wrapper}>
                 <span className={rotuloCelular}>{comMateriais(it) ? "Unit. base" : "Unitário"}</span>
                 {travado ? (
                   <div
@@ -370,11 +409,11 @@ export function ItensTabela({ titulo, dica, labelAdicionar, catalogo, itens, onC
                     <span className="font-medium tabular-nums">{formatarMoeda(Number(it.valorUnitario) || 0)}</span>
                   </div>
                 ) : (
-                  <CampoNumero valor={Number(it.valorUnitario) || 0} casas={2} onValor={(v) => mudarUnitario(it, v)} title={precoTitulo} aria-label="Valor unitário" data-campo="unitario" />
+                  <CampoNumero valor={Number(it.valorUnitario) || 0} casas={2} onValor={(v) => mudarUnitario(it, v)} title={precoTitulo} aria-label="Valor unitário" data-campo="unitario" {...cUnit.input} className={cUnit.classe} />
                 )}
               </label>
 
-              <label role="cell" className="block">
+              <label role="cell" className="block" {...cTot.wrapper}>
                 <span className={rotuloCelular}>Total</span>
                 {totalEditavel && !travado ? (
                   <CampoNumero
@@ -384,7 +423,8 @@ export function ItensTabela({ titulo, dica, labelAdicionar, catalogo, itens, onC
                     aria-label="Valor total do item"
                     title={comMateriais(it) ? "Total = base + materiais inclusos. Digitar aqui fixa um valor manual" : "Digite o total: o unitário é recalculado (total ÷ quantidade)"}
                     data-campo="total"
-                    className="font-semibold"
+                    {...cTot.input}
+                    className={cn("font-semibold", cTot.classe)}
                   />
                 ) : (
                   <div className="text-right font-semibold text-ink px-2 py-1.5 sm:py-0.5 tabular-nums" data-campo="total">{formatarMoeda(total)}</div>
@@ -403,6 +443,14 @@ export function ItensTabela({ titulo, dica, labelAdicionar, catalogo, itens, onC
                 </button>}
               </div>
             </div>
+            {/* A mensagem da célula com erro, logo embaixo da linha (a célula é estreita demais para o texto) */}
+            {errosDaLinha.length > 0 && (
+              <div className="px-3 pb-2 space-y-0.5" data-erros-linha>
+                {errosDaLinha.map(([campo, rotulo, c]) => (
+                  <p key={campo} id={`${idErro}-${i}-${campo}`} className="text-xs text-atrasado-texto font-medium" data-erro-campo>{rotulo}: {c.erro}</p>
+                ))}
+              </div>
+            )}
             {infoLinha?.(it, total)}
             {extraLinha && !derivada && <div className="px-3">{extraLinha(it)}</div>}
             </div>
@@ -410,8 +458,9 @@ export function ItensTabela({ titulo, dica, labelAdicionar, catalogo, itens, onC
         })}
       </div>
 
+      <div className="space-y-1" data-campo-nome={nome} data-campo-com-erro={erroLista ? "" : undefined}>
       <div className="flex flex-wrap items-center gap-2">
-        <BuscaCatalogo catalogo={catalogo} onSelect={adicionarDoCatalogo} placeholder={labelAdicionar} tabela={tabela} cadastro={cadastro} />
+        <BuscaCatalogo catalogo={catalogo} onSelect={adicionarDoCatalogo} placeholder={labelAdicionar} tabela={tabela} cadastro={cadastro} erroId={erroLista ? `${idErro}-lista` : undefined} />
         <button
           type="button"
           onClick={adicionarVazio}
@@ -419,6 +468,8 @@ export function ItensTabela({ titulo, dica, labelAdicionar, catalogo, itens, onC
         >
           <Plus className="w-4 h-4" /> Linha em branco
         </button>
+      </div>
+      {erroLista && <p id={`${idErro}-lista`} className="text-xs text-atrasado-texto font-medium" data-erro-campo>{erroLista}</p>}
       </div>
     </div>
   );
@@ -430,12 +481,15 @@ function BuscaCatalogo({
   placeholder,
   tabela,
   cadastro,
+  erroId,
 }: {
   catalogo: CatalogoItem[];
   onSelect: (c: CatalogoItem) => void;
   placeholder: string;
   tabela?: TabelaPrecoCliente | null;
   cadastro?: CadastroCatalogo;
+  /** A lista está com erro (nenhum item): a busca fica marcada e descrita pela mensagem */
+  erroId?: string;
 }) {
   const podeCriar = usePodeCriar(cadastro?.permissao) && !!cadastro;
   const [modal, setModal] = useState(false);
@@ -483,7 +537,12 @@ function BuscaCatalogo({
           onChange={(e) => { setQuery(e.target.value); setAberto(true); }}
           onFocus={() => setAberto(true)}
           placeholder={restritoTabela ? "Pesquisar na tabela do cliente..." : placeholder}
-          className="w-full bg-white border border-surface-border rounded-lg pl-9 pr-9 py-2 text-sm text-ink placeholder:text-ink-subtle focus:outline-none focus:border-primary-500 focus:ring-4 focus:ring-primary-500/10 transition-all"
+          aria-label={placeholder}
+          aria-invalid={erroId ? true : undefined} aria-describedby={erroId}
+          className={cn(
+            "w-full bg-white border rounded-lg pl-9 pr-9 py-2 text-sm text-ink placeholder:text-ink-subtle focus:outline-none focus:ring-4 transition-all",
+            erroId ? "border-atrasado focus:border-atrasado focus:ring-atrasado/15" : "border-surface-border focus:border-primary-500 focus:ring-primary-500/10",
+          )}
         />
         {query && (
           <button

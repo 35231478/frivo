@@ -210,7 +210,8 @@ describe("cadastro de kits de material (rotas reais, banco em memória)", () => 
 
   it("nome único na empresa (sem diferença de maiúsculas, inativo avisa); outra empresa pode repetir; itens vazios limpam", async () => {
     const r = await novoKit();
-    expect((await kits("POST", { nome: "  kit INSTALAÇÃO ", itens: [] })).json).toEqual({ erro: "Já existe o kit “Kit instalação”." });
+    // ERRO NO CAMPO: o repetido diz o campo (`nome`) para a gaveta marcar; a mensagem é a mesma
+    expect((await kits("POST", { nome: "  kit INSTALAÇÃO ", itens: [] })).json).toEqual({ erro: "Já existe o kit “Kit instalação”.", campos: { nome: "Já existe o kit “Kit instalação”." } });
     expect((await kits("POST", { nome: "kit antigo", itens: [] })).json.erro).toMatch(/inativo — reative-o/);
     expect((await kits("PATCH", { nome: "Kit antigo" }, r.json.id)).status).toBe(409);
     expect((await kits("PATCH", { nome: "Kit instalação" }, r.json.id)).status).toBe(200); // o próprio nome

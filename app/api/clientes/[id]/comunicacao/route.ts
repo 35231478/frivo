@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { erroDeValidacao } from "@/lib/forms/erros-server";
 import { auth } from "@/lib/auth";
 import { pode } from "@/lib/permissoes";
 import { prisma } from "@/lib/prisma";
@@ -40,7 +41,7 @@ export async function PUT(req: NextRequest, { params }: Params) {
 
   const parsed = comunicacaoPreferenciasSchema.safeParse(await req.json());
   if (!parsed.success) {
-    return NextResponse.json({ erro: "Dados inválidos", detalhes: parsed.error.flatten() }, { status: 400 });
+    return erroDeValidacao(parsed.error);
   }
 
   // Só aceita contatos que pertençam a este cliente/empresa.

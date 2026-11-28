@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { CalendarDays } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useCampo } from "@/components/ui/campo-contexto";
 
 /** ISO (aaaa-mm-dd) → "dd/mm/aaaa" */
 export function isoParaBr(iso: string | null | undefined): string {
@@ -61,13 +62,15 @@ export function InputData({ value, defaultValue, onChange, name, id, className, 
     onChange?.(novoIso);
   }
 
-  const invalida = texto.length === 10 && !brParaIso(texto);
+  const campo = useCampo();
+  // Data que não existe, ou o FormField de fora diz que o campo está com erro
+  const invalida = (texto.length === 10 && !brParaIso(texto)) || !!campo?.invalido;
 
   return (
     <div className={cn("relative", className)}>
       <input
         id={id} type="text" inputMode="numeric" autoComplete="off" placeholder={placeholder} title={title} disabled={disabled}
-        aria-label={ariaLabel} aria-invalid={invalida || undefined} data-input-data value={texto}
+        aria-label={ariaLabel} aria-invalid={invalida || undefined} aria-describedby={campo?.descricaoId} data-input-data value={texto}
         onChange={(e) => {
           const t = mascararData(e.target.value);
           setTexto(t);
@@ -96,3 +99,4 @@ export function InputData({ value, defaultValue, onChange, name, id, className, 
     </div>
   );
 }
+(InputData as unknown as { campoDeFormulario: boolean }).campoDeFormulario = true;

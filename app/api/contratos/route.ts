@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { erroDeValidacao, erroNoCampo } from "@/lib/forms/erros-server";
 import { salvarRegrasDoContrato } from "@/lib/atendimento/prazo-server";
 import { prisma } from "@/lib/prisma";
 import { respostaRefEmpresa, validarRefEmpresa, validarRefsEmpresa } from "@/lib/ref-empresa";
@@ -36,13 +37,13 @@ export async function POST(req: NextRequest) {
   const parsed = contratoSchema.safeParse(body);
 
   if (!parsed.success) {
-    return NextResponse.json({ erro: "Dados inválidos", detalhes: parsed.error.flatten() }, { status: 400 });
+    return erroDeValidacao(parsed.error);
   }
 
   const dup = await prisma.contrato.findUnique({
     where: { numero_empresaId: { numero: parsed.data.numero, empresaId } },
   });
-  if (dup) return NextResponse.json({ erro: "Número de contrato já cadastrado" }, { status: 409 });
+  if (dup) return erroNoCampo("numero", "Número de contrato já cadastrado", 409);
 
   // PR3-A/B: a automação do faturamento fatura sem ninguém olhar — pede Financeiro › Medições (+ Fiscal / Contas a receber)
   const faltaAutomacao = faltaPermissaoAutomacao(parsed.data, {}, session.user!);

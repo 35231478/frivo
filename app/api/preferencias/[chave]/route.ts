@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { erroDeValidacao } from "@/lib/forms/erros-server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { CHAVE_PREFERENCIA, lerPreferenciaTabela, preferenciaTabelaSchema } from "@/lib/preferencias";
@@ -29,7 +30,7 @@ export async function PUT(req: NextRequest, { params }: Params) {
   if (!chaveValida(chave)) return NextResponse.json({ erro: "Dados inválidos" }, { status: 400 });
 
   const parsed = preferenciaTabelaSchema.safeParse(await req.json().catch(() => null));
-  if (!parsed.success) return NextResponse.json({ erro: "Dados inválidos", detalhes: parsed.error.flatten() }, { status: 400 });
+  if (!parsed.success) return erroDeValidacao(parsed.error);
 
   const usuarioId = session.user!.id;
   await prisma.preferenciaUsuario.upsert({

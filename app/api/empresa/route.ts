@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { erroDeValidacao, erroNoCampo } from "@/lib/forms/erros-server";
 import { auth } from "@/lib/auth";
 import { pode } from "@/lib/permissoes";
 import { prisma } from "@/lib/prisma";
@@ -12,10 +13,11 @@ const textoBanco = (max: number) =>
   z.string().trim().max(max).transform((v) => v || null).optional().nullable();
 
 const empresaUpdateSchema = z.object({
-  nome: z.string().min(2).optional(),
+  // Mensagens em português: o erro cai no campo da tela (ERRO NO CAMPO)
+  nome: z.string().trim().min(2, "Informe a razão social (mín. 2 letras).").optional(),
   nomeFantasia: z.string().optional(),
   cnpj: z.string().optional(),
-  email: z.string().email().optional(),
+  email: z.string().trim().email("E-mail inválido: confira o endereço.").optional(),
   telefone: z.string().optional(),
   celular: z.string().optional(),
   site: z.string().optional(),
@@ -82,7 +84,7 @@ export async function PUT(req: NextRequest) {
   const parsed = empresaUpdateSchema.safeParse(body);
   if (!parsed.success) {
     const cnae = parsed.error.flatten().fieldErrors.cnaePrincipal?.[0];
-    return NextResponse.json({ erro: cnae ?? "Dados inválidos", detalhes: parsed.error.flatten() }, { status: 400 });
+    return erroDeValidacao(parsed.error, cnae ?? "Dados inválidos");
   }
 
   // CNAE principal é dado fiscal (vai nas notas de todos os serviços sem CNAE próprio): mudar exige o Fiscal
@@ -101,7 +103,7 @@ export async function PUT(req: NextRequest) {
     });
     const atual = await prisma.empresa.findUnique({ where: { id: session.user!.empresaId }, select: { responsavelTecnicoId: true } });
     if (!ok && atual?.responsavelTecnicoId !== rt) {
-      return NextResponse.json({ erro: "Responsável técnico inválido: escolha um responsável técnico ativo da empresa." }, { status: 400 });
+      return erroNoCampo("responsavelTecnicoId", "Responsável técnico inválido: escolha um responsável técnico ativo da empresa.");
     }
   }
 
@@ -111,7 +113,7 @@ export async function PUT(req: NextRequest) {
   if (data.cnpj !== undefined) {
     const atual = await prisma.empresa.findUnique({ where: { id: session.user!.empresaId }, select: { cnpj: true } });
     if (digitos(data.cnpj) === digitos(atual?.cnpj ?? "")) delete data.cnpj;
-    else if (!cnpjValido(data.cnpj)) return NextResponse.json({ erro: "CNPJ inválido." }, { status: 400 });
+    else if (!cnpjValido(data.cnpj)) return erroNoCampo("cnpj", "CNPJ inválido.");
     else data.cnpj = formatarCnpj(data.cnpj);
   }
 
@@ -122,7 +124,7 @@ export async function PUT(req: NextRequest) {
     });
     return NextResponse.json(empresa);
   } catch (e) {
-    if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002") return NextResponse.json({ erro: MSG_CNPJ_EM_USO }, { status: 409 });
+    if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002") return erroNoCampo("cnpj", MSG_CNPJ_EM_USO, 409);
     throw e;
   }
 }

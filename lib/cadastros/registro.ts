@@ -850,6 +850,21 @@ export function camposSemPermissao(
     .filter((c) => (existente ? !mesmoValor(dados[c.key], existente[c.key]) : dados[c.key] != null && dados[c.key] !== false && dados[c.key] !== ""));
 }
 
+/**
+ * ERRO NO CAMPO: cada erro de validação no campo do cadastro a que pertence (a 1ª mensagem de cada um), com a chave
+ * do registro (`c.key`, o mesmo `name` do FormField da gaveta). Campo fora do registro (ou campo desconhecido) não
+ * entra: fica só na mensagem geral (`mensagemValidacao`).
+ */
+export function camposValidacao(e: z.ZodError, def: DefCadastro): Record<string, string> {
+  const r: Record<string, string> = {};
+  for (const i of e.issues) {
+    const k = i.path[0];
+    if (typeof k !== "string" || r[k] || !def.campos.some((c) => c.key === k)) continue;
+    r[k] = i.message;
+  }
+  return r;
+}
+
 /** Mensagem legível do erro de validação (campo desconhecido incluso). */
 export function mensagemValidacao(e: z.ZodError, def: DefCadastro): string {
   const i = e.issues[0];

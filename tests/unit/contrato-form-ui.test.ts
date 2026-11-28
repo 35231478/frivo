@@ -569,7 +569,10 @@ describe("prazo de atendimento do contrato (aba Escopo e locais)", () => {
     expect(enviado()).toBeUndefined();
     expect(visivel("escopo")).toBe(true);
     expect(sp($("[data-erro-prazos-atendimento]")!.textContent!)).toBe("O prazo para resolver não pode ser menor que o de comparecer.");
-    expect(sp(caixa.textContent!)).toContain('Verifique o prazo de atendimento na aba "Escopo e locais".');
+    // ERRO NO CAMPO: a faixa do topo repete o erro (um só, de campo) e a aba ganha o ponto vermelho — saiu o
+    // antigo "Verifique o prazo de atendimento na aba…"
+    expect(sp($("[data-resumo-erros]")!.textContent!)).toBe("O prazo para resolver não pode ser menor que o de comparecer.");
+    expect($('[data-aba-contrato="escopo"] [data-erro-aba]')).toBeTruthy();
     await digitar(horas("Resolver em (horas)"), "48");
     expect($("[data-erro-prazos-atendimento]")).toBeNull();
     await clicar($$("button").find((b) => b.textContent?.trim() === "Salvar")!);

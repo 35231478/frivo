@@ -154,7 +154,8 @@ describe("ficha do colaborador: a jornada em faixas", () => {
     await clicar($("[data-aba='profissionais']"));
     await digitar(hora("Início do intervalo da faixa 1"), "1200");
     await clicar($("[data-aba='pessoais']"));
-    expect($("[data-aba='profissionais'] [aria-label='Tem erro']")).toBeTruthy();
+    // ERRO NO CAMPO: a marca da aba é o ponto vermelho com a contagem (o antigo ícone "Tem erro" saiu)
+    expect($("[data-aba='profissionais'] [data-erro-aba]")).toBeTruthy();
     await salvar();
     expect(gravacoes()).toEqual([]);
     expect(document.body.textContent).toContain("Jornada: faixa 1: Informe o início e o fim do intervalo (ou deixe os dois em branco).");

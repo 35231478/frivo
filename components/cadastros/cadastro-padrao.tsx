@@ -9,6 +9,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { FormField } from "@/components/ui/form-field";
+import { ErrosDoFormulario, ResumoDeErros, useErrosDoFormulario } from "@/components/ui/formulario-erros";
+import { useCampo } from "@/components/ui/campo-contexto";
+import type { Formato } from "@/lib/forms/erros";
 import { Dica } from "@/components/ui/dica";
 import { ComboboxCodigo } from "@/components/ui/combobox-codigo";
 import { Drawer } from "@/components/ui/drawer";
@@ -76,13 +79,14 @@ export interface GrupoFormProps {
 
 /** Grava pela rota genérica (POST cria / PATCH edita) — usado pelos editores próprios. */
 export async function salvarCadastro(entidade: EntidadeCadastro, id: string | null, corpo: Record<string, unknown>):
-  Promise<{ ok: true; item: Item } | { ok: false; erro: string }> {
+  Promise<{ ok: true; item: Item } | { ok: false; erro: string; campos?: Record<string, string> }> {
   try {
     const res = await fetch(id ? `/api/cadastros/${entidade}/${id}` : `/api/cadastros/${entidade}`, {
       method: id ? "PATCH" : "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(corpo),
     });
     const d = await res.json().catch(() => null);
-    if (!res.ok || !d?.id) return { ok: false, erro: d?.erro ?? "Não foi possível salvar." };
+    // `campos` (ERRO NO CAMPO): o editor próprio marca o campo certo (e-mail de login em uso, nome repetido…)
+    if (!res.ok || !d?.id) return { ok: false, erro: d?.erro ?? "Não foi possível salvar.", ...(d?.campos ? { campos: d.campos } : {}) };
     return { ok: true, item: d };
   } catch { return { ok: false, erro: "Erro de conexão: nada foi salvo." }; }
 }
@@ -392,37 +396,39 @@ function FormularioCadastro({
   const [form, setForm] = useState<Record<string, string>>({});
   // Cada abertura remonta as seções próprias (estado local delas começa do registro aberto)
   const [abertura, setAbertura] = useState(0);
-  const [erro, setErro] = useState("");
   const [salvando, setSalvando] = useState(false);
   const item = editando && editando !== "novo" ? editando : null;
-  // Erro aparece no topo da gaveta: rola até ele (o campo errado pode estar lá embaixo)
-  const erroRef = useRef<HTMLDivElement>(null);
-  useEffect(() => { if (erro) erroRef.current?.scrollIntoView?.({ block: "nearest" }); }, [erro]);
+  // ERRO NO CAMPO: o erro mora no campo da gaveta (obrigatório, formato, servidor); a faixa do topo é o resumo e o
+  // salvar rola e foca o primeiro campo com erro (o campo errado pode estar lá embaixo)
+  const erros = useErrosDoFormulario();
 
   useEffect(() => {
     if (!editando) return;
-    setErro("");
+    erros.limparTudo();
     setAbertura((n) => n + 1);
     setForm(Object.fromEntries(def.campos.map((c) => [c.key, item ? valorParaForm(c, item[c.key]) : vazioParaForm(c)])));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [editando]);
 
   async function salvar() {
-    for (const c of def.campos) if (c.obrigatorio && !form[c.key]?.trim()) { setErro(`${c.label} é obrigatório.`); return; }
+    // Todos os obrigatórios vazios de uma vez, cada um no seu campo
+    const faltando = Object.fromEntries(def.campos.filter((c) => c.obrigatorio && !bloqueado(c) && !form[c.key]?.trim()).map((c) => [c.key, `${c.label} é obrigatório.`]));
+    if (!erros.validar(faltando)) return;
     // Edição manda SÓ o que mudou (o servidor também é parcial: nada que não veio é zerado)
     const corpo = Object.fromEntries(def.campos
       .filter((c) => !item || form[c.key] !== valorParaForm(c, item[c.key]))
       .map((c) => [c.key, form[c.key]]));
     if (item && !Object.keys(corpo).length) { onFechar(); return; }
-    setSalvando(true); setErro("");
+    setSalvando(true);
     try {
       const res = await fetch(item ? `/api/cadastros/${def.entidade}/${item.id}` : `/api/cadastros/${def.entidade}`, {
         method: item ? "PATCH" : "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(corpo),
       });
       const d = await res.json().catch(() => null);
-      if (!res.ok || !d?.id) { setErro(d?.erro ?? "Não foi possível salvar."); return; }
+      // O erro do servidor cai no campo certo ({ erro, campos }: nome/código repetido, validação…)
+      if (!res.ok || !d?.id) { erros.erroDaApi(d ?? {}, "Não foi possível salvar."); return; }
       onSalvo(d);
-    } catch { setErro("Erro de conexão: nada foi salvo."); } finally { setSalvando(false); }
+    } catch { erros.definirGeral("Erro de conexão: nada foi salvo."); erros.focar(); } finally { setSalvando(false); }
   }
 
   // Campo com permissão própria (ex.: dados fiscais da NFS-e): sem ela fica só leitura e não é enviado
@@ -439,7 +445,9 @@ function FormularioCadastro({
         <Button type="button" loading={salvando} onClick={salvar}><Check className="w-4 h-4" /> Salvar</Button>
       </>}
     >
-      {erro && <div ref={erroRef} role="alert" className="bg-atrasado-claro border border-atrasado/20 text-atrasado-texto text-sm rounded-lg px-3 py-2 mb-4">{erro}</div>}
+      <ErrosDoFormulario valor={erros}>
+      <div ref={erros.ref} data-form-cadastro>
+      <ResumoDeErros className="mb-4" />
       {item && !item.ativo && (
         <div className="bg-atencao-claro border border-atencao/20 text-atencao-texto text-sm rounded-lg px-3 py-2 mb-4">
           {titulo} inativ{def.feminino ? "a" : "o"}: não aparece para novas escolhas até ser reativad{def.feminino ? "a" : "o"}.
@@ -469,6 +477,8 @@ function FormularioCadastro({
           );
         })}
       </div>
+      </div>
+      </ErrosDoFormulario>
     </Drawer>
   );
 }
@@ -490,10 +500,24 @@ export function CampoCadastroForm({ campo: c, valores, mudar, bloqueado, classNa
 }) {
   return (
     // O que o valor significa (ex.: a descrição do código LC 116) fica visível; a explicação do campo vai para o ⓘ
-    <FormField label={c.label} required={c.obrigatorio} hint={c.descrever?.(valores[c.key] ?? "") ?? undefined} dica={c.ajuda} className={className}>
+    // ERRO NO CAMPO: o nome é a chave do registro (a mesma dos `campos` da API); controle sem digitação limpa pelo valor
+    <FormField label={c.label} required={c.obrigatorio} hint={c.descrever?.(valores[c.key] ?? "") ?? undefined} dica={c.ajuda} className={className}
+      name={c.key} formato={formatoDoCampo(c)} valor={SEM_DIGITACAO.has(c.tipo ?? "") || c.opcoesCodigo ? valores[c.key] ?? "" : undefined}>
       <CampoForm campo={c} valor={valores[c.key] ?? ""} disabled={bloqueado} onChange={(v) => mudar(c.key, v)} />
     </FormField>
   );
+}
+
+/** Controles que mudam sem evento de digitação: o erro some pelo valor */
+const SEM_DIGITACAO = new Set(["select", "cadastro", "booleano", "cor"]);
+
+/** O formato óbvio conferido ao sair do campo (e-mail, valor, CNPJ/CPF, telefone) */
+function formatoDoCampo(c: CampoCadastro): Formato | undefined {
+  if (c.tipo === "email") return "email";
+  if (c.tipo === "moeda" || c.tipo === "numero" || c.tipo === "inteiro") return "valor";
+  if (c.key === "documento") return "cpfCnpj";
+  if (c.key === "telefone") return "telefone";
+  return undefined;
 }
 
 function CampoForm({ campo: c, valor, disabled, id, onChange }: {
@@ -532,9 +556,9 @@ function CampoForm({ campo: c, valor, disabled, id, onChange }: {
     const opcoes = c.opcoes ?? [];
     const extra = valor && !opcoes.some((o) => o.value === valor) ? [{ value: valor, label: `${valor} (valor antigo)` }] : [];
     return (
-      <select id={id} value={valor} disabled={disabled} onChange={(e) => onChange(e.target.value)} className="disabled:bg-surface-page disabled:text-ink-muted disabled:cursor-not-allowed w-full bg-white border border-surface-border rounded-lg px-3 py-2.5 text-sm text-ink focus:outline-none focus:border-primary-500 focus:ring-4 focus:ring-primary-500/10">
+      <SelectDoCadastro id={id} value={valor} disabled={disabled} onChange={(e) => onChange(e.target.value)}>
         {[...opcoes, ...extra].map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-      </select>
+      </SelectDoCadastro>
     );
   }
   const numerico = c.tipo === "moeda" || c.tipo === "numero" || c.tipo === "inteiro";
@@ -544,5 +568,15 @@ function CampoForm({ campo: c, valor, disabled, id, onChange }: {
       value={valor} onChange={(e) => onChange(e.target.value)} placeholder={c.placeholder} disabled={disabled}
       caixa={numerico ? undefined : c.caixa}
     />
+  );
+}
+
+/** O <select> da gaveta: com erro no FormField, borda vermelha + aria-invalid/aria-describedby (ERRO NO CAMPO) */
+function SelectDoCadastro(props: React.SelectHTMLAttributes<HTMLSelectElement>) {
+  const campo = useCampo();
+  return (
+    <select {...props} aria-invalid={campo?.invalido || undefined} aria-describedby={campo?.descricaoId}
+      className={cn("disabled:bg-surface-page disabled:text-ink-muted disabled:cursor-not-allowed w-full bg-white border rounded-lg px-3 py-2.5 text-sm text-ink focus:outline-none focus:ring-4",
+        campo?.invalido ? "border-atrasado focus:border-atrasado focus:ring-atrasado/15" : "border-surface-border focus:border-primary-500 focus:ring-primary-500/10")} />
   );
 }

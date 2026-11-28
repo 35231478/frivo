@@ -97,12 +97,17 @@ describe("Atraso justificado no cartão Prazos da OS", () => {
     expect([...$<HTMLSelectElement>("[data-motivo]")!.options].map((o) => o.textContent)).toEqual(
       ["Escolha o motivo", "Cliente ausente", "Peça faltando", "Acesso ao local negado", "Chuva ou clima", "Outro motivo"]);
 
-    await clicar($("[data-salvar-atraso]")); // sem motivo
-    expect(txt($("[data-erro-atraso]"))).toBe("Escolha o motivo do atraso.");
+    // ERRO NO CAMPO: tudo o que falta aparece de uma vez, cada mensagem embaixo do seu campo (a faixa é o resumo)
+    const noCampo = (nome: string) => txt($(`[data-campo-nome="${nome}"] [data-erro-campo]`));
+    await clicar($("[data-salvar-atraso]")); // sem motivo (e, sem motivo, sem a causa sugerida)
+    expect(noCampo("motivo")).toBe("Escolha o motivo do atraso.");
+    expect(noCampo("responsavel")).toBe("Diga de quem foi a causa do atraso.");
+    expect(txt($("[data-erro-atraso]"))).toContain("2 campos para corrigir");
     await escrever($("[data-motivo]"), "OUTRO");
-    // "Outro" não sugere causa nenhuma: ela é cobrada antes da explicação, na ordem em que estão na tela
+    // "Outro" não sugere causa nenhuma: a causa e a explicação são cobradas juntas, na ordem em que estão na tela
     await clicar($("[data-salvar-atraso]"));
-    expect(txt($("[data-erro-atraso]"))).toBe("Diga de quem foi a causa do atraso.");
+    expect(noCampo("responsavel")).toBe("Diga de quem foi a causa do atraso.");
+    expect(noCampo("observacao")).toBe("Explique o motivo do atraso (pelo menos 5 caracteres).");
     await escrever($("[data-responsavel]"), "INTERNA");
     await clicar($("[data-salvar-atraso]")); // "Outro" sem explicação
     expect(txt($("[data-erro-atraso]"))).toBe("Explique o motivo do atraso (pelo menos 5 caracteres).");

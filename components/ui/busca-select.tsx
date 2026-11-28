@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { cn } from "@/lib/utils";
+import { useCampo } from "@/components/ui/campo-contexto";
 import { Search, X, ChevronDown, Plus } from "lucide-react";
 
 export interface OpcaoBusca {
@@ -90,6 +91,8 @@ export function BuscaSelect({
   }, [aberto, ativo]);
 
   const escolher = (v: string) => { onChange(v); fechar(true); };
+  // Dentro de um FormField com erro: borda vermelha + aria-invalid + aria-describedby
+  const campo = useCampo();
 
   function teclado(e: React.KeyboardEvent) {
     if (disabled) return;
@@ -118,10 +121,13 @@ export function BuscaSelect({
         onClick={() => (aberto ? fechar() : setAberto(true))}
         role="combobox" aria-expanded={aberto} aria-haspopup="listbox"
         aria-controls={aberto ? idLista : undefined} aria-label={rotulo}
+        aria-invalid={campo?.invalido || undefined} aria-describedby={campo?.descricaoId}
         data-busca-select
         className={cn(
-          "w-full flex items-center justify-between gap-2 bg-white border border-surface-campo rounded-lg px-3 py-2 text-sm text-left transition-all",
-          "focus:outline-none focus:border-primary-500 focus:ring-4 focus:ring-primary-500/10",
+          "w-full flex items-center justify-between gap-2 bg-white border rounded-lg px-3 py-2 text-sm text-left transition-all",
+          campo?.invalido
+            ? "border-atrasado focus:outline-none focus:border-atrasado focus:ring-4 focus:ring-atrasado/15"
+            : "border-surface-campo focus:outline-none focus:border-primary-500 focus:ring-4 focus:ring-primary-500/10",
           disabled && "opacity-60 cursor-not-allowed bg-surface-alt",
         )}
       >
@@ -192,3 +198,4 @@ export function BuscaSelect({
     </div>
   );
 }
+(BuscaSelect as unknown as { campoDeFormulario: boolean }).campoDeFormulario = true;

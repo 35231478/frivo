@@ -153,10 +153,16 @@ describe("técnico: lançar despesa", () => {
     expect($$("[data-modal-despesa] [data-categoria]").map(texto)).toEqual(["Combustível", "Pedágio", "Estacionamento", "Alimentação", "Hospedagem", "Material comprado em campo", "Outros"]);
     expect(salvar().disabled).toBe(true);
     await clicar($('[data-categoria="COMBUSTIVEL"]'));
-    await digitar($("[data-valor-despesa-campo]"), "0");
-    expect($("[data-valor-invalido]")).not.toBeNull();
-    await digitar($("[data-valor-despesa-campo]"), "187,40");
-    expect($("[data-valor-invalido]")).toBeNull();
+    // ERRO NO CAMPO: enquanto digita pela 1ª vez não acusa; saiu do campo, o erro aparece no campo (borda +
+    // mensagem logo abaixo, aria-invalid) e some assim que o valor fica certo
+    const campoValor = () => $("[data-valor-despesa-campo]") as HTMLInputElement;
+    await digitar(campoValor(), "0");
+    expect(campoValor().getAttribute("aria-invalid")).toBeNull();
+    await act(async () => { campoValor().dispatchEvent(new FocusEvent("focusout", { bubbles: true })); });
+    expect(campoValor().getAttribute("aria-invalid")).toBe("true");
+    expect(document.getElementById(campoValor().getAttribute("aria-describedby")!)!.textContent).toBe("Informe um valor maior que zero.");
+    await digitar(campoValor(), "187,40");
+    expect(campoValor().getAttribute("aria-invalid")).toBeNull();
     await clicar($('[data-modal-despesa] [data-pagamento="PROPRIO"]'));
     expect(salvar().disabled).toBe(true); // falta a foto
     await clicar($("[data-foto-falsa]"));

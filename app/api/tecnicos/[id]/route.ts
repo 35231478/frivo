@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { erroDeValidacao, erroNoCampo } from "@/lib/forms/erros-server";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { emailDeLoginEmUso, MSG_EMAIL_LOGIN_EM_USO } from "@/lib/acesso/email-unico";
@@ -58,25 +59,25 @@ export async function PUT(req: NextRequest, { params }: Params) {
   const body = await req.json();
   const parsed = tecnicoSchema.safeParse(body);
   if (!parsed.success) {
-    return NextResponse.json({ erro: erroDoCadastro(parsed.error), detalhes: parsed.error.flatten() }, { status: 400 });
+    return erroDeValidacao(parsed.error, erroDoCadastro(parsed.error));
   }
 
   if (parsed.data.cpf !== existente.cpf) {
     const dup = await prisma.tecnico.findUnique({
       where: { cpf_empresaId: { cpf: parsed.data.cpf, empresaId } },
     });
-    if (dup) return NextResponse.json({ erro: "CPF já cadastrado" }, { status: 409 });
+    if (dup) return erroNoCampo("cpf", "CPF já cadastrado", 409);
   }
 
   const { competenciaIds, dataNascimento, dataAdmissao, cargoId, perfilAcessoId, email, veiculoId, jornadaFaixas, jornadaEntrada, jornadaSaida, jornadaDias, tipo: tipoCorpo, tipoEquipe: equipeCorpo, ...rest } = parsed.data;
   // tipo × tipoEquipe sempre coerentes no banco (sem equipe no corpo, ela sai do tipo); RT não fica sem CREA
   const funcao = funcaoDoCorpo(tipoCorpo, equipeCorpo);
-  if (funcao.tipo === "RESPONSAVEL_TECNICO" && !rest.crea?.trim()) return NextResponse.json({ erro: MSG_RT_SEM_CREA }, { status: 400 });
+  if (funcao.tipo === "RESPONSAVEL_TECNICO" && !rest.crea?.trim()) return erroNoCampo("crea", MSG_RT_SEM_CREA);
   // Leva J: a jornada em faixas (ou, de um cliente antigo, os campos antigos)
   const jornada = jornadaDoCorpo({ jornadaFaixas, jornadaEntrada, jornadaSaida, jornadaDias });
   // Veículo padrão (opcional): só muda quando enviado; precisa ser da mesma empresa
   if (veiculoId && !(await prisma.veiculo.findFirst({ where: { id: veiculoId, empresaId }, select: { id: true } })))
-    return NextResponse.json({ erro: "Veículo inválido." }, { status: 400 });
+    return erroNoCampo("veiculoId", "Veículo inválido.");
   // Cargo, perfil de acesso e competências (tipos de OS) precisam ser da mesma empresa
   try {
     await Promise.all([
@@ -100,10 +101,10 @@ export async function PUT(req: NextRequest, { params }: Params) {
   const login = emailNovo && emailAntigo && emailNovo.toLowerCase() !== emailAntigo.toLowerCase()
     ? await prisma.usuario.findFirst({ where: { empresaId, email: { equals: emailAntigo, mode: "insensitive" } }, select: { id: true } })
     : null;
-  if (login && await emailDeLoginEmUso(emailNovo, login.id)) return NextResponse.json({ erro: MSG_EMAIL_LOGIN_EM_USO }, { status: 409 });
+  if (login && await emailDeLoginEmUso(emailNovo, login.id)) return erroNoCampo("email", MSG_EMAIL_LOGIN_EM_USO, 409);
   // Apagar o e-mail de quem tem login deixaria o login no e-mail velho, solto do colaborador: recusa
   if (!emailNovo && emailAntigo && await prisma.usuario.findFirst({ where: { empresaId, email: { equals: emailAntigo, mode: "insensitive" } }, select: { id: true } }))
-    return NextResponse.json({ erro: MSG_EMAIL_COM_LOGIN }, { status: 400 });
+    return erroNoCampo("email", MSG_EMAIL_COM_LOGIN);
 
   // Status "Inativo" no formulário = inativar o colaborador pela MESMA função do botão e da ação em
   // massa (impacto/bloqueio, motivo e anotação nas observações; exige "excluir"). Sair de "Inativo"
@@ -224,7 +225,7 @@ export async function PATCH(req: NextRequest, { params }: Params) {
     if (!atual) return NextResponse.json({ erro: "Não encontrado" }, { status: 404 });
     const { crea, ...resto } = parsed.data;
     // Responsável técnico não fica sem CREA (é o que sai impresso no orçamento)
-    if (crea !== undefined && !crea && atual.tipo === "RESPONSAVEL_TECNICO") return NextResponse.json({ erro: MSG_RT_SEM_CREA }, { status: 400 });
+    if (crea !== undefined && !crea && atual.tipo === "RESPONSAVEL_TECNICO") return erroNoCampo("crea", MSG_RT_SEM_CREA);
     const t = await prisma.tecnico.update({
       where: { id }, data: { ...resto, ...(crea !== undefined && { crea: crea || null }) },
       select: { id: true, nome: true, telefone: true, crea: true, tipo: true, ativo: true },

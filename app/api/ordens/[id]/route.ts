@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { erroNoCampo } from "@/lib/forms/erros-server";
 import { fixarLimitesDaOs } from "@/lib/atendimento/prazo-server";
 import { exigirPermissao } from "@/lib/permissoes-server";
 import { travaDasLinhasDaOs } from "@/lib/os/trava-edicao-server";
@@ -105,14 +106,15 @@ export async function PATCH(req: NextRequest, { params }: Params) {
   const data: string | undefined = body?.data;
   const atividadeId: string | undefined = body?.atividadeId || undefined;
   const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(data ?? "");
-  if (!m) return NextResponse.json({ erro: "Data inválida." }, { status: 400 });
+  // Os campos da gaveta "Editar a OS" (o arrastar do calendário só lê o `erro`)
+  if (!m) return erroNoCampo("visitaData", "Data inválida.");
   const [, ys, ms, ds] = m;
   const y = Number(ys), mo = Number(ms) - 1, d = Number(ds);
   // Hora opcional ("HH:mm", relógio de Brasília). Vazia/ausente = mantém a que estava (o arrastar).
   const horaTexto = body?.hora == null || body.hora === "" ? undefined : String(body.hora);
   const h = horaTexto === undefined ? null : /^(\d{2}):(\d{2})$/.exec(horaTexto);
   if (horaTexto !== undefined && (!h || Number(h[1]) > 23 || Number(h[2]) > 59)) {
-    return NextResponse.json({ erro: "Hora inválida." }, { status: 400 });
+    return erroNoCampo("visitaHora", "Hora inválida.");
   }
   const horaNova = h ? { hora: Number(h[1]), minuto: Number(h[2]) } : null;
 
@@ -162,7 +164,7 @@ export async function PUT(req: NextRequest, { params }: Params) {
   const { status, prioridade, descricao, observacoes, unidadeId, contratoId, responsavelId, previsaoConclusao, prazoExecucao } = body;
   // O prazo de execução é um DIA (o "Prazo para finalizar"); a data prevista é agenda — campos diferentes
   const prazoDigitado = prazoExecucao === undefined ? undefined : lerPrazoDigitado(prazoExecucao);
-  if (prazoExecucao !== undefined && prazoDigitado === undefined) return NextResponse.json({ erro: "Prazo para finalizar inválido." }, { status: 400 });
+  if (prazoExecucao !== undefined && prazoDigitado === undefined) return erroNoCampo("prazoExecucao", "Prazo para finalizar inválido.");
 
   // Registro fechado (OS assinada pelo cliente, já faturada ou com nota emitida): os CAMPOS da OS
   // não mudam mais — a mesma trava das linhas, agora também para a gaveta "Editar OS". O status

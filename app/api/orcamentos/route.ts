@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { erroDeValidacao } from "@/lib/forms/erros-server";
 import { comEscopo, filtroOrcamentos } from "@/lib/escopo/proprios";
 import { registrarEvento } from "@/lib/orcamentos/ciclo-server";
 import { itensDoOrcamentoParaTrava, verificarPrecoDeTabela } from "@/lib/precos/trava-tabela-server";
@@ -68,10 +69,7 @@ export async function POST(req: NextRequest) {
   const body = await req.json();
   const parsed = orcamentoSchema.safeParse(body);
   if (!parsed.success) {
-    return NextResponse.json(
-      { erro: "Dados inválidos", detalhes: parsed.error.flatten() },
-      { status: 400 }
-    );
+    return erroDeValidacao(parsed.error);
   }
   const data = parsed.data;
 
@@ -112,7 +110,8 @@ export async function POST(req: NextRequest) {
   await fixarCustosDosMateriais(empresaId, null, valores.servicos);
   // Preço que veio da tabela do cliente: travado (só com a permissão e o motivo — lib/precos/trava-tabela)
   const trava = await verificarPrecoDeTabela({ user: session.user!, empresaId, clienteId: data.clienteId, itens: itensDoOrcamentoParaTrava(valores), motivo: data.motivoPrecoTabela });
-  if (!trava.veredito.ok) return NextResponse.json({ erro: trava.veredito.erro, precoTabela: true }, { status: trava.veredito.status });
+  // Falta (ou é curto) o motivo: o erro mora no campo do motivo; sem a permissão, vai para a faixa
+  if (!trava.veredito.ok) return NextResponse.json({ erro: trava.veredito.erro, precoTabela: true, ...(trava.veredito.status === 400 ? { campos: { motivoPrecoTabela: trava.veredito.erro } } : {}) }, { status: trava.veredito.status });
   const proposta = montarCamposProposta(
     data.responsavelTecnicoId === undefined ? { ...data, responsavelTecnicoId: padroes.responsavelTecnicoId } : data,
   );

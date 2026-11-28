@@ -7,6 +7,8 @@ import { Drawer } from "@/components/ui/drawer";
 import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { FormField } from "@/components/ui/form-field";
+import { ErrosDoFormulario, ResumoDeErros, useErrosDoFormulario } from "@/components/ui/formulario-erros";
+import type { ErrosDeCampo } from "@/lib/forms/erros";
 import { confirmar, toast } from "@/components/ui/avisos";
 import { usePermissoes } from "@/components/providers/permissoes-provider";
 import { formatarData } from "@/lib/utils";
@@ -38,14 +40,15 @@ export function AtrasoJustificado({ os, onAtualizado }: { os: any; onAtualizado:
   const [motivo, setMotivo] = useState("");
   const [responsavel, setResponsavel] = useState("");
   const [observacao, setObservacao] = useState("");
-  const [erro, setErro] = useState("");
+  // ERRO NO CAMPO: motivo, causa e explicação, cada um no seu campo; a faixa no alto da gaveta é o resumo
+  const erros = useErrosDoFormulario();
   const [salvando, setSalvando] = useState(false);
 
   // Abrir começa do que está gravado (ou em branco)
   useEffect(() => {
     if (aberto) {
       setMotivo(os.atrasoJustificadoMotivo ?? ""); setResponsavel(os.atrasoResponsavel ?? "");
-      setObservacao(os.atrasoJustificadoObs ?? ""); setErro("");
+      setObservacao(os.atrasoJustificadoObs ?? ""); erros.limparTudo();
     }
   }, [aberto, os.atrasoJustificadoMotivo, os.atrasoResponsavel, os.atrasoJustificadoObs]);
 
@@ -68,19 +71,22 @@ export function AtrasoJustificado({ os, onAtualizado }: { os: any; onAtualizado:
   }
 
   async function salvar() {
-    if (!motivo) { setErro("Escolha o motivo do atraso."); return; }
-    if (!responsavel) { setErro(MSG_ATRASO_SEM_RESPONSAVEL); return; }
-    if (!explicacaoDoAtrasoValida(motivo, observacao)) { setErro(MSG_ATRASO_OUTRO); return; }
-    setErro(""); setSalvando(true);
+    // Tudo o que falta de uma vez, cada um no campo dele (na ordem da tela: motivo, causa, explicação)
+    const faltando: ErrosDeCampo = {};
+    if (!motivo) faltando.motivo = "Escolha o motivo do atraso.";
+    if (!responsavel) faltando.responsavel = MSG_ATRASO_SEM_RESPONSAVEL;
+    if (motivo && !explicacaoDoAtrasoValida(motivo, observacao)) faltando.observacao = MSG_ATRASO_OUTRO;
+    if (!erros.validar(faltando)) return;
+    setSalvando(true);
     try {
       const r = await chamar("POST", { motivo, responsavel, observacao });
       // Recusado (sem permissão, sem atraso): a gaveta fica aberta com o que foi escolhido
-      if (!r.ok) { setErro(r.erro || "Não foi possível justificar o atraso."); return; }
+      if (!r.ok) { erros.erroDaApi(r.d ?? { erro: r.erro }, "Não foi possível justificar o atraso."); return; }
       toast(justificada ? "Justificativa alterada." : "Atraso justificado.");
       onAtualizado(r.d);
       router.refresh(); // o histórico da OS ganha a linha nova
       setAberto(false);
-    } catch { setErro("Sem conexão. Tente de novo."); } finally { setSalvando(false); }
+    } catch { erros.definirGeral("Sem conexão. Tente de novo."); erros.focar(); } finally { setSalvando(false); }
   }
 
   async function desfazer() {
@@ -132,6 +138,7 @@ export function AtrasoJustificado({ os, onAtualizado }: { os: any; onAtualizado:
         </button>
       )}
 
+      <ErrosDoFormulario valor={erros}>
       <Drawer
         aberto={aberto} onFechar={() => setAberto(false)} titulo={`Justificar atraso · ${os.chamadoNumero ?? os.numero}`}
         rodape={
@@ -141,15 +148,16 @@ export function AtrasoJustificado({ os, onAtualizado }: { os: any; onAtualizado:
           </div>
         }
       >
-        <div className="space-y-4" data-gaveta-atraso>
-          {erro && <p role="alert" className="text-sm text-atrasado-texto bg-atrasado-claro border border-atrasado/20 rounded-lg px-3 py-2" data-erro-atraso>{erro}</p>}
+        <div ref={erros.ref} className="space-y-4" data-gaveta-atraso>
+          {/* A faixa no alto da gaveta é só o resumo: o erro mora no campo (ERRO NO CAMPO) */}
+          {erros.temErros && <div data-erro-atraso><ResumoDeErros /></div>}
           {mesFechado && <p className="text-sm text-atencao-texto bg-atencao-claro border border-atencao/20 rounded-lg px-3 py-2" data-aviso-mes-fechado>{mesFechado}</p>}
-          <FormField label="Motivo" required dica="Use quando o atraso não foi culpa de quem executou. A OS continua atrasada; o atraso só deixa de contar no desempenho do colaborador.">
+          <FormField label="Motivo" required name="motivo" dica="Use quando o atraso não foi culpa de quem executou. A OS continua atrasada; o atraso só deixa de contar no desempenho do colaborador.">
             <Select value={motivo} onChange={(e) => escolherMotivo(e.target.value)} placeholder="Escolha o motivo" aria-label="Motivo do atraso" data-motivo>
               {MOTIVOS_ATRASO.map((m) => <option key={m} value={m}>{ROTULO_MOTIVO_ATRASO[m]}</option>)}
             </Select>
           </FormField>
-          <FormField label="De quem foi a causa" required dica="É esta marcação que o relatório do cliente lê: o atraso por causa dele sai da conta do percentual que ele recebe. Causa interna e força maior continuam contando como descumprido no documento que vai a ele.">
+          <FormField label="De quem foi a causa" required name="responsavel" valor={responsavel} dica="É esta marcação que o relatório do cliente lê: o atraso por causa dele sai da conta do percentual que ele recebe. Causa interna e força maior continuam contando como descumprido no documento que vai a ele.">
             <Select value={responsavel} onChange={(e) => setResponsavel(e.target.value)} placeholder="Escolha a causa" aria-label="De quem foi a causa do atraso" data-responsavel>
               {RESPONSABILIDADES_ATRASO.map((r) => <option key={r} value={r}>{ROTULO_RESPONSABILIDADE_ATRASO[r]}</option>)}
             </Select>
@@ -159,12 +167,13 @@ export function AtrasoJustificado({ os, onAtualizado }: { os: any; onAtualizado:
               {AJUDA_RESPONSABILIDADE_ATRASO[responsavel as keyof typeof AJUDA_RESPONSABILIDADE_ATRASO]}
             </p>
           )}
-          <FormField label="Explicação" required={motivo === "OUTRO"}>
+          <FormField label="Explicação" required={motivo === "OUTRO"} name="observacao">
             <Textarea value={observacao} onChange={(e) => setObservacao(e.target.value)} rows={3} maxLength={500} aria-label="Explicação do atraso"
               placeholder={motivo === "OUTRO" ? "O que aconteceu" : "Opcional"} data-observacao />
           </FormField>
         </div>
       </Drawer>
+      </ErrosDoFormulario>
     </div>
   );
 }

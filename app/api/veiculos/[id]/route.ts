@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { erroDeValidacao } from "@/lib/forms/erros-server";
 import { prisma } from "@/lib/prisma";
 import { validarDocumentoDataUrl, validarFotos } from "@/lib/anexos-server";
 import { veiculoSchema } from "@/lib/validations";
@@ -42,7 +43,7 @@ export async function PUT(req: NextRequest, { params }: Params) {
 
   const body = await req.json();
   const parsed = veiculoSchema.safeParse(body);
-  if (!parsed.success) return NextResponse.json({ erro: "Dados inválidos", detalhes: parsed.error.flatten() }, { status: 400 });
+  if (!parsed.success) return erroDeValidacao(parsed.error);
 
   const placa = parsed.data.placa.toUpperCase().trim();
   if (placa !== existente.placa) {

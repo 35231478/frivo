@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Clock } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useCampo } from "@/components/ui/campo-contexto";
 import { completarHora, horaValida, mascararHora, selecionarAoFocar } from "@/components/ui/input-data-hora";
 
 export { completarHora };
@@ -38,13 +39,14 @@ export function InputHora({ value, onChange, id, className, disabled, invalido =
   }, [value]);
   const entregar = (h: string) => { if (h !== entregue.current) { entregue.current = h; onChange(h); } };
 
-  const invalida = (!!texto && !horaValida(texto) && (saiu || texto.length === 5)) || (invalido && !horaValida(texto));
+  const campo = useCampo();
+  const invalida = (!!texto && !horaValida(texto) && (saiu || texto.length === 5)) || (invalido && !horaValida(texto)) || !!campo?.invalido;
 
   return (
     <div className={cn("relative", className)} data-input-hora-campo>
       <input
         id={id} type="text" inputMode="numeric" autoComplete="off" placeholder={placeholder} disabled={disabled}
-        aria-label={ariaLabel} aria-invalid={invalida || undefined} data-input-hora
+        aria-label={ariaLabel} aria-invalid={invalida || undefined} aria-describedby={campo?.descricaoId} data-input-hora
         onFocus={selecionarAoFocar}
         value={texto}
         onChange={(e) => {
@@ -66,3 +68,4 @@ export function InputHora({ value, onChange, id, className, disabled, invalido =
     </div>
   );
 }
+(InputHora as unknown as { campoDeFormulario: boolean }).campoDeFormulario = true;

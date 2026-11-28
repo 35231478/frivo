@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { erroDeValidacao, erroNoCampo } from "@/lib/forms/erros-server";
 import bcrypt from "bcryptjs";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
@@ -27,12 +28,13 @@ export async function PATCH(req: NextRequest) {
 
   const parsed = schema.safeParse(await req.json().catch(() => null));
   if (!parsed.success) {
-    return NextResponse.json({ erro: parsed.error.issues[0]?.message ?? "Dados inválidos" }, { status: 400 });
+    // ERRO NO CAMPO: o mesmo `erro` de antes (a 1ª mensagem) + `campos` (senhaAtual, novaSenha, confirmar)
+    return erroDeValidacao(parsed.error, parsed.error.issues[0]?.message ?? "Dados inválidos");
   }
   const { senhaAtual, novaSenha, confirmar } = parsed.data;
 
   if (novaSenha !== confirmar) {
-    return NextResponse.json({ erro: "A confirmação da nova senha não coincide." }, { status: 400 });
+    return erroNoCampo("confirmar", "A confirmação da nova senha não coincide.");
   }
 
   const alvos = { usuarioId: userId };
@@ -47,10 +49,10 @@ export async function PATCH(req: NextRequest) {
   const ok = await bcrypt.compare(senhaAtual, usuario.senha);
   if (!ok) {
     await registrarTentativa("TROCA_SENHA", alvos);
-    return NextResponse.json({ erro: "Senha atual incorreta." }, { status: 400 });
+    return erroNoCampo("senhaAtual", "Senha atual incorreta.");
   }
   if (senhaAtual === novaSenha) {
-    return NextResponse.json({ erro: "A nova senha precisa ser diferente da atual." }, { status: 400 });
+    return erroNoCampo("novaSenha", "A nova senha precisa ser diferente da atual.");
   }
   await limparTentativas("TROCA_SENHA", alvos);
 

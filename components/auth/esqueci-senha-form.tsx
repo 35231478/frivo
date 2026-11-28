@@ -3,26 +3,30 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { AlertCircle, ArrowLeft, Loader2, MailCheck, Send } from "lucide-react";
+import { ArrowLeft, Loader2, MailCheck, Send } from "lucide-react";
+import { FormField } from "@/components/ui/form-field";
+import { Input } from "@/components/ui/input";
+import { ErrosDoFormulario, ResumoDeErros, useErrosDoFormulario } from "@/components/ui/formulario-erros";
+import { validarFormato } from "@/lib/forms/erros";
 
 /** Pede o e-mail; a resposta é sempre a mesma mensagem (não revela se o e-mail tem cadastro). */
 export function EsqueciSenhaForm() {
   const [email, setEmail] = useState(useSearchParams().get("email") ?? "");
   const [enviando, setEnviando] = useState(false);
-  const [erro, setErro] = useState("");
+  // ERRO NO CAMPO: e-mail mal digitado no campo; limite de pedidos/conexão na faixa
+  const erros = useErrosDoFormulario();
   const [mensagem, setMensagem] = useState("");
 
   async function enviar(e: React.FormEvent) {
     e.preventDefault();
-    setErro("");
-    if (!/^\S+@\S+\.\S+$/.test(email.trim())) { setErro("Informe um e-mail válido."); return; }
+    if (!erros.validar(email.trim() && !validarFormato("email", email) ? {} : { email: "Informe um e-mail válido." })) return;
     setEnviando(true);
     try {
       const r = await fetch("/api/publico/esqueci-senha", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email: email.trim() }) });
       const d = await r.json().catch(() => ({}));
-      if (!r.ok) { setErro(d.erro ?? "Não foi possível enviar agora. Tente de novo."); return; }
+      if (!r.ok) { erros.erroDaApi(d, "Não foi possível enviar agora. Tente de novo."); return; }
       setMensagem(d.mensagem);
-    } catch { setErro("Erro de conexão."); } finally { setEnviando(false); }
+    } catch { erros.definirGeral("Erro de conexão."); erros.focar(); } finally { setEnviando(false); }
   }
 
   const voltar = (
@@ -46,21 +50,22 @@ export function EsqueciSenhaForm() {
   );
 
   return (
-    <form onSubmit={enviar} className="space-y-5" noValidate>
+    <ErrosDoFormulario valor={erros}>
+    <form ref={erros.ref} onSubmit={enviar} className="space-y-5" noValidate>
       <div>
         <h2 className="text-xl font-bold text-ink">Esqueci minha senha</h2>
         <p className="text-sm text-ink-muted mt-1">Informe o e-mail de acesso. O link para criar uma nova senha é enviado por e-mail.</p>
       </div>
-      {erro && <p role="alert" className="bg-atrasado-claro border border-atrasado/20 text-atrasado-texto text-sm rounded-lg px-3 py-2.5 flex items-center gap-2"><AlertCircle className="w-4 h-4 shrink-0" /> {erro}</p>}
-      <label className="block space-y-1.5">
-        <span className="text-sm font-semibold text-ink">E-mail</span>
-        <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="email" placeholder="seu@email.com.br" disabled={enviando}
-          className="w-full bg-white border border-surface-border rounded-lg px-3 py-2.5 text-sm text-ink placeholder:text-ink-subtle focus:outline-none focus:border-primary-500 focus:ring-4 focus:ring-primary-500/10 disabled:opacity-50" />
-      </label>
+      <ResumoDeErros className="py-2.5 px-3" />
+      <FormField label="E-mail" name="email" formato="email">
+        <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="email" placeholder="seu@email.com.br" disabled={enviando}
+          className="min-h-[44px] disabled:opacity-50" />
+      </FormField>
       <button type="submit" disabled={enviando} className="w-full inline-flex items-center justify-center gap-2 bg-acento hover:bg-acento-hover text-white font-semibold rounded-lg py-2.5 disabled:opacity-60">
         {enviando ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />} Enviar link
       </button>
       <div className="text-center">{voltar}</div>
     </form>
+    </ErrosDoFormulario>
   );
 }

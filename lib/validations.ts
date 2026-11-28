@@ -240,14 +240,14 @@ export const MAX_DESCRICAO_SERVICOS = 1000;
  * antigo no banco não é apagado ao editar.
  */
 export const contratoSchema = z.object({
-  clienteId: z.string().min(1, "Cliente é obrigatório"),
+  clienteId: z.string({ required_error: "Cliente é obrigatório" }).min(1, "Cliente é obrigatório"),
   numero: z.string().min(1, "Número é obrigatório"),
   tipo: z.nativeEnum(TipoContrato),
   status: z.nativeEnum(StatusContrato).default(StatusContrato.ATIVO),
   periodicidade: z.nativeEnum(Periodicidade).default(Periodicidade.MENSAL),
   valorMensal: valorOpcional,
   valorTotal: valorOpcional,
-  dataInicio: z.string().min(1, "Data de início é obrigatória"),
+  dataInicio: z.string({ required_error: "Data de início é obrigatória" }).min(1, "Data de início é obrigatória"),
   dataFim: z.string().optional(),
   diaVencimento: z.preprocess(
     (v) => (v === "" || v === null || v === undefined ? undefined : Number(v)),

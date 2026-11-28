@@ -79,7 +79,7 @@ export function PropostaCampos({ proposta, onChange, tecnicos, termoTemplates, e
       <div className="card-padded">
         <FormSection title="Dados do contrato proposto">
           <FormGrid cols={3}>
-            <FormField label="Valor mensal (R$)" required>
+            <FormField label="Valor mensal (R$)" required name="valorMensal">
               <Input type="number" step="0.01" min="0" value={proposta.valorMensal}
                 onChange={(e) => onChange({ valorMensal: e.target.value })} placeholder="0,00" />
             </FormField>

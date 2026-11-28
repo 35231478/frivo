@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { erroDeValidacao } from "@/lib/forms/erros-server";
 import { prisma } from "@/lib/prisma";
 import { exigirAlgumaPermissao, exigirPermissao } from "@/lib/permissoes-server";
 import { gerarQrDataUrl } from "@/lib/portal-server";
@@ -49,7 +50,7 @@ export async function PATCH(req: NextRequest, { params }: Params) {
 
   const parsed = patchSchema.safeParse(await req.json().catch(() => null));
   if (!parsed.success) {
-    return NextResponse.json({ erro: "Dados inválidos", detalhes: parsed.error.flatten() }, { status: 400 });
+    return erroDeValidacao(parsed.error);
   }
   const d = parsed.data;
   const dados: any = {};
