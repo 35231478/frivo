@@ -171,7 +171,7 @@ describe("5. CEP global", () => {
       .toEqual({ endereco: "Av. Nova", bairro: "Centro", cidade: "Santos", estado: "SP" });
   });
   it("os formulários com CEP usam o mesmo campo (sem a lupa de antes)", () => {
-    for (const f of ["components/forms/unidades-manager.tsx", "components/forms/unidades-local.tsx", "components/forms/colaborador-form.tsx", "components/forms/configuracoes-client.tsx", "components/admissao/campos-admissao.tsx"]) {
+    for (const f of ["components/forms/unidades-manager.tsx", "components/forms/unidades-local.tsx", "components/forms/colaborador-form.tsx", "components/forms/configuracoes-client.tsx", "components/admissao/campos-admissao.tsx", "components/forms/cliente-form.tsx"]) {
       const s = ler(f);
       expect(s, f).toContain("<CampoCep");
       expect(s, f).not.toContain("clique na lupa");
@@ -188,6 +188,10 @@ describe("5. CEP global", () => {
       .filter((f) => /viacep\.com\.br|brasilapi\.com\.br\/api\/cep/.test(fs.readFileSync(f, "utf8")));
     expect(fora).toEqual([]);
     expect(ler("components/ui/campo-cep.tsx")).toContain('from "@/lib/cep"');
+    // e nenhuma tela monta a própria busca: quem chama a consulta é só o CampoCep e o cadastro rápido (que monta o
+    // formulário a partir da definição); as telas recebem o endereço pronto em onEndereco
+    const chamam = ["app", "components"].flatMap((d) => arquivos(d)).filter((f) => /\b(buscarCep|consultarCep)\(/.test(fs.readFileSync(f, "utf8")));
+    expect(chamam.sort()).toEqual([path.join("components", "ui", "campo-cep.tsx"), path.join("components", "ui", "select-cadastro-rapido.tsx")]);
     // a assinatura de sempre: endereço ou null; com o ViaCEP fora, vem da reserva
     vi.stubGlobal("fetch", vi.fn(async (u: string) => { if (u.includes("viacep")) throw new Error("rede"); return resposta(brasilapi); }));
     expect(await buscarCep("01310-100")).toMatchObject({ logradouro: expect.any(String), cidade: expect.any(String) });

@@ -24,7 +24,7 @@ export async function carregarFichaCliente(id: string, empresaId: string) {
   });
   if (!cliente) return null;
 
-  const [{ status, totalProximos30Dias }, perdas12m, satisfacao, unidadesInativas, contatosInativos] = await Promise.all([
+  const [{ status, totalProximos30Dias, valorEmAtraso }, perdas12m, satisfacao, unidadesInativas, contatosInativos] = await Promise.all([
     calcularStatusFinanceiroDetalhado(id, empresaId),
     perdasRecentesDoCliente(id, empresaId),
     satisfacaoDosClientes(empresaId, [id]),
@@ -34,5 +34,5 @@ export async function carregarFichaCliente(id: string, empresaId: string) {
   ]);
   // Contatos vão para o client sem hash/senha do portal
   const dados = { ...cliente, contatosCliente: cliente.contatosCliente.map(contatoSeguro), unidadesInativas, contatosInativos: contatosInativos.map(contatoSeguro) };
-  return { dados, status, totalProximos30Dias, perdas12m, satisfacao: satisfacao.get(id) ?? SEM_AVALIACAO };
+  return { dados, status, totalProximos30Dias, valorEmAtraso, perdas12m, satisfacao: satisfacao.get(id) ?? SEM_AVALIACAO };
 }

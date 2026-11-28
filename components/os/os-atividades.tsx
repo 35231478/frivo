@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, type ReactNode } from "react";
+import { nomeComEspecialidades, textoEspecialidades } from "@/lib/atividade-equipe";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -289,6 +290,7 @@ export function OsAtividades({ osId, atividades: iniciais, clienteId, unidadeId,
                     {a.dataAgendada && <span className="whitespace-nowrap">{formatarDataHora(a.dataAgendada)}</span>}
                     {a.duracaoMin && <span className="whitespace-nowrap">{a.duracaoMin} min</span>}
                   </div>
+                  <EspecialidadesAtividade a={a} />
                   {/* A observação em uma linha curta (a inteira aparece ao abrir) */}
                   {obs && !aberto && <p className="text-xs text-ink-muted truncate mt-0.5" data-observacao-curta title={a.observacao}>{obs}</p>}
                 </div>
@@ -441,6 +443,14 @@ function TecnicosAtividade({ a }: { a: any }) {
       <span className="truncate">{nomes.map((n, i) => (i === 0 && nomes.length > 1 ? `${n} (resp.)` : n)).join(", ") || "Sem técnico"}</span>
     </span>
   );
+}
+
+/** Leva J: "Lucas — especialista em Chiller e VRF" de cada técnico que tem especialidade (a OS só recebe se a empresa mostra) */
+function EspecialidadesAtividade({ a }: { a: any }) {
+  const tecnicos: { nome: string; especialidades?: string[] }[] = [a.tecnico, ...(a.tecnicosEquipe ?? []).map((t: any) => t.tecnico)].filter(Boolean);
+  const linhas = [...new Map(tecnicos.map((t) => [t.nome, t])).values()].filter((t) => textoEspecialidades(t.especialidades)).map((t) => nomeComEspecialidades(t));
+  if (!linhas.length) return null;
+  return <p className="text-[11px] text-ink-muted mt-0.5" data-especialidades-atividade>{linhas.join(" · ")}</p>;
 }
 
 const COR_CHIP_PRAZO: Record<string, string> = { ATRASADO: "bg-atrasado-claro text-atrasado-texto", VENCE_HOJE: "bg-atencao-claro text-atencao-texto", NO_PRAZO: "bg-surface-linha text-ink-muted" };

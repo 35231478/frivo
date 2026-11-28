@@ -459,9 +459,16 @@ describe("o atalho \"Enviar documentação da equipe\" (ficha do cliente e do co
     expect($("[data-atalho-documentacao]")).toBeNull();
   });
 
-  it("as duas fichas usam o mesmo atalho, e a do contrato só manda o contrato quando ele está ativo", () => {
+  it("a ficha do cliente leva ao mesmo Novo envio pelo botão “Novo ▾”; a do contrato usa o atalho (só com contrato ativo)", async () => {
+    // Leva H (mudança intencional): na ficha do cliente o atalho virou o item "Envio de documentação da equipe"
+    // do botão único "Novo ▾" — mesmo destino (hrefNovoEnvio) e mesma permissão (Documentos › Enviar ao cliente)
+    const { itensDoNovo } = await import("@/lib/clientes/cabecalho");
+    const { hrefNovoEnvio } = await import("@/components/documentacao/atalho-documentacao");
+    const so = (permitidas: string[]) => (m: string, a: string) => permitidas.includes(`${m}.${a}`);
+    expect(itensDoNovo("c1", true, so(["documentos.enviar"]))).toEqual([{ id: "documentacao", rotulo: "Envio de documentação da equipe", href: hrefNovoEnvio("c1") }]);
+    expect(itensDoNovo("c1", true, so([]))).toEqual([]);
     const fonte = (arquivo: string) => readFileSync(path.resolve(__dirname, "../..", arquivo), "utf8");
-    expect(fonte("components/forms/cliente-form.tsx")).toContain("<AtalhoDocumentacao clienteId={initialData!.id} compact={compact} />");
+    expect(fonte("components/forms/cliente-form.tsx")).not.toContain("<AtalhoDocumentacao");
     expect(fonte("components/forms/contrato-form.tsx")).toContain('<AtalhoDocumentacao clienteId={initialData?.clienteId} contratoId={statusVal === "ATIVO" ? initialData?.id : null} compact={compact} />');
   });
 });

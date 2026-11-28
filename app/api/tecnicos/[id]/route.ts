@@ -4,6 +4,8 @@ import { prisma } from "@/lib/prisma";
 import { validarFoto } from "@/lib/anexos-server";
 import { respostaRefEmpresa, validarRefEmpresa, validarRefsEmpresa } from "@/lib/ref-empresa";
 import { tecnicoSchema } from "@/lib/validations";
+import { Prisma } from "@prisma/client";
+import { jornadaDoCorpo } from "@/lib/colaborador/jornada";
 import { caixaNome } from "@/lib/texto/zod";
 import { exigirPermissao } from "@/lib/permissoes-server";
 import { pode, type Permissoes } from "@/lib/permissoes";
@@ -64,7 +66,9 @@ export async function PUT(req: NextRequest, { params }: Params) {
     if (dup) return NextResponse.json({ erro: "CPF já cadastrado" }, { status: 409 });
   }
 
-  const { competenciaIds, dataNascimento, dataAdmissao, cargoId, perfilAcessoId, email, veiculoId, ...rest } = parsed.data;
+  const { competenciaIds, dataNascimento, dataAdmissao, cargoId, perfilAcessoId, email, veiculoId, jornadaFaixas, jornadaEntrada, jornadaSaida, jornadaDias, ...rest } = parsed.data;
+  // Leva J: a jornada em faixas (ou, de um cliente antigo, os campos antigos)
+  const jornada = jornadaDoCorpo({ jornadaFaixas, jornadaEntrada, jornadaSaida, jornadaDias });
   // Veículo padrão (opcional): só muda quando enviado; precisa ser da mesma empresa
   if (veiculoId && !(await prisma.veiculo.findFirst({ where: { id: veiculoId, empresaId }, select: { id: true } })))
     return NextResponse.json({ erro: "Veículo inválido." }, { status: 400 });
@@ -105,6 +109,7 @@ export async function PUT(req: NextRequest, { params }: Params) {
     where: { id },
     data: {
       ...rest,
+      ...jornada, jornadaFaixas: jornada.jornadaFaixas ?? Prisma.DbNull,
       email: email || null,
       cargoId: cargoId || null,
       perfilAcessoId: perfilAcessoId || null,

@@ -113,6 +113,7 @@ const CLIENTE: any = {
   id: "cl1", nome: "Clínica Vida Plena Ltda", nomeFantasia: "Vida Plena", tipoPessoa: "JURIDICA", cpfCnpj: "11222333000181",
   ativo: true, statusFinanceiro: "ADIMPLENTE", logo: null, observacoes: "Portaria fecha às 18h.", satisfacao: null,
   tabelaPreco: { nome: "Contrato", ativo: true }, emailsFaturamento: ["financeiro@vidaplena.com.br"],
+  endereco: "Av. Brasil", numero: "900", bairro: "Jardim América", cidade: "São Paulo", estado: "SP", cep: "01430-000",
   unidades: [{ id: "u1", nome: "Matriz", principal: true, logradouro: "Rua das Flores", numero: "120", bairro: "Centro", cidade: "São Paulo", estado: "SP" }],
   contatosCliente: [{ id: "k1", nome: "Marta", cargo: "Gerente", principal: true, telefone: "11988887777", email: "marta@vidaplena.com.br" }],
   anexos: [{ id: "a1", nome: "contrato.pdf", tipo: "application/pdf", tamanho: 1000, criadoEm: "2026-11-01" }], interacoes: [], _count: { contratos: 1 },
@@ -132,7 +133,11 @@ describe("4. ficha do cliente: consulta, com Editar como ação", () => {
     // e o formulário de Dados gerais não está na página (nem escondido): nada de campo de nome ou documento
     expect(caixa.querySelector('input[name="nome"], input[name="cpfCnpj"], select[name="tipoPessoa"]')).toBeNull();
     expect(txt(ficha)).toContain("11.222.333/0001-81");
-    expect(txt(ficha)).toContain("Rua das Flores, 120 · Centro · São Paulo/SP");
+    // Leva H (mudança intencional): em Dados fica o ENDEREÇO PRINCIPAL (o do cadastro, numa linha); os locais de
+    // atendimento (unidades) foram para a aba Endereços, em lista enxuta
+    expect(txt(ficha)).toContain("Av. Brasil, 900 · Jardim América · São Paulo/SP · CEP 01430-000");
+    expect(txt(ficha)).not.toContain("Rua das Flores");
+    expect(txt($('[data-endereco="u1"]'))).toContain("Rua das Flores, 120 · Centro · São Paulo/SP");
     expect(txt(ficha)).toContain("Marta");
     expect(txt(ficha)).toContain("financeiro@vidaplena.com.br");
     expect(txt(caixa)).not.toMatch(/\bSalvar\b/);
@@ -142,8 +147,9 @@ describe("4. ficha do cliente: consulta, com Editar como ação", () => {
   it("\"Editar\" leva à edição — na mesma aba em que a pessoa está", async () => {
     await montarCliente({ consulta: true });
     expect($$("[data-editar-cliente]").map((a) => a.getAttribute("href"))).toEqual(["/clientes/cl1/editar"]);
-    await act(async () => { [...caixa.querySelectorAll("nav button")].find((b) => txt(b) === "Relacionamento")!.dispatchEvent(new MouseEvent("click", { bubbles: true })); });
-    expect($("[data-editar-cliente]")!.getAttribute("href")).toBe("/clientes/cl1/editar?aba=relacionamento");
+    // Leva H: a antiga aba Relacionamento virou o Histórico automático
+    await act(async () => { [...caixa.querySelectorAll("[data-abas-cliente] button")].find((b) => txt(b) === "Histórico")!.dispatchEvent(new MouseEvent("click", { bubbles: true })); });
+    expect($("[data-editar-cliente]")!.getAttribute("href")).toBe("/clientes/cl1/editar?aba=historico");
     expect(txt($("[data-observacoes-ficha]"))).toBe("Portaria fecha às 18h.");
   });
 

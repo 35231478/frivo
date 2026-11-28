@@ -26,6 +26,7 @@
  * nada — nenhuma cláusula é inventada.
  */
 import { createHash, randomBytes, randomInt } from "node:crypto";
+import { faixasDoColaborador, textoDaJornada } from "@/lib/colaborador/jornada";
 import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { cpfValido, digitos, formatarDocumento } from "@/lib/documento";
@@ -39,7 +40,7 @@ import {
   MSG_JA_ASSINADO, MSG_LINK_INVALIDO, MSG_MOTIVO, MSG_SEM_CONSENTIMENTO, MSG_VALIDADE,
   ROTULO_SITUACAO, VALIDADE_PADRAO, caminhoPublicoAdmissao, codigoValido, documentosDaEmpresa,
   emailConfere, enderecoEmLinha, etapaPendente, expiraEm, faltaNaEtapa, linkValido, montarContrato,
-  motivoValido, normalizarForm, obrigatoriosDa, podeIr, podeReenviar, textoJornada, validadeValida,
+  motivoValido, normalizarForm, obrigatoriosDa, podeIr, podeReenviar, validadeValida,
   type DadosContrato, type DocumentoPedido, type Etapa, type FormAdmissao, type SituacaoAdmissao,
 } from "@/lib/admissao/admissao";
 
@@ -564,7 +565,7 @@ const SELECT_PUBLICO = {
   colaborador: {
     select: {
       id: true, nome: true, cpf: true, salario: true, dataAdmissao: true,
-      jornadaEntrada: true, jornadaSaida: true, jornadaDias: true,
+      jornadaEntrada: true, jornadaSaida: true, jornadaDias: true, jornadaFaixas: true,
       cargo: { select: { nome: true } },
     },
   },
@@ -622,7 +623,7 @@ function dadosDoContrato(a: LinhaPublica, form: FormAdmissao, cfg: ConfigAdmissa
     endereco: enderecoEmLinha(form),
     cargo: col.cargo?.nome ?? "",
     salario: col.salario === null || col.salario === undefined ? "" : formatarMoeda(Number(col.salario)),
-    jornada: textoJornada({ entrada: col.jornadaEntrada, saida: col.jornadaSaida, dias: col.jornadaDias }),
+    jornada: textoDaJornada(faixasDoColaborador(col)),
     admissao: col.dataAdmissao ? formatarData(col.dataAdmissao) : "",
     experienciaDias: cfg.experienciaDias,
     experienciaProrrogacaoDias: cfg.experienciaProrrogacaoDias,
@@ -888,7 +889,9 @@ export async function concluirPreenchimento(token: string, agora: Date = new Dat
   if (digitos(form.cpf) !== digitos(a.colaborador.cpf)) {
     throw new ErroAdmissao("O CPF não confere com o do convite. Confira o número.", 409);
   }
-  if (form.email && !emailConfere(form.email, a.emailVerificado)) throw new ErroAdmissao(MSG_EMAIL_NAO_VERIFICADO, 409);
+  // O e-mail agora é obrigatório (Leva J); a confirmação por código só é exigida quando a empresa envia e-mail —
+  // sem o envio configurado o código nunca chegaria e a admissão ficaria presa
+  if (form.email && !emailConfere(form.email, a.emailVerificado) && (await emailConfigAtiva(a.empresaId))) throw new ErroAdmissao(MSG_EMAIL_NAO_VERIFICADO, 409);
 
   const data = new Date(form.dataNascimento);
   const nascimento = Number.isNaN(data.getTime()) ? null : data;
