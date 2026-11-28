@@ -269,8 +269,8 @@ export async function sincronizarContratosNaTransacao(tx: Tx, empresaId: string,
  */
 export async function comissoesDoContratoNoStatus(empresaId: string, contratoId: string, anterior: string | null, novo: string, agora: Date = new Date()): Promise<void> {
   try {
-    const criado = anterior === null;
-    if ((criado && novo === "ATIVO") || ehFechamento(anterior, novo)) {
+    // Criado agora (qualquer status: a geração só aceita o contrato ATIVO) ou saiu de "Aguardando assinatura"
+    if (anterior === null || ehFechamento(anterior, novo)) {
       await gerarComissoesDoContrato(empresaId, contratoId, { agora });
       return;
     }

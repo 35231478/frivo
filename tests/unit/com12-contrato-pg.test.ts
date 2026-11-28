@@ -262,7 +262,8 @@ describe.skipIf(!URL_PG)("COM-1.2 — comissão sobre contrato (PostgreSQL real)
     expect((await prisma.comissao.findMany({ where: { contratoId: id, competencia: COMP(1), itemTipo: "MENSALIDADE" } })).map((c: any) => Number(c.valor))).toEqual([50]);
     // Renovação: sem a chave, não gera ciclo novo; com a chave, gera (o ciclo começa no mês da renovação)
     const daqui1Ano = new Date(Date.UTC(agora.getUTCFullYear() + 1, agora.getUTCMonth(), 15));
-    await prisma.contrato.update({ where: { id }, data: { status: "EM_RENOVACAO" } });
+    // (o contrato já voltou a ATIVO quando o gatilho roda, como depois da troca de status)
+    await prisma.contrato.update({ where: { id }, data: { status: "ATIVO" } });
     await ct.comissoesDoContratoNoStatus("e1", id, "EM_RENOVACAO", "ATIVO", daqui1Ano);
     expect(await prisma.comissao.count({ where: { contratoId: id } })).toBe(4);
     expect((await chamar("comissoes", "PUT", {}, { quando: "RECEBIMENTO", liquidaImpostos: false, renovacaoGera: true })).status).toBe(200);
@@ -318,6 +319,16 @@ describe.skipIf(!URL_PG)("COM-1.2 — comissão sobre contrato (PostgreSQL real)
     expect((await prisma.contrato.findUnique({ where: { id } })).vendedorId).toBe("uP");
     await prisma.comissaoLancamento.updateMany({ where: { fechamentoId: f.id }, data: { fechamentoId: null } });
     await prisma.desempenhoFechamento.delete({ where: { id: f.id } });
+    // Para alguém SEM regra (nenhuma de contrato ativa): o liberado da Paula é estornado na hora, e nada nasce para o novo
+    const ativas = await prisma.comissaoRegra.findMany({ where: { empresaId: "e1", ativo: true, sobreTipo: "CONTRATOS" }, select: { id: true } });
+    await prisma.comissaoRegra.updateMany({ where: { id: { in: ativas.map((x: any) => x.id) } }, data: { ativo: false } });
+    try {
+      expect((await chamar("contratos/[id]/vendedor", "PATCH", { id }, { vendedorId: "uV", motivo: "Voltou para o Vitor" })).status).toBe(200);
+      expect(await liberado(id)).toBe(0);
+      expect(await prisma.comissao.count({ where: { contratoId: id, papel: "VENDEDOR" } })).toBe(0);
+    } finally {
+      await prisma.comissaoRegra.updateMany({ where: { id: { in: ativas.map((x: any) => x.id) } }, data: { ativo: true } });
+    }
   });
 
   it("contrato de antes (sem vendedor) não gera nada, nem ao reativar; isolamento entre empresas", async () => {
@@ -350,6 +361,8 @@ describe.skipIf(!URL_PG)("COM-1.2 — comissão sobre contrato (PostgreSQL real)
     const rel = await srv.relatorioDeComissoes("e1", COMP(0), "RECEBIMENTO");
     const vitor = rel.pessoas.find((p) => p.usuarioId === "uV");
     expect(vitor?.vendas.some((v) => v.chave.startsWith("ct:") && v.nome === "Contrato" && v.valor > 0)).toBe(true);
+    // O Vitor só tem comissão de contrato: nada dela vira linha de venda ou de OS no relatório
+    expect(vitor?.vendas.every((v) => v.chave.startsWith("ct:"))).toBe(true);
     // A vista "por emissão" mostra o contrato do mesmo jeito (o gatilho do contrato é sempre o recebimento)
     const relE = await srv.relatorioDeComissoes("e1", COMP(0), "EMISSAO");
     expect(relE.pessoas.find((p) => p.usuarioId === "uV")?.vendas.filter((v) => v.chave.startsWith("ct:")).length)

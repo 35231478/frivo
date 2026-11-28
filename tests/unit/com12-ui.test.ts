@@ -131,14 +131,19 @@ describe("Configurações › Comissões: regra sobre contrato", () => {
     await escolher($("[data-campo-sobre]"), "TODOS_SERVICOS");
     expect(($("[data-campo-base]") as HTMLSelectElement).value).toBe("PERC_VENDA");
     expect($("[data-campo-tipo-contrato]")).toBeNull();
+    // E é a base da venda que vai para o servidor (não sobra a do contrato escondida)
+    await digitar($("[data-campo-valor]"), "3");
+    chamadas.length = 0;
+    await clicar($("[data-salvar-regra]"));
+    expect(chamadas.find((c) => c.metodo === "POST")?.corpo).toMatchObject({ sobreTipo: "TODOS_SERVICOS", base: "PERC_VENDA", valor: 3 });
   });
 
   it("editar a regra de contrato traz o tipo e a janela de volta", async () => {
-    await abrir();
-    await clicar($("[data-regra='r2'] [data-editar-regra]"));
+    await abrir({ ...DADOS, regras: [regra({ id: "r9", sobreTipo: "CONTRATOS", tipoContrato: "LOCACAO", base: "PERC_MENSALIDADE", valor: 4, meses: 12 })] });
+    await clicar($("[data-regra='r9'] [data-editar-regra]"));
     expect(($("[data-campo-sobre]") as HTMLSelectElement).value).toBe("CONTRATOS");
-    expect(($("[data-campo-meses]") as HTMLInputElement).value).toBe("3");
-    expect(($("[data-campo-tipo-contrato]") as HTMLSelectElement).value).toBe("");
+    expect(($("[data-campo-meses]") as HTMLInputElement).value).toBe("12");
+    expect(($("[data-campo-tipo-contrato]") as HTMLSelectElement).value).toBe("LOCACAO");
   });
 
   it("'Renovação também gera': ligar habilita o Salvar e o PUT manda a chave", async () => {
