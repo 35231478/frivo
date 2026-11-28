@@ -159,7 +159,9 @@ function ResumoOs({ r, x, fila, aEnviar, registrar, camera, incluir, fim }: { r:
     const s = await guardaRapida?.sessao(atividadeId);
     if (s && (s.fotos.length || s.salvos.length)) setConferindo(true);
   }
-  const st = ROTULO_STATUS_ATIVIDADE[x.atividade.status] ?? { rotulo: x.atividade.status, classe: "bg-surface-linha text-ink" };
+  // D1: pausada, o selo do topo diz "Pausada" (o motivo e o tempo estão na faixa logo abaixo)
+  const st = x.pausa && x.atividade.status === "EM_ANDAMENTO" ? { rotulo: "Pausada", classe: "bg-atencao-claro text-atencao-texto" }
+    : ROTULO_STATUS_ATIVIDADE[x.atividade.status] ?? { rotulo: x.atividade.status, classe: "bg-surface-linha text-ink" };
   const atendidos = x.equipamentos.filter((e) => e.feito).length;
   // Topo: o que fazer, contato e rota (1 toque); o dado de escritório vai para "Detalhes"
   const problema = descricaoParaApp(c.descricao, config);

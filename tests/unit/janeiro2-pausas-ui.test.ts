@@ -178,6 +178,7 @@ describe("telas: onde a pausa aparece", () => {
     expect(ex).toContain("{!so && <BotaoPausar r={r} x={x} registrar={registrar} />}");
     expect(ex).toContain("{!so && !x.pausa && (");
     expect(ex).toContain("{!x.pausa && <FaixaAndamento s={andamento} />}");
+    expect(ex).toContain('const st = x.pausa && x.atividade.status === "EM_ANDAMENTO" ? { rotulo: "Pausada"');
     expect(lerArq("components/tecnico/equipamento.tsx")).toContain("<FaixaPausa x={x} registrar={registrar} />");
     expect(lerArq("components/tecnico/meu-dia.tsx")).toContain("pausaDoCartao(c.atividadeId, c.pausa, fila)");
   });
