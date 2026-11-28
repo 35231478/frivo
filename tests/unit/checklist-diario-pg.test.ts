@@ -401,7 +401,7 @@ describe.skipIf(!URL_PG)("Checklist obrigatório no app (PostgreSQL real)", () =
         .rejects.toThrow("O checklist do veículo só pode ser corrigido no mesmo dia.");
       // corrigida sem sinal, hoje, e enviada depois (o toque foi hoje): vale
       const tocouHoje = new Date();
-      expect((await reg({ empresaId: "e1", usuarioId: "u1", tecnicoId: "t1", envio: envioDiarioSchema.parse(corrigir({ feitoEm: tocouHoje.toISOString() })), agora: new Date(tocouHoje.getTime() + 60_000) })).acao).toBe("corrigir");
+      expect((await reg({ empresaId: "e1", usuarioId: "u1", tecnicoId: "t1", envio: envioDiarioSchema.parse(corrigir({ feitoEm: tocouHoje.toISOString() })), agora: new Date(tocouHoje.getTime() + 60_000) }) as { acao?: string }).acao).toBe("corrigir");
       expect((await enviar(corrigir({ itens: [{ itemTemplateId: "i-outro", valor: "OK" }] }))).status).toBe(400);
       const c = await checklistDeHoje();
       await prisma.checklistPreenchido.update({ where: { id: c.id }, data: { inativadoEm: new Date() } });
