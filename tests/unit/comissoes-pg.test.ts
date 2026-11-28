@@ -343,6 +343,11 @@ describe.skipIf(!URL_PG)("COM-1 — comissões (PostgreSQL real)", () => {
     const ev = await prisma.orcamentoEvento.findFirst({ where: { orcamentoId: o.id, tipo: "VENDEDOR" } });
     expect(ev.detalhe).toBe("Vendedor: Vitor Vendas → Paula Pessoa. Motivo: Assumi o cliente");
     expect(ev.usuarioId).toBe("uP");
+    // A troca segue para a OS já gerada do orçamento
+    const comOs = await novoOrcamento({ servicos: [{ servicoId: "sLimp", descricao: "Limpeza", v: 100 }] });
+    const osDele = await prisma.ordemServico.create({ data: { empresaId: "e1", numero: `OS-troca-${comOs.id}`, clienteId: "c1", descricao: "Serviço fictício", criadoPorId: "uV", vendedorId: "uV", orcamentoOrigemId: comOs.id } });
+    expect((await chamar("orcamentos/[id]/vendedor", "PATCH", { id: comOs.id }, { vendedorId: "uP", motivo: "Assumi o cliente" })).status).toBe(200);
+    expect((await prisma.ordemServico.findUnique({ where: { id: osDele.id } })).vendedorId).toBe("uP");
     // Aprovado depois da troca: a comissão é da Paula (regra "todos" 2%)
     logar("uAdm");
     await aprovar(o.id);
