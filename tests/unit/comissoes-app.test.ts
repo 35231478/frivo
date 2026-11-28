@@ -15,7 +15,7 @@ vi.mock("@/components/push/notificacoes-aparelho", () => ({ NotificacoesAparelho
 
 const EXTRATO = {
   ativo: true, totais: { prevista: 10, liberada: 5, paga: 0 },
-  vendas: [{ orcamentoId: "o1", codigo: "ORC-1", nome: "Limpeza fictícia", cliente: "Cliente Fictício", osNumero: null, prevista: 10, liberada: 5, paga: 0, itens: [{ descricao: "Limpeza", regra: "Todos · Todos os serviços · 5% da venda", valor: 15 }] }],
+  vendas: [{ chave: "o1", tipo: "VENDA", orcamentoId: "o1", codigo: "ORC-1", nome: "Limpeza fictícia", cliente: "Cliente Fictício", osNumero: null, prevista: 10, liberada: 5, paga: 0, itens: [{ descricao: "Limpeza", regra: "Todos · Todos os serviços · 5% da venda", valor: 15 }] }],
 };
 
 let root: Root; let caixa: HTMLDivElement;
