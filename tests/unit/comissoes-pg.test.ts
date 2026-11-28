@@ -210,6 +210,15 @@ describe.skipIf(!URL_PG)("COM-1 — comissões (PostgreSQL real)", () => {
     expect(emi.json.vista).toBe("EMISSAO");
     expect(daVenda(emi).valor).toBe(50); // aprovada neste mês: a comissão inteira
     expect(daVenda(await chamar("comissoes/relatorio", "GET", {}, undefined, `?mes=${mesPassado}&vista=EMISSAO`))).toBeUndefined();
+    // Venda aprovada neste mês e cancelada depois: sai da vista por emissão (não é mais venda)
+    const cancelada = await novoOrcamento({ servicos: [{ servicoId: "sInst", descricao: "Instalação split", v: 400 }] });
+    await aprovar(cancelada.id);
+    const emiAntes = await chamar("comissoes/relatorio", "GET", {}, undefined, `?mes=${mes}&vista=EMISSAO`);
+    expect(emiAntes.json.pessoas.flatMap((p: any) => p.vendas).some((v: any) => v.orcamentoId === cancelada.id)).toBe(true);
+    await prisma.orcamento.update({ where: { id: cancelada.id }, data: { status: "CANCELADO" } });
+    const emiDepois = await chamar("comissoes/relatorio", "GET", {}, undefined, `?mes=${mes}&vista=EMISSAO`);
+    expect(emiDepois.json.pessoas.flatMap((p: any) => p.vendas).some((v: any) => v.orcamentoId === cancelada.id)).toBe(false);
+    expect(daVenda(emiDepois).valor).toBe(50);
     // A vista não muda o que o fechamento paga (segue a configuração): o liberado continua sendo os 40% que entraram
     await srv.sincronizarComissoes("e1");
     expect(await liberado(o.id)).toBe(20);
