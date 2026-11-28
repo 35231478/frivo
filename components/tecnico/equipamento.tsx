@@ -1,8 +1,9 @@
 "use client";
 
+import { ROTULO_SITUACAO_APP, comissoesDaTela, type ComissaoRetrato } from "@/lib/tecnico/comissao";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AlertTriangle, ArrowLeft, ArrowRight, Camera, Check, CheckCheck, ChevronLeft, ChevronRight, CircleSlash, ClipboardList, Ruler } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { cn, formatarMoeda } from "@/lib/utils";
 import { Modal } from "@/components/ui/modal";
 import { Dica } from "@/components/ui/dica";
 import { CampoFormulario } from "@/components/os/execucao-equipamento";
@@ -44,6 +45,8 @@ interface Props {
   endereco?: string | null;
   /** Código do QR do equipamento (ex.: o número gerado no cadastro em campo), para o técnico anotar */
   qr?: string | null;
+  /** COM-2B: a comissão de quem está com o aparelho (vem do retrato); null/ausente = não se aplica */
+  comissao?: ComissaoRetrato | null;
 }
 
 /**
@@ -51,7 +54,7 @@ interface Props {
  * ajusta o que não está OK (Atenção pede foto + observação, que pode ser falada) → medições (número +
  * unidade, sem avaliar) → fotos DEPOIS → "Concluir equipamento" leva ao próximo. Tudo grava no aparelho.
  */
-export function TelaEquipamento({ x, e, registrar, endereco, qr }: Props) {
+export function TelaEquipamento({ x, e, registrar, endereco, qr, comissao }: Props) {
   const atividadeId = x.atividade.id;
   const equipamentoId = e.equipamento.id;
   const so = x.bloqueada;
@@ -199,6 +202,15 @@ export function TelaEquipamento({ x, e, registrar, endereco, qr }: Props) {
           {/* G11: o número sozinho não diz O QUE está sendo contado (na dica: a tela fica curta, o TUDO OK sob o dedão) */}
           <Dica rotulo="Progresso" texto="Itens do checklist e medições respondidos. Fotos e observações pedidas contam à parte." lado="direita" />
         </div>
+        {/* COM-2B: completou o relatório → a comissão dele aparece na hora (o servidor confirma no envio) */}
+        {(() => {
+          const com = comissoesDaTela([e], comissao).get(equipamentoId);
+          return com ? (
+            <p key={com.situacao} className="anim-comissao inline-flex items-center gap-1 rounded-full bg-success-50 px-2.5 py-1 text-sm font-semibold text-success-800" data-comissao-equip={equipamentoId} data-situacao-comissao={com.situacao}>
+              Sua comissão: {formatarMoeda(com.valor)} · {ROTULO_SITUACAO_APP[com.situacao]}
+            </p>
+          ) : null;
+        })()}
       </header>
 
       {so && <p className="rounded-card bg-success-50 border border-success-200 p-3 text-sm text-success-800">Atividade concluída: só leitura.</p>}

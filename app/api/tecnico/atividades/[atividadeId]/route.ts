@@ -1,3 +1,4 @@
+import { comissaoParaRetrato } from "@/lib/comissoes/executor-server";
 import { NextRequest, NextResponse } from "next/server";
 import { exigirPermissao } from "@/lib/permissoes-server";
 import { prisma } from "@/lib/prisma";
@@ -101,6 +102,8 @@ export async function GET(_: NextRequest, { params }: Params) {
     // O relatório da visita (link com token): o técnico manda ao cliente pelo WhatsApp ao concluir
     relatorio: await relatorioParaRetrato(empresaId, atividadeId),
     modulos: { equipamentos: await temModulo(empresaId, "equipamentos"), qrcodes: await temModulo(empresaId, "qrcodes") },
+    // COM-2B: a comissão de quem está com o aparelho, por equipamento (só o valor dele; a conta é do servidor)
+    comissao: await comissaoParaRetrato(empresaId, atividadeId, guard.session.user.id).catch(() => null),
     geradoEm: new Date().toISOString(),
   }, { headers: { "Cache-Control": "private, no-store" } });
 }

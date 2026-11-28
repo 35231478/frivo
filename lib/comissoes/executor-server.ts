@@ -18,6 +18,7 @@ import {
   type Atendido, type LinhaOs, type Participante,
 } from "./executor";
 import { recebimentoDaOrigem, regrasAtivas } from "./servidor";
+import type { ComissaoRetrato } from "@/lib/tecnico/comissao";
 
 const num = (v: unknown) => { const n = Number(v); return Number.isFinite(n) ? n : 0; };
 const DIA_MS = 86_400_000;
@@ -380,3 +381,58 @@ export async function decidirRevisao(empresaId: string, id: string, d: { decisao
 
 /** Quantas revisões estão abertas (o aviso do fechamento e o sino) */
 export const revisoesAbertas = (empresaId: string) => prisma.comissaoRevisao.count({ where: { empresaId, situacao: "A_REVISAR" } });
+
+/* ───────── COM-2B: o que o app do técnico recebe (no retrato da atividade) ───────── */
+
+// O formato é do app (lib/tecnico/comissao): o servidor só preenche
+export type { ComissaoRetrato };
+
+/**
+ * A comissão do técnico logado nesta atividade, para o app mostrar AO VIVO (também sem sinal): a mesma conta do
+ * servidor (unidade, regra que vence para ele, divisão), supondo cada equipamento da atividade feito e completo.
+ * Só o valor dele — nenhuma regra, base, custo ou valor de colega vai para o aparelho. null = a empresa não paga
+ * técnico, a OS foi cancelada, a pessoa não está na atividade ou a OS não tem equipamento.
+ */
+export async function comissaoParaRetrato(empresaId: string, atividadeId: string, usuarioId: string): Promise<ComissaoRetrato | null> {
+  const regras = (await regrasAtivas(empresaId)).filter((r) => r.papel === "EXECUTOR");
+  if (!regras.length) return null;
+  const a = await prisma.atividadeOs.findFirst({
+    where: { id: atividadeId, empresaId, status: { not: "CANCELADA" }, ordemServico: { status: { not: "CANCELADA" } } },
+    select: {
+      id: true, ordemServicoId: true, tecnicoId: true, tecnicosEquipe: { select: { tecnicoId: true } }, equipamentos: { select: { equipamentoId: true, feito: true, feitoPorId: true } },
+      ordemServico: {
+        select: {
+          equipamentoId: true,
+          atividades: { where: { status: { not: "CANCELADA" } }, select: { equipamentos: { select: { equipamentoId: true } } } },
+          itensOrcamento: { select: { id: true, tipo: true, servicoId: true, descricao: true, quantidade: true, valorTotal: true, servico: { select: { categoria: true } }, materiais: { select: { custoUnit: true, quantidade: true, comportamento: true } }, material: { select: { custoUnit: true } } } },
+        },
+      },
+    },
+  });
+  if (!a || !a.equipamentos.length) return null;
+  const cfg = await prisma.configuracao.findUnique({ where: { empresaId }, select: { comissaoLiquidaImpostos: true } });
+  const tecnicoIds = [...new Set([a.tecnicoId, ...a.tecnicosEquipe.map((t) => t.tecnicoId)].filter((x): x is string => !!x))];
+  const pessoas = await prisma.$transaction((tx) => participantesDosTecnicos(tx, empresaId, tecnicoIds));
+  const participantes = tecnicoIds.map((id) => pessoas.get(id)).filter((p): p is Participante => !!p);
+  const eu = participantes.find((p) => p.usuarioId === usuarioId);
+  if (!eu) return null;
+  const linhas: LinhaOs[] = a.ordemServico.itensOrcamento.map((l) => {
+    const inclusos = l.materiais.filter((m) => m.comportamento === "INCLUSO_NO_SERVICO");
+    const custo = l.tipo === "PRODUTO"
+      ? (l.material?.custoUnit == null ? null : round2(num(l.material.custoUnit) * num(l.quantidade)))
+      : inclusos.some((m) => m.custoUnit == null) ? null : round2(inclusos.reduce((s, m) => s + num(m.custoUnit) * num(m.quantidade), 0));
+    return { id: l.id, tipo: l.tipo === "PRODUTO" ? "PRODUTO" : "SERVICO", servicoId: l.servicoId, categoria: l.servico?.categoria ?? null, descricao: l.descricao, quantidade: l.quantidade, valorTotal: l.valorTotal, custo };
+  });
+  const vinculados = new Set([a.ordemServico.equipamentoId, ...a.ordemServico.atividades.flatMap((x) => x.equipamentos.map((e) => e.equipamentoId))].filter(Boolean) as string[]);
+  const porEquipamento: Record<string, number> = {};
+  for (const e of a.equipamentos) {
+    // "Para quem executou": quem já marcou; ainda não marcado, quem está com o aparelho (é ele quem vai marcar)
+    const unidades = unidadesDaOs(linhas, vinculados.size, [{ atividadeId: a.id, equipamentoId: e.equipamentoId, feitoPorTecnicoId: e.feito ? e.feitoPorId : eu.tecnicoId }]);
+    const valor = round2(unidades.flatMap((u) => comissoesDaUnidade(u, participantes, regras, cfg?.comissaoLiquidaImpostos ?? false)).filter((k) => k.participante.usuarioId === usuarioId).reduce((s, k) => s + k.valor, 0));
+    if (valor > 0) porEquipamento[e.equipamentoId] = valor;
+  }
+  const ja = await prisma.comissao.findMany({ where: { empresaId, usuarioId, atividadeId, equipamentoId: { not: null } }, select: { equipamentoId: true, valor: true } });
+  const confirmadas: Record<string, number> = {};
+  for (const c of ja) confirmadas[c.equipamentoId!] = round2((confirmadas[c.equipamentoId!] ?? 0) + num(c.valor));
+  return { porEquipamento, confirmadas };
+}

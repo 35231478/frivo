@@ -1,5 +1,6 @@
 "use client";
 
+import { ComissoesDoDia } from "@/components/tecnico/comissoes-do-dia";
 import { useCallback, useEffect, useState } from "react";
 import { CalendarDays, Camera, Car, CheckCircle2, ChevronDown, ChevronRight, Clock, HardDrive, MapPin, MessageCircle, RefreshCw, Sun, WifiOff } from "lucide-react";
 import { cn, formatarData } from "@/lib/utils";
@@ -377,6 +378,9 @@ export function MeuDia() {
       {d && d.tecnico && <BotaoQrEquipamento atividadeIds={[...d.anteriores, ...d.atividades].map((c) => c.atividadeId)} />}
       {/* Despesa fora de OS (combustível, pedágio…): com a OS aberta, o botão de dentro dela já vincula */}
       {d && d.tecnico && <BotaoLancarDespesa />}
+
+      {/* COM-2B: as comissões dele (o extrato e o que garantiu no aparelho e ainda não subiu) */}
+      {d && d.tecnico && <ComissoesDoDia />}
 
       {/* O que carregar no veículo antes de sair: a soma dos materiais previstos das OS ainda por fazer */}
       {d && <OQueLevarDoDia cartoes={[...d.anteriores, ...d.atividades]} fila={fila} />}

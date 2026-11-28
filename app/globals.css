@@ -230,6 +230,18 @@
   .anim-hoje-pulso { animation: none; }
 }
 
+/* --- COM-2B: a comissão do equipamento aparece de leve no app quando o relatório fica completo --- */
+@keyframes comissaoSurge {
+  from { opacity: 0; transform: translateY(4px) scale(0.96); }
+  to { opacity: 1; transform: none; }
+}
+.anim-comissao {
+  animation: comissaoSurge 0.35s ease-out;
+}
+@media (prefers-reduced-motion: reduce) {
+  .anim-comissao { animation: none; }
+}
+
 /* --- Splash screen (app instalado) --- */
 @keyframes splashOut {
   0%, 70% { opacity: 1; }
