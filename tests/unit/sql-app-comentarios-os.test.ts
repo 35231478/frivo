@@ -35,6 +35,8 @@ describe.skipIf(!URL)("SQL de produção: comentários na OS (PostgreSQL real)",
       INSERT INTO "ordens_servico" VALUES ('os1'), ('os2'); INSERT INTO "atividades_os" VALUES ('a1');`);
     psql(["-f", ARQUIVO]);
     psql(["-f", ARQUIVO]); // 2ª vez: idempotente
+    // CHAT-1 acrescentou à tabela a leitura (lida_em, lida_por_id) e dois índices: a produção roda os dois arquivos, em ordem
+    psql(["-f", path.join(RAIZ, "prisma/sql/2027-02-20_chat_1.sql")]);
     const url = `${URL}${URL!.includes("?") ? "&" : "?"}schema=${PRISMA}`;
     execFileSync(path.join(RAIZ, "node_modules/.bin/prisma"), ["db", "push", "--skip-generate", "--schema", "prisma/schema.prisma"], { cwd: RAIZ, env: { ...process.env, DATABASE_URL: url }, stdio: "pipe" });
   }, 180_000);
@@ -46,7 +48,7 @@ describe.skipIf(!URL)("SQL de produção: comentários na OS (PostgreSQL real)",
       expect(indices(SCHEMA, t), t).toBe(indices(PRISMA, t));
       expect(chaves(SCHEMA, t), t).toBe(chaves(PRISMA, t));
     }
-    expect(colunas(SCHEMA, "os_comentarios").split("\n")).toHaveLength(10);
+    expect(colunas(SCHEMA, "os_comentarios").split("\n")).toHaveLength(12);
   });
 
   it("a chave única (empresa, client_id) impede o comentário reenviado de duplicar; os do escritório (sem client_id) não colidem", () => {

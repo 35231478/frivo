@@ -44,50 +44,32 @@ const COMENTARIOS = [
   { id: "k2", clientId: "c1", texto: "Falta a peça", autor: "Carlos", origem: "APP", criadoEm: "2026-11-28T02:30:00Z", meu: false, atividade: "Limpeza dos splits", novo: true },
 ];
 
-describe("OS › Comentários no escritório", () => {
-  let visibilidade: DocumentVisibilityState = "visible";
-  beforeEach(() => {
-    visibilidade = "visible";
-    Object.defineProperty(document, "visibilityState", { configurable: true, get: () => visibilidade });
-  });
+describe("OS › Conversa no escritório (CHAT-1: a mesma conversa da tela Conversas, com tempo real no lugar dos 20 s)", () => {
+  const CONVERSA = { osId: "os1", osNumero: "OS-1", cliente: "Cliente", status: "AGENDADA", tecnicos: ["Carlos"], ultima: null, naoLidas: 0 };
 
-  it("mostra os do app com a marca da atividade e o 'novo'; atualiza a cada 20 s com a aba visível, não escondida; volta para a aba = atualiza", async () => {
-    vi.useFakeTimers({ toFake: ["setInterval", "clearInterval"] });
-    respostas["GET /api/ordens/os1/comentarios"] = { status: 200, corpo: { comentarios: [COMENTARIOS[0]] } };
-    const { ComentariosOs, INTERVALO_COMENTARIOS_MS } = await import("@/components/os/comentarios-os");
-    expect(INTERVALO_COMENTARIOS_MS).toBe(20_000);
+  it("mostra os do app com a marca da atividade e o 'novo'; a mensagem minha à direita", async () => {
+    respostas["GET /api/conversas/os1"] = { status: 200, corpo: { conversa: CONVERSA, mensagens: COMENTARIOS } };
+    const { ComentariosOs } = await import("@/components/os/comentarios-os");
     await montar(createElement(ComentariosOs, { osId: "os1", podeResponder: true }));
-    expect($$("[data-comentario-os]")).toHaveLength(1);
-    // o técnico escreveu pelo app depois que a OS foi aberta
-    respostas["GET /api/ordens/os1/comentarios"] = { status: 200, corpo: { comentarios: COMENTARIOS } };
-    await act(async () => { vi.advanceTimersByTime(20_000); });
-    await esperar();
-    expect($$("[data-comentario-os]").map((li) => li.getAttribute("data-comentario-os"))).toEqual(["ESCRITORIO", "APP"]);
-    expect(txt($("[data-comentario-atividade]"))).toBe("Atividade: Limpeza dos splits");
-    expect(txt($('[data-novo="sim"] [data-comentario-novo]'))).toBe("novo");
-    const antes = chamadas.length;
-    visibilidade = "hidden";
-    await act(async () => { vi.advanceTimersByTime(60_000); });
-    expect(chamadas.length).toBe(antes); // aba escondida: não lê (nem marca como lido)
-    visibilidade = "visible";
-    await act(async () => { document.dispatchEvent(new Event("visibilitychange")); });
-    await esperar();
-    expect(chamadas.length).toBe(antes + 1);
+    expect($$("[data-mensagem]").map((li) => li.getAttribute("data-origem"))).toEqual(["ESCRITORIO", "APP"]);
+    expect(txt($("[data-origem='APP'] [data-autor]"))).toBe("Carlos · Limpeza dos splits");
+    expect($("[data-origem='APP']")!.hasAttribute("data-nova")).toBe(true);
+    expect($("[data-origem='ESCRITORIO']")!.hasAttribute("data-minha")).toBe(true);
   });
 
-  it("o erro da leitura aparece como erro (não como 'Nenhum comentário')", async () => {
-    respostas["GET /api/ordens/os1/comentarios"] = { status: 403, corpo: { erro: "Sem permissão" } };
+  it("o erro da leitura aparece como erro (não como 'Nenhuma mensagem')", async () => {
+    respostas["GET /api/conversas/os1"] = { status: 403, corpo: { erro: "Sem permissão" } };
     const { ComentariosOs } = await import("@/components/os/comentarios-os");
     await montar(createElement(ComentariosOs, { osId: "os1", podeResponder: false }));
-    expect(txt($("[data-erro-comentarios]"))).toBe("Sem permissão");
-    expect($("[data-sem-comentarios]")).toBeNull();
+    expect(txt($("[data-mensagens] [role='alert']"))).toBe("Sem permissão");
+    expect($("[data-sem-mensagens]")).toBeNull();
   });
 
   it("resposta de erro que ainda traz uma lista (cache, proxy): vale o status — é erro, a lista não é usada", async () => {
-    respostas["GET /api/ordens/os1/comentarios"] = { status: 502, corpo: { erro: "Falha temporária", comentarios: [] } };
+    respostas["GET /api/conversas/os1"] = { status: 502, corpo: { erro: "Falha temporária", conversa: CONVERSA, mensagens: [] } };
     const { ComentariosOs } = await import("@/components/os/comentarios-os");
     await montar(createElement(ComentariosOs, { osId: "os1", podeResponder: false }));
-    expect(txt($("[data-erro-comentarios]"))).toBe("Falha temporária");
+    expect(txt($("[data-mensagens] [role='alert']"))).toBe("Falha temporária");
   });
 });
 

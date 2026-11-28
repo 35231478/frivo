@@ -186,31 +186,35 @@ describe("comentários no app", () => {
   });
 });
 
-describe("escritório: comentários na OS", () => {
+describe("escritório: a conversa na OS (CHAT-1: a mesma da tela Conversas)", () => {
   let pedidos: { url: string; metodo: string; corpo: any }[] = [];
+  const CONVERSA = { osId: "osA", osNumero: "OS-1", cliente: "Cliente", status: "AGENDADA", tecnicos: ["João Silva"], ultima: null, naoLidas: 0 };
   async function montar(podeResponder = true) {
     pedidos = [];
     vi.stubGlobal("fetch", vi.fn(async (u: string, init?: RequestInit) => {
       pedidos.push({ url: u, metodo: init?.method ?? "GET", corpo: init?.body ? JSON.parse(String(init.body)) : null });
-      if (!init?.method) return json({ comentarios: [{ id: "c1", clientId: "k", texto: "Ruído no ventilador.", autor: "João Silva", origem: "APP", criadoEm: "2026-11-12T13:00:00.000Z", meu: false }] });
-      return json({ comentario: { id: "c2", clientId: null, texto: JSON.parse(String(init.body)).texto, autor: "Ana", origem: "ESCRITORIO", criadoEm: "2026-11-12T15:00:00.000Z", meu: true } }, 201);
+      if (u.startsWith("/api/conversas/novidades")) return new Promise<Response>(() => {}); // o tempo real fica esperando
+      if (!init?.method) return json({ conversa: CONVERSA, mensagens: [{ id: "c1", clientId: "k", texto: "Ruído no ventilador.", autor: "João Silva", origem: "APP", criadoEm: "2026-11-12T13:00:00.000Z", meu: false }] });
+      const corpo = JSON.parse(String(init.body));
+      return json({ mensagem: { id: "c2", clientId: corpo.clientId, texto: corpo.texto, autor: "Ana", origem: "ESCRITORIO", criadoEm: "2026-11-12T15:00:00.000Z", meu: true } }, 201);
     }));
     const { ComentariosOs } = await import("@/components/os/comentarios-os");
     caixa = document.createElement("div"); document.body.appendChild(caixa); root = createRoot(caixa);
     await act(async () => { root.render(createElement(ComentariosOs, { osId: "osA", podeResponder })); });
-    await esperarAte(() => !!$("[data-comentario-os]"), "lista");
+    await esperarAte(() => !!$("[data-mensagem]"), "lista");
   }
-  it("lê (o GET marca como lido) e responde (POST)", async () => {
+  it("lê (o GET marca como lido) e responde (POST, com o clientId que não deixa duplicar)", async () => {
     await montar();
-    expect(pedidos[0]).toEqual({ url: "/api/ordens/osA/comentarios", metodo: "GET", corpo: null });
-    expect(texto($("[data-comentario-os='APP']"))).toContain("João Silva · app");
-    await digitar($("[data-responder-comentario]") as HTMLTextAreaElement, "Peça chega amanhã.");
-    await clicar($("[data-enviar-comentario-os]"));
-    await esperarAte(() => !!$("[data-comentario-os='ESCRITORIO']"), "resposta na lista");
-    expect(pedidos.find((p) => p.metodo === "POST")).toEqual({ url: "/api/ordens/osA/comentarios", metodo: "POST", corpo: { texto: "Peça chega amanhã." } });
+    expect(pedidos.find((p) => p.url === "/api/conversas/osA")).toEqual({ url: "/api/conversas/osA", metodo: "GET", corpo: null });
+    expect(texto($("[data-origem='APP'] [data-autor]"))).toContain("João Silva · app");
+    await digitar($("[data-texto-mensagem]") as HTMLTextAreaElement, "Peça chega amanhã.");
+    await clicar($("[data-enviar-mensagem]"));
+    await esperarAte(() => !!$("[data-origem='ESCRITORIO']"), "resposta na lista");
+    expect(pedidos.find((p) => p.metodo === "POST")).toMatchObject({ url: "/api/conversas/osA", metodo: "POST", corpo: { texto: "Peça chega amanhã.", clientId: expect.any(String) } });
   });
   it("sem OS › Editar: só lê", async () => {
     await montar(false);
-    expect($("[data-responder-comentario]")).toBeNull();
+    expect($("[data-texto-mensagem]")).toBeNull();
+    expect($("[data-somente-leitura]")).not.toBeNull();
   });
 });

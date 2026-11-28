@@ -131,9 +131,9 @@ function ListaConversas() {
 
       <div className="space-y-2">
         <label className="relative block">
-          <span className="sr-only">Buscar conversa</span>
+          <span className="sr-only">Pesquisar conversa</span>
           <Search className="w-4 h-4 text-ink-subtle absolute left-3 top-1/2 -translate-y-1/2" aria-hidden />
-          <input type="search" value={busca} onChange={(e) => setBusca(e.target.value)} placeholder="Buscar por OS, cliente, técnico ou mensagem" data-busca-chat
+          <input type="search" value={busca} onChange={(e) => setBusca(e.target.value)} placeholder="Pesquisar por OS, cliente, técnico ou mensagem" data-busca-chat
             className="w-full rounded-card border border-surface-border bg-white pl-9 pr-3 h-11 text-base focus:outline-none focus:ring-2 focus:ring-primary-500/40" />
         </label>
         <div className="flex gap-2" role="group" aria-label="Filtro das conversas">

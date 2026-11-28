@@ -78,7 +78,7 @@ export function ConversasEscritorio({ osInicial, podeEscrever }: { osInicial: st
           <div className="p-3 space-y-2 border-b border-surface-border">
             <label className="relative block">
               <Search className="w-4 h-4 text-ink-subtle absolute left-3 top-1/2 -translate-y-1/2" aria-hidden />
-              <input value={busca} onChange={(e) => setBusca(e.target.value)} placeholder="Buscar OS, cliente ou técnico" aria-label="Buscar conversa" data-busca-conversas
+              <input value={busca} onChange={(e) => setBusca(e.target.value)} placeholder="Pesquisar OS, cliente ou técnico" aria-label="Pesquisar conversa" data-busca-conversas
                 className="w-full rounded-full border border-surface-border bg-surface-page pl-9 pr-8 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/40" />
               {busca && <button type="button" onClick={() => setBusca("")} aria-label="Limpar a busca" className="absolute right-2 top-1/2 -translate-y-1/2 text-ink-subtle"><X className="w-4 h-4" /></button>}
             </label>

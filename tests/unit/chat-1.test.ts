@@ -181,6 +181,7 @@ describe("tempo real — o navegador (um laço por aba)", () => {
       escondida: () => escondida,
       aoAparecer: (cb) => { aparecer = cb; return () => { aparecer = null; }; },
       dormir: async (ms) => { sonos.push(ms); },
+      agora: () => 0,
     };
     const ok = (corpo: object) => async () => new Response(JSON.stringify(corpo), { status: 200 });
     return { amb, respostas, pedidos, sonos, ok, esconder: (v: boolean) => { escondida = v; }, aparecer: () => aparecer?.() };
@@ -239,6 +240,16 @@ describe("tempo real — o navegador (um laço por aba)", () => {
     for (let i = 0; i < 6; i++) await tique();
     // o 1º pedido ficou pendurado e foi cancelado; o laço novo fez UM pedido (também pendurado) — não dois
     expect(a.pedidos).toEqual(["/x", "/x"]);
+    laco.parar();
+  });
+
+  it("resposta sem marca (proxy, página de erro) conta como erro; resposta rápida sem mudança espera 1 s — nunca laço apertado", async () => {
+    const a = ambiente();
+    a.respostas.push(a.ok({}), a.ok({ marca: "1.0", mudou: false }), a.ok({ marca: "1.0", mudou: false }));
+    const laco = new LacoNovidades("/x", a.amb);
+    laco.assinar(() => {});
+    for (let i = 0; i < 10; i++) await tique();
+    expect(a.sonos.slice(0, 2)).toEqual([2000, 1000]);
     laco.parar();
   });
 

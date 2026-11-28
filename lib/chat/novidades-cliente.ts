@@ -18,7 +18,11 @@ export interface AmbienteLaco {
   /** Avisa quando a aba volta a aparecer (devolve como parar de ouvir) */
   aoAparecer: (cb: () => void) => () => void;
   dormir: (ms: number) => Promise<void>;
+  agora: () => number;
 }
+
+/** Resposta rápida sem mudança: a menor espera antes de perguntar de novo */
+export const PAUSA_MINIMA_MS = 1_000;
 
 const ambientePadrao = (): AmbienteLaco => ({
   fetch: (...a) => fetch(...a),
@@ -30,6 +34,7 @@ const ambientePadrao = (): AmbienteLaco => ({
     return () => { document.removeEventListener("visibilitychange", f); window.removeEventListener("focus", cb); };
   },
   dormir: (ms) => new Promise((r) => setTimeout(r, ms)),
+  agora: () => Date.now(),
 });
 
 export class LacoNovidades {
@@ -83,11 +88,15 @@ export class LacoNovidades {
     while (minha() && this.ouvintes.size) {
       if (this.amb.escondida()) { await this.esperarAparecer(); continue; }
       this.controle = new AbortController();
+      const inicio = this.amb.agora();
       try {
         const q = this.marca ? `${this.url.includes("?") ? "&" : "?"}desde=${encodeURIComponent(this.marca)}` : "";
         const res = await this.amb.fetch(`${this.url}${q}`, { signal: this.controle.signal, cache: "no-store" });
         if (!res.ok) throw new Error(String(res.status));
         const r = (await res.json()) as RespostaNovidades;
+        // Resposta sem marca válida (proxy, página de erro, servidor antigo): conta como erro — espera crescente, nunca
+        // pergunta em laço apertado
+        if (typeof r?.marca !== "string" || !/^\d{1,16}\.\d{1,16}$/.test(r.marca)) throw new Error("resposta inválida");
         const primeira = this.marca === null;
         this.marca = r.marca;
         this.falhas = 0;
@@ -95,6 +104,8 @@ export class LacoNovidades {
           this.ultima = r;
           for (const o of [...this.ouvintes]) o(r);
         }
+        // O servidor segura até 8 s; se respondeu depressa SEM mudança (ex.: reiniciou), espera um pouco antes da próxima
+        if (!r.mudou && !primeira && this.amb.agora() - inicio < PAUSA_MINIMA_MS) await Promise.race([this.amb.dormir(PAUSA_MINIMA_MS), this.esperarAparecer()]);
       } catch {
         if (!minha()) break;
         if (this.controle?.signal.aborted) continue; // `avisar()`: pergunta de novo na hora
