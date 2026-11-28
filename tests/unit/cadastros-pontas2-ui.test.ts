@@ -94,15 +94,15 @@ describe("endereços: inativar com o impacto do local e reativar pela seção In
       inativosIniciais: [un("uD", "Depósito Antigo", { ativo: false, logradouro: "Av. Brasil", numero: "900" })] as any,
     }), permissoes);
   }
-  const ativos = () => $$("button").map(txt).filter((t) => /^(Matriz|Loja Centro|Depósito Antigo|Quiosque)/.test(t));
-  const expandir = (nome: string) => clicar($$("button").find((b) => txt(b).startsWith(nome)));
+  // Leva H: lista enxuta — nome + selo na linha e as ações ao lado (sem sanfona para abrir)
+  const ativos = () => $$("[data-endereco]").map((li) => txt(li.querySelector("p")));
+  const linha = (nome: string) => $$("[data-endereco]").find((li) => txt(li.querySelector("[data-endereco-nome]")) === nome)!;
 
   it("inativar: o texto padrão (que agora promete reativar), os avisos do local e, confirmado, vai para Inativos", async () => {
     respostas["GET /api/unidades/uL/impacto"] = { status: 200, corpo: { bloqueio: null, avisos: ["Está em 1 contrato ativo (CT-1): continua atendendo este local até ser alterado.", "Tem 1 OS em aberto (OS-9): segue normalmente."] } };
     respostas["DELETE /api/unidades/uL"] = { status: 200, corpo: { ok: true } };
     await abrir();
-    await expandir("Loja Centro");
-    await clicar($('[data-inativar-registro="inativar"]'));
+    await clicar(linha("Loja Centro").querySelector('[data-inativar-registro="inativar"]'));
     expect(chamadas.map((c) => `${c.metodo} ${c.url}`)).toContain("GET /api/unidades/uL/impacto");
     const d = dialogo()!;
     expect(txt(d)).toContain("Inativar endereço Loja Centro?");
@@ -119,10 +119,8 @@ describe("endereços: inativar com o impacto do local e reativar pela seção In
   it("o bloqueio aparece antes e trava o botão; o principal nem tem Inativar", async () => {
     respostas["GET /api/unidades/uL/impacto"] = { status: 200, corpo: { bloqueio: "Tem 1 equipamento ativo neste endereço: mova ou inative os equipamentos antes.", avisos: [] } };
     await abrir();
-    await expandir("Matriz");
-    expect($('[data-inativar-registro="inativar"]')).toBeNull();
-    await expandir("Loja Centro");
-    await clicar($('[data-inativar-registro="inativar"]'));
+    expect(linha("Matriz").querySelector('[data-inativar-registro="inativar"]')).toBeNull();
+    await clicar(linha("Loja Centro").querySelector('[data-inativar-registro="inativar"]'));
     expect(txt($("[data-bloqueio]"))).toBe("Tem 1 equipamento ativo neste endereço: mova ou inative os equipamentos antes.");
     expect((botao("Sim, inativar", dialogo()!) as HTMLButtonElement).disabled).toBe(true);
     expect(gravacoes()).toEqual([]);
@@ -158,7 +156,6 @@ describe("endereços: inativar com o impacto do local e reativar pela seção In
 
   it("quem só vê clientes: nem Inativar nem Reativar", async () => {
     await abrir(montarPermissoes({ clientes: ["visualizar"] }));
-    await expandir("Loja Centro");
     await clicar($("[data-secao-inativos] > button"));
     expect($("[data-inativar-registro]")).toBeNull();
   });

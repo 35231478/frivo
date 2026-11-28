@@ -12,5 +12,5 @@ export default async function EditarClientePage({ params, searchParams }: { para
   const session = await auth();
   const ficha = await carregarFichaCliente(id, session!.user!.empresaId);
   if (!ficha) notFound();
-  return <ClienteForm abaInicial={aba} initialData={ficha.dados} statusFinanceiroCalc={ficha.status} totalProximos30Dias={ficha.totalProximos30Dias} perdas12m={ficha.perdas12m} satisfacaoAceite={ficha.satisfacao} />;
+  return <ClienteForm abaInicial={aba} initialData={ficha.dados} totalProximos30Dias={ficha.totalProximos30Dias} valorEmAtraso={ficha.valorEmAtraso} perdas12m={ficha.perdas12m} satisfacaoAceite={ficha.satisfacao} />;
 }
