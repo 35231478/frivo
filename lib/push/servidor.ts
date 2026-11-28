@@ -6,7 +6,9 @@
  *     e — no alcance "escritorio" — fora do modo técnico (o técnico nunca recebe o que é da empresa inteira);
  *  3. registra o envio em push_envios ANTES de mandar: a chave única (usuário, chave do evento) impede
  *     repetir o mesmo aviso (o mesmo evento de novo, ou o sino e o agendador vendo a mesma coisa);
- *  4. manda para cada aparelho da pessoa; o que o navegador recusa de vez (404/410) é apagado na hora.
+ *  4. manda para cada aparelho da pessoa e ESPERA a resposta do serviço de push; o resultado de cada aparelho (status
+ *     e motivo) fica no envio (push_envios.resultados/falhas). O que não vai funcionar nunca mais (404/410, ou a
+ *     inscrição feita com outra chave VAPID) é apagado na hora — lib/push/diagnostico.
  * Nunca lança: falha de push não pode derrubar quem gravou a OS (o erro vai para o log).
  */
 import webpush from "web-push";
@@ -15,7 +17,8 @@ import { prisma } from "@/lib/prisma";
 import { permissoesDoUsuario } from "@/lib/permissoes";
 import { emModoTecnico } from "@/lib/tecnico/modo";
 import { chavesVapid } from "@/lib/push/config";
-import { CHAVE_PREFERENCIA_PUSH, deveReceber, inscricaoMorta, lerPreferenciaPush, type MensagemPush, type QuemRecebe, type TipoPush } from "@/lib/push/tipos";
+import { apagarInscricao, motivoDaResposta, servicoDoEndpoint, situacaoDaResposta, trechoDoCorpo, type ResultadoAparelho } from "@/lib/push/diagnostico";
+import { CHAVE_PREFERENCIA_PUSH, deveReceber, lerPreferenciaPush, type MensagemPush, type QuemRecebe, type TipoPush } from "@/lib/push/tipos";
 
 /** "pessoal": é destas pessoas (os técnicos da atividade, quem enviou a despesa); "escritorio": da empresa (sem o modo técnico) */
 export type AlcancePush = "pessoal" | "escritorio";
@@ -32,8 +35,8 @@ export interface PedidoPush {
 }
 
 export interface ResultadoPush {
-  /** Quem recebeu e em quantos aparelhos */
-  enviados: { usuarioId: string; aparelhos: number }[];
+  /** Quem recebeu, em quantos aparelhos, e em quantos o serviço de push recusou */
+  enviados: { usuarioId: string; aparelhos: number; falhas?: number }[];
   /** Pulados: sem permissão/preferência, ou já recebido antes (chave repetida) */
   pulados: number;
   desligado?: boolean;
@@ -87,34 +90,47 @@ export async function usuariosComAparelho(empresaId: string): Promise<string[]> 
   return subs.map((s) => s.userId);
 }
 
-function configurar(): boolean {
+export function configurar(): boolean {
   const chaves = chavesVapid();
   if (!chaves) return false;
   webpush.setVapidDetails(chaves.assunto, chaves.publica, chaves.privada);
   return true;
 }
 
-/** Manda a mensagem para todos os aparelhos de UMA pessoa; apaga os mortos. Devolve quantos aceitaram. */
-async function mandarParaAparelhos(usuarioId: string, mensagem: MensagemPush): Promise<number> {
+/**
+ * Manda a mensagem para todos os aparelhos de UMA pessoa e devolve o RESULTADO de cada um (o status e o motivo do
+ * serviço de push). Apaga a inscrição que não vai funcionar nunca mais (expirou, ou foi feita com outra chave VAPID:
+ * o app reinscreve sozinho ao abrir). Registra o último status no aparelho e escreve a recusa no log (só o serviço e o
+ * status — o endpoint e as chaves nunca vão para o log).
+ */
+export async function mandarParaAparelhos(usuarioId: string, mensagem: MensagemPush): Promise<ResultadoAparelho[]> {
   const aparelhos = await prisma.pushSubscription.findMany({ where: { userId: usuarioId } });
   const corpo = JSON.stringify(mensagem);
-  let ok = 0;
-  await Promise.all(aparelhos.map(async (a) => {
+  return Promise.all(aparelhos.map(async (a): Promise<ResultadoAparelho> => {
+    const servico = servicoDoEndpoint(a.endpoint);
+    let resposta: { status: number | null; corpo: string | null };
     try {
-      await webpush.sendNotification({ endpoint: a.endpoint, keys: { p256dh: a.p256dh, auth: a.auth } }, corpo, { TTL: TTL_SEGUNDOS, urgency: "high" });
-      ok++;
-      await prisma.pushSubscription.update({ where: { id: a.id }, data: { ultimoEnvioEm: new Date(), falhas: 0 } }).catch(() => null);
+      const r = await webpush.sendNotification({ endpoint: a.endpoint, keys: { p256dh: a.p256dh, auth: a.auth } }, corpo, { TTL: TTL_SEGUNDOS, urgency: "high" });
+      resposta = { status: r?.statusCode ?? 201, corpo: null };
     } catch (e) {
-      const status = (e as { statusCode?: number })?.statusCode ?? null;
-      if (inscricaoMorta(status) || a.falhas + 1 >= MAX_FALHAS_APARELHO) {
-        // O navegador recusou de vez (desinstalou, revogou, expirou): a inscrição sai
-        await prisma.pushSubscription.deleteMany({ where: { id: a.id } });
-      } else {
-        await prisma.pushSubscription.update({ where: { id: a.id }, data: { falhas: { increment: 1 } } }).catch(() => null);
-      }
+      const err = e as { statusCode?: number; body?: string; message?: string };
+      resposta = { status: typeof err?.statusCode === "number" ? err.statusCode : null, corpo: err?.body ?? err?.message ?? null };
     }
+    const situacao = situacaoDaResposta(resposta);
+    const ok = situacao === "ok";
+    const motivo = motivoDaResposta(resposta);
+    const detalhe = ok ? null : trechoDoCorpo(resposta.corpo);
+    let removido = false;
+    if (ok) {
+      await prisma.pushSubscription.update({ where: { id: a.id }, data: { ultimoEnvioEm: new Date(), falhas: 0, ultimoStatus: resposta.status, ultimoErro: null } }).catch(() => null);
+    } else {
+      console.error("[push] recusado", servico, resposta.status, situacao);
+      removido = apagarInscricao(situacao) || (situacao === "temporario" && a.falhas + 1 >= MAX_FALHAS_APARELHO);
+      if (removido) await prisma.pushSubscription.deleteMany({ where: { id: a.id } });
+      else await prisma.pushSubscription.update({ where: { id: a.id }, data: { falhas: { increment: 1 }, ultimoStatus: resposta.status, ultimoErro: `${motivo}${detalhe ? ` (${detalhe})` : ""}`.slice(0, 400), ultimoErroEm: new Date() } }).catch(() => null);
+    }
+    return { aparelho: a.id, servico, ok, status: resposta.status, situacao, motivo, detalhe, removido };
   }));
-  return ok;
 }
 
 export async function enviarPush(pedido: PedidoPush): Promise<ResultadoPush> {
@@ -142,9 +158,14 @@ export async function enviarPush(pedido: PedidoPush): Promise<ResultadoPush> {
         if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002") { r.pulados++; continue; }
         throw e;
       }
-      const aparelhos = await mandarParaAparelhos(usuarioId, msg);
-      await prisma.pushEnvio.update({ where: { id: envioId }, data: { aparelhos } });
-      r.enviados.push({ usuarioId, aparelhos });
+      // O envio termina AQUI (await): na Vercel nada fica rodando depois que a função responde
+      const resultados = await mandarParaAparelhos(usuarioId, msg);
+      const aparelhos = resultados.filter((x) => x.ok).length;
+      await prisma.pushEnvio.update({
+        where: { id: envioId },
+        data: { aparelhos, falhas: resultados.length - aparelhos, resultados: resultados.map(({ aparelho, servico, ok, status, motivo }) => ({ aparelho, servico, ok, status, motivo })) },
+      });
+      r.enviados.push({ usuarioId, aparelhos, falhas: resultados.length - aparelhos });
     }
     return r;
   } catch (e) {

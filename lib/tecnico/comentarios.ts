@@ -25,6 +25,10 @@ export interface ComentarioTela {
   meu: boolean;
   /** Gravado no aparelho, ainda não confirmado */
   pendente?: boolean;
+  /** Hotfix: a atividade de onde o técnico escreveu (o escritório vê a marca); vazio = escritório */
+  atividade?: string | null;
+  /** Hotfix: chegou depois da última leitura desta pessoa (o escritório destaca) */
+  novo?: boolean;
 }
 
 /** Em ordem de criação (mais antigo primeiro); o que ainda está no aparelho vai por último. */

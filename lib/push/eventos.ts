@@ -160,8 +160,9 @@ export async function notificarAceite(empresaId: string, osId: string) {
 }
 
 /**
- * Comentário novo na OS (lib/execucao/comentarios: do app e do escritório). Recebem os técnicos da OS e o
- * escritório (quem vê OS), menos o autor; o mesmo comentário não repete (chave pelo id).
+ * Comentário novo na OS (lib/execucao/comentarios: do app e do escritório). Recebem os técnicos da OS e, no escritório,
+ * quem está ligado à OS (sem ninguém ligado com aparelho, o escritório todo que vê OS), menos o autor; o mesmo
+ * comentário não repete (chave pelo id).
  */
 export async function notificarComentarioOS(osId: string, autorId: string, opts: { comentarioId?: string; texto?: string | null } = {}) {
   const os = await prisma.ordemServico.findUnique({ where: { id: osId }, select: { id: true, numero: true, empresaId: true, cliente: { select: { nome: true, nomeFantasia: true } } } });
@@ -174,7 +175,22 @@ export async function notificarComentarioOS(osId: string, autorId: string, opts:
   const chave = `comentario:${opts.comentarioId ?? `${os.id}:${autorId}:${Date.now()}`}`;
   await enviarPush({ empresaId: os.empresaId, tipo: "OS_COMENTARIO", alcance: "pessoal", usuarios: tecnicos, chave,
     mensagem: (q) => msgComentario(base, urlPara(q, daOs.urlApp, os.id)) });
-  return enviarPush({ empresaId: os.empresaId, tipo: "OS_COMENTARIO", alcance: "escritorio", usuarios: sem(await usuariosComAparelho(os.empresaId)).filter((u) => !tecnicos.includes(u)), chave, mensagem: msgComentario(base, urlOs(os.id)) });
+  // Hotfix: no escritório, QUEM ESTÁ LIGADO À OS (responsável, quem abriu, quem já conversou ou leu a conversa); se
+  // nenhum deles tem aparelho, o escritório todo que vê OS (como antes), para o aviso não se perder
+  const comAparelho = sem(await usuariosComAparelho(os.empresaId)).filter((u) => !tecnicos.includes(u));
+  const ligados = new Set(await usuariosLigadosAOs(os.empresaId, os.id));
+  const alvo = comAparelho.filter((u) => ligados.has(u));
+  return enviarPush({ empresaId: os.empresaId, tipo: "OS_COMENTARIO", alcance: "escritorio", usuarios: alvo.length ? alvo : comAparelho, chave, mensagem: msgComentario(base, urlOs(os.id)) });
+}
+
+/** As pessoas do escritório ligadas à OS: o responsável, quem abriu, quem comentou pelo escritório e quem leu a conversa */
+export async function usuariosLigadosAOs(empresaId: string, osId: string): Promise<string[]> {
+  const [os, comentaram, leram] = await Promise.all([
+    prisma.ordemServico.findFirst({ where: { id: osId, empresaId }, select: { responsavelId: true, criadoPorId: true } }),
+    prisma.osComentario.findMany({ where: { empresaId, ordemServicoId: osId, origem: "ESCRITORIO" }, select: { usuarioId: true }, distinct: ["usuarioId"] }),
+    prisma.osComentarioLeitura.findMany({ where: { ordemServicoId: osId }, select: { usuarioId: true } }),
+  ]);
+  return [...new Set([os?.responsavelId, os?.criadoPorId, ...comentaram.map((c) => c.usuarioId), ...leram.map((l) => l.usuarioId)].filter((x): x is string => !!x))];
 }
 
 export interface EventoDespesa {

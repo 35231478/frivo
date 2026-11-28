@@ -127,6 +127,6 @@ export const config = {
     // rotas do próprio Auth.js (/api/auth/*): lá o middleware não decide nada, e o cookie da sessão
     // que ele regrava (com o token que chegou) não pode competir com o que /api/auth/session grava
     // com o acesso atualizado do cadastro (lib/acesso/acesso-atual).
-    "/((?!_next/static|_next/image|api/auth/|favicon.ico|sw.js|swe-worker-.*|workbox-.*|fallback-.*|manifest.json|icons/.*|.*\\.png$).*)",
+    "/((?!_next/static|_next/image|api/auth/|favicon.ico|sw.js|swe-worker-.*|worker-.*|workbox-.*|fallback-.*|manifest.json|icons/.*|.*\\.png$).*)",
   ],
 };
