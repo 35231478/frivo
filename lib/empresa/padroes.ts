@@ -19,14 +19,16 @@ import { PRESETS, CORES_PERFIL, montarPermissoes, type Permissoes } from "@/lib/
 /**
  * Vendas: atende o comercial sem aprovar orçamento nem ver custo (o envio do orçamento é "editar").
  * COM-1: nasce com "Ver só os próprios" em Orçamentos e OS — cada vendedor vê os orçamentos em que é o vendedor e as
- * OS ligadas a eles. Só para empresas NOVAS: os perfis que já existem não são alterados.
+ * OS ligadas a eles. COM-1.1: com "Visualizar" em OS (as dele). Só para empresas NOVAS: os perfis que já existem não
+ * são alterados.
  */
 export const PRESET_VENDAS: Permissoes = montarPermissoes({
   dashboard: ["visualizar"],
   clientes: ["visualizar", "criar", "editar"],
   // Leads do site ficam dentro de Orçamentos (visualizar)
   orcamentos: ["visualizar", "criar", "editar", "verSoProprios"],
-  ordens: ["verSoProprios"],
+  // COM-1.1: vê as OS (as dele, pelo escopo) — sem "Visualizar" o vendedor não abria nem as próprias
+  ordens: ["visualizar", "verSoProprios"],
   contratos: ["visualizar"],
 });
 

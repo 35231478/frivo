@@ -46,12 +46,14 @@ export function GavetaPedido({ aberto, onFechar, alvo, pedidoId = null, onConclu
   const [enviando, setEnviando] = useState(false);
   const [tentou, setTentou] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
+  /** COM-1.1: o pedido compartilhado com OS de outro vendedor (com "Ver só os próprios") é só para ver */
+  const [compartilhado, setCompartilhado] = useState(false);
   const chaveAlvo = `${(alvo.osIds ?? []).join(",")}|${(alvo.orcamentoIds ?? []).join(",")}|${alvo.medicaoId ?? ""}`;
 
   useEffect(() => {
     if (!aberto) return;
     let vivo = true;
-    setAlvos(null); setErroCarga(null); setErro(null); setTentou(false); setLiberando(false); setMotivo(""); setAnexo(null);
+    setAlvos(null); setErroCarga(null); setErro(null); setTentou(false); setLiberando(false); setMotivo(""); setAnexo(null); setCompartilhado(false);
     const q = new URLSearchParams();
     if (alvo.osIds?.length) q.set("os", alvo.osIds.join(","));
     if (alvo.orcamentoIds?.length) q.set("orc", alvo.orcamentoIds.join(","));
@@ -64,6 +66,7 @@ export function GavetaPedido({ aberto, onFechar, alvo, pedidoId = null, onConclu
       setAlvos(a);
       setNumero(p?.numero ?? ""); setData(p?.data ?? hoje()); setValor(p?.valor != null ? String(p.valor).replace(".", ",") : "");
       setObservacao(p?.observacao ?? ""); setAnexoAtual(p?.temAnexo ? `/api/pedidos-cliente/${pedidoId}/anexo?inline=1` : null);
+      setCompartilhado(p?.podeEditar === false);
     }).catch(() => { if (vivo) setErroCarga("Não foi possível carregar. Tente de novo."); });
     return () => { vivo = false; };
   }, [aberto, chaveAlvo, pedidoId]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -128,7 +131,7 @@ export function GavetaPedido({ aberto, onFechar, alvo, pedidoId = null, onConclu
           <Button variant="secondary" onClick={onFechar}>Cancelar</Button>
           {liberando
             ? <Button onClick={liberar} loading={enviando} data-confirmar-liberacao><Unlock className="w-4 h-4" aria-hidden /> Liberar sem pedido</Button>
-            : <Button onClick={salvar} loading={enviando} disabled={!alvos.mesmoCliente} data-salvar-pedido>{editando ? "Salvar correção" : "Salvar pedido"}</Button>}
+            : !compartilhado && <Button onClick={salvar} loading={enviando} disabled={!alvos.mesmoCliente} data-salvar-pedido>{editando ? "Salvar correção" : "Salvar pedido"}</Button>}
         </div>
       )}>
       <div className="space-y-4" data-gaveta-pedido>
@@ -154,12 +157,17 @@ export function GavetaPedido({ aberto, onFechar, alvo, pedidoId = null, onConclu
               </p>
             )}
 
+            {compartilhado && (
+              <p className="text-sm text-ink-muted bg-surface-page rounded-lg px-3 py-2" data-pedido-compartilhado>
+                Este pedido também cobre OS de outro vendedor. Só quem vê todas as OS corrige o pedido.
+              </p>
+            )}
             {liberando ? (
               <FormField label="Motivo da liberação" hint="Fica no histórico, com o seu nome." error={tentou && !limparMotivo(motivo) ? MSG_MOTIVO : undefined}>
                 <Textarea value={motivo} onChange={(e) => setMotivo(e.target.value)} rows={3} maxLength={300} data-motivo-liberacao placeholder="Ex.: atendimento emergencial autorizado pelo gerente do cliente" />
               </FormField>
             ) : (
-              <fieldset disabled={!alvos.mesmoCliente} className="space-y-4">
+              <fieldset disabled={!alvos.mesmoCliente || compartilhado} className="space-y-4">
                 <FormField label="Número do pedido" required error={tentou && !numeroOk ? "Informe o número do pedido do cliente." : undefined}>
                   <Input value={numero} onChange={(e) => setNumero(e.target.value)} maxLength={60} autoFocus data-pedido-numero error={tentou && !numeroOk} />
                 </FormField>
@@ -178,10 +186,12 @@ export function GavetaPedido({ aberto, onFechar, alvo, pedidoId = null, onConclu
                 )}
                 <FormField label="Anexo (PDF ou foto)">
                   <div className="flex items-center gap-2 flex-wrap">
-                    <label className="btn-secondary cursor-pointer">
-                      <Paperclip className="w-4 h-4" aria-hidden /> {anexo ? "Trocar arquivo" : "Escolher arquivo"}
-                      <input type="file" accept=".pdf,image/png,image/jpeg,image/webp" className="sr-only" onChange={escolherArquivo} data-pedido-anexo />
-                    </label>
+                    {!compartilhado && (
+                      <label className="btn-secondary cursor-pointer">
+                        <Paperclip className="w-4 h-4" aria-hidden /> {anexo ? "Trocar arquivo" : "Escolher arquivo"}
+                        <input type="file" accept=".pdf,image/png,image/jpeg,image/webp" className="sr-only" onChange={escolherArquivo} data-pedido-anexo />
+                      </label>
+                    )}
                     {anexo && <span className="text-sm text-ink truncate max-w-[12rem]" data-pedido-anexo-nome>{anexo.nome}</span>}
                     {!anexo && anexoAtual && (
                       <a href={anexoAtual} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-sm text-acento hover:underline" data-pedido-anexo-atual>

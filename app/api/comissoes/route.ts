@@ -14,14 +14,20 @@ export async function GET() {
   return NextResponse.json(await telaDeComissoes(guard.session.user!.empresaId));
 }
 
-/** Grava a configuração da empresa (quando fica devida, base líquida de impostos). Vale para as comissões que nascerem daqui em diante. */
+/**
+ * Grava a configuração da empresa (quando fica devida, base líquida de impostos — vale para as comissões que
+ * nascerem daqui em diante — e o vencimento da conta a pagar do fechamento, que vale para o próximo fechamento).
+ */
 export async function PUT(req: NextRequest) {
   const guard = await exigirPermissao("desempenho", "gerenciar");
   if (guard.erro) return guard.resposta;
   const parsed = configComissaoSchema.safeParse(await req.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ erro: parsed.error.errors[0]?.message ?? "Dados inválidos" }, { status: 400 });
   const empresaId = guard.session.user!.empresaId;
-  const data = { comissaoQuando: parsed.data.quando, comissaoLiquidaImpostos: parsed.data.liquidaImpostos };
+  const data = {
+    comissaoQuando: parsed.data.quando, comissaoLiquidaImpostos: parsed.data.liquidaImpostos,
+    ...(parsed.data.vencimentoTipo ? { comissaoVencimentoTipo: parsed.data.vencimentoTipo, comissaoVencimentoDia: parsed.data.vencimentoDia } : {}),
+  };
   await prisma.configuracao.upsert({ where: { empresaId }, update: data, create: { empresaId, ...data } });
   return NextResponse.json({ ok: true });
 }

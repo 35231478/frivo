@@ -753,6 +753,10 @@ model Configuracao {
   comissaoQuando          String  @default("RECEBIMENTO") @map("comissao_quando")
   /// COM-1 — base "líquida de impostos": tira o ISS do valor da venda (padrão: o valor com desconto, com o ISS)
   comissaoLiquidaImpostos Boolean @default(false) @map("comissao_liquida_impostos")
+  /// COM-1.1 — o vencimento da conta a pagar do fechamento (bônus + comissão): DIA_UTIL (o N-º dia útil, seg–sex,
+  /// do mês seguinte; padrão 5) | DIA_FIXO (o dia N do mês seguinte; além do fim do mês = o último dia)
+  comissaoVencimentoTipo  String  @default("DIA_UTIL") @map("comissao_vencimento_tipo")
+  comissaoVencimentoDia   Int     @default(5) @map("comissao_vencimento_dia")
 
   /// Impressão do relatório da OS: seções ligadas/desligadas e quem vê (cliente × só interno).
   /// JSON { [secao]: { ativo, cliente } }; ausente = padrões de lib/relatorio-os/config.ts

@@ -35,6 +35,14 @@ export function filtroOrdens(u: QuemVe | null | undefined): Prisma.OrdemServicoW
 }
 
 /**
+ * COM-1.1 — a lista de clientes com "Ver só os próprios" em OS: a contagem de OS é só a das OS da pessoa, e
+ * ordenar pela contagem (que dependeria do volume dos outros) volta para a ordem padrão.
+ */
+export function ordemSemVolumeDosOutros<T extends { campo: string | null }>(u: QuemVe | null | undefined, ordem: T, campoDaContagem = "os"): T {
+  return ordem.campo === campoDaContagem && soProprios(u, "ordens") ? { ...ordem, campo: null } : ordem;
+}
+
+/**
  * Junta o escopo a um `where` já montado sem mexer nos ORs dele (AND explícito). O tipo vem do ESCOPO (o `where`
  * ganha o tipo do Prisma como contexto e continua conferido).
  */

@@ -13,8 +13,17 @@ Empresa **sem regra ativa** não vê nada de comissão: nem a aba em Meu perfil,
 - **Trocar** só com a permissão nova Orçamentos › **"Trocar vendedor"** (ADMIN sempre tem; nenhum perfil
   existente foi alterado). Pede a pessoa e o **motivo** (mínimo 5 letras), que vai para a linha do tempo do
   orçamento ("Vendedor: A → B. Motivo: …").
-- A troca **segue** para a OS gerada e para as faturas (medições) que têm itens do orçamento. Ela é recusada
-  (409) quando o orçamento **já tem comissão liberada**: aí o dinheiro já está na conta de alguém.
+- A troca **segue** para a OS gerada e para as faturas (medições) que têm itens do orçamento.
+- **Troca depois de liberar (COM-1.1).** A troca vale, com o motivo, e tudo acontece na **mesma transação**:
+  - o que foi liberado para o vendedor antigo é **estornado** (motivo "Troca de vendedor");
+  - a comissão dele fica como **substituída** (`papel = VENDEDOR_ANTERIOR`), só como histórico: vale 0, sai do
+    relatório e do extrato dele (fica só o que já foi pago);
+  - o novo vendedor ganha a comissão dele (as regras de hoje, o mesmo "quando" da venda), já liberada no que for
+    devido.
+
+  Se algo da comissão **já foi pago** (está num fechamento fechado), a troca é recusada (409) com o mês:
+  "A comissão desta venda já foi paga no fechamento de MM/AAAA…". Comissão sem nada liberado é simplesmente refeita
+  para o novo vendedor, como antes.
 - Backfill (no SQL): `vendedor_id = criado_por_id` nos orçamentos existentes. OS antigas mostram o vendedor do
   orçamento de origem (sem backfill nelas).
 - Coluna opcional **"Vendedor"** nas listas de orçamentos e de OS (seletor de colunas; escondida por padrão).
@@ -63,8 +72,11 @@ Duas regras ativas para a mesma pessoa/cargo e o mesmo alvo são recusadas (409)
 | Gatilho | Liberada quando |
 |---|---|
 | **Por data de recebimento** (padrão) | Proporcional ao que entrou: parcela paga → comissão proporcional |
-| Por data de emissão (aprovação do orçamento) | Na aprovação |
+| Na aprovação do orçamento | Na aprovação |
 | Na conclusão da OS | A OS gerada do orçamento fica concluída |
+
+(O gatilho "na aprovação" se chamava "Por data de emissão". Com a COM-1.1, **emissão** passou a ser a da fatura;
+o nome mudou para não confundir. O gatilho em si não mudou.)
 
 O gatilho e o valor ficam **congelados** em cada comissão: trocar a regra ou o gatilho não mexe no passado.
 
@@ -73,7 +85,15 @@ O gatilho e o valor ficam **congelados** em cada comissão: trocar a regra ou o 
 No fechamento do mês, a seção **Comissões do mês** mostra o mesmo mês pelas duas datas (abas). Abre na data da
 configuração acima. É só a vista: o que o fechamento paga segue o "quando é devida".
 
-- **Por data de emissão:** as vendas emitidas (orçamento aprovado) no mês, ainda vivas, com a comissão inteira.
+- **Por data de emissão (COM-1.1, como no OMIE):** a data é a da **emissão da fatura/NF**, não a aprovação. Vale a
+  primeira que existir:
+  1. a NFS-e autorizada (a mais antiga);
+  2. a NF registrada na fatura;
+  3. a fatura enviada ao cliente;
+  4. o primeiro título gerado.
+
+  Entra a parte de cada fatura **viva** da venda emitida no mês (o que ela cobra da venda ÷ o total da venda).
+  A **venda sem fatura emitida não aparece** nesta vista (rascunho não conta). Faturar a mais não gera comissão a mais.
 - **Por data de recebimento:** a parte de cada comissão coberta pelo dinheiro que entrou no mês, recebimento a
   recebimento (o recebido de cada fatura × a parte da venda nela). Recebido antes não conta de novo; o que passar
   do total da venda não gera comissão a mais.
@@ -96,6 +116,10 @@ Cada item gera uma comissão (`comissoes`, valor congelado). O que acontece com 
 
 - No recebimento: recebimento estornado ou fatura/conta cancelada → estorno.
 - Na aprovação e na conclusão: orçamento cancelado/recusado, ou a OS deixou de estar concluída → estorno.
+- Na aprovação e na conclusão, também a **fatura cancelada** (COM-1.1, proteção da empresa), com o motivo
+  "Fatura cancelada". Conta como cancelada a medição cancelada ou a fatura com **todos** os títulos cancelados ou
+  excluídos. O estorno só acontece quando **não sobrou nenhuma fatura viva**. Refaturar devolve a comissão. Venda
+  ainda sem fatura não estorna.
 
 Estorno de comissão já paga fica como saldo **negativo**, que desconta no próximo fechamento (a linha só gera
 conta a pagar quando o total é positivo).
@@ -111,7 +135,14 @@ Sem tela nova. A folha do mês ganha as colunas **Comissão** e **Total** (só q
 - Quem tem bônus e comissão fica numa linha só; quem só tem comissão entra no fim, com o perfil "Comissão".
 - Empresa sem programa de bônus usa o mesmo fechamento, só com as comissões.
 - **Fechar** liga os lançamentos liberados até o fim do mês ao fechamento e gera **uma conta a pagar por
-  pessoa** com o total (bônus + comissão), com vencimento no dia 5 do mês seguinte.
+  pessoa** com o total (bônus + comissão).
+- **Vencimento (COM-1.1):** configurável em Configurações › Comissões › "Vencimento do pagamento":
+  - **dia útil do mês seguinte** (1º a 20º, segunda a sexta; feriados não entram, pois não há cadastro de
+    feriados);
+  - ou **dia fixo do mês seguinte** (1 a 31; além do fim do mês, vale o último dia).
+
+  O padrão é o **5º dia útil**. Se a data já passou quando o mês é fechado, vence no dia. Mudar vale para o
+  próximo fechamento. (Antes: dia 5 fixo.)
 - **Reabrir** é recusado se alguma dessas contas já tem pagamento. Sem pagamento, as contas são canceladas e as
   comissões voltam a "liberada".
 - O CSV da folha ganha "Comissão (R$)" e "Total (R$)" quando há comissão.
@@ -159,7 +190,13 @@ O filtro é do **servidor**, em todos estes pontos:
 - o **pedido do cliente** (`/api/pedidos-cliente/…`):
   - informar o pedido e liberar sem pedido: qualquer OS/orçamento de outro vendedor na lista dá 404;
   - a gaveta (o que o pedido vai cobrir) mostra só os da pessoa;
-  - ler, corrigir, conferir o pedido e baixar o anexo: com a marca, tudo o que o pedido cobre tem de ser da pessoa;
+  - **pedido compartilhado** (cobre OS de dois vendedores, COM-1.1): cada vendedor **vê** o pedido e o anexo
+    com as OS/orçamentos dele (só esses aparecem, e o total é só deles). **Corrigir e conferir** continua só para
+    quem não tem a marca (ou para quem tem tudo o que o pedido cobre). A gaveta mostra o pedido só para leitura,
+    com o aviso. Pedido sem nada da pessoa dá 404;
+  - **pela fatura** que cobre OS dos dois: com a marca, o pedido informado liga só as OS/orçamentos da pessoa. O
+    outro vendedor informa o dele nas OS dele, e a fatura segue "Aguardando PC" enquanto alguma OS dela esperar o
+    pedido. Fatura sem nada da pessoa dá 404;
   - as contagens de OS aguardando pedido no painel e no sino.
 
 Abrir por link direto um registro de outro vendedor dá **404** (página: "não encontrado").
@@ -167,8 +204,11 @@ Abrir por link direto um registro de outro vendedor dá **404** (página: "não 
 - **ADMIN nunca é limitado** (nem com a marca ligada).
 - A marca fica fora de "todas as permissões": o perfil Administrador e o "Selecionar tudo" do editor não a ligam.
 - **Nenhum perfil existente foi alterado** (nenhum UPDATE).
-- O perfil "Vendas" das **empresas novas** nasce com a marca em Orçamentos e em OS. Ele continua sem "Visualizar"
-  em OS, ou seja, sem ganhar acesso novo; para o vendedor ver as OS dele, basta ligar "Visualizar" no perfil.
+- O perfil "Vendas" das **empresas novas** nasce com a marca em Orçamentos e em OS e, desde a COM-1.1, com
+  **"Visualizar" em OS**: o vendedor vê as OS dele, sem criar, editar nem excluir. Os perfis de empresas que já
+  existem não mudam.
+- **Lista de clientes (COM-1.1):** com a marca em OS, a contagem de OS de cada cliente é só a das OS da pessoa, e
+  ordenar pela coluna OS volta à ordem padrão. Nada revela o volume dos outros.
 - A exportação de dados da empresa é só do ADMIN, por isso não muda.
 
 Código: `lib/escopo/proprios.ts` (regra) e `lib/escopo/proprios-server.ts` (guarda por id, ids em massa).
@@ -191,6 +231,13 @@ SQL aditivo e idempotente: `prisma/sql/2027-02-11_comissoes.sql`.
   - `desempenho_fechamento_linhas.usuario_id`, `.comissao` e `.conta_pagar_id`.
 - O único UPDATE é o backfill do vendedor.
 
+COM-1.1: `prisma/sql/2027-02-14_comissoes_vencimento.sql`, também aditivo e idempotente:
+- `configuracoes.comissao_vencimento_tipo` (`DIA_UTIL` | `DIA_FIXO`, padrão `DIA_UTIL`);
+- `configuracoes.comissao_vencimento_dia` (padrão 5);
+- CHECK dos limites.
+
+Nada é reescrito. A troca de vendedor usa o `papel` que já existe (`VENDEDOR_ANTERIOR`), sem coluna nova.
+
 ## Testes
 
 - `tests/unit/comissoes.test.ts`: regras puras (precedência, base, recebimento proporcional, estados, validação).
@@ -203,7 +250,16 @@ SQL aditivo e idempotente: `prisma/sql/2027-02-11_comissoes.sql`.
   - permissões;
   - isolamento entre empresas;
   - empresa sem regra.
-- `tests/unit/comissoes-ui.test.ts`: as telas (vendedor, Configurações › Comissões, Meu perfil, folha do mês).
+- `tests/unit/comissoes-ui.test.ts`: as telas (vendedor, Configurações › Comissões com o vencimento, Meu perfil, folha do mês).
+- `tests/unit/com11-regras.test.ts`: regras puras da COM-1.1:
+  - fatura cancelada;
+  - data de emissão e vista por emissão;
+  - vencimento;
+  - ordem da lista de clientes.
+
+  O `comissoes-pg` cobre ainda o estorno por fatura/título cancelado, a emissão pela NF, a troca depois de
+  liberar (e a recusa quando paga) e o vencimento do fechamento. O `escopo-proprios-pg` cobre o pedido
+  compartilhado e a contagem de OS no escopo.
 - `tests/unit/comissoes-app.test.ts`: a seção Minhas comissões no Perfil do app do técnico.
 - `tests/unit/sql-comissoes.test.ts`: o SQL sobre o banco de hoje (backfill, travas, idempotência, igual ao Prisma).
 
